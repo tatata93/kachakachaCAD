@@ -12,6 +12,7 @@
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
 #include "V2MainWindow.h"
+#include "V2Ribbon.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
@@ -25,6 +26,7 @@
 #include <QString>
 
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -747,12 +749,72 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("右クリックで測定が消える", viewport.MeasurePicks().empty());
 }
 
+//! HP-ME-02(C-15)。手で矩形を引き、1 辺を押して選び、帯の 測定 → 面積 を押すと、測定の棚が
+//! 面積で開き、線の全体が囲む面積(幅 × 高さ)と「厳密」が出る。寸法としては残さず理由を言う。
+[[nodiscard]] bool CaseAreaMeasureFromRibbon(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    const auto wire = DrawRectangleAtByHand(window, 0.40, 0.40, 0.60, 0.55);
+    if (!Explain("矩形を手で引ける", !wire.IsNil())
+        || !Explain("矩形の 1 辺を押して選べる", ClickOnCurveOf(window, wire))) {
+        return false;
+    }
+    double minX = 1.0e18;
+    double maxX = -1.0e18;
+    double minY = 1.0e18;
+    double maxY = -1.0e18;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (curve.entityId == wire) {
+            for (const auto& p : {curve.segment.StartPoint(), curve.segment.EndPoint()}) {
+                minX = std::min(minX, p.x);
+                maxX = std::max(maxX, p.x);
+                minY = std::min(minY, p.y);
+                maxY = std::max(maxY, p.y);
+            }
+        }
+    }
+    auto& ribbon = window.Ribbon();
+    if (!Explain("帯の「測定」を押せる", ribbon.ClickCategory(QStringLiteral("測定")))
+        || !Explain("帯の「面積」を押せる", ribbon.ClickTool(QStringLiteral("面積")))) {
+        return false;
+    }
+    auto& dock = window.MeasureDock();
+    QString area;
+    QString how;
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (dock.RowLabel(row) == QStringLiteral("面積")) {
+            area = dock.RowValue(row);
+        } else if (dock.RowLabel(row) == QStringLiteral("求め方")) {
+            how = dock.RowValue(row);
+        }
+    }
+    const double expected = (maxX - minX) * (maxY - minY);
+    const bool matches = area.endsWith(QStringLiteral(" mm²"))
+        && std::abs(std::strtod(area.toStdString().c_str(), nullptr) - expected)
+            <= std::max(expected * 1.0e-6, 1.0e-3);
+    if (!Explain("測定の棚が面積で開く", dock.Mode() == kachakacha::v2::app::MeasureMode::Area)
+        || !Explain((std::string("線の全体が囲む面積が出る(") + area.toStdString() + " / "
+                        + std::to_string(expected) + ")").c_str(), matches)
+        || !Explain("直線だけなので厳密と言う", how.contains(QStringLiteral("厳密")))) {
+        return false;
+    }
+    const auto before = window.Session().GetDocument().Snapshot().referenceDimensions.size();
+    dock.PressKeep();
+    return Explain((std::string("面積は寸法として残さず理由を言う(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.Session().GetDocument().Snapshot().referenceDimensions.size() == before
+            && window.StatusText().contains(QStringLiteral("面積は寸法として残せません")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
         {"測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
+        {"HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
+            &CaseAreaMeasureFromRibbon},
         {"V1 の .kcd を開くと V2 の文書になる", &CaseV1KcdOpensAsDocument},
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"角の加工は何本選んでも線ごとに作り1回で戻る", &CasePolylineCornersPerWire},

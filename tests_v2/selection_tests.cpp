@@ -27,6 +27,7 @@ using kachakacha::v2::app::PruneSelection;
 using kachakacha::v2::app::SelectAllOfKind;
 using kachakacha::v2::app::SelectedCountOfKind;
 using kachakacha::v2::app::SelectedCurves;
+using kachakacha::v2::app::SelectedWholeCurves;
 using kachakacha::v2::app::SelectionElementKind;
 using kachakacha::v2::app::SelectionItemCount;
 using kachakacha::v2::app::SelectionMode;
@@ -442,6 +443,12 @@ KACHA_V2_TEST(selection, 同じワイヤーの複数辺を別々に選べる)
     Require(selection.ordered[0].segmentId == Seg(1), "最初の辺");
     Require(selection.ordered[1].segmentId == Seg(2), "次の辺");
     Require(SelectedCurves(selection, scene).size() == 2, "選んだ2辺だけを渡す");
+    // 面積(C-15)は 1 辺を押しただけでも線の全体で測る。
+    SelectionSet oneEdge;
+    oneEdge = ApplySelection(oneEdge, first, SelectionMode::Replace);
+    Require(SelectedCurves(oneEdge, scene).size() == 1, "ふつうは押した 1 辺だけ");
+    Require(SelectedWholeCurves(oneEdge, scene).size() == scene.curves.size(),
+        "面積のときは線の全体(同じワイヤーの辺を全部)");
 
     selection = ApplySelection(selection, first, SelectionMode::Toggle);
     Require(SelectionItemCount(selection) == 1, "同じ辺だけを外す");

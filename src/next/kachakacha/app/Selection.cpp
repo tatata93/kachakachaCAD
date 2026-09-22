@@ -582,4 +582,18 @@ std::vector<geometry::CurveSegment> SelectedCurves(const SelectionSet& selection
     return curves;
 }
 
+std::vector<geometry::CurveSegment> SelectedWholeCurves(const SelectionSet& selection,
+    const modeling::SnapScene& scene)
+{
+    std::vector<geometry::CurveSegment> curves;
+    for (const base::EntityId& id : selection.entityIds) {
+        for (const auto& curve : scene.curves) {
+            if (curve.entityId == id) {
+                curves.push_back(curve.segment);
+            }
+        }
+    }
+    return curves;
+}
+
 } // namespace kachakacha::v2::app

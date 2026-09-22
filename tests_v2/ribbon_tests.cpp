@@ -98,11 +98,20 @@ KACHA_V2_TEST(ribbon, 正本にあって核に無いものは理由つきで押�
             }
         }
     }
-    for (const char* label : {"楕円", "テキスト", "面積", "面オフセット", "面削除",
-             "面置換", "表裏反転"}) {
+    for (const char* label : {"楕円", "テキスト", "面オフセット", "面削除", "面置換", "表裏反転"}) {
         Require(blocked.count(label) == 1, std::string("まだ作れないので押せない形: ") + label);
     }
-    Require(blocked.size() == 7, "押せない道具は 7 個(作れるようになったものは本物の道具へ)");
+    Require(blocked.size() == 6, "押せない道具は 6 個(作れるようになったものは本物の道具へ)");
+    // 面積は測定の棚を「面積」で開く(C-15)。
+    bool areaFound = false;
+    for (const auto& category : RibbonCategoriesFor(UiMode::Drawing)) {
+        for (const auto& tool : category.tools) {
+            if (tool.labelJa == std::string_view("面積")) {
+                areaFound = !tool.Blocked() && tool.measureMode.has_value() && *tool.measureMode == 4;
+            }
+        }
+    }
+    Require(areaFound, "作図の測定で面積が押せ、測定の棚を面積で開く");
     const auto* scale = FindRibbonTool(UiMode::Drawing, "wire.scale");
     Require(scale != nullptr && !scale->Blocked(), "作図の変形でスケールが押せる(D-22)");
     // 作れるようになったものは本物の命令を呼ぶ(P-08/P-09: 回転体・ロフト立体・スイープ、

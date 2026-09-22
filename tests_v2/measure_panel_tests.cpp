@@ -272,4 +272,58 @@ KACHA_V2_TEST(measure, 寸法を残すには値と相手が要る)
         "描く位置は押した 2 点");
 }
 
+KACHA_V2_TEST(measure, 面積モードは閉じた線の囲む面積を厳密に出す)
+{
+    // C-15: 40 × 20 の矩形。線は順不同・向きばらばらでもよい。
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::Area;
+    request.toleranceMm = 0.01;
+    request.curves = {Line({40, 0, 0}, {40, 20, 0}), Line({0, 0, 0}, {40, 0, 0}),
+        Line({0, 20, 0}, {0, 0, 0}), Line({0, 20, 0}, {40, 20, 0})};
+    const auto rows = BuildMeasureRows(request);
+    RequireEqual(ValueOf(rows, "面積"), std::string("800.000 mm²"), "矩形の面積");
+    RequireEqual(ValueOf(rows, "求め方"), std::string("厳密(直線と円弧だけ)"), "直線だけなので厳密");
+    RequireEqual(ValueOf(rows, "周の長さ"), std::string("120.000 mm"), "周の長さ");
+    // 円 1 本は π r²。
+    request.curves = {Circle(10.0)};
+    const auto circle = kachakacha::v2::app::MeasureLoopArea(request.curves, 0.01);
+    Require(circle.HasValue() && circle.Value().exact, "円は厳密に測れる");
+    kachakacha::v2::test::RequireNear(circle.Value().areaMm2, 3.14159265358979323846 * 100.0, 1.0e-9,
+        "円の面積は π r²");
+    // 半円と直径(D 字)。
+    // 中心 (0,0,0)、半径 10、x 軸から左回りに 180 度(10,0,0 → -10,0,0)と直径。
+    const auto arc = CurveSegment::MakeCircularArc(Vector3{0, 0, 0}, Vector3{0, 0, 1},
+        Vector3{1, 0, 0}, 10.0, 0.0, 3.14159265358979323846);
+    Require(arc.HasValue(), "半円が作れる");
+    const std::vector<CurveSegment> dShape{arc.Value(), Line({-10, 0, 0}, {10, 0, 0})};
+    const auto half = kachakacha::v2::app::MeasureLoopArea(dShape, 0.01);
+    Require(half.HasValue(), "D 字を測れる: " + half.FirstSummaryJa());
+    kachakacha::v2::test::RequireNear(half.Value().areaMm2, 3.14159265358979323846 * 50.0, 1.0e-9,
+        "半円の面積");
+}
+
+KACHA_V2_TEST(measure, 面積は閉じていない線と平面に載らない線を断り寸法には残さない)
+{
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::Area;
+    request.toleranceMm = 0.01;
+    Require(ValueOf(BuildMeasureRows(request), "面積").find("選ばれていません") != std::string::npos,
+        "何も選んでいなければ何を選ぶかを言う");
+    request.curves = {Line({0, 0, 0}, {40, 0, 0}), Line({40, 0, 0}, {40, 20, 0})};
+    const auto open = kachakacha::v2::app::MeasureLoopArea(request.curves, 0.01);
+    Require(!open.HasValue() && open.FirstCode() == "UI-M002", "開いた線は断る: " + open.FirstSummaryJa());
+    // 1 か所だけ持ち上げた四角(平面に載らない)。
+    request.curves = {Line({0, 0, 0}, {40, 0, 0}), Line({40, 0, 0}, {40, 20, 5}),
+        Line({40, 20, 5}, {0, 20, 0}), Line({0, 20, 0}, {0, 0, 0})};
+    const auto bent = kachakacha::v2::app::MeasureLoopArea(request.curves, 0.01);
+    Require(!bent.HasValue() && bent.FirstCode() == "UI-M003", "平面に載らない輪は断る: " + bent.FirstSummaryJa());
+    request.curves = {Line({0, 0, 0}, {10, 0, 0}), Line({10, 0, 0}, {10, 10, 0}),
+        Line({10, 10, 0}, {0, 0, 0})};
+    Require(ValueOf(BuildMeasureRows(request), "面積") == "50.000 mm²", "三角形は測れる");
+    kachakacha::v2::base::DeterministicIdGenerator ids{3};
+    const auto kept = kachakacha::v2::app::MeasureDimensionOf(request, "面積",
+        ids.NextTyped<kachakacha::v2::base::IdKind::Dimension>());
+    Require(!kept.HasValue() && kept.FirstCode() == "UI-M004", "面積は寸法として残さない(理由を言う)");
+}
+
 KACHA_V2_TEST_MAIN("measure_panel_tests")

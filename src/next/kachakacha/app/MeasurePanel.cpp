@@ -1,7 +1,14 @@
 #include "kachakacha/app/MeasurePanel.h"
 
+#include "kachakacha/base/Ids.h"
+#include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/Measurement.h"
+#include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/modeling/ExtrudeInput.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -57,6 +64,7 @@ std::string_view MeasureModeNameJa(MeasureMode mode) noexcept
     case MeasureMode::TwoPoints:       return "2点間";
     case MeasureMode::ThreePointAngle: return "3点角度";
     case MeasureMode::Element:         return "要素(接線・法線)";
+    case MeasureMode::Area:            return "面積(閉じた線)";
     }
     return "";
 }
@@ -64,7 +72,7 @@ std::string_view MeasureModeNameJa(MeasureMode mode) noexcept
 const std::vector<MeasureMode>& MeasureModes()
 {
     static const std::vector<MeasureMode> modes{MeasureMode::Selection, MeasureMode::TwoPoints,
-        MeasureMode::ThreePointAngle, MeasureMode::Element};
+        MeasureMode::ThreePointAngle, MeasureMode::Element, MeasureMode::Area};
     return modes;
 }
 
@@ -75,6 +83,7 @@ int MeasurePointCount(MeasureMode mode) noexcept
     case MeasureMode::ThreePointAngle: return 3;
     case MeasureMode::Element:         return 1;
     case MeasureMode::Selection:       return 0;
+    case MeasureMode::Area:            return 0;
     }
     return 0;
 }
@@ -197,7 +206,108 @@ namespace {
     return rows;
 }
 
+//! 面積の 1 行ぶん(mm²)。
+[[nodiscard]] std::string FormatSquareMillimetersJa(double value)
+{
+    return Fixed(value, 3) + " mm²";
+}
+
+//! 選んだ線を、順と向きのそろった 1 つの閉じた輪にする。
+[[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> OrderedLoop(
+    const std::vector<geometry::CurveSegment>& curves, const geometry::GeometryTolerance& tolerance)
+{
+    using Out = base::Result<std::vector<geometry::CurveSegment>>;
+    base::DeterministicIdGenerator ids{1};
+    std::vector<geometry::ChainInput> inputs;
+    for (const auto& curve : curves) {
+        inputs.push_back({ids.NextTyped<base::IdKind::Entity>(), ids.NextTyped<base::IdKind::Segment>(),
+            curve});
+    }
+    const std::vector<geometry::ChainInput> original = inputs;
+    const auto analyzed = geometry::AnalyzeChain(inputs, tolerance);
+    if (!analyzed.HasValue()) {
+        return Out::Failure(base::MakeError("UI-M002", "選んだ線が 1 つの輪になっていません。",
+            analyzed.FirstSummaryJa()));
+    }
+    if (!analyzed.Value().order.closed) {
+        return Out::Failure(base::MakeError("UI-M002", "選んだ線が閉じていません。",
+            "端と端がつながった輪だけ、囲む面積を測れます。"));
+    }
+    std::vector<geometry::CurveSegment> ordered;
+    for (const auto& item : analyzed.Value().order.segments) {
+        const auto found = std::find_if(original.begin(), original.end(),
+            [&](const auto& input) { return input.segmentId == item.segmentId; });
+        if (found == original.end()) {
+            return Out::Failure(base::MakeError("UI-M002", "選んだ線が 1 つの輪になっていません。", {}));
+        }
+        if (!item.reversed) {
+            ordered.push_back(found->segment);
+            continue;
+        }
+        const auto reversed = geometry::ReverseCurve(found->segment);
+        if (!reversed.HasValue()) {
+            return Out::Failure(reversed.Diagnostics());
+        }
+        ordered.push_back(reversed.Value());
+    }
+    return Out::Success(std::move(ordered));
+}
+
+//! 面積。選んだ線が 1 つの閉じた輪で平面に載っていれば、囲む面積と求め方。
+[[nodiscard]] std::vector<MeasureRow> AreaRows(const MeasureRequest& request)
+{
+    std::vector<MeasureRow> rows;
+    const auto measured = MeasureLoopArea(request.curves, request.toleranceMm);
+    if (!measured.HasValue()) {
+        const std::string details = measured.FirstDetailsJa();
+        rows.push_back(MeasureRow{"面積", measured.FirstSummaryJa()
+                + (details.empty() ? std::string() : "(" + details + ")")});
+        return rows;
+    }
+    const auto& m = measured.Value();
+    rows.push_back(MeasureRow{"面積", FormatSquareMillimetersJa(m.areaMm2)});
+    rows.push_back(MeasureRow{"求め方", m.exact ? std::string("厳密(直線と円弧だけ)")
+                                               : std::string("近似(曲線を 0.001 mm で刻んで足した)")});
+    rows.push_back(MeasureRow{"周の長さ", FormatMillimetersJa(m.perimeterMm)});
+    rows.push_back(MeasureRow{"平面の法線", FormatPointJa(m.normal)});
+    return rows;
+}
+
 } // namespace
+
+base::Result<LoopAreaMeasure> MeasureLoopArea(const std::vector<geometry::CurveSegment>& curves,
+    double toleranceMm)
+{
+    using Out = base::Result<LoopAreaMeasure>;
+    if (curves.empty()) {
+        return Out::Failure(base::MakeError("UI-M002", "面積を測る閉じた線が選ばれていません。",
+            "輪になっている線を選んでください(線は何本に分かれていてもかまいません)。"));
+    }
+    geometry::GeometryTolerance tolerance;
+    tolerance.interactiveJoinMm = std::max(toleranceMm, 1.0e-6);
+    const auto loop = OrderedLoop(curves, tolerance);
+    if (!loop.HasValue()) {
+        return Out::Failure(loop.Diagnostics());
+    }
+    constexpr double kSamplingMm = 0.001;
+    const auto sampled = geometry::SampleChain(loop.Value(), kSamplingMm);
+    const geometry::PlaneFit plane = geometry::FitPlane(sampled);
+    if (!plane.valid || plane.maximumDeviationMm > tolerance.interactiveJoinMm) {
+        return Out::Failure(base::MakeError("UI-M003", "選んだ線が平面に載っていません。",
+            plane.valid ? "平面から最大 " + FormatMillimetersJa(plane.maximumDeviationMm) + " 離れています。"
+                        : std::string("線が一直線に並んでいて、平面が決まりません。")));
+    }
+    const geometry::PlanarFrame frame = geometry::MakeFrame(plane);
+    const auto area = modeling::SignedAreaOnPlane(loop.Value(), frame, kSamplingMm);
+    LoopAreaMeasure result;
+    result.areaMm2 = std::abs(area.signedAreaMm2);
+    result.exact = area.exact;
+    result.normal = frame.normal;
+    for (const auto& segment : loop.Value()) {
+        result.perimeterMm += geometry::MeasureCurveLength(segment, kSamplingMm);
+    }
+    return Out::Success(result);
+}
 
 std::optional<MeasurePrimaryValue> MeasurePrimary(const MeasureRequest& request)
 {
@@ -241,6 +351,9 @@ std::optional<MeasurePrimaryValue> MeasurePrimary(const MeasureRequest& request)
         }
         return std::nullopt;
     }
+    case MeasureMode::Area:
+        // 面積は寸法(長さ・角度)として残さない(MeasureDimensionOf が理由を言う)。
+        return std::nullopt;
     case MeasureMode::Selection:
         break;
     }
@@ -258,6 +371,10 @@ base::Result<document::ReferenceDimension> MeasureDimensionOf(const MeasureReque
     std::string_view label, base::DimensionId id)
 {
     using Out = base::Result<document::ReferenceDimension>;
+    if (request.mode == MeasureMode::Area) {
+        return Out::Failure(base::MakeError("UI-M004", "面積は寸法として残せません。",
+            "残せる寸法は長さと角度だけです。面積は表の値を控えてください。"));
+    }
     const auto primary = MeasurePrimary(request);
     if (!primary.has_value()) {
         return Out::Failure(base::MakeError("UI-M001", "残せる寸法がまだありません。",
@@ -314,6 +431,9 @@ std::vector<MeasureRow> BuildMeasureRows(const MeasureRequest& request)
     }
     if (request.mode == MeasureMode::Element) {
         return ElementRows(request);
+    }
+    if (request.mode == MeasureMode::Area) {
+        return AreaRows(request);
     }
     if (request.curves.empty()) {
         // 空の表は、壊れているのか選び忘れなのかが分からない。何をすればよいかを言う。

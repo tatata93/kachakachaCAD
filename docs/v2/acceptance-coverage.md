@@ -74,9 +74,9 @@
 | AT-EXT-006 | 済 | tests_v2/extrude_tests.cpp(5方式と到達判定)+ tests_v2/kernel_extrude_tests.cpp(平面・傾いた平面・円筒・球まで厳密に切る。トーラスは拒否) |
 | AT-EXT-007 | 済 | tests_v2/extrude_tests.cpp(相手未選択を拒否)+ tests_v2/kernel_extrude_tests.cpp(足す・穴を引く・2つへ分離する引き。非連結は EXT-005 で拒否) |
 | AT-EXT-008 | 済 | tests_v2/feature_reevaluation_tests.cpp(輪郭の寸法・移動距離・点の位置を変えても、出力の EntityId と安定キーは変わらず形だけが変わる。25回続けて編集してもIDは動かない。上流を変えれば下流へ伝わり、計算し直す順番は上流から。途中を変えたら上流は計算し直さない。種類の違う定義への差し替えは DOC-C006 で断る。core で形を作れない立体は「核が要る」と印をつけて返し、作ったふりをしない) |
-| AT-SOL-001 | 部分 | tests_v2/solid_input_tests.cpp(輪郭の読み方は押し出しと同じ、軸が平面外 SOL-003・輪郭を横切る SOL-004・角度 SOL-005、Pappus の予測)+ tests_v2/solid_input_state_tests.cpp(閉じた線 → 輪郭、直線 → 軸、押し直すと外れる、足す・引くの相手、カードの表)+ tests_v2/document_file_tests.cpp(CreateSolid の往復)+ tests_v2/kernel_solid_tests.cpp(OCCT: 全回転 π·300·30、対称 90°)+ 自己試験 HP-SO-01/04。**OCCT と画面の試験は PC で通るまで部分** |
-| AT-SOL-002 | 部分 | tests_v2/solid_input_tests.cpp(断面 1 つ・開いた断面・端の断面が平らでない・重なりを断る)+ tests_v2/kernel_solid_tests.cpp(OCCT: 角錐台 4360 mm3 に 1% で合う)+ 自己試験 HP-SO-03(ガイド付き・中心線付きは押せない形)。**PC で通るまで部分** |
-| AT-SOL-003 | 部分 | tests_v2/solid_input_tests.cpp(経路が切れている SOL-006、輪郭の平面から始まらない・面に沿う SOL-008)+ tests_v2/kernel_solid_tests.cpp(OCCT: まっすぐな経路で円柱 π·25·40)+ 自己試験 HP-SO-02。**PC で通るまで部分** |
+| AT-SOL-001 | 済 | tests_v2/solid_input_tests.cpp(輪郭の読み方は押し出しと同じ、軸が平面外 SOL-003・輪郭を横切る SOL-004・角度 SOL-005、Pappus の予測)+ tests_v2/solid_input_state_tests.cpp(閉じた線 → 輪郭、直線 → 軸、押し直すと外れる、足す・引くの相手、カードの表)+ tests_v2/document_file_tests.cpp(CreateSolid の往復)+ tests_v2/kernel_solid_tests.cpp(OCCT: 全回転 π·300·30、対称 90°)+ 自己試験 HP-SO-01/04。**PC で通過(c2a7b28: ctest 172/172、自己試験 332/332)** |
+| AT-SOL-002 | 済 | tests_v2/solid_input_tests.cpp(断面 1 つ・開いた断面・端の断面が平らでない・重なりを断る)+ tests_v2/kernel_solid_tests.cpp(OCCT: 角錐台 4360 mm3 に 1% で合う)+ 自己試験 HP-SO-03(ガイド付き・中心線付きは押せない形)。**PC で通過(c2a7b28: ctest 172/172、自己試験 332/332)** |
+| AT-SOL-003 | 済 | tests_v2/solid_input_tests.cpp(経路が切れている SOL-006、輪郭の平面から始まらない・面に沿う SOL-008)+ tests_v2/kernel_solid_tests.cpp(OCCT: まっすぐな経路で円柱 π·25·40)+ 自己試験 HP-SO-02。**PC で通過(c2a7b28: ctest 172/172、自己試験 332/332)** |
 | AT-FIN-002 | 部分 | tests_v2/kernel_shell_split_tests.cpp(OCCT: 箱の上の面を抜いて肉厚 2 で 外 − 36×16×28、辺のそばを押しても面の内側の点を残す・辺の上の点は断る、無い面・厚すぎる・肉厚 0 を断る)+ tests_v2/shell_split_input_state_tests.cpp(面が入り押し直すと外れる、別の部品で入れ替わる)+ tests_v2/document_file_tests.cpp(ShellSplit の往復)+ 自己試験 HP-SH-01。**OCCT と画面の試験は PC で通るまで部分** |
 | AT-FIN-003 | 部分 | tests_v2/kernel_shell_split_tests.cpp(OCCT: 平面で分けた両側の体積、U 字を横に切ると片側 2 塊、外れた平面・面と重なる平面・向きの無い平面を断る)+ tests_v2/shell_split_input_state_tests.cpp(分割は部品だけ)+ tests_v2/shape_rebuild_tests.cpp(元の後に作り直す)+ 自己試験 HP-SH-02。**OCCT と画面の試験は PC で通るまで部分** |
 | AT-FIN-001 | 部分 | tests_v2/kernel_edge_finish_tests.cpp(OCCT: 箱の縁を半径 3 で丸めると (1 - π/4) r² L、C 2 を 2 本で 2 × d²/2 × L、無い辺・大きすぎる半径を断る)+ tests_v2/edge_finish_input_state_tests.cpp(部品と近い辺が入り押し直すと外れる、別の部品で入れ替わる)+ tests_v2/document_file_tests.cpp(EdgeFinish の往復)+ 自己試験 HP-FL-01/02。**OCCT と画面の試験は PC で通るまで部分** |
@@ -84,6 +84,7 @@
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(3点角度モードは2点目が頂点で 90 度) |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(要素モード: 線1本と点で接線・法線・半径、2本で接線どうしの角度) |
 | AT-MEA-004 | 済 | tests_v2/measurement_tests.cpp |
+| AT-MEA-006 | 部分 | tests_v2/measure_panel_tests.cpp(矩形 800 mm² 厳密・周 120 mm、円 π r²、D 字 π r²/2、開いた線 UI-M002、平面に載らない UI-M003、寸法に残さない UI-M004)+ tests_v2/selection_tests.cpp(面積のときは 1 辺を押しても線の全体)+ tests_v2/ribbon_tests.cpp(測定の面積が押せる)+ 自己試験 HP-ME-02。**画面の試験は PC で通るまで部分** |
 | AT-MEA-005 | 済 | tests_v2/point_source_tests.cpp(測った2点の両端と中点、円・円弧の中心、始点・終点・中点、ベジェとB-splineの制御点、2曲線の最接近から作図点を作れる。円は始点と終点を二重に出さず、直線は中心も制御点も出さない。同じ入力なら同じ並びで出る。数値でない位置からは作らない。「円1の中心」のように由来が分かる名前になり、作った点は作業中グループへ入る) + measurement_tests.cpp(測定が位置を返すところ) + cad_next --self-test(形から中心や端点に点を作れる: 円の中心に1つ、直線には中心を作らず断る、端点と中点で3つ、どちらも一度で戻る) |
 | AT-FAB-001 | 済 | tests_v2/fabrication_tests.cpp(円筒の厳密展開) |
 | AT-FAB-002 | 済 | tests_v2/fabrication_tests.cpp(円錐の厳密展開) |

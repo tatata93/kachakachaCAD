@@ -38,6 +38,9 @@ enum class MeasureMode {
     TwoPoints,        //!< 2点間: 距離・dX/dY/dZ・座標面への投影・軸との角度
     ThreePointAngle,  //!< 3点角度: 1点目-頂点(2点目)-3点目
     Element,          //!< 要素: 線1本と点で接線・法線、線2本で接線どうし・法線どうしの角度
+    //! 面積: 選んだ線が 1 つの閉じた輪で平面に載っていれば、囲む面積(C-15)。
+    //! 直線と円弧だけなら厳密、曲線を含めば細かく刻んだ近似で、どちらかを言う。
+    Area,
 };
 
 [[nodiscard]] std::string_view MeasureModeNameJa(MeasureMode mode) noexcept;
@@ -75,6 +78,21 @@ struct MeasureRequest {
 
 //! 表の見出しに出す一言。何を測っているかを言う。
 [[nodiscard]] std::string MeasureSummaryJa(const MeasureRequest& request);
+
+//! 閉じた線 1 つが囲む面積(C-15)。
+struct LoopAreaMeasure {
+    double areaMm2 = 0.0;
+    double perimeterMm = 0.0;
+    //! 輪の載っている平面の法線。
+    geometry::Vector3 normal{0.0, 0.0, 1.0};
+    //! 直線と円弧だけなら true。曲線を含めば刻んだ近似なので false。
+    bool exact = true;
+};
+
+//! 選んだ線(順不同・向き不問)が 1 つの閉じた輪になり、平面に載っていれば、その面積。
+//! 輪にならない・閉じていない(UI-M002)、平面に載っていない(UI-M003)なら断る。
+[[nodiscard]] base::Result<LoopAreaMeasure> MeasureLoopArea(
+    const std::vector<geometry::CurveSegment>& curves, double toleranceMm);
 
 //! いまの測定の主な値(残す寸法の値)。距離は mm、角度は rad。決まっていなければ空。
 struct MeasurePrimaryValue {

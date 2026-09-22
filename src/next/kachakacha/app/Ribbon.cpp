@@ -17,6 +17,7 @@ constexpr int kMeasureSelection = 0;
 constexpr int kMeasureTwoPoints = 1;
 constexpr int kMeasureAngle = 2;
 constexpr int kMeasureElement = 3;
+constexpr int kMeasureArea = 4;
 
 [[nodiscard]] RibbonTool Tool(std::string_view label, std::string_view id)
 {
@@ -97,7 +98,8 @@ const std::vector<RibbonCategory>& DrawingCategories()
         {"measure", "測定",
             {Measure("距離", kMeasureTwoPoints), Measure("角度", kMeasureAngle),
                 Measure("半径/直径", kMeasureElement), Measure("座標", kMeasureSelection),
-                Blocked("面積", "面積の測定はまだありません(閉じた輪郭の面積を測る道が核にありません)")}},
+                // 閉じた線の囲む面積(C-15)。直線と円弧なら厳密、曲線なら刻んだ近似と言う。
+                Measure("面積", kMeasureArea)}},
     };
     return categories;
 }

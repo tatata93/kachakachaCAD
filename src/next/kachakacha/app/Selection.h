@@ -283,4 +283,9 @@ void AccumulateBoxPoint(BoxReach& reach, const ScreenBox& box,
 [[nodiscard]] std::vector<geometry::CurveSegment> SelectedCurves(
     const SelectionSet& selection, const modeling::SnapScene& scene);
 
+//! 選んでいるもの(線分を 1 本押しただけでも、その線の全体)の線を集める。
+//! 面積(C-15)は閉じた輪の性質なので、押した 1 辺ではなく線ぜんぶで測る。
+[[nodiscard]] std::vector<geometry::CurveSegment> SelectedWholeCurves(
+    const SelectionSet& selection, const modeling::SnapScene& scene);
+
 } // namespace kachakacha::v2::app

@@ -56,6 +56,11 @@ kachakacha::v2::app::MeasureRequest V2MainWindow::CurrentMeasureRequest() const
     request.toleranceMm =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     request.mode = measureDock_->Mode();
+    if (request.mode == kachakacha::v2::app::MeasureMode::Area) {
+        // 面積は閉じた輪の性質。1 辺を押しただけでも、その線の全体で測る(C-15)。
+        request.curves = kachakacha::v2::app::SelectedWholeCurves(viewport_->Selection(),
+            session_->Scene());
+    }
     request.targetIds = viewport_->Selection().entityIds;
     for (const auto& pick : viewport_->MeasurePicks()) {
         request.pickedPoints.push_back(pick.point);

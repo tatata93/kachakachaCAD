@@ -164,7 +164,15 @@ struct Box3 {
     }
     const auto reopened = VisibleParts(window);
     const auto again = reopened.size() == 1 ? BoundsOf(window, reopened.front()) : std::nullopt;
-    return Explain("開き直しても動かした場所に形がある",
+    // 落ちたときに何が違ったかを残す(見える部品の数・形の有無・x・作り直せなかったもの・帯)。
+    const std::string seen = "見える部品 " + std::to_string(reopened.size()) + "、形 "
+        + (again.has_value() ? "あり x " + std::to_string(again->minimum.x) + " .. "
+                    + std::to_string(again->maximum.x)
+                             : std::string("なし"))
+        + "、動かした x " + std::to_string(after->minimum.x) + " .. " + std::to_string(after->maximum.x)
+        + "、作り直せなかったもの「" + window.RebuildProblems().toStdString() + "」、帯「"
+        + window.StatusText().toStdString() + "」";
+    return Explain(("開き直しても動かした場所に形がある(" + seen + ")").c_str(),
         again.has_value() && Near(again->minimum.x, after->minimum.x)
             && Near(again->maximum.x, after->maximum.x));
 }

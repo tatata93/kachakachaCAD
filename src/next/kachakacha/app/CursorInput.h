@@ -72,6 +72,10 @@ struct CursorInputPanel {
 //! 半径ではないので出さない(打った数が別の意味に化ける欄を出さない、D-04)。
 [[nodiscard]] bool ToolUsesCursorInput(DrawingTool tool, const modeling::ToolSettings& settings);
 
+//! 欄に何か打った(打ちかけ・確定済み)か。何も打っていない Enter は、点をいくつでも
+//! 受ける道具(折れ線)では「締める」になる(右クリックと同じ。打った値があれば、その値で点を置く)。
+[[nodiscard]] bool AnyCursorFieldTouched(const CursorInputPanel& panel) noexcept;
+
 //! 最初の点を置いた直後に呼ぶ。主要寸法欄へ焦点が合った状態で返る。
 [[nodiscard]] base::Result<CursorInputPanel> BeginCursorInput(DrawingTool tool,
     bool onWorkPlane);

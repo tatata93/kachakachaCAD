@@ -773,8 +773,10 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     // 立体と面を作り方から作り直す。作り直さないと、線だけが残って
     // 立体が消えたことに気づかないまま、出そうとしたときに初めて分かる。
     RebuildKernelShapes();
-    RefreshEntityList();
-    RefreshExportCounts();
+    // 作り直した形を画面へ渡す(形の網・残した寸法・一覧・書き出しの数)。ここで渡していなかったので、
+    // 開き直すと立体と面の塗りが出ず、新規にしても前の文書の塗りが残っていた(PC 自己試験 HP-PL-01)。
+    AdoptCurrentDocument();
+    RefreshPartEdges();   // 場面を作り直したので、部品と面の辺を足し直す
     RefreshWorkPlaneDock();
     viewport_->update();
 }

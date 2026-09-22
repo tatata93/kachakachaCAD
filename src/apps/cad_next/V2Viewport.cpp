@@ -1,11 +1,13 @@
 #include "V2Viewport.h"
 
+#include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/app/ToolTargeting.h"
 
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
+#include "kachakacha/modeling/ToolController.h"
 
 #include <QColor>
 #include <QEvent>
@@ -1156,6 +1158,14 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
     }
     if (cursorPanel_.active
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        // 何も打っていない Enter は、点をいくつでも受ける道具(折れ線)を締める(右クリックと同じ)。
+        // 欄が Enter を食べていたので、Enter でも棚の「確定 Enter」でも折れ線が締まらなかった
+        // (PC 自己試験 HP-PF-03)。打った値があれば、これまでどおりその値で次の点を置く。
+        if (!kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)
+            && kachakacha::v2::modeling::TakesAnyNumberOfPoints(session_->CurrentTool())) {
+            FinishTool();
+            return;
+        }
         (void)PressEnterInCursorInput();
         return;
     }

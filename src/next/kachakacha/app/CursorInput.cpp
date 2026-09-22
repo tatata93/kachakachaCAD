@@ -96,6 +96,16 @@ bool ToolUsesCursorInput(DrawingTool tool)
     return !CursorFieldsFor(tool, true).empty();
 }
 
+bool AnyCursorFieldTouched(const CursorInputPanel& panel) noexcept
+{
+    for (const CursorFieldState& state : panel.states) {
+        if (!state.text.empty() || state.locked) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool ToolUsesCursorInput(DrawingTool tool, const modeling::ToolSettings& settings)
 {
     if (tool == DrawingTool::Circle && settings.circleMode == modeling::CircleMode::ThreePoints) {

@@ -70,6 +70,11 @@ std::string_view DrawingToolNameJa(DrawingTool tool) noexcept
     return "";
 }
 
+bool TakesAnyNumberOfPoints(DrawingTool tool) noexcept
+{
+    return tool == DrawingTool::Polyline || tool == DrawingTool::Spline;
+}
+
 ToolSession::ToolSession(DrawingTool tool, ToolSettings settings, GeometryTolerance tolerance)
     : tool_(tool), settings_(std::move(settings)), tolerance_(tolerance)
 {
@@ -104,7 +109,7 @@ int ToolSession::RequiredPointCount() const
         return 4;
     case DrawingTool::Polyline:
     case DrawingTool::Spline:
-        return -1;  // いくつでも
+        return -1;  // いくつでも(TakesAnyNumberOfPoints と同じ 2 つ)
     default:
         return 0;   // 形を作らないツール
     }

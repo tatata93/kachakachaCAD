@@ -55,6 +55,9 @@ enum class DrawingTool {
 
 [[nodiscard]] std::string_view DrawingToolNameJa(DrawingTool tool) noexcept;
 
+//! 点をいくつでも受ける道具(折れ線・スプライン)。締めるのは Enter / 右クリック。
+[[nodiscard]] bool TakesAnyNumberOfPoints(DrawingTool tool) noexcept;
+
 //! 円弧の作り方(V1の `ArcDrawingMode` と同じ3種 + 中心・始点・終点)。
 //! 末尾に足す(並びの番号を変えない)。
 enum class ArcMode {

@@ -12,6 +12,7 @@
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
@@ -21,6 +22,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -61,7 +63,7 @@ using kachakacha::v2::modeling::DrawingTool;
     return newest;
 }
 
-//! その線の上を、いま持っている道具のまま押す(`ClickAt`)。
+//! その線の上を、いま持っている道具のまま押す(`ClickAt`)。真ん中(t=0.5)を押す。
 [[nodiscard]] bool PressCurveOf(V2MainWindow& window, const EntityId& id)
 {
     auto& viewport = window.Viewport();
@@ -77,6 +79,57 @@ using kachakacha::v2::modeling::DrawingTool;
         return true;
     }
     return false;
+}
+
+//! `PressCurveOf` と同じだが、真ん中(t=0.5)ではなく指定した助変数の場所を押す。
+//! 交点がちょうど真ん中に来る形(例: 3点円弧の通過点)では、真ん中を押すと
+//! どちら側を残したいのかが曖昧になるので、こちらで片側をはっきり示す。
+[[nodiscard]] bool PressCurveAt(V2MainWindow& window, const EntityId& id, double t)
+{
+    auto& viewport = window.Viewport();
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (!(curve.entityId == id)) {
+            continue;
+        }
+        const auto screen = viewport.Mapping().Project(curve.segment.Evaluate(t));
+        if (!screen.has_value()) {
+            continue;
+        }
+        viewport.ClickAt(QPointF(screen->x, screen->y));
+        return true;
+    }
+    return false;
+}
+
+//! 上から見て、画面の割合で指した3点(始点・通過点・終点)を3点円弧で結んで手で引く。
+//! `DrawLineAtByHand` と同じ道(道具を持つ→動かす→押す)を円弧向けに真似たもの。
+[[nodiscard]] EntityId DrawArcAtByHand(V2MainWindow& window, double x0, double y0, double x1,
+    double y1, double x2, double y2)
+{
+    auto& viewport = window.Viewport();
+    const int before = CountOfKind(window, EntityKind::Wire);
+    auto settings = window.DrawingDock().Settings();
+    settings.arcMode = kachakacha::v2::modeling::ArcMode::ThreePoints;
+    window.DrawingDock().SetSettings(settings);
+    window.SelectTool(DrawingTool::Arc);
+    viewport.SetSnapSuppressed(true);
+    for (const QPointF& at : {QPointF(x0, y0), QPointF(x1, y1), QPointF(x2, y2)}) {
+        const QPointF screen(viewport.width() * at.x(), viewport.height() * at.y());
+        viewport.HoverAt(screen);
+        viewport.ClickAt(screen);
+    }
+    viewport.SetSnapSuppressed(false);
+    window.SelectTool(DrawingTool::Select);
+    if (CountOfKind(window, EntityKind::Wire) != before + 1) {
+        return EntityId{};
+    }
+    EntityId newest;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Wire) {
+            newest = entity.id;
+        }
+    }
+    return newest;
 }
 
 //! HP-CN-01。面取りは道具 → A → B → 下見 → Enter。
@@ -179,6 +232,88 @@ using kachakacha::v2::modeling::DrawingTool;
         && Explain("線は2本のまま", window.Session().Scene().curves.size() == before);
 }
 
+//! HP-CN-03。面取り(丸め)は直線と円弧の角も落とせる。角は共有する端点ではなく
+//! 曲線どうしの交わりで決まり、押した側が残る。
+[[nodiscard]] bool CaseHumanPathFilletLineArcCorner(V2MainWindow& window)
+{
+    using kachakacha::v2::app::ParameterId;
+    using kachakacha::v2::app::ParameterValueOf;
+    using kachakacha::v2::geometry::CurveKind;
+    // 面取り量 / 丸め半径。CornerSizeMm() は V2MainWindow の private な近道で、道具の
+    // 中からしか呼べない。試験は道具の外から見ているので、数の棚(ParameterDock)から
+    // 同じ値を読み直す(V2MainWindow::CornerSizeMm 自身と同じ式)。
+    const auto cornerSizeMm = [&window] {
+        return ParameterValueOf(window.ParameterDock().Values(), ParameterId::CornerSize);
+    };
+    window.RunCommand("file.new");
+    // 水平な直線。
+    const EntityId line = DrawLineAtByHand(window, 0.20, 0.50, 0.80, 0.50);
+    // 右へ膨らむ3点円弧。通過点 (0.75, 0.50) がちょうど直線の上に来て交わる。
+    const EntityId arc = DrawArcAtByHand(window, 0.60, 0.25, 0.75, 0.50, 0.60, 0.75);
+    if (!Explain("手で直線と円弧を1本ずつ引ける", !line.IsNil() && !arc.IsNil())) {
+        return false;
+    }
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);   // 空所を押して選択を外す
+    window.RunCommand("wire.fillet");
+    // 直線は真ん中(交点より左)を押して左側を残す。円弧は通過点(t=0.5)がそのまま
+    // 交点なので、そこを押すと片側を選んだことにならない。始点寄りの t=0.25(上側)を押す。
+    if (!Explain("直線を画面で押せる(左側を残す)", PressCurveOf(window, line))
+        || !Explain("円弧を画面で押せる(交点を避けて上側を残す)",
+            PressCurveAt(window, arc, 0.25))
+        || !Explain("2つそろうと下見が出る", window.CornerPreviewShown())
+        || !Explain("実際に計算した線が3Dに出ている", !window.Viewport().ToolPreview().empty())
+        || !Explain("一番下の一行は R丸め",
+            window.ToolFooterTextJa().startsWith(QStringLiteral("R丸め")))) {
+        return false;
+    }
+    // 元の直線の長さを覚えておく。角を落とした後、残る側はこれより短くなるはず。
+    double originalLineLengthMm = 0.0;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (curve.entityId == line) {
+            originalLineLengthMm = kachakacha::v2::geometry::Distance(
+                curve.segment.StartPoint(), curve.segment.EndPoint());
+        }
+    }
+    const std::size_t before = window.Session().Scene().curves.size();
+    if (!Explain("Enterで確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain((std::string("2本が3本(直線'・面取り弧・円弧')になる(")
+                        + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
+            window.Session().Scene().curves.size() == before + 1)
+        || !Explain("確定すると下見は消える", !window.CornerPreviewShown())) {
+        return false;
+    }
+    bool hasFilletArc = false;
+    bool sawLine = false;
+    bool lineIsShorter = true;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (curve.segment.Kind() == CurveKind::CircularArc
+            && std::abs(curve.segment.Radius() - cornerSizeMm()) < 1.0e-6) {
+            hasFilletArc = true;
+        }
+        if (curve.segment.Kind() == CurveKind::Line) {
+            sawLine = true;
+            const double lengthMm = kachakacha::v2::geometry::Distance(
+                curve.segment.StartPoint(), curve.segment.EndPoint());
+            // 押した側(左)が残る: 交点で切られているので元より短いはず。
+            // ここが崩れる(元と同じ長さのまま)なら、右側(交点の向こう側)を
+            // 落とせておらず、押した側が残るという約束が破れている。
+            if (lengthMm >= originalLineLengthMm - 1.0e-6) {
+                lineIsShorter = false;
+            }
+        }
+    }
+    if (!Explain((std::string("面取り弧の半径が角の量と同じ(角の量=")
+                     + std::to_string(cornerSizeMm()) + ")").c_str(),
+            hasFilletArc)
+        || !Explain("直線は残っている", sawLine)
+        || !Explain("残った直線は交点の向こう側を持たず、元より短い(押した左側が残る)",
+            lineIsShorter)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1回の取り消しで2本へ戻る", window.Session().Scene().curves.size() == before);
+}
+
 //! HP-SF-08。回転体は 道具 → 断面 → 軸(自動遷移)→ 下見 → Enter。ガイドの欄が「軸」になる。
 [[nodiscard]] bool CaseHumanPathRevolveSectionThenAxis(V2MainWindow& window)
 {
@@ -238,6 +373,8 @@ std::vector<SelfTestCase> HumanPathCornerCases()
             CaseHumanPathChamferPreviewThenConfirm},
         {"HP-CN-02 丸めも同じ道で、Esc でやめると何も変わらない",
             CaseHumanPathFilletCancelLeavesNothing},
+        {"HP-CN-03 面取りは直線と円弧の角も落とせる(押した側を残す)",
+            CaseHumanPathFilletLineArcCorner},
     };
 }
 

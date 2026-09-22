@@ -33,9 +33,29 @@ std::string_view BooleanSlotNameJa(BooleanSlot slot) noexcept
     return slot == BooleanSlot::Target ? "土台" : "相手";
 }
 
-std::string_view BooleanOperationLabelJa(bool cut) noexcept
+std::string_view BooleanOperationLabelJa(BooleanKind kind) noexcept
 {
-    return cut ? "引く" : "足す";
+    switch (kind) {
+    case BooleanKind::Add:       return "足す";
+    case BooleanKind::Cut:       return "引く";
+    case BooleanKind::Intersect: return "交差";
+    }
+    return "足す";
+}
+
+int BooleanModeOf(BooleanKind kind) noexcept
+{
+    switch (kind) {
+    case BooleanKind::Add:       return 0;
+    case BooleanKind::Cut:       return 1;
+    case BooleanKind::Intersect: return 2;
+    }
+    return 0;
+}
+
+BooleanKind BooleanKindOfMode(int mode) noexcept
+{
+    return mode == 1 ? BooleanKind::Cut : mode == 2 ? BooleanKind::Intersect : BooleanKind::Add;
 }
 
 BooleanSlot NextBooleanSlot(const BooleanInputState& state) noexcept
@@ -140,7 +160,7 @@ std::vector<std::string> BooleanStatusLinesJa(const BooleanInputState& state,
         + (state.tools.empty() ? std::string("× まだ")
                 : state.tools.size() == 1 ? std::string("✓ 入っている")
                 : "✓ " + std::to_string(state.tools.size()) + " 個(順に"
-                    + std::string(BooleanOperationLabelJa(state.cut)) + ")"));
+                    + std::string(BooleanOperationLabelJa(state.kind)) + ")"));
     if (!BooleanReady(state)) {
         lines.push_back("× 土台と相手(1 個以上。何個でも)を入れると下見が出ます");
         return lines;
@@ -163,7 +183,7 @@ std::vector<std::string> BooleanStatusLinesJa(const BooleanInputState& state,
 std::string BooleanFooterLine(const BooleanInputState& state, const std::string& targetName,
     const std::string& toolName, const BooleanPreviewOutcome& outcome, bool previewShown)
 {
-    std::string line = std::string(BooleanOperationLabelJa(state.cut)) + ": ";
+    std::string line = std::string(BooleanOperationLabelJa(state.kind)) + ": ";
     line += "TARGET=" + (state.target.IsNil() ? std::string("(なし)") : targetName);
     line += " / TOOL=" + (state.tools.empty() ? std::string("(なし)") : toolName);
     if (!BooleanReady(state) || state.activeSlot.has_value()) {

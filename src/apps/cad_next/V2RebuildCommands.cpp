@@ -167,7 +167,6 @@ bool V2MainWindow::RebuildWireCageShape(const kachakacha::v2::domain::Feature& f
 bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& feature,
     const EntityId& output)
 {
-    using kachakacha::v2::kernel::BooleanOperation;
 
     const auto* definition =
         std::get_if<kachakacha::v2::domain::BooleanDefinition>(&feature.definition);
@@ -191,7 +190,7 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
             return false;
         }
         const auto built = kachakacha::v2::kernel::BuildBoolean(
-            definition->mode == 1 ? BooleanOperation::Difference : BooleanOperation::Union,
+            KernelBooleanOperation(kachakacha::v2::app::BooleanKindOfMode(definition->mode)),
             current, other->second, tolerance);
         if (!built.HasValue()) {
             return false;

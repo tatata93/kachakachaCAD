@@ -13,13 +13,16 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/BooleanInputState.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/domain/Feature.h"
 
 #include <QPointF>
 #include <QString>
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace kachakacha::v2::selftest {
@@ -216,6 +219,82 @@ using kachakacha::v2::domain::EntityKind;
         CountOfKind(window, EntityKind::Part) == 2 && visibleParts == 2);
 }
 
+//! 見えている部品の数。
+[[nodiscard]] int VisiblePartCount(V2MainWindow& window)
+{
+    int count = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Part
+            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+//! HP-BO-03。交差(P-17): 重なる 2 つの箱の共通部分だけを残す部品になり、1 回で戻り、
+//! 保存して開き直しても作り直せる(文書には交差として残る)。
+[[nodiscard]] bool CaseHumanPathIntersectKeepsOnlyTheOverlap(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = MakeBoxByHand(window, 0.25, 0.35, 0.45, 0.65);
+    const EntityId second = MakeBoxByHand(window, 0.40, 0.35, 0.60, 0.65);   // 少し重なる
+    if (first.IsNil() || second.IsNil()) {
+        return false;
+    }
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);   // 空所を押して選択を外す
+    window.RunCommand("part.boolean_intersect");
+    auto& dock = window.BooleanDock();
+    if (!Explain("交差を押すと棚が構える", window.BooleanShelfShown())
+        || !Explain("棚の作り方は交差", dock.KindShown() == kachakacha::v2::app::BooleanKind::Intersect)
+        || !Explain("土台を画面で押せる", PressPart(window, first))
+        || !Explain("相手を画面で押せる", PressPart(window, second))) {
+        return false;
+    }
+    const std::string status = dock.StatusTextJa().toStdString();
+    if (!Explain((std::string("交差した結果が状態に出る(") + status + ")").c_str(),
+            status.find("生成可能") != std::string::npos)
+        || !Explain("一番下の一行は交差",
+            window.ToolFooterTextJa().startsWith(QStringLiteral("交差")))
+        || !Explain("Enterで確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("交差の部品が1つできる(元の2つは隠れる)",
+            CountOfKind(window, EntityKind::Part) == 3 && VisiblePartCount(window) == 1)) {
+        return false;
+    }
+    bool recorded = false;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        if (const auto* boolean =
+                std::get_if<kachakacha::v2::domain::BooleanDefinition>(&feature.definition)) {
+            recorded = recorded || boolean->mode == 2;
+        }
+    }
+    if (!Explain("文書には交差(mode 2)として残る", recorded)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("1回の取り消しで元の2つに戻る",
+            CountOfKind(window, EntityKind::Part) == 2 && VisiblePartCount(window) == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    if (!Explain("やり直すと交差の部品に戻る", VisiblePartCount(window) == 1)
+        || !Explain("保存して開き直せる",
+            window.SaveAndReopen(QStringLiteral("kacha_selftest_intersect.kcd2")))) {
+        return false;
+    }
+    // 開き直したあと、見えている部品(交差の結果)に形がある = 交差として作り直せた。
+    kachakacha::v2::app::SelectionSet visible;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Part
+            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            visible.entityIds.push_back(entity.id);
+        }
+    }
+    window.Viewport().SetSelection(visible);
+    return Explain("開き直しても交差の部品は形があり、書き出せる",
+        visible.entityIds.size() == 1 && window.CanExportSelectedParts());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
@@ -225,6 +304,8 @@ std::vector<SelfTestCase> HumanPathBooleanCases()
             CaseHumanPathBooleanSlotsFollowClicks},
         {"HP-BO-02 両方入ると実際の結果が下見に出て、Enter で 1回で戻せる部品になる",
             CaseHumanPathBooleanPreviewThenConfirm},
+        {"HP-BO-03 交差は重なりだけを残す部品になり1回で戻り開き直しても作り直せる",
+            CaseHumanPathIntersectKeepsOnlyTheOverlap},
     };
 }
 

@@ -176,7 +176,8 @@ void V2MainWindow::BuildOutputShelves()
     BuildSurfaceDock();
 
     booleanDock_ = new V2BooleanDock(this);
-    booleanDock_->SetOperationHandler([this](bool cut) { ChooseBooleanOperation(cut); });
+    booleanDock_->SetOperationHandler(
+        [this](kachakacha::v2::app::BooleanKind kind) { ChooseBooleanOperation(kind); });
     booleanDock_->SetActivateHandler(
         [this](kachakacha::v2::app::BooleanSlot slot) { ActivateBooleanSlot(slot); });
     booleanDock_->SetClearHandler(

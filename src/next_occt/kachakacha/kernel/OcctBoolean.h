@@ -29,8 +29,9 @@ inline constexpr const char* kBooleanNothingLeft = "KER-B004";
 inline constexpr const char* kBooleanUnsupported = "KER-B005";
 
 enum class BooleanOperation {
-    Union,       //!< 足す
-    Difference,  //!< 引く
+    Union,         //!< 足す
+    Difference,    //!< 引く
+    Intersection,  //!< 交差(2 つに共通する部分だけを残す)
 };
 
 struct BooleanBuildResult {
@@ -40,7 +41,9 @@ struct BooleanBuildResult {
     double previousVolumeMm3 = 0.0;
 };
 
-//! 2つの部品を足す/引く。first が土台で、second が相手である。
+//! 2つの部品を足す/引く/交差させる。first が土台で、second が相手である。
+//! 何も変わらない(足しても土台の中・引いても重ならない・交差しても土台のまま)なら断り、
+//! 何も残らない(引き切る・重ならないものを交差させる)ときも断る。
 [[nodiscard]] base::Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     modeling::KernelShapeHandle first, modeling::KernelShapeHandle second,
     double toleranceMm);

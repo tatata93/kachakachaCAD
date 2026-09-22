@@ -51,6 +51,7 @@
 #include "kachakacha/app/DiagnosticReport.h"
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
+#include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
@@ -850,7 +851,10 @@ private:
     //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
     //! 「足す・引く」の道具(引継ぎ 2026-09-17 の 4、V2BooleanCommands.cpp)。
-    void RunBooleanTool(bool cut);
+    void RunBooleanTool(kachakacha::v2::app::BooleanKind kind);
+    [[nodiscard]] static kachakacha::v2::app::BooleanKind BooleanKindForCommand(std::string_view id);
+    [[nodiscard]] static kachakacha::v2::kernel::BooleanOperation KernelBooleanOperation(
+        kachakacha::v2::app::BooleanKind kind);
     void MirrorBooleanToSelection();
     void RefreshBooleanForSelectionChange();
     void RefreshBooleanPreview();
@@ -858,7 +862,7 @@ private:
     void RefreshBooleanAll();
     void ActivateBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
     void ClearBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
-    void ChooseBooleanOperation(bool cut);
+    void ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind);
     void EndBoolean();
     void ConfirmBoolean();
     //! 「厚み」の道具(指示書 matrix P-10、V2ThickenCommands.cpp)。

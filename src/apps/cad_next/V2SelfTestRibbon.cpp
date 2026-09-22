@@ -80,7 +80,7 @@ using kachakacha::v2::modeling::DrawingTool;
     if (!Explain("部品は5カテゴリ", ribbon.CategoryCount() == 5)
         || !Explain("押し出しが見えている", ribbon.ToolEnabled(QStringLiteral("押し出し")))
         || !Explain("ブール演算を押せる", ribbon.ClickCategory(QStringLiteral("ブール演算")))
-        || !Explain("交差は押せない形", !ribbon.ToolEnabled(QStringLiteral("交差")))) {
+        || !Explain("交差を押せる(P-17、共通部分)", ribbon.ToolEnabled(QStringLiteral("交差")))) {
         return false;
     }
     window.SetMode(UiMode::Drawing);

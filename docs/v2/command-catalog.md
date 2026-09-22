@@ -139,6 +139,7 @@ parameter schemaのdiscriminatorにする。
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart(閉シェルごとに 1 つ。各部品はそのシェルの線だけを記録。まとめて 1 回で戻る) | AT-GEO-010から013 |
 | `part.boolean_add` | 足す | target Part 1、tool Part 1以上(何個でも。順に足す) | Part | AT-EXT-007 |
 | `part.boolean_cut` | 引く | target Part 1、tool Part 1以上(何個でも。順に引く) | 1以上のPart | AT-EXT-007 |
+| `part.boolean_intersect` | 交差 | target Part 1、tool Part 1以上(何個でも。全部に共通する部分) | Part(重ならなければ KER-B004、土台のままなら KER-B003 で断る) | AT-EXT-007 |
 | `derived.freeze` | 現在状態を固定 | Derived Wire/Part 1以上 | Frozen Wire/Part | AT-DOC-004, AT-FAB-014 |
 
 押し出し内の `足す/引く` と単独Booleanは同じ `BooleanFeature` 評価器を使う。UI入口が違っても

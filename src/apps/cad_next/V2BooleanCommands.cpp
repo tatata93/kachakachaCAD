@@ -69,9 +69,9 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         RunFabricationCreate();
         return true;
     }
-    if (id == "part.boolean_add" || id == "part.boolean_cut") {
+    if (id == "part.boolean_add" || id == "part.boolean_cut" || id == "part.boolean_intersect") {
         ClearPendingCommand();
-        RunBooleanTool(id == "part.boolean_cut");
+        RunBooleanTool(BooleanKindForCommand(id));
         return true;
     }
     // 厚みも道具から始める(指示書 matrix P-10)。何も選んでいなくても棚が出て、
@@ -114,16 +114,36 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     return false;
 }
 
-//! 「足す」「引く」を押した。構えていなければ構え、構えていれば操作を切り替える。
-void V2MainWindow::RunBooleanTool(bool cut)
+//! 作り方からカーネルの演算へ。開き直し(V2RebuildCommands)も同じものを使う。
+kachakacha::v2::kernel::BooleanOperation V2MainWindow::KernelBooleanOperation(
+    kachakacha::v2::app::BooleanKind kind)
+{
+    using kachakacha::v2::app::BooleanKind;
+    using kachakacha::v2::kernel::BooleanOperation;
+    return kind == BooleanKind::Cut ? BooleanOperation::Difference
+        : kind == BooleanKind::Intersect ? BooleanOperation::Intersection
+                                         : BooleanOperation::Union;
+}
+
+//! 命令の名前から作り方(足す / 引く / 交差)。
+kachakacha::v2::app::BooleanKind V2MainWindow::BooleanKindForCommand(std::string_view id)
+{
+    using kachakacha::v2::app::BooleanKind;
+    return id == "part.boolean_cut" ? BooleanKind::Cut
+        : id == "part.boolean_intersect" ? BooleanKind::Intersect
+                                         : BooleanKind::Add;
+}
+
+//! 「足す」「引く」「交差」を押した。構えていなければ構え、構えていれば作り方を切り替える。
+void V2MainWindow::RunBooleanTool(kachakacha::v2::app::BooleanKind kind)
 {
     if (booleanShelfShown_) {
-        ChooseBooleanOperation(cut);
+        ChooseBooleanOperation(kind);
         return;
     }
     // 選んであった部品は、選んだ順に土台・相手へ入れる(選んでから押す道も残す)。
     booleanInput_ = kachakacha::v2::app::BooleanInputState{};
-    booleanInput_.cut = cut;
+    booleanInput_.kind = kind;
     const auto& document = session_->GetDocument();
     for (const EntityId& id : viewport_->Selection().entityIds) {
         const auto* entity = document.FindEntity(id);
@@ -140,7 +160,7 @@ void V2MainWindow::RunBooleanTool(bool cut)
     SetStatus(QStringLiteral("%1: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。"
                              "押し直すと外れます。Enter で確定、Esc でやめます。\n%2")
             .arg(QString::fromUtf8(
-                     std::string(kachakacha::v2::app::BooleanOperationLabelJa(cut)).c_str()),
+                     std::string(kachakacha::v2::app::BooleanOperationLabelJa(kind)).c_str()),
                 QString::fromStdString(kachakacha::v2::app::BooleanHintJa(booleanInput_))));
 }
 
@@ -215,9 +235,7 @@ void V2MainWindow::RefreshBooleanPreview()
             return;
         }
         const auto built = kachakacha::v2::kernel::BuildBoolean(
-            booleanInput_.cut ? kachakacha::v2::kernel::BooleanOperation::Difference
-                              : kachakacha::v2::kernel::BooleanOperation::Union,
-            current, other->second, tolerance);
+            KernelBooleanOperation(booleanInput_.kind), current, other->second, tolerance);
         if (!built.HasValue()) {
             const auto* entity = session_->GetDocument().FindEntity(tool);
             booleanOutcome_.refusalJa = (booleanInput_.tools.size() > 1 && entity != nullptr
@@ -297,7 +315,7 @@ void V2MainWindow::ActivateBooleanSlot(BooleanSlot slot)
     RefreshBooleanDock();
     SetStatus(QStringLiteral("%1: 次のクリックは「%2」へ入ります。")
             .arg(QString::fromUtf8(std::string(kachakacha::v2::app::BooleanOperationLabelJa(
-                                                   booleanInput_.cut))
+                                                   booleanInput_.kind))
                                        .c_str()),
                 QString::fromUtf8(
                     std::string(kachakacha::v2::app::BooleanSlotNameJa(slot)).c_str())));
@@ -311,14 +329,14 @@ void V2MainWindow::ClearBooleanSlot(BooleanSlot slot)
     RefreshBooleanAll();
 }
 
-//! 足す ⇄ 引く。入力はそのまま、下見だけ作り直す。
-void V2MainWindow::ChooseBooleanOperation(bool cut)
+//! 足す ⇄ 引く ⇄ 交差。入力はそのまま、下見だけ作り直す。
+void V2MainWindow::ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind)
 {
-    booleanInput_.cut = cut;
+    booleanInput_.kind = kind;
     RefreshBooleanAll();
     SetStatus(QStringLiteral("%1: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。\n%2")
             .arg(QString::fromUtf8(
-                     std::string(kachakacha::v2::app::BooleanOperationLabelJa(cut)).c_str()),
+                     std::string(kachakacha::v2::app::BooleanOperationLabelJa(kind)).c_str()),
                 QString::fromStdString(kachakacha::v2::app::BooleanHintJa(booleanInput_))));
 }
 
@@ -345,15 +363,15 @@ void V2MainWindow::ConfirmBoolean()
     if (!booleanBuilt_.has_value()) {
         SetStatus(QStringLiteral("%1: まだ作れません。土台と相手を入れてください。")
                 .arg(QString::fromUtf8(std::string(kachakacha::v2::app::BooleanOperationLabelJa(
-                                                       booleanInput_.cut))
+                                                       booleanInput_.kind))
                                            .c_str())));
         RefreshBooleanDock();
         return;
     }
-    const bool cut = booleanInput_.cut;
-    const char* label = cut ? "引く" : "足す";
+    const std::string labelText(kachakacha::v2::app::BooleanOperationLabelJa(booleanInput_.kind));
+    const char* label = labelText.c_str();
     kachakacha::v2::domain::BooleanDefinition definition;
-    definition.mode = cut ? 1 : 0;
+    definition.mode = kachakacha::v2::app::BooleanModeOf(booleanInput_.kind);   // 0 足す 1 引く 2 交差
     definition.targets.push_back(booleanInput_.target);
     definition.tools = booleanInput_.tools;   // 相手は何個でも(保存の形は前から並び)
     std::vector<EntityId> used{booleanInput_.target};

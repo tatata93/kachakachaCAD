@@ -205,7 +205,7 @@ bool V2MainWindow::IsPartCommand(std::string_view id)
     return id == "part.extrude" || id == "part.thicken" || id == "part.thicken_to_plane"
         || id == "part.thickness_placement" || id == "part.surface_jig"
         || id == "part.from_wire_cage" || id == "part.boolean_add"
-        || id == "part.boolean_cut";
+        || id == "part.boolean_cut" || id == "part.boolean_intersect";
 }
 
 void V2MainWindow::RunPartCommand(std::string_view id)
@@ -242,8 +242,8 @@ void V2MainWindow::RunPartCommand(std::string_view id)
         RunWireCage();
         return;
     }
-    // 足す・引くは道具から始める(V2BooleanCommands.cpp)。ここへは来ない。
-    RunBooleanTool(id == "part.boolean_cut");
+    // 足す・引く・交差は道具から始める(V2BooleanCommands.cpp)。ここへは来ない。
+    RunBooleanTool(BooleanKindForCommand(id));
 }
 
 kachakacha::v2::app::ExtrudeFacts V2MainWindow::BuildExtrudeFacts(

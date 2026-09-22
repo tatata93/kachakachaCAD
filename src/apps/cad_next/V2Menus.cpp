@@ -82,7 +82,7 @@ void V2MainWindow::BuildMenus()
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",
         "guide.clear", "part.extrude", "part.thicken", "part.thickness_placement",
         "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",
-        "part.boolean_add", "part.boolean_cut", "derived.freeze"});
+        "part.boolean_add", "part.boolean_cut", "part.boolean_intersect", "derived.freeze"});
 
     QMenu* fabrication = menuBar()->addMenu(QStringLiteral("製作(&B)"));
     addCommands(fabrication, {"fabrication.create", "fabrication.assign_role",

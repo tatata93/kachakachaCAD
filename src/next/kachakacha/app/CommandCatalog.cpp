@@ -470,6 +470,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::TwoOrMoreParts, "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。",
             "部品から引きます。分かれる場合は個数を先に知らせます。", true,
             {"AT-EXT-007"}},
+        {"part.boolean_intersect", "交差", CommandMode::Dialog, "boolean_intersect", "",
+            SelectionPredicate::TwoOrMoreParts, "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。",
+            "土台と相手に共通する部分だけを残します(相手が何個でも、全部に共通する部分)。"
+            "重ならなければ断ります。", true,
+            {"AT-EXT-007"}},
         {"derived.freeze", "現在状態を固定", CommandMode::Instant, "freeze", "",
             SelectionPredicate::OneOrMoreDerivedEntities, "派生したものを1つ以上選んでください。",
             "派生したものを固定して、独立した実体にします(選んだものごとに 1 つ。1 回で戻る)。", true,

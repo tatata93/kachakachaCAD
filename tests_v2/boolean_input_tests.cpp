@@ -114,7 +114,7 @@ KACHA_V2_TEST(boolean_input, 相手は何個でも足せて押し直した分だ
 KACHA_V2_TEST(boolean_input, 状態行と一番下の一行は同じことを言う)
 {
     BooleanInputState state;
-    state.cut = true;
+    state.kind = kachakacha::v2::app::BooleanKind::Cut;
     BooleanPreviewOutcome none;
     auto lines = BooleanStatusLinesJa(state, none, false);
     Require(!lines.empty() && lines.front() == "▶ 次のクリック → 土台", "先頭は案内");
@@ -142,6 +142,24 @@ KACHA_V2_TEST(boolean_input, 状態行と一番下の一行は同じことを言
     refused.refusalJa = "触れていないので何も変わりません";
     lines = BooleanStatusLinesJa(state, refused, false);
     Require(lines.back().find("触れていない") != std::string::npos, "断る理由が出る");
+}
+
+KACHA_V2_TEST(boolean_input, 交差も作り方の1つで文書の数と行き来できる)
+{
+    using kachakacha::v2::app::BooleanKind;
+    using kachakacha::v2::app::BooleanKindOfMode;
+    using kachakacha::v2::app::BooleanModeOf;
+    using kachakacha::v2::app::BooleanOperationLabelJa;
+    Require(BooleanOperationLabelJa(BooleanKind::Intersect) == "交差", "名前は交差");
+    for (const BooleanKind kind : {BooleanKind::Add, BooleanKind::Cut, BooleanKind::Intersect}) {
+        Require(BooleanKindOfMode(BooleanModeOf(kind)) == kind, "文書の数と行き来できる");
+    }
+    Require(BooleanModeOf(BooleanKind::Intersect) == 2, "交差は 2(足す 0・引く 1 は前から)");
+    Require(BooleanKindOfMode(7) == BooleanKind::Add, "知らない数は足す");
+    BooleanInputState state;
+    state.kind = BooleanKind::Intersect;
+    const auto footer = BooleanFooterLine(state, "", "", BooleanPreviewOutcome{}, false);
+    Require(footer.rfind("交差: ", 0) == 0, "一番下の一行も交差と言う: " + footer);
 }
 
 KACHA_V2_TEST_MAIN("boolean_input_tests")

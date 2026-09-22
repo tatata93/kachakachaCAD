@@ -10,6 +10,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <utility>
+
 namespace {
 
 using kachakacha::v2::app::BooleanSlot;
@@ -40,20 +42,20 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     auto* operations = new QHBoxLayout();
     add_ = new QPushButton(QStringLiteral("足す"), body);
     cut_ = new QPushButton(QStringLiteral("引く"), body);
-    add_->setCheckable(true);
-    cut_->setCheckable(true);
-    QObject::connect(add_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && operationHandler_) {
-            operationHandler_(false);
-        }
-    });
-    QObject::connect(cut_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && operationHandler_) {
-            operationHandler_(true);
-        }
-    });
-    operations->addWidget(add_);
-    operations->addWidget(cut_);
+    intersect_ = new QPushButton(QStringLiteral("交差"), body);
+    intersect_->setToolTip(QStringLiteral("土台と相手に共通する部分だけを残します(相手が何個でも、全部に共通する部分)。"));
+    using kachakacha::v2::app::BooleanKind;
+    const std::pair<QPushButton*, BooleanKind> kinds[] = {
+        {add_, BooleanKind::Add}, {cut_, BooleanKind::Cut}, {intersect_, BooleanKind::Intersect}};
+    for (const auto& [button, kind] : kinds) {
+        button->setCheckable(true);
+        QObject::connect(button, &QPushButton::clicked, this, [this, kind = kind] {
+            if (!loading_ && operationHandler_) {
+                operationHandler_(kind);
+            }
+        });
+        operations->addWidget(button);
+    }
     layout->addLayout(operations);
 
     BuildRows(layout);
@@ -123,8 +125,9 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
     const std::vector<QString>& statusLinesJa, bool canConfirm)
 {
     loading_ = true;
-    add_->setChecked(!state.cut);
-    cut_->setChecked(state.cut);
+    add_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Add);
+    cut_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Cut);
+    intersect_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Intersect);
     targetValue_->setText(state.target.IsNil() ? QStringLiteral("(選んでいません)")
                                                 : targetNameJa);
     toolValue_->setText(state.tools.empty() ? QStringLiteral("(選んでいません)") : toolNameJa);
@@ -145,7 +148,8 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
     loading_ = false;
 }
 
-void V2BooleanDock::SetOperationHandler(std::function<void(bool)> handler)
+void V2BooleanDock::SetOperationHandler(
+    std::function<void(kachakacha::v2::app::BooleanKind)> handler)
 {
     operationHandler_ = std::move(handler);
 }
@@ -177,9 +181,12 @@ QPushButton* V2BooleanDock::ClearFor(BooleanSlot slot) const
     return slot == BooleanSlot::Target ? clearTarget_ : clearTool_;
 }
 
-bool V2BooleanDock::ClickOperation(bool cut)
+bool V2BooleanDock::ClickOperation(kachakacha::v2::app::BooleanKind kind)
 {
-    return ClickIfVisible(cut ? cut_ : add_);
+    using kachakacha::v2::app::BooleanKind;
+    return ClickIfVisible(kind == BooleanKind::Cut ? cut_
+            : kind == BooleanKind::Intersect      ? intersect_
+                                                  : add_);
 }
 
 bool V2BooleanDock::ClickActivate(BooleanSlot slot)
@@ -212,9 +219,12 @@ QString V2BooleanDock::ToolTextJa() const
     return toolValue_->text();
 }
 
-bool V2BooleanDock::CutShown() const
+kachakacha::v2::app::BooleanKind V2BooleanDock::KindShown() const
 {
-    return cut_->isChecked();
+    using kachakacha::v2::app::BooleanKind;
+    return cut_->isChecked() ? BooleanKind::Cut
+        : intersect_->isChecked() ? BooleanKind::Intersect
+                                  : BooleanKind::Add;
 }
 
 QString V2BooleanDock::StatusTextJa() const

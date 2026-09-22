@@ -127,7 +127,7 @@ const std::vector<RibbonCategory>& PartCategories()
                 Blocked("面置換", "面置換はまだできません")}},
         {"boolean", "ブール演算",
             {Tool("足す", "part.boolean_add"), Tool("引く", "part.boolean_cut"),
-                Blocked("交差", "交差はまだできません(核に共通部分の演算がありません)")}},
+                Tool("交差", "part.boolean_intersect")}},
         {"place", "配置",
             {Blocked("移動", "部品の移動はまだできません(線の移動はあります。部品の変形は核にありません)"),
                 Blocked("回転", "部品の回転はまだできません"),

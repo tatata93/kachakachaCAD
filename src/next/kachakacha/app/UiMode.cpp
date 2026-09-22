@@ -82,7 +82,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "part.surface_jig",
         "part.from_wire_cage",
         "part.boolean_add",
-        "part.boolean_cut", "derived.freeze",
+        "part.boolean_cut", "part.boolean_intersect", "derived.freeze",
     };
     static const std::vector<std::string_view> fabrication{
         "fabrication.create", "fabrication.assign_role", "fabrication.assign_relief_cut",

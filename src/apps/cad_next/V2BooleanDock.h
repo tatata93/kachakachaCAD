@@ -1,9 +1,9 @@
 #pragma once
 
-//! 「足す・引く」の棚(引継ぎ 2026-09-17 の 4)。
+//! 「足す・引く・交差」の棚(引継ぎ 2026-09-17 の 4、交差は P-17)。
 //!
 //! 3つの段を1枚に置く。
-//!   1. 操作   … 足す / 引く(押して切り替える)
+//!   1. 作り方 … 足す / 引く / 交差(押して切り替える)
 //!   2. 入力   … 土台 / 相手。欄ごとに「ここへ選ぶ」(押された形 = 次のクリックが入る欄)と「解除」
 //!   3. 状態   … 何を待っているか・生成可否・体積の変わり方・下見の様子
 //! 下に キャンセル / 確定。
@@ -31,8 +31,8 @@ public:
         const QString& targetNameJa, const QString& toolNameJa,
         const std::vector<QString>& statusLinesJa, bool canConfirm);
 
-    //! 足す / 引くを押した。
-    void SetOperationHandler(std::function<void(bool cut)> handler);
+    //! 足す / 引く / 交差を押した。
+    void SetOperationHandler(std::function<void(kachakacha::v2::app::BooleanKind)> handler);
     //! その欄の「ここへ選ぶ」を押した。
     void SetActivateHandler(std::function<void(kachakacha::v2::app::BooleanSlot)> handler);
     //! その欄の「解除」を押した。
@@ -42,7 +42,7 @@ public:
 
     //! **見えているボタンを実際に押す。**人の道の試験はこちらを使う。
     //! 見えていなければ偽。不可視の widget を叩いて通したことにしない。
-    [[nodiscard]] bool ClickOperation(bool cut);
+    [[nodiscard]] bool ClickOperation(kachakacha::v2::app::BooleanKind kind);
     [[nodiscard]] bool ClickActivate(kachakacha::v2::app::BooleanSlot slot);
     [[nodiscard]] bool ClickClear(kachakacha::v2::app::BooleanSlot slot);
     [[nodiscard]] bool ClickConfirm();
@@ -52,8 +52,8 @@ public:
     //! 欄に出ている名前。
     [[nodiscard]] QString TargetTextJa() const;
     [[nodiscard]] QString ToolTextJa() const;
-    //! 押された形で出ている操作(真 = 引く)。
-    [[nodiscard]] bool CutShown() const;
+    //! 押された形で出ている作り方。
+    [[nodiscard]] kachakacha::v2::app::BooleanKind KindShown() const;
     //! 「状態」に出ている文。
     [[nodiscard]] QString StatusTextJa() const;
 
@@ -64,6 +64,7 @@ private:
 
     QPushButton* add_ = nullptr;
     QPushButton* cut_ = nullptr;
+    QPushButton* intersect_ = nullptr;
     QLabel* targetValue_ = nullptr;
     QLabel* toolValue_ = nullptr;
     QPushButton* armTarget_ = nullptr;
@@ -75,7 +76,7 @@ private:
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;
 
-    std::function<void(bool)> operationHandler_;
+    std::function<void(kachakacha::v2::app::BooleanKind)> operationHandler_;
     std::function<void(kachakacha::v2::app::BooleanSlot)> activateHandler_;
     std::function<void(kachakacha::v2::app::BooleanSlot)> clearHandler_;
     std::function<void()> confirmHandler_;

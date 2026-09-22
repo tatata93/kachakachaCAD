@@ -1,6 +1,6 @@
 #pragma once
 
-//! 「足す・引く」の入力の状態(引継ぎ 2026-09-17 の 4)。
+//! 「足す・引く・交差」の入力の状態(引継ぎ 2026-09-17 の 4、交差は P-17)。
 //!
 //! これまでの足す・引くは「部品を2つ選んでから押す」だけで、どちらが土台で
 //! どちらが相手かは **選んだ順** に隠れていた。押した瞬間に文書が変わり、下見も無かった。
@@ -26,9 +26,16 @@ enum class BooleanSlot {
     Tool,     //!< 相手。足す/引く側
 };
 
+//! 足す / 引く / 交差(P-17。2 つに共通する部分だけを残す)。
+enum class BooleanKind {
+    Add,
+    Cut,
+    Intersect,
+};
+
 struct BooleanInputState {
-    //! 偽なら足す、真なら引く。
-    bool cut = false;
+    //! 作り方。足す・引く・交差。
+    BooleanKind kind = BooleanKind::Add;
     //! 土台(1 つ。結果が土台を置き換える)。空なら Nil。
     base::EntityId target;
     //! 相手(何個でも。順に足す・引く)。
@@ -39,7 +46,10 @@ struct BooleanInputState {
 
 [[nodiscard]] std::string_view BooleanSlotKey(BooleanSlot slot) noexcept;      //!< TARGET / TOOL
 [[nodiscard]] std::string_view BooleanSlotNameJa(BooleanSlot slot) noexcept;   //!< 土台 / 相手
-[[nodiscard]] std::string_view BooleanOperationLabelJa(bool cut) noexcept;     //!< 足す / 引く
+[[nodiscard]] std::string_view BooleanOperationLabelJa(BooleanKind kind) noexcept;   //!< 足す / 引く / 交差
+//! 文書の BooleanDefinition::mode(0=足す 1=引く 2=交差)との行き来。知らない数は足す。
+[[nodiscard]] int BooleanModeOf(BooleanKind kind) noexcept;
+[[nodiscard]] BooleanKind BooleanKindOfMode(int mode) noexcept;
 
 //! 次の 3D クリックが入る欄。明示した欄があればそれ、無ければ土台 → 相手の順に空いている欄。
 //! 両方入っていれば相手(押し直しは相手を入れ替える)。

@@ -100,6 +100,7 @@ class V2SolidTool;
 class V2EdgeFinishTool;
 class V2ShellSplitTool;
 class V2HoverEditTool;
+class V2LoopFacesTool;
 
 //! 見た目。
 enum class UiTheme {
@@ -114,6 +115,7 @@ class V2MainWindow final : public QMainWindow {
     friend class V2EdgeFinishTool;        // 辺の丸め・面取り(同じ)
     friend class V2ShellSplitTool;        // シェル・分割(同じ)
     friend class V2HoverEditTool;         // トリム・延長・分割(線の上に置いて押す)
+    friend class V2LoopFacesTool;         // 線から面(輪を探して面にする)
 public:
     V2MainWindow();
     ~V2MainWindow() override;
@@ -283,6 +285,7 @@ public:
     [[nodiscard]] V2EdgeFinishTool& EdgeFinishTool() { return *edgeFinishTool_; }
     [[nodiscard]] V2ShellSplitTool& ShellSplitTool() { return *shellSplitTool_; }
     [[nodiscard]] V2HoverEditTool& HoverEditTool() { return *hoverEdit_; }
+    [[nodiscard]] V2LoopFacesTool& LoopFacesTool() { return *loopFaces_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
     [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
     [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
@@ -1065,6 +1068,7 @@ private:
     std::unique_ptr<V2EdgeFinishTool> edgeFinishTool_;
     std::unique_ptr<V2ShellSplitTool> shellSplitTool_;
     std::unique_ptr<V2HoverEditTool> hoverEdit_;
+    std::unique_ptr<V2LoopFacesTool> loopFaces_;
     //! 自分の棚を持つ道具(立体を作る・辺の丸め面取り)が構えていれば、その棚。無ければ None。
     [[nodiscard]] kachakacha::v2::app::Shelf OwnedToolShelf() const;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。

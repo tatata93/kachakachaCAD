@@ -348,6 +348,13 @@ const std::vector<CommandDescriptor>& CommandCatalog()
         // **人が使う入口はこれ1つ**(オーナー指示 2026-09-15 §10)。
         // 「形状ガイド」と役割表の2本立ては、人から見て別物に見えていた。
         // 中では今までの GuideTable をそのまま使う。
+        // 線から面(オーナー決定 2026-09-22): 線を選ぶだけで、閉じた輪を全部面にする。
+        // 「面を作る」の入口 1 つの方針に、迷わない近道を **足す**(置き換えない)。
+        {"surface.from_lines", "線から面", CommandMode::Tool, "surface", "",
+            SelectionPredicate::OneOrMoreWires, "線を1つ以上選んでください。",
+            "選んだ線の端点のつながりから閉じた輪を全部見つけ、平面 / 四辺面 / 境界面で面にします。"
+            "端が離れていれば、どこが何 mm かを言い、Enter で直線の端を寄せてから作ります。元の線は残ります。",
+            true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-008"}},
         {"surface.create", "面を作る", CommandMode::Dialog, "surface", "G",
             SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
             "線を1つ以上、または形状ガイドの面を選んでください。",

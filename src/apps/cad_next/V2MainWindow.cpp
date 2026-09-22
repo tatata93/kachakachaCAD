@@ -2,6 +2,7 @@
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2HoverEditTool.h"
+#include "V2LoopFacesTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -772,6 +773,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
     if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
     if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
+    if (loopFaces_ != nullptr) { loopFaces_->Clear(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));

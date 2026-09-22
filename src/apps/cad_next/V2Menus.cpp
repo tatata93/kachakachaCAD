@@ -76,7 +76,7 @@ void V2MainWindow::BuildMenus()
         "grid.move_origin"});
 
     QMenu* shape = menuBar()->addMenu(QStringLiteral("形(&M)"));
-    addCommands(shape, {"surface.create", "surface.match", "surface.bridge",
+    addCommands(shape, {"surface.from_lines", "surface.create", "surface.match", "surface.bridge",
         "surface.refit", "surface.mirror", "surface.iso_curves", "guide.revolve",
         "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",

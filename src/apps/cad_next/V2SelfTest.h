@@ -199,6 +199,9 @@ void Note(const char* what);
 //! 境界面が外周と内側の線を分けて扱うか(V2SelfTestBoundaryFill.cpp、HP-SF-10)。
 [[nodiscard]] std::vector<SelfTestCase> BoundaryFillCases();
 
+//! 「線から面」の人の道(HP-LF、オーナー要望 2026-09-22)。線を選んで押すだけで輪を面にする。
+[[nodiscard]] std::vector<SelfTestCase> LoopFacesCases();
+
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();
 

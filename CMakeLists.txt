@@ -598,6 +598,8 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ProcessSteps.cpp
     src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DirectWireEntry.cpp
+    src/next/kachakacha/app/LoopGraph.cpp
+    src/next/kachakacha/app/LoopFaces.cpp
     src/next/kachakacha/app/OuterLoopSplit.cpp
     src/next/kachakacha/app/IntersectionPoints.cpp
     src/next/kachakacha/app/EntityEdit.cpp
@@ -803,6 +805,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(arc_builder_tests tests_v2/arc_builder_tests.cpp)
     kachakacha_add_v2_test(wire_connect_tests tests_v2/wire_connect_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
+    kachakacha_add_v2_test(loop_faces_tests tests_v2/loop_faces_tests.cpp)
     kachakacha_add_v2_test(corner_curves_tests tests_v2/corner_curves_tests.cpp)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(profile_region_tests tests_v2/profile_region_tests.cpp)
@@ -1019,6 +1022,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestEdgeFinish.cpp
         src/apps/cad_next/V2SelfTestShellSplit.cpp
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
+        src/apps/cad_next/V2SelfTestLoopFaces.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -1081,6 +1085,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ShellSplitDock.cpp
         src/apps/cad_next/V2ShellSplitTool.cpp
         src/apps/cad_next/V2HoverEditTool.cpp
+        src/apps/cad_next/V2LoopFacesTool.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp
         src/apps/cad_next/V2SurfaceDockRoles.cpp

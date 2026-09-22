@@ -147,6 +147,8 @@ namespace {
     cases.insert(cases.end(), accuracy.begin(), accuracy.end());
     const std::vector<SelfTestCase> boundaryFill = BoundaryFillCases();
     cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
+    const std::vector<SelfTestCase> loopFaces = LoopFacesCases();
+    cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
     return cases;
 }
 

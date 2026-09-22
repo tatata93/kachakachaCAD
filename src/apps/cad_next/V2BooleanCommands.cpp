@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
@@ -63,6 +64,14 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand();
         RunGuideCommand(id);
+        return true;
+    }
+    // 線から面。線が選ばれていれば、輪を探して下見 → Enter で作る(V2LoopFacesTool)。
+    // 選んでいなければ、構えて待つ道(ArmCommand)へ通す。
+    QString reason;
+    if (id == "surface.from_lines" && CommandEnabled(id, &reason)) {
+        ClearPendingCommand();
+        loopFaces_->Start();
         return true;
     }
     // 近似も道具から始める。何も選んでいなくても棚が出て、3D で対象を押せる。

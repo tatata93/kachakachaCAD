@@ -18,6 +18,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
@@ -60,6 +61,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         || thickenShelfShown_ || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
+        || (loopFaces_ != nullptr && loopFaces_->Active())
         || OwnedToolShelf() != kachakacha::v2::app::Shelf::None;
 }
 
@@ -99,6 +101,9 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
         }
     }
     if (cornerPreviewShown_ && HandleCornerToolKey(key)) {
+        return true;
+    }
+    if (loopFaces_ != nullptr && loopFaces_->Active() && loopFaces_->HandleKey(key)) {
         return true;
     }
     if (booleanShelfShown_) {

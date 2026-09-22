@@ -115,8 +115,14 @@ using kachakacha::v2::domain::EntityKind;
             dock.ClickGenerateCard(QStringLiteral("Flat 0%")))) {
         return false;
     }
-    return Explain("線が増える", CountOfKind(window, EntityKind::Wire) > wiresBefore)
-        && Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1);
+    if (!Explain("線が増える", CountOfKind(window, EntityKind::Wire) > wiresBefore)
+        || !Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    // 展開 0% の線は 1 回の取り消しで全部消える(線を 1 本ずつ戻していた)。
+    window.RunCommand("edit.undo");
+    return Explain("1回の取り消しで展開の線が全部消える",
+        CountOfKind(window, EntityKind::Wire) == wiresBefore && window.FabricationModelCount() == 1);
 }
 
 //! HP-GN-03。「輪郭 Wire」(fabrication.freeze_wires)は、固定で作るものが
@@ -156,7 +162,8 @@ std::vector<SelfTestCase> GenerateCases()
     return {
         {"HP-GN-01 生成の作り方カードは 現在/Flat/Target で、Target 100% は固定物を作る",
             CaseGenerateCardsListStatesAndTargetFreezes},
-        {"HP-GN-02 Flat 0% は線を作り、近似モデルは残る", CaseFlatCardMakesWiresAndKeepsModel},
+        {"HP-GN-02 Flat 0% は線を作り、近似モデルは残り、1回の取り消しで線が全部消える",
+            CaseFlatCardMakesWiresAndKeepsModel},
         {"HP-GN-03 輪郭 Wire は固定で作るものが部品でも線だけを作る",
             CaseContourWiresIgnoreFreezeOutputSetting},
     };

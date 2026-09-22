@@ -427,14 +427,18 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
     ApplyBandPartition(decided.preview, decided.what, decided.carried);
 }
 
-//! 「部材を1つにする」。棚の「曲げる部材」で挙げた番号と、その次を1枚にする。
+//! 「部材を1つにする」。棚の「対象部材」の番号が 1 つならその次と、隣り合う番号が
+//! 2 つ以上(2, 3, 4)なら全部を 1 枚にする(入力の数: 1 つにする枚数は 2 と決まっていない)。
 void V2MainWindow::MergeFabricationParts()
 {
-    const auto numbers = SelectedPartNumbers();
-    if (numbers.size() != 1) {
+    auto numbers = SelectedPartNumbers();
+    std::sort(numbers.begin(), numbers.end());
+    numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
+    const bool adjacent = numbers.size() >= 2 && numbers.back() - numbers.front() + 1 == numbers.size();
+    if (numbers.empty() || (numbers.size() >= 2 && !adjacent)) {
         SetStatus(QStringLiteral(
-            "部材を1つにする: 棚の「曲げる部材」に、番号を1つ書いてください。"
-            "その番号と次の番号を1枚にします。"));
+            "部材を1つにする: 棚の「対象部材」に、番号を 1 つ(その番号と次の番号を 1 枚に)か、"
+            "2, 3, 4 のように隣り合う番号を書いてください(離れた部材は 1 枚にできません)。"));
         return;
     }
     std::vector<double> rails;
@@ -446,19 +450,21 @@ void V2MainWindow::MergeFabricationParts()
         return;
     }
     const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
+    const std::size_t first = numbers.front();
+    const std::size_t last = numbers.size() == 1 ? first + 1 : numbers.back();
     ProposeOrApplyPartition(QStringLiteral("部材を1つにする"), numbers,
-        kachakacha::v2::fabrication::PreviewBandMerge(rails, widths, numbers.front()),
-        kachakacha::v2::fabrication::RemapForMerge(BandValuesNow(), parts,
-            numbers.front()));
+        kachakacha::v2::fabrication::PreviewBandMergeRange(rails, widths, first, last),
+        kachakacha::v2::fabrication::RemapForMergeRange(BandValuesNow(), parts, first, last));
 }
 
-//! 「部材を分ける」。棚の「曲げる部材」で挙げた1つを、その真ん中で2つに分ける。
+//! 「部材を分ける」。棚の「対象部材」で挙げた部材(何枚でも)を、それぞれ棚の枚数に等分する。
 void V2MainWindow::SplitFabricationPart()
 {
     const auto numbers = SelectedPartNumbers();
-    if (numbers.size() != 1) {
+    if (numbers.empty()) {
         SetStatus(QStringLiteral(
-            "部材を分ける: 棚の「曲げる部材」に、分ける部材の番号を1つ書いてください。"));
+            "部材を分ける: 棚の「対象部材」に、分ける部材の番号を 1 つ以上書いてください"
+            "(3D で部材を押しても入ります)。"));
         return;
     }
     std::vector<double> rails;
@@ -473,11 +479,14 @@ void V2MainWindow::SplitFabricationPart()
     const auto* definition = CurrentFabricationDefinition();
     const double minimumMm = definition == nullptr ? 4.0 : definition->minimumPartWidthMm;
     const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
+    const std::size_t pieces = fabricationDock_ == nullptr
+        ? 2
+        : static_cast<std::size_t>(std::max(2, fabricationDock_->SplitPieces()));
     ProposeOrApplyPartition(QStringLiteral("部材を分ける"), numbers,
-        kachakacha::v2::fabrication::PreviewBandSplit(rails, widths, numbers.front(),
+        kachakacha::v2::fabrication::PreviewBandSplitEach(rails, widths, numbers, pieces,
             minimumMm),
-        kachakacha::v2::fabrication::RemapForSplit(BandValuesNow(), parts,
-            numbers.front()));
+        kachakacha::v2::fabrication::RemapForSplitEach(BandValuesNow(), parts, numbers,
+            pieces));
 }
 
 //! 棚の「曲げる部材」の欄を、**一度だけ**読む。

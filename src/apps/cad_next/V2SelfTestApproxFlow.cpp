@@ -483,6 +483,116 @@ using kachakacha::v2::domain::Visibility;
         window.Session().GetDocument().Revision() != revision);
 }
 
+//! F-04 表示: 元の面と近似の姿を出し分ける。見るだけの切り替えで、文書は変わらない。
+[[nodiscard]] bool CaseFabricationDisplayTogglesAreViewOnly(V2MainWindow& window)
+{
+    if (!MakeSurfaceFromScratch(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface);
+    const EntityId surface = surfaces.entityIds.front();
+    viewport.SetSelection(surfaces);
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    const auto drawn = [&viewport, &surface] {
+        const auto& shapes = viewport.ShapeViews();
+        return std::any_of(shapes.begin(), shapes.end(),
+            [&surface](const auto& shape) { return shape.entityId == surface; });
+    };
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    if (!Explain("はじめは元の面も近似の姿も出ている", drawn() && viewport.FoldPreviewRailCount() > 0)) {
+        return false;
+    }
+    window.FabricationDock().SetShowSource(false);
+    if (!Explain("「元の面」を外すと元の面が消える", !drawn())) {
+        return false;
+    }
+    window.FabricationDock().SetShowApprox(false);
+    if (!Explain("「近似の姿」を外すと近似の姿が消える", viewport.FoldPreviewRailCount() == 0)) {
+        return false;
+    }
+    window.FabricationDock().SetShowSource(true);
+    window.FabricationDock().SetShowApprox(true);
+    return Explain("戻すと両方出て、文書は一度も変わっていない",
+        drawn() && viewport.FoldPreviewRailCount() > 0
+            && window.Session().GetDocument().Revision() == revision);
+}
+
+//! 入力の数(製作): 挙げた部材を何枚にでも等分でき、隣り合う何枚でも 1 枚にできる。
+//! どちらも 1 度目は見せるだけ・2 度目で当てる・1 回の元に戻すで戻る(既存の約束のまま)。
+[[nodiscard]] bool CaseSplitIntoPiecesAndMergeRange(V2MainWindow& window)
+{
+    if (!MakeSurfaceFromScratch(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const auto selectSurfaces = [&window, &viewport] {
+        viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    };
+    selectSurfaces();
+    if (window.FabricationMethodInUse()
+        != kachakacha::v2::app::FabricationMethod::BandApproximation) {
+        window.RunCommand("fabrication.set_method");
+        selectSurfaces();
+    }
+    // 細い帯の基準を下げておく(ここで見るのは枚数の扱い。基準で断ることは別の試験が見る)。
+    auto choice = window.FabricationDock().Choice();
+    choice.minimumPartWidthMm = 0.5;
+    window.FabricationDock().SetChoice(choice);
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
+    const int before = static_cast<int>(window.FabricationPanelCount());
+    if (!Explain((std::string("部材が 2 枚以上ある(") + std::to_string(before) + " 枚)").c_str(),
+            window.FabricationModelCount() == 1 && before >= 2)) {
+        return false;
+    }
+    const auto panels = [&window] { return static_cast<int>(window.FabricationPanelCount()); };
+    const auto twice = [&window](const char* command) {
+        window.RunCommand(command);   // 1 度目: 見せる
+        window.RunCommand(command);   // 2 度目: 当てる
+    };
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.FabricationDock().SetSplitPieces(3);
+    twice("fabrication.split_part");
+    if (!Explain((std::string("部材1 を 3 枚に等分できる(") + std::to_string(before) + " → "
+                     + std::to_string(panels()) + "、帯は " + window.StatusText().toStdString()
+                     + ")").c_str(),
+            panels() == before + 2)) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1, 2, 3"));
+    twice("fabrication.merge_parts");
+    if (!Explain((std::string("隣り合う 3 枚を 1 枚にできる(") + std::to_string(panels()) + " 枚)")
+                .c_str(),
+            panels() == before)) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1, 3"));
+    twice("fabrication.merge_parts");
+    if (!Explain("離れた番号は 1 枚にせず、隣り合う番号を書くよう言う",
+            panels() == before
+                && window.StatusText().contains(QStringLiteral("隣り合う番号")))) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1, 2"));
+    window.FabricationDock().SetSplitPieces(2);
+    twice("fabrication.split_part");
+    if (!Explain((std::string("挙げた 2 枚をそれぞれ 2 枚に分ける(") + std::to_string(panels())
+                     + " 枚)").c_str(),
+            panels() == before + 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の元に戻すで分ける前へ戻る", panels() == before);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ApproximationFlowCases()
@@ -498,6 +608,10 @@ std::vector<SelfTestCase> ApproximationFlowCases()
             CaseApproximationBendsAndOutputs},
         {"近似は1回の取り消しで戻り、保存して開き直しても残る",
             CaseApproximationUndoAndReopen},
+        {"部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻る",
+            CaseSplitIntoPiecesAndMergeRange},
+        {"製作の表示は元の面と近似の姿を出し分け文書は変えない",
+            CaseFabricationDisplayTogglesAreViewOnly},
         {"部材を1つにする・分けるが本当に分け方を変える",
             CaseMergeAndSplitChangeThePartition},
     };

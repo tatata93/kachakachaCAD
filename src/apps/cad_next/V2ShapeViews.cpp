@@ -13,6 +13,7 @@
 //! 部品が10個あるだけで画面が固まる。番号で覚えるのはそのためである。
 
 #include "V2MainWindow.h"
+#include "V2FabricationDock.h"
 #include "V2SurfaceAnalysisTool.h"
 
 #include "kachakacha/app/GroupTree.h"
@@ -23,6 +24,7 @@
 
 #include <QStringList>
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <utility>
@@ -43,6 +45,18 @@ void V2MainWindow::RefreshShapeViews()
     std::vector<V2Viewport::ShapeView> shapes;
     std::map<std::uint64_t, ShapeMesh> keep;
     const auto& snapshot = session_->GetDocument().Snapshot();
+    // 製作モードの表示で「元の面」を消しているなら、いまの近似モデルの元の面は描かない
+    // (F-04。見るだけの切り替えで、文書の表示・非表示は書き換えない)。
+    std::vector<kachakacha::v2::base::EntityId> sources;
+    if (fabricationDock_ != nullptr && !fabricationDock_->ShowSource()
+        && Mode() == kachakacha::v2::app::UiMode::Fabrication) {
+        const auto* model = session_->GetDocument().FindEntity(CurrentFabricationModelId());
+        const auto* feature =
+            model == nullptr ? nullptr : session_->GetDocument().FindFeature(model->createdBy);
+        if (feature != nullptr) {
+            sources = feature->inputEntityIds;
+        }
+    }
 
     const auto take = [&](const std::map<std::string, KernelShapeHandle>& source,
                           bool surface) {
@@ -53,7 +67,8 @@ void V2MainWindow::RefreshShapeViews()
             const auto* entity = FindEntityByIdText(snapshot, entry.first);
             // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
-                || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)) {
+                || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)
+                || std::find(sources.begin(), sources.end(), entity->id) != sources.end()) {
                 continue;
             }
             V2Viewport::ShapeView view;

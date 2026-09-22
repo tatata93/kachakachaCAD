@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QScrollArea>
 #include <QString>
 #include <QTabWidget>
@@ -23,6 +24,7 @@
 #include <QWidget>
 
 #include <string>
+#include <utility>
 
 using kachakacha::v2::app::FabricationChoice;
 using kachakacha::v2::app::FabricationMethod;
@@ -101,6 +103,27 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択した開いた線を切れ目にする"), "fabrication.assign_relief_cut", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("接続する部材の範囲を決める"), "fabrication.set_connection_scope", this));
     approximationLayout->addWidget(buttons);
+    // 表示(F-04)。元の面と近似の姿を見比べる。見るだけの切り替えで、文書は変えない。
+    // 誤差の色分けは、近似の核が点ごとの外れを返さないので押せない形で理由を出す。
+    auto* display = new QWidget(approximationPage);
+    auto* displayLayout = new QHBoxLayout(display);
+    displayLayout->setContentsMargins(0, 0, 0, 0);
+    displayLayout->addWidget(new QLabel(QStringLiteral("表示"), display));
+    showSource_ = new QCheckBox(QStringLiteral("元の面"), display);
+    showSource_->setChecked(true);
+    showSource_->setToolTip(QStringLiteral("近似の元にした面を出します。消しても文書は変わりません。"));
+    showApprox_ = new QCheckBox(QStringLiteral("近似の姿"), display);
+    showApprox_->setChecked(true);
+    showApprox_->setToolTip(QStringLiteral("いまの曲げ状態での部材の境目と姿を出します。"));
+    auto* heatmap = new QCheckBox(QStringLiteral("誤差の色"), display);
+    heatmap->setEnabled(false);
+    heatmap->setToolTip(QStringLiteral("近似の核が点ごとの外れを返さないので、まだ塗れません"
+                                       "(最大誤差は数で出ています)。"));
+    displayLayout->addWidget(showSource_);
+    displayLayout->addWidget(showApprox_);
+    displayLayout->addWidget(heatmap);
+    displayLayout->addStretch(1);
+    approximationLayout->addWidget(display);
     approximationLayout->addStretch(1);
     stages_->addTab(approximationPage, QStringLiteral("1 近似モデル"));
 
@@ -231,6 +254,35 @@ void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
 void V2FabricationDock::SetCandidateHandler(std::function<void(int)> handler)
 {
     candidateHandler_ = std::move(handler);
+}
+
+bool V2FabricationDock::ShowSource() const
+{
+    return showSource_ == nullptr || showSource_->isChecked();
+}
+
+bool V2FabricationDock::ShowApprox() const
+{
+    return showApprox_ == nullptr || showApprox_->isChecked();
+}
+
+void V2FabricationDock::SetShowSource(bool shown)
+{
+    if (showSource_ != nullptr) {
+        showSource_->setChecked(shown);   // 人が押したのと同じ道(toggled が画面を描き直す)
+    }
+}
+
+void V2FabricationDock::SetShowApprox(bool shown)
+{
+    if (showApprox_ != nullptr) {
+        showApprox_->setChecked(shown);
+    }
+}
+
+void V2FabricationDock::SetDisplayHandler(std::function<void()> handler)
+{
+    displayHandler_ = std::move(handler);
 }
 
 void V2FabricationDock::SetClearSourcesHandler(std::function<void()> handler)
@@ -590,13 +642,27 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     layout->addWidget(new QLabel(QStringLiteral("部材の編集(「対象部材」に当てる)"),
         editWidget));
     // ボタン文言を短くし、外した説明はツールチップへ(380px の棚に収めるため)。
-    auto* splitPart = MakeRun(editWidget, QStringLiteral("部材を分ける"),
+    // 分ける: 挙げた部材をそれぞれ N 枚に等分する(入力の数: 部材も枚数も決まった数ではない)。
+    auto* splitRow = new QWidget(editWidget);
+    auto* splitLayout = new QHBoxLayout(splitRow);
+    splitLayout->setContentsMargins(0, 0, 0, 0);
+    auto* splitPart = MakeRun(splitRow, QStringLiteral("部材を分ける"),
         "fabrication.split_part", this);
-    splitPart->setToolTip(QStringLiteral("1度目は下見です。もう一度押すと実行します。"));
-    layout->addWidget(splitPart);
+    splitPart->setToolTip(QStringLiteral("「対象部材」の部材(何枚でも)を、それぞれ右の枚数に"
+                                         "等分します。1度目は下見です。もう一度押すと実行します。"));
+    splitPieces_ = new QSpinBox(splitRow);
+    splitPieces_->setRange(2, 8);
+    splitPieces_->setValue(2);
+    splitPieces_->setSuffix(QStringLiteral(" 枚に"));
+    splitPieces_->setToolTip(QStringLiteral("1 枚を何枚に等分するか。"));
+    splitLayout->addWidget(splitPart, 1);
+    splitLayout->addWidget(splitPieces_);
+    layout->addWidget(splitRow);
     auto* mergeParts = MakeRun(editWidget, QStringLiteral("部材を1つにする"),
         "fabrication.merge_parts", this);
-    mergeParts->setToolTip(QStringLiteral("1度目は下見です。もう一度押すと実行します。"));
+    mergeParts->setToolTip(QStringLiteral("「対象部材」が 1 つならその次と、2, 3, 4 のように"
+                                          "隣り合う番号なら全部を 1 枚にします。"
+                                          "1度目は下見です。もう一度押すと実行します。"));
     layout->addWidget(mergeParts);
     auto* reliefCut = MakeRun(editWidget, QStringLiteral("開いた線を切れ目に"),
         "fabrication.assign_relief_cut", this);
@@ -786,6 +852,13 @@ void V2FabricationDock::Connect()
     QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
+    for (QCheckBox* shown : {showSource_, showApprox_}) {
+        QObject::connect(shown, &QCheckBox::toggled, this, [this] {
+            if (displayHandler_) {
+                displayHandler_();
+            }
+        });
+    }
     QObject::connect(lockRadius_, &QPushButton::clicked, this,
         [this] { PressLockRadius(); });
     QObject::connect(assembly_, &QDoubleSpinBox::valueChanged, this,
@@ -993,6 +1066,18 @@ void V2FabricationDock::TypeRadiusMm(double radiusMm)
 {
     if (radius_ != nullptr) {
         radius_->setValue(radiusMm);   // valueChanged → SyncPercentFromRadius
+    }
+}
+
+int V2FabricationDock::SplitPieces() const
+{
+    return splitPieces_ == nullptr ? 2 : splitPieces_->value();
+}
+
+void V2FabricationDock::SetSplitPieces(int pieces)
+{
+    if (splitPieces_ != nullptr) {
+        splitPieces_->setValue(pieces);
     }
 }
 

@@ -37,6 +37,11 @@ void V2MainWindow::BuildEditingShelves()
         ChooseApproxCandidate(candidate);
     });
     fabricationDock_->SetClearSourcesHandler([this] { ClearApproxSources(); });
+    // 表示の切り替え(元の面・近似の姿)。見るだけなので文書は変えず、描き直すだけ。
+    fabricationDock_->SetDisplayHandler([this] {
+        RefreshShapeViews();
+        RefreshFabricationView();
+    });
     fabricationDock_->SetPolicyHandler([this](int policy) { ChooseApproxPolicy(policy); });
     fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
         SetAssemblyPercent(percent, parts);

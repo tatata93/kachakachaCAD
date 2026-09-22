@@ -18,6 +18,10 @@ using kachakacha::v2::fabrication::PreviewBandSplit;
 using kachakacha::v2::fabrication::ValidRailParameters;
 using kachakacha::v2::fabrication::BandValueRemap;
 using kachakacha::v2::fabrication::RemapForMerge;
+using kachakacha::v2::fabrication::PreviewBandMergeRange;
+using kachakacha::v2::fabrication::PreviewBandSplitEach;
+using kachakacha::v2::fabrication::RemapForMergeRange;
+using kachakacha::v2::fabrication::RemapForSplitEach;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
 using kachakacha::v2::test::RequireNear;
@@ -270,6 +274,92 @@ KACHA_V2_TEST(band_partition, 統合で消える組立率も前もって言う)
     const auto plainAfter = RemapForMerge(plain, 3, 0);
     Require(plainAfter.droppedValues.empty(), "失うものが無ければ何も言わない");
     Require(plainAfter.droppedParts.empty(), "番号も挙げない");
+}
+
+KACHA_V2_TEST(band_partition, 1枚をK枚に等分できる)
+{
+    // 入力の数: 分ける枚数は 2 と決まっていない。部材2(16mm)を 4 枚(4mm ずつ)に。
+    const auto preview = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {1}, 4, 3.0);
+    Require(preview.possible, "分けられる: " + preview.messageJa);
+    Require(preview.partsAfter == 6, "3 枚 → 6 枚");
+    Require(preview.railParameters.size() == 7, "境目は 0 と 1 を入れて 7 本");
+    RequireNear(preview.railParameters[1], 0.3, 1.0e-12, "手前の境目はそのまま");
+    RequireNear(preview.railParameters[2], 0.4, 1.0e-12, "0.3〜0.7 を 4 等分: 0.4");
+    RequireNear(preview.railParameters[3], 0.5, 1.0e-12, "0.5");
+    RequireNear(preview.railParameters[4], 0.6, 1.0e-12, "0.6");
+    RequireNear(preview.railParameters[5], 0.7, 1.0e-12, "後ろの境目はそのまま");
+    Require(ValidRailParameters(preview.railParameters), "並びとして正しい");
+    // 細くなりすぎる枚数は断る(16mm を 8 枚 = 2mm < 3mm)。
+    const auto thin = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {1}, 8, 3.0);
+    Require(!thin.possible && thin.messageJa.find("2.00mm") != std::string::npos,
+        "細すぎると言って断る: " + thin.messageJa);
+    // 2 枚・1 部材なら、これまでの分け方と同じ。
+    const auto two = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {1}, 2, 3.0);
+    const auto old = PreviewBandSplit(ThreeParts(), ThreeWidths(), 1, 3.0);
+    Require(two.railParameters == old.railParameters && two.messageJa == old.messageJa,
+        "2 枚に分けるのはこれまでと同じ形と言い方");
+}
+
+KACHA_V2_TEST(band_partition, 挙げた部材を全部分け1枚でも細すぎれば全部断る)
+{
+    const auto preview = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {2, 0}, 2, 3.0);
+    Require(preview.possible, "部材1と部材3を 2 枚ずつに分けられる: " + preview.messageJa);
+    Require(preview.partsAfter == 5, "3 枚 → 5 枚");
+    Require(preview.railParameters.size() == 6
+            && std::abs(preview.railParameters[1] - 0.15) < 1.0e-12
+            && std::abs(preview.railParameters[2] - 0.3) < 1.0e-12
+            && std::abs(preview.railParameters[3] - 0.7) < 1.0e-12
+            && std::abs(preview.railParameters[4] - 0.85) < 1.0e-12,
+        "部材1 は 0.15 で、部材3 は 0.85 で分ける");
+    Require(preview.messageJa.find("部材1・部材3") != std::string::npos, "どれを分けるかを言う");
+    // 部材1(12mm)を 4 枚 = 3mm は通るが、5mm の基準では断る。1 つでも断れば何も分けない。
+    const auto refused = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {0, 1}, 4, 3.5);
+    Require(!refused.possible, "1 枚でも細すぎれば全部断る: " + refused.messageJa);
+    // 分けた部材は、全部の枚が元の値を引き継ぐ。変えていない部材の値は残る。
+    BandValueRemap before;
+    before.bandProgress = {0.1, 0.2, 0.3};
+    before.bendRadiusMm = {5.0, 6.0, 7.0};
+    before.bendRadiusLock = {0, 1, 0};
+    before.creaseProgress = {0.4, 0.5};
+    const auto carried = RemapForSplitEach(before, 3, {1}, 3);
+    Require(carried.bandProgress == std::vector<double>({0.1, 0.2, 0.2, 0.2, 0.3}),
+        "部材2 を 3 枚にすると、3 枚とも 0.2");
+    Require(carried.bendRadiusLock == std::vector<int>({0, 1, 1, 1, 0}), "半径の固定も 3 枚とも");
+    Require(carried.creaseProgress.size() == 4, "折り線は部材より 1 本少ない");
+}
+
+KACHA_V2_TEST(band_partition, 隣り合う何枚でも1枚にでき捨てる値を元の番号で言う)
+{
+    const std::vector<double> rails{0.0, 0.25, 0.5, 0.75, 1.0};
+    const std::vector<double> widths{10.0, 10.0, 10.0, 10.0};
+    const auto preview = PreviewBandMergeRange(rails, widths, 0, 2);
+    Require(preview.possible, "部材1〜3 を 1 枚にできる: " + preview.messageJa);
+    Require(preview.railParameters == std::vector<double>({0.0, 0.75, 1.0}), "境目を 2 本抜く");
+    Require(preview.partsAfter == 2, "4 枚 → 2 枚");
+    RequireNear(preview.widthBeforeMm, 30.0, 1.0e-12, "幅は足した 30mm");
+    Require(preview.messageJa.find("接着線が 2 本") != std::string::npos, "減る接着線の数を言う");
+    // 隣の 2 枚なら、これまでと同じ形。
+    const auto pair = PreviewBandMergeRange(rails, widths, 1, 2);
+    Require(pair.railParameters == PreviewBandMerge(rails, widths, 1).railParameters,
+        "2 枚はこれまでと同じ");
+    // 無い番号は断る。
+    Require(!PreviewBandMergeRange(rails, widths, 2, 4).possible, "部材5 は無い");
+    // 捨てる値: 部材2 に半径の固定、部材3 に違う組立率。元の番号(2 と 3)で言う。
+    BandValueRemap before;
+    before.bandProgress = {0.5, 0.5, 0.8, 0.5};
+    before.bendRadiusMm = {5.0, 6.0, 7.0, 8.0};
+    before.bendRadiusLock = {0, 1, 0, 0};
+    before.creaseProgress = {0.1, 0.2, 0.3};
+    const auto carried = RemapForMergeRange(before, 4, 0, 2);
+    Require(carried.bandProgress == std::vector<double>({0.5, 0.5}), "先頭の値と、後ろの部材の値");
+    Require(carried.creaseProgress == std::vector<double>({0.3}), "消える折り線は 2 本");
+    bool radius2 = false;
+    bool progress3 = false;
+    for (const auto& lost : carried.droppedValues) {
+        radius2 = radius2 || (lost.part == 2 && lost.what == "曲げ半径");
+        progress3 = progress3 || (lost.part == 3 && lost.what == "組立率");
+    }
+    Require(radius2 && progress3, "部材2 の曲げ半径と部材3 の組立率を捨てると言う");
 }
 
 KACHA_V2_TEST_MAIN("band_partition_tests")

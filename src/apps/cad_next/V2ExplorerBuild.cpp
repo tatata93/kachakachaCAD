@@ -29,6 +29,8 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
+#include <variant>
 
 using kachakacha::v2::app::ExplorerSection;
 using kachakacha::v2::domain::EntityKind;
@@ -211,6 +213,38 @@ void V2MainWindow::AddApproximationRows(QTreeWidgetItem* modelItem,
         part->setText(0, QStringLiteral("部材 %1").arg(static_cast<int>(index + 1)));
         part->setText(1, QStringLiteral("近似部品"));
         part->setFlags(part->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+    }
+    // 役割の線(開口・折り線・切れ目)。どの線がこの近似モデルの何になっているかを、
+    // 近似の単位で読めるようにする(F-15)。線そのものはワイヤーの節にある(ここは写し)。
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    const auto* feature = session_->GetDocument().FindFeature(entity.createdBy);
+    const auto* definition = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(&feature->definition);
+    if (definition == nullptr) {
+        return;
+    }
+    const std::pair<const std::vector<kachakacha::v2::base::EntityId>*, QString> roles[] = {
+        {&definition->openingWires, QStringLiteral("開口")},
+        {&definition->foldWires, QStringLiteral("折り線")},
+        {&definition->reliefCutWires, QStringLiteral("切れ目")}};
+    for (const auto& [wires, role] : roles) {
+        if (wires->empty()) {
+            continue;
+        }
+        auto* group = new QTreeWidgetItem(modelItem);
+        group->setText(0, role);
+        group->setText(1, QStringLiteral("%1 本").arg(static_cast<int>(wires->size())));
+        group->setFlags(group->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+        for (const auto& id : *wires) {
+            const auto* wire = FindEntityByIdText(snapshot, id.ToString());
+            auto* row = new QTreeWidgetItem(group);
+            row->setText(0, wire == nullptr || wire->displayName.empty()
+                    ? QStringLiteral("(見つからない線)")
+                    : QString::fromUtf8(wire->displayName.c_str()));
+            row->setText(1, role + QStringLiteral("の線"));
+            row->setFlags(row->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+        }
     }
 }
 

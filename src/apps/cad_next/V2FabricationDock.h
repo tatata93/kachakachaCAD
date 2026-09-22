@@ -26,6 +26,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QSpinBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
@@ -44,6 +45,12 @@ public:
     void SetCandidateHandler(std::function<void(int)> handler);
     //! 対象の「解除」を押した。
     void SetClearSourcesHandler(std::function<void()> handler);
+    //! 表示(F-04): 元の面・近似の姿を出すか。見るだけの切り替えで、文書は変えない。
+    [[nodiscard]] bool ShowSource() const;
+    [[nodiscard]] bool ShowApprox() const;
+    void SetShowSource(bool shown);
+    void SetShowApprox(bool shown);
+    void SetDisplayHandler(std::function<void()> handler);
     //! **見えているボタンを実際に押す。**人の道の試験はこちら。見えていなければ偽。
     [[nodiscard]] bool ClickCandidate(int candidate);
     [[nodiscard]] bool ClickClearSources();
@@ -164,6 +171,9 @@ public:
     void SetAutomaticBoundaries(bool automatic);
     void SetMaximumPartCount(int count);
     void SetSplitAxisIndex(int index);
+    //! 「部材を分ける」で 1 枚を何枚に等分するか(2〜8)。人が欄に打つのと同じ道。
+    [[nodiscard]] int SplitPieces() const;
+    void SetSplitPieces(int pieces);
 
 private:
     QWidget* BuildApproxInput(QWidget* body);
@@ -198,6 +208,8 @@ private:
     //! 切れ目の上限。材料で変わるので、隠した既定値にしない。
     QDoubleSpinBox* reliefDepth_ = nullptr;
     QDoubleSpinBox* reliefLigament_ = nullptr;
+    //! 「部材を分ける」の枚数(等分)。
+    QSpinBox* splitPieces_ = nullptr;
     QDoubleSpinBox* thickness_ = nullptr;
     QDoubleSpinBox* deviation_ = nullptr;
     QDoubleSpinBox* assembly_ = nullptr;
@@ -249,6 +261,9 @@ private:
     QPushButton* confirmApprox_ = nullptr;
     std::function<void(int)> candidateHandler_;
     std::function<void()> clearSourcesHandler_;
+    std::function<void()> displayHandler_;
+    QCheckBox* showSource_ = nullptr;
+    QCheckBox* showApprox_ = nullptr;
     std::function<void(const QString&, int)> materialHandler_;
     std::function<void()> choiceChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;

@@ -296,6 +296,10 @@ void V2MainWindow::RefreshFabricationView()
             }
         }
     }
+    // 表示で「近似の姿」を消しているなら出さない(F-04。見るだけの切り替え)。
+    if (fabricationDock_ != nullptr && !fabricationDock_->ShowApprox()) {
+        rails.clear();
+    }
     viewport_->SetFoldPreview(std::move(rails));
     processContext_.fabricationBuilt = !fabricationPanels_.empty();
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());

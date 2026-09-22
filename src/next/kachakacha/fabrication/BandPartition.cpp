@@ -1,5 +1,6 @@
 #include "kachakacha/fabrication/BandPartition.h"
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -161,6 +162,133 @@ BandPartitionPreview PreviewBandMerge(const std::vector<double>& railParameters,
     return preview;
 }
 
+namespace {
+
+//! 挙げた番号を、重なりを除いて大きい順に並べる(後ろから分けると前の番号がずれない)。
+[[nodiscard]] std::vector<std::size_t> DescendingUnique(std::vector<std::size_t> which)
+{
+    std::sort(which.begin(), which.end());
+    which.erase(std::unique(which.begin(), which.end()), which.end());
+    std::reverse(which.begin(), which.end());
+    return which;
+}
+
+//! 「部材1・部材3」のような並び(1 起点、昇順)。
+[[nodiscard]] std::string PartListJa(std::vector<std::size_t> which)
+{
+    std::sort(which.begin(), which.end());
+    std::string text;
+    for (const std::size_t index : which) {
+        text += (text.empty() ? "部材" : "・部材") + std::to_string(index + 1);
+    }
+    return text;
+}
+
+} // namespace
+
+BandPartitionPreview PreviewBandSplitEach(const std::vector<double>& railParameters,
+    const std::vector<double>& bandWidthsMm, const std::vector<std::size_t>& which,
+    std::size_t pieces, double minimumPartWidthMm)
+{
+    BandPartitionPreview preview;
+    if (which.empty()) {
+        preview.messageJa = "分ける部材の番号を 1 つ以上書いてください。";
+        return preview;
+    }
+    if (pieces < 2) {
+        preview.messageJa = "分ける枚数は 2 以上にしてください。";
+        return preview;
+    }
+    const auto order = DescendingUnique(which);
+    if (order.size() == 1 && pieces == 2) {
+        return PreviewBandSplit(railParameters, bandWidthsMm, order.front(), minimumPartWidthMm);
+    }
+    // 1 枚ずつ、後ろの部材から等分する。途中でどれか 1 つでも断られたら、その理由で全部断る。
+    std::vector<double> rails = railParameters;
+    std::vector<double> widths = bandWidthsMm;
+    double before = 0.0;
+    for (const std::size_t index : order) {
+        const double width = index < widths.size() ? widths[index] : 0.0;
+        before += width;
+        const double piece = width / static_cast<double>(pieces);
+        if (minimumPartWidthMm > 0.0 && width > 0.0 && piece < minimumPartWidthMm) {
+            preview = PreviewBandSplit(railParameters, bandWidthsMm, index, minimumPartWidthMm);
+            preview.possible = false;
+            preview.messageJa = "部材" + std::to_string(index + 1) + " は " + Millimetres(width)
+                + "mm しかないので、" + std::to_string(pieces) + " 枚に分けると " + Millimetres(piece)
+                + "mm になります。" + Millimetres(minimumPartWidthMm) + "mm より細い帯は作れません。";
+            return preview;
+        }
+        // 1 枚を pieces 枚へ: 中の境目を pieces - 1 本、等間隔に足す。
+        const auto checked = PreviewBandSplit(rails, widths, index, 0.0);
+        if (!checked.possible) {
+            return checked;   // 無い番号・読めない並び。理由はそちらの一文
+        }
+        const double a = rails[index];
+        const double b = rails[index + 1];
+        std::vector<double> nextRails(rails.begin(), rails.begin() + static_cast<long>(index) + 1);
+        for (std::size_t k = 1; k < pieces; ++k) {
+            nextRails.push_back(a + (b - a) * static_cast<double>(k) / static_cast<double>(pieces));
+        }
+        nextRails.insert(nextRails.end(), rails.begin() + static_cast<long>(index) + 1, rails.end());
+        rails = std::move(nextRails);
+        if (index < widths.size()) {
+            widths.erase(widths.begin() + static_cast<long>(index));
+            widths.insert(widths.begin() + static_cast<long>(index), pieces, piece);
+        }
+    }
+    preview.possible = true;
+    preview.partsBefore = railParameters.size() - 1;
+    preview.partsAfter = rails.size() - 1;
+    preview.railParameters = std::move(rails);
+    preview.widthBeforeMm = before;
+    preview.firstWidthMm = before / static_cast<double>(pieces);
+    preview.secondWidthMm = preview.firstWidthMm;
+    preview.messageJa = PartListJa(order) + "(計 " + Millimetres(before) + "mm)を、それぞれ "
+        + std::to_string(pieces) + " 枚に等分します。";
+    return preview;
+}
+
+BandPartitionPreview PreviewBandMergeRange(const std::vector<double>& railParameters,
+    const std::vector<double>& bandWidthsMm, std::size_t first, std::size_t last)
+{
+    if (last <= first + 1) {
+        return PreviewBandMerge(railParameters, bandWidthsMm, first);
+    }
+    BandPartitionPreview preview = PreviewBandMerge(railParameters, bandWidthsMm, first);
+    if (!preview.possible) {
+        return preview;   // 読めない並び・1 枚しかない。理由はそちらの一文
+    }
+    const std::size_t parts = railParameters.size() - 1;
+    if (last >= parts) {
+        preview.possible = false;
+        preview.messageJa = "部材" + std::to_string(last + 1) + " がありません。1 から "
+            + std::to_string(parts) + " までの、隣り合う番号を書いてください。";
+        return preview;
+    }
+    double total = 0.0;
+    for (std::size_t index = first; index <= last; ++index) {
+        total += index < bandWidthsMm.size() ? bandWidthsMm[index] : 0.0;
+    }
+    std::vector<double> next;
+    for (std::size_t index = 0; index < railParameters.size(); ++index) {
+        if (index > first && index <= last) {
+            continue;   // 1 枚にする部材の間の境目を全部抜く
+        }
+        next.push_back(railParameters[index]);
+    }
+    preview.railParameters = std::move(next);
+    preview.partsAfter = parts - (last - first);
+    preview.widthBeforeMm = total;
+    preview.firstWidthMm = first < bandWidthsMm.size() ? bandWidthsMm[first] : 0.0;
+    preview.secondWidthMm = total - preview.firstWidthMm;
+    preview.messageJa = "部材" + std::to_string(first + 1) + "〜部材" + std::to_string(last + 1)
+        + "(" + std::to_string(last - first + 1) + " 枚)を 1枚(" + Millimetres(total)
+        + "mm)にします。接着線が " + std::to_string(last - first)
+        + " 本減りますが、丸みは粗くなります。";
+    return preview;
+}
+
 std::string DescribeBandPartitionJa(const BandPartitionPreview& preview)
 {
     if (!preview.possible) {
@@ -305,6 +433,57 @@ BandValueRemap RemapForMerge(const BandValueRemap& before, std::size_t partsBefo
             ? before.unfoldBaseRail - 1
             : before.unfoldBaseRail;
     }
+    return after;
+}
+
+BandValueRemap RemapForSplitEach(const BandValueRemap& before, std::size_t partsBefore,
+    const std::vector<std::size_t>& which, std::size_t pieces)
+{
+    // 1 枚を 2 枚に分ける引き継ぎを、後ろの部材から、枚数ぶん繰り返す(同じ決まりを通す)。
+    BandValueRemap after = before;
+    after.droppedParts.clear();
+    after.droppedValues.clear();
+    std::size_t parts = partsBefore;
+    for (const std::size_t index : DescendingUnique(which)) {
+        if (index >= parts) {
+            return BandValueRemap{};
+        }
+        for (std::size_t k = 1; k < pieces; ++k) {
+            after = RemapForSplit(after, parts, index);
+            ++parts;
+        }
+    }
+    return after;
+}
+
+BandValueRemap RemapForMergeRange(const BandValueRemap& before, std::size_t partsBefore,
+    std::size_t first, std::size_t last)
+{
+    // 隣どうしを 1 つにする引き継ぎを、先頭の部材へ向けて繰り返す。捨てる値は元の番号で言う。
+    BandValueRemap after = before;
+    after.droppedParts.clear();
+    after.droppedValues.clear();
+    std::vector<std::size_t> droppedParts;
+    std::vector<BandValueRemap::DroppedValue> droppedValues;
+    std::size_t parts = partsBefore;
+    for (std::size_t step = 0; first + 1 + step <= last; ++step) {
+        if (first + 1 >= parts) {
+            return BandValueRemap{};
+        }
+        after = RemapForMerge(after, parts, first);
+        --parts;
+        // いま捨てた部材は、元の番号で first + 2 + step(1 起点)。
+        const std::size_t original = first + 2 + step;
+        for (auto value : after.droppedValues) {
+            value.part = original;
+            droppedValues.push_back(value);
+        }
+        if (!after.droppedParts.empty()) {
+            droppedParts.push_back(original);
+        }
+    }
+    after.droppedParts = std::move(droppedParts);
+    after.droppedValues = std::move(droppedValues);
     return after;
 }
 

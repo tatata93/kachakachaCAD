@@ -51,6 +51,19 @@ struct BandPartitionPreview {
     const std::vector<double>& railParameters, const std::vector<double>& bandWidthsMm,
     std::size_t first);
 
+//! 挙げた部材(0 起点、1 つ以上、重なりなし)を、それぞれ `pieces` 枚(2 以上)に等分したらどうなるか。
+//! 入力の数: 部材も枚数も決まった数ではない。どれか 1 枚でも細くなりすぎるなら全部断る
+//! (半分だけ分けない)。pieces = 2 で 1 枚なら PreviewBandSplit と同じ。
+[[nodiscard]] BandPartitionPreview PreviewBandSplitEach(
+    const std::vector<double>& railParameters, const std::vector<double>& bandWidthsMm,
+    const std::vector<std::size_t>& which, std::size_t pieces, double minimumPartWidthMm);
+
+//! 部材 `first` から `last` まで(隣り合う全部、2 枚以上)を 1 枚にしたらどうなるか。
+//! last = first + 1 なら PreviewBandMerge と同じ。
+[[nodiscard]] BandPartitionPreview PreviewBandMergeRange(
+    const std::vector<double>& railParameters, const std::vector<double>& bandWidthsMm,
+    std::size_t first, std::size_t last);
+
 //! 「3枚 → 4枚。部材2(12.24mm)を 6.12mm と 6.12mm に分けます」のような一文。
 [[nodiscard]] std::string DescribeBandPartitionJa(const BandPartitionPreview& preview);
 
@@ -97,5 +110,14 @@ struct BandValueRemap {
 //! 1つにしたとき(部材 `first` と `first + 1` が1枚になる)の引き継ぎ。
 [[nodiscard]] BandValueRemap RemapForMerge(const BandValueRemap& before,
     std::size_t partsBefore, std::size_t first);
+
+//! 挙げた部材をそれぞれ `pieces` 枚に分けたときの引き継ぎ(分けた部材は全部の枚が元の値)。
+[[nodiscard]] BandValueRemap RemapForSplitEach(const BandValueRemap& before,
+    std::size_t partsBefore, const std::vector<std::size_t>& which, std::size_t pieces);
+
+//! 部材 `first` から `last` までを 1 枚にしたときの引き継ぎ(先頭の値を残し、捨てる値は
+//! 元の番号で全部言う)。
+[[nodiscard]] BandValueRemap RemapForMergeRange(const BandValueRemap& before,
+    std::size_t partsBefore, std::size_t first, std::size_t last);
 
 } // namespace kachakacha::v2::fabrication

@@ -6,6 +6,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2EntityTree.h"
 
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/UiMode.h"
@@ -30,6 +31,8 @@
 #include <QRectF>
 #include <QSize>
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QStringList>
 
 #include <iostream>
@@ -997,10 +1000,38 @@ namespace {
     // 同じ開いた線を「切れ目にする」と、切れ目として作り方に入る(V1 の plate_relief_cut)。
     viewport.SetSelection(last);
     window.RunCommand("fabrication.assign_relief_cut");
-    return Explain((std::string("切れ目として扱う(") + window.StatusText().toStdString()
-                       + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("切れ目"))
-            || window.StatusText().contains(QStringLiteral("載っていません")));
+    const bool assigned = window.StatusText().contains(QStringLiteral("切れ目"));
+    if (!Explain((std::string("切れ目として扱う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            assigned || window.StatusText().contains(QStringLiteral("載っていません")))) {
+        return false;
+    }
+    if (!assigned) {
+        return true;   // 線が部材の平面に載っていないので役割は入らない(それも正しい断り)
+    }
+    // 一覧の近似モデルの下に「切れ目 N 本」が出て、その線の名前が並ぶ(F-15、近似の単位)。
+    std::function<bool(const QTreeWidgetItem*)> hasReliefRow;
+    hasReliefRow = [&hasReliefRow](const QTreeWidgetItem* item) {
+        if (item == nullptr) {
+            return false;
+        }
+        if (item->text(0) == QStringLiteral("切れ目") && item->childCount() >= 1
+            && item->text(1).contains(QStringLiteral("本"))) {
+            return true;
+        }
+        for (int index = 0; index < item->childCount(); ++index) {
+            if (hasReliefRow(item->child(index))) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const auto* tree = window.EntityTree();
+    bool found = false;
+    for (int index = 0; tree != nullptr && index < tree->topLevelItemCount(); ++index) {
+        found = found || hasReliefRow(tree->topLevelItem(index));
+    }
+    return Explain("一覧の近似モデルの下に切れ目の線が出る", found);
 }
 
 [[nodiscard]] bool CaseWorkPlaneCanBeOffset(V2MainWindow& window)

@@ -290,6 +290,11 @@ bool V2MainWindow::ApplyUiShotState(const QString& name)
     // 同じ場面が単独では作れるのに続けて作ると作れない(PC 4 回目、HP-RS-01)。
     SetMode(kachakacha::v2::app::UiMode::Drawing);
     SelectTool(DrawingTool::Select);
+    // 面を作るの作り方の覚え(前の場面で人が選んだ作り方)も、開いた直後に戻す。覚えたままだと、
+    // 前の場面でロフトを選んだあと、閉じた輪郭 1 本から面を作る場面(近似)が作れない(HP-RS-02)。
+    if (!surfaceShelfShown_) {
+        surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
+    }
     bool ok = false;
     if (name.startsWith(QStringLiteral("ui-extrude-"))) {
         ok = ApplyExtrudeShotState(name);

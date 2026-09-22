@@ -83,6 +83,7 @@ public:
     void setMinimumSize(int, int);
     void setMinimumWidth(int);
     void setMinimumHeight(int);
+    void setMaximumHeight(int);
     void setFixedSize(int, int);
     void setFixedWidth(int);
     void setWindowTitle(const QString&);
@@ -346,6 +347,7 @@ public:
     [[nodiscard]] int columnCount() const;
     void setHeaderLabels(const QStringList&);
     void setRootIsDecorated(bool);
+    void setHeaderHidden(bool);
     void setIndentation(int);
     void setColumnHidden(int, bool);
     void addTopLevelItem(QTreeWidgetItem*);
@@ -576,6 +578,7 @@ public:
     explicit QFormLayout(QWidget*) {}
     void addRow(const QString&, QWidget*);
     void addRow(QWidget*, QWidget*);
+    void addRow(QWidget*, QLayout*);
     void addRow(QWidget*);
     void setRowVisible(QWidget*, bool);
     void setRowWrapPolicy(RowWrapPolicy);

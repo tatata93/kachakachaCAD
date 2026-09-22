@@ -13,12 +13,14 @@
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <QPointF>
 #include <QString>
 
+#include <string>
 #include <vector>
 
 using kachakacha::v2::base::EntityId;
@@ -72,25 +74,44 @@ bool V2MainWindow::PickShapeCenterForShot(const EntityId& id)
     return false;
 }
 
-//! 08 案内付きロフト。断面3枚と、角をなぞるガイド1本。
+//! 08 案内付きロフト(多レール)。先が細る開いた断面 3 本と、ガイド 3 本
+//! (両脇の裾 2 本 + 頂の筋 1 本)。前頭部の形。外側が両脇にあるので断面とガイドの網で作る。
+//! 2026-09-22 まで閉じた四角 3 枚 + 角のガイド 1 本だった。閉じた断面にガイドを付けた
+//! ロフトは作れない(検査が断る)ので、棚には断る言葉しか写っていなかった。
 bool V2MainWindow::ApplyGuidedLoftShotState()
 {
     std::vector<EntityId> sections;
-    const double heights[3] = {0.0, 25.0, 50.0};
-    const double halves[3] = {40.0, 30.0, 16.0};
-    const char* const labels[3] = {"断面1", "断面2", "断面3"};
+    const double xs[3] = {0.0, 40.0, 80.0};
+    const double halves[3] = {30.0, 24.0, 14.0};
+    const double tops[3] = {20.0, 16.0, 8.0};
     for (int index = 0; index < 3; ++index) {
-        const auto id = AddPlainWire(RectangleAround(0.0, heights[index], halves[index]),
-            labels[index]);
+        const double lift = tops[index] / 0.75;   // 3 次ベジェの山は制御点の高さの 3/4
+        const auto arch = CurveSegment::MakeCubicBezier({Vector3{xs[index], -halves[index], 0.0},
+            Vector3{xs[index], -halves[index], lift}, Vector3{xs[index], halves[index], lift},
+            Vector3{xs[index], halves[index], 0.0}});
+        const auto id = arch.HasValue()
+            ? AddPlainWire({arch.Value()}, ("断面" + std::to_string(index + 1)).c_str())
+            : EntityId{};
         if (id.IsNil()) {
             return false;
         }
         sections.push_back(id);
     }
-    const auto guide = AddPlainWire(
-        PolylineThrough({{-40.0, -40.0, 0.0}, {-30.0, -30.0, 25.0}, {-16.0, -16.0, 50.0}}),
-        "ガイド");
-    if (guide.IsNil()) {
+    std::vector<EntityId> guides;
+    const auto through = [&](double side, const char* label) {
+        const auto arc = kachakacha::v2::geometry::ArcThroughThreePoints(
+            {xs[0], side * halves[0], side == 0.0 ? tops[0] : 0.0},
+            {xs[1], side * halves[1], side == 0.0 ? tops[1] : 0.0},
+            {xs[2], side * halves[2], side == 0.0 ? tops[2] : 0.0});
+        const auto id = arc.HasValue() ? AddPlainWire({arc.Value()}, label) : EntityId{};
+        if (!id.IsNil()) {
+            guides.push_back(id);
+        }
+    };
+    through(-1.0, "ガイド(裾)");
+    through(0.0, "ガイド(頂)");
+    through(1.0, "ガイド(裾)");
+    if (guides.size() != 3) {
         return false;
     }
     AdoptCurrentDocument();
@@ -101,23 +122,24 @@ bool V2MainWindow::ApplyGuidedLoftShotState()
     viewport_->SetSelection(all);
     RunCommand("surface.create");
     // ガイド付きロフトはロフト面へ統合した(互換の入口は「その他」)。ロフト面のカードでガイドの欄を使う。
-    // 旧カードを押そうとして、この場面は 70cfb9c から作れていなかった(絵が古いまま残っていた)。
     if (!surfaceShelfShown_ || !surfaceDock_->ClickMethodCard(GuideSurfaceMethod::LoftSections)
         || !surfaceDock_->ClickActivate(ChainRole::GuideU)) {
         return false;
     }
-    // ガイドは 3D で押す(欄が「ここへ選ぶ」の状態)。
-    for (const auto& curve : session_->Scene().curves) {
-        if (!(curve.entityId == guide)) {
-            continue;
-        }
-        const auto screen = viewport_->Mapping().Project(curve.segment.Evaluate(0.5));
-        if (screen.has_value()) {
-            viewport_->SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+    // ガイドは 3D で押す(欄が「ここへ選ぶ」の状態)。断面と重ならない、断面の間の点を押す。
+    for (const EntityId& guide : guides) {
+        for (const auto& curve : session_->Scene().curves) {
+            if (!(curve.entityId == guide)) {
+                continue;
+            }
+            const auto screen = viewport_->Mapping().Project(curve.segment.Evaluate(0.25));
+            if (screen.has_value()) {
+                viewport_->SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+            }
             break;
         }
     }
-    return surfaceInput_.guides.size() == 1;
+    return surfaceInput_.guides.size() == 3;
 }
 
 //! 09 近似。平らな面を作ってから、近似を押し、3D で面を押して候補を並べる。

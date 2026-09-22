@@ -310,34 +310,81 @@ void ClassifyRails(const std::vector<SampledChain>& sampled,
     }
 }
 
-//! 張り直すときのガイドは、最初の断面から最後の断面までの部分。はみ出しは断る
+//! ガイドの、端の断面より外の長さ(mm)。before = 最初の断面の側、after = 最後の断面の側。
+struct Overhang {
+    double before = 0.0;
+    double after = 0.0;
+    bool beforeIsStart = true;   //!< 最初の断面の側が、ガイドを引いた始点の側か
+};
+
+//! ガイドの始点の側が、最初の断面の側か。断面が 1 本だけだと交わりの順では決まらないので、
+//! 1 本目のガイドの向きにそろえる(端どうしが近い組み合わせ)。
+[[nodiscard]] bool BeforeIsStart(const GuideSurfaceRequest& request, const LoftPlan& plan,
+    const RailGrid& grid, std::size_t r, std::size_t first, std::size_t last)
+{
+    if (first != last) {
+        return grid.crossings[r][first].firstParameter <= grid.crossings[r][last].firstParameter;
+    }
+    const auto& reference = request.chains[plan.rails.front().chainIndex].segments;
+    const auto& here = request.chains[plan.rails[r].chainIndex].segments;
+    const double same = geometry::Distance(here.front().StartPoint(), reference.front().StartPoint())
+        + geometry::Distance(here.back().EndPoint(), reference.back().EndPoint());
+    const double crossed =
+        geometry::Distance(here.front().StartPoint(), reference.back().EndPoint())
+        + geometry::Distance(here.back().EndPoint(), reference.front().StartPoint());
+    return same <= crossed;
+}
+
+[[nodiscard]] Overhang OverhangOf(const GuideSurfaceRequest& request,
+    const std::vector<SampledChain>& sampled, const LoftPlan& plan, const RailGrid& grid,
+    std::size_t r, std::size_t first, std::size_t last)
+{
+    Overhang out;
+    out.beforeIsStart = BeforeIsStart(request, plan, grid, r, first, last);
+    const double length = sampled[plan.rails[r].chainIndex].lengthMm;
+    const double a = grid.crossings[r][first].firstParameter;
+    const double b = grid.crossings[r][last].firstParameter;
+    out.before = (out.beforeIsStart ? a : 1.0 - a) * length;
+    out.after = (out.beforeIsStart ? 1.0 - b : b) * length;
+    return out;
+}
+
+//! ガイドの端(引いた始点の側か、終点の側か)。
+[[nodiscard]] Vector3 RailEnd(const std::vector<CurveSegment>& chain, bool start)
+{
+    return start ? chain.front().StartPoint() : chain.back().EndPoint();
+}
+
+//! 張り直す・網にするときのガイドは、最初の断面から最後の断面までの部分。はみ出しは断る
 //! (はみ出した部分は面に乗らない。黙って捨てると「通る線」を無視したことになる)。
+//! 仮想断面を作る側(toBefore / toAfter)だけは、ガイドの端まで使う。
 [[nodiscard]] std::vector<Diagnostic> SpanRails(const GuideSurfaceRequest& request,
     const std::vector<SampledChain>& sampled, const std::vector<std::size_t>& sections,
     const RailGrid& grid, const std::vector<std::size_t>& order, double joinTolerance,
-    LoftPlan& plan)
+    LoftPlan& plan, bool toBefore = false, bool toAfter = false)
 {
     std::vector<Diagnostic> errors;
     const std::size_t first = PositionOf(sections, order.front());
     const std::size_t last = PositionOf(sections, order.back());
     for (std::size_t r = 0; r < plan.rails.size(); ++r) {
+        const Overhang overhang = OverhangOf(request, sampled, plan, grid, r, first, last);
         LoftRail& rail = plan.rails[r];
-        const SampledChain& along = sampled[rail.chainIndex];
-        const double a = grid.crossings[r][first].firstParameter;
-        const double b = grid.crossings[r][last].firstParameter;
-        const double before = std::min(a, b) * along.lengthMm;
-        const double after = (1.0 - std::max(a, b)) * along.lengthMm;
-        if (before > joinTolerance || after > joinTolerance) {
+        const double beyond =
+            std::max(toBefore ? 0.0 : overhang.before, toAfter ? 0.0 : overhang.after);
+        if (beyond > joinTolerance) {
             errors.push_back(MakeError(kBadInput,
                 Label(request, rail.chainIndex) + "が端の断面より外へ "
-                    + Mm(std::max(before, after)) + " mm はみ出しています。",
+                    + Mm(beyond) + " mm はみ出しています。",
                 "面は最初の断面から最後の断面までの間に張ります。はみ出した部分は面に乗りません。"
                 "ガイドを断面のところで切るか、端に断面を足してください。"));
             continue;
         }
-        const auto span = geometry::TrimChainBetween(request.chains[rail.chainIndex].segments,
-            grid.crossings[r][first].position, grid.crossings[r][last].position,
-            joinTolerance);
+        const auto& chain = request.chains[rail.chainIndex].segments;
+        const Vector3 from = toBefore ? RailEnd(chain, overhang.beforeIsStart)
+                                      : grid.crossings[r][first].position;
+        const Vector3 to = toAfter ? RailEnd(chain, !overhang.beforeIsStart)
+                                   : grid.crossings[r][last].position;
+        const auto span = geometry::TrimChainBetween(chain, from, to, joinTolerance);
         if (!span.HasValue()) {
             errors.push_back(MakeError(kBadInput,
                 Label(request, rail.chainIndex) + "を断面の間で切り出せませんでした。",
@@ -350,16 +397,83 @@ void ClassifyRails(const std::vector<SampledChain>& sampled,
     return errors;
 }
 
-//! 2 本のレールで掃く近道が使えるか: 外側のガイドが始点側と終点側に 1 本ずつだけ。
-[[nodiscard]] bool TwoOuterRails(const LoftPlan& plan, bool centerline)
+//! 外側のガイドが始点側と終点側に 1 本ずつ(内側のガイドは何本でも)。網にできる形。
+[[nodiscard]] bool OuterPair(const LoftPlan& plan)
 {
-    if (centerline || plan.rails.size() != 2) {
-        return false;
+    const auto count = [&plan](LoftRailSide side) {
+        return std::count_if(plan.rails.begin(), plan.rails.end(),
+            [side](const LoftRail& rail) { return rail.side == side; });
+    };
+    return count(LoftRailSide::Start) == 1 && count(LoftRailSide::End) == 1;
+}
+
+//! v を、単位ベクトル from を to へ重ねるいちばん小さい回転で回す(ロドリゲスの式)。
+[[nodiscard]] Vector3 RotateOnto(const Vector3& v, const Vector3& from, const Vector3& to)
+{
+    const Vector3 axis = geometry::Cross(from, to);
+    const double sine = axis.Length();
+    const double cosine = geometry::Dot(from, to);
+    if (sine < 1.0e-12) {
+        if (cosine > 0.0) {
+            return v;
+        }
+        // ちょうど逆向き: from に直角な軸で半回転する。
+        const Vector3 other = std::abs(from.x) < 0.9 ? Vector3{1.0, 0.0, 0.0}
+                                                     : Vector3{0.0, 1.0, 0.0};
+        const Vector3 k = geometry::Normalized(geometry::Cross(from, other));
+        return k * (2.0 * geometry::Dot(k, v)) - v;
     }
-    const LoftRailSide a = plan.rails[0].side;
-    const LoftRailSide b = plan.rails[1].side;
-    return (a == LoftRailSide::Start && b == LoftRailSide::End)
-        || (a == LoftRailSide::End && b == LoftRailSide::Start);
+    const Vector3 k = axis * (1.0 / sine);
+    return v * cosine + geometry::Cross(k, v) * sine + k * (geometry::Dot(k, v) * (1.0 - cosine));
+}
+
+//! 仮想断面: 端の断面を、2 本のガイドの端へ運んだ折れ線(相似 = 移動・いちばん小さい回転・
+//! 一様な拡大縮小)。断面の始点が始点側のガイドの端へ、終点が終点側のガイドの端へ来る。
+//! 作れなければ空(呼ぶ側は従来の 2 本レールへ戻す)。
+[[nodiscard]] std::vector<CurveSegment> VirtualSection(const SampledChain& section, bool reversed,
+    const Vector3& startEnd, const Vector3& endEnd)
+{
+    std::vector<Vector3> points = section.points;
+    if (reversed) {
+        std::reverse(points.begin(), points.end());
+    }
+    if (points.size() < 2) {
+        return {};
+    }
+    const Vector3 origin = points.front();
+    const Vector3 chord = points.back() - origin;
+    const Vector3 target = endEnd - startEnd;
+    if (chord.Length() < 1.0e-9 || target.Length() < 1.0e-9) {
+        return {};
+    }
+    const double scale = target.Length() / chord.Length();
+    const Vector3 from = chord * (1.0 / chord.Length());
+    const Vector3 to = target * (1.0 / target.Length());
+    // 点が多すぎると網の計算が重い。弧長で等間隔に 129 点まで間引く。
+    constexpr std::size_t kMaximumPoints = 129;
+    if (points.size() > kMaximumPoints) {
+        const std::vector<double> t = geometry::NormalizedArcLength(points);
+        std::vector<Vector3> thinned;
+        for (std::size_t k = 0; k < kMaximumPoints; ++k) {
+            thinned.push_back(geometry::PointAtNormalizedArcLength(points, t,
+                static_cast<double>(k) / static_cast<double>(kMaximumPoints - 1)));
+        }
+        points = std::move(thinned);
+    }
+    std::vector<CurveSegment> out;
+    Vector3 previous = startEnd;
+    for (std::size_t k = 1; k < points.size(); ++k) {
+        const Vector3 next = k + 1 == points.size()
+            ? endEnd
+            : startEnd + RotateOnto(points[k] - origin, from, to) * scale;
+        const auto line = CurveSegment::MakeLine(previous, next);
+        if (!line.HasValue()) {
+            continue;   // 重なった点は飛ばす
+        }
+        out.push_back(line.Value());
+        previous = next;
+    }
+    return out;
 }
 
 //! 従来の案内付きロフトと同じ: 端に断面が無ければ仮想断面を作る位置を決める。
@@ -387,6 +501,92 @@ void PlanVirtualEndSections(const GuideSurfaceRequest& request, const RailGrid& 
             std::to_string(analysis.virtualSectionParameters.size())
                 + " 本。設定で作らないようにもできます。"));
     }
+}
+
+//! 外側のガイドが両脇に 1 本ずつ: 断面とガイドを網(Gordon)にする。
+//! 外側の 2 本だけで、両方のガイドが端の断面より外へ伸びている側には仮想断面を作る。
+//! 片方だけが伸びている・仮想断面を作らない設定なら、従来の 2 本レールで掃く。
+[[nodiscard]] Result<GuideSurfaceAnalysis> NetworkAlongRails(const GuideSurfaceRequest& request,
+    const std::vector<SampledChain>& sampled, const std::vector<std::size_t>& sections,
+    const RailGrid& grid, const std::vector<std::size_t>& order, double joinTolerance,
+    GuideSurfaceAnalysis analysis)
+{
+    LoftPlan& plan = analysis.loft;
+    const std::size_t first = PositionOf(sections, order.front());
+    const std::size_t last = PositionOf(sections, order.back());
+    std::vector<Overhang> overhangs;
+    bool anyBefore = false;
+    bool allBefore = true;
+    bool anyAfter = false;
+    bool allAfter = true;
+    for (std::size_t r = 0; r < plan.rails.size(); ++r) {
+        overhangs.push_back(OverhangOf(request, sampled, plan, grid, r, first, last));
+        const bool before = overhangs.back().before > joinTolerance;
+        const bool after = overhangs.back().after > joinTolerance;
+        anyBefore = anyBefore || before;
+        allBefore = allBefore && before;
+        anyAfter = anyAfter || after;
+        allAfter = allAfter && after;
+    }
+    const auto railOn = [&plan](LoftRailSide side) {
+        for (std::size_t r = 0; r < plan.rails.size(); ++r) {
+            if (plan.rails[r].side == side) {
+                return r;
+            }
+        }
+        return std::size_t{0};
+    };
+    const std::size_t startRail = railOn(LoftRailSide::Start);
+    const std::size_t endRail = railOn(LoftRailSide::End);
+    const auto endOf = [&](std::size_t r, bool beforeSide) {
+        return RailEnd(request.chains[plan.rails[r].chainIndex].segments,
+            beforeSide == overhangs[r].beforeIsStart);
+    };
+    const bool outerOnly = plan.rails.size() == 2;
+    if (outerOnly && request.createVirtualEndSections && allBefore) {
+        plan.virtualBefore = VirtualSection(sampled[order.front()], plan.reverseSections.front(),
+            endOf(startRail, true), endOf(endRail, true));
+    }
+    if (outerOnly && request.createVirtualEndSections && allAfter) {
+        plan.virtualAfter = VirtualSection(sampled[order.back()], plan.reverseSections.back(),
+            endOf(startRail, false), endOf(endRail, false));
+    }
+    const bool before = !plan.virtualBefore.empty();
+    const bool after = !plan.virtualAfter.empty();
+    const std::size_t lines = sections.size() + (before ? 1 : 0) + (after ? 1 : 0);
+    if (outerOnly && ((anyBefore && !before) || (anyAfter && !after) || lines < 2)) {
+        plan.virtualBefore.clear();
+        plan.virtualAfter.clear();
+        plan.solver = LoftSolver::TwoRailSweep;
+        PlanVirtualEndSections(request, grid, startRail, analysis);
+        return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
+    }
+    if (lines < 2) {
+        return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
+            "断面が 2 本以上必要です(いま 1 本)。",
+            "1 本で作れるのは、断面の両端にガイドが 1 本ずつあるときだけです。"));
+    }
+    std::vector<Diagnostic> errors =
+        SpanRails(request, sampled, sections, grid, order, joinTolerance, plan, before, after);
+    if (!errors.empty()) {
+        return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
+    }
+    plan.solver = LoftSolver::RailNetwork;
+    if (before || after) {
+        // 位置は始点側のガイドの上(0 = 引いた始点、1 = 終点)。従来の仮想断面と同じ言い方。
+        const bool startFirst = overhangs[startRail].beforeIsStart;
+        if (before) {
+            analysis.virtualSectionParameters.push_back(startFirst ? 0.0 : 1.0);
+        }
+        if (after) {
+            analysis.virtualSectionParameters.push_back(startFirst ? 1.0 : 0.0);
+        }
+        analysis.notes.push_back(MakeWarning("GEO-G104",
+            "端に断面が無いので、仮想断面を作ります。",
+            std::to_string(analysis.virtualSectionParameters.size())
+                + " 本。設定で作らないようにもできます。"));
+    }
+    return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
 }
 
 //! ガイドがあるときの残り(交わり → 順 → 向き → 側 → 作り方)。
@@ -420,12 +620,9 @@ void PlanVirtualEndSections(const GuideSurfaceRequest& request, const RailGrid& 
     }
     ClassifyRails(sampled, rails, sections, grid, order, analysis.loft.reverseSections,
         joinTolerance, analysis.loft);
-    if (TwoOuterRails(analysis.loft, !centerlines.empty())) {
-        analysis.loft.solver = LoftSolver::TwoRailSweep;
-        const std::size_t startRail =
-            analysis.loft.rails[0].side == LoftRailSide::Start ? 0 : 1;
-        PlanVirtualEndSections(request, grid, startRail, analysis);
-        return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
+    if (centerlines.empty() && OuterPair(analysis.loft)) {
+        return NetworkAlongRails(request, sampled, sections, grid, order, joinTolerance,
+            std::move(analysis));
     }
     if (sections.size() < 2) {
         return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
@@ -494,3 +691,40 @@ Result<GuideSurfaceAnalysis> AnalyzeLoft(const GuideSurfaceRequest& request,
 }
 
 } // namespace kachakacha::v2::modeling::detail
+
+namespace kachakacha::v2::modeling {
+
+GuideSurfaceRequest LoftNetworkRequest(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis)
+{
+    GuideSurfaceRequest network;
+    network.method = GuideSurfaceMethod::CurveNetworkExact;
+    int vs = 0;
+    const auto addV = [&](const std::vector<CurveSegment>& segments) {
+        GuideChain chain;
+        chain.role = ChainRole::GuideV;
+        chain.index = ++vs;
+        chain.segments = segments;
+        network.chains.push_back(std::move(chain));
+    };
+    if (!analysis.loft.virtualBefore.empty()) {
+        addV(analysis.loft.virtualBefore);
+    }
+    for (const std::size_t index : analysis.sectionOrdering.chainIndices) {
+        addV(request.chains[index].segments);
+    }
+    if (!analysis.loft.virtualAfter.empty()) {
+        addV(analysis.loft.virtualAfter);
+    }
+    int us = 0;
+    for (const LoftRail& rail : analysis.loft.rails) {
+        GuideChain chain;
+        chain.role = ChainRole::GuideU;
+        chain.index = ++us;
+        chain.segments = rail.span;
+        network.chains.push_back(std::move(chain));
+    }
+    return network;
+}
+
+} // namespace kachakacha::v2::modeling

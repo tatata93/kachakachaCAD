@@ -9,6 +9,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/modeling/GordonGrid.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/LoftInput.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -803,6 +804,64 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
     }, "四辺面");
 }
 
+namespace {
+
+//! Gordon の格子点を B-spline 面へ写して、1 枚の面にする。
+[[nodiscard]] Result<TopoDS_Shape> FaceFromGrid(const modeling::GordonGrid& g)
+{
+    using Out = Result<TopoDS_Shape>;
+    NCollection_Array2<gp_Pnt> points(1, static_cast<int>(g.columns), 1,
+        static_cast<int>(g.rows));
+    for (std::size_t column = 0; column < g.columns; ++column) {
+        for (std::size_t row = 0; row < g.rows; ++row) {
+            points.SetValue(static_cast<int>(column) + 1, static_cast<int>(row) + 1,
+                ToPoint(g.At(row, column)));
+        }
+    }
+    // 写す誤差の目標は、曲線網の許容(0.02 mm)より十分小さく。
+    GeomAPI_PointsToBSplineSurface fit(points, 3, 8, GeomAbs_C2, 0.002);
+    if (!fit.IsDone() || fit.Surface().IsNull()) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed,
+            "曲線網の形を面へ写せませんでした。", "線の数を減らすか、曲線網(近似)を使ってください。"));
+    }
+    const occ::handle<Geom_Surface> surface = fit.Surface();
+    BRepBuilderAPI_MakeFace face{surface, Precision::Confusion()};
+    if (!face.IsDone()) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed, "曲線網の面を作れませんでした。", {}));
+    }
+    return Out::Success(TopoDS_Shape(face.Face()));
+}
+
+//! 線が多いほど細かく。1 区間に 8 点、25〜97 点。
+[[nodiscard]] std::size_t GridSamples(std::size_t lines)
+{
+    return std::clamp<std::size_t>(8 * (lines > 1 ? lines - 1 : 1) + 1, 25, 97);
+}
+
+//! 外側のガイドが両脇にある: 断面とガイドの網(Gordon)。網は検査が組んだ(仮想断面も含む)。
+//! 2026-09-22 まで、外側の 2 本だけのときは MakePipeShell(2 本のレールで掃く)だった。
+//! 断面が 3 本あると断面の間で面が波打った(はしご形の撮影で、山が 3 つのはずが 7 つ)。
+//! 網は自然 3 次スプラインでつなぐので、断面の間はなめらかに移る。
+[[nodiscard]] Result<TopoDS_Shape> RailNetwork(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance)
+{
+    const GuideSurfaceRequest network = modeling::LoftNetworkRequest(request, analysis);
+    std::size_t us = 0;
+    std::size_t vs = 0;
+    for (const auto& chain : network.chains) {
+        us += chain.role == ChainRole::GuideU ? 1 : 0;
+        vs += chain.role == ChainRole::GuideV ? 1 : 0;
+    }
+    const auto grid =
+        modeling::BuildGordonGrid(network, tolerance, GridSamples(std::max(us, vs)));
+    if (!grid.HasValue()) {
+        return Result<TopoDS_Shape>::Failure(grid.Diagnostics());
+    }
+    return FaceFromGrid(grid.Value());
+}
+
+} // namespace
+
 Result<TopoDS_Shape> BuildNetworkShape(const GuideSurfaceRequest& request,
     const GeometryTolerance& tolerance)
 {
@@ -812,34 +871,11 @@ Result<TopoDS_Shape> BuildNetworkShape(const GuideSurfaceRequest& request,
         for (const auto& chain : request.chains) {
             lines = std::max(lines, chain.index > 0 ? static_cast<std::size_t>(chain.index) : 0);
         }
-        // 線が多いほど細かく。1 区間に 8 点、25〜97 点。
-        const std::size_t samples = std::clamp<std::size_t>(8 * (lines > 1 ? lines - 1 : 1) + 1,
-            25, 97);
-        const auto grid = modeling::BuildGordonGrid(request, tolerance, samples);
+        const auto grid = modeling::BuildGordonGrid(request, tolerance, GridSamples(lines));
         if (!grid.HasValue()) {
             return Out::Failure(grid.Diagnostics());
         }
-        const auto& g = grid.Value();
-        NCollection_Array2<gp_Pnt> points(1, static_cast<int>(g.columns), 1,
-            static_cast<int>(g.rows));
-        for (std::size_t column = 0; column < g.columns; ++column) {
-            for (std::size_t row = 0; row < g.rows; ++row) {
-                points.SetValue(static_cast<int>(column) + 1, static_cast<int>(row) + 1,
-                    ToPoint(g.At(row, column)));
-            }
-        }
-        // 写す誤差の目標は、曲線網の許容(0.02 mm)より十分小さく。
-        GeomAPI_PointsToBSplineSurface fit(points, 3, 8, GeomAbs_C2, 0.002);
-        if (!fit.IsDone() || fit.Surface().IsNull()) {
-            return Out::Failure(MakeError(kSurfaceBuildFailed,
-                "曲線網の形を面へ写せませんでした。", "線の数を減らすか、曲線網(近似)を使ってください。"));
-        }
-        const occ::handle<Geom_Surface> surface = fit.Surface();
-        BRepBuilderAPI_MakeFace face{surface, Precision::Confusion()};
-        if (!face.IsDone()) {
-            return Out::Failure(MakeError(kSurfaceBuildFailed, "曲線網の面を作れませんでした。", {}));
-        }
-        return Out::Success(TopoDS_Shape(face.Face()));
+        return FaceFromGrid(grid.Value());
     }, "曲線網(Gordon)");
 }
 
@@ -864,6 +900,8 @@ Result<TopoDS_Shape> BuildLoftShape(const GuideSurfaceRequest& request,
             return TwoRailSweep(request, analysis, tolerance);
         case modeling::LoftSolver::RailFilling:
             return RailFilling(request, analysis, sections.Value(), tolerance);
+        case modeling::LoftSolver::RailNetwork:
+            return RailNetwork(request, analysis, tolerance);
         }
         return Out::Failure(MakeError(kSurfaceUnsupportedMethod, "知らないロフトの作り方です。", {}));
     }, "ロフト");

@@ -136,6 +136,7 @@ public:
     QStringList() = default;
     QStringList(std::initializer_list<QString>) {}
     [[nodiscard]] bool contains(const QString&) const;
+    [[nodiscard]] bool isEmpty() const;
     [[nodiscard]] int size() const;
     [[nodiscard]] int indexOf(const QString&) const;
     [[nodiscard]] QString at(int) const;

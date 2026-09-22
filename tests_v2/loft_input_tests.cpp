@@ -5,7 +5,9 @@
 // ここでは、どのガイドも形に効く作り方(LoftSolver)が選ばれることと、
 // 作れない入力をどの線が悪いのかを言って断ることを押さえる。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/modeling/GordonGrid.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/modeling/LoftInput.h"
 #include "kachakacha/modeling/SurfaceCardinality.h"
 
 #include <algorithm>
@@ -17,6 +19,8 @@ using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::GeometryTolerance;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest;
+using kachakacha::v2::modeling::BuildGordonGrid;
+using kachakacha::v2::modeling::LoftNetworkRequest;
 using kachakacha::v2::modeling::ChainRole;
 using kachakacha::v2::modeling::GuideChain;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
@@ -121,20 +125,26 @@ KACHA_V2_TEST(loft, 断面3本とガイド1本は全部を通るように張る)
     Require(!result.Value().loft.rails[0].span.empty(), "断面の間に切ったガイドがある");
 }
 
-KACHA_V2_TEST(loft, 断面3本と両端のガイド2本は従来の2本レール)
+KACHA_V2_TEST(loft, 断面3本と両端のガイド2本は網にして全部の線を通す)
 {
+    // 2026-09-22 まで 2 本のレールで掃いていた(MakePipeShell)。断面が 3 本あると
+    // 断面の間で面が波打った(PC の撮影)。いまは断面とガイドの網(Gordon)。
     const auto result = Accept(Grid(3, {0.0, 40.0}), "断面3・ガイド2(両端)");
-    Require(result.Value().loft.solver == LoftSolver::TwoRailSweep,
-        "従来の案内付きロフトと同じ作り方(回帰)");
+    Require(result.Value().loft.solver == LoftSolver::RailNetwork, "網にする");
     Require(result.Value().loft.rails[0].side == LoftRailSide::Start, "1本目は始点側");
     Require(result.Value().loft.rails[1].side == LoftRailSide::End, "2本目は終点側");
+    Require(!result.Value().loft.rails[0].span.empty() && !result.Value().loft.rails[1].span.empty(),
+        "どちらのガイドも断面の間で切り出してある");
+    Require(result.Value().virtualSectionParameters.empty()
+            && result.Value().loft.virtualBefore.empty() && result.Value().loft.virtualAfter.empty(),
+        "端に断面があるので仮想断面は作らない");
 }
 
 KACHA_V2_TEST(loft, 断面3本とガイド3本は3本目も使う)
 {
     const auto result = Accept(Grid(3, {0.0, 20.0, 40.0}), "断面3・ガイド3");
-    Require(result.Value().loft.solver == LoftSolver::RailFilling,
-        "3本目があるので張り直す(2本レールの近道は使わない)");
+    Require(result.Value().loft.solver == LoftSolver::RailNetwork,
+        "外側が両脇にあるので、内側の 3 本目も網の線にする");
     Require(result.Value().loft.rails.size() == 3, "3本とも作り方に入る");
     Require(result.Value().loft.rails[2].side == LoftRailSide::End
             || result.Value().loft.rails[1].side == LoftRailSide::Interior,
@@ -235,7 +245,7 @@ KACHA_V2_TEST(loft, 中心線は0か1本で1本なら中心線に沿って運ぶ
         "中心線は1本までと言う: " + why);
 }
 
-KACHA_V2_TEST(loft, 断面1本は両端のガイドで掃くときだけ作れる)
+KACHA_V2_TEST(loft, 断面1本は両端のガイドがあるときだけ作れる)
 {
     const auto sweep = Accept(Grid(3, {0.0, 40.0}), "準備");
     (void)sweep;
@@ -243,7 +253,17 @@ KACHA_V2_TEST(loft, 断面1本は両端のガイドで掃くときだけ作れ�
     one.chains.erase(one.chains.begin(), one.chains.begin() + 2);   // 断面 3 だけ残す
     one.chains[0].index = 1;
     const auto accepted = Accept(one, "断面1本 + 両端のガイド2本");
-    Require(accepted.Value().loft.solver == LoftSolver::TwoRailSweep, "両端のガイドで掃く");
+    // 断面はガイドの終わり(x = 100)にある。ガイドの始まりの側に仮想断面を足して網にする。
+    Require(accepted.Value().loft.solver == LoftSolver::RailNetwork, "仮想断面を足して網にする");
+    Require(accepted.Value().virtualSectionParameters.size() == 1
+            && !accepted.Value().loft.virtualBefore.empty(),
+        "仮想断面は 1 本(断面の無い側だけ)");
+
+    GuideSurfaceRequest noVirtual = one;
+    noVirtual.createVirtualEndSections = false;
+    const auto swept = Accept(noVirtual, "仮想断面を作らない設定");
+    Require(swept.Value().loft.solver == LoftSolver::TwoRailSweep,
+        "仮想断面を作らない設定なら、従来どおり 2 本のレールで掃く");
 
     GuideSurfaceRequest lonely = Grid(3, {20.0});
     lonely.chains.erase(lonely.chains.begin(), lonely.chains.begin() + 2);
@@ -251,6 +271,113 @@ KACHA_V2_TEST(loft, 断面1本は両端のガイドで掃くときだけ作れ�
     std::string code;
     const std::string why = RejectWhy(lonely, code);
     Require(why.find("2 本以上") != std::string::npos, "断面が足りないと言う: " + why);
+}
+
+KACHA_V2_TEST(loft, 片方のガイドだけ端の断面より外へ伸びていれば従来の2本レール)
+{
+    GuideSurfaceRequest request = Grid(3, {0.0, 40.0});
+    GuideChain& rail = request.chains[3];   // ガイド 1(y = 0)だけ x = -15 まで伸ばす
+    const auto first = rail.segments.front();
+    rail.segments.insert(rail.segments.begin(),
+        CurveSegment::MakeLine(first.StartPoint() - Vector3{15, 0, 0}, first.StartPoint())
+            .Value());
+    const auto result = Accept(request, "片方だけ伸びたガイド");
+    // 片側だけの三角の部分は網の四角にならない。仮想断面は作らず、従来の掃き方に戻す。
+    Require(result.Value().loft.solver == LoftSolver::TwoRailSweep, "2 本のレールで掃く");
+    Require(result.Value().loft.virtualBefore.empty() && result.Value().loft.virtualAfter.empty(),
+        "仮想断面の線は作らない");
+}
+
+KACHA_V2_TEST(loft, 両方のガイドが伸びていれば端の断面と相似な仮想断面を足す)
+{
+    GuideSurfaceRequest request = Grid(3, {0.0, 40.0});
+    for (const std::size_t at : {std::size_t{3}, std::size_t{4}}) {
+        GuideChain& rail = request.chains[at];
+        const auto last = rail.segments.back();
+        rail.segments.push_back(
+            CurveSegment::MakeLine(last.EndPoint(), last.EndPoint() + Vector3{20, 0, 0}).Value());
+    }
+    const auto result = Accept(request, "両方のガイドが x = 120 まで伸びる");
+    Require(result.Value().loft.solver == LoftSolver::RailNetwork, "網にする");
+    const auto& added = result.Value().loft.virtualAfter;
+    Require(!added.empty() && result.Value().loft.virtualBefore.empty(),
+        "伸びた側(最後の断面の側)だけに仮想断面");
+    // 端の断面(x = 100)をそのまま x = 120 へ運んだ形になる(ガイドは平行なので、回さず縮めない)。
+    const Vector3 start = added.front().StartPoint();
+    const Vector3 end = added.back().EndPoint();
+    Require(std::abs(start.x - 120.0) < 1.0e-6 && std::abs(start.y) < 1.0e-6,
+        "始点は始点側のガイドの端");
+    Require(std::abs(end.x - 120.0) < 1.0e-6 && std::abs(end.y - 40.0) < 1.0e-6,
+        "終点は終点側のガイドの端");
+    double top = 0.0;
+    for (const CurveSegment& segment : added) {
+        top = std::max(top, segment.EndPoint().z);
+        Require(std::abs(segment.EndPoint().x - 120.0) < 1.0e-6, "断面の平面ごと運ぶ");
+    }
+    Require(std::abs(top - Height(100.0, 20.0)) < 0.05, "高さは端の断面と同じ");
+    const auto network = LoftNetworkRequest(request, result.Value());
+    int us = 0;
+    int vs = 0;
+    for (const GuideChain& chain : network.chains) {
+        us += chain.role == ChainRole::GuideU ? 1 : 0;
+        vs += chain.role == ChainRole::GuideV ? 1 : 0;
+    }
+    Require(us == 2 && vs == 4, "網は U 2 本(ガイド)と V 4 本(断面 3 + 仮想断面 1)");
+}
+
+KACHA_V2_TEST(loft, はしご形は網にして断面の間で波打たない)
+{
+    // 2026-09-22 の PC の撮影: 両端のガイド 2 本と断面 3 本(高さ 12・16・10 のアーチ)を
+    // 2 本のレールで掃くと、断面の間で面が波打った(山が 3 つのはずが 7 つ)。
+    // 網(Gordon)の格子で、断面の真ん中の筋が断面の高さの間をなめらかに移ることを見る。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::LoftSections;
+    const double xs[3] = {0.0, 40.0, 80.0};
+    const double heights[3] = {12.0, 16.0, 10.0};
+    for (int s = 0; s < 3; ++s) {
+        const double lift = heights[s] / 0.75;   // 3 次ベジェの山は制御点の高さの 3/4
+        GuideChain chain;
+        chain.role = ChainRole::Section;
+        chain.index = s + 1;
+        chain.segments.push_back(CurveSegment::MakeCubicBezier({Vector3{xs[s], 0.0, 0.0},
+            Vector3{xs[s], 0.0, lift}, Vector3{xs[s], 40.0, lift}, Vector3{xs[s], 40.0, 0.0}})
+                .Value());
+        request.chains.push_back(chain);
+    }
+    request.chains.push_back(Path(ChainRole::GuideU, 1, {{0, 0, 0}, {80, 0, 0}}));
+    request.chains.push_back(Path(ChainRole::GuideU, 2, {{0, 40, 0}, {80, 40, 0}}));
+    const auto analysis = Accept(request, "はしご形");
+    Require(analysis.Value().loft.solver == LoftSolver::RailNetwork, "網にする");
+    const auto grid = BuildGordonGrid(LoftNetworkRequest(request, analysis.Value()), Tolerance(), 33);
+    Require(grid.HasValue(), "網の格子を作れる");
+    const auto& g = grid.Value();
+    std::size_t middle = 0;
+    for (std::size_t row = 1; row < g.rows; ++row) {
+        if (std::abs(g.vParameters[row] - 0.5) < std::abs(g.vParameters[middle] - 0.5)) {
+            middle = row;
+        }
+    }
+    double lowest = 1.0e9;
+    double highest = -1.0e9;
+    int peaks = 0;
+    for (std::size_t column = 0; column < g.columns; ++column) {
+        const Vector3 here = g.At(middle, column);
+        lowest = std::min(lowest, here.z);
+        highest = std::max(highest, here.z);
+        Require(std::abs(here.y - 20.0) < 0.05, "真ん中の筋は y = 20 を通る");
+        if (column > 0) {
+            Require(here.x > g.At(middle, column - 1).x, "x は折り返さない");
+        }
+        if (column > 0 && column + 1 < g.columns) {
+            const double before = g.At(middle, column - 1).z;
+            const double after = g.At(middle, column + 1).z;
+            peaks += here.z > before + 1.0e-9 && here.z >= after ? 1 : 0;
+        }
+    }
+    Require(peaks == 1, "山は 1 つ(波打たない): " + std::to_string(peaks));
+    Require(highest <= 16.0 * 1.02 && lowest >= 10.0 * 0.98,
+        "高さは断面の高さ(10〜16)の間をなめらかに移る: " + std::to_string(lowest) + "〜"
+            + std::to_string(highest));
 }
 
 KACHA_V2_TEST(loft, 個数の約束は1か所にあり固定の理由を持つ)

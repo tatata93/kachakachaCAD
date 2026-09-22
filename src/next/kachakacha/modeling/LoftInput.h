@@ -7,10 +7,12 @@
 //! 3 本目以降を受ける作りになっていなかった。ここでは 1 つの「ロフト」として、
 //! 入力のつながりから作り方(LoftSolver)を決める。
 //!
-//!   ガイド 0 本            → 断面をなめらかに通す
-//!   中心線あり(ガイド 0) → 中心線に沿って運ぶ
-//!   外側のガイド 2 本だけ  → 2 本のレールで掃く(従来と同じ)
-//!   それ以外               → 断面と全部のガイドを通るように張る(近似、実測で判定)
+//!   ガイド 0 本                      → 断面をなめらかに通す
+//!   中心線あり(ガイド 0)           → 中心線に沿って運ぶ
+//!   外側のガイドが両脇に 1 本ずつ    → 断面とガイドを網(Gordon)にして全部の線を通す
+//!     (内側のガイドは何本でも。外側 2 本だけでガイドが端の断面より外へ伸びていれば
+//!      仮想断面を足す。片方だけ伸びている・仮想断面を作らない設定なら 2 本のレールで掃く)
+//!   それ以外                         → 断面と全部のガイドを通るように張る(近似、実測で判定)
 //!
 //! **どのガイドも形に効く。**3 本目以降を黙って使わない作りにはしない。
 
@@ -28,3 +30,12 @@ namespace kachakacha::v2::modeling::detail {
     std::vector<SampledChain>& sampled);
 
 } // namespace kachakacha::v2::modeling::detail
+
+namespace kachakacha::v2::modeling {
+
+//! LoftSolver::RailNetwork の網。U 線 = ガイド(断面の間の部分。仮想断面の側は端まで)、
+//! V 線 = 仮想断面 + 断面(並べた順)+ 仮想断面。核はこれを BuildGordonGrid へ渡す。
+[[nodiscard]] GuideSurfaceRequest LoftNetworkRequest(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis);
+
+} // namespace kachakacha::v2::modeling

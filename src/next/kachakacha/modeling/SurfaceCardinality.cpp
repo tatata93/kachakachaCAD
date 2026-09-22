@@ -39,7 +39,7 @@ const std::vector<RoleCardinality>& SurfaceCardinality(GuideSurfaceMethod method
     // ロフト: 断面 2〜任意、ガイド 0〜任意、中心線 0〜1。
     // 中心線は「断面を運ぶ道筋」なので 1 本(2 本あると、どちらに沿うか決まらない)。
     // 断面の下限は 1。ただし 1 本で作れるのは、断面の両端にガイドが 1 本ずつある
-    // (2 本のレールで 1 つの断面を掃く)ときだけ。それ以外は 2 本以上要る。
+    // (ガイドが断面より外へ伸びた側に仮想断面を足して網にする)ときだけ。それ以外は 2 本以上要る。
     // この条件は役割をまたぐので、表ではなく LoftSectionRuleProblemJa で見る。
     static const std::vector<RoleCardinality> loft{
         Role(ChainRole::Section, 1, kAny, true, true),

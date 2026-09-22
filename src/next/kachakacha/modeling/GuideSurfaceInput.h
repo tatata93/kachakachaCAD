@@ -199,13 +199,17 @@ enum class LoftSolver {
     Sections,
     //! 中心線に沿って断面を運ぶ(ガイド無し)。
     Centerline,
-    //! 外側のガイド 2 本だけ(断面の両端に 1 本ずつ)。2 本のレールで掃く。
-    //! 従来の「案内付きロフト」と同じ作り方(2 本のときの近道)。
+    //! 外側のガイド 2 本だけで、網にできないとき(片方のガイドだけが端の断面より外へ
+    //! 伸びている、または仮想断面を作らない設定)。2 本のレールで掃く(従来の作り方)。
     TwoRailSweep,
-    //! それ以外(ガイド 1 本、3 本以上、内側のガイド、中心線とガイドの併用)。
+    //! それ以外(外側のガイドが片側に無い、中心線とガイドの併用)。
     //! 最初と最後の断面と両脇を境界に、残りの断面と **全部のガイド** を
     //! 面が通る拘束にして張る。作ったあとで全部の線からの外れを測る。
     RailFilling,
+    //! 外側のガイドが両脇に 1 本ずつある(内側のガイドは何本でも)。断面とガイドを
+    //! 網(Gordon)にして、全部の線を通す面を作る。2026-09-22 に両端 2 本の掃きから
+    //! 移した: 掃く作りは断面が 3 本以上あると断面の間で波打った(PC の撮影で見つけた)。
+    RailNetwork,
 };
 
 [[nodiscard]] constexpr std::string_view LoftSolverLabelJa(LoftSolver solver) noexcept
@@ -215,6 +219,7 @@ enum class LoftSolver {
     case LoftSolver::Centerline:   return "中心線に沿って断面を運ぶ";
     case LoftSolver::TwoRailSweep: return "両端の2本のガイドで掃く";
     case LoftSolver::RailFilling:  return "断面とガイドを全部通るように張る(近似)";
+    case LoftSolver::RailNetwork:  return "断面とガイドを網にして全部の線を通す";
     }
     return "";
 }
@@ -229,7 +234,8 @@ enum class LoftRailSide {
 struct LoftRail {
     std::size_t chainIndex = 0;
     LoftRailSide side = LoftRailSide::Interior;
-    //! 最初の断面から最後の断面までの部分(RailFilling のときだけ)。曲線の種類は保つ。
+    //! 最初の断面から最後の断面までの部分(RailFilling と RailNetwork のとき)。
+    //! 仮想断面を作る側は、ガイドの端まで。曲線の種類は保つ。
     std::vector<CurveSegment> span;
 };
 
@@ -240,6 +246,11 @@ struct LoftPlan {
     std::size_t centerlineChainIndex = 0;
     //! 断面を逆向きに使うか。sectionOrdering.chainIndices と同じ並び。
     std::vector<bool> reverseSections;
+    //! 仮想断面(RailNetwork で、両方のガイドが端の断面より外へ伸びている側に作る)。
+    //! 端の断面と相似な形を、2 本のガイドの端へ運んだ折れ線。空なら作らない。
+    //! before = 最初の断面の側、after = 最後の断面の側。
+    std::vector<CurveSegment> virtualBefore;
+    std::vector<CurveSegment> virtualAfter;
 };
 
 //! 四辺面の 4 辺の並び。検査が端点のつながりから決める(渡した順と向きは問わない)。

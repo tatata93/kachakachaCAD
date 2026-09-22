@@ -3,10 +3,12 @@
 // OCCT が無い版ではこの試験の中身は走らない(核の無い版は面を作らずに断る。
 // それは kernel_surface_tests の kernel_absent が見る)。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -146,11 +148,92 @@ KACHA_V2_TEST(kernel_loft, ガイド無しの2断面ロフトは断面を通る)
     Require(built.Value().maximumDeviationMm <= 1.0e-3, "断面の上に乗る");
 }
 
-KACHA_V2_TEST(kernel_loft, 両端のガイド2本と3断面は従来どおり作れる)
+KACHA_V2_TEST(kernel_loft, 両端のガイド2本と3断面は網で作り全部の線を通る)
 {
+    // 2026-09-22 から 2 本のレールで掃く作りをやめ、断面とガイドの網(Gordon)にした。
+    // 網は全部の線を通すので、曲線網の試験と同じ 0.02 mm で見る。
     const auto built = Build(Nose(3, {0.0, 40.0}));
-    Require(built.HasValue(), "作れる(回帰): " + Why(built));
-    Require(built.Value().maximumDeviationMm <= 0.25, "近似の許容の内側");
+    Require(built.HasValue(), "作れる: " + Why(built));
+    Require(built.Value().maximumDeviationMm <= 0.02,
+        "全部の線から 0.02 mm 以内(" + std::to_string(built.Value().maximumDeviationMm) + ")");
+}
+
+namespace {
+
+//! 面の標本の 1 筋(行か列)に沿った高さの山の数。
+[[nodiscard]] int PeaksAlong(const kachakacha::v2::fabrication::SurfacePatchSamples& samples,
+    bool alongRow, std::size_t fixed)
+{
+    const std::size_t count = alongRow ? samples.columnCount : samples.rowCount;
+    const auto z = [&](std::size_t k) {
+        return alongRow ? samples.At(fixed, k).z : samples.At(k, fixed).z;
+    };
+    int peaks = 0;
+    for (std::size_t k = 1; k + 1 < count; ++k) {
+        peaks += z(k) > z(k - 1) + 1.0e-6 && z(k) >= z(k + 1) ? 1 : 0;
+    }
+    return peaks;
+}
+
+} // namespace
+
+KACHA_V2_TEST(kernel_loft, はしご形の3断面と両端のガイドは断面の間で波打たない)
+{
+    // PC の撮影(ui/12、2026-09-22): 高さ 12・16・10 のアーチ 3 本と両端の直線ガイド 2 本を
+    // 2 本のレールで掃くと、山が 3 つのはずが 7 つに波打った。網で作れば、どの筋も山は 1 つ。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::LoftSections;
+    const double xs[3] = {0.0, 40.0, 80.0};
+    const double heights[3] = {12.0, 16.0, 10.0};
+    for (int s = 0; s < 3; ++s) {
+        const double lift = heights[s] / 0.75;
+        GuideChain chain;
+        chain.role = ChainRole::Section;
+        chain.index = s + 1;
+        chain.segments.push_back(CurveSegment::MakeCubicBezier({Vector3{xs[s], 0.0, 0.0},
+            Vector3{xs[s], 0.0, lift}, Vector3{xs[s], 40.0, lift}, Vector3{xs[s], 40.0, 0.0}})
+                .Value());
+        request.chains.push_back(chain);
+    }
+    request.chains.push_back(Path(ChainRole::GuideU, 1, {{0, 0, 0}, {80, 0, 0}}));
+    request.chains.push_back(Path(ChainRole::GuideU, 2, {{0, 40, 0}, {80, 40, 0}}));
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れる: " + Why(built));
+    const auto& samples = built.Value().samples;
+    Require(samples.Valid(), "面の標本がある");
+    const int acrossRows = PeaksAlong(samples, false, samples.columnCount / 2);
+    const int acrossColumns = PeaksAlong(samples, true, samples.rowCount / 2);
+    Require(acrossRows <= 1 && acrossColumns <= 1,
+        "真ん中の筋の山は 1 つ(" + std::to_string(acrossRows) + " / "
+            + std::to_string(acrossColumns) + ")");
+    double highest = 0.0;
+    for (const Vector3& point : samples.points) {
+        highest = std::max(highest, point.z);
+    }
+    Require(highest <= 16.0 * 1.05, "いちばん高い断面(16)を大きく越えない: "
+            + std::to_string(highest));
+    Require(built.Value().maximumDeviationMm <= 0.02,
+        "全部の線から 0.02 mm 以内(" + std::to_string(built.Value().maximumDeviationMm) + ")");
+}
+
+KACHA_V2_TEST(kernel_loft, 断面1本と両端のガイドは仮想断面を足して網で作る)
+{
+    // 断面は x = 50 の円弧 1 本だけ。ガイドは x = 0〜100 の直線 2 本。両端に仮想断面
+    // (同じ円弧を運んだもの)を足すので、円弧を 100 mm 押し出した形になる。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::LoftSections;
+    request.chains.push_back(Arc(ChainRole::Section, 1, {50, 0, 0}, {50, 20, 10}, {50, 40, 0}));
+    request.chains.push_back(Path(ChainRole::GuideU, 1, {{0, 0, 0}, {100, 0, 0}}));
+    request.chains.push_back(Path(ChainRole::GuideU, 2, {{0, 40, 0}, {100, 40, 0}}));
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れる: " + Why(built));
+    // 円弧: 弦 40・高さ 10 → 半径 25、中心角 2·asin(0.8)。長さ × 100 mm が面積。
+    const double expected = 2.0 * std::asin(0.8) * 25.0 * 100.0;
+    Require(std::abs(built.Value().areaMm2 - expected) < expected * 0.01,
+        "円弧を押し出した面積(" + std::to_string(built.Value().areaMm2) + " / "
+            + std::to_string(expected) + ")");
+    Require(built.Value().maximumDeviationMm <= 0.02,
+        "断面とガイドから 0.02 mm 以内(" + std::to_string(built.Value().maximumDeviationMm) + ")");
 }
 
 KACHA_V2_TEST(kernel_loft, 内側のガイド1本と3断面から面を作る)

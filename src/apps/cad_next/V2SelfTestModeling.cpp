@@ -877,17 +877,15 @@ namespace {
         return false;
     }
     window.RunCommand("wire.trim");
-    if (!Explain((std::string("押す場所を聞く(") + window.StatusText().toStdString()
-                     + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("押してください")))) {
+    // Inventor の手順: 道具を持つだけ(拾う待ちにはならない)。線の上に置いて押す。
+    if (!Explain("トリムの道具になる",
+            window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Trim)
+        || !Explain("拾う待ちにはならない(置いて押す)", !window.Viewport().PickPending())) {
         return false;
     }
-    if (!Explain("拾う待ちになっている", window.Viewport().PickPending())) {
-        return false;
-    }
-    // Esc でやめられる。やめられないと、押すまで何もできなくなる。
-    window.Viewport().CancelTool();
-    return Explain("やめられる", !window.Viewport().PickPending());
+    (void)window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return Explain("Esc でやめられる",
+        window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select);
 }
 
 [[nodiscard]] bool CaseTrimNeedsTwoWires(V2MainWindow& window)
@@ -900,12 +898,10 @@ namespace {
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Wire));
     window.RunCommand("wire.trim");
-    if (!Explain((std::string("2本要ると言う(") + window.StatusText().toStdString()
-                     + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("線を2本")))) {
-        return false;
-    }
-    return Explain("拾う待ちにならない", !window.Viewport().PickPending());
+    // 1 本しか無くても道具は構わる。置いた線に交点が無ければ「線ごと消える」と下見で言う(HP-TR-02)。
+    return Explain("線が 1 本でもトリムの道具になる",
+               window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Trim)
+        && Explain("拾う待ちにならない", !window.Viewport().PickPending());
 }
 
 [[nodiscard]] bool CaseGridOriginAsksWhereToPress(V2MainWindow& window)
@@ -1389,8 +1385,8 @@ std::vector<SelfTestCase> ModelingCases()
         {"選んだものだけを別の文書にできる", &CaseSelectedEntitiesExportMakesASmallerDocument},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
         {"投影は元の線を残す", &CaseProjectKeepsTheOriginal},
-        {"トリムは押す場所を聞きやめられる", &CaseTrimAsksWhereToPress},
-        {"トリムは線を2本要る", &CaseTrimNeedsTwoWires},
+        {"トリムは道具を持つだけでEscでやめられる", &CaseTrimAsksWhereToPress},
+        {"トリムは線が1本でも道具になる", &CaseTrimNeedsTwoWires},
         {"グリッド原点は押した場所へ動く", &CaseGridOriginAsksWhereToPress},
         {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},

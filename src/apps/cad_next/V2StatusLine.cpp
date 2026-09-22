@@ -7,6 +7,7 @@
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
+#include "V2HoverEditTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -171,6 +172,10 @@ QString V2MainWindow::StatusLeftText() const
 //! カーソルが動いた。座標の札だけ書き直す(案内は変えない)。
 void V2MainWindow::OnViewportHoverChanged()
 {
+    // 線の上に置いて押す編集(トリムなど)の下見。置いた線が変わるたびに作り直す。
+    if (hoverEdit_ != nullptr && hoverEdit_->Active()) {
+        hoverEdit_->RefreshPreview();
+    }
     if (cursorLabel_ == nullptr) {
         return;
     }

@@ -125,6 +125,67 @@ void V2Viewport::DrawToolPreview(QPainter& painter) const
     }
 }
 
+void V2Viewport::ShowEditPreview(EditPreview preview)
+{
+    editPreview_ = std::move(preview);
+    update();
+}
+
+void V2Viewport::HideEditPreview()
+{
+    if (editPreview_.lines.empty() && editPreview_.markers.empty()) {
+        return;
+    }
+    editPreview_ = EditPreview{};
+    update();
+}
+
+void V2Viewport::SetEditClickCallback(std::function<bool(const QPointF&)> callback)
+{
+    editClickCallback_ = std::move(callback);
+}
+
+//! 線の上に置いて押す編集の下見。消える区間は吸着と同じ赤系の太い破線(文書の線・選択・
+//! 候補のどれとも違う色)、増える区間は下見の色。分かれる点は × 印。
+void V2Viewport::DrawEditPreview(QPainter& painter) const
+{
+    if (editPreview_.lines.empty() && editPreview_.markers.empty()) {
+        return;
+    }
+    painter.save();
+    painter.setBrush(Qt::NoBrush);
+    const QColor ink = editPreview_.removing ? palette_.snap : palette_.preview;
+    painter.setPen(QPen(ink, 3.0, Qt::DashLine));
+    for (const auto& line : editPreview_.lines) {
+        QPolygonF path;
+        bool complete = true;
+        for (const auto& point : line) {
+            const auto screen = ToScreen(point);
+            if (!screen.has_value()) {
+                complete = false;
+                break;
+            }
+            path << *screen;
+        }
+        if (complete && path.size() >= 2) {
+            painter.drawPolyline(path);
+        }
+    }
+    painter.setPen(QPen(ink, 2.0));
+    for (const auto& marker : editPreview_.markers) {
+        const auto screen = ToScreen(marker);
+        if (!screen.has_value()) {
+            continue;
+        }
+        constexpr double kArm = 6.0;
+        painter.drawLine(QPointF(screen->x() - kArm, screen->y() - kArm),
+            QPointF(screen->x() + kArm, screen->y() + kArm));
+        painter.drawLine(QPointF(screen->x() - kArm, screen->y() + kArm),
+            QPointF(screen->x() + kArm, screen->y() - kArm));
+    }
+    painter.restore();
+}
+
 void V2Viewport::ShowToolRoleLabels(std::vector<PlacedRoleLabel> labels)
 {
     toolRoleLabels_ = std::move(labels);

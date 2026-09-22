@@ -78,11 +78,11 @@ std::string_view DrawingToolHintJa(DrawingTool tool) noexcept
     case DrawingTool::Rotate:
         return "回すものを押し、次に中心と、回す前後の向きを押してください。";
     case DrawingTool::Split:
-        return "切りたい線の、切る場所を押してください。";
+        return "線の上に置くと、いちばん近い交点に × が出ます。押すとそこで 2 本に分かれます。";
     case DrawingTool::Trim:
-        return "消したい側を押してください。境目になる線が要ります。";
+        return "線の上に置くと消える区間が破線で見えます。押すと消えます(境目は画面の全部の線。交点が無ければ線ごと)。";
     case DrawingTool::Extend:
-        return "伸ばしたい線の、伸ばす側の端を押してください。";
+        return "伸ばしたい線の端の近くに置くと、伸びる先が見えます。押すと伸びます。";
     case DrawingTool::JoinEndpoints:
         return "つなぎたい端点を2つ押してください。";
     case DrawingTool::TangentJoin:

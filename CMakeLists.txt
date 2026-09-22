@@ -643,6 +643,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/SolidInputState.cpp
     src/next/kachakacha/app/EdgeFinishInputState.cpp
     src/next/kachakacha/app/ShellSplitInputState.cpp
+    src/next/kachakacha/app/HoverEditPlan.cpp
     src/next/kachakacha/app/StatusLine.cpp
     src/next/kachakacha/app/DrawingMethodCards.cpp
     src/next/kachakacha/app/ToolKeys.cpp
@@ -705,6 +706,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/PolylineCorners.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
+    src/next/kachakacha/geometry/CurveTrim.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
@@ -860,6 +862,8 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(solid_input_state_tests tests_v2/solid_input_state_tests.cpp)
     kachakacha_add_v2_test(edge_finish_input_state_tests tests_v2/edge_finish_input_state_tests.cpp)
     kachakacha_add_v2_test(shell_split_input_state_tests tests_v2/shell_split_input_state_tests.cpp)
+    kachakacha_add_v2_test(curve_trim_tests tests_v2/curve_trim_tests.cpp)
+    kachakacha_add_v2_test(hover_edit_plan_tests tests_v2/hover_edit_plan_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
     kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
@@ -1012,6 +1016,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestSolid.cpp
         src/apps/cad_next/V2SelfTestEdgeFinish.cpp
         src/apps/cad_next/V2SelfTestShellSplit.cpp
+        src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -1073,6 +1078,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2EdgeFinishTool.cpp
         src/apps/cad_next/V2ShellSplitDock.cpp
         src/apps/cad_next/V2ShellSplitTool.cpp
+        src/apps/cad_next/V2HoverEditTool.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp
         src/apps/cad_next/V2SurfaceDockRoles.cpp

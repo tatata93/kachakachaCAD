@@ -275,6 +275,20 @@ public:
         return toolPreview_;
     }
 
+    //! 線の上に置いて押す編集(トリムなど、Inventor の手順)の下見。
+    //! removing なら「消える区間」(吸着の色の太い破線)、そうでなければ「増える区間」(下見の色)。
+    //! markers は分かれる点などの印。ToolPreview とは別に持ち、道具を離せば片づく。
+    struct EditPreview {
+        std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
+        std::vector<kachakacha::v2::geometry::Vector3> markers;
+        bool removing = true;
+    };
+    void ShowEditPreview(EditPreview preview);
+    void HideEditPreview();
+    [[nodiscard]] const EditPreview& CurrentEditPreview() const noexcept { return editPreview_; }
+    //! 線の上に置いて押す編集の道具が、押しを引き受ける口。真を返せば押しはそこで終わる。
+    void SetEditClickCallback(std::function<bool(const QPointF&)> callback);
+
     //! 面の解析の表示(プロンプト surface_analysis)。色は描くときに決める(ゼブラは見る向きで動く)。
     struct AnalysisLine {
         std::vector<kachakacha::v2::geometry::Vector3> points;
@@ -520,6 +534,8 @@ public:
     }
     //! いま出している候補。無ければ値を持たない。
     [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> CurrentCandidate() const;
+    //! その場所の候補を拾い直す(押した場所で下見を作り直す道具のため)。
+    void RefreshPickCycleAt(const QPointF& position) { RefreshPickCycle(position); }
     //! 文書から消えたものを選択から外す。文書が変わったら呼ぶ。
     void PruneSelection();
     void SetDocumentChangedCallback(std::function<void()> callback);
@@ -709,6 +725,9 @@ public:
 protected:
     bool event(QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
+    void DrawEditPreview(QPainter& painter) const;
+    void NotifyHoverChanged();
+    void ClickForMeasure(const QPointF& position);
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -997,6 +1016,8 @@ private:
     ExtrudeHandleState extrudeHandle_;
     //! 道具の下見の線。空なら何も描かない。
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreview_;
+    EditPreview editPreview_;
+    std::function<bool(const QPointF&)> editClickCallback_;
     //! 3D の中の役割の札。空なら何も描かない。
     std::vector<PlacedRoleLabel> toolRoleLabels_;
     std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> roleColors_;

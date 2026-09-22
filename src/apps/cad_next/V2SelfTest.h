@@ -156,6 +156,9 @@ void Note(const char* what);
 //! シェル・分割(HP-SH、P-13)。
 [[nodiscard]] std::vector<SelfTestCase> ShellSplitCases();
 
+//! 線の上に置いて押す編集(HP-TR、トリム。Inventor の手順)。
+[[nodiscard]] std::vector<SelfTestCase> HoverEditCases();
+
 //! 上面 XY から決めた距離だけ離した作業平面を作って使う(断面を高さ違いに描くとき)。
 [[nodiscard]] bool UseTopPlaneOffsetBy(V2MainWindow& window, double offsetMm);
 

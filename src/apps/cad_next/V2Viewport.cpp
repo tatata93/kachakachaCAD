@@ -739,6 +739,8 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawSnap(painter);
     // 道具の下見(面を作る)は、文書の線の上・矢印の下に出す。
     DrawToolPreview(painter);
+    // 線の上に置いて押す編集(トリム)の下見。文書の線の上に重ねる。
+    DrawEditPreview(painter);
     // 押し出しの矢印は選択の印より上に出す。掴む相手だからである。
     DrawExtrudeHandle(painter);
     // 役割の札は一番上。線や矢印に隠れると読めない。
@@ -800,6 +802,16 @@ void V2Viewport::HoverAt(const QPointF& position)
     RefreshForbiddenHover(position);
     RefreshCursorShape();
     update();
+    NotifyHoverChanged();
+}
+
+//! 置いた先が変わったことを窓へ。マウスからでも試験の HoverAt からでも同じ道を通す
+//! (トリムの下見は置いた線から作るので、ここで知らせないと試験では下見が出ない)。
+void V2Viewport::NotifyHoverChanged()
+{
+    if (hoverChangedCallback_) {
+        hoverChangedCallback_();
+    }
 }
 
 void V2Viewport::SetSelectionChangedCallback(std::function<void()> callback)
@@ -909,6 +921,29 @@ void V2Viewport::CancelPointPick()
     update();
 }
 
+//! 測定は点を集めるだけ。形は作らない。吸着した位置と、吸着した線を覚える。
+void V2Viewport::ClickForMeasure(const QPointF& position)
+{
+    const auto hovered = session_->Hover(ScreenPoint{position.x(), position.y()});
+    if (!hovered.position.has_value()) {
+        status_ = "その場所では点を取れません。";
+        if (statusCallback_) {
+            statusCallback_(status_);
+        }
+        return;
+    }
+    MeasurePick pick;
+    pick.point = *hovered.position;
+    if (hovered.snap.has_value()) {
+        pick.entityId = hovered.snap->entityId;
+    }
+    measurePicks_.push_back(pick);
+    if (measurePicksChanged_) {
+        measurePicksChanged_();
+    }
+    update();
+}
+
 void V2Viewport::ClickAt(const QPointF& position)
 {
     if (pickHandler_) {
@@ -932,24 +967,11 @@ void V2Viewport::ClickAt(const QPointF& position)
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
-        // 測定は点を集めるだけ。形は作らない。吸着した位置と、吸着した線を覚える。
-        const auto hovered = session_->Hover(ScreenPoint{position.x(), position.y()});
-        if (!hovered.position.has_value()) {
-            status_ = "その場所では点を取れません。";
-            if (statusCallback_) {
-                statusCallback_(status_);
-            }
-            return;
-        }
-        MeasurePick pick;
-        pick.point = *hovered.position;
-        if (hovered.snap.has_value()) {
-            pick.entityId = hovered.snap->entityId;
-        }
-        measurePicks_.push_back(pick);
-        if (measurePicksChanged_) {
-            measurePicksChanged_();
-        }
+        ClickForMeasure(position);
+        return;
+    }
+    // 線の上に置いて押す編集(トリム)。道具がその道具なら引き受け、押しはそこで終わる。
+    if (editClickCallback_ && editClickCallback_(position)) {
         update();
         return;
     }

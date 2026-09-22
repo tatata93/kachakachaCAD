@@ -1,6 +1,7 @@
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
+#include "V2HoverEditTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -770,6 +771,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
     if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
+    if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
@@ -1080,6 +1082,9 @@ void V2MainWindow::SelectTool(DrawingTool tool)
     // その道具の設定だけを右に出す。道具を選んだのに欄が出てこない、をなくす。
     RefreshRightShelves();
     RefreshCornerPreview();   // 面取りの道具を持った/離したときに下見を出す/片づける
+    if (hoverEdit_ != nullptr) {
+        hoverEdit_->RefreshPreview();   // トリムなどを持った/離したときに下見を出す/片づける
+    }
     RefreshRibbonState();
     // 近道やメニューで持った道具も、帯ではそのカテゴリが前に出る(帯と道具を食い違わせない)。
     for (const ToolBinding& binding : kToolBindings) {
@@ -1213,8 +1218,8 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
     // トリム・延長・グリッド原点は「押す場所」を1回聞く必要があり、
     // 測定は棚を出す必要がある。これらは道具を選んだあと、受け口へ続ける。
     // ここで終わりにしてしまい、押しても案内文が出るだけになっていた。
-    const bool continuesAfterTool = command.id == "wire.trim"
-        || command.id == "wire.extend" || command.id == "grid.move_origin"
+    // トリムは道具だけで完結する(線の上に置いて押す。V2HoverEditTool)。
+    const bool continuesAfterTool = command.id == "wire.extend" || command.id == "grid.move_origin"
         || command.id == "measure.open";
     for (const ToolBinding& binding : kToolBindings) {
         if (binding.commandId != command.id) {

@@ -323,9 +323,25 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         ProjectSelectedWiresOntoSurface();
         return;
     }
-    if (id == "wire.trim" || id == "wire.extend") {
-        BeginTrimOrExtend(id == "wire.trim");
-        return;
+    if (id == "wire.trim") {
+        return;   // 道具だけ(EnterToolFor)。線の上に置いて押す(V2HoverEditTool)
+    }
+    if (id == "wire.extend" || id == "wire.split") {
+        // 線を 2 本以上選んでから押した昔の道(相手を選ぶ)は残す。選んでいなければ、
+        // 道具を持って線の上に置いて押す(Inventor の手順)。
+        const auto inputs = kachakacha::v2::app::SelectedCurves(viewport_->Selection(), session_->Scene());
+        if (inputs.size() < 2) {
+            SelectTool(id == "wire.extend" ? kachakacha::v2::modeling::DrawingTool::Extend
+                                           : kachakacha::v2::modeling::DrawingTool::Split);
+            SetStatus(id == "wire.extend"
+                    ? QStringLiteral("延長: 伸ばしたい線の端の近くに置くと伸びる先が見えます。押すと伸びます。Esc でやめます。")
+                    : QStringLiteral("分割: 線の上に置くと分かれる点が見えます。押すとそこで 2 本になります。Esc でやめます。"));
+            return;
+        }
+        if (id == "wire.extend") {
+            BeginTrimOrExtend(false);
+            return;
+        }
     }
     if (id == "wire.intersection_points") {
         MakeIntersectionPoints();

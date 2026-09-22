@@ -105,6 +105,8 @@ namespace {
     cases.insert(cases.end(), edgeFinish.begin(), edgeFinish.end());
     const std::vector<SelfTestCase> shellSplit = ShellSplitCases();
     cases.insert(cases.end(), shellSplit.begin(), shellSplit.end());
+    const std::vector<SelfTestCase> hoverEdit = HoverEditCases();
+    cases.insert(cases.end(), hoverEdit.begin(), hoverEdit.end());
     const std::vector<SelfTestCase> generate = GenerateCases();
     cases.insert(cases.end(), generate.begin(), generate.end());
     const std::vector<SelfTestCase> unfold = UnfoldCases();

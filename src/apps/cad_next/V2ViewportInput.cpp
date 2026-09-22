@@ -1303,10 +1303,7 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
     if (zone.has_value()) {
         return; // キューブの上ではスナップを探さない。
     }
-    HoverAt(event->position());
-    if (hoverChangedCallback_) {
-        hoverChangedCallback_();
-    }
+    HoverAt(event->position());   // 窓への知らせは HoverAt が出す
 }
 
 void V2Viewport::mousePressEvent(QMouseEvent* event)

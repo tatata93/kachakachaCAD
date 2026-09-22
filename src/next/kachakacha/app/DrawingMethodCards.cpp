@@ -142,9 +142,9 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
                 "中心・基準の点・行き先の点の3か所を押してください。倍率は「中心から行き先」÷「中心から基準」。"),
         };
     case DrawingTool::Split:
-        return {ToolCard("押した場所で", tool)};
+        return {ToolCard("交点で分ける", tool)};
     case DrawingTool::Trim:
-        return {ToolCard("消したい側を押す", tool)};
+        return {ToolCard("消したい区間を押す", tool)};
     case DrawingTool::Extend:
         return {ToolCard("伸ばす端を押す", tool)};
     case DrawingTool::JoinEndpoints:

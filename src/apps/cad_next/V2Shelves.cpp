@@ -6,6 +6,7 @@
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
+#include "V2HoverEditTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -14,6 +15,7 @@
 #include "kachakacha/app/CommandParameters.h"
 
 #include <QDockWidget>
+#include <QPointF>
 #include <QString>
 
 void V2MainWindow::BuildEditingShelves()
@@ -202,6 +204,11 @@ void V2MainWindow::BuildOutputShelves()
     edgeFinishTool_ = std::make_unique<V2EdgeFinishTool>(*this);
     // シェル・分割(P-13)。状態と棚は道具が持つ。
     shellSplitTool_ = std::make_unique<V2ShellSplitTool>(*this);
+    // トリム・延長・分割(線の上に置いて押す。Inventor の手順)。
+    hoverEdit_ = std::make_unique<V2HoverEditTool>(*this);
+    viewport_->SetEditClickCallback([this](const QPointF& position) {
+        return hoverEdit_ != nullptr && hoverEdit_->Click(position);
+    });
 
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });

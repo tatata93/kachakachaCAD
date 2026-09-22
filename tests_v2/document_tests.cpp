@@ -550,6 +550,48 @@ KACHA_V2_TEST(document, 基準線にできる)
     Require(!document.FindEntity(wire.entity.id)->datum, "解除されたこと");
 }
 
+KACHA_V2_TEST(document, 生成物の由来は近似モデルにだけ付けられ依存にはならない)
+{
+    // F-15: 製作の「生成」で作ったものが、どの近似モデルから作ったかを持つ。
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made model = maker.MakePoint("近似モデル");
+    model.entity.kind = EntityKind::FabricationModel;
+    Maker::Made wire = maker.MakePoint("生成した線");
+    wire.entity.kind = EntityKind::Wire;
+    Maker::Made other = maker.MakePoint("ふつうの線");
+    other.entity.kind = EntityKind::Wire;
+    for (auto* made : {&model, &wire, &other}) {
+        Require(document.Run(AddFeatureCommand(made->feature, {made->entity}, "足す")).committed,
+            "足せること");
+    }
+    const auto set = document.Run(
+        kachakacha::v2::document::SetGeneratedFromCommand({wire.entity.id}, model.entity.id));
+    Require(set.committed, "近似モデルを由来にできる");
+    Require(document.FindEntity(wire.entity.id)->generatedFrom == model.entity.id, "由来が付く");
+    Require(!document.FindEntity(other.entity.id)->generatedFrom.has_value(), "ほかは付かない");
+    // 近似モデルでないものは由来にならない。近似モデル自身にも付けない。
+    Require(!document.Run(kachakacha::v2::document::SetGeneratedFromCommand(
+                              {other.entity.id}, wire.entity.id))
+                 .committed,
+        "線は由来にならない");
+    Require(!document.Run(kachakacha::v2::document::SetGeneratedFromCommand(
+                              {model.entity.id}, model.entity.id))
+                 .committed,
+        "近似モデル自身には付けない");
+    // 依存ではない: 近似モデルを消しても生成物は残る(由来は指す先が無くなるだけ)。
+    const auto removed = document.Run(kachakacha::v2::document::RemoveFeatureCommand(
+        model.feature.id, kachakacha::v2::document::RemovePolicy::RefuseIfUsed, "消す"));
+    Require(removed.committed, "近似モデルは生成物に止められずに消せる");
+    Require(document.FindEntity(wire.entity.id) != nullptr, "生成物は残る");
+    // 取り消すと由来も戻る(1 回ずつの操作)。
+    document.Undo();
+    Require(document.FindEntity(model.entity.id) != nullptr, "近似モデルが戻る");
+    document.Undo();
+    Require(!document.FindEntity(wire.entity.id)->generatedFrom.has_value(),
+        "由来を付ける前へ戻る");
+}
+
 KACHA_V2_TEST(document, 無いものを補助線にしようとしたら断る)
 {
     Document document(kachakacha::v2::base::DocumentId{});

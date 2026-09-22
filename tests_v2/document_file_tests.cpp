@@ -543,6 +543,24 @@ KACHA_V2_TEST(documentFile, 表示の状態が往復する)
     Require(read.Value().snapshot.settings.activeGroupId.has_value(), "選択中のグループ");
 }
 
+KACHA_V2_TEST(documentFile, 生成物の由来が往復し付いていなければ書かない)
+{
+    DocumentFile original = MakeSampleDocument();
+    original.snapshot.entities[2].generatedFrom = original.snapshot.entities[1].id;
+    const std::string json = WriteDocumentJson(original);
+    Require(json.find("\"generatedFrom\"") != std::string::npos, "付いているときは書く");
+    const auto read = ReadDocumentJson(json);
+    Require(read.HasValue(), "読めること");
+    const auto& entities = read.Value().snapshot.entities;
+    Require(entities[2].generatedFrom.has_value()
+            && *entities[2].generatedFrom == entities[1].id,
+        "由来が戻る");
+    Require(!entities[1].generatedFrom.has_value(), "付いていないものは無いまま");
+    // 付いていない文書は、これまでと同じ字面(古い文書を読んでも由来は無い)。
+    Require(WriteDocumentJson(MakeSampleDocument()).find("\"generatedFrom\"") == std::string::npos,
+        "付いていなければ書かない");
+}
+
 KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

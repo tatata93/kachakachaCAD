@@ -8,6 +8,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2EntityTree.h"
 #include "V2FabricationDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -16,7 +17,11 @@
 #include "kachakacha/domain/Entity.h"
 
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 
+#include <functional>
+#include <string>
 #include <vector>
 
 namespace kachakacha::v2::selftest {
@@ -62,6 +67,51 @@ using kachakacha::v2::domain::EntityKind;
         window.FabricationDock().StageIndex() == 1);
 }
 
+//! 一覧で、近似モデルの下の「生成物」の行の子の数(無ければ -1)。節の見出しの「生成物」は
+//! 2 列目が「節」なので数えない(ここで見るのは近似モデルの下のほう、F-15)。
+[[nodiscard]] int GeneratedRowCount(V2MainWindow& window)
+{
+    std::function<int(const QTreeWidgetItem*)> find;
+    find = [&find](const QTreeWidgetItem* item) -> int {
+        if (item == nullptr) {
+            return -1;
+        }
+        if (item->text(0) == QStringLiteral("生成物")
+            && item->text(1).endsWith(QStringLiteral("個"))) {
+            return item->childCount();
+        }
+        for (int index = 0; index < item->childCount(); ++index) {
+            if (const int count = find(item->child(index)); count >= 0) {
+                return count;
+            }
+        }
+        return -1;
+    };
+    const auto* tree = window.EntityTree();
+    for (int index = 0; tree != nullptr && index < tree->topLevelItemCount(); ++index) {
+        if (const int count = find(tree->topLevelItem(index)); count >= 0) {
+            return count;
+        }
+    }
+    return -1;
+}
+
+//! 一覧の節(「ワイヤー」など)の直下の行の数。
+[[nodiscard]] int SectionRowCount(V2MainWindow& window, const QString& section)
+{
+    const auto* tree = window.EntityTree();
+    if (tree == nullptr || tree->topLevelItemCount() == 0) {
+        return -1;
+    }
+    const auto* root = tree->topLevelItem(0);
+    for (int index = 0; index < root->childCount(); ++index) {
+        if (root->child(index)->text(0) == section) {
+            return root->child(index)->childCount();
+        }
+    }
+    return -1;
+}
+
 //! HP-GN-01。生成のカードは 現在状態/Flat 0%/Target 100% の3枚で、Target 100% は
 //! 固定で作るものの設定どおりに固定物を作り、近似モデルは残り、1回の取り消しで戻る。
 [[nodiscard]] bool CaseGenerateCardsListStatesAndTargetFreezes(V2MainWindow& window)
@@ -80,8 +130,22 @@ using kachakacha::v2::domain::EntityKind;
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
     const int partsBefore = CountOfKind(window, EntityKind::Part);
     const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    const int wireRowsBefore = SectionRowCount(window, QStringLiteral("ワイヤー"));
     if (!Explain("「Target 100%」のカードが見えていて押せる",
             dock.ClickGenerateCard(QStringLiteral("Target 100%")))) {
+        return false;
+    }
+    // F-15: 作ったものは一覧の近似モデルの下の「生成物」に並び、ワイヤーの節には増えない。
+    const int made = CountOfKind(window, EntityKind::Wire) - wiresBefore
+        + CountOfKind(window, EntityKind::Part) - partsBefore
+        + CountOfKind(window, EntityKind::GuideSurface) - surfacesBefore;
+    if (!Explain((std::string("一覧の近似モデルの下の「生成物」に作ったもの(") + std::to_string(made)
+                     + " 個)が並ぶ(並んだのは " + std::to_string(GeneratedRowCount(window))
+                     + " 個)")
+                     .c_str(),
+            made > 0 && GeneratedRowCount(window) == made)
+        || !Explain("生成物はワイヤーの節には増えない",
+            SectionRowCount(window, QStringLiteral("ワイヤー")) == wireRowsBefore)) {
         return false;
     }
     const bool grew = CountOfKind(window, EntityKind::Wire) > wiresBefore
@@ -96,10 +160,11 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     window.RunCommand("edit.undo");
-    return Explain("1回の取り消しで固定物が消える(線/面/部品とも元どおり)",
+    return Explain("1回の取り消しで固定物が消える(線/面/部品とも元どおり、生成物の行も消える)",
         CountOfKind(window, EntityKind::Wire) == wiresBefore
             && CountOfKind(window, EntityKind::Part) == partsBefore
-            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore
+            && GeneratedRowCount(window) == -1);
 }
 
 //! HP-GN-02。「Flat 0%」のカードは線だけを作り、近似モデルは壊さずに残す。

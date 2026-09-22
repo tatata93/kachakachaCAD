@@ -61,6 +61,41 @@ KACHA_V2_TEST(explorer, 種類とグループと作られ方で節が決まる)
     Require(SectionForEntity(snapshot, frozen) == ExplorerSection::Generated, "固定したものは生成物");
 }
 
+KACHA_V2_TEST(explorer, 生成物は生成元の近似モデルの下でグループが先で近似モデルが無ければ種類の節)
+{
+    kachakacha::v2::document::DocumentSnapshot snapshot;
+    kachakacha::v2::base::DeterministicIdGenerator ids{7};
+    Entity model;
+    model.id = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    model.kind = EntityKind::FabricationModel;
+    snapshot.entities.push_back(model);
+    Entity wire;
+    wire.id = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    wire.kind = EntityKind::Wire;
+    wire.generatedFrom = model.id;
+    Require(kachakacha::v2::app::GeneratingModelOf(snapshot, wire) == model.id, "生成元が分かる");
+    Require(SectionForEntity(snapshot, wire) == ExplorerSection::Approximation,
+        "近似の節(近似モデルの下)");
+    // グループに入れたものはグループが先(ほかの物と同じ決まり)。
+    kachakacha::v2::document::Group group;
+    group.id = ids.NextTyped<kachakacha::v2::base::IdKind::Group>();
+    snapshot.groups.push_back(group);
+    Entity grouped = wire;
+    grouped.groupId = group.id;
+    Require(SectionForEntity(snapshot, grouped) == ExplorerSection::Groups, "グループの中");
+    // 近似モデルがもう無ければ、ふつうの種類の節。
+    Entity orphan = wire;
+    orphan.generatedFrom = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    Require(!kachakacha::v2::app::GeneratingModelOf(snapshot, orphan).has_value(), "生成元は無い");
+    Require(SectionForEntity(snapshot, orphan) == ExplorerSection::Wires, "ワイヤーの節");
+    // 近似モデルでないものを指していても、生成物としては扱わない。
+    Entity pointsAtWire = wire;
+    pointsAtWire.generatedFrom = wire.id;
+    snapshot.entities.push_back(wire);
+    Require(!kachakacha::v2::app::GeneratingModelOf(snapshot, pointsAtWire).has_value(),
+        "線は生成元にならない");
+}
+
 KACHA_V2_TEST(explorer_model, 同じ名前には番号を送る)
 {
     using kachakacha::v2::app::UniqueDisplayName;

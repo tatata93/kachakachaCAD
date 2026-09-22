@@ -122,6 +122,20 @@ private:
     bool datum_ = true;
 };
 
+//! 製作の「生成」で作ったものに、どの近似モデルから作ったかを付ける(F-15)。
+//! 由来は一覧の並べ方のためのもので、依存ではない(Entity::generatedFrom)。
+//! 相手は近似モデルだけ。近似モデル自身や作業平面には付けない。
+class SetGeneratedFromCommand final : public DocumentCommand {
+public:
+    SetGeneratedFromCommand(std::vector<EntityId> entityIds, EntityId sourceModelId);
+    [[nodiscard]] std::string Label() const override { return "生成物の由来を付ける"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    std::vector<EntityId> entityIds_;
+    EntityId sourceModelId_;
+};
+
 //! Featureを無効にする(消さずに効かなくする)。下流は SuppressedInput になる。
 class SetFeatureEnabledCommand final : public DocumentCommand {
 public:

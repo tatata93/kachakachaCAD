@@ -833,6 +833,9 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                 std::max(0.0, loader.Number(item, "revision", where)));
             entity.construction = loader.Bool(item, "construction", where, false);
             entity.datum = loader.Bool(item, "datum", where, false);
+            // 生成の由来(F-15)。古い文書には無い。指す近似モデルが無くても断らない(依存ではない)。
+            entity.generatedFrom = loader.ParseOptionalId<EntityId>(item.Find("generatedFrom"),
+                where + ".generatedFrom");
 
             const JsonValue* partProperties = item.Find("partProperties");
             const bool hasPart = partProperties != nullptr && partProperties->IsObject();

@@ -6,7 +6,7 @@
 //!
 //! どのものがどの節に入るかは core(app/ExplorerModel)が決める。
 //! 1つずつ ◉ で出し隠しできる(entity の visibility)。グループの ◉ はグループごと。
-//! 近似モデルの下には 部材 N の行を出す(近似の結果の単位で見る)。
+//! 近似モデルの下には 候補 / 部材 N / 開口・折り線・切れ目 / 生成物 を出す(近似の結果の単位で見る)。
 
 #include "V2MainWindow.h"
 
@@ -109,6 +109,10 @@ void V2MainWindow::RefreshEntityList()
         if (section == ExplorerSection::Origin) {
             continue;   // 原点の行は BuildOriginRows が出した
         }
+        if (section == ExplorerSection::Approximation
+            && kachakacha::v2::app::GeneratingModelOf(snapshot, entity).has_value()) {
+            continue;   // 生成物は近似モデルの行の下(AddGeneratedRows)に出る
+        }
         QTreeWidgetItem* parent = sections[section];
         if (section == ExplorerSection::Groups && entity.groupId.has_value()) {
             const auto found = byGroupId.find(entity.groupId->ToString());
@@ -185,8 +189,38 @@ QTreeWidgetItem* V2MainWindow::AddEntityRow(QTreeWidgetItem* parent,
     entityItems_.emplace_back(item, entity.id);
     if (entity.kind == EntityKind::FabricationModel) {
         AddApproximationRows(item, entity);
+        AddGeneratedRows(item, entity);
     }
     return item;
+}
+
+//! 近似モデルの下の「生成物」: この近似モデルから「生成」(固定・展開)で作ったもの(F-15)。
+//! 行はふつうのものの行(選べる・◉ で出し隠し・名前を変えられる・グループへ引きずれる)。
+//! 近似の計算が失敗していても出す(生成物は独立したもの)。グループに入れたものは
+//! グループの節に出る(ほかの物と同じ決まり、core の SectionForEntity)。
+void V2MainWindow::AddGeneratedRows(QTreeWidgetItem* modelItem,
+    const kachakacha::v2::domain::Entity& model)
+{
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    std::vector<const kachakacha::v2::domain::Entity*> generated;
+    for (const auto& entity : snapshot.entities) {
+        if (kachakacha::v2::app::SectionForEntity(snapshot, entity) == ExplorerSection::Approximation
+            && kachakacha::v2::app::GeneratingModelOf(snapshot, entity) == model.id) {
+            generated.push_back(&entity);
+        }
+    }
+    if (generated.empty()) {
+        return;
+    }
+    auto* node = new QTreeWidgetItem(modelItem);
+    node->setText(0, QStringLiteral("生成物"));
+    node->setText(1, QStringLiteral("%1 個").arg(static_cast<int>(generated.size())));
+    node->setToolTip(0, QStringLiteral("この近似モデルから「生成」で作ったもの。"
+                                       "近似モデルを消しても残ります(固定したものは独立)。"));
+    node->setFlags(node->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+    for (const auto* entity : generated) {
+        AddEntityRow(node, *entity);
+    }
 }
 
 //! 近似モデルの下: 候補(方式)と 部材 N。近似の結果の単位で読めるようにする。

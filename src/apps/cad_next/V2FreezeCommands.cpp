@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
@@ -76,14 +77,33 @@ struct FreezeJob {
 }
 
 //! 近似モデルごとに固定する。全部を 1 回の元に戻すにまとめ、1 つでも作れなければ全部戻す。
+//! 作ったもの(線・面・部品)には、どの近似モデルから作ったかを付ける(F-15。一覧で近似モデルの
+//! 下の「生成物」に並ぶ)。由来は依存ではないので、近似モデルを消しても固定したものは残る。
 template <class Freeze>
 [[nodiscard]] bool FreezeEachModel(kachakacha::v2::document::Document& document,
     const std::string& label, const std::vector<FreezeJob>& jobs, Freeze&& freeze)
 {
     kachakacha::v2::document::Document::Transaction transaction(document, label);
     for (const FreezeJob& job : jobs) {
+        std::set<std::string> before;
+        for (const auto& entity : document.Snapshot().entities) {
+            before.insert(entity.id.ToString());
+        }
         if (!freeze(job)) {
             return false;   // まとめごと無かったことにする
+        }
+        std::vector<EntityId> made;
+        for (const auto& entity : document.Snapshot().entities) {
+            if (before.count(entity.id.ToString()) == 0
+                && entity.kind != kachakacha::v2::domain::EntityKind::FabricationModel
+                && entity.kind != kachakacha::v2::domain::EntityKind::WorkPlane) {
+                made.push_back(entity.id);
+            }
+        }
+        if (!made.empty()
+            && !document.Run(kachakacha::v2::document::SetGeneratedFromCommand(made, job.modelId))
+                    .committed) {
+            return false;
         }
     }
     return transaction.Commit();

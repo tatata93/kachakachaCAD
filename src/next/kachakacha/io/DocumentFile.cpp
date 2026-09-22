@@ -402,6 +402,10 @@ template<class Id>
     object["revision"] = JsonValue::Number(static_cast<double>(entity.revision));
     object["construction"] = JsonValue::Bool(entity.construction);
     object["datum"] = JsonValue::Bool(entity.datum);
+    // 由来は付いているときだけ書く(古い文書と同じ字面を保つ)。
+    if (entity.generatedFrom.has_value()) {
+        object["generatedFrom"] = WriteId(*entity.generatedFrom);
+    }
     if (entity.kind == EntityKind::Part) {
         JsonObject part;
         part["purpose"] = JsonValue::String(NameOf(kPartRoles, entity.partRole));

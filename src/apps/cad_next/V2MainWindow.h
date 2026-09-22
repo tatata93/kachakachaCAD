@@ -1218,6 +1218,7 @@ private:
         const kachakacha::v2::domain::Entity& entity);
     void AddApproximationRows(QTreeWidgetItem* modelItem,
         const kachakacha::v2::domain::Entity& entity);
+    void AddGeneratedRows(QTreeWidgetItem* modelItem, const kachakacha::v2::domain::Entity& model);
     [[nodiscard]] bool ToggleEntityVisibilityFromItem(QTreeWidgetItem* item);
     [[nodiscard]] QString DocumentDisplayName() const;
 public:

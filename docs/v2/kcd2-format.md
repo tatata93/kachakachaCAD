@@ -169,6 +169,10 @@ frozen
 ```
 
 - Entityに幾何payloadを保存しない。
+- `generatedFrom`(省略可、EntityId 文字列)。製作の「生成」(固定・展開)で作ったものが、
+  どの近似モデル(kind=`fabrication_model`)から作ったか。一覧で近似モデルの下の「生成物」に
+  並べるための由来で、**依存ではない**(Feature の入力にならず、指す近似モデルが無くても読める。
+  近似モデルを消しても生成物は残る)。付いていないときは書かない(2026-09-22、F-15)。
 - `createdBy` のFeatureが同Entity IDをoutputsに1回だけ含むこと。
 - `kind` とFeature output kindが一致すること。
 - `partProperties` はkind=`part` ではobjectを必須とし、他kindではnullとする。

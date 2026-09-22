@@ -18,6 +18,7 @@
 #include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Entity.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -41,9 +42,16 @@ enum class ExplorerSection {
 [[nodiscard]] const std::vector<ExplorerSection>& ExplorerSections();
 
 //! グループに入っていないものが入る節。原点の平面は Origin。
+//! 製作の「生成」で作り、生成元の近似モデルがあるものは Approximation(その近似モデルの下)。
 //! 固定(FreezeDerived)で作ったものは Generated。
 [[nodiscard]] ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     const domain::Entity& entity);
+
+//! 製作の「生成」で作ったもので、生成元の近似モデルがまだ文書にあるなら、その近似モデル。
+//! 一覧はこれを近似モデルの下の「生成物」に並べる(F-15)。グループに入れたものは
+//! グループの節が先(ほかの物と同じ決まり)なので、ここでは見ない。
+[[nodiscard]] std::optional<base::EntityId> GeneratingModelOf(
+    const document::DocumentSnapshot& snapshot, const domain::Entity& entity);
 
 //! 種類の名前(一覧の2列目)。
 [[nodiscard]] std::string_view ExplorerKindNameJa(domain::EntityKind kind) noexcept;

@@ -351,6 +351,42 @@ std::vector<Diagnostic> SetDatumCommand::Apply(DocumentSnapshot& candidate) cons
     return diagnostics;
 }
 
+SetGeneratedFromCommand::SetGeneratedFromCommand(std::vector<EntityId> entityIds,
+    EntityId sourceModelId)
+    : entityIds_(std::move(entityIds)), sourceModelId_(sourceModelId)
+{
+}
+
+std::vector<Diagnostic> SetGeneratedFromCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    const Entity* source = FindMutable(candidate, sourceModelId_);
+    if (source == nullptr || source->kind != domain::EntityKind::FabricationModel) {
+        diagnostics.push_back(MakeError(kNotFound,
+            "生成元の近似モデルが見つかりません。", sourceModelId_.ToString()));
+        return diagnostics;
+    }
+    for (const EntityId& id : entityIds_) {
+        Entity* entity = FindMutable(candidate, id);
+        if (entity == nullptr) {
+            diagnostics.push_back(MakeError(kNotFound,
+                "生成物として印を付けるものが見つかりません。", id.ToString()));
+            return diagnostics;
+        }
+        if (entity->kind == domain::EntityKind::FabricationModel
+            || entity->kind == domain::EntityKind::WorkPlane) {
+            diagnostics.push_back(MakeError(kNotAllowed,
+                "この種類は生成物になりません。",
+                std::string(domain::EntityKindNameJa(entity->kind))
+                    + " は近似モデルの生成物として扱いません。"));
+            return diagnostics;
+        }
+        entity->generatedFrom = sourceModelId_;
+        ++entity->revision;
+    }
+    return diagnostics;
+}
+
 // ---- 残した参照寸法 ----
 
 AddReferenceDimensionCommand::AddReferenceDimensionCommand(ReferenceDimension dimension)

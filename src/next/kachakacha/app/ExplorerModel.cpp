@@ -38,6 +38,9 @@ ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     if (entity.groupId.has_value()) {
         return ExplorerSection::Groups;
     }
+    if (GeneratingModelOf(snapshot, entity).has_value()) {
+        return ExplorerSection::Approximation;   // 近似モデルの下の「生成物」
+    }
     for (const auto& feature : snapshot.features) {
         if (feature.id == entity.createdBy
             && feature.type == domain::FeatureType::FreezeDerived) {
@@ -54,6 +57,23 @@ ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     case domain::EntityKind::Pattern:          return ExplorerSection::Generated;
     }
     return ExplorerSection::Wires;
+}
+
+std::optional<base::EntityId> GeneratingModelOf(const document::DocumentSnapshot& snapshot,
+    const domain::Entity& entity)
+{
+    if (!entity.generatedFrom.has_value() || *entity.generatedFrom == entity.id) {
+        return std::nullopt;
+    }
+    for (const auto& candidate : snapshot.entities) {
+        if (candidate.id == *entity.generatedFrom) {
+            if (candidate.kind == domain::EntityKind::FabricationModel) {
+                return candidate.id;
+            }
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;   // 近似モデルはもう無い: ふつうの節へ
 }
 
 std::string_view ExplorerKindNameJa(domain::EntityKind kind) noexcept

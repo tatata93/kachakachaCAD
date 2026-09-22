@@ -282,7 +282,10 @@ Result<SolidFaceInfo> NearestSolidFace(const KernelShapeHandle& solid, const Vec
                 "部品に面が見つかりません。", {}));
         }
         const auto self = static_cast<std::size_t>(best);
-        const double clear = AllowedMm(geometry::GeometryTolerance{}) * 4.0;
+        // 選び直すときの許す離れ(AllowedMm)は、つなぐ許容差を画面の上限 0.1 mm にしても 0.1 mm。
+        // その 4 倍だけほかの面から離しておけば、許容差をどう変えても隣の面と取り違えない。
+        constexpr double kClearanceMm = 0.4;
+        const double clear = std::max(AllowedMm(geometry::GeometryTolerance{}) * 4.0, kClearanceMm);
         SolidFaceInfo info;
         info.point = FromPoint(InteriorPointOf(faces, self, bestPoint, clear));
         info.outline = OutlineOf(faces[self]);

@@ -124,7 +124,10 @@ KACHA_V2_TEST(kernel_shell_split, 辺のそばを押しても面の内側の点�
     const auto near = NearestSolidFace(box, Vector3{20.0, 0.002, 29.999});
     Require(near.HasValue(), "面が拾える: " + near.FirstSummaryJa());
     RequireNear(near.Value().point.z, 30.0, 1.0e-6, "上の面の上");
-    Require(near.Value().point.y > 0.04, "手前の面から離れた点へ寄せる(開き直して取り違えない)");
+    Require(near.Value().point.y > 0.4, "手前の面から 0.4 mm より離れた点へ寄せる(許容差を上限にしても取り違えない)");
+    GeometryTolerance loose = Tolerance();
+    loose.interactiveJoinMm = 0.1;   // 画面で選べる上限
+    Require(SolidFaceAt(box, near.Value().point, loose).HasValue(), "許容差を上限にしても同じ面を選び直せる");
     const auto again = SolidFaceAt(box, near.Value().point, Tolerance());
     Require(again.HasValue(), "残した点で同じ面を選び直せる: " + again.FirstSummaryJa());
     Require(again.Value().faceIndex == near.Value().faceIndex && near.Value().faceIndex >= 0,

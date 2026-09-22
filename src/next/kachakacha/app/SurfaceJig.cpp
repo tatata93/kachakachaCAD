@@ -21,11 +21,11 @@ Result<SurfaceJigPlan> PlanSurfaceJig(double clearanceMm, double thicknessMm,
     std::size_t surfaceCount)
 {
     using Out = Result<SurfaceJigPlan>;
-    if (surfaceCount != 1) {
+    // 面は何枚でもよい(1 枚ごとに当たり面と当て板を 1 組作る)。0 枚だけ断る。
+    if (surfaceCount == 0) {
         return Out::Failure(MakeError(kBadSurface,
-            "治具の元にする形状ガイドの面を1つ選んでください。",
-            surfaceCount == 0 ? std::string("いま面を選んでいません。")
-                              : std::to_string(surfaceCount) + " 枚選んでいます。"));
+            "治具の元にする形状ガイドの面を1つ以上選んでください。",
+            "いま面を選んでいません(何枚でも。1 枚ごとに 1 組作ります)。"));
     }
     if (!std::isfinite(clearanceMm) || clearanceMm < 0.0) {
         return Out::Failure(MakeError(kBadClearance,

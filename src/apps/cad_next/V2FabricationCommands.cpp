@@ -462,6 +462,62 @@ kachakacha::v2::app::FabricationMarkings V2MainWindow::FabricationMarkingsFor(
     return markings;
 }
 
+namespace {
+
+//! 役割を付けた数。
+struct WireRoleTally {
+    int added = 0;
+    int openings = 0;
+    int folds = 0;
+};
+
+//! 選んだ線に役割を付ける(切れ目、または閉じていれば開口・開いていれば折り線)。
+//! もう役割を持っている線は入れ直さない(同じ線を 2 度押すと切れ目が 2 本に数えられていた)。
+[[nodiscard]] WireRoleTally AddWireRoles(
+    kachakacha::v2::domain::CreateFabricationModelDefinition& definition,
+    const std::vector<kachakacha::v2::base::EntityId>& wires, bool reliefCut,
+    const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+{
+    const auto listed = [&definition](const kachakacha::v2::base::EntityId& id) {
+        for (const auto* list : {&definition.reliefCutWires, &definition.openingWires,
+                 &definition.foldWires}) {
+            if (std::find(list->begin(), list->end(), id) != list->end()) {
+                return true;
+            }
+        }
+        return false;
+    };
+    WireRoleTally tally;
+    for (const auto& id : wires) {
+        if (listed(id)) {
+            continue;
+        }
+        ++tally.added;
+        if (reliefCut) {
+            // 切れ目(V1 の plate_relief_cut)。閉じているかは core が近似のときに見る(FAB-M005)。
+            definition.reliefCutWires.push_back(id);
+            continue;
+        }
+        std::vector<kachakacha::v2::geometry::CurveSegment> curves;
+        for (const auto& curve : scene.curves) {
+            if (curve.entityId == id) {
+                curves.push_back(curve.segment);
+            }
+        }
+        if (kachakacha::v2::geometry::SegmentsFormClosedLoop(curves, tolerance)) {
+            definition.openingWires.push_back(id);
+            ++tally.openings;
+        } else {
+            definition.foldWires.push_back(id);
+            ++tally.folds;
+        }
+    }
+    return tally;
+}
+
+} // namespace
+
 void V2MainWindow::AssignOpeningRole(bool reliefCut)
 {
     using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
@@ -497,27 +553,14 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
     }
     auto definition = *current;
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    int openings = 0;
-    int folds = 0;
-    for (const auto& id : wires) {
-        if (reliefCut) {
-            // 切れ目(V1 の plate_relief_cut)。閉じているかは core が近似のときに見る(FAB-M005)。
-            definition.reliefCutWires.push_back(id);
-            continue;
-        }
-        std::vector<kachakacha::v2::geometry::CurveSegment> curves;
-        for (const auto& curve : session_->Scene().curves) {
-            if (curve.entityId == id) {
-                curves.push_back(curve.segment);
-            }
-        }
-        if (kachakacha::v2::geometry::SegmentsFormClosedLoop(curves, tolerance)) {
-            definition.openingWires.push_back(id);
-            ++openings;
-        } else {
-            definition.foldWires.push_back(id);
-            ++folds;
-        }
+    const WireRoleTally tally = AddWireRoles(definition, wires, reliefCut, session_->Scene(), tolerance);
+    const int added = tally.added;
+    const int openings = tally.openings;
+    const int folds = tally.folds;
+    if (added == 0) {
+        SetStatus(QStringLiteral("%1: 選んだ線はもう役割を持っています。文書は変えていません。")
+                .arg(reliefCut ? QStringLiteral("切れ目") : QStringLiteral("境界の役割")));
+        return;
     }
     // 先に作れるかを確かめる。定義を書き換えてから断ると、壊れた作り方が残る。
     const auto sources = FabricationSourcesFor(definition.parts, definition.splitSolidFaces);
@@ -528,7 +571,11 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
         return;
     }
     auto inputs = feature->inputEntityIds;
-    inputs.insert(inputs.end(), wires.begin(), wires.end());
+    for (const auto& id : wires) {
+        if (std::find(inputs.begin(), inputs.end(), id) == inputs.end()) {
+            inputs.push_back(id);
+        }
+    }
     const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
         feature->id, definition, inputs, reliefCut ? "切れ目を入れる" : "境界の役割を決める"));
     if (!changed.committed) {
@@ -540,7 +587,7 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
     RefreshFabricationView();
     if (reliefCut) {
         SetStatus(QStringLiteral("切れ目: %1 本入れました(いま切れ目 %2)。型紙はもう一度作ってください。")
-                .arg(static_cast<int>(wires.size()))
+                .arg(added)
                 .arg(static_cast<int>(definition.reliefCutWires.size())));
         return;
     }

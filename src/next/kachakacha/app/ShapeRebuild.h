@@ -14,6 +14,7 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/document/Document.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -44,6 +45,11 @@ struct ShapeRebuildStep {
     //! 出来上がりのもの。画面はこの id を鍵にして形を覚える。
     base::EntityId outputEntityId;
     std::string displayName;
+    //! 同じ作り方(押し出しの定義がまったく同じ)の出力のうち、作った順で何番目か。
+    //! 1 回の押し出しで部品が N 個できると、定義の同じ作り方が N 個並ぶ(古い文書と、
+    //! 足す・引くで分かれたとき)。作り直した N 個の立体を、この番号で 1 つずつ配る。
+    //! 先頭だけを配っていたので、2 個目以降が 1 個目の写しになっていた。
+    std::size_t outputOrdinal = 0;
 };
 
 //! 作り直す順に並べて返す。評価順に従う。

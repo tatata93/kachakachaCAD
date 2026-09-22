@@ -379,6 +379,31 @@ KACHA_V2_TEST(wireCage, 離れた2つの箱は2つの立体に分かれる)
     Require(told, "いくつになるかを先に知らせること");
 }
 
+KACHA_V2_TEST(wireCage, 離れた2つの箱はシェルごとに自分の線だけを記録できる)
+{
+    // 1 シェル = 1 部品。部品ごとに、そのシェルを囲む線だけを作り方へ記録する。
+    // 全部の線を記録すると、開き直したときに先頭のシェルしか戻らない。
+    std::vector<CageEdgeInput> edges = Box(10.0, 10.0, 10.0);
+    const EntityId first = edges.front().entityId;
+    Builder second;
+    // 箱を作る道具と同じ種から番号を振ると、2 つの箱の線が同じ番号になる。種を変える。
+    second.ids = DeterministicIdGenerator{97};
+    second.wireId = second.ids.NextTyped<IdKind::Entity>();
+    const Vector3 offset{50.0, 0.0, 0.0};
+    for (const auto& edge : Box(10.0, 10.0, 10.0)) {
+        second.Add(edge.segment.StartPoint() + offset, edge.segment.EndPoint() + offset);
+    }
+    edges.insert(edges.end(), second.edges.begin(), second.edges.end());
+    const auto result = AnalyzeWireCage(edges, Tolerance());
+    Require(result.HasValue() && result.Value().shells.size() == 2, "立体は2つ");
+    const auto a = kachakacha::v2::modeling::WireCageShellWires(edges, result.Value().shells[0]);
+    const auto b = kachakacha::v2::modeling::WireCageShellWires(edges, result.Value().shells[1]);
+    Require(a.size() == 1 && b.size() == 1 && a.front() != b.front(), "シェルごとに別の線 1 本");
+    Require((a.front() == first && b.front() == second.wireId)
+            || (a.front() == second.wireId && b.front() == first),
+        "それぞれの箱の線");
+}
+
 KACHA_V2_TEST(wireCage, 平面でない面は根拠が無ければ埋めない)
 {
     // かまぼこ形。曲面の根拠(形状ガイド)が無いので、勝手に埋めてはいけない。

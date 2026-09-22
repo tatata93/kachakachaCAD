@@ -48,6 +48,8 @@ enum class SelectionPredicate {
     //! 部品を2つ以上。足す・引く(土台 1 つと相手 1 個以上。相手は何個でも)。
     TwoOrMoreParts,
     OneDerivedEntity,
+    //! 作られたもの(派生)を1つ以上。現在状態を固定(選んだものごとに 1 本ずつ固定する)。
+    OneOrMoreDerivedEntities,
     OneFabricationModel,
     OneFabricationPanel,
     OneOrMorePatterns,
@@ -56,6 +58,10 @@ enum class SelectionPredicate {
     WiresAndTwoOrMoreGuideSurfaces,
     //! 部品1つ、または形状ガイド1つ。製作はどちらからでも始められる。
     OnePartOrSurface,
+    //! 部品を1つ以上。書き出し・出力の検査(何個でもまとめて出す・調べる)。
+    OneOrMoreParts,
+    //! 部品か形状ガイドを1つ以上。製作モデルを作る(元は何個でも 1 つのモデルにまとめる)。
+    OneOrMorePartsOrSurfaces,
     //! 形状ガイドの面を1つ以上。厚みを付けて立体にするときに使う。
     OneOrMoreGuideSurfaces,
     //! ワイヤーか形状ガイドの面を1つ以上。役割表へ入れるときに使う(離した面は面を指す)。
@@ -68,6 +74,8 @@ enum class SelectionPredicate {
     WiresAndOneGuideSurface,
     //! 形状ガイドの面ちょうど1つと作業平面ちょうど1つ。面を平面まで立体にするときに使う。
     OneGuideSurfaceAndOneWorkPlane,
+    //! 形状ガイドの面1つ以上と作業平面ちょうど1つ。面を平面まで立体に(面ごとに 1 部品)。
+    GuideSurfacesAndOneWorkPlane,
     //! 画面から隠せるもの(線・部品・形状ガイドの面)を1つ以上。
     //! 立体と面が画面に出るようになったので、線だけでは足りない。
     //! 隠せないと、見たくない部品が画面に居座る。

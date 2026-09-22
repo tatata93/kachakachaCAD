@@ -48,6 +48,8 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.parts >= 2;
     case SelectionPredicate::OneDerivedEntity:
         return facts.derivedEntities == 1;
+    case SelectionPredicate::OneOrMoreDerivedEntities:
+        return facts.derivedEntities >= 1;
     case SelectionPredicate::OneFabricationModel:
         return facts.fabricationModels == 1;
     case SelectionPredicate::OneFabricationPanel:
@@ -59,6 +61,11 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::OnePartOrSurface:
         // どちらか片方が1つ。両方選んでいたら、どちらから作るのか決まらない。
         return facts.parts + facts.guideSurfaces == 1;
+    case SelectionPredicate::OneOrMoreParts:
+        return facts.parts >= 1;
+    case SelectionPredicate::OneOrMorePartsOrSurfaces:
+        // 製作モデルは元が何個でもよい(部品と面を混ぜてもよい)。
+        return facts.parts + facts.guideSurfaces >= 1;
     case SelectionPredicate::OneOrMoreGuideSurfaces:
         // 面に厚みを付ける。面が1つも無ければ、付ける相手がいない。
         return facts.guideSurfaces >= 1;
@@ -79,6 +86,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.wires + facts.parts + facts.guideSurfaces >= 1;
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane:
         return facts.guideSurfaces == 1 && facts.workPlanes == 1;
+    case SelectionPredicate::GuideSurfacesAndOneWorkPlane:
+        // 面は何枚でも。相手の平面は 1 つ(2 つあると、どちらまで埋めるのか決まらない)。
+        return facts.guideSurfaces >= 1 && facts.workPlanes == 1;
     }
     return false;
 }

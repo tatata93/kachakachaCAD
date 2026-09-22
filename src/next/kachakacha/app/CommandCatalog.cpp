@@ -22,11 +22,14 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OnePart: return "部品を1つ選んでください。";
     case SelectionPredicate::TwoOrMoreParts: return "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。";
     case SelectionPredicate::OneDerivedEntity: return "派生したものを1つ選んでください。";
+    case SelectionPredicate::OneOrMoreDerivedEntities: return "派生したものを1つ以上選んでください。";
     case SelectionPredicate::OneFabricationModel: return "製作モデルを1つ選んでください。";
     case SelectionPredicate::OneFabricationPanel: return "部材を1つ選んでください。";
     case SelectionPredicate::OneOrMorePatterns: return "型紙を1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreSelectedCurves: return "曲線を1つ以上選んでください。";
     case SelectionPredicate::OnePartOrSurface: return "部品か形状ガイドを1つ選んでください。";
+    case SelectionPredicate::OneOrMoreParts: return "部品を1つ以上選んでください。";
+    case SelectionPredicate::OneOrMorePartsOrSurfaces: return "部品か形状ガイドを1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreGuideSurfaces: return "形状ガイドの面を1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreWiresOrGuideSurfaces: return "ワイヤーか形状ガイドの面を1つ以上選んでください。";
     case SelectionPredicate::OneGuideRow: return "役割表の行を1つ選んでください。";
@@ -34,6 +37,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::WiresAndOneGuideSurface: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。";
     case SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を2つ以上選んでください。";
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane: return "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。";
+    case SelectionPredicate::GuideSurfacesAndOneWorkPlane: return "形状ガイドの面を1つ以上と、相手の作業平面を1つ選んでください。";
     case SelectionPredicate::OneOrMoreHideable: return "線・部品・面のどれかを選んでください。";
     }
     return "";
@@ -242,8 +246,9 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "中心・始まりの向き・終わりの向きの3点で回します。", true,
             {"AT-WIR-006"}},
         {"wire.join", "結合", CommandMode::Tool, "join", "",
-            SelectionPredicate::TwoWireChains, "鎖を2つ選んでください。",
-            "2つの鎖を繋ぎます。隙間は明示して許します。", true,
+            SelectionPredicate::TwoOrMoreWires, "つなぐ線を2つ以上選んでください。",
+            "端でつながっている線を何本でも1本の並びにします(並べ替えと向きの反転はするが、"
+            "形は変えない)。端が離れていれば断ります。", true,
             {"AT-WIR-004"}},
         {"wire.coincident", "端点一致", CommandMode::Tool, "coincident", "I",
             SelectionPredicate::TwoWireChains, "鎖を2つ選んでください。",
@@ -342,9 +347,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "右の棚でいつでも変えられます。方式を変えても入れたものは消えません。",
             true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-008", "AT-UIX-007"}},
         {"guide.revolve", "回転体", CommandMode::Instant, "guide_revolve", "",
-            SelectionPredicate::TwoOrMoreWires, "断面の線と軸の直線を、この順に選んでください。",
-            "1本目の線を、2本目の直線を軸に「回転体の角度」だけ回した断面を「回転体の断面の数」だけ"
-            "並べ、その断面のロフトで形状ガイドを作ります(V1 の回転面と同じ近似)。", true,
+            SelectionPredicate::TwoOrMoreWires,
+            "断面の線(何本でも)と、最後に軸の直線を選んでください。",
+            "最後に選んだ直線を軸に、ほかの線(断面。何本でも)を「回転体の角度」だけ回した"
+            "形状ガイドを作ります(断面 1 本ごとに 1 枚。核が断面そのものを回します)。", true,
             {"AT-GEO-003"}},
         // 面の編集(プロンプト additional_surface_tools)。どれも道具から始め、3D で面や縁を
         // 押して入れる。元の面は残し、新しい面(U/V 線は線)を作る。
@@ -447,9 +453,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "面に厚みを付けるときの付け方を、外側・中央・内側の順に切り替えます。", false,
             {"AT-EXT-001"}},
         {"part.thicken_to_plane", "面を平面まで立体に", CommandMode::Instant, "thicken_to", "",
-            SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
-            "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。",
-            "選んだ面と作業平面の間を埋めて立体にします。面が平面をまたいでいれば断ります。",
+            SelectionPredicate::GuideSurfacesAndOneWorkPlane,
+            "形状ガイドの面を1つ以上と、相手の作業平面を1つ選んでください。",
+            "選んだ面と作業平面の間を埋めて立体にします(面ごとに 1 部品、1 回で戻る)。"
+            "面が平面をまたいでいれば断ります。",
             true, {"AT-EXT-001"}},
         {"part.from_wire_cage", "ワイヤー群から部品", CommandMode::Dialog, "cage", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
@@ -464,12 +471,13 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "部品から引きます。分かれる場合は個数を先に知らせます。", true,
             {"AT-EXT-007"}},
         {"derived.freeze", "現在状態を固定", CommandMode::Instant, "freeze", "",
-            SelectionPredicate::OneDerivedEntity, "派生したものを1つ選んでください。",
-            "派生したものを固定して、独立した実体にします。", true,
+            SelectionPredicate::OneOrMoreDerivedEntities, "派生したものを1つ以上選んでください。",
+            "派生したものを固定して、独立した実体にします(選んだものごとに 1 つ。1 回で戻る)。", true,
             {"AT-DOC-004", "AT-FAB-014"}},
         {"fabrication.create", "製作モデルを作る", CommandMode::Dialog, "fab_new", "",
-            SelectionPredicate::OnePartOrSurface, "部品か形状ガイドを1つ選んでください。",
-            "部品から製作モデルを作ります。元の部品は変えません。", true,
+            SelectionPredicate::OneOrMorePartsOrSurfaces,
+            "部品か形状ガイドを1つ以上選んでください(何個でも 1 つの製作モデルにまとめます)。",
+            "部品や形状ガイドから製作モデルを作ります(元は何個でも)。元の部品は変えません。", true,
             {"AT-FAB-001", "AT-FAB-002", "AT-FAB-003", "AT-FAB-004", "AT-FAB-005"}},
         {"fabrication.assign_role", "境界の役割", CommandMode::Instant, "fab_role", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
@@ -552,16 +560,16 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "床板はその場に残り、まわりの板だけが開きます。", true,
             {"AT-FAB-011"}},
         {"export.validate", "出力を検査", CommandMode::Instant, "validate", "",
-            SelectionPredicate::OnePart, "部品を1つ選んでください。",
-            "書き出せる形かどうかを先に確かめます。", false,
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "書き出せる形かどうかを先に確かめます(選んだ部品を全部)。", false,
             {"AT-EXP-011"}},
         {"export.stl", "STLで保存", CommandMode::Dialog, "stl", "",
-            SelectionPredicate::OnePart, "部品を1つ選んでください。",
-            "STLで書き出します。", false,
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "STLで書き出します(選んだ部品を全部 1 つのファイルへ)。", false,
             {"AT-EXP-010"}},
         {"export.step", "STEPで保存", CommandMode::Dialog, "step", "",
-            SelectionPredicate::OnePart, "部品を1つ選んでください。",
-            "STEPで書き出します。", false,
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "STEPで書き出します(選んだ部品を全部 1 つのファイルへ)。", false,
             {"AT-EXP-010"}},
         {"export.svg", "SVGで保存", CommandMode::Dialog, "svg", "",
             SelectionPredicate::OneOrMorePatterns, "型紙を1つ以上選んでください。",

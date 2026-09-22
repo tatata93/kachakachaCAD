@@ -3,6 +3,7 @@
 #include "kachakacha/domain/Feature.h"
 
 #include <algorithm>
+#include <variant>
 
 namespace kachakacha::v2::app {
 namespace {
@@ -36,6 +37,40 @@ using domain::FeatureType;
 [[nodiscard]] base::EntityId OutputOf(const domain::Feature& feature)
 {
     return feature.outputs.empty() ? base::EntityId{} : feature.outputs.front().entityId;
+}
+
+[[nodiscard]] bool SameValue(const geometry::EvaluatedValue& a, const geometry::EvaluatedValue& b)
+{
+    return a.value == b.value && a.kind == b.kind && a.expression == b.expression;
+}
+
+//! 押し出しの定義がまったく同じか(同じ 1 回の押し出しから出来た部品どうし)。
+[[nodiscard]] bool SameExtrude(const domain::Feature& a, const domain::Feature& b)
+{
+    const auto* left = std::get_if<domain::ExtrudeDefinition>(&a.definition);
+    const auto* right = std::get_if<domain::ExtrudeDefinition>(&b.definition);
+    return left != nullptr && right != nullptr && left->profiles == right->profiles
+        && left->targets == right->targets && left->extentMode == right->extentMode
+        && left->booleanMode == right->booleanMode && SameValue(left->distance, right->distance)
+        && left->direction.x == right->direction.x && left->direction.y == right->direction.y
+        && left->direction.z == right->direction.z;
+}
+
+//! 作った順で、定義の同じ押し出しがいくつ前にあるか。切ってあるものも数える
+//! (作り直すと、切ってあっても同じ並びで立体が出来る)。
+[[nodiscard]] std::size_t ExtrudeOrdinal(const document::DocumentSnapshot& snapshot,
+    const domain::Feature& feature)
+{
+    std::size_t ordinal = 0;
+    for (const domain::Feature& other : snapshot.features) {
+        if (other.id == feature.id) {
+            break;
+        }
+        if (other.type == FeatureType::Extrude && SameExtrude(other, feature)) {
+            ++ordinal;
+        }
+    }
+    return ordinal;
 }
 
 } // namespace
@@ -73,7 +108,11 @@ std::vector<ShapeRebuildStep> PlanShapeRebuild(const document::DocumentSnapshot&
         if (output.IsNil()) {
             continue;
         }
-        steps.push_back(ShapeRebuildStep{*kind, found->id, output, found->displayName});
+        ShapeRebuildStep step{*kind, found->id, output, found->displayName};
+        if (*kind == ShapeRebuildKind::Extrude) {
+            step.outputOrdinal = ExtrudeOrdinal(snapshot, *found);
+        }
+        steps.push_back(std::move(step));
     }
     return steps;
 }

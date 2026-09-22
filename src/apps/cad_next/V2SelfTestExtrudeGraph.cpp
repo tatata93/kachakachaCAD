@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -421,6 +422,63 @@ using kachakacha::v2::domain::Visibility;
             && window.Session().GetDocument().CanUndo());
 }
 
+//! 画面に出ている立体の x の広がり(左から順)。
+[[nodiscard]] std::vector<std::pair<double, double>> SolidSpansX(V2MainWindow& window)
+{
+    std::vector<std::pair<double, double>> spans;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (!shape.surface && !shape.mesh.Empty()) {
+            spans.emplace_back(shape.mesh.minimum.x, shape.mesh.maximum.x);
+        }
+    }
+    std::sort(spans.begin(), spans.end());
+    return spans;
+}
+
+//! 2 個の立体が、重ならずに別の場所にあるか(1 個目の写しになっていないか)。
+[[nodiscard]] bool TwoSeparateSolids(V2MainWindow& window)
+{
+    const auto spans = SolidSpansX(window);
+    return spans.size() == 2 && spans[0].second < spans[1].first;
+}
+
+//! 離れた輪郭 2 つを 1 回で押し出すと、部品ごとに自分の輪郭だけを持ち、
+//! 作り直しても(開き直しても)2 個が別の場所にある。全部の輪郭を持たせていたので、
+//! 作り直すと 2 個目が 1 個目の写しになっていた。
+[[nodiscard]] bool CaseTwoOutlinesMakeTwoPartsThatKeepTheirOwnOutline(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("左の矩形を引ける", DrawClosedRectangleAt(window, 0.15, 0.35, 0.35, 0.65))
+        || !Explain("右の矩形を引ける(2 つとも選ぶ)",
+            DrawClosedRectangleAt(window, 0.60, 0.35, 0.85, 0.65))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
+    if (!Explain((std::string("部品が 2 個できる(実際 ")
+                     + std::to_string(CountOfKind(window, EntityKind::Part)) + ")").c_str(),
+            CountOfKind(window, EntityKind::Part) == 2)) {
+        return false;
+    }
+    std::vector<std::vector<EntityId>> outlines;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        if (const auto* extrude = std::get_if<ExtrudeDefinition>(&feature.definition)) {
+            outlines.push_back(extrude->profiles);
+        }
+    }
+    const bool own = outlines.size() == 2 && !outlines[0].empty() && !outlines[1].empty()
+        && std::none_of(outlines[0].begin(), outlines[0].end(),
+            [&outlines](const EntityId& id) { return Contains(outlines[1], id); });
+    if (!Explain("部品ごとに自分の輪郭だけを持つ", own)
+        || !Explain("作り直した 2 個が別の場所にある", TwoSeparateSolids(window))
+        || !Explain("保存して開き直せる",
+            window.SaveAndReopen(QStringLiteral("kacha_selftest_two_outlines.kcd2")))) {
+        return false;
+    }
+    return Explain("開き直しても 2 個が別の場所にある",
+        CountOfKind(window, EntityKind::Part) == 2 && TwoSeparateSolids(window));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudeGraphCases()
@@ -435,6 +493,8 @@ std::vector<SelfTestCase> ExtrudeGraphCases()
             CaseFacePushPullRoundTripsInOneUndo},
         {"断られた押し出しは覚えている形にも跡を残さない",
             CaseRefusedExtrudeLeavesNoTrace},
+        {"輪郭 2 つの押し出しは部品ごとに自分の輪郭を持ち開き直しても別の場所にある",
+            CaseTwoOutlinesMakeTwoPartsThatKeepTheirOwnOutline},
     };
 }
 

@@ -121,7 +121,8 @@ void V2MainWindow::CreateRevolvedSurface()
 }
 
 //! 「回転体」を押した。面を作るの道具を、作り方 = 回転体 で構える。
-//! 選んであった線は、選んだ順に 断面 → 軸 へ入れる(選んでから押す道も残す)。
+//! 選んであった線は、最後に選んだ 1 本を軸へ、ほかを全部断面へ入れる(断面は何本でも。
+//! 1 本ごとに 1 枚の回転面)。1 本だけなら断面。選んでから押す道も残す。
 //! 構えている間の2度目は確定。
 void V2MainWindow::RunRevolveTool()
 {
@@ -140,11 +141,12 @@ void V2MainWindow::RunRevolveTool()
     surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
     surfaceInput_.method = GuideSurfaceMethod::Revolve;
     surfaceInput_.methodChosenByUser = true;
-    if (!wires.empty()) {
-        surfaceInput_.sections.push_back(wires[0]);
-    }
-    if (wires.size() >= 2) {
-        surfaceInput_.guides.push_back(wires[1]);   // 軸
+    if (wires.size() == 1) {
+        surfaceInput_.sections.push_back(wires.front());
+    } else if (wires.size() >= 2) {
+        // 断面は何本でも。2 本目以降を捨てていたので、選んだ断面の一部だけが回っていた。
+        surfaceInput_.sections.assign(wires.begin(), wires.end() - 1);
+        surfaceInput_.guides.push_back(wires.back());   // 軸
     }
     // 取り込みは済ませた。RunSurfaceCreate に二重に取り込ませない。
     viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});

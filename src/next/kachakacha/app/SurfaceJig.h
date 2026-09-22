@@ -17,7 +17,7 @@
 //! 断られかた:
 //! - JIG-E001 治具のすき間は 0 以上にしてください。
 //! - JIG-E002 治具の厚みは 0 にできません。
-//! - JIG-E003 治具の元にする形状ガイドの面を1つ選んでください。
+//! - JIG-E003 治具の元にする形状ガイドの面を1つ以上選んでください。
 
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
@@ -39,7 +39,7 @@ struct SurfaceJigPlan {
 };
 
 //! すき間と厚みから手順を決める。値が使えなければ理由をつけて断る。
-//! surfaceCount は選んでいる形状ガイドの面の数。1 でなければ JIG-E003。
+//! surfaceCount は選んでいる形状ガイドの面の数。0 なら JIG-E003(何枚でも。1 枚ごとに 1 組)。
 [[nodiscard]] base::Result<SurfaceJigPlan> PlanSurfaceJig(double clearanceMm,
     double thicknessMm, std::size_t surfaceCount);
 

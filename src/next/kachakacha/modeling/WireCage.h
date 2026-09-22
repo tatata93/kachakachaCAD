@@ -107,4 +107,10 @@ struct WireCagePart {
 [[nodiscard]] base::Result<std::vector<WireCagePart>> PlanWireCageParts(
     const WireCageAnalysis& analysis, const std::vector<std::size_t>& chosenShells);
 
+//! その閉シェルの面を囲む線(Entity)。最初に出てきた順で、重ねない。
+//! 1 シェル = 1 部品として作り方へ記録するのに使う。選んだ線を全部記録すると、
+//! 開き直したときにどの部品がどのシェルか分からない。
+[[nodiscard]] std::vector<EntityId> WireCageShellWires(const std::vector<CageEdgeInput>& edges,
+    const CageShell& shell);
+
 } // namespace kachakacha::v2::modeling

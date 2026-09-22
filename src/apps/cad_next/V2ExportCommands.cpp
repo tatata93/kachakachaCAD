@@ -22,6 +22,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -279,42 +280,72 @@ void V2MainWindow::ValidateSelectedSolid()
 {
     // 出す前に形そのものを調べる。出してから失敗すると、
     // 何が悪かったのかを、出来なかったファイルから読み取ることになる。
-    const auto shapes = PartShapesFor(true);
-    if (shapes.empty()) {
+    // 選んだ部品を全部調べる(1 つ目だけを調べて「出せます」と言わない)。
+    const double tolerance =
+        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    int checkedCount = 0;
+    double totalVolume = 0.0;
+    double largestDiagonal = 0.0;
+    QStringList problems;
+    for (const auto& entity : session_->GetDocument().Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::Part
+            || !kachakacha::v2::app::IsSelected(viewport_->Selection(), entity.id)) {
+            continue;
+        }
+        const auto found = partShapes_.find(entity.id.ToString());
+        if (found == partShapes_.end()) {
+            continue;
+        }
+        const QString name = QString::fromStdString(entity.displayName);
+        const auto checked = kachakacha::v2::kernel::CheckSolidForExport(found->second, tolerance);
+        if (!checked.HasValue()) {
+            ReportDiagnostics(checked.Diagnostics());
+            problems << QStringLiteral("%1: 調べられません").arg(name);
+            continue;
+        }
+        ++checkedCount;
+        const auto& value = checked.Value();
+        if (!value.Ok()) {
+            // どこが駄目なのかを言う。「出せません」だけでは直しようがない。
+            QStringList reasons;
+            if (!value.closed) {
+                reasons << QStringLiteral("閉じていません");
+            }
+            if (!value.positiveVolume) {
+                reasons << QStringLiteral("体積がありません");
+            }
+            if (!value.selfIntersectionFree) {
+                reasons << QStringLiteral("自分と交わっています");
+            }
+            problems << QStringLiteral("%1: %2").arg(name, reasons.join(QStringLiteral("、")));
+            continue;
+        }
+        totalVolume += value.volumeMm3;
+        largestDiagonal = std::max(largestDiagonal, value.boundingDiagonalMm);
+    }
+    if (checkedCount == 0 && problems.isEmpty()) {
         SetStatus(QStringLiteral(
             "出力を検査: 選んだ部品の立体がまだありません。先に作ってください。"));
         return;
     }
-    const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto checked = kachakacha::v2::kernel::CheckSolidForExport(shapes.front(),
-        tolerance);
-    if (!checked.HasValue()) {
-        ReportDiagnostics(checked.Diagnostics());
+    if (!problems.isEmpty()) {
+        SetStatus(QStringLiteral("出力を検査: 出せません(%1)。")
+                .arg(problems.join(QStringLiteral(" / "))));
+        AddDiagnostic(QStringLiteral("EXP-013 %1").arg(problems.join(QStringLiteral(" / "))));
         return;
     }
-    const auto& value = checked.Value();
-    if (!value.Ok()) {
-        // どこが駄目なのかを言う。「出せません」だけでは直しようがない。
-        QStringList reasons;
-        if (!value.closed) {
-            reasons << QStringLiteral("閉じていません");
-        }
-        if (!value.positiveVolume) {
-            reasons << QStringLiteral("体積がありません");
-        }
-        if (!value.selfIntersectionFree) {
-            reasons << QStringLiteral("自分と交わっています");
-        }
-        SetStatus(QStringLiteral("出力を検査: 出せません(%1)。")
-                .arg(reasons.join(QStringLiteral("、"))));
-        AddDiagnostic(QStringLiteral("EXP-013 %1").arg(reasons.join(QStringLiteral("、"))));
+    if (checkedCount == 1) {
+        SetStatus(QStringLiteral(
+            "出力を検査: 出せます。体積 %1 mm3、外接箱の対角 %2 mm。")
+                .arg(totalVolume, 0, 'f', 4)
+                .arg(largestDiagonal, 0, 'f', 3));
         return;
     }
     SetStatus(QStringLiteral(
-        "出力を検査: 出せます。体積 %1 mm3、外接箱の対角 %2 mm。")
-            .arg(value.volumeMm3, 0, 'f', 4)
-            .arg(value.boundingDiagonalMm, 0, 'f', 3));
+        "出力を検査: %1 個とも出せます。体積の合計 %2 mm3、いちばん大きい外接箱の対角 %3 mm。")
+            .arg(checkedCount)
+            .arg(totalVolume, 0, 'f', 4)
+            .arg(largestDiagonal, 0, 'f', 3));
 }
 
 bool V2MainWindow::CanExportSelectedParts()

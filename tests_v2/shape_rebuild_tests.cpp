@@ -118,6 +118,31 @@ KACHA_V2_TEST(shape_rebuild, 出来上がりが無い作り方は飛ばす)
     Require(PlanShapeRebuild(snapshot).empty(), "指す先が無いので飛ばす");
 }
 
+KACHA_V2_TEST(shape_rebuild, 同じ押し出しから出来た部品は作った順に何番目かを持つ)
+{
+    // 1 回の押し出しで部品が 2 個できると、定義の同じ作り方が 2 個並ぶ。作り直した 2 個の
+    // 立体を順に配らないと、2 個目が 1 個目の写しになる。定義の違う押し出しは 0 番から数える。
+    DocumentSnapshot snapshot;
+    DeterministicIdGenerator ids;
+    kachakacha::v2::domain::ExtrudeDefinition same;
+    same.profiles = {ids.NextTyped<IdKind::Entity>(), ids.NextTyped<IdKind::Entity>()};
+    same.distance.value = 10.0;
+    for (const char* name : {"押し出し 1", "押し出し 2"}) {
+        Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, name);
+        snapshot.features.back().definition = same;
+    }
+    auto other = same;
+    other.distance.value = 20.0;
+    Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, "別の押し出し");
+    snapshot.features.back().definition = other;
+    Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, "押し出し 3", false);
+    snapshot.features.back().definition = same;
+    const auto steps = PlanShapeRebuild(snapshot);
+    Require(steps.size() == 3, "切ってあるものは作り直さない");
+    Require(steps[0].outputOrdinal == 0 && steps[1].outputOrdinal == 1, "同じ定義は 0, 1 番");
+    Require(steps[2].outputOrdinal == 0, "定義の違う押し出しは 0 番");
+}
+
 KACHA_V2_TEST(shape_rebuild, 4種類すべてに名前がある)
 {
     for (const ShapeRebuildKind kind : {ShapeRebuildKind::Extrude,

@@ -28,6 +28,7 @@
 
 #include <QString>
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <utility>
@@ -90,6 +91,27 @@ using kachakacha::v2::modeling::SnapCurve;
         }
     }
     return profiles;
+}
+
+//! 新しい部品を N 個作るときの、部品ごとの輪郭(外周と穴)。作り方と同じ領域の読み方を
+//! 通すので、部品の並び(外周の並び)と同じになる。数が合わなければ空(全部を持たせる)。
+[[nodiscard]] std::vector<std::vector<EntityId>> ProfilesPerPart(
+    const std::vector<EntityId>& profiles, std::size_t partCount,
+    const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+{
+    if (partCount < 2) {
+        return {};
+    }
+    const auto regions = kachakacha::v2::app::DetectProfileRegions(scene, profiles, tolerance);
+    if (regions.size() != partCount) {
+        return {};
+    }
+    std::vector<std::vector<EntityId>> perPart;
+    for (const auto& region : regions) {
+        perPart.push_back(kachakacha::v2::app::ProfileRegionEntityIds(region));
+    }
+    return perPart;
 }
 
 } // namespace
@@ -566,14 +588,27 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     // 返ってきたからといって文書へ入れてはいけない。
     kachakacha::v2::base::EntityId partId;
     const std::size_t partCount = choice.makePart ? built.parts.size() : 0;
+    // 新しい部品を N 個作るなら、部品ごとに自分の輪郭だけを持たせる。全部を持たせると、
+    // 開き直したときにどれがどの輪郭か分からず、1 つの輪郭を消すと全部が作り直せなくなる。
+    const bool newParts = !facePushPull_
+        && choice.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    const auto perPart = newParts
+        ? ProfilesPerPart(definition.profiles, partCount, session_->Scene(),
+              session_->GetDocument().Snapshot().settings.tolerance)
+        : std::vector<std::vector<EntityId>>{};
     for (std::size_t index = 0; index < partCount; ++index) {
         auto copy = definition;
+        std::vector<EntityId> partInputs = inputs;
+        if (perPart.size() == partCount) {
+            copy.profiles = perPart[index];
+            partInputs = perPart[index];
+        }
         const std::string label = built.parts.size() > 1
             ? "押し出し " + std::to_string(index + 1)
             : std::string("押し出し");
         const auto made = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
             std::move(copy), built.parts[index].handle,
-            index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str(), inputs);
+            index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str(), partInputs);
         if (made.IsNil()) {
             return false;   // 1つでも入らなければ、全体を無かったことにする。
         }
@@ -677,16 +712,36 @@ void V2MainWindow::RunWireCage()
         SetStatus(QStringLiteral("ワイヤー群から部品: 立体になりませんでした。"));
         return;
     }
-    kachakacha::v2::domain::CreatePartFromWireCageDefinition definition;
-    definition.wires = selection.entityIds;
-    std::vector<CurveSegment> edges;
-    for (const auto& input : inputs) {
-        edges.push_back(input.segment);
+    // 1 シェル = 1 部品。部品ごとに、そのシェルを囲む線だけを記録する(先頭だけを部品にして
+    // 「N 個作りました」と言っていた)。N 個を 1 回の元に戻すで消せるようにまとめる。
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+        "かごから部品");
+    const std::size_t count = std::min(built.Value().size(), planned.Value().size());
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto& shell = analysis.Value().shells[planned.Value()[index].shellIndex];
+        kachakacha::v2::domain::CreatePartFromWireCageDefinition definition;
+        definition.wires = kachakacha::v2::modeling::WireCageShellWires(inputs, shell);
+        std::vector<CurveSegment> edges;
+        for (const auto& input : inputs) {
+            if (std::find(definition.wires.begin(), definition.wires.end(), input.entityId)
+                != definition.wires.end()) {
+                edges.push_back(input.segment);
+            }
+        }
+        const auto wires = definition.wires;
+        const std::string label = count > 1 ? "かごから部品 " + std::to_string(index + 1)
+                                            : std::string("かごから部品");
+        if (AddPartFeature(kachakacha::v2::domain::FeatureType::CreatePartFromWireCage,
+                std::move(definition), built.Value()[index].handle, edges, label.c_str(), wires)
+                .IsNil()) {
+            return;   // 1 つでも入らなければ、まとめごと無かったことにする。
+        }
     }
-    AddPartFeature(kachakacha::v2::domain::FeatureType::CreatePartFromWireCage,
-        std::move(definition), built.Value().front().handle, edges, "かごから部品");
-    SetStatus(QStringLiteral("ワイヤー群から部品: %1個の部品を作りました。")
-            .arg(static_cast<int>(built.Value().size())));
+    if (!transaction.Commit()) {
+        return;
+    }
+    SetStatus(QStringLiteral("ワイヤー群から部品: %1個の部品を作りました(1 回の元に戻すで消えます)。")
+            .arg(static_cast<int>(count)));
 }
 
 // 足す・引く(RunBoolean)は V2BooleanCommands.cpp の道具へ移した(引継ぎ 2026-09-17 の 4)。
@@ -936,10 +991,14 @@ void V2MainWindow::RunSurfaceJig()
     }
     const auto revisionBefore = session_->GetDocument().Revision();
     session_->GetDocument().BeginCompound("治具を作る");
-    const auto contact = JigContactSurface(surfaces.front(), plan.Value());
-    bool ok = !contact.IsNil();
-    if (ok) {
-        ok = AddJigSolid(contact, plan.Value());
+    // 選んだ面ごとに 1 組(当たり面 + 当て板)。1 つでも作れなければ全部戻す。
+    bool ok = true;
+    for (const auto& surface : surfaces) {
+        const auto contact = JigContactSurface(surface, plan.Value());
+        ok = !contact.IsNil() && AddJigSolid(contact, plan.Value());
+        if (!ok) {
+            break;
+        }
     }
     session_->GetDocument().EndCompound();
     if (!ok) {
@@ -950,56 +1009,83 @@ void V2MainWindow::RunSurfaceJig()
         }
         return;
     }
-    SetStatus(QStringLiteral("治具: すき間 %1 mm、厚み %2 mm(%3)の当て板を作りました。")
+    SetStatus(QStringLiteral("治具: すき間 %1 mm、厚み %2 mm(%3)の当て板を %4 組作りました"
+                             "(1 回の元に戻すで消えます)。")
             .arg(std::abs(plan.Value().offsetDistanceMm), 0, 'f', 3)
             .arg(plan.Value().thicknessMm, 0, 'f', 3)
             .arg(QString::fromUtf8(kachakacha::v2::fabrication::ThicknessPlacementNameJa(
-                plan.Value().placement))));
+                plan.Value().placement)))
+            .arg(static_cast<int>(surfaces.size())));
 }
 
 void V2MainWindow::RunThickenSurfaceToPlane()
 {
     // 「面を任意の面まで立体化」。面と作業平面の間を埋める。
-    // 厚みを数で決めるのではなく、相手で決める。
-    kachakacha::v2::base::EntityId surfaceId;
+    // 厚みを数で決めるのではなく、相手で決める。面は何枚でも(1 枚ごとに 1 部品、1 回で戻る)。
+    std::vector<kachakacha::v2::base::EntityId> surfaceIds;
     kachakacha::v2::base::EntityId planeId;
+    int planes = 0;
     for (const auto& id : viewport_->Selection().entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr) {
             continue;
         }
-        if (entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
-            surfaceId = id;
+        if (entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface
+            && guideShapes_.count(id.ToString()) != 0) {
+            surfaceIds.push_back(id);
         } else if (entity->kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
             planeId = id;
+            ++planes;
         }
     }
     const auto frame = planeId.IsNil() ? std::nullopt : WorkPlaneFrameOf(planeId);
-    const auto found = guideShapes_.find(surfaceId.ToString());
-    if (surfaceId.IsNil() || !frame.has_value() || found == guideShapes_.end()) {
-        SetStatus(QStringLiteral(
-            "面を平面まで立体に: 形状ガイドの面を1つと、相手の作業平面を1つ選んでください。"));
+    if (surfaceIds.empty() || planes != 1 || !frame.has_value()) {
+        SetStatus(QStringLiteral("面を平面まで立体に: 形状ガイドの面を1つ以上と、"
+                                 "相手の作業平面をちょうど1つ選んでください。"));
         return;
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second,
-        frame->origin, frame->normal, tolerance);
-    if (!built.HasValue()) {
-        ReportDiagnostics(built.Diagnostics());
-        return;
+    double thickest = 0.0;
+    double volume = 0.0;
+    bool committed = false;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+            "面を平面まで");
+        bool ok = true;
+        for (const auto& surfaceId : surfaceIds) {
+            const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(
+                guideShapes_.at(surfaceId.ToString()), frame->origin, frame->normal, tolerance);
+            if (!built.HasValue()) {
+                ReportDiagnostics(built.Diagnostics());
+                ok = false;
+                break;
+            }
+            kachakacha::v2::domain::ThickenSurfaceDefinition definition;
+            definition.surface = surfaceId;
+            definition.targetPlane = planeId;
+            definition.thickness.value = built.Value().thicknessMm;
+            definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
+            if (AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+                    std::move(definition), built.Value().handle, built.Value().edges,
+                    "面を平面まで", {surfaceId, planeId})
+                    .IsNil()) {
+                ok = false;
+                break;
+            }
+            thickest = std::max(thickest, built.Value().thicknessMm);
+            volume += built.Value().volumeMm3;
+        }
+        committed = ok && transaction.Commit();
     }
-    kachakacha::v2::domain::ThickenSurfaceDefinition definition;
-    definition.surface = surfaceId;
-    definition.targetPlane = planeId;
-    definition.thickness.value = built.Value().thicknessMm;
-    definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
-    const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-        std::move(definition), built.Value().handle, built.Value().edges, "面を平面まで");
-    if (partId.IsNil()) {
+    if (!committed) {
+        AdoptCurrentDocument();
+        RebuildKernelShapes();
         return;
     }
     SetStatus(QStringLiteral(
-        "面を平面まで立体に: 面と平面の間(最大 %1 mm)を埋めて、体積 %2 mm3 の部品にしました。")
-            .arg(built.Value().thicknessMm, 0, 'f', 3)
-            .arg(built.Value().volumeMm3, 0, 'f', 3));
+        "面を平面まで立体に: 面 %1 枚と平面の間(最大 %2 mm)を埋めて、部品 %1 個"
+        "(体積の合計 %3 mm3)にしました。")
+            .arg(static_cast<int>(surfaceIds.size()))
+            .arg(thickest, 0, 'f', 3)
+            .arg(volume, 0, 'f', 3));
 }

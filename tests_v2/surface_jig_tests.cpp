@@ -38,7 +38,7 @@ KACHA_V2_TEST(surface_jig, すき間0なら離さず元の面に当てる)
     RequireNear(plan.Value().offsetDistanceMm, 0.0, 1e-12, "離さない");
 }
 
-KACHA_V2_TEST(surface_jig, 負のすき間と厚み0と面の数が1でないものは断る)
+KACHA_V2_TEST(surface_jig, 負のすき間と厚み0と面が無いものは断る)
 {
     RequireEqual(PlanSurfaceJig(-0.5, 3.0, 1).Diagnostics().front().code,
         std::string("JIG-E001"), "負のすき間");
@@ -46,8 +46,14 @@ KACHA_V2_TEST(surface_jig, 負のすき間と厚み0と面の数が1でないも
         std::string("JIG-E002"), "厚み 0");
     RequireEqual(PlanSurfaceJig(0.5, 3.0, 0).Diagnostics().front().code,
         std::string("JIG-E003"), "面を選んでいない");
-    RequireEqual(PlanSurfaceJig(0.5, 3.0, 2).Diagnostics().front().code,
-        std::string("JIG-E003"), "面が 2 枚");
+}
+
+KACHA_V2_TEST(surface_jig, 面が何枚でも同じ決め方で1枚ごとに1組作れる)
+{
+    // 面を 2 枚選んだら 2 組。1 枚目だけを使って「作りました」と言わない(画面が 1 枚ずつ回す)。
+    const auto plan = PlanSurfaceJig(0.5, 3.0, 3);
+    Require(plan.HasValue(), "3 枚でも作れる");
+    RequireNear(plan.Value().offsetDistanceMm, 0.5, 1e-12, "決め方は 1 枚のときと同じ");
 }
 
 KACHA_V2_TEST_MAIN("surface_jig")

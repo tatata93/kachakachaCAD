@@ -214,6 +214,20 @@ KACHA_V2_TEST(availability, 部品の数で分かれる)
         "3つでも通る");
 }
 
+KACHA_V2_TEST(availability, 書き出しと製作モデルは何個でも選べる)
+{
+    // 書き出し・出力の検査は選んだ部品を全部出す。製作モデルは元を何個でもまとめる。
+    // 「ちょうど 1 つ」のままだと、2 つ選んだだけで押せなくなる。
+    Bench bench;
+    Require(!SelectionSatisfies(SelectionPredicate::OneOrMoreParts, bench.Facts()), "0 個は通らない");
+    bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::Part));
+    bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::Part));
+    Require(SelectionSatisfies(SelectionPredicate::OneOrMoreParts, bench.Facts()), "部品 2 つで通る");
+    bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::GuideSurface));
+    Require(SelectionSatisfies(SelectionPredicate::OneOrMorePartsOrSurfaces, bench.Facts()),
+        "部品と面を混ぜても通る");
+}
+
 KACHA_V2_TEST(availability, 製作は部品からでも形状ガイドからでも始められる)
 {
     // 平らな部品からも、曲がった面からも型紙は作れる。
@@ -269,17 +283,21 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OnePart,
         SelectionPredicate::TwoOrMoreParts,
         SelectionPredicate::OneDerivedEntity,
+        SelectionPredicate::OneOrMoreDerivedEntities,
         SelectionPredicate::OneFabricationModel,
         SelectionPredicate::OneFabricationPanel,
         SelectionPredicate::OneOrMorePatterns,
         SelectionPredicate::OneOrMoreSelectedCurves,
         SelectionPredicate::OnePartOrSurface,
+        SelectionPredicate::OneOrMoreParts,
+        SelectionPredicate::OneOrMorePartsOrSurfaces,
         SelectionPredicate::OneOrMoreGuideSurfaces,
         SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
         SelectionPredicate::OneGuideRow,
         SelectionPredicate::OneOrMoreGuideRows,
         SelectionPredicate::WiresAndOneGuideSurface,
         SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
+        SelectionPredicate::GuideSurfacesAndOneWorkPlane,
     };
     for (const SelectionPredicate predicate : needsSelection) {
         Require(!SelectionSatisfies(predicate, facts),
@@ -316,17 +334,21 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OnePart,
         SelectionPredicate::TwoOrMoreParts,
         SelectionPredicate::OneDerivedEntity,
+        SelectionPredicate::OneOrMoreDerivedEntities,
         SelectionPredicate::OneFabricationModel,
         SelectionPredicate::OneFabricationPanel,
         SelectionPredicate::OneOrMorePatterns,
         SelectionPredicate::OneOrMoreSelectedCurves,
         SelectionPredicate::OnePartOrSurface,
+        SelectionPredicate::OneOrMoreParts,
+        SelectionPredicate::OneOrMorePartsOrSurfaces,
         SelectionPredicate::OneOrMoreGuideSurfaces,
         SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
         SelectionPredicate::OneGuideRow,
         SelectionPredicate::OneOrMoreGuideRows,
         SelectionPredicate::WiresAndOneGuideSurface,
         SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
+        SelectionPredicate::GuideSurfacesAndOneWorkPlane,
     };
     // まだどのコマンドにも付いていない条件。契約にはあるが、
     // それを使うコマンドがまだ無い。ここへ書いておけば、
@@ -339,6 +361,16 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         // 部材ちょうど1つ ── 部材の行を選んで効かせるコマンド(切れ目など)を入れるときに使う。
         // 「境界の役割」に付いていたが、それは線を選ぶ操作なので外した。
         SelectionPredicate::OneFabricationPanel,
+        // 部品ちょうど1つ ── 部品 1 つだけに効くコマンドを入れるときに使う。
+        // 書き出しと出力の検査に付いていたが、選んだ部品を全部出すので外した。
+        SelectionPredicate::OnePart,
+        // 部品か形状ガイドちょうど1つ ── 製作モデルを作るに付いていたが、元は何個でも
+        // 1 つのモデルにまとめるので外した。
+        SelectionPredicate::OnePartOrSurface,
+        // 派生ちょうど1つ ── 現在状態を固定に付いていたが、選んだものごとに固定するので外した。
+        SelectionPredicate::OneDerivedEntity,
+        // 面ちょうど1つと平面1つ ── 面を平面まで立体にに付いていたが、面は何枚でもにしたので外した。
+        SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
     };
     std::string unused;
     for (const SelectionPredicate predicate : all) {

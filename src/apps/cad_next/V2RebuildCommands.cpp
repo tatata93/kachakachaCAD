@@ -36,7 +36,7 @@ using kachakacha::v2::geometry::CurveSegment;
 } // namespace
 
 bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& feature,
-    const EntityId& output)
+    const EntityId& output, std::size_t ordinal)
 {
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
     using kachakacha::v2::modeling::ExtrudeRequest;
@@ -84,20 +84,29 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
     }
     const auto built = kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(),
         tolerance, booleanTarget);
-    if (!built.HasValue() || built.Value().parts.empty()) {
+    // 同じ定義の押し出しが並ぶとき(1 回で N 個できた部品)は、作った順の番号の立体を取る。
+    // 先頭だけを取ると、2 個目以降が 1 個目の写しになる。数が合わなければ作り直せない。
+    if (!built.HasValue() || ordinal >= built.Value().parts.size()) {
         return false;
     }
+    const auto& made = built.Value();
+    // 画面に出す辺は 1 つ目にだけ持たせる(同じ押し出しの辺を部品の数だけ重ねて描かない)。
     std::vector<CurveSegment> edges;
-    for (const auto& wire : built.Value().endProfileWires) {
-        edges.insert(edges.end(), wire.begin(), wire.end());
+    if (ordinal == 0) {
+        for (const auto& wire : made.endProfileWires) {
+            edges.insert(edges.end(), wire.begin(), wire.end());
+        }
+        for (const auto& wire : made.sideBoundaryWires) {
+            edges.insert(edges.end(), wire.begin(), wire.end());
+        }
     }
-    for (const auto& wire : built.Value().sideBoundaryWires) {
-        edges.insert(edges.end(), wire.begin(), wire.end());
-    }
-    partShapes_[output.ToString()] = built.Value().parts.front().handle;
+    partShapes_[output.ToString()] = made.parts[ordinal].handle;
     partEdges_[output.ToString()] = std::move(edges);
-    if (!built.Value().endProfileWires.empty()) {
-        partFlatBoundary_[output.ToString()] = built.Value().endProfileWires.front();
+    // 端の輪郭は外周ごとに 1 本(部品と同じ並び)。数が合うときだけ番号で取る。
+    if (made.endProfileWires.size() == made.parts.size()) {
+        partFlatBoundary_[output.ToString()] = made.endProfileWires[ordinal];
+    } else if (ordinal == 0 && !made.endProfileWires.empty()) {
+        partFlatBoundary_[output.ToString()] = made.endProfileWires.front();
     }
     return true;
 }
@@ -260,7 +269,7 @@ void V2MainWindow::RebuildKernelShapes()
         bool ok = false;
         switch (step.kind) {
         case kachakacha::v2::app::ShapeRebuildKind::Extrude:
-            ok = RebuildExtrudeShape(*feature, step.outputEntityId);
+            ok = RebuildExtrudeShape(*feature, step.outputEntityId, step.outputOrdinal);
             break;
         case kachakacha::v2::app::ShapeRebuildKind::WireCage:
             ok = RebuildWireCageShape(*feature, step.outputEntityId);

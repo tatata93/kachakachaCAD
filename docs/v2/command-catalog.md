@@ -76,20 +76,20 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.copy` | コピー | ワイヤー、2点 | TransformWire | AT-WIR-006 |
 | `wire.mirror` | ミラー複製 | ワイヤー、鏡の線2点 | TransformWire | AT-WIR-006 |
 | `wire.rotate` | 回転 | ワイヤー、中心と向き2点 | TransformWire | AT-WIR-006 |
-| `wire.join` | 結合 | 2 chain、明示許容/拘束 | TransformWire | AT-WIR-004,006 |
+| `wire.join` | 結合 | 線 2 本以上(何本でも。端でつながっていること) | TransformWire(1 本の並び。端が離れていれば断る) | AT-WIR-004,006 |
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.curvature` | 曲率接続 | 2曲線端、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.chamfer` | C面取り | 2辺(選んだ順に A・B)、A の切戻し(数の棚の面取り量)、面取りの棚の B の切戻し(0 なら対称)・A/B の残す側 | TransformWire(secondScalarMm / firstKeepSide / secondKeepSide) | AT-WIR-006 |
 | `wire.fillet` | R丸め | 2辺、半径、面取りの棚の A/B の残す側 | TransformWire | AT-WIR-006 |
-| `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)。元は残す | AT-WIR-006 |
+| `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)を線ごとに 1 つ(まとめて 1 回で戻る)。元は残す | AT-WIR-006 |
 | `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
 | `help.copy_diagnostics` | 診断情報をコピー | いつでも | いまの状態を短い文にして貼り板へ。文書は変えない | AT-UIX-011 |
 | `wire.center_points` | 中心に点 | ワイヤー1以上 | 円・円弧の中心に CreatePoint。線は変えない | AT-MEA-005 |
 | `wire.key_points` | 端点と中点に点 | ワイヤー1以上 | 始点・終点・中点に CreatePoint。線は変えない | AT-MEA-005 |
-| `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |
-| `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径、同上 | TransformWire(CornerFillet、cornerIndex) | AT-WIR-006 |
+| `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)を線ごとに 1 つ(まとめて 1 回で戻る)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |
+| `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径、同上 | TransformWire(CornerFillet、cornerIndex)を線ごとに 1 つ(まとめて 1 回で戻る) | AT-WIR-006 |
 | `wire.array_linear` | 直線に並べる | ワイヤー1つ以上、個数(2〜200)、間隔または端から端まで | 個数-1 だけ TransformWire(Copy)。元は残す。まとめて1回で戻せる。UI-A001〜A003 | AT-WIR-006 |
 | `wire.array_circular` | 円に並べる | ワイヤー1つ以上、個数(2〜200)、全体の角度、中心。軸は作図面の法線 | 個数-1 だけ TransformWire(Rotate)。360度なら最後を元に重ねない。UI-A001/A002/A004/A005 | AT-WIR-006 |
 | `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
@@ -118,7 +118,7 @@ parameter schemaのdiscriminatorにする。
 | `surface.refit` | 面を整える | 道具から始める。面 1〜任意、許容(mm)。1 枚ずつ作り直す | GuideSurface(面ごと) | AT-SRF-007 |
 | `surface.mirror` | 対称に写す | 道具から始める。面 1〜任意、対称面(車体の中心 / X=0 / Z=0 / 作業平面) | GuideSurface(面ごと) | AT-SRF-008 |
 | `surface.iso_curves` | U/V 線を取り出す | 道具から始める。面 1〜任意、向き(U/V/両方)と本数 | Wire | AT-SRF-009 |
-| `guide.revolve` | 回転体 | 断面の線1 + 軸の直線1(この順)、回転体の角度(度) | GuideSurface(作り方 Revolve: 核が断面を軸のまわりに回した面を作る。写しのロフトではない)。REV-E001〜E003、GEO-G009 | AT-GEO-003 |
+| `guide.revolve` | 回転体 | 断面の線 1 本以上 + 軸の直線 1(最後に選ぶ)、回転体の角度(度) | GuideSurface を断面 1 本ごとに 1 枚(作り方 Revolve: 核が断面を軸のまわりに回した面を作る。写しのロフトではない。まとめて 1 回で戻る)。REV-E001〜E003、GEO-G009 | AT-GEO-003 |
 | `guide.set_method` | 面の作り方 | 常時。使わない役割の行が残っていれば断る | 表の method | AT-GEO-008 |
 | `guide.add_row` | 選択を表へ | ワイヤーか形状ガイドの面1以上。役割は作り方で使うものから選ぶ | 表の行 | AT-GEO-008, AT-UIX-007 |
 | `guide.append_row` | 選択を既存行へ追加 | 表の行1、ワイヤー1以上 | 表の行 | AT-GEO-008, AT-UIX-007 |
@@ -132,13 +132,13 @@ parameter schemaのdiscriminatorにする。
 | `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(面の上の曲線。形が無いときだけ折れ線) | AT-FAB-013, AT-SRF-010 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Part/GuideSurface/Wire/Part+Wire | AT-EXT-001から008, AT-UIX-013 |
-| `part.thicken` | 面に厚みを付ける | 道具から始める(0個から押せる)。3Dで形状ガイドの面を選ぶ、厚み、作り方(外側/中央/内側/平面まで) | Part | AT-EXT-001 |
-| `part.surface_jig` | 治具を作る | 形状ガイドの面1つ、治具のすき間、治具の厚み(符号で表側/裏側) | 当たり面(OffsetGuide、すき間 0 なら作らない)+ 当て板(ThickenSurface)をひとまとまりで。JIG-E001〜E003 | AT-EXT-001 |
+| `part.thicken` | 面に厚みを付ける | 道具から始める(0個から押せる)。3Dで形状ガイドの面を選ぶ(何枚でも)、厚み、作り方(外側/中央/内側/平面まで) | Part を面ごとに 1 つ(まとめて 1 回で戻る) | AT-EXT-001 |
+| `part.surface_jig` | 治具を作る | 形状ガイドの面1つ以上(何枚でも)、治具のすき間、治具の厚み(符号で表側/裏側) | 面ごとに当たり面(OffsetGuide、すき間 0 なら作らない)+ 当て板(ThickenSurface)を 1 組、全部をひとまとまりで。JIG-E001〜E003 | AT-EXT-001 |
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |
-| `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド1と作業平面1。面が平面をまたげば断る | Part | AT-EXT-001 |
-| `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart | AT-GEO-010から013 |
-| `part.boolean_add` | 足す | target Part 1、tool Part 1以上 | Part | AT-EXT-007 |
-| `part.boolean_cut` | 引く | target Part 1、tool Part 1以上 | 1以上のPart | AT-EXT-007 |
+| `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド 1 以上(何枚でも)と作業平面 1。面が平面をまたげば断る | Part を面ごとに 1 つ(まとめて 1 回で戻る) | AT-EXT-001 |
+| `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart(閉シェルごとに 1 つ。各部品はそのシェルの線だけを記録。まとめて 1 回で戻る) | AT-GEO-010から013 |
+| `part.boolean_add` | 足す | target Part 1、tool Part 1以上(何個でも。順に足す) | Part | AT-EXT-007 |
+| `part.boolean_cut` | 引く | target Part 1、tool Part 1以上(何個でも。順に引く) | 1以上のPart | AT-EXT-007 |
 | `derived.freeze` | 現在状態を固定 | Derived Wire/Part 1以上 | Frozen Wire/Part | AT-DOC-004, AT-FAB-014 |
 
 押し出し内の `足す/引く` と単独Booleanは同じ `BooleanFeature` 評価器を使う。UI入口が違っても
@@ -148,7 +148,7 @@ parameter schemaのdiscriminatorにする。
 
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
-| `fabrication.create` | 製作モデルを作る | Part/Subshape、strategy、settings | FabricationModel | AT-FAB-001から005 |
+| `fabrication.create` | 製作モデルを作る | Part か GuideSurface 1 以上(何個でも 1 つのモデルへ)、strategy、settings | FabricationModel | AT-FAB-001から005 |
 | `fabrication.assign_role` | 境界の役割 | WireChain、role | Fabrication Feature更新 | AT-FAB-006 |
 | `fabrication.assign_relief_cut` | 切れ目にする | 開いたワイヤー1以上 | Fabrication Feature更新(reliefCutWires)。平らな部材の型紙に切れ目(RELIEF 層)。閉じた線は FAB-M005、部材に載っていなければ FAB-M003 | AT-FAB-006 |
 | `fabrication.preview_update` | プレビュー更新 | 編集中設定 | Document外preview | AT-PER-001,002 |

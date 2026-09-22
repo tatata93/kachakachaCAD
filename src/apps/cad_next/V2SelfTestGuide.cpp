@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
 #include <system_error>
 
 namespace kachakacha::v2::selftest {
@@ -275,6 +276,52 @@ void SelectOne(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
     return Explain("一度で戻る", GuideSurfaceCount(window) == 0);
 }
 
+//! 断面を何本選んでも、全部が回る(最後に選んだ直線が軸)。断面 1 本ごとに 1 枚、1 回で戻る。
+//! 選んでから押すと 1 本目と 2 本目しか入れていなかったので、3 本目以降の断面が黙って落ちた。
+[[nodiscard]] bool CaseRevolveTakesEverySelectedSection(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    const double pxPerMm = viewport.width() / 200.0;
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    const auto at = [&](double x, double y) {
+        return QPointF(center.x() + x * pxPerMm, center.y() - y * pxPerMm);
+    };
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    // 断面 2 本(軸から 30mm と 50mm)、最後に軸(中央の縦線)。
+    for (const auto& [from, to] : {std::pair{at(30, 20), at(30, -20)}, std::pair{at(50, 15), at(50, -15)},
+             std::pair{at(0, 40), at(0, -40)}}) {
+        viewport.ClickAt(from);
+        viewport.ClickAt(to);
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);
+    if (!Explain((std::string("線が 3 本(実際は ") + std::to_string(wires.entityIds.size()) + ")").c_str(),
+            wires.entityIds.size() == 3)) {
+        return false;
+    }
+    viewport.SetSelection(wires);
+    window.RunCommand("guide.revolve");
+    const auto& in = window.SurfaceInput();
+    if (!Explain((std::string("断面 2 本と軸 1 本が入る(実際 ") + std::to_string(in.sections.size())
+                     + "・" + std::to_string(in.guides.size()) + ")").c_str(),
+            in.sections.size() == 2 && in.guides.size() == 1
+                && in.guides.front() == wires.entityIds.back())) {
+        return false;
+    }
+    window.RunCommand("guide.revolve");
+    if (!Explain((std::string("断面ごとに形状ガイドが 1 つ、合わせて 2 つ(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            GuideSurfaceCount(window) == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("一度で戻る", GuideSurfaceCount(window) == 0);
+}
+
 [[nodiscard]] bool CaseSurfaceJigMakesContactSurfaceAndSolid(V2MainWindow& window)
 {
     // 治具(V1 の body_surface_jig)。すき間だけ離した面 + 厚みで当て板を作る。
@@ -356,6 +403,7 @@ std::vector<SelfTestCase> GuideCases()
     return {
         {"治具は当たり面と当て板を作り一度で戻る", &CaseSurfaceJigMakesContactSurfaceAndSolid},
         {"回転体は断面を軸のまわりに回して形状ガイドを作る", &CaseRevolveMakesHiddenSectionsAndASurface},
+        {"回転体は選んだ断面を全部回し最後の直線を軸にする", &CaseRevolveTakesEverySelectedSection},
         {"役割表から平面を作り開き直しても戻る", &CaseGuideTableBuildsPlanarAndSurvivesReopen},
         {"表の行に効くコマンドは行を選んでから", &CaseGuideRowCommandsNeedARow},
     };

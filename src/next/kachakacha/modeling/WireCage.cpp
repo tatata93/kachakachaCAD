@@ -940,4 +940,22 @@ base::Result<std::vector<WireCagePart>> PlanWireCageParts(const WireCageAnalysis
     return Out::Success(std::move(parts));
 }
 
+std::vector<EntityId> WireCageShellWires(const std::vector<CageEdgeInput>& edges,
+    const CageShell& shell)
+{
+    std::vector<EntityId> wires;
+    for (const CagePatch& patch : shell.patches) {
+        for (const std::size_t index : patch.edgeIndices) {
+            if (index >= edges.size()) {
+                continue;
+            }
+            const EntityId& id = edges[index].entityId;
+            if (std::find(wires.begin(), wires.end(), id) == wires.end()) {
+                wires.push_back(id);
+            }
+        }
+    }
+    return wires;
+}
+
 } // namespace kachakacha::v2::modeling

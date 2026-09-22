@@ -707,7 +707,7 @@ public:
     //! 開き直したときに、立体と面を作り方から作り直す。V2RebuildCommands.cpp が持つ。
     void RebuildKernelShapes();
     bool RebuildExtrudeShape(const kachakacha::v2::domain::Feature& feature,
-        const kachakacha::v2::base::EntityId& output);
+        const kachakacha::v2::base::EntityId& output, std::size_t ordinal);
     bool RebuildWireCageShape(const kachakacha::v2::domain::Feature& feature,
         const kachakacha::v2::base::EntityId& output);
     bool RebuildBooleanShape(const kachakacha::v2::domain::Feature& feature,
@@ -920,7 +920,8 @@ private:
     kachakacha::v2::fabrication::FreezeOutput freezeOutput_ =
         kachakacha::v2::fabrication::FreezeOutput::WiresOnly;
     //! V2 方式(曲げ状態の形が無い)の固定。型紙の線をそのまま置く。
-    void FreezeFlatPanels();
+    [[nodiscard]] bool FreezeFlatPanels(
+        const std::vector<kachakacha::v2::fabrication::PatternPanel>& panels, int& wires);
     void FreezeFlatOutline();
     void ShowPartEditShelf();
     void FocusFabricationStageFor(std::string_view id);

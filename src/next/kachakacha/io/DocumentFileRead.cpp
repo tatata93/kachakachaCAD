@@ -483,6 +483,13 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
             made.secondKeepSide = static_cast<int>(
                 loader.NumberOr(*parameters, "keepSecond", 0.0));
             made.cornerIndex = static_cast<int>(loader.NumberOr(*parameters, "corner", -1.0));
+            // 押した点(面取り・丸め)。無い文書は「無し」。
+            if (parameters->Find("hintFirst") != nullptr) {
+                made.firstHint = loader.ReadVector(*parameters, "hintFirst", place);
+            }
+            if (parameters->Find("hintSecond") != nullptr) {
+                made.secondHint = loader.ReadVector(*parameters, "hintSecond", place);
+            }
         }
         feature.definition = std::move(made);
         break;

@@ -707,6 +707,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/PolylineCorners.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
     src/next/kachakacha/geometry/CurveTrim.cpp
+    src/next/kachakacha/geometry/CornerCurves.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
@@ -802,6 +803,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(arc_builder_tests tests_v2/arc_builder_tests.cpp)
     kachakacha_add_v2_test(wire_connect_tests tests_v2/wire_connect_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
+    kachakacha_add_v2_test(corner_curves_tests tests_v2/corner_curves_tests.cpp)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(profile_region_tests tests_v2/profile_region_tests.cpp)
     kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)

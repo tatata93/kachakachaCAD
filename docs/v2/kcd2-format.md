@@ -907,6 +907,9 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 残す側(0 自動、1 始点側、2 終点側)、`corner` は角の加工で 1 つの角だけにするときの頂点番号
 (-1 なら全部)。無ければその既定で読む(古い文書はそのまま開ける)。
 
+`hintFirst` / `hintSecond`(任意、`{"x","y","z"}`)は面取り・丸めで押した点。あれば、その点に
+近い交点を角にし、その点のある側を残す(`keepFirst` / `keepSecond` より優先)。無ければ書かない。
+
 `freeze_derived`:
 
 ```json

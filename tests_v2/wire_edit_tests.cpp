@@ -264,14 +264,21 @@ KACHA_V2_TEST(edit, an_oversized_fillet_is_refused_with_the_needed_length)
         "the message says how much length would be needed");
 }
 
-KACHA_V2_TEST(edit, corner_operations_refuse_non_lines)
+KACHA_V2_TEST(edit, corner_operations_accept_curves_now)
 {
+    // かつては直線以外を断っていたが、CornerCurves.h に委譲するようになったので
+    // 直線×円弧でも作れる(円弧は始点(5,0)で線の内側に触れ、その接線(0,1)は線に垂直)。
     const auto arc =
         CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, 5.0, 0.0, 1.0).Value();
-    Require(!ChamferLines(arc, L({0, 0, 0}, {10, 0, 0}), 1.0, 1.0e-6).HasValue(),
-        "chamfer refuses an arc");
-    Require(!FilletLines(arc, L({0, 0, 0}, {10, 0, 0}), 1.0, 1.0e-6).HasValue(),
-        "fillet refuses an arc");
+    const auto chamfered = ChamferLines(arc, L({0, 0, 0}, {10, 0, 0}), 1.0, 1.0e-6);
+    Require(chamfered.HasValue(), "chamfer now accepts a line and an arc");
+    Require(chamfered.Value().corner.Kind() == CurveKind::Line,
+        "the chamfer corner is a straight line");
+
+    const auto filleted = FilletLines(arc, L({0, 0, 0}, {10, 0, 0}), 1.0, 1.0e-6);
+    Require(filleted.HasValue(), "fillet now accepts a line and an arc");
+    Require(filleted.Value().corner.Kind() == CurveKind::CircularArc,
+        "the fillet corner is a circular arc");
 }
 
 KACHA_V2_TEST(edit, meet_lines_pulls_both_to_the_intersection)

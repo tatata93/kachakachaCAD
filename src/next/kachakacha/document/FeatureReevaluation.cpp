@@ -210,6 +210,8 @@ namespace {
         options.secondSetbackMm = definition.secondScalarMm;
         options.firstKeepSide = definition.firstKeepSide;
         options.secondKeepSide = definition.secondKeepSide;
+        options.firstHint = definition.firstHint;
+        options.secondHint = definition.secondHint;
         const auto corner = definition.method == WireTransformMethod::Chamfer
             ? geometry::ChamferLines(first, second, size, options, tolerance)
             : geometry::FilletLines(first, second, size, options, tolerance);

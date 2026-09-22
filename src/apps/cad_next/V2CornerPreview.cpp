@@ -43,6 +43,21 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
     definition.secondScalarMm = choice.secondSetbackMm;
     definition.firstKeepSide = choice.firstKeepSide;
     definition.secondKeepSide = choice.secondKeepSide;
+    // 押した位置(Inventor と同じ): 押した点に近い交点を角にし、押した側を残す。
+    // 選んだ順の 1 本目が A、2 本目が B。命中位置は選択の正本(ordered)が持っている。
+    int found = 0;
+    for (const auto& ref : viewport_->Selection().ordered) {
+        const auto* entity = session_->GetDocument().FindEntity(ref.entityId);
+        if (entity == nullptr || entity->kind != EntityKind::Wire) {
+            continue;
+        }
+        if (found == 0) {
+            definition.firstHint = ref.hitPoint;
+        } else if (found == 1) {
+            definition.secondHint = ref.hitPoint;
+        }
+        ++found;
+    }
     return definition;
 }
 

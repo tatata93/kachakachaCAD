@@ -209,6 +209,13 @@ template<class Id>
         parameters["keepSecond"] = JsonValue::Number(
             static_cast<double>(transform->secondKeepSide));
         parameters["corner"] = JsonValue::Number(static_cast<double>(transform->cornerIndex));
+        // 押した点(面取り・丸め)。無いときは書かない(古い文書と同じ形)。
+        if (transform->firstHint.has_value()) {
+            parameters["hintFirst"] = WriteVector(*transform->firstHint);
+        }
+        if (transform->secondHint.has_value()) {
+            parameters["hintSecond"] = WriteVector(*transform->secondHint);
+        }
         definition["parameters"] = JsonValue::Object(std::move(parameters));
     } else if (const auto* freeze =
                    std::get_if<FreezeDerivedDefinition>(&feature.definition)) {

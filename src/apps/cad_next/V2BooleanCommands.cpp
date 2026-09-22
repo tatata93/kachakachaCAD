@@ -144,8 +144,8 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
             cornerDock_->SetFillet(id == "wire.fillet");
         }
         SelectTool(kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair);
-        SetStatus(QStringLiteral("%1: 線を2本、直す順に 3D で押してください(1本目が A、2本目が B)。"
-                                 "2本そろうと下見が出ます。Enter で確定、Esc でやめます。")
+        SetStatus(QStringLiteral("%1: 線を2本、残したい側を 3D で押してください(1本目が A、2本目が B。"
+                                 "直線・円弧・円・ベジェ)。2本そろうと下見が出ます。Enter で確定、Esc でやめます。")
                 .arg(id == "wire.fillet" ? QStringLiteral("R丸め") : QStringLiteral("C面取り")));
         return true;
     }

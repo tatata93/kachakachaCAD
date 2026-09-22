@@ -68,8 +68,8 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     inputForm->setContentsMargins(0, 0, 0, 0);
     first_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
     second_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
-    inputForm->addRow(QStringLiteral("直線 A"), first_);
-    inputForm->addRow(QStringLiteral("直線 B"), second_);
+    inputForm->addRow(QStringLiteral("線 A"), first_);
+    inputForm->addRow(QStringLiteral("線 B"), second_);
     layout->addWidget(inputWidget);
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 設定")));

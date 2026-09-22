@@ -1,7 +1,10 @@
 #include "kachakacha/geometry/WireEdit.h"
 
+#include "kachakacha/geometry/CornerCurves.h"
+
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace kachakacha::v2::geometry {
 
@@ -306,14 +309,23 @@ Result<CurveSegment> TrimCurve(const CurveSegment& curve, const CurveSegment& bo
 
 namespace {
 
-//! 残す側の端。0 なら角から遠い端、1 なら始点、2 なら終点。
-[[nodiscard]] Vector3 KeptEnd(const CurveSegment& line, const Vector3& corner, int keepSide)
+//! 残す側の端。1 なら始点、2 なら終点。0(自動)なら押した点のある側、それも無ければ角から遠い端。
+[[nodiscard]] Vector3 KeptEnd(const CurveSegment& line, const Vector3& corner, int keepSide,
+    const std::optional<Vector3>& hint)
 {
     if (keepSide == 1) {
         return line.StartPoint();
     }
     if (keepSide == 2) {
         return line.EndPoint();
+    }
+    if (hint.has_value()) {
+        // 押した点が角のどちら側か(線に沿った符号)。角の上なら下の決め方へ。
+        const Vector3 axis = line.EndPoint() - line.StartPoint();
+        const double along = Dot(*hint - corner, axis);
+        if (std::abs(along) > 1.0e-9 * std::max(1.0, axis.Length())) {
+            return along > 0.0 ? line.EndPoint() : line.StartPoint();
+        }
     }
     return Distance(line.StartPoint(), corner) > Distance(line.EndPoint(), corner)
         ? line.StartPoint()
@@ -340,8 +352,8 @@ namespace {
     }
     corner = (a + b) * 0.5;
     // 「残す側」が指定されていればその端、無ければ角から遠い方の端点を残す。
-    firstAway = KeptEnd(first, corner, options.firstKeepSide);
-    secondAway = KeptEnd(second, corner, options.secondKeepSide);
+    firstAway = KeptEnd(first, corner, options.firstKeepSide, options.firstHint);
+    secondAway = KeptEnd(second, corner, options.secondKeepSide, options.secondHint);
     return true;
 }
 
@@ -356,10 +368,9 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
 Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment& second,
     double setbackMm, const CornerOptions& options, double toleranceMm)
 {
-    (void)toleranceMm;
     if (!IsLine(first) || !IsLine(second)) {
-        return Result<CornerResult>::Failure(MakeError(kNotSupported,
-            "C面取りは直線どうしにだけ使えます。", {}));
+        // 曲線が混ざる組は数値で角を探す(CornerCurves)。
+        return CornerBetweenCurves(first, second, CornerKind::Chamfer, setbackMm, options, toleranceMm);
     }
     // B の切戻しが 0 なら A と同じ(対称)。V1 の欄と同じ意味。
     const double secondSetbackMm = options.secondSetbackMm > 0.0 ? options.secondSetbackMm
@@ -407,10 +418,9 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
 Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& second,
     double radiusMm, const CornerOptions& options, double toleranceMm)
 {
-    (void)toleranceMm;
     if (!IsLine(first) || !IsLine(second)) {
-        return Result<CornerResult>::Failure(MakeError(kNotSupported,
-            "丸めは直線どうしにだけ使えます。", {}));
+        // 曲線が混ざる組は数値で角を探す(CornerCurves)。
+        return CornerBetweenCurves(first, second, CornerKind::Fillet, radiusMm, options, toleranceMm);
     }
     if (!(radiusMm > 0.0) || !IsFinite(radiusMm)) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,

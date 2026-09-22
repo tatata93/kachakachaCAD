@@ -150,6 +150,10 @@ struct TransformWireDefinition {
     //! 残す側(V1 の「A の残す側」「B の残す側」)。0 自動(角から遠い端)/ 1 始点側 / 2 終点側。
     int firstKeepSide = 0;
     int secondKeepSide = 0;
+    //! 面取り・丸めで押した点(Inventor と同じく、押した位置で角と残す側を決める)。
+    //! 無ければ残す側の欄と自動の決め方。
+    std::optional<geometry::Vector3> firstHint;
+    std::optional<geometry::Vector3> secondHint;
     //! 角の加工で 1 つの角だけにするときの頂点番号(0 始まり、点の番号)。-1 なら全部。
     int cornerIndex = -1;
 };

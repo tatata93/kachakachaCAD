@@ -9,6 +9,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 
 #include <utility>
+#include <optional>
 #include <vector>
 
 namespace kachakacha::v2::geometry {
@@ -62,6 +63,10 @@ struct CornerOptions {
     //! 残す側。0 自動(角から遠い端を残す)/ 1 始点側を残す / 2 終点側を残す。
     int firstKeepSide = 0;
     int secondKeepSide = 0;
+    //! 押した点(Inventor と同じく、押した位置で「どの角か」と「残す側」を決める)。
+    //! 残す側の欄が 0(自動)のときに使う。欄で明示した側はそれが優先。
+    std::optional<Vector3> firstHint;
+    std::optional<Vector3> secondHint;
 };
 
 //! C面取り。2本の直線の角を、指定した切戻し量で落とす。

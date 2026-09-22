@@ -919,45 +919,61 @@ void V2MainWindow::ApplyTransformPlan(
     const auto selected = viewport_->Selection().entityIds;
     const QString label = QString::fromStdString(plan.summaryJa);
     if (selected.empty()) {
-        SetStatus(QStringLiteral("%1: 先に動かす線を選んでください。").arg(label));
+        SetStatus(QStringLiteral("%1: 先に動かす線か部品を選んでください。").arg(label));
         return;
     }
     // ここは線の編集(トリムなど)とは分ける。あちらは複数の線から1本を作るが、
     // 動かすのは1本を1本のまま動かすことである。まとめて1本にしてしまうと、
     // 3本を動かしたつもりが1本になり、名前も分け方も失われる。
+    // 部品も同じ道具・同じ点で動かす(P-18)。部品は元の形に同じ変換を掛けた新しい部品にする。
     const auto definition = DefinitionFor(plan);
-    int changed = 0;
+    int wires = 0;
+    int parts = 0;
     std::vector<kachakacha::v2::base::EntityId> consumed;
+    std::vector<kachakacha::v2::base::EntityId> consumedParts;
     // 何本動かしても 1 回の取り消しで戻る(足す + 元の線を消す をひとまとまりに)。
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
         plan.summaryJa);
     for (const auto& entityId : selected) {
+        const auto* entity = session_->GetDocument().FindEntity(entityId);
+        if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+            if (TransformOnePart(definition, entityId, label, !plan.keepsSource)) {
+                ++parts;
+                if (!plan.keepsSource) {
+                    consumedParts.push_back(entityId);
+                }
+            }
+            continue;
+        }
         if (!TransformOneWire(definition, entityId, label)) {
             continue;
         }
-        ++changed;
+        ++wires;
         if (!plan.keepsSource) {
             consumed.push_back(entityId);
         }
     }
-    if (changed == 0) {
-        SetStatus(QStringLiteral("%1: 動かせる線がありませんでした。").arg(label));
+    if (wires + parts == 0) {
+        SetStatus(QStringLiteral("%1: 動かせる線や部品がありませんでした。").arg(label));
         return;
     }
     RemoveConsumedWires(consumed);
-    if (!transaction.Commit()) {
+    if (!HideConsumedParts(consumedParts) || !transaction.Commit()) {
         SetStatus(label + QStringLiteral(": 途中で失敗したので、何も変えていません。"));
         AdoptCurrentDocument();
         return;
     }
     AdoptCurrentDocument();
+    const QString what = parts == 0 ? QStringLiteral("%1本").arg(wires)
+        : wires == 0               ? QStringLiteral("部品 %1 個").arg(parts)
+                                   : QStringLiteral("線 %1 本と部品 %2 個").arg(wires).arg(parts);
     if (plan.keepsSource) {
-        SetStatus(QStringLiteral("%1: %2本を写しました。元の線は残っています。")
-                .arg(label)
-                .arg(changed));
+        SetStatus(QStringLiteral("%1: %2を写しました。元は残っています。").arg(label, what));
         return;
     }
-    SetStatus(QStringLiteral("%1: %2本を動かしました。").arg(label).arg(changed));
+    SetStatus(parts == 0 ? QStringLiteral("%1: %2を動かしました。").arg(label, what)
+                         : QStringLiteral("%1: %2を動かしました(元の部品は隠してあります)。")
+                               .arg(label, what));
 }
 
 void V2MainWindow::ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,

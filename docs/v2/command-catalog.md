@@ -140,6 +140,12 @@ parameter schemaのdiscriminatorにする。
 | `part.boolean_add` | 足す | target Part 1、tool Part 1以上(何個でも。順に足す) | Part | AT-EXT-007 |
 | `part.boolean_cut` | 引く | target Part 1、tool Part 1以上(何個でも。順に引く) | 1以上のPart | AT-EXT-007 |
 | `part.boolean_intersect` | 交差 | target Part 1、tool Part 1以上(何個でも。全部に共通する部分) | Part(重ならなければ KER-B004、土台のままなら KER-B003 で断る) | AT-EXT-007 |
+| `part.move` | 部品の移動 | Part 1以上(何個でも)、2点(始点→終点) | 変換した Part(TransformPart、元は隠す)。1 回で戻る | AT-EXT-001 |
+| `part.copy` | 部品のコピー | Part 1以上、2点 | 写した Part(元は残す) | AT-EXT-001 |
+| `part.mirror` | 部品のミラー | Part 1以上、2点(鏡の線。面は作業平面に垂直) | 鏡に写した Part(元は残す。体積が変わったら KER-P003 で断る) | AT-EXT-001 |
+| `part.rotate` | 部品の回転 | Part 1以上、3点(中心・始まり・終わり。軸は作業平面の法線) | 回した Part(元は隠す) | AT-EXT-001 |
+| `part.array_linear` | 部品を直線に並べる | Part 1以上、個数・間隔・向き(配列の棚) | 写した Part(元を含めて個数)。1 回で戻る | AT-EXT-001 |
+| `part.array_circular` | 部品を円に並べる | Part 1以上、個数・中心・全体の角度(配列の棚) | 写した Part(元を含めて個数)。1 回で戻る | AT-EXT-001 |
 | `derived.freeze` | 現在状態を固定 | Derived Wire/Part 1以上 | Frozen Wire/Part | AT-DOC-004, AT-FAB-014 |
 
 押し出し内の `足す/引く` と単独Booleanは同じ `BooleanFeature` 評価器を使う。UI入口が違っても

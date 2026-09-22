@@ -86,11 +86,14 @@ std::vector<EntityId> DefinitionEntityReferences(const domain::FeatureDefinition
                 out.Add(value.parts);
                 out.Add(value.openingWires);
                 out.Add(value.foldWires);
+                out.Add(value.reliefCutWires);
                 out.Add(value.connectionWires);
             } else if constexpr (std::is_same_v<T, domain::CreatePatternDefinition>) {
                 out.Add(value.fabricationModels);
             } else if constexpr (std::is_same_v<T, domain::EditSurfaceDefinition>) {
                 out.Add(value.surfaces);
+            } else if constexpr (std::is_same_v<T, domain::TransformPartDefinition>) {
+                out.Add(value.source);
             }
         },
         definition);

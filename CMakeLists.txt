@@ -739,6 +739,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
+    src/next_occt/kachakacha/kernel/OcctTransform.cpp
 )
 target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
 target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)
@@ -961,6 +962,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_analysis_tests tests_v2/kernel_surface_analysis_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_boolean_tests tests_v2/kernel_boolean_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_place_tests tests_v2/kernel_place_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_er_export_tests tests_v2/kernel_er_export_tests.cpp)
@@ -987,6 +989,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestPartPanel.cpp
         src/apps/cad_next/V2SelfTestArray.cpp
         src/apps/cad_next/V2SelfTestPanelFrame.cpp
+        src/apps/cad_next/V2SelfTestPartPlace.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -1060,6 +1063,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2OperationPanelHost.cpp
         src/apps/cad_next/V2OperationPanelHost.h
         src/apps/cad_next/V2PanelFrame.cpp
+        src/apps/cad_next/V2PartPlaceCommands.cpp
         src/apps/cad_next/V2PanelFrame.h
         src/apps/cad_next/V2MainWindowTypes.h
         src/apps/cad_next/V2SelfTestDrawing.cpp

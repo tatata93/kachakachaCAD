@@ -11,6 +11,7 @@
 using kachakacha::v2::app::NeedsShapeRebuild;
 using kachakacha::v2::app::PlanShapeRebuild;
 using kachakacha::v2::app::ShapeRebuildKind;
+using kachakacha::v2::app::ShapeRebuildKindNameJa;
 using kachakacha::v2::base::DeterministicIdGenerator;
 using kachakacha::v2::base::IdKind;
 using kachakacha::v2::document::DocumentSnapshot;
@@ -143,11 +144,26 @@ KACHA_V2_TEST(shape_rebuild, 同じ押し出しから出来た部品は作った
     Require(steps[2].outputOrdinal == 0, "定義の違う押し出しは 0 番");
 }
 
-KACHA_V2_TEST(shape_rebuild, 4種類すべてに名前がある)
+KACHA_V2_TEST(shape_rebuild, 部品の配置は形を作る作り方で材料の後に作り直す)
+{
+    // P-18: 動かした・写した部品は、元の部品の形に変換を掛けて作り直す。評価順のとおり元が先。
+    DocumentSnapshot snapshot;
+    DeterministicIdGenerator ids;
+    Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, "元の箱");
+    Add(snapshot, ids, FeatureType::TransformPart, EntityKind::Part, "鏡に写した箱");
+    const auto steps = PlanShapeRebuild(snapshot);
+    Require(steps.size() == 2, "配置も作り直す");
+    Require(steps[0].kind == ShapeRebuildKind::Extrude, "元が先");
+    Require(steps[1].kind == ShapeRebuildKind::TransformPart, "配置が後");
+}
+
+KACHA_V2_TEST(shape_rebuild, 全種類に名前がある)
 {
     for (const ShapeRebuildKind kind : {ShapeRebuildKind::Extrude,
              ShapeRebuildKind::WireCage, ShapeRebuildKind::Boolean,
-             ShapeRebuildKind::GuideSurface}) {
+             ShapeRebuildKind::GuideSurface, ShapeRebuildKind::ThickenSurface,
+             ShapeRebuildKind::FabricationModel, ShapeRebuildKind::EditSurface,
+             ShapeRebuildKind::TransformPart}) {
         Require(!ShapeRebuildKindNameJa(kind).empty(), "名前がある");
         Require(ShapeRebuildKindNameJa(kind) != std::string_view("不明"), "不明でない");
     }

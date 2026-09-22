@@ -288,6 +288,9 @@ void V2MainWindow::RebuildKernelShapes()
         case kachakacha::v2::app::ShapeRebuildKind::EditSurface:
             ok = surfaceEdit_ != nullptr && surfaceEdit_->Rebuild(*feature, step.outputEntityId);
             break;
+        case kachakacha::v2::app::ShapeRebuildKind::TransformPart:
+            ok = RebuildTransformPartShape(*feature, step.outputEntityId);
+            break;
         }
         if (ok) {
             ++made;

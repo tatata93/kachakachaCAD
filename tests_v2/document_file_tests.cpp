@@ -561,6 +561,39 @@ KACHA_V2_TEST(documentFile, 生成物の由来が往復し付いていなけれ�
         "付いていなければ書かない");
 }
 
+KACHA_V2_TEST(documentFile, 部品の配置の作り方が往復する)
+{
+    // P-18: 元の部品と変換(鏡の面など)だけを持つ。形は持たない。
+    DocumentFile original = MakeSampleDocument();
+    kachakacha::v2::domain::Feature feature;
+    kachakacha::v2::base::DeterministicIdGenerator ids{4242};
+    feature.id = ids.NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::TransformPart;
+    feature.displayName = "鏡に写す";
+    kachakacha::v2::domain::TransformPartDefinition place;
+    place.method = 2;
+    place.source = original.snapshot.entities[2].id;
+    place.vectorArgument = {1.0, 0.0, 0.0};
+    place.pointArgument = {-5.0, 2.5, 0.0};
+    place.angleRad = 0.25;
+    feature.inputEntityIds.push_back(place.source);
+    feature.definition = place;
+    original.snapshot.features.push_back(feature);
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    const kachakacha::v2::domain::TransformPartDefinition* back = nullptr;
+    for (const auto& candidate : read.Value().snapshot.features) {
+        if (candidate.type == FeatureType::TransformPart) {
+            back = std::get_if<kachakacha::v2::domain::TransformPartDefinition>(&candidate.definition);
+        }
+    }
+    Require(back != nullptr, "配置の作り方が戻る");
+    Require(back->method == 2 && back->source == place.source, "作り方と元の部品");
+    Require(back->vectorArgument.x == 1.0 && back->pointArgument.x == -5.0
+            && back->pointArgument.y == 2.5 && back->angleRad == 0.25,
+        "鏡の面と角度が戻る");
+}
+
 KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

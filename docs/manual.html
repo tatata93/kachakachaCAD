@@ -306,6 +306,12 @@
           <tr data-command="part.boolean_add"><td>足す</td><td><code>part.boolean_add</code></td><td>二部品を一体化。</td></tr>
           <tr data-command="part.boolean_cut"><td>引く</td><td><code>part.boolean_cut</code></td><td>第一部品から第二を切削。</td></tr>
           <tr data-command="part.boolean_intersect"><td>交差</td><td><code>part.boolean_intersect</code></td><td>土台と相手の共通部分だけを残す(重ならなければ断る)。</td></tr>
+          <tr data-command="part.move"><td>部品の移動</td><td><code>part.move</code></td><td>2 点で示した分だけ部品を動かす(元は隠す)。</td></tr>
+          <tr data-command="part.copy"><td>部品のコピー</td><td><code>part.copy</code></td><td>2 点で示した分だけ離して部品を写す。</td></tr>
+          <tr data-command="part.mirror"><td>部品のミラー</td><td><code>part.mirror</code></td><td>2 点の線を含む面(作業平面に垂直)で部品を鏡に写す。</td></tr>
+          <tr data-command="part.rotate"><td>部品の回転</td><td><code>part.rotate</code></td><td>中心・始まり・終わりの 3 点で部品を回す(元は隠す)。</td></tr>
+          <tr data-command="part.array_linear"><td>部品を直線に並べる</td><td><code>part.array_linear</code></td><td>個数・間隔・向きで部品を並べる(パターン)。</td></tr>
+          <tr data-command="part.array_circular"><td>部品を円に並べる</td><td><code>part.array_circular</code></td><td>個数・中心・角度で部品を円に並べる。</td></tr>
           <tr data-command="derived.freeze"><td>現在状態を固定</td><td><code>derived.freeze</code></td><td>派生要素を独立実体へ。</td></tr>
           <tr data-command="fabrication.create"><td>製作モデルを作る</td><td><code>fabrication.create</code></td><td>元を別の製作近似へ。</td></tr>
           <tr data-command="fabrication.assign_role"><td>境界の役割</td><td><code>fabrication.assign_role</code></td><td>開口または折り線。</td></tr>

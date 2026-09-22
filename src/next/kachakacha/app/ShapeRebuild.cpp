@@ -28,6 +28,8 @@ using domain::FeatureType;
         return ShapeRebuildKind::EditSurface;
     case FeatureType::CreateFabricationModel:
         return ShapeRebuildKind::FabricationModel;
+    case FeatureType::TransformPart:
+        return ShapeRebuildKind::TransformPart;
     default:
         return std::nullopt;
     }
@@ -85,6 +87,7 @@ std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept
     case ShapeRebuildKind::ThickenSurface:   return "面に厚み";
     case ShapeRebuildKind::FabricationModel: return "近似モデル";
     case ShapeRebuildKind::EditSurface:      return "面の編集";
+    case ShapeRebuildKind::TransformPart:    return "部品の配置";
     }
     return "不明";
 }

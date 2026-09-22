@@ -32,6 +32,8 @@ enum class FeatureType {
     ThickenSurface,
     //! 面の編集(合わせる・つなぐ・整える・対称)。元の面は残し、新しい面を作る。
     EditSurface,
+    //! 部品を動かす・回す・鏡に写す・写す・並べる(P-18、配置)。元の部品の形に変換を掛ける。
+    TransformPart,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -51,6 +53,7 @@ enum class FeatureType {
     case FeatureType::FreezeDerived:          return "FreezeDerived";
     case FeatureType::ThickenSurface:         return "ThickenSurface";
     case FeatureType::EditSurface:            return "EditSurface";
+    case FeatureType::TransformPart:          return "TransformPart";
     }
     return "Unknown";
 }
@@ -248,6 +251,21 @@ struct ThickenSurfaceDefinition {
     std::optional<EntityId> targetPlane;
 };
 
+//! 部品の配置(P-18)。元の部品の形に剛体の変換を掛けた新しい部品を作る。
+//! 形そのものは持たない。開き直したら元の部品を作り直してから同じ変換を掛ける。
+//! 動かす・回すは元を隠し(消すと作り方をたどれない)、写す・鏡・並べるは元を残す。
+struct TransformPartDefinition {
+    //! modeling::TransformKind と同じ並び。0 = 移動、1 = 複製、2 = 鏡映、3 = 回転。
+    int method = 0;
+    EntityId source;
+    //! 移動量 / 鏡の面の法線 / 回転の軸の向き。
+    geometry::Vector3 vectorArgument{};
+    //! 鏡の面上の点 / 回転の軸上の点。
+    geometry::Vector3 pointArgument{};
+    //! 回転角(ラジアン)。
+    double angleRad = 0.0;
+};
+
 //! 製作モデル(近似モデル)。
 //!
 //! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
@@ -346,7 +364,7 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
     CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
-    EditSurfaceDefinition>;
+    EditSurfaceDefinition, TransformPartDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

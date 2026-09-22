@@ -129,11 +129,10 @@ const std::vector<RibbonCategory>& PartCategories()
             {Tool("足す", "part.boolean_add"), Tool("引く", "part.boolean_cut"),
                 Tool("交差", "part.boolean_intersect")}},
         {"place", "配置",
-            {Blocked("移動", "部品の移動はまだできません(線の移動はあります。部品の変形は核にありません)"),
-                Blocked("回転", "部品の回転はまだできません"),
-                Blocked("ミラー", "部品のミラーはまだできません"),
-                Blocked("コピー", "部品のコピーはまだできません"),
-                Blocked("パターン", "部品のパターンはまだできません(線の配列はあります)")}},
+            // 線と同じ道具・同じ点の置き方で部品を動かす(P-18)。パターンは線の配列と同じ棚。
+            {Tool("移動", "part.move"), Tool("回転", "part.rotate"), Tool("ミラー", "part.mirror"),
+                Tool("コピー", "part.copy"), Tool("パターン", "part.array_linear"),
+                Extra("円に並べる", "part.array_circular")}},
     };
     return categories;
 }

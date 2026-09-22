@@ -680,6 +680,19 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::TransformPart: {
+        domain::TransformPartDefinition made;
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        made.source = loader.ParseId<EntityId>(loader.String(definition, "source", where),
+            where + ".source");
+        made.vectorArgument = loader.ReadVector(definition, "vector", where);
+        if (definition.Find("point") != nullptr) {
+            made.pointArgument = loader.ReadVector(definition, "point", where);
+        }
+        made.angleRad = loader.NumberOr(definition, "angleRad", 0.0);
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

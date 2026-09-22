@@ -26,16 +26,18 @@
 
 bool V2MainWindow::IsArrayCommand(std::string_view id)
 {
-    return id == "wire.array_linear" || id == "wire.array_circular";
+    // 部品のパターン(P-18)も同じ棚・同じ段取り。並べるものが部品なら部品を写す。
+    return id == "wire.array_linear" || id == "wire.array_circular"
+        || id == "part.array_linear" || id == "part.array_circular";
 }
 
 void V2MainWindow::RunArrayCommand(std::string_view id)
 {
-    if (id == "wire.array_linear") {
+    if (id == "wire.array_linear" || id == "part.array_linear") {
         RunLinearArray();
         return;
     }
-    if (id == "wire.array_circular") {
+    if (id == "wire.array_circular" || id == "part.array_circular") {
         RunCircularArray();
     }
 }
@@ -44,7 +46,7 @@ void V2MainWindow::RunLinearArray()
 {
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("直線に並べる: 先に並べる線を選んでください。"));
+        SetStatus(QStringLiteral("直線に並べる: 先に並べる線か部品を選んでください。"));
         return;
     }
     if (arrayChooser_) {
@@ -70,7 +72,7 @@ void V2MainWindow::RunCircularArray()
 {
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("円に並べる: 先に並べる線を選んでください。"));
+        SetStatus(QStringLiteral("円に並べる: 先に並べる線か部品を選んでください。"));
         return;
     }
     if (arrayChooser_) {
@@ -92,6 +94,18 @@ void V2MainWindow::RunCircularArray()
 }
 
 //! いまの arrayChoice_(直線)で、選んでいる線を並べる。窓の道でも棚の道でも同じ道を通る。
+//! 並べる 1 回ぶん: 線なら線を、部品なら部品を写す(P-18 のパターン。元は残す)。
+bool V2MainWindow::TransformOneEntity(
+    const kachakacha::v2::domain::TransformWireDefinition& definition,
+    kachakacha::v2::base::EntityId entityId, const QString& labelJa)
+{
+    const auto* entity = session_->GetDocument().FindEntity(entityId);
+    if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+        return TransformOnePart(definition, entityId, labelJa, false);
+    }
+    return TransformOneWire(definition, entityId, labelJa);
+}
+
 //! 並べられたら真(棚の道はこれで棚を片付ける。断ったときは棚を残して直させる)。
 bool V2MainWindow::CommitLinearArray()
 {
@@ -100,7 +114,7 @@ bool V2MainWindow::CommitLinearArray()
 
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("直線に並べる: 先に並べる線を選んでください。"));
+        SetStatus(QStringLiteral("直線に並べる: 先に並べる線か部品を選んでください。"));
         return false;
     }
     const auto plan = kachakacha::v2::app::PlanLinearArray(arrayChoice_.step,
@@ -117,18 +131,18 @@ bool V2MainWindow::CommitLinearArray()
         definition.method = WireTransformMethod::Copy;
         definition.vectorArgument = offset;
         for (const auto& entityId : selected) {
-            if (TransformOneWire(definition, entityId, QStringLiteral("直線に並べる"))) {
+            if (TransformOneEntity(definition, entityId, QStringLiteral("直線に並べる"))) {
                 ++made;
             }
         }
     }
     session_->GetDocument().EndCompound();
     if (made == 0) {
-        SetStatus(QStringLiteral("直線に並べる: 並べられる線がありませんでした。"));
+        SetStatus(QStringLiteral("直線に並べる: 並べられる線や部品がありませんでした。"));
         return false;
     }
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("直線に並べる: %1本を写しました(元を含めて %2 個)。")
+    SetStatus(QStringLiteral("直線に並べる: %1 個を写しました(元を含めて %2 個)。")
             .arg(made)
             .arg(arrayChoice_.count));
     return true;
@@ -142,7 +156,7 @@ bool V2MainWindow::CommitCircularArray()
 
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("円に並べる: 先に並べる線を選んでください。"));
+        SetStatus(QStringLiteral("円に並べる: 先に並べる線か部品を選んでください。"));
         return false;
     }
     // 軸は作業平面の法線。別に聞かない ── 作図面の上で並べるのが普通で、
@@ -163,18 +177,18 @@ bool V2MainWindow::CommitCircularArray()
         definition.vectorArgument = axis;
         definition.scalarArgument.value = step.angleRad;
         for (const auto& entityId : selected) {
-            if (TransformOneWire(definition, entityId, QStringLiteral("円に並べる"))) {
+            if (TransformOneEntity(definition, entityId, QStringLiteral("円に並べる"))) {
                 ++made;
             }
         }
     }
     session_->GetDocument().EndCompound();
     if (made == 0) {
-        SetStatus(QStringLiteral("円に並べる: 並べられる線がありませんでした。"));
+        SetStatus(QStringLiteral("円に並べる: 並べられる線や部品がありませんでした。"));
         return false;
     }
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("円に並べる: %1本を写しました(元を含めて %2 個、%3 度)。")
+    SetStatus(QStringLiteral("円に並べる: %1 個を写しました(元を含めて %2 個、%3 度)。")
             .arg(made)
             .arg(arrayChoice_.count)
             .arg(arrayChoice_.totalAngleDeg, 0, 'f', 1));

@@ -144,6 +144,9 @@ void Note(const char* what);
 //! 配列(直線/円形)の棚(HP-AR、指示書 D-23)。
 [[nodiscard]] std::vector<SelfTestCase> ArrayCases();
 
+//! 部品の配置(HP-PL、P-18)。移動・ミラー・パターン。
+[[nodiscard]] std::vector<SelfTestCase> PartPlaceCases();
+
 //! 道具の棚の共通の枠(HP-PF、C-10)。節の並び・キャンセルと確定・作図の共通。
 [[nodiscard]] std::vector<SelfTestCase> PanelFrameCases();
 

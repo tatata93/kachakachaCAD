@@ -561,6 +561,16 @@ public:
     [[nodiscard]] bool TransformOneWire(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
         kachakacha::v2::base::EntityId entityId, const QString& labelJa);
+    //! 部品 1 つに同じ変換を掛けた新しい部品を作る(P-18、V2PartPlaceCommands.cpp)。
+    [[nodiscard]] bool TransformOnePart(
+        const kachakacha::v2::domain::TransformWireDefinition& definition,
+        const kachakacha::v2::base::EntityId& partId, const QString& labelJa, bool replacesSource);
+    bool RebuildTransformPartShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    bool HideConsumedParts(const std::vector<kachakacha::v2::base::EntityId>& parts);
+    [[nodiscard]] bool TransformOneEntity(
+        const kachakacha::v2::domain::TransformWireDefinition& definition,
+        kachakacha::v2::base::EntityId entityId, const QString& labelJa);
     //! 制御点を1つ動かした結果を文書へ入れる。元のワイヤーは置き換える。
     void ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,
         kachakacha::v2::base::SegmentId segmentId,

@@ -362,6 +362,13 @@ template<class Id>
         definition["tension"] = JsonValue::Number(edit->tension);
         definition["planePoint"] = WriteVector(edit->planePoint);
         definition["planeNormal"] = WriteVector(edit->planeNormal);
+    } else if (const auto* place =
+                   std::get_if<domain::TransformPartDefinition>(&feature.definition)) {
+        definition["method"] = JsonValue::Number(static_cast<double>(place->method));
+        definition["source"] = WriteId(place->source);
+        definition["vector"] = WriteVector(place->vectorArgument);
+        definition["point"] = WriteVector(place->pointArgument);
+        definition["angleRad"] = JsonValue::Number(place->angleRad);
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

@@ -119,7 +119,7 @@ struct ToolBinding {
     DrawingTool tool;
 };
 
-constexpr std::array<ToolBinding, 17> kToolBindings{{
+constexpr std::array<ToolBinding, 21> kToolBindings{{
     {"selection.activate", DrawingTool::Select},
     {"grid.move_origin", DrawingTool::SetGridOrigin},
     {"draw.point", DrawingTool::Point},
@@ -137,6 +137,11 @@ constexpr std::array<ToolBinding, 17> kToolBindings{{
     {"wire.mirror", DrawingTool::Mirror},
     {"wire.rotate", DrawingTool::Rotate},
     {"measure.open", DrawingTool::Measure},
+    // 部品の配置(P-18)。線と同じ道具・同じ点の置き方で、選んだ部品を動かす。
+    {"part.move", DrawingTool::Move},
+    {"part.copy", DrawingTool::Copy},
+    {"part.mirror", DrawingTool::Mirror},
+    {"part.rotate", DrawingTool::Rotate},
 }};
 
 [[nodiscard]] QString ToolLabel(DrawingTool tool)

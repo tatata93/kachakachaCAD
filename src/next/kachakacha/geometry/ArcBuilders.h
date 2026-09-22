@@ -12,6 +12,17 @@ namespace kachakacha::v2::geometry {
 [[nodiscard]] base::Result<CurveSegment> ArcThroughThreePoints(Vector3 start,
     Vector3 middle, Vector3 end);
 
+//! 3点を通る円(D-04)。3点が一直線に並んでいたら作れない。
+//! preferredNormal と向きが逆なら法線を裏返す(作業平面の上の円は作業平面と同じ向きにする)。
+[[nodiscard]] base::Result<CurveSegment> CircleThroughThreePoints(Vector3 first, Vector3 second,
+    Vector3 third, Vector3 preferredNormal);
+
+//! 中心・始点・終点(D-08)。半径は中心から始点まで、終点は向きだけを使う。
+//! 始点から終点へ、面の法線まわりに左回り(反時計回り)。始点と終点が同じ向きなら作れない。
+//! 始点・終点は、中心を通り法線に垂直な面へ落としてから使う。
+[[nodiscard]] base::Result<CurveSegment> ArcFromCenterStartEnd(Vector3 center, Vector3 start,
+    Vector3 end, Vector3 planeNormal);
+
 //! 両端と半径。半径が小さすぎる(弦の半分未満)と作れない。
 //! largeArc は優弧を取るか、clockwise は法線の向きを反転するか。
 [[nodiscard]] base::Result<CurveSegment> ArcFromEndpointsAndRadius(Vector3 start,

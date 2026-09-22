@@ -68,6 +68,9 @@ struct CursorInputPanel {
 [[nodiscard]] const std::vector<CursorField>& CursorFieldsFor(DrawingTool tool,
     bool onWorkPlane);
 [[nodiscard]] bool ToolUsesCursorInput(DrawingTool tool);
+//! 作り方まで見て、カーソル横の欄が意味を持つか。3点を通る円では、2点目までの距離は
+//! 半径ではないので出さない(打った数が別の意味に化ける欄を出さない、D-04)。
+[[nodiscard]] bool ToolUsesCursorInput(DrawingTool tool, const modeling::ToolSettings& settings);
 
 //! 最初の点を置いた直後に呼ぶ。主要寸法欄へ焦点が合った状態で返る。
 [[nodiscard]] base::Result<CursorInputPanel> BeginCursorInput(DrawingTool tool,

@@ -66,6 +66,8 @@ public:
     //! いま使うツールを切り替える。途中の点は捨てる(V1と同じ)。
     void SelectTool(DrawingTool tool);
     void SetToolSettings(ToolSettings settings);
+    //! いまの道具の設定(作り方など)。画面がカーソル横の欄を出すかを決めるのに読む。
+    [[nodiscard]] const ToolSettings& CurrentToolSettings() const noexcept { return toolSettings_; }
     [[nodiscard]] DrawingTool CurrentTool() const noexcept { return tool_; }
 
     //! 吸着の相手を差し替える。持ち越しも捨てる。

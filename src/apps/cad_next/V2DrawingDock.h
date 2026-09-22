@@ -128,6 +128,9 @@ private:
     std::vector<kachakacha::v2::app::DrawingMethodCard> methodCards_;
     int methodIndex_ = -1;
     kachakacha::v2::modeling::ArcMode arcMode_ = kachakacha::v2::modeling::ArcMode::ThreePoints;
+    //! 円・スプラインのカードが決める作り方(D-04 3点円、D-13 通過点)。
+    kachakacha::v2::modeling::CircleMode circleMode_ = kachakacha::v2::modeling::CircleMode::CenterRadius;
+    kachakacha::v2::modeling::SplineMode splineMode_ = kachakacha::v2::modeling::SplineMode::ControlPoints;
     std::function<void(const QString&)> blockedMethodHandler_;
     QDoubleSpinBox* arcRadius_ = nullptr;
     QDoubleSpinBox* arcSweep_ = nullptr;

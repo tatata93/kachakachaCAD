@@ -699,6 +699,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/io/DocumentFileRead.cpp
     src/next/kachakacha/io/KcdImport.cpp
     src/next/kachakacha/geometry/ArcBuilders.cpp
+    src/next/kachakacha/geometry/SplineThroughPoints.cpp
     src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/PolylineCorners.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp

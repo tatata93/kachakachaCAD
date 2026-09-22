@@ -17,6 +17,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -75,12 +76,11 @@ using kachakacha::v2::modeling::DrawingTool;
             dock.HintText().contains(QStringLiteral("始点と終点")))) {
         return false;
     }
-    if (!Explain("「中心・始点・終点」は押せない形", !dock.MethodEnabled(QStringLiteral("中心・始点・終点")))
-        || !Explain("押しても偽", !dock.ClickMethod(QStringLiteral("中心・始点・終点")))
-        || !Explain("理由が状態行に出る", window.StatusText().contains(QStringLiteral("まだ作れません")))
-        || !Explain("作り方は変わらない", dock.Settings().arcMode == ArcMode::EndpointsAndRadius)
-        || !Explain("ツールチップにも理由",
-            dock.MethodTip(QStringLiteral("中心・始点・終点")).contains(QStringLiteral("核")))) {
+    // 中心・始点・終点(D-08)も押せる。押すと作り方が変わり、一文が中心から決める説明になる。
+    if (!Explain("「中心・始点・終点」も押せる", dock.MethodEnabled(QStringLiteral("中心・始点・終点")))
+        || !Explain("「中心・始点・終点」を押せる", dock.ClickMethod(QStringLiteral("中心・始点・終点")))
+        || !Explain("作り方が中心・始点・終点になる", dock.Settings().arcMode == ArcMode::CenterStartEnd)
+        || !Explain("欄の一文が左回りを言う", dock.HintText().contains(QStringLiteral("左回り")))) {
         return false;
     }
     // 道具を替えるとカードも替わる(円弧のカードが残らない)。
@@ -91,7 +91,7 @@ using kachakacha::v2::modeling::DrawingTool;
     return Explain("円のカードは 3 枚", circle.size() == 3)
         && Explain("中心＋半径 / 直径指定 / 3点", HasLabel(circle, "中心＋半径")
             && HasLabel(circle, "直径指定") && HasLabel(circle, "3点"))
-        && Explain("3点円は押せない形", !dock.MethodEnabled(QStringLiteral("3点")))
+        && Explain("3点円も押せる(D-04)", dock.MethodEnabled(QStringLiteral("3点")))
         && Explain("最初は中心＋半径", dock.CurrentMethodLabel() == QStringLiteral("中心＋半径"));
 }
 
@@ -122,7 +122,7 @@ using kachakacha::v2::modeling::DrawingTool;
         WireCount(window) == before + 1);
 }
 
-//! HP-DM-03。スプラインは制御点だけ押せ、通過点と Fit は理由つきで押せない。ベジェは 1 枚。
+//! HP-DM-03。スプラインは制御点と通過点を押せ、Fit は理由つきで押せない。ベジェは 1 枚。
 [[nodiscard]] bool CaseSplineAndBezierCards(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -136,8 +136,12 @@ using kachakacha::v2::modeling::DrawingTool;
     const auto spline = dock.MethodLabels();
     if (!Explain("スプラインは 3 枚", spline.size() == 3)
         || !Explain("制御点は押せる", dock.MethodEnabled(QStringLiteral("制御点")))
-        || !Explain("通過点は押せない", !dock.MethodEnabled(QStringLiteral("通過点")))
-        || !Explain("近似 / Fit は押せない", !dock.MethodEnabled(QStringLiteral("近似 / Fit")))) {
+        || !Explain("通過点も押せる(D-13)", dock.MethodEnabled(QStringLiteral("通過点")))
+        || !Explain("近似 / Fit は押せない", !dock.MethodEnabled(QStringLiteral("近似 / Fit")))
+        || !Explain("押しても偽", !dock.ClickMethod(QStringLiteral("近似 / Fit")))
+        || !Explain("理由が状態行に出る", window.StatusText().contains(QStringLiteral("まだ作れません")))
+        || !Explain("ツールチップにも理由",
+            dock.MethodTip(QStringLiteral("近似 / Fit")).contains(QStringLiteral("核")))) {
         return false;
     }
     if (!Explain("「ベジェ」を押せる", ribbon.ClickTool(QStringLiteral("ベジェ")))) {
@@ -291,6 +295,124 @@ using kachakacha::v2::modeling::DrawingTool;
         WireCount(window) == before + 1);
 }
 
+//! 帯の道具を持ち、作り方のカードを押す(吸着なしで点を置く準備)。
+[[nodiscard]] bool HoldToolWithCard(V2MainWindow& window, const char* category, const char* tool,
+    DrawingTool expected, const char* card)
+{
+    window.RunCommand("file.new");
+    window.SetMode(UiMode::Drawing);
+    auto& ribbon = window.Ribbon();
+    if (category != nullptr
+        && !Explain("帯のカテゴリを選べる", ribbon.ClickCategory(QString::fromUtf8(category)))) {
+        return false;
+    }
+    return Explain("帯の道具を押せる", ribbon.ClickTool(QString::fromUtf8(tool)))
+        && Explain("その道具になる", window.Session().CurrentTool() == expected)
+        && Explain("作り方のカードを押せる", window.DrawingDock().ClickMethod(QString::fromUtf8(card)));
+}
+
+//! 世界の点を画面で押す(吸着なし)。
+[[nodiscard]] bool ClickWorld(V2MainWindow& window, const kachakacha::v2::geometry::Vector3& point)
+{
+    auto& viewport = window.Viewport();
+    const auto screen = viewport.Mapping().Project(point);
+    if (!screen.has_value()) {
+        return false;
+    }
+    viewport.SetSnapSuppressed(true);
+    viewport.ClickAt(QPointF(screen->x, screen->y));
+    viewport.SetSnapSuppressed(false);
+    return true;
+}
+
+//! HP-DM-07。円の「3点」: 3 か所を押すと、その 3 点を通る円が 1 本できる。
+[[nodiscard]] bool CaseCircleThroughThreeClicks(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::Vector3;
+    if (!HoldToolWithCard(window, nullptr, "円", DrawingTool::Circle, "3点")
+        || !Explain("作り方が 3点 になる", window.DrawingDock().Settings().circleMode
+                == kachakacha::v2::modeling::CircleMode::ThreePoints)) {
+        return false;
+    }
+    const int before = WireCount(window);
+    if (!Explain("3 か所を押せる", ClickWorld(window, Vector3{10.0, 0.0, 0.0})
+                && ClickWorld(window, Vector3{0.0, 10.0, 0.0}))
+        || !Explain("2 か所ではまだ円はできない", WireCount(window) == before)
+        || !Explain("3 か所目を押せる", ClickWorld(window, Vector3{-10.0, 0.0, 0.0}))) {
+        return false;
+    }
+    window.SelectTool(DrawingTool::Select);
+    const auto& curves = window.Session().Scene().curves;
+    const bool made = WireCount(window) == before + 1 && !curves.empty()
+        && curves.back().segment.Kind() == kachakacha::v2::geometry::CurveKind::Circle;
+    return Explain("円が 1 本できる", made)
+        && Explain((std::string("3 点を通る(半径 ") + std::to_string(curves.back().segment.Radius())
+                       + " mm、中心は原点)").c_str(),
+            std::abs(curves.back().segment.Radius() - 10.0) < 1.0e-6
+                && kachakacha::v2::geometry::Distance(curves.back().segment.Center(), Vector3{}) < 1.0e-6);
+}
+
+//! HP-DM-08。円弧の「中心・始点・終点」: 半径は中心から始点、終点は向きだけ。左回りに 90°。
+[[nodiscard]] bool CaseArcFromCenterClicks(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::Vector3;
+    if (!HoldToolWithCard(window, nullptr, "円弧", DrawingTool::Arc, "中心・始点・終点")) {
+        return false;
+    }
+    const int before = WireCount(window);
+    if (!Explain("中心・始点・終点を押せる", ClickWorld(window, Vector3{0.0, 0.0, 0.0})
+                && ClickWorld(window, Vector3{15.0, 0.0, 0.0}) && ClickWorld(window, Vector3{0.0, 30.0, 0.0}))) {
+        return false;
+    }
+    window.SelectTool(DrawingTool::Select);
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("円弧が 1 本できる", WireCount(window) == before + 1 && !curves.empty()
+                && curves.back().segment.Kind() == kachakacha::v2::geometry::CurveKind::CircularArc)) {
+        return false;
+    }
+    const auto& arc = curves.back().segment;
+    return Explain((std::string("半径は中心から始点まで(") + std::to_string(arc.Radius()) + ")").c_str(),
+               std::abs(arc.Radius() - 15.0) < 1.0e-6)
+        && Explain("左回りに 90°", std::abs(arc.SweepAngleRad() - 1.5707963267948966) < 1.0e-6)
+        && Explain("終わりは半径の上(終点は向きだけ)",
+            kachakacha::v2::geometry::Distance(arc.EndPoint(), Vector3{0.0, 15.0, 0.0}) < 1.0e-6);
+}
+
+//! HP-DM-09。スプラインの「通過点」: 押した 4 点を必ず通る線が Enter で 1 本できる。
+[[nodiscard]] bool CaseSplineThroughClickedPoints(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::Vector3;
+    if (!HoldToolWithCard(window, "曲線", "スプライン", DrawingTool::Spline, "通過点")
+        || !Explain("作り方が 通過点 になる", window.DrawingDock().Settings().splineMode
+                == kachakacha::v2::modeling::SplineMode::ThroughPoints)) {
+        return false;
+    }
+    const std::vector<Vector3> points{{-30.0, 0.0, 0.0}, {-10.0, 20.0, 0.0}, {10.0, -20.0, 0.0},
+        {30.0, 0.0, 0.0}};
+    const int before = WireCount(window);
+    for (const Vector3& point : points) {
+        if (!Explain("点を押せる", ClickWorld(window, point))) {
+            return false;
+        }
+    }
+    window.Viewport().FinishTool();
+    window.SelectTool(DrawingTool::Select);
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("スプラインが 1 本できる", WireCount(window) == before + 1 && !curves.empty()
+                && curves.back().segment.Kind() == kachakacha::v2::geometry::CurveKind::CubicBSpline)) {
+        return false;
+    }
+    const auto& spline = curves.back().segment;
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const double t = static_cast<double>(index) / static_cast<double>(points.size() - 1);
+        if (!Explain((std::string("押した点 ") + std::to_string(index + 1) + " を通る").c_str(),
+                kachakacha::v2::geometry::Distance(spline.Evaluate(t), points[index]) < 1.0e-6)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingMethodCases()
@@ -299,12 +421,15 @@ std::vector<SelfTestCase> DrawingMethodCases()
         {"HP-DM-01 作り方カードは道具に従い、押すと作り方が変わり、核に無いものは理由つき",
             CaseMethodCardsFollowToolAndChangeArcMode},
         {"HP-DM-02 3点のカードで 3 か所を押すと円弧ができる", CaseThreePointArcByCards},
-        {"HP-DM-03 スプラインは制御点だけ押せ、ベジェは 1 枚", CaseSplineAndBezierCards},
+        {"HP-DM-03 スプラインは制御点と通過点を押せFitは理由つき、ベジェは 1 枚", CaseSplineAndBezierCards},
         {"HP-DM-04 円は中心＋半径と直径指定のどちらでも画面から引ける",
             CaseCircleByCenterRadiusAndDiameterCards},
         {"HP-DM-05 ベジェは制御点を4か所押すと1本できる", CaseBezierFourClicksMakesOneWire},
         {"HP-DM-06 スプラインは制御点を4か所押して Enter で1本できる",
             CaseSplineFourClicksThenEnterMakesOneWire},
+        {"HP-DM-07 円の3点は3か所を押すとその3点を通る円ができる", CaseCircleThroughThreeClicks},
+        {"HP-DM-08 円弧の中心・始点・終点は半径が始点で決まり左回りにできる", CaseArcFromCenterClicks},
+        {"HP-DM-09 スプラインの通過点は押した点をすべて通る", CaseSplineThroughClickedPoints},
     };
 }
 

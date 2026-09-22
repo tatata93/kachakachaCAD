@@ -3,10 +3,10 @@
 //! 作図の道具の「作り方」カード(正本 3 HTML 2026-09-18 の methods、指示書 D-01〜D-14)。
 //!
 //!   線:       2点 / 点＋長さ＋角度
-//!   円:       中心＋半径 / 直径指定 / 3点(核に無い)
-//!   円弧:     3点 / 始点・終点・半径 / 中心・始点・終点(核に無い) / その他: 始点接線
+//!   円:       中心＋半径 / 直径指定 / 3点
+//!   円弧:     3点 / 始点・終点・半径 / 中心・始点・終点 / その他: 始点接線
 //!   ベジェ:   制御点で作成
-//!   スプライン: 制御点 / 通過点(核に無い) / 近似・Fit(核に無い)
+//!   スプライン: 制御点 / 通過点 / 近似・Fit(核に無い)
 //!   移動/コピー: 2点     ミラー: 鏡の線2点     回転: 中心+2方向
 //!   分割:     押した場所で   トリム: 消したい側を押す   延長: 伸ばす端を押す
 //!   結合:     端点2つ / 接線 / 曲率(3つの道具それぞれ1枚)
@@ -29,6 +29,10 @@ struct DrawingMethodCard {
     std::string blockedReasonJa;
     //! 円弧のカードは作り方(ArcMode)を決める。ほかの道具のカードは持たない。
     std::optional<modeling::ArcMode> arcMode;
+    //! 円のカードは作り方(CircleMode)を決める(直径指定は中心＋半径 + 直径の欄)。
+    std::optional<modeling::CircleMode> circleMode;
+    //! スプラインのカードは作り方(SplineMode)を決める。
+    std::optional<modeling::SplineMode> splineMode;
     //! そのカードを選んだときの、次にすることの一文。空にはならない。
     std::string hintJa;
     //! 正本に無い(「その他」)。並びの後ろに出す。
@@ -47,8 +51,8 @@ struct DrawingMethodCard {
 //! (指示書 D-15/D-21、一道具一枚 = 道具のページ)。決める意味の無い道具(選択など)は空。
 [[nodiscard]] std::vector<DrawingMethodCard> DrawingMethodCardsFor(modeling::DrawingTool tool);
 
-//! いまの設定(円弧の作り方)に当たるカードの位置。カードが無ければ -1。
-//! 円弧以外は最初の押せるカード。
+//! いまの設定(円弧・円・スプラインの作り方)に当たるカードの位置。カードが無ければ -1。
+//! 作り方を持たない道具は最初の押せるカード。
 [[nodiscard]] int CurrentDrawingMethodIndex(modeling::DrawingTool tool,
     const modeling::ToolSettings& settings);
 

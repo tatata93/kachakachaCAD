@@ -198,6 +198,94 @@ KACHA_V2_TEST(tool, 円弧の3つの作り方が全部動く)
     }
 }
 
+KACHA_V2_TEST(tool, 円は3点を通して作れ一直線なら断る)
+{
+    ToolSettings settings;
+    settings.circleMode = kachakacha::v2::modeling::CircleMode::ThreePoints;
+    ToolSession session(DrawingTool::Circle, settings, Tolerance());
+    RequireCount(static_cast<std::size_t>(session.Prompt().remainingPoints), 3, "3点必要");
+    const auto output = PlaceAll(session, {{10.0, 0.0, 0.0}, {0.0, 10.0, 0.0}, {-10.0, 0.0, 0.0}});
+    Require(output.has_value(), "確定すること");
+    const auto& circle = output->segments.front();
+    Require(circle.Kind() == CurveKind::Circle, "円であること");
+    RequireNear(circle.Radius(), 10.0, 1e-9, "半径は外接円");
+    RequireNear(circle.Center().x, 0.0, 1e-9, "中心 x");
+    RequireNear(circle.Center().y, 0.0, 1e-9, "中心 y");
+    Require(circle.Normal().z > 0.0, "作業平面(+Z)と同じ向き");
+    ToolSession straight(DrawingTool::Circle, settings, Tolerance());
+    Require(!straight.AddPoint({0.0, 0.0, 0.0}).Value().has_value(), "1点目");
+    Require(!straight.AddPoint({10.0, 0.0, 0.0}).Value().has_value(), "2点目");
+    Require(!straight.AddPoint({20.0, 0.0, 0.0}).HasValue(), "一直線の3点目は断る");
+}
+
+KACHA_V2_TEST(tool, 円弧は中心と始点と終点で左回りに作り終点は向きだけ使う)
+{
+    ToolSettings settings;
+    settings.arcMode = ArcMode::CenterStartEnd;
+    ToolSession session(DrawingTool::Arc, settings, Tolerance());
+    RequireCount(static_cast<std::size_t>(session.Prompt().remainingPoints), 3, "3点必要");
+    // 中心 (0,0)、始点 (10,0)、終点は (0,25)(半径と違う距離でも向きだけ使う)。
+    const auto output = PlaceAll(session, {{0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {0.0, 25.0, 0.0}});
+    Require(output.has_value(), "確定すること");
+    const auto& arc = output->segments.front();
+    Require(arc.Kind() == CurveKind::CircularArc, "円弧");
+    RequireNear(arc.Radius(), 10.0, 1e-9, "半径は中心から始点まで");
+    RequireNear(arc.SweepAngleRad(), kPi / 2.0, 1e-9, "左回りに 90°");
+    RequireNear(arc.EndPoint().y, 10.0, 1e-9, "終点は半径の上(向きだけ使う)");
+    // 右回りに見える終点(0,-5)は、左回りに 270°。
+    ToolSession around(DrawingTool::Arc, settings, Tolerance());
+    const auto big = PlaceAll(around, {{0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {0.0, -5.0, 0.0}});
+    Require(big.has_value(), "確定すること");
+    RequireNear(big->segments.front().SweepAngleRad(), 1.5 * kPi, 1e-9, "左回りに 270°");
+    // 終点が始点と同じ向きなら断る。
+    ToolSession same(DrawingTool::Arc, settings, Tolerance());
+    Require(!same.AddPoint({0.0, 0.0, 0.0}).Value().has_value(), "中心");
+    Require(!same.AddPoint({10.0, 0.0, 0.0}).Value().has_value(), "始点");
+    Require(!same.AddPoint({20.0, 0.0, 0.0}).HasValue(), "同じ向きの終点は断る");
+}
+
+KACHA_V2_TEST(tool, スプラインの通過点は押した点をすべて通る)
+{
+    ToolSettings settings;
+    settings.splineMode = kachakacha::v2::modeling::SplineMode::ThroughPoints;
+    ToolSession session(DrawingTool::Spline, settings, Tolerance());
+    const std::vector<Vector3> points{{0.0, 0.0, 0.0}, {10.0, 8.0, 0.0}, {25.0, -3.0, 0.0},
+        {40.0, 5.0, 0.0}, {55.0, 0.0, 2.0}};
+    for (std::size_t index = 0; index < 2; ++index) {
+        Require(!session.AddPoint(points[index]).Value().has_value(), "点を足す");
+    }
+    Require(!session.Prompt().canFinish && session.Prompt().remainingPoints == 1,
+        "通過点は 3 点から確定できる");
+    for (std::size_t index = 2; index < points.size(); ++index) {
+        Require(!session.AddPoint(points[index]).Value().has_value(), "点を足す");
+    }
+    const auto finished = session.Finish();
+    Require(finished.HasValue(), "確定できる");
+    const auto& spline = finished.Value().segments.front();
+    Require(spline.Kind() == CurveKind::CubicBSpline, "3次B-spline");
+    const double spans = static_cast<double>(points.size() - 1);
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const Vector3 at = spline.Evaluate(static_cast<double>(index) / spans);
+        Require(kachakacha::v2::geometry::Distance(at, points[index]) < 1.0e-9,
+            "押した点 " + std::to_string(index + 1) + " を通る");
+    }
+    // 3 点だけでも通る。続けて同じ点は断る。
+    ToolSession three(DrawingTool::Spline, settings, Tolerance());
+    (void)three.AddPoint({0.0, 0.0, 0.0});
+    (void)three.AddPoint({10.0, 10.0, 0.0});
+    (void)three.AddPoint({20.0, 0.0, 0.0});
+    const auto small = three.Finish();
+    Require(small.HasValue()
+            && kachakacha::v2::geometry::Distance(small.Value().segments.front().Evaluate(0.5),
+                   Vector3{10.0, 10.0, 0.0}) < 1.0e-9,
+        "3 点のまん中を通る");
+    ToolSession twice(DrawingTool::Spline, settings, Tolerance());
+    (void)twice.AddPoint({0.0, 0.0, 0.0});
+    (void)twice.AddPoint({0.0, 0.0, 0.0});
+    (void)twice.AddPoint({20.0, 0.0, 0.0});
+    Require(!twice.Finish().HasValue(), "続けて同じ場所の点は断る");
+}
+
 KACHA_V2_TEST(tool, 半径が小さすぎる円弧を断る)
 {
     ToolSettings settings;

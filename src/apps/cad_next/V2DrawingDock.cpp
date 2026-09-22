@@ -317,6 +317,8 @@ void V2DrawingDock::RebuildMethodCards()
     methodCards_ = kachakacha::v2::app::DrawingMethodCardsFor(tool_);
     ToolSettings now;
     now.arcMode = arcMode_;
+    now.circleMode = circleMode_;
+    now.splineMode = splineMode_;
     methodIndex_ = kachakacha::v2::app::CurrentDrawingMethodIndex(tool_, now);
     for (std::size_t index = 0; index < methodCards_.size(); ++index) {
         const auto& card = methodCards_[index];
@@ -364,6 +366,14 @@ void V2DrawingDock::ChooseMethod(int index)
     if (card.arcMode.has_value() && *card.arcMode != arcMode_) {
         arcMode_ = *card.arcMode;
         ApplyArcVisibility();
+        EmitSettings();
+    }
+    if (card.circleMode.has_value() && *card.circleMode != circleMode_) {
+        circleMode_ = *card.circleMode;
+        EmitSettings();
+    }
+    if (card.splineMode.has_value() && *card.splineMode != splineMode_) {
+        splineMode_ = *card.splineMode;
         EmitSettings();
     }
 }
@@ -513,8 +523,10 @@ void V2DrawingDock::ApplyArcVisibility()
         return;   // 円弧の道具でないなら、この区画はそもそも出ていない。
     }
     const ArcMode mode = arcMode_;
-    // 3点のときは半径も中心角も使わない。出したままにすると効くのか分からない。
-    toolForm_->setRowVisible(arcRadius_, mode != ArcMode::ThreePoints);
+    // 3点・中心から決めるときは半径も中心角も使わない(点が決める)。
+    // 出したままにすると効くのか分からない。
+    toolForm_->setRowVisible(arcRadius_,
+        mode == ArcMode::EndpointsAndRadius || mode == ArcMode::StartTangent);
     toolForm_->setRowVisible(arcSweep_, mode == ArcMode::StartTangent);
 }
 
@@ -543,6 +555,8 @@ ToolSettings V2DrawingDock::Settings() const
 {
     ToolSettings settings;
     settings.arcMode = arcMode_;
+    settings.circleMode = circleMode_;
+    settings.splineMode = splineMode_;
     settings.radiusMm = arcRadius_->value();
     settings.sweepAngleRad = arcSweep_->value() * kPi / 180.0;
     settings.construction = construction_->isChecked();
@@ -555,6 +569,8 @@ void V2DrawingDock::SetSettings(const ToolSettings& settings)
 {
     loading_ = true;
     arcMode_ = settings.arcMode;
+    circleMode_ = settings.circleMode;
+    splineMode_ = settings.splineMode;
     arcRadius_->setValue(settings.radiusMm);
     arcSweep_->setValue(settings.sweepAngleRad * 180.0 / kPi);
     construction_->setChecked(settings.construction);

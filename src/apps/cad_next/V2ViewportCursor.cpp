@@ -78,7 +78,8 @@ void V2Viewport::SyncCursorInputWithTool(bool placedPoint, bool committed)
         }
         return;
     }
-    if (placedPoint && kachakacha::v2::app::ToolUsesCursorInput(session_->CurrentTool())) {
+    if (placedPoint && kachakacha::v2::app::ToolUsesCursorInput(session_->CurrentTool(),
+                           session_->CurrentToolSettings())) {
         (void)OpenCursorInput();
     }
 }

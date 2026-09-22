@@ -20,13 +20,18 @@ KACHA_V2_TEST(drawing_method_cards, 正本の作り方が並び核に無いも�
     Require(circle.size() == 3, "円は3枚");
     RequireEqual(circle[0].labelJa, std::string("中心＋半径"), "先頭は中心＋半径");
     Require(!circle[0].Blocked() && !circle[1].Blocked(), "中心＋半径と直径指定は押せる");
-    Require(circle[2].labelJa == "3点" && circle[2].Blocked(), "3点円は押せない");
-    Require(circle[2].blockedReasonJa.find("核") != std::string::npos, "理由は核に無いこと");
+    Require(circle[2].labelJa == "3点" && !circle[2].Blocked() && circle[2].circleMode.has_value()
+            && *circle[2].circleMode == kachakacha::v2::modeling::CircleMode::ThreePoints,
+        "3点円は押せて、作り方を 3点 にする(D-04)");
 
     const auto spline = DrawingMethodCardsFor(DrawingTool::Spline);
     Require(spline.size() == 3, "スプラインは3枚");
-    Require(!spline[0].Blocked() && spline[1].Blocked() && spline[2].Blocked(),
-        "制御点だけ押せる");
+    Require(!spline[0].Blocked() && !spline[1].Blocked() && spline[2].Blocked(),
+        "制御点と通過点は押せ、近似 / Fit は押せない");
+    Require(spline[1].splineMode.has_value()
+            && *spline[1].splineMode == kachakacha::v2::modeling::SplineMode::ThroughPoints,
+        "通過点は作り方を 通過点 にする(D-13)");
+    Require(spline[2].blockedReasonJa.find("まだ") != std::string::npos, "Fit は理由つき");
     Require(DrawingMethodCardsFor(DrawingTool::Line).size() == 2, "線は2点と点＋長さ＋角度");
     Require(DrawingMethodCardsFor(DrawingTool::Select).empty(), "選択に作り方は無い");
 }
@@ -38,7 +43,8 @@ KACHA_V2_TEST(drawing_method_cards, 円弧のカードは作り方を決め既�
     Require(arc[0].arcMode.has_value() && *arc[0].arcMode == ArcMode::ThreePoints, "3点");
     Require(arc[1].arcMode.has_value() && *arc[1].arcMode == ArcMode::EndpointsAndRadius,
         "始点・終点・半径");
-    Require(arc[2].Blocked() && !arc[2].arcMode.has_value(), "中心・始点・終点は押せない");
+    Require(!arc[2].Blocked() && arc[2].arcMode.has_value() && *arc[2].arcMode == ArcMode::CenterStartEnd,
+        "中心・始点・終点は押せて、作り方を決める(D-08)");
     Require(arc[3].arcMode.has_value() && *arc[3].arcMode == ArcMode::StartTangent && arc[3].extra,
         "始点接線はその他として残る");
     ToolSettings settings;
@@ -46,7 +52,13 @@ KACHA_V2_TEST(drawing_method_cards, 円弧のカードは作り方を決め既�
     Require(CurrentDrawingMethodIndex(DrawingTool::Arc, settings) == 3, "設定に当たるカード");
     settings.arcMode = ArcMode::EndpointsAndRadius;
     Require(CurrentDrawingMethodIndex(DrawingTool::Arc, settings) == 1, "設定に当たるカード");
-    Require(CurrentDrawingMethodIndex(DrawingTool::Circle, settings) == 0, "円は最初の押せるカード");
+    Require(CurrentDrawingMethodIndex(DrawingTool::Circle, settings) == 0, "円は中心＋半径");
+    settings.circleMode = kachakacha::v2::modeling::CircleMode::ThreePoints;
+    Require(CurrentDrawingMethodIndex(DrawingTool::Circle, settings) == 2, "3点円の設定なら 3点");
+    settings.splineMode = kachakacha::v2::modeling::SplineMode::ThroughPoints;
+    Require(CurrentDrawingMethodIndex(DrawingTool::Spline, settings) == 1, "通過点の設定なら 通過点");
+    settings.arcMode = ArcMode::CenterStartEnd;
+    Require(CurrentDrawingMethodIndex(DrawingTool::Arc, settings) == 2, "中心・始点・終点の設定");
     Require(CurrentDrawingMethodIndex(DrawingTool::Select, settings) == -1, "無ければ -1");
 }
 

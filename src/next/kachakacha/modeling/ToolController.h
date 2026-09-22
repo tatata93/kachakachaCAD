@@ -55,15 +55,35 @@ enum class DrawingTool {
 
 [[nodiscard]] std::string_view DrawingToolNameJa(DrawingTool tool) noexcept;
 
-//! 円弧の作り方(V1の `ArcDrawingMode` と同じ3種)。
+//! 円弧の作り方(V1の `ArcDrawingMode` と同じ3種 + 中心・始点・終点)。
+//! 末尾に足す(並びの番号を変えない)。
 enum class ArcMode {
     ThreePoints,
     EndpointsAndRadius,
     StartTangent,
+    //! 中心 → 始点(半径が決まる)→ 終点(向きだけ)。左回り(D-08)。
+    CenterStartEnd,
+};
+
+//! 円の作り方。直径指定は中心＋半径のまま、カーソル横の欄で直径を打つ。
+enum class CircleMode {
+    CenterRadius,
+    //! 3点を通る円(D-04)。
+    ThreePoints,
+};
+
+//! スプラインの作り方。
+enum class SplineMode {
+    //! 押した点が制御点(4 点以上)。
+    ControlPoints,
+    //! 押した点を必ず通る(3 点以上、D-13)。
+    ThroughPoints,
 };
 
 struct ToolSettings {
     ArcMode arcMode = ArcMode::ThreePoints;
+    CircleMode circleMode = CircleMode::CenterRadius;
+    SplineMode splineMode = SplineMode::ControlPoints;
     //! 円弧の半径や掃引角など、数値欄で決める値。
     double radiusMm = 10.0;
     double sweepAngleRad = 1.5707963267948966;

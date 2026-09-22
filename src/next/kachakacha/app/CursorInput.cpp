@@ -96,6 +96,14 @@ bool ToolUsesCursorInput(DrawingTool tool)
     return !CursorFieldsFor(tool, true).empty();
 }
 
+bool ToolUsesCursorInput(DrawingTool tool, const modeling::ToolSettings& settings)
+{
+    if (tool == DrawingTool::Circle && settings.circleMode == modeling::CircleMode::ThreePoints) {
+        return false;
+    }
+    return ToolUsesCursorInput(tool);
+}
+
 Result<CursorInputPanel> BeginCursorInput(DrawingTool tool, bool onWorkPlane)
 {
     const std::vector<CursorField>& fields = CursorFieldsFor(tool, onWorkPlane);

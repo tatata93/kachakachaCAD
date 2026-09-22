@@ -1,5 +1,7 @@
 #include "kachakacha/modeling/ToolController.h"
 
+#include "kachakacha/geometry/SplineThroughPoints.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -82,13 +84,18 @@ int ToolSession::RequiredPointCount() const
     case DrawingTool::Line:
     case DrawingTool::ConnectTwoPoints:
     case DrawingTool::Rectangle:
-    case DrawingTool::Circle:
     case DrawingTool::Move:
     case DrawingTool::Copy:
         return 2;
+    case DrawingTool::Circle:
+        // 3点を通す円は3点、中心＋半径は2点。
+        return settings_.circleMode == CircleMode::ThreePoints ? 3 : 2;
     case DrawingTool::Arc:
-        // 3点通す場合は3点、それ以外は2点。
-        return settings_.arcMode == ArcMode::ThreePoints ? 3 : 2;
+        // 3点通す・中心から決める場合は3点、それ以外は2点。
+        return settings_.arcMode == ArcMode::ThreePoints
+                || settings_.arcMode == ArcMode::CenterStartEnd
+            ? 3
+            : 2;
     case DrawingTool::Mirror:
         return 2;   // 鏡の線を2点で
     case DrawingTool::Rotate:
@@ -110,7 +117,9 @@ ToolPrompt ToolSession::Prompt() const
     const int placed = static_cast<int>(points_.size());
     if (required < 0) {
         prompt.acceptsMorePoints = true;
-        const int minimum = tool_ == DrawingTool::Spline ? 4 : 2;
+        const int minimum = tool_ != DrawingTool::Spline ? 2
+            : settings_.splineMode == SplineMode::ThroughPoints ? 3
+                                                                : 4;
         prompt.canFinish = placed >= minimum;
         prompt.remainingPoints = std::max(0, minimum - placed);
         prompt.messageJa = prompt.canFinish
@@ -210,6 +219,18 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
     }
 
     case DrawingTool::Circle: {
+        if (settings_.circleMode == CircleMode::ThreePoints) {
+            if (points.size() != 3) {
+                return fail(kNeedMore, "点が足りません。", "3点を通る円は 3 か所を押します。");
+            }
+            auto made = geometry::CircleThroughThreePoints(points[0], points[1], points[2],
+                settings_.planeNormal);
+            if (!made.HasValue()) {
+                return Result<ToolOutput>::Failure(made.Diagnostics());
+            }
+            output.segments.push_back(made.Value());
+            return Result<ToolOutput>::Success(std::move(output));
+        }
         if (points.size() != 2) {
             return fail(kNeedMore, "点が足りません。", {});
         }
@@ -229,6 +250,18 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
                 return fail(kNeedMore, "点が足りません。", {});
             }
             auto made = geometry::ArcThroughThreePoints(points[0], points[1], points[2]);
+            if (!made.HasValue()) {
+                return Result<ToolOutput>::Failure(made.Diagnostics());
+            }
+            output.segments.push_back(made.Value());
+            return Result<ToolOutput>::Success(std::move(output));
+        }
+        if (settings_.arcMode == ArcMode::CenterStartEnd) {
+            if (points.size() != 3) {
+                return fail(kNeedMore, "点が足りません。", "中心・始点・終点の 3 か所を押します。");
+            }
+            auto made = geometry::ArcFromCenterStartEnd(points[0], points[1], points[2],
+                settings_.planeNormal);
             if (!made.HasValue()) {
                 return Result<ToolOutput>::Failure(made.Diagnostics());
             }
@@ -274,6 +307,14 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
     }
 
     case DrawingTool::Spline: {
+        if (settings_.splineMode == SplineMode::ThroughPoints) {
+            auto made = geometry::CubicBSplineThroughPoints(points);
+            if (!made.HasValue()) {
+                return Result<ToolOutput>::Failure(made.Diagnostics());
+            }
+            output.segments.push_back(made.Value());
+            return Result<ToolOutput>::Success(std::move(output));
+        }
         if (points.size() < 4) {
             return fail(kNeedMore, "点が足りません。", "制御点は4つ以上です。");
         }

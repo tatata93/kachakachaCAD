@@ -39,6 +39,22 @@ namespace {
     return card;
 }
 
+[[nodiscard]] DrawingMethodCard CircleCard(const char* labelJa, modeling::CircleMode mode,
+    const char* hintJa, const char* cursorFieldId = "")
+{
+    DrawingMethodCard card = Card(labelJa, hintJa, cursorFieldId);
+    card.circleMode = mode;
+    return card;
+}
+
+[[nodiscard]] DrawingMethodCard SplineCard(const char* labelJa, modeling::SplineMode mode,
+    const char* hintJa)
+{
+    DrawingMethodCard card = Card(labelJa, hintJa);
+    card.splineMode = mode;
+    return card;
+}
+
 [[nodiscard]] DrawingMethodCard Blocked(const char* labelJa, const char* reasonJa)
 {
     DrawingMethodCard card;
@@ -62,18 +78,22 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
         };
     case DrawingTool::Circle:
         return {
-            Card("中心＋半径", "中心を押し、次に円周の1点を押してください。半径は欄にも打てます。"),
-            Card("直径指定",
+            CircleCard("中心＋半径", modeling::CircleMode::CenterRadius,
+                "中心を押し、次に円周の1点を押してください。半径は欄にも打てます。"),
+            CircleCard("直径指定", modeling::CircleMode::CenterRadius,
                 "中心を押してから、カーソル横の「直径」の欄に打って Enter(欄はここへ移してあります)。",
                 "diameter"),
-            Blocked("3点", "3点を通る円はまだ作れません(核に3点円がありません。3点の円弧はあります)。"),
+            CircleCard("3点", modeling::CircleMode::ThreePoints,
+                "円周が通る3か所を順に押してください(一直線に並べると円が決まりません)。"),
         };
     case DrawingTool::Arc:
         return {
             ArcCard("3点", ArcMode::ThreePoints, "始点・通過点・終点の3か所を押してください。"),
             ArcCard("始点・終点・半径", ArcMode::EndpointsAndRadius,
                 "始点と終点を押してください。半径は下の欄で決めます。"),
-            Blocked("中心・始点・終点", "中心から決める円弧はまだ作れません(核にその作り方がありません)。"),
+            ArcCard("中心・始点・終点", ArcMode::CenterStartEnd,
+                "中心・始点・終点の3か所を押してください。半径は中心から始点まで、終点は向きだけを使い、"
+                "左回り(反時計回り)に進みます。"),
             ArcCard("始点接線・半径・中心角", ArcMode::StartTangent,
                 "始点と接線の向きを押してください。半径と中心角は下の欄で決めます。", true),
         };
@@ -83,8 +103,10 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
         };
     case DrawingTool::Spline:
         return {
-            Card("制御点", "制御点を4つ以上、順に押してください。Enter で終わります。"),
-            Blocked("通過点", "点を通るスプラインはまだ作れません(核に補間がありません)。"),
+            SplineCard("制御点", modeling::SplineMode::ControlPoints,
+                "制御点を4つ以上、順に押してください。Enter で終わります。"),
+            SplineCard("通過点", modeling::SplineMode::ThroughPoints,
+                "通る点を3つ以上、順に押してください。どの点も必ず通ります。Enter で終わります。"),
             Blocked("近似 / Fit", "点列への当てはめはまだ作れません(核に当てはめがありません)。"),
         };
     case DrawingTool::Rectangle:
@@ -135,6 +157,22 @@ int CurrentDrawingMethodIndex(DrawingTool tool, const modeling::ToolSettings& se
     if (tool == DrawingTool::Arc) {
         for (std::size_t index = 0; index < cards.size(); ++index) {
             if (cards[index].arcMode.has_value() && *cards[index].arcMode == settings.arcMode) {
+                return static_cast<int>(index);
+            }
+        }
+    }
+    if (tool == DrawingTool::Circle) {
+        for (std::size_t index = 0; index < cards.size(); ++index) {
+            if (cards[index].circleMode.has_value()
+                && *cards[index].circleMode == settings.circleMode) {
+                return static_cast<int>(index);
+            }
+        }
+    }
+    if (tool == DrawingTool::Spline) {
+        for (std::size_t index = 0; index < cards.size(); ++index) {
+            if (cards[index].splineMode.has_value()
+                && *cards[index].splineMode == settings.splineMode) {
                 return static_cast<int>(index);
             }
         }

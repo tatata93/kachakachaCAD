@@ -91,6 +91,61 @@ Result<CurveSegment> ArcThroughThreePoints(Vector3 start, Vector3 middle, Vector
     return CurveSegment::MakeCircularArc(center, unitNormal, reference, radius, 0.0, sweep);
 }
 
+Result<CurveSegment> CircleThroughThreePoints(Vector3 first, Vector3 second, Vector3 third,
+    Vector3 preferredNormal)
+{
+    // 外心と半径は 3点の円弧と同じ求め方(食い違わせない)。
+    auto arc = ArcThroughThreePoints(first, second, third);
+    if (!arc.HasValue()) {
+        return arc;
+    }
+    Vector3 normal = arc.Value().Normal();
+    if (preferredNormal.IsFinite() && Dot(normal, preferredNormal) < 0.0) {
+        normal = -normal;
+    }
+    const Vector3 center = arc.Value().Center();
+    return CurveSegment::MakeCircle(center, normal, Normalized(first - center), arc.Value().Radius());
+}
+
+Result<CurveSegment> ArcFromCenterStartEnd(Vector3 center, Vector3 start, Vector3 end,
+    Vector3 planeNormal)
+{
+    if (!center.IsFinite() || !start.IsFinite() || !end.IsFinite() || !planeNormal.IsFinite()) {
+        return Result<CurveSegment>::Failure(MakeError(kDegenerate,
+            "点の座標に数値でない値が入っています。", {}));
+    }
+    const Vector3 normal = Normalized(planeNormal);
+    if (normal == Vector3{}) {
+        return Result<CurveSegment>::Failure(MakeError(kDegenerate,
+            "円弧を置く面の向きが決まりません。", {}));
+    }
+    // 中心を通る面へ落とす(3D の点へ吸い付いていても、円弧は 1 つの面に載る)。
+    const Vector3 toStart = (start - center) - normal * Dot(start - center, normal);
+    const Vector3 toEnd = (end - center) - normal * Dot(end - center, normal);
+    const double radius = toStart.Length();
+    if (!(radius > 1.0e-9)) {
+        return Result<CurveSegment>::Failure(MakeError(kDegenerate,
+            "始点が中心と重なっているので、半径が決まりません。", "始点を中心から離してください。"));
+    }
+    if (!(toEnd.Length() > 1.0e-9)) {
+        return Result<CurveSegment>::Failure(MakeError(kDegenerate,
+            "終点が中心と重なっているので、終わりの向きが決まりません。",
+            "終点を中心から離してください(終点は向きだけを使います)。"));
+    }
+    const Vector3 reference = toStart * (1.0 / radius);
+    const Vector3 binormal = Cross(normal, reference);
+    double sweep = std::atan2(Dot(toEnd, binormal), Dot(toEnd, reference));
+    if (std::abs(sweep) <= 1.0e-9) {
+        return Result<CurveSegment>::Failure(MakeError(kCollinear,
+            "始点と終点が中心から同じ向きにあるので、円弧が決まりません。",
+            "終点を始点と違う向きへ置いてください(左回りに進みます)。"));
+    }
+    if (sweep < 0.0) {
+        sweep += 2.0 * kPi;   // 左回り(反時計回り)に始点から終点まで
+    }
+    return CurveSegment::MakeCircularArc(center, normal, reference, radius, 0.0, sweep);
+}
+
 Result<CurveSegment> ArcFromEndpointsAndRadius(Vector3 start, Vector3 end, double radius,
     Vector3 planeNormal, bool largeArc, bool clockwise)
 {

@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -275,6 +276,9 @@ bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& 
     case kachakacha::v2::app::ShapeRebuildKind::EdgeFinish:
         ok = edgeFinishTool_ != nullptr
             && edgeFinishTool_->Rebuild(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::ShellSplit:
+        ok = shellSplitTool_ != nullptr && shellSplitTool_->Rebuild(*feature, step.outputEntityId);
         break;
     }
     return ok;

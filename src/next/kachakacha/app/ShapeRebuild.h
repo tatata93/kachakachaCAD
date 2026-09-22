@@ -40,6 +40,8 @@ enum class ShapeRebuildKind {
     Solid,
     //! 辺の丸め・面取り(P-12)。元の部品が作り直された後に、同じ辺を丸め直す。
     EdgeFinish,
+    //! 部品の形状編集(シェル・分割、P-13)。元の部品が作り直された後に、同じ入力で作り直す。
+    ShellSplit,
 };
 
 [[nodiscard]] std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept;

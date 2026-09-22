@@ -471,6 +471,18 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "両側に同じ距離で落とした立体を実際に作って下見に出し、Enter で確定します"
             "(元の部品は隠します)。", true,
             {"AT-FIN-001"}},
+        {"part.shell", "シェル(面を抜いて肉厚を残す)", CommandMode::Dialog, "shell_part", "",
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "道具から始められます。3Dで部品の開けたい面を押すと、その面が入ります(何枚でも。"
+            "押し直すと外れます)。内側へ肉厚だけ残した立体を実際に作って下見に出し、Enter で"
+            "確定します(元の部品は隠します)。", true,
+            {"AT-FIN-002"}},
+        {"part.split", "分割(立体を平面で2つに)", CommandMode::Dialog, "split_part", "",
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "道具から始められます。3Dで部品を押すと、いまの作業平面(棚の「ずらす」で動かせます)で"
+            "2 つに分けた形を実際に作って下見に出し、Enter で両側を 2 つの部品として確定します"
+            "(元の部品は隠します)。平面が部品を通らなければ断ります。", true,
+            {"AT-FIN-003"}},
         {"part.thicken", "面に厚みを付ける", CommandMode::Dialog, "thicken", "",
             SelectionPredicate::OneOrMoreGuideSurfaces,
             "形状ガイドの面を1つ以上選んでください。",

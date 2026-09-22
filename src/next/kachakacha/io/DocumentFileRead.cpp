@@ -727,6 +727,30 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::ShellSplit: {
+        domain::ShellSplitDefinition made;
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        made.source = loader.ParseId<EntityId>(loader.String(definition, "source", where),
+            where + ".source");
+        made.thickness = loader.ReadExpression(definition, "thickness", where);
+        if (const JsonArray* faces = loader.ArrayAt(definition, "faces", where); faces != nullptr) {
+            for (std::size_t index = 0; index < faces->size(); ++index) {
+                const JsonValue& item = (*faces)[index];
+                const std::string place = where + ".faces[" + std::to_string(index) + "]";
+                if (!item.IsObject()) {
+                    loader.Fail(kBadValue, "面の点が組ではありません。", place);
+                    continue;
+                }
+                made.facePoints.push_back(Vector3{loader.Number(item, "x", place),
+                    loader.Number(item, "y", place), loader.Number(item, "z", place)});
+            }
+        }
+        made.planeOrigin = loader.ReadVector(definition, "planeOrigin", where);
+        made.planeNormal = loader.ReadVector(definition, "planeNormal", where);
+        made.side = static_cast<int>(loader.NumberOr(definition, "side", 1.0));
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

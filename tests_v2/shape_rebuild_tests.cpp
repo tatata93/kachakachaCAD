@@ -157,6 +157,21 @@ KACHA_V2_TEST(shape_rebuild, 部品の配置は形を作る作り方で材料の
     Require(steps[1].kind == ShapeRebuildKind::TransformPart, "配置が後");
 }
 
+KACHA_V2_TEST(shape_rebuild, シェルと分割は元の部品の後に作り直す)
+{
+    // P-13: シェル・分割は元の部品の形に掛ける。評価順のとおり元が先。
+    DocumentSnapshot snapshot;
+    DeterministicIdGenerator ids;
+    Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, "元の箱");
+    Add(snapshot, ids, FeatureType::ShellSplit, EntityKind::Part, "分割");
+    Add(snapshot, ids, FeatureType::ShellSplit, EntityKind::Part, "分割 2");
+    const auto steps = PlanShapeRebuild(snapshot);
+    Require(steps.size() == 3, "分けた両側も作り直す");
+    Require(steps[0].kind == ShapeRebuildKind::Extrude, "元が先");
+    Require(steps[1].kind == ShapeRebuildKind::ShellSplit && steps[2].kind == ShapeRebuildKind::ShellSplit,
+        "形状編集が後");
+}
+
 KACHA_V2_TEST(shape_rebuild, 全種類に名前がある)
 {
     for (const ShapeRebuildKind kind : {ShapeRebuildKind::Extrude,
@@ -164,7 +179,7 @@ KACHA_V2_TEST(shape_rebuild, 全種類に名前がある)
              ShapeRebuildKind::GuideSurface, ShapeRebuildKind::ThickenSurface,
              ShapeRebuildKind::FabricationModel, ShapeRebuildKind::EditSurface,
              ShapeRebuildKind::TransformPart, ShapeRebuildKind::Solid,
-             ShapeRebuildKind::EdgeFinish}) {
+             ShapeRebuildKind::EdgeFinish, ShapeRebuildKind::ShellSplit}) {
         Require(!ShapeRebuildKindNameJa(kind).empty(), "名前がある");
         Require(ShapeRebuildKindNameJa(kind) != std::string_view("不明"), "不明でない");
     }

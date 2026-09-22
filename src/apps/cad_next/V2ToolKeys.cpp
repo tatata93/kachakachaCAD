@@ -18,6 +18,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -123,6 +124,9 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) {
         return edgeFinishTool_->HandleKey(key);
+    }
+    if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) {
+        return shellSplitTool_->HandleKey(key);
     }
     if (ShelfShown(kachakacha::v2::app::Shelf::Array)) {
         // 配列の棚(D-23)。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。

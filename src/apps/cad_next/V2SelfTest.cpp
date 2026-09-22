@@ -103,6 +103,8 @@ namespace {
     cases.insert(cases.end(), solid.begin(), solid.end());
     const std::vector<SelfTestCase> edgeFinish = EdgeFinishCases();
     cases.insert(cases.end(), edgeFinish.begin(), edgeFinish.end());
+    const std::vector<SelfTestCase> shellSplit = ShellSplitCases();
+    cases.insert(cases.end(), shellSplit.begin(), shellSplit.end());
     const std::vector<SelfTestCase> generate = GenerateCases();
     cases.insert(cases.end(), generate.begin(), generate.end());
     const std::vector<SelfTestCase> unfold = UnfoldCases();

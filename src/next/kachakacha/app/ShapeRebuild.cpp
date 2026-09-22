@@ -34,6 +34,8 @@ using domain::FeatureType;
         return ShapeRebuildKind::Solid;
     case FeatureType::EdgeFinish:
         return ShapeRebuildKind::EdgeFinish;
+    case FeatureType::ShellSplit:
+        return ShapeRebuildKind::ShellSplit;
     default:
         return std::nullopt;
     }
@@ -94,6 +96,7 @@ std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept
     case ShapeRebuildKind::TransformPart:    return "部品の配置";
     case ShapeRebuildKind::Solid:            return "立体の作成";
     case ShapeRebuildKind::EdgeFinish:       return "辺の丸め・面取り";
+    case ShapeRebuildKind::ShellSplit:         return "部品の形状編集";
     }
     return "不明";
 }

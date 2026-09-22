@@ -89,6 +89,7 @@ inline constexpr NamedEnum<FeatureType> kFeatureTypes[]{
     {FeatureType::TransformPart, "transform_part"},
     {FeatureType::CreateSolid, "create_solid"},
     {FeatureType::EdgeFinish, "edge_finish"},
+    {FeatureType::ShellSplit, "shell_split"},
     {FeatureType::EditSurface, "edit_surface"},
 };
 

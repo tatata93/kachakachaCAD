@@ -6,6 +6,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -13,6 +14,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/EdgeFinishInputState.h"
+#include "kachakacha/app/ShellSplitInputState.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/StatusLine.h"
 #include "kachakacha/modeling/SolidInput.h"
@@ -121,6 +123,9 @@ std::string V2MainWindow::RunningOperationNameJa() const
     }
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) {
         return std::string(kachakacha::v2::app::EdgeFinishKindNameJa(edgeFinishTool_->Input().kind));
+    }
+    if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) {
+        return std::string(kachakacha::v2::app::ShellSplitMethodNameJa(shellSplitTool_->Input().method));
     }
     const Shelf current = operationHost_->CurrentShelf();
     if (current == Shelf::None) {

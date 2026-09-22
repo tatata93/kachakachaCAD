@@ -38,6 +38,8 @@ enum class FeatureType {
     CreateSolid,
     //! 立体の辺を丸める(フィレット)・落とす(面取り)。P-12。元の部品の形に掛ける。
     EdgeFinish,
+    //! 部品の形状編集(シェル・分割)。P-13。元の部品の形に掛ける。作り方は定義の method。
+    ShellSplit,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -60,6 +62,7 @@ enum class FeatureType {
     case FeatureType::TransformPart:          return "TransformPart";
     case FeatureType::CreateSolid:            return "CreateSolid";
     case FeatureType::EdgeFinish:             return "EdgeFinish";
+    case FeatureType::ShellSplit:               return "ShellSplit";
     }
     return "Unknown";
 }
@@ -309,6 +312,26 @@ struct EdgeFinishDefinition {
     std::vector<geometry::Vector3> edgeMidpoints;
 };
 
+//! 部品の形状編集(P-13)。形は持たず、開き直したら元の部品を作り直してから同じ入力で
+//! 作り直す。作り方ごとに Feature の種類を増やさない(method が持つ)。
+//!   シェル: 抜く面(面の上の点で指す)と肉厚。内側へ肉厚だけ残す。
+//!   分割 : 平面(点と法線)で分けた片側。1 回の分割で side = +1 と -1 の 2 つを作る。
+struct ShellSplitDefinition {
+    //! 0 = シェル、1 = 分割。
+    int method = 0;
+    //! 元の部品。
+    EntityId source;
+    //! シェル: 残す肉厚(mm)。
+    geometry::EvaluatedValue thickness;
+    //! シェル: 抜く面の上の点(番号は作り直しで並びが変わりうるので、点で指す)。
+    std::vector<geometry::Vector3> facePoints;
+    //! 分割: 平面の上の点と法線。
+    geometry::Vector3 planeOrigin{};
+    geometry::Vector3 planeNormal{0.0, 0.0, 1.0};
+    //! 分割: +1 = 法線の側、-1 = 反対の側。
+    int side = 1;
+};
+
 //! 製作モデル(近似モデル)。
 //!
 //! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
@@ -407,7 +430,8 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
     CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
-    EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition, EdgeFinishDefinition>;
+    EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition, EdgeFinishDefinition,
+    ShellSplitDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

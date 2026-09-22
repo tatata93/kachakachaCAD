@@ -389,6 +389,18 @@ template<class Id>
             edges.push_back(WriteVector(point));
         }
         definition["edges"] = JsonValue::Array(std::move(edges));
+    } else if (const auto* edit = std::get_if<domain::ShellSplitDefinition>(&feature.definition)) {
+        definition["method"] = JsonValue::Number(static_cast<double>(edit->method));
+        definition["source"] = WriteId(edit->source);
+        definition["thickness"] = WriteExpression(edit->thickness);
+        JsonArray faces;
+        for (const Vector3& point : edit->facePoints) {
+            faces.push_back(WriteVector(point));
+        }
+        definition["faces"] = JsonValue::Array(std::move(faces));
+        definition["planeOrigin"] = WriteVector(edit->planeOrigin);
+        definition["planeNormal"] = WriteVector(edit->planeNormal);
+        definition["side"] = JsonValue::Number(static_cast<double>(edit->side));
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

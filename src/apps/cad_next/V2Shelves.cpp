@@ -5,6 +5,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -199,6 +200,8 @@ void V2MainWindow::BuildOutputShelves()
     solidTool_ = std::make_unique<V2SolidTool>(*this);
     // 辺の丸め・面取り(P-12)。状態と棚は道具が持つ。
     edgeFinishTool_ = std::make_unique<V2EdgeFinishTool>(*this);
+    // シェル・分割(P-13)。状態と棚は道具が持つ。
+    shellSplitTool_ = std::make_unique<V2ShellSplitTool>(*this);
 
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });

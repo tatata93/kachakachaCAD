@@ -70,6 +70,8 @@ enum class Shelf {
     Solid,
     //! 「辺の丸め・面取り」の欄(立体の辺のフィレット・面取り、matrix P-12)。
     EdgeFinish,
+    //! 「シェル・分割」の欄(部品の形状編集、matrix P-13)。
+    ShellSplit,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -86,7 +88,7 @@ enum class Shelf {
 //! `editingSurface` は「面の編集の欄を構えている最中か」(自分で出して隠される形にしない)。
 //! `analyzing` は「面の解析の欄を開いている最中か」。道具の棚より後ろ(道具が前に出る。
 //! 解析の表示そのものは残るので、面を作る下見の間も効く)。
-//! `ownedShelf` は「自分の棚を持つ道具(立体を作る・辺の丸め面取り)が構えている最中なら、
+//! `ownedShelf` は「自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割)が構えている最中なら、
 //! その棚」。構えていなければ Shelf::None。道具を増やすたびに bool を足さない。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
     bool extruding = false, bool surfacing = false, bool booleaning = false,

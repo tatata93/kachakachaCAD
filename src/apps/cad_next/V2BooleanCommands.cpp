@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -83,17 +84,39 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         RunThickenTool();
         return true;
     }
+    // 自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割)は 1 つだけ構える。
+    // 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
+    const auto endOwnedToolsBut = [this](const void* keep) {
+        if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
+            solidTool_->End();
+        }
+        if (edgeFinishTool_ != nullptr && edgeFinishTool_.get() != keep && edgeFinishTool_->Active()) {
+            edgeFinishTool_->End();
+        }
+        if (shellSplitTool_ != nullptr && shellSplitTool_.get() != keep && shellSplitTool_->Active()) {
+            shellSplitTool_->End();
+        }
+    };
     // 立体を作る(回転体・ロフト立体・スイープ)も道具から始める。何も選んでいなくても棚が出て、
     // 3D で線を押すと種類で欄に入る(P-08/P-09)。構えている間の2度目は確定。
     if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {
         ClearPendingCommand();
+        endOwnedToolsBut(solidTool_.get());
         solidTool_->Begin(id);
         return true;
     }
     // 辺の丸め・面取り(P-12)も道具から始める。3D で部品の辺の近くを押す。
     if (edgeFinishTool_ != nullptr && V2EdgeFinishTool::Handles(id)) {
         ClearPendingCommand();
+        endOwnedToolsBut(edgeFinishTool_.get());
         edgeFinishTool_->Begin(id);
+        return true;
+    }
+    // シェル・分割(P-13)も道具から始める。3D で部品(シェルなら開けたい面)を押す。
+    if (shellSplitTool_ != nullptr && V2ShellSplitTool::Handles(id)) {
+        ClearPendingCommand();
+        endOwnedToolsBut(shellSplitTool_.get());
+        shellSplitTool_->Begin(id);
         return true;
     }
     // 面の編集も道具から始める。何も選んでいなくても棚が出て、3D で面・縁・線を押せる。

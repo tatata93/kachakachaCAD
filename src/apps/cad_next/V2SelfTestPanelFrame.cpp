@@ -105,6 +105,7 @@ namespace {
         {"part.revolve", "回転体"},
         {"part.loft_solid", "ロフト立体"},
         {"part.fillet", "フィレット"},
+        {"part.shell", "シェル"},
         {"wire.chamfer", "C面取り"},
         {"fabrication.create", "近似"},
     };

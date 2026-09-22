@@ -659,6 +659,48 @@ KACHA_V2_TEST(documentFile, 辺の丸め面取りの作り方が往復する)
             && back->edgeMidpoints[0].z == 30.0, "辺の真ん中の点");
 }
 
+KACHA_V2_TEST(documentFile, シェルと分割の作り方が往復する)
+{
+    // P-13: シェルの面は面の上の点で指す。分割は平面(点と法線)と残す側。
+    DocumentFile original = MakeSampleDocument();
+    kachakacha::v2::base::DeterministicIdGenerator ids{6262};
+    kachakacha::v2::domain::ShellSplitDefinition shell;
+    shell.method = 0;
+    shell.source = original.snapshot.entities[0].id;
+    shell.thickness = EvaluatedValue{"2", 2.0, QuantityKind::Length};
+    shell.facePoints = {{20.0, 10.0, 30.0}, {0.0, 10.0, 15.0}};
+    kachakacha::v2::domain::ShellSplitDefinition split;
+    split.method = 1;
+    split.source = original.snapshot.entities[0].id;
+    split.planeOrigin = {10.0, 0.0, 5.0};
+    split.planeNormal = {1.0, 0.0, 0.0};
+    split.side = -1;
+    for (const auto& definition : {shell, split}) {
+        kachakacha::v2::domain::Feature feature;
+        feature.id = ids.NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = FeatureType::ShellSplit;
+        feature.displayName = definition.method == 0 ? "シェル" : "分割";
+        feature.definition = definition;
+        original.snapshot.features.push_back(feature);
+    }
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    std::vector<const kachakacha::v2::domain::ShellSplitDefinition*> back;
+    for (const auto& candidate : read.Value().snapshot.features) {
+        if (candidate.type == FeatureType::ShellSplit) {
+            back.push_back(std::get_if<kachakacha::v2::domain::ShellSplitDefinition>(&candidate.definition));
+        }
+    }
+    Require(back.size() == 2 && back[0] != nullptr && back[1] != nullptr, "2 つとも戻る");
+    Require(back[0]->method == 0 && back[0]->source == shell.source, "シェルと元の部品");
+    RequireNear(back[0]->thickness.value, 2.0, 1e-12, "肉厚");
+    Require(back[0]->facePoints.size() == 2 && back[0]->facePoints[1].z == 15.0
+            && back[0]->facePoints[0].x == 20.0, "抜く面の点");
+    Require(back[1]->method == 1 && back[1]->side == -1, "分割と残す側");
+    Require(back[1]->planeOrigin.x == 10.0 && back[1]->planeOrigin.z == 5.0
+            && back[1]->planeNormal.x == 1.0 && back[1]->planeNormal.z == 0.0, "分ける平面");
+}
+
 KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

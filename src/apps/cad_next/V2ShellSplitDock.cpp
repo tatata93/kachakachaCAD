@@ -81,9 +81,13 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
     auto* methodRow = new QHBoxLayout();
-    const char* labels[2] = {"シェル(面を抜いて肉厚を残す)", "分割(作業平面で 2 つに)"};
+    // 名前は短く(右の棚は狭い画面でも窓を押し広げない幅に収める。PC 2f92305 で「狭い画面でも
+    // 部品がはみ出さない」が 1024px → 1122px になった)。説明はツールチップへ。
+    const char* labels[2] = {"シェル", "分割"};
+    const char* tips[2] = {"面を抜いて、内側へ肉厚だけ残します。", "いまの作業平面で 2 つに分けます。"};
     for (std::size_t index = 0; index < methods_.size(); ++index) {
         auto* button = new QPushButton(QString::fromUtf8(labels[index]), body);
+        button->setToolTip(QString::fromUtf8(tips[index]));
         button->setCheckable(true);
         const int method = static_cast<int>(index);
         QObject::connect(button, &QPushButton::clicked, this, [this, method] {

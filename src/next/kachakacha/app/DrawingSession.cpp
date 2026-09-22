@@ -342,6 +342,11 @@ ClickResult DrawingSession::Commit(const ToolOutput& output, std::string_view la
     result.diagnostics = commandResult.diagnostics;
     result.commandLabel = commandResult.delta.label;
     if (commandResult.committed) {
+        // 作れたが言っておくこと(押した点からのずれなど)。案内に出す。
+        result.diagnostics.insert(result.diagnostics.end(), output.warnings.begin(),
+            output.warnings.end());
+    }
+    if (commandResult.committed) {
         result.createdEntityIds.push_back(createdId);
         AddToScene(output, createdId);
         if (keepPoints) {

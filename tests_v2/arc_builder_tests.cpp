@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+using kachakacha::v2::geometry::ArcFromCenterStartEnd;
 using kachakacha::v2::geometry::ArcFromEndpointsAndRadius;
 using kachakacha::v2::geometry::ArcFromStartTangentRadiusLength;
 using kachakacha::v2::geometry::ArcFromStartTangentRadiusSweep;
@@ -71,6 +72,54 @@ KACHA_V2_TEST(arc, collinear_points_are_refused)
         "the refusal names the collinear case");
 }
 
+KACHA_V2_TEST(arc, center_start_end_planar_case_is_unchanged)
+{
+    const auto made = ArcFromCenterStartEnd({0, 0, 0}, {5, 0, 0}, {0, 5, 0}, {0, 0, 1});
+    Require(made.HasValue(), "the arc is built");
+    const auto& arc = made.Value();
+    RequireNear(arc.Radius(), 5.0, 1.0e-9, "the radius comes from the start point");
+    RequireNear(Distance(arc.EndPoint(), Vector3{0, 5, 0}), 0.0, 1.0e-9,
+        "the end point is where asked");
+    RequireNear(Distance(arc.Normal(), Vector3{0, 0, 1}), 0.0, 1.0e-9,
+        "the normal is the plane normal");
+    RequireNear(arc.SweepAngleRad(), kPi / 2.0, 1.0e-9, "a quarter turn");
+}
+
+KACHA_V2_TEST(arc, center_start_end_passes_through_a_point_off_the_plane)
+{
+    // 終点 (0,5,5) は作業平面(XY)の外。円弧の面は3点(中心・始点・終点)が決める。
+    const auto made = ArcFromCenterStartEnd({0, 0, 0}, {5, 0, 0}, {0, 5, 5}, {0, 0, 1});
+    Require(made.HasValue(), "the arc is built even though the end point is off the plane");
+    const auto& arc = made.Value();
+    RequireNear(arc.Radius(), 5.0, 1.0e-9, "the radius comes from the start point");
+    RequireNear(Distance(arc.StartPoint(), Vector3{5, 0, 0}), 0.0, 1.0e-9,
+        "the start point is exactly where clicked");
+    // 終点は向きだけ使う。end の向きへ、半径5の位置。
+    RequireNear(Distance(arc.EndPoint(), Normalized(Vector3{0, 5, 5}) * 5.0), 0.0, 1.0e-9,
+        "the end point sits at radius 5 in the direction of the clicked point");
+    RequireNear(Dot(arc.Normal(), Vector3{5, 0, 0}), 0.0, 1.0e-9,
+        "the normal is perpendicular to start - center");
+    RequireNear(Dot(arc.Normal(), Vector3{0, 5, 5}), 0.0, 1.0e-9,
+        "the normal is perpendicular to end - center");
+    Require(Dot(arc.Normal(), Vector3{0, 0, 1}) > 0.0,
+        "the normal keeps a positive dot with the plane normal");
+}
+
+KACHA_V2_TEST(arc, center_start_end_collinear_points_use_the_plane_normal)
+{
+    // 始点・終点が中心を挟んで反対向き(一直線)。面は決まらないので作業平面の法線を使う。
+    const auto made = ArcFromCenterStartEnd({0, 0, 0}, {5, 0, 0}, {-5, 0, 0}, {0, 0, 1});
+    Require(made.HasValue(), "the collinear case is still buildable");
+    const auto& arc = made.Value();
+    RequireNear(Distance(arc.Normal(), Vector3{0, 0, 1}), 0.0, 1.0e-9,
+        "the plane normal is used when the 3 points do not determine a plane");
+    RequireNear(Distance(arc.EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-9,
+        "it ends at the opposite point");
+    RequireNear(arc.SweepAngleRad(), kPi, 1.0e-9, "half a turn");
+    RequireNear(Distance(arc.Evaluate(0.5), Vector3{0, 5, 0}), 0.0, 1.0e-9,
+        "counter-clockwise: the midpoint is on the +y side");
+}
+
 KACHA_V2_TEST(arc, endpoints_and_radius_small_arc)
 {
     const auto made = ArcFromEndpointsAndRadius({0, 0, 0}, {10, 0, 0}, 10.0, {0, 0, 1},
@@ -117,6 +166,39 @@ KACHA_V2_TEST(arc, exactly_half_the_chord_gives_a_half_turn)
         "the centre sits at the chord midpoint");
 }
 
+KACHA_V2_TEST(arc, endpoints_and_radius_planar_case_is_unchanged)
+{
+    const auto made = ArcFromEndpointsAndRadius({0, 0, 0}, {10, 0, 0}, 8.0, {0, 0, 1},
+        false, false);
+    Require(made.HasValue(), "the arc is built");
+    const auto& arc = made.Value();
+    RequireNear(Distance(arc.EndPoint(), Vector3{10, 0, 0}), 0.0, 1.0e-9,
+        "the end point is exactly where asked");
+    RequireNear(Distance(arc.Normal(), Vector3{0, 0, 1}), 0.0, 1.0e-9,
+        "the normal is the plane normal");
+}
+
+KACHA_V2_TEST(arc, endpoints_and_radius_keeps_a_tilted_chord_exact)
+{
+    // 終点 (10,0,5) は作業平面(XY)の外。以前はここで終点がずれていた。
+    const auto made = ArcFromEndpointsAndRadius({0, 0, 0}, {10, 0, 5}, 8.0, {0, 0, 1},
+        false, false);
+    Require(made.HasValue(), "the arc is built even though the chord is tilted");
+    const auto& arc = made.Value();
+    RequireNear(Distance(arc.StartPoint(), Vector3{0, 0, 0}), 0.0, 1.0e-9,
+        "the start point is exact");
+    RequireNear(Distance(arc.EndPoint(), Vector3{10, 0, 5}), 0.0, 1.0e-9,
+        "the end point is exact (the fix): it no longer drifts off the clicked point");
+    RequireNear(std::abs(Dot(arc.Normal(), Vector3{10, 0, 5})), 0.0, 1.0e-9,
+        "the normal is perpendicular to the chord");
+    Require(Dot(arc.Normal(), Vector3{0, 0, 1}) > 0.0,
+        "the normal keeps a positive dot with the plane normal");
+    RequireNear(Distance(arc.Center(), Vector3{0, 0, 0}), 8.0, 1.0e-9,
+        "the centre is 8 away from the start point");
+    RequireNear(Distance(arc.Center(), Vector3{10, 0, 5}), 8.0, 1.0e-9,
+        "the centre is 8 away from the end point too");
+}
+
 KACHA_V2_TEST(arc, start_tangent_radius_and_sweep)
 {
     // 原点から +x 方向へ出て、半径5で反時計回りに90度。
@@ -144,6 +226,33 @@ KACHA_V2_TEST(arc, a_negative_sweep_curves_the_other_way)
         "a negative sweep curves to the other side");
     RequireNear(Dot(Normalized(made.Value().FirstDerivative(0.0)), Vector3{1, 0, 0}), 1.0,
         1.0e-9, "the start tangent is still as asked");
+}
+
+KACHA_V2_TEST(arc, start_tangent_radius_sweep_planar_case_is_unchanged)
+{
+    const auto made = ArcFromStartTangentRadiusSweep({0, 0, 0}, {1, 0, 0}, {0, 0, 1}, 5.0,
+        kPi / 2.0);
+    Require(made.HasValue(), "the arc is built");
+    const auto& arc = made.Value();
+    RequireNear(Distance(arc.Center(), Vector3{0, 5, 0}), 0.0, 1.0e-9,
+        "the centre is 5 away from the start, perpendicular to the tangent, "
+        "on the side the positive sweep turns towards");
+    RequireNear(Distance(arc.EndPoint(), Vector3{5, 5, 0}), 0.0, 1.0e-8,
+        "a quarter turn of radius 5 lands at (5,5,0)");
+}
+
+KACHA_V2_TEST(arc, start_tangent_radius_sweep_is_truly_tangent_in_3d)
+{
+    // 接線 (1,0,1) は作業平面(XY)の外を向く。以前は投影した向きにしか接していなかった。
+    const auto made = ArcFromStartTangentRadiusSweep({0, 0, 0}, {1, 0, 1}, {0, 0, 1}, 5.0,
+        kPi / 2.0);
+    Require(made.HasValue(), "the arc is built even though the tangent leaves the plane");
+    const auto& arc = made.Value();
+    const Vector3 tangentDirection = Normalized(Vector3{1, 0, 1});
+    RequireNear(Distance(Normalized(arc.FirstDerivative(0.0)), tangentDirection), 0.0, 1.0e-9,
+        "the arc really leaves along the requested 3D tangent, not its projection");
+    RequireNear(Dot(arc.Normal(), tangentDirection), 0.0, 1.0e-9,
+        "the normal is perpendicular to the tangent");
 }
 
 KACHA_V2_TEST(arc, start_tangent_radius_and_arc_length)

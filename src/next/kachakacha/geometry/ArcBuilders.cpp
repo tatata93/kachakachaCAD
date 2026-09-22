@@ -15,6 +15,18 @@ constexpr const char* kRadiusTooSmall = "GEO-C021";
 constexpr const char* kDegenerate = "GEO-C022";
 
 //! 中心と面内の点から、基準方向を基準にした角度を測る。
+//! 作業平面の法線を、指定した向き(弦・接線・半径の向き)と直角になるように倒したもの。
+//! 押した点が作業平面の外(3D の端点へ吸着した点)でも、円弧はその点を **必ず通る** ようにする。
+//! 元の法線がその向きと平行なら決められないので零ベクトル(呼び手が断る)。
+[[nodiscard]] Vector3 NormalPerpendicularTo(const Vector3& planeNormal, const Vector3& direction)
+{
+    const Vector3 unitDirection = Normalized(direction);
+    if (unitDirection == Vector3{}) {
+        return Normalized(planeNormal);
+    }
+    return Normalized(planeNormal - unitDirection * Dot(planeNormal, unitDirection));
+}
+
 [[nodiscard]] double AngleOf(const Vector3& point, const Vector3& center,
     const Vector3& reference, const Vector3& binormal)
 {
@@ -114,12 +126,24 @@ Result<CurveSegment> ArcFromCenterStartEnd(Vector3 center, Vector3 start, Vector
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
             "点の座標に数値でない値が入っています。", {}));
     }
-    const Vector3 normal = Normalized(planeNormal);
+    // 円弧の面は **押した 3 点が決める**(中心・始点・終点)。作業平面の法線は、3 点が一直線で
+    // 面が決まらないときの倒す向きと、表裏(左回りの向き)を決めるのに使う。
+    // 以前は始点・終点を作業平面に平行な面へ落としていたので、3D の端点へ吸着した点が
+    // 黙って動き、線がつながらなかった(オーナー報告 2026-09-23)。
+    Vector3 normal = Cross(start - center, end - center);
+    if (normal.Length() > 1.0e-9 * std::max(1.0, (start - center).Length() * (end - center).Length())) {
+        normal = Normalized(normal);
+        if (Dot(normal, planeNormal) < 0.0) {
+            normal = -normal;
+        }
+    } else {
+        normal = NormalPerpendicularTo(planeNormal, start - center);
+    }
     if (normal == Vector3{}) {
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
             "円弧を置く面の向きが決まりません。", {}));
     }
-    // 中心を通る面へ落とす(3D の点へ吸い付いていても、円弧は 1 つの面に載る)。
+    // 3 点の面の中では、これは落とさなくても同じ(始点は必ず通る)。
     const Vector3 toStart = (start - center) - normal * Dot(start - center, normal);
     const Vector3 toEnd = (end - center) - normal * Dot(end - center, normal);
     const double radius = toStart.Length();
@@ -165,12 +189,13 @@ Result<CurveSegment> ArcFromEndpointsAndRadius(Vector3 start, Vector3 end, doubl
             "半径は端点間の距離の半分(" + std::to_string(chordLength * 0.5)
                 + " mm)以上にしてください。"));
     }
-    const Vector3 unitNormal = Normalized(planeNormal);
+    // 面は弦を含む(両端を必ず通る)。作業平面の法線を弦と直角に倒して使う。
+    const Vector3 chordDirection = Normalized(chord);
+    const Vector3 unitNormal = NormalPerpendicularTo(planeNormal, chordDirection);
     if (unitNormal == Vector3{}) {
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
-            "円弧を置く面の向きが決まりません。", {}));
+            "円弧を置く面の向きが決まりません。", "弦が面の法線と平行です。"));
     }
-    const Vector3 chordDirection = Normalized(chord);
     Vector3 perpendicular = Cross(unitNormal, chordDirection);
     if (perpendicular == Vector3{}) {
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
@@ -205,8 +230,9 @@ Result<CurveSegment> ArcFromStartTangentRadiusSweep(Vector3 start, Vector3 tange
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
             "半径は正の値にしてください。", {}));
     }
-    const Vector3 unitNormal = Normalized(planeNormal);
+    // 面は接線を含む(始点でその向きに本当に接する)。作業平面の法線を接線と直角に倒して使う。
     const Vector3 unitTangent = Normalized(tangent);
+    const Vector3 unitNormal = NormalPerpendicularTo(planeNormal, unitTangent);
     if (unitNormal == Vector3{} || unitTangent == Vector3{}) {
         return Result<CurveSegment>::Failure(MakeError(kDegenerate,
             "接線か面の向きが決まりません。", {}));

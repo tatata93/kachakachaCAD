@@ -9,7 +9,10 @@
 #include <vector>
 
 using kachakacha::v2::geometry::CurveKind;
+using kachakacha::v2::geometry::Distance;
+using kachakacha::v2::geometry::Dot;
 using kachakacha::v2::geometry::GeometryTolerance;
+using kachakacha::v2::geometry::Normalized;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::ArcMode;
 using kachakacha::v2::modeling::DrawingTool;
@@ -196,6 +199,35 @@ KACHA_V2_TEST(tool, 円弧の3つの作り方が全部動く)
         RequireNear(std::abs(output->segments.front().SweepAngleRad()), kPi / 3.0, 1e-9,
             "掃引角");
     }
+}
+
+KACHA_V2_TEST(tool, 円は中心と半径の点で半径の点が面の外なら面を倒して通す)
+{
+    // 半径の点 (3,0,4) は作業平面(XY)の外。円の面はその点を通るように倒す。
+    ToolSession tilted(DrawingTool::Circle, {}, Tolerance());
+    tilted.SetPlane({0.0, 0.0, 1.0}, {1.0, 0.0, 0.0});
+    const auto output = PlaceAll(tilted, {{0.0, 0.0, 0.0}, {3.0, 0.0, 4.0}});
+    Require(output.has_value(), "確定すること");
+    const auto& circle = output->segments.front();
+    RequireNear(circle.Radius(), 5.0, 1e-9, "半径");
+    RequireNear(Distance(circle.Center(), Vector3{0.0, 0.0, 0.0}), 0.0, 1e-9, "中心");
+    RequireNear(circle.ClosestPoint({3.0, 0.0, 4.0}).distance, 0.0, 1e-9,
+        "半径の点を必ず通ること");
+    RequireNear(Dot(circle.Normal(), Vector3{3.0, 0.0, 4.0}), 0.0, 1e-9,
+        "法線は半径の点の向きと直角");
+    Require(Dot(circle.Normal(), Vector3{0.0, 0.0, 1.0}) > 0.0,
+        "法線は作業平面と正の内積を保つ");
+
+    // 半径の点が面の上ならこれまでどおり。
+    ToolSession flat(DrawingTool::Circle, {}, Tolerance());
+    flat.SetPlane({0.0, 0.0, 1.0}, {1.0, 0.0, 0.0});
+    const auto flatOutput = PlaceAll(flat, {{0.0, 0.0, 0.0}, {5.0, 0.0, 0.0}});
+    Require(flatOutput.has_value(), "確定すること");
+    const auto& flatCircle = flatOutput->segments.front();
+    RequireNear(Distance(flatCircle.Normal(), Vector3{0.0, 0.0, 1.0}), 0.0, 1e-9,
+        "法線は作業平面のまま");
+    RequireNear(Distance(flatCircle.StartPoint(), Vector3{5.0, 0.0, 0.0}), 0.0, 1e-9,
+        "基準は PlaneU のまま");
 }
 
 KACHA_V2_TEST(tool, 円は3点を通して作れ一直線なら断る)

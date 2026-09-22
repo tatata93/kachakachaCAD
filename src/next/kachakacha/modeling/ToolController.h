@@ -141,6 +141,8 @@ struct ToolOutput {
     std::vector<Vector3> keptPoints;
     //! ベジェの制御点(keepControlPolygon のとき)。順に結んだ折れ線を補助線として文書へ残す。
     std::vector<Vector3> controlPolygon;
+    //! 作れたが言っておくこと(押した点と出来た線の端がずれた、など)。黙って動かさない。
+    std::vector<base::Diagnostic> warnings;
 };
 
 //! 作図ツール1つぶんの進行。

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace kachakacha::v2::modeling {
 
@@ -16,6 +18,14 @@ namespace {
 
 constexpr const char* kNeedMore = "UI-T001";
 constexpr const char* kBadInput = "UI-T002";
+constexpr const char* kEndDrift = "GEO-C023";
+
+[[nodiscard]] std::string FormatMm(double value)
+{
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%.3f", value);
+    return buffer;
+}
 constexpr const char* kNotSupported = "UI-T003";
 
 //! 選択や測定のように、形を作らないツール。
@@ -244,7 +254,19 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
             return fail(kNeedMore, "点が足りません。", {});
         }
         const double radius = (points[1] - points[0]).Length();
-        auto made = CurveSegment::MakeCircle(points[0], settings_.planeNormal, PlaneU(),
+        // 半径の点が作業平面の外(3D の点へ吸着)なら、円の面をその点を通るように倒す。
+        // 押した点を黙って外さない。
+        const Vector3 spoke = points[1] - points[0];
+        const bool tilted = radius > 0.0
+            && std::abs(Dot(settings_.planeNormal, spoke)) > tolerance_.modelLinearMm;
+        const Vector3 normal = tilted
+            ? Normalized(settings_.planeNormal - spoke * (Dot(settings_.planeNormal, spoke) / (radius * radius)))
+            : settings_.planeNormal;
+        if (tilted && normal == Vector3{}) {
+            return fail(kBadInput, "円の面の向きが決まりません。",
+                "半径の点が作業平面の法線の上にあります。");
+        }
+        auto made = CurveSegment::MakeCircle(points[0], normal, tilted ? Normalized(spoke) : PlaneU(),
             radius);
         if (!made.HasValue()) {
             return Result<ToolOutput>::Failure(made.Diagnostics());
@@ -273,6 +295,14 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
                 settings_.planeNormal);
             if (!made.HasValue()) {
                 return Result<ToolOutput>::Failure(made.Diagnostics());
+            }
+            // 終点は向きだけを使う。押した終点が円弧の端からずれたら、黙らずに言う。
+            const double drift = geometry::Distance(made.Value().EndPoint(), points[2]);
+            if (drift > tolerance_.modelLinearMm) {
+                output.warnings.push_back(base::MakeWarning(kEndDrift,
+                    "円弧の終点は押した点から " + FormatMm(drift) + " mm ずれています。",
+                    "中心・始点・終点の円弧は、終点を向きだけに使います(半径は中心から始点まで)。"
+                    "終点を線の端に合わせたいときは「3 点」の円弧か、始点を先に押してください。"));
             }
             output.segments.push_back(made.Value());
             return Result<ToolOutput>::Success(std::move(output));

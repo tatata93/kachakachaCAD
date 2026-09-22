@@ -19,16 +19,18 @@ namespace kachakacha::v2::geometry {
 
 //! 中心・始点・終点(D-08)。半径は中心から始点まで、終点は向きだけを使う。
 //! 始点から終点へ、面の法線まわりに左回り(反時計回り)。始点と終点が同じ向きなら作れない。
-//! 始点・終点は、中心を通り法線に垂直な面へ落としてから使う。
+//! 円弧の面は 3 点が決める(3D の点へ吸着していても始点を必ず通る)。planeNormal は表裏と、
+//! 3 点が一直線のときの面の向きにだけ使う。
 [[nodiscard]] base::Result<CurveSegment> ArcFromCenterStartEnd(Vector3 center, Vector3 start,
     Vector3 end, Vector3 planeNormal);
 
 //! 両端と半径。半径が小さすぎる(弦の半分未満)と作れない。
+//! 面は弦を含む(両端を必ず通る)。planeNormal は弦と直角に倒して使う。
 //! largeArc は優弧を取るか、clockwise は法線の向きを反転するか。
 [[nodiscard]] base::Result<CurveSegment> ArcFromEndpointsAndRadius(Vector3 start,
     Vector3 end, double radius, Vector3 planeNormal, bool largeArc, bool clockwise);
 
-//! 始点、始点での接線方向、半径、中心角。
+//! 始点、始点での接線方向、半径、中心角。面は接線を含む(planeNormal は接線と直角に倒す)。
 [[nodiscard]] base::Result<CurveSegment> ArcFromStartTangentRadiusSweep(Vector3 start,
     Vector3 tangent, Vector3 planeNormal, double radius, double sweepAngleRad);
 

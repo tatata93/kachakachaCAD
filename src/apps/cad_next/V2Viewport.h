@@ -381,6 +381,13 @@ public:
     {
         toolPickToggle_ = active;
         lastToolPick_.reset();   // 前の道具の押し跡を次の道具へ持ち越さない
+        lastToolPickPoint_.reset();
+    }
+    //! いま押した物の、押した点(TakeLastToolPick と対。読んでも消えず、次の押しで替わる)。
+    //! 押し直して選択から外れた物でも、どこを押したかは残る(辺の丸めで同じ部品の別の辺を選ぶ)。
+    [[nodiscard]] std::optional<kachakacha::v2::geometry::Vector3> LastToolPickPoint() const noexcept
+    {
+        return lastToolPickPoint_;
     }
     //! 押すたび入れる/外す の最中に、いま押した物(1回きり。読むと消える)。
     //! 選択の差分だけでは「別の欄へ移す」(同じ物をもう一度押す)が読めないので、押した当人を伝える。
@@ -1001,6 +1008,7 @@ private:
     //! 押すたびに入れる/外す(面を作る)。
     bool toolPickToggle_ = false;
     std::optional<kachakacha::v2::base::EntityId> lastToolPick_;
+    std::optional<kachakacha::v2::geometry::Vector3> lastToolPickPoint_;
     bool profileRegionPicking_ = false;
     bool profileRegionWiresFirst_ = false;
     std::vector<kachakacha::v2::app::ProfileRegion> profileRegions_;

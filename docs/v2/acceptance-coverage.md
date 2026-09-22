@@ -77,6 +77,7 @@
 | AT-SOL-001 | 部分 | tests_v2/solid_input_tests.cpp(輪郭の読み方は押し出しと同じ、軸が平面外 SOL-003・輪郭を横切る SOL-004・角度 SOL-005、Pappus の予測)+ tests_v2/solid_input_state_tests.cpp(閉じた線 → 輪郭、直線 → 軸、押し直すと外れる、足す・引くの相手、カードの表)+ tests_v2/document_file_tests.cpp(CreateSolid の往復)+ tests_v2/kernel_solid_tests.cpp(OCCT: 全回転 π·300·30、対称 90°)+ 自己試験 HP-SO-01/04。**OCCT と画面の試験は PC で通るまで部分** |
 | AT-SOL-002 | 部分 | tests_v2/solid_input_tests.cpp(断面 1 つ・開いた断面・端の断面が平らでない・重なりを断る)+ tests_v2/kernel_solid_tests.cpp(OCCT: 角錐台 4360 mm3 に 1% で合う)+ 自己試験 HP-SO-03(ガイド付き・中心線付きは押せない形)。**PC で通るまで部分** |
 | AT-SOL-003 | 部分 | tests_v2/solid_input_tests.cpp(経路が切れている SOL-006、輪郭の平面から始まらない・面に沿う SOL-008)+ tests_v2/kernel_solid_tests.cpp(OCCT: まっすぐな経路で円柱 π·25·40)+ 自己試験 HP-SO-02。**PC で通るまで部分** |
+| AT-FIN-001 | 部分 | tests_v2/kernel_edge_finish_tests.cpp(OCCT: 箱の縁を半径 3 で丸めると (1 - π/4) r² L、C 2 を 2 本で 2 × d²/2 × L、無い辺・大きすぎる半径を断る)+ tests_v2/edge_finish_input_state_tests.cpp(部品と近い辺が入り押し直すと外れる、別の部品で入れ替わる)+ tests_v2/document_file_tests.cpp(EdgeFinish の往復)+ 自己試験 HP-FL-01/02。**OCCT と画面の試験は PC で通るまで部分** |
 | AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) + tests_v2/measure_panel_tests.cpp(2点間モード: 押した2点で距離 13・dZ 12・軸との角度、残す値は距離)+ 自己試験(2点間・3点角度・寸法を残す・消去・右クリック) |
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(3点角度モードは2点目が頂点で 90 度) |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(要素モード: 線1本と点で接線・法線・半径、2本で接線どうしの角度) |

@@ -17,6 +17,7 @@
 //! (オーナー指示 §9)。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -58,7 +59,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         || thickenShelfShown_ || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
-        || (solidTool_ != nullptr && solidTool_->Active());
+        || OwnedToolShelf() != kachakacha::v2::app::Shelf::None;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -119,6 +120,9 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     // 立体を作る。角度の欄は打つたびに下見を作り直すので、打ちかけの取り合いは無い。
     if (solidTool_ != nullptr && solidTool_->Active()) {
         return solidTool_->HandleKey(key);
+    }
+    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) {
+        return edgeFinishTool_->HandleKey(key);
     }
     if (ShelfShown(kachakacha::v2::app::Shelf::Array)) {
         // 配列の棚(D-23)。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。

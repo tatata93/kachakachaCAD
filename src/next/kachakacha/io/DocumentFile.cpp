@@ -379,6 +379,16 @@ template<class Id>
         definition["symmetric"] = JsonValue::Bool(solid->symmetric);
         definition["booleanMode"] = JsonValue::Number(static_cast<double>(solid->booleanMode));
         definition["targets"] = WriteIdArray(solid->targets);
+    } else if (const auto* finish =
+                   std::get_if<domain::EdgeFinishDefinition>(&feature.definition)) {
+        definition["kind"] = JsonValue::Number(static_cast<double>(finish->kind));
+        definition["source"] = WriteId(finish->source);
+        definition["size"] = WriteExpression(finish->size);
+        JsonArray edges;
+        for (const Vector3& point : finish->edgeMidpoints) {
+            edges.push_back(WriteVector(point));
+        }
+        definition["edges"] = JsonValue::Array(std::move(edges));
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

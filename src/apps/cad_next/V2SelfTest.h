@@ -150,6 +150,9 @@ void Note(const char* what);
 //! 立体を作る(HP-SO、P-08/P-09)。回転体・スイープ・ロフト立体・断ると足す。
 [[nodiscard]] std::vector<SelfTestCase> SolidCases();
 
+//! 辺の丸め・面取り(HP-FL、P-12)。
+[[nodiscard]] std::vector<SelfTestCase> EdgeFinishCases();
+
 //! 上面 XY から決めた距離だけ離した作業平面を作って使う(断面を高さ違いに描くとき)。
 [[nodiscard]] bool UseTopPlaneOffsetBy(V2MainWindow& window, double offsetMm);
 

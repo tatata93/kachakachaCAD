@@ -68,6 +68,8 @@ enum class Shelf {
     SurfaceAnalysis,
     //! 「立体を作る」の欄(回転体・ロフト立体・スイープ、matrix P-08/P-09)。
     Solid,
+    //! 「辺の丸め・面取り」の欄(立体の辺のフィレット・面取り、matrix P-12)。
+    EdgeFinish,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -84,17 +86,18 @@ enum class Shelf {
 //! `editingSurface` は「面の編集の欄を構えている最中か」(自分で出して隠される形にしない)。
 //! `analyzing` は「面の解析の欄を開いている最中か」。道具の棚より後ろ(道具が前に出る。
 //! 解析の表示そのものは残るので、面を作る下見の間も効く)。
-//! `solidifying` は「立体を作る(回転体・ロフト立体・スイープ)の欄を構えている最中か」。
+//! `ownedShelf` は「自分の棚を持つ道具(立体を作る・辺の丸め面取り)が構えている最中なら、
+//! その棚」。構えていなければ Shelf::None。道具を増やすたびに bool を足さない。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
     bool extruding = false, bool surfacing = false, bool booleaning = false,
     bool thickening = false, bool editingSurface = false, bool analyzing = false,
-    bool solidifying = false);
+    Shelf ownedShelf = Shelf::None);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
 [[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
     bool extruding = false, bool surfacing = false, bool booleaning = false,
     bool thickening = false, bool editingSurface = false, bool analyzing = false,
-    bool solidifying = false);
+    Shelf ownedShelf = Shelf::None);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

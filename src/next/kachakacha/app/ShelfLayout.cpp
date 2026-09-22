@@ -29,6 +29,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::SurfaceEdit: return "面の編集";
     case Shelf::SurfaceAnalysis: return "面の解析";
     case Shelf::Solid:      return "立体を作る";
+    case Shelf::EdgeFinish: return "辺の丸め・面取り";
     }
     return "なし";
 }
@@ -40,14 +41,14 @@ const std::vector<Shelf>& AllShelves()
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
         Shelf::Boolean, Shelf::Thicken, Shelf::Array, Shelf::SurfaceEdit, Shelf::SurfaceAnalysis,
-        Shelf::Solid,
+        Shelf::Solid, Shelf::EdgeFinish,
     };
     return all;
 }
 
 std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     bool surfacing, bool booleaning, bool thickening, bool editingSurface, bool analyzing,
-    bool solidifying)
+    Shelf ownedShelf)
 {
     // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
@@ -76,9 +77,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     if (editingSurface) {
         return {Shelf::SurfaceEdit};
     }
-    // 「立体を作る」も同じ。輪郭・軸・経路の欄が見えていなければ、選び直しも確定も触れない。
-    if (solidifying) {
-        return {Shelf::Solid};
+    // 自分の棚を持つ道具(立体を作る・辺の丸め面取り)も同じ。欄が見えていなければ、
+    // 選び直しも確定も触れない。
+    if (ownedShelf != Shelf::None) {
+        return {ownedShelf};
     }
     // 「面の解析」は道具の棚より後ろ。道具を持てば道具の棚が前に出る(解析の表示は残る)。
     if (analyzing) {
@@ -152,10 +154,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
 }
 
 Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing,
-    bool booleaning, bool thickening, bool editingSurface, bool analyzing, bool solidifying)
+    bool booleaning, bool thickening, bool editingSurface, bool analyzing, Shelf ownedShelf)
 {
     const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding, surfacing, booleaning,
-        thickening, editingSurface, analyzing, solidifying);
+        thickening, editingSurface, analyzing, ownedShelf);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

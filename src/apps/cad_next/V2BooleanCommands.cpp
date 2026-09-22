@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -87,6 +88,12 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {
         ClearPendingCommand();
         solidTool_->Begin(id);
+        return true;
+    }
+    // 辺の丸め・面取り(P-12)も道具から始める。3D で部品の辺の近くを押す。
+    if (edgeFinishTool_ != nullptr && V2EdgeFinishTool::Handles(id)) {
+        ClearPendingCommand();
+        edgeFinishTool_->Begin(id);
         return true;
     }
     // 面の編集も道具から始める。何も選んでいなくても棚が出て、3D で面・縁・線を押せる。

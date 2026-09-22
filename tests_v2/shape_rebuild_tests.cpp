@@ -163,7 +163,8 @@ KACHA_V2_TEST(shape_rebuild, 全種類に名前がある)
              ShapeRebuildKind::WireCage, ShapeRebuildKind::Boolean,
              ShapeRebuildKind::GuideSurface, ShapeRebuildKind::ThickenSurface,
              ShapeRebuildKind::FabricationModel, ShapeRebuildKind::EditSurface,
-             ShapeRebuildKind::TransformPart, ShapeRebuildKind::Solid}) {
+             ShapeRebuildKind::TransformPart, ShapeRebuildKind::Solid,
+             ShapeRebuildKind::EdgeFinish}) {
         Require(!ShapeRebuildKindNameJa(kind).empty(), "名前がある");
         Require(ShapeRebuildKindNameJa(kind) != std::string_view("不明"), "不明でない");
     }

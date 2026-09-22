@@ -36,6 +36,8 @@ enum class FeatureType {
     TransformPart,
     //! 立体を作る(回転体・ロフト立体・スイープ、P-08/P-09)。作り方は定義の method が持つ。
     CreateSolid,
+    //! 立体の辺を丸める(フィレット)・落とす(面取り)。P-12。元の部品の形に掛ける。
+    EdgeFinish,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -57,6 +59,7 @@ enum class FeatureType {
     case FeatureType::EditSurface:            return "EditSurface";
     case FeatureType::TransformPart:          return "TransformPart";
     case FeatureType::CreateSolid:            return "CreateSolid";
+    case FeatureType::EdgeFinish:             return "EdgeFinish";
     }
     return "Unknown";
 }
@@ -293,6 +296,19 @@ struct CreateSolidDefinition {
     std::vector<EntityId> targets;
 };
 
+//! 立体の辺を丸める・落とす(P-12)。形は持たず、開き直したら元の部品を作り直してから
+//! 同じ辺(真ん中の点が同じ辺)を同じ大きさで丸め直す。
+struct EdgeFinishDefinition {
+    //! 0 = 丸め(フィレット、半径)、1 = 面取り(両側に同じ距離)。
+    int kind = 0;
+    //! 元の部品。
+    EntityId source;
+    //! 半径 / 距離(mm)。
+    geometry::EvaluatedValue size;
+    //! 辺の真ん中の点(番号は作り直しで並びが変わりうるので、点で指す)。
+    std::vector<geometry::Vector3> edgeMidpoints;
+};
+
 //! 製作モデル(近似モデル)。
 //!
 //! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
@@ -391,7 +407,7 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
     CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
-    EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition>;
+    EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition, EdgeFinishDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

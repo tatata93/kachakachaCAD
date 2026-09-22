@@ -113,8 +113,8 @@ const std::vector<RibbonCategory>& PartCategories()
                 Extra("ワイヤー群から部品", "part.from_wire_cage"), Extra("治具", "part.surface_jig"),
                 Extra("現在状態を固定", "derived.freeze")}},
         {"shape", "形状編集",
-            {Blocked("フィレット", "立体の辺の丸めはまだできません(核に辺の丸めがありません)"),
-                Blocked("面取り", "立体の辺の面取りはまだできません(核に辺の面取りがありません)"),
+            // 辺の丸め・面取り(P-12)。道具から始め、3D で部品の辺の近くを押す。
+            {Tool("フィレット", "part.fillet"), Tool("面取り", "part.chamfer"),
                 Blocked("シェル", "シェルはまだできません(核に面を抜く肉抜きがありません)"),
                 Blocked("分割", "立体の分割はまだできません(核に立体を切る道がありません)"),
                 Tool("結合", "part.boolean_add")}},

@@ -10,6 +10,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -236,6 +237,49 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
     return true;
 }
 
+//! 作り直しの 1 段(種類ごとに、作ったときと同じ道を通す)。RebuildKernelShapes から切り出した
+//! (1 関数 100 行の門)。
+bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& step,
+    const kachakacha::v2::domain::Feature& featureRef)
+{
+    const auto* feature = &featureRef;
+    bool ok = false;
+    switch (step.kind) {
+    case kachakacha::v2::app::ShapeRebuildKind::Extrude:
+        ok = RebuildExtrudeShape(*feature, step.outputEntityId, step.outputOrdinal);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::WireCage:
+        ok = RebuildWireCageShape(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::Boolean:
+        ok = RebuildBooleanShape(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::GuideSurface:
+        ok = RebuildGuideSurfaceShape(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::ThickenSurface:
+        ok = RebuildThickenShape(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::FabricationModel:
+        ok = RebuildFabricationModel(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::EditSurface:
+        ok = surfaceEdit_ != nullptr && surfaceEdit_->Rebuild(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::TransformPart:
+        ok = RebuildTransformPartShape(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::Solid:
+        ok = solidTool_ != nullptr && solidTool_->Rebuild(*feature, step.outputEntityId);
+        break;
+    case kachakacha::v2::app::ShapeRebuildKind::EdgeFinish:
+        ok = edgeFinishTool_ != nullptr
+            && edgeFinishTool_->Rebuild(*feature, step.outputEntityId);
+        break;
+    }
+    return ok;
+}
+
 void V2MainWindow::RebuildKernelShapes()
 {
     // 覚えていた形をいったん捨てる。捨てないと、開く前の文書の形が混ざる。
@@ -266,36 +310,7 @@ void V2MainWindow::RebuildKernelShapes()
         if (feature == nullptr) {
             continue;
         }
-        bool ok = false;
-        switch (step.kind) {
-        case kachakacha::v2::app::ShapeRebuildKind::Extrude:
-            ok = RebuildExtrudeShape(*feature, step.outputEntityId, step.outputOrdinal);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::WireCage:
-            ok = RebuildWireCageShape(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::Boolean:
-            ok = RebuildBooleanShape(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::GuideSurface:
-            ok = RebuildGuideSurfaceShape(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::ThickenSurface:
-            ok = RebuildThickenShape(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::FabricationModel:
-            ok = RebuildFabricationModel(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::EditSurface:
-            ok = surfaceEdit_ != nullptr && surfaceEdit_->Rebuild(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::TransformPart:
-            ok = RebuildTransformPartShape(*feature, step.outputEntityId);
-            break;
-        case kachakacha::v2::app::ShapeRebuildKind::Solid:
-            ok = solidTool_ != nullptr && solidTool_->Rebuild(*feature, step.outputEntityId);
-            break;
-        }
+        const bool ok = RebuildOneShape(step, *feature);
         if (ok) {
             ++made;
         } else {

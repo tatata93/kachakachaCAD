@@ -104,6 +104,7 @@ namespace {
         {"part.boolean_add", "足す"},
         {"part.revolve", "回転体"},
         {"part.loft_solid", "ロフト立体"},
+        {"part.fillet", "フィレット"},
         {"wire.chamfer", "C面取り"},
         {"fabrication.create", "近似"},
     };

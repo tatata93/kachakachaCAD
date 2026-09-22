@@ -4,6 +4,7 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -196,6 +197,8 @@ void V2MainWindow::BuildOutputShelves()
     surfaceAnalysis_ = std::make_unique<V2SurfaceAnalysisTool>(*this);
     // 立体を作る(回転体・ロフト立体・スイープ、P-08/P-09)。状態と棚は道具が持つ。
     solidTool_ = std::make_unique<V2SolidTool>(*this);
+    // 辺の丸め・面取り(P-12)。状態と棚は道具が持つ。
+    edgeFinishTool_ = std::make_unique<V2EdgeFinishTool>(*this);
 
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });

@@ -706,6 +706,27 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::EdgeFinish: {
+        domain::EdgeFinishDefinition made;
+        made.kind = static_cast<int>(loader.NumberOr(definition, "kind", 0.0));
+        made.source = loader.ParseId<EntityId>(loader.String(definition, "source", where),
+            where + ".source");
+        made.size = loader.ReadExpression(definition, "size", where);
+        if (const JsonArray* edges = loader.ArrayAt(definition, "edges", where); edges != nullptr) {
+            for (std::size_t index = 0; index < edges->size(); ++index) {
+                const JsonValue& item = (*edges)[index];
+                const std::string place = where + ".edges[" + std::to_string(index) + "]";
+                if (!item.IsObject()) {
+                    loader.Fail(kBadValue, "辺の点が組ではありません。", place);
+                    continue;
+                }
+                made.edgeMidpoints.push_back(Vector3{loader.Number(item, "x", place),
+                    loader.Number(item, "y", place), loader.Number(item, "z", place)});
+            }
+        }
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

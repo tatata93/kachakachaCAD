@@ -81,6 +81,7 @@ void V2MainWindow::BuildMenus()
         "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",
         "guide.clear", "part.extrude", "part.revolve", "part.loft_solid", "part.sweep",
+        "part.fillet", "part.chamfer",
         "part.thicken", "part.thickness_placement",
         "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",
         "part.boolean_add", "part.boolean_cut", "part.boolean_intersect", "part.move", "part.copy",

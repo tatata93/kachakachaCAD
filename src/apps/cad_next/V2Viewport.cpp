@@ -862,6 +862,9 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     lastToolPick_ = (toolPickToggle_ && picked.has_value())
         ? std::optional<kachakacha::v2::base::EntityId>{picked->entityId}
         : std::nullopt;
+    lastToolPickPoint_ = (toolPickToggle_ && picked.has_value())
+        ? std::optional<kachakacha::v2::geometry::Vector3>{picked->hitPoint}
+        : std::nullopt;
     // 道具が入力を待っている間は、役割が違うものを足す(§5)。
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,

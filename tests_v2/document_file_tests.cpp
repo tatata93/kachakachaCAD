@@ -628,6 +628,37 @@ KACHA_V2_TEST(documentFile, 立体の作成の作り方が往復する)
             && back->targets == solid.targets, "角度・対称・足し引きの相手");
 }
 
+KACHA_V2_TEST(documentFile, 辺の丸め面取りの作り方が往復する)
+{
+    // P-12: 辺は真ん中の点で指す(番号は作り直しで並びが変わりうる)。
+    DocumentFile original = MakeSampleDocument();
+    kachakacha::v2::domain::Feature feature;
+    kachakacha::v2::base::DeterministicIdGenerator ids{6161};
+    feature.id = ids.NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::EdgeFinish;
+    feature.displayName = "面取り";
+    kachakacha::v2::domain::EdgeFinishDefinition finish;
+    finish.kind = 1;
+    finish.source = original.snapshot.entities[0].id;
+    finish.size = EvaluatedValue{"1.5", 1.5, QuantityKind::Length};
+    finish.edgeMidpoints = {{20.0, 0.0, 30.0}, {20.0, 20.0, 30.0}};
+    feature.definition = finish;
+    original.snapshot.features.push_back(feature);
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    const kachakacha::v2::domain::EdgeFinishDefinition* back = nullptr;
+    for (const auto& candidate : read.Value().snapshot.features) {
+        if (candidate.type == FeatureType::EdgeFinish) {
+            back = std::get_if<kachakacha::v2::domain::EdgeFinishDefinition>(&candidate.definition);
+        }
+    }
+    Require(back != nullptr, "丸め・面取りの作り方が戻る");
+    Require(back->kind == 1 && back->source == finish.source, "種類と元の部品");
+    RequireNear(back->size.value, 1.5, 1e-12, "大きさ");
+    Require(back->edgeMidpoints.size() == 2 && back->edgeMidpoints[1].y == 20.0
+            && back->edgeMidpoints[0].z == 30.0, "辺の真ん中の点");
+}
+
 KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

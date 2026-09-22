@@ -459,6 +459,18 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "道具から始められます。閉じた輪郭と経路の線(何本でも。1 本につながるように)を"
             " 3D で押すと、輪郭を経路に沿って動かした立体を実際に作って下見に出します。", true,
             {"AT-SOL-003"}},
+        {"part.fillet", "フィレット(立体の辺)", CommandMode::Dialog, "fillet_edge", "",
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "道具から始められます。3Dで部品の辺の近くを押すと、その辺が入ります(何本でも。"
+            "押し直すと外れます)。半径で丸めた立体を実際に作って下見に出し、Enter で確定します"
+            "(元の部品は隠します)。", true,
+            {"AT-FIN-001"}},
+        {"part.chamfer", "面取り(立体の辺)", CommandMode::Dialog, "chamfer_edge", "",
+            SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
+            "道具から始められます。3Dで部品の辺の近くを押すと、その辺が入ります(何本でも)。"
+            "両側に同じ距離で落とした立体を実際に作って下見に出し、Enter で確定します"
+            "(元の部品は隠します)。", true,
+            {"AT-FIN-001"}},
         {"part.thicken", "面に厚みを付ける", CommandMode::Dialog, "thicken", "",
             SelectionPredicate::OneOrMoreGuideSurfaces,
             "形状ガイドの面を1つ以上選んでください。",

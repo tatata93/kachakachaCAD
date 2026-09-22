@@ -35,6 +35,7 @@
 #include "kachakacha/app/ApproxInput.h"
 #include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/BooleanInputState.h"
+#include "kachakacha/app/ShapeRebuild.h"
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/SurfaceRoleAssist.h"
@@ -96,6 +97,7 @@ class V2OperationPanelHost;
 class V2SurfaceEditTool;
 class V2SurfaceAnalysisTool;
 class V2SolidTool;
+class V2EdgeFinishTool;
 
 //! 見た目。
 enum class UiTheme {
@@ -107,6 +109,7 @@ class V2MainWindow final : public QMainWindow {
     friend class V2SurfaceEditTool;       // 面の編集の道具(状態と手順は向こうが持つ)
     friend class V2SurfaceAnalysisTool;   // 面の解析の道具(同じ)
     friend class V2SolidTool;             // 立体を作る(回転体・ロフト立体・スイープ。同じ)
+    friend class V2EdgeFinishTool;        // 辺の丸め・面取り(同じ)
 public:
     V2MainWindow();
     ~V2MainWindow() override;
@@ -272,6 +275,7 @@ public:
     [[nodiscard]] V2SurfaceEditTool& SurfaceEdit() { return *surfaceEdit_; }
     [[nodiscard]] V2SurfaceAnalysisTool& SurfaceAnalysis() { return *surfaceAnalysis_; }
     [[nodiscard]] V2SolidTool& SolidTool() { return *solidTool_; }
+    [[nodiscard]] V2EdgeFinishTool& EdgeFinishTool() { return *edgeFinishTool_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
     [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
     [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
@@ -715,6 +719,8 @@ public:
         const std::vector<kachakacha::v2::base::EntityId>& entityIds) const;
     //! 開き直したときに、立体と面を作り方から作り直す。V2RebuildCommands.cpp が持つ。
     void RebuildKernelShapes();
+    [[nodiscard]] bool RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& step,
+        const kachakacha::v2::domain::Feature& featureRef);
     bool RebuildExtrudeShape(const kachakacha::v2::domain::Feature& feature,
         const kachakacha::v2::base::EntityId& output, std::size_t ordinal);
     bool RebuildWireCageShape(const kachakacha::v2::domain::Feature& feature,
@@ -1049,6 +1055,9 @@ private:
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;
     std::unique_ptr<V2SolidTool> solidTool_;
+    std::unique_ptr<V2EdgeFinishTool> edgeFinishTool_;
+    //! 自分の棚を持つ道具(立体を作る・辺の丸め面取り)が構えていれば、その棚。無ければ None。
+    [[nodiscard]] kachakacha::v2::app::Shelf OwnedToolShelf() const;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     using SurfaceSnapshot = V2SurfaceSnapshot;   // 形と説明は V2MainWindowTypes.h

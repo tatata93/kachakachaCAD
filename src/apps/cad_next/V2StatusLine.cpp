@@ -5,12 +5,14 @@
 //!   HUD:    3D の左上に「モード › 道具」と案内。測定を重ねていれば戻り先も。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/EdgeFinishInputState.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/StatusLine.h"
 #include "kachakacha/modeling/SolidInput.h"
@@ -109,13 +111,16 @@ std::string V2MainWindow::RunningOperationNameJa() const
     const bool running = extrudeShelfShown_ || surfaceShelfShown_ || booleanShelfShown_
         || thickenShelfShown_ || approxShelfShown_ || cornerPreviewShown_
         || ShelfShown(Shelf::Array) || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
-        || (solidTool_ != nullptr && solidTool_->Active());
+        || OwnedToolShelf() != Shelf::None;
     if (!running || operationHost_ == nullptr) {
         return std::string();
     }
     // 立体を作るの棚は 3 つの道具で 1 枚。いまの作り方(回転体など)を名前にする。
     if (solidTool_ != nullptr && solidTool_->Active()) {
         return std::string(kachakacha::v2::modeling::SolidMethodNameJa(solidTool_->Input().method));
+    }
+    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) {
+        return std::string(kachakacha::v2::app::EdgeFinishKindNameJa(edgeFinishTool_->Input().kind));
     }
     const Shelf current = operationHost_->CurrentShelf();
     if (current == Shelf::None) {

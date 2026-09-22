@@ -641,6 +641,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ToolFooter.cpp
     src/next/kachakacha/app/PanelFrame.cpp
     src/next/kachakacha/app/SolidInputState.cpp
+    src/next/kachakacha/app/EdgeFinishInputState.cpp
     src/next/kachakacha/app/StatusLine.cpp
     src/next/kachakacha/app/DrawingMethodCards.cpp
     src/next/kachakacha/app/ToolKeys.cpp
@@ -744,6 +745,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
     src/next_occt/kachakacha/kernel/OcctTransform.cpp
     src/next_occt/kachakacha/kernel/OcctSolid.cpp
+    src/next_occt/kachakacha/kernel/OcctEdgeFinish.cpp
 )
 target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
 target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)
@@ -765,6 +767,10 @@ if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
             TKDESTEP
             TKDESTL
     )
+    # 辺の丸め・面取り(BRepFilletAPI、P-12)。TKOffset から間接に入ることが多いが、名指しで結ぶ。
+    if(TARGET TKFillet)
+        target_link_libraries(kachakacha_v2_occt PRIVATE TKFillet)
+    endif()
 endif()
 
 if(KACHACAD_BUILD_TESTS)
@@ -850,6 +856,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(panel_frame_tests tests_v2/panel_frame_tests.cpp)
     kachakacha_add_v2_test(solid_input_tests tests_v2/solid_input_tests.cpp)
     kachakacha_add_v2_test(solid_input_state_tests tests_v2/solid_input_state_tests.cpp)
+    kachakacha_add_v2_test(edge_finish_input_state_tests tests_v2/edge_finish_input_state_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
     kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
@@ -970,6 +977,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_boolean_tests tests_v2/kernel_boolean_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_place_tests tests_v2/kernel_place_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_solid_tests tests_v2/kernel_solid_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_edge_finish_tests tests_v2/kernel_edge_finish_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_er_export_tests tests_v2/kernel_er_export_tests.cpp)
@@ -998,6 +1006,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestPanelFrame.cpp
         src/apps/cad_next/V2SelfTestPartPlace.cpp
         src/apps/cad_next/V2SelfTestSolid.cpp
+        src/apps/cad_next/V2SelfTestEdgeFinish.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -1055,6 +1064,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceEditTool.cpp
         src/apps/cad_next/V2SolidDock.cpp
         src/apps/cad_next/V2SolidTool.cpp
+        src/apps/cad_next/V2EdgeFinishDock.cpp
+        src/apps/cad_next/V2EdgeFinishTool.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp
         src/apps/cad_next/V2SurfaceDockRoles.cpp
         src/apps/cad_next/V2SurfaceRoles.cpp

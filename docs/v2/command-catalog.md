@@ -133,6 +133,8 @@ parameter schemaのdiscriminatorにする。
 | `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(面の上の曲線。形が無いときだけ折れ線) | AT-FAB-013, AT-SRF-010 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Part/GuideSurface/Wire/Part+Wire | AT-EXT-001から008, AT-UIX-013 |
+| `part.fillet` | フィレット(立体の辺) | 道具から始める。部品 1(3Dで辺の近くを押す)、辺 1以上(何本でも。押し直すと外れる)、半径 | 丸めた Part(EdgeFinish。辺は真ん中の点で持ち、開き直したら同じ辺を丸め直す。元の部品は隠す)。大きすぎれば KER-R001、辺が無ければ KER-R002 | AT-FIN-001 |
+| `part.chamfer` | 面取り(立体の辺) | 道具から始める。部品 1、辺 1以上、距離(両側に同じ) | 落とした Part(EdgeFinish)。同上 | AT-FIN-001 |
 | `part.revolve` | 回転体(立体) | 道具から始める(0個から押せる)。閉じた輪郭 1以上(外周と穴)+ 回転軸の直線 1、作り方(全回転/角度指定/対称回転)、操作(新しい部品/足す/引く。足す・引くは相手の Part 1) | Part(CreateSolid。体積は Pappus の予測と突き合わせ、合わなければ KER-O002 で断る)。1 回で戻る | AT-SOL-001 |
 | `part.loft_solid` | ロフト立体 | 道具から始める。閉じた断面 2以上(何個でも。押した順に通す)、操作(新しい部品/足す/引く) | Part(CreateSolid)。ガイド付き・中心線付きは押せない形で理由を出す | AT-SOL-002 |
 | `part.sweep` | スイープ | 道具から始める。閉じた輪郭 1以上 + 経路の線 1以上(1 本につながる並び。輪郭の平面から始まる)、操作(新しい部品/足す/引く) | Part(CreateSolid。姿勢は経路に追従)。ねじれ指定・ガイド付きは押せない形で理由を出す | AT-SOL-003 |

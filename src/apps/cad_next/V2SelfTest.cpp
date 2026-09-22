@@ -101,6 +101,8 @@ namespace {
     cases.insert(cases.end(), partPlace.begin(), partPlace.end());
     const std::vector<SelfTestCase> solid = SolidCases();
     cases.insert(cases.end(), solid.begin(), solid.end());
+    const std::vector<SelfTestCase> edgeFinish = EdgeFinishCases();
+    cases.insert(cases.end(), edgeFinish.begin(), edgeFinish.end());
     const std::vector<SelfTestCase> generate = GenerateCases();
     cases.insert(cases.end(), generate.begin(), generate.end());
     const std::vector<SelfTestCase> unfold = UnfoldCases();

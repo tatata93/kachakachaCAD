@@ -38,6 +38,8 @@ enum class ShapeRebuildKind {
     TransformPart,
     //! 立体の作成(回転体・ロフト立体・スイープ)。輪郭のワイヤーから作り直す。
     Solid,
+    //! 辺の丸め・面取り(P-12)。元の部品が作り直された後に、同じ辺を丸め直す。
+    EdgeFinish,
 };
 
 [[nodiscard]] std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept;

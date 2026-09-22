@@ -6,6 +6,7 @@
 //! 「見やすくしただけ」のつもりが寸法を変えたことになる。
 
 #include "V2MainWindow.h"
+#include "V2EdgeFinishTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
@@ -887,9 +888,22 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::SurfaceAnalysis:
         return surfaceAnalysis_ != nullptr ? surfaceAnalysis_->Dock() : nullptr;
     case Shelf::Solid:       return solidTool_ != nullptr ? solidTool_->Dock() : nullptr;
+    case Shelf::EdgeFinish:  return edgeFinishTool_ != nullptr ? edgeFinishTool_->Dock() : nullptr;
     case Shelf::None:        break;
     }
     return nullptr;
+}
+
+kachakacha::v2::app::Shelf V2MainWindow::OwnedToolShelf() const
+{
+    using kachakacha::v2::app::Shelf;
+    if (solidTool_ != nullptr && solidTool_->Active()) {
+        return Shelf::Solid;
+    }
+    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) {
+        return Shelf::EdgeFinish;
+    }
+    return Shelf::None;
 }
 
 //! 右に出す棚を、いまの道具とモードに合わせる(オーナー指摘 2026-09-11)。
@@ -909,8 +923,7 @@ void V2MainWindow::RefreshRightShelves()
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
         extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thickenShelfShown_,
         surfaceEdit_ != nullptr && surfaceEdit_->Active(),
-        surfaceAnalysis_ != nullptr && surfaceAnalysis_->Shown(),
-        solidTool_ != nullptr && solidTool_->Active());
+        surfaceAnalysis_ != nullptr && surfaceAnalysis_->Shown(), OwnedToolShelf());
     if (operationHost_ != nullptr) {
         operationHost_->SetShelves(wanted);
     }

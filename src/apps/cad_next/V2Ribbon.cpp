@@ -179,15 +179,24 @@ void V2Ribbon::RebuildTools()
 void V2Ribbon::RevealCommand(std::string_view commandId)
 {
     const auto& categories = RibbonCategoriesFor(mode_);
-    for (std::size_t index = 0; index < categories.size(); ++index) {
+    const auto holds = [&](std::size_t index) {
         for (const RibbonTool& tool : categories[index].tools) {
-            if (tool.commandId == commandId && static_cast<int>(index) != current_) {
-                ShowCategory(static_cast<int>(index));
-                return;
-            }
             if (tool.commandId == commandId) {
-                return;   // もう見えている
+                return true;
             }
+        }
+        return false;
+    };
+    // いま見ているカテゴリにその命令があれば、そのまま(もう見えている)。先に並ぶ別のカテゴリへ
+    // 飛ぶと、測定の「面積」を押したのに注記の「寸法」の段へ替わっていた(撮影 ui/17、2026-09-22)。
+    if (current_ >= 0 && static_cast<std::size_t>(current_) < categories.size()
+        && holds(static_cast<std::size_t>(current_))) {
+        return;
+    }
+    for (std::size_t index = 0; index < categories.size(); ++index) {
+        if (holds(index)) {
+            ShowCategory(static_cast<int>(index));
+            return;
         }
     }
 }

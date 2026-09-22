@@ -117,6 +117,8 @@ struct ShotBox {
     }
     part = NewestOfKind(window, EntityKind::Part);
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    // 丸め・シェル・分割は部品モードの道具。帯とモード表示も部品にしてから撮る。
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
     return PartBox(window, part);
 }
 

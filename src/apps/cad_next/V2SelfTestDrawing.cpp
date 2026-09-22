@@ -779,6 +779,10 @@ using kachakacha::v2::modeling::ToolSettings;
         || !Explain("帯の「面積」を押せる", ribbon.ClickTool(QStringLiteral("面積")))) {
         return false;
     }
+    if (!Explain("面積を押しても帯は測定のまま(先に並ぶ注記へ飛ばない)",
+            ribbon.CategoryLabel(ribbon.CurrentCategory()) == QStringLiteral("測定"))) {
+        return false;
+    }
     auto& dock = window.MeasureDock();
     QString area;
     QString how;

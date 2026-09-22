@@ -539,6 +539,7 @@ public:
     void setRange(double, double);
     void setDecimals(int);
     void setSingleStep(double);
+    void setPrefix(const QString&);
     void setSuffix(const QString&);
     void setValue(double);
     [[nodiscard]] double value() const;
@@ -551,6 +552,7 @@ public:
     explicit QSpinBox(QWidget*) {}
     void setRange(int, int);
     void setSingleStep(int);
+    void setPrefix(const QString&);
     void setSuffix(const QString&);
     void setValue(int);
     [[nodiscard]] int value() const;

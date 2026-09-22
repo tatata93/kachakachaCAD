@@ -249,6 +249,98 @@ BandPartitionPreview PreviewBandSplitEach(const std::vector<double>& railParamet
     return preview;
 }
 
+namespace {
+
+//! 「35%」「12.5%」のような割合。整数なら小数を付けない。
+[[nodiscard]] std::string PercentJa(double fraction)
+{
+    const double percent = fraction * 100.0;
+    std::ostringstream text;
+    text.setf(std::ios::fixed);
+    text.precision(std::abs(percent - std::round(percent)) < 1.0e-9 ? 0 : 1);
+    text << percent << "%";
+    return text.str();
+}
+
+} // namespace
+
+BandPartitionPreview PreviewBandSplitAt(const std::vector<double>& railParameters,
+    const std::vector<double>& bandWidthsMm, const std::vector<std::size_t>& which,
+    double fraction, double minimumPartWidthMm)
+{
+    BandPartitionPreview preview;
+    if (which.empty()) {
+        preview.messageJa = "分ける部材の番号を 1 つ以上書いてください。";
+        return preview;
+    }
+    if (!std::isfinite(fraction) || fraction <= 0.0 || fraction >= 1.0) {
+        preview.messageJa = "分ける位置は 0% と 100% の間にしてください"
+                            "(部材の番号が小さい側から測ります)。";
+        return preview;
+    }
+    if (!std::isfinite(minimumPartWidthMm) || minimumPartWidthMm < 0.0) {
+        preview.messageJa = "細すぎる部材の基準が読めません。0 以上の数にしてください。";
+        return preview;
+    }
+    if (std::abs(fraction - 0.5) < 1.0e-12) {
+        return PreviewBandSplitEach(railParameters, bandWidthsMm, which, 2, minimumPartWidthMm);
+    }
+    const auto order = DescendingUnique(which);
+    std::vector<double> rails = railParameters;
+    std::vector<double> widths = bandWidthsMm;
+    double before = 0.0;
+    double firstTotal = 0.0;
+    double secondTotal = 0.0;
+    for (const std::size_t index : order) {
+        // 無い番号・読めない並びは、分け方の決まりと同じ一文で断る。
+        const auto checked = PreviewBandSplit(rails, widths, index, 0.0);
+        if (!checked.possible) {
+            return checked;
+        }
+        const double width = index < widths.size() ? widths[index] : 0.0;
+        const double first = width * fraction;
+        const double second = width - first;
+        if (minimumPartWidthMm > 0.0 && width > 0.0
+            && std::min(first, second) < minimumPartWidthMm) {
+            preview = checked;
+            preview.possible = false;
+            preview.railParameters.clear();
+            preview.messageJa = "部材" + std::to_string(index + 1) + " は " + Millimetres(width)
+                + "mm しかないので、" + PercentJa(fraction) + " の位置で分けると細いほうが "
+                + Millimetres(std::min(first, second)) + "mm になります。"
+                + Millimetres(minimumPartWidthMm) + "mm より細い帯は作れません。";
+            return preview;
+        }
+        before += width;
+        firstTotal += first;
+        secondTotal += second;
+        const double a = rails[index];
+        const double b = rails[index + 1];
+        rails.insert(rails.begin() + static_cast<long>(index) + 1, a + (b - a) * fraction);
+        if (index < widths.size()) {
+            widths[index] = first;
+            widths.insert(widths.begin() + static_cast<long>(index) + 1, second);
+        }
+    }
+    preview.possible = true;
+    preview.partsBefore = railParameters.size() - 1;
+    preview.partsAfter = rails.size() - 1;
+    preview.railParameters = std::move(rails);
+    preview.widthBeforeMm = before;
+    preview.firstWidthMm = firstTotal;
+    preview.secondWidthMm = secondTotal;
+    if (order.size() == 1) {
+        preview.messageJa = "部材" + std::to_string(order.front() + 1) + "(" + Millimetres(before)
+            + "mm)を、番号の小さい側から " + PercentJa(fraction) + " の位置で "
+            + Millimetres(firstTotal) + "mm と " + Millimetres(secondTotal) + "mm に分けます。";
+    } else {
+        preview.messageJa = PartListJa(order) + "(計 " + Millimetres(before)
+            + "mm)を、それぞれ番号の小さい側から " + PercentJa(fraction)
+            + " の位置で 2 枚に分けます。";
+    }
+    return preview;
+}
+
 BandPartitionPreview PreviewBandMergeRange(const std::vector<double>& railParameters,
     const std::vector<double>& bandWidthsMm, std::size_t first, std::size_t last)
 {

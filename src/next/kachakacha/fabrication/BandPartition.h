@@ -58,6 +58,15 @@ struct BandPartitionPreview {
     const std::vector<double>& railParameters, const std::vector<double>& bandWidthsMm,
     const std::vector<std::size_t>& which, std::size_t pieces, double minimumPartWidthMm);
 
+//! 挙げた部材(0 起点、1 つ以上)を、それぞれ **位置 `fraction`(0 と 1 の間)で 2 枚** に
+//! 分けたらどうなるか(F-06 位置指定)。位置は部材の番号が小さい側から測った幅の割合。
+//! 細いほうが最小幅より細くなる部材が 1 枚でもあれば全部断る。fraction = 0.5 は
+//! PreviewBandSplitEach(…, 2, …) と同じ(同じ形と言い方)。
+//! 値の引き継ぎは RemapForSplitEach(…, 2) と同じ(分けた 2 枚とも元の値)。
+[[nodiscard]] BandPartitionPreview PreviewBandSplitAt(
+    const std::vector<double>& railParameters, const std::vector<double>& bandWidthsMm,
+    const std::vector<std::size_t>& which, double fraction, double minimumPartWidthMm);
+
 //! 部材 `first` から `last` まで(隣り合う全部、2 枚以上)を 1 枚にしたらどうなるか。
 //! last = first + 1 なら PreviewBandMerge と同じ。
 [[nodiscard]] BandPartitionPreview PreviewBandMergeRange(

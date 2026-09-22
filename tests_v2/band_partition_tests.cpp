@@ -19,6 +19,7 @@ using kachakacha::v2::fabrication::ValidRailParameters;
 using kachakacha::v2::fabrication::BandValueRemap;
 using kachakacha::v2::fabrication::RemapForMerge;
 using kachakacha::v2::fabrication::PreviewBandMergeRange;
+using kachakacha::v2::fabrication::PreviewBandSplitAt;
 using kachakacha::v2::fabrication::PreviewBandSplitEach;
 using kachakacha::v2::fabrication::RemapForMergeRange;
 using kachakacha::v2::fabrication::RemapForSplitEach;
@@ -326,6 +327,47 @@ KACHA_V2_TEST(band_partition, 挙げた部材を全部分け1枚でも細すぎ�
         "部材2 を 3 枚にすると、3 枚とも 0.2");
     Require(carried.bendRadiusLock == std::vector<int>({0, 1, 1, 1, 0}), "半径の固定も 3 枚とも");
     Require(carried.creaseProgress.size() == 4, "折り線は部材より 1 本少ない");
+}
+
+KACHA_V2_TEST(band_partition, 位置を指定して分けられ細いほうで断る)
+{
+    // 部材2(16mm、境目 0.3〜0.7)を番号の小さい側から 25% の位置で: 4mm と 12mm。
+    const auto preview = PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 0.25, 3.0);
+    Require(preview.possible, "分けられる: " + preview.messageJa);
+    Require(preview.partsAfter == 4, "3 枚 → 4 枚");
+    Require(preview.railParameters.size() == 5, "境目は 5 本");
+    RequireNear(preview.railParameters[2], 0.4, 1.0e-12, "0.3 + 0.4 × 0.25 = 0.4");
+    RequireNear(preview.firstWidthMm, 4.0, 1.0e-12, "小さい側は 4mm");
+    RequireNear(preview.secondWidthMm, 12.0, 1.0e-12, "残りは 12mm");
+    Require(preview.messageJa.find("25%") != std::string::npos
+            && preview.messageJa.find("4.00mm と 12.00mm") != std::string::npos,
+        "位置と 2 つの幅を言う: " + preview.messageJa);
+    Require(ValidRailParameters(preview.railParameters), "並びとして正しい");
+    // 細いほうが基準より細いなら断る(16mm の 10% = 1.6mm < 3mm)。反対側でも同じ。
+    const auto thin = PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 0.1, 3.0);
+    Require(!thin.possible && thin.messageJa.find("1.60mm") != std::string::npos,
+        "細いほうの幅を言って断る: " + thin.messageJa);
+    Require(thin.railParameters.empty(), "断ったときは境目を返さない");
+    Require(!PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 0.9, 3.0).possible,
+        "反対側が細くても断る");
+    // 0% / 100% / 読めない位置は断る(0 幅の部材は作れない)。
+    Require(!PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 0.0, 3.0).possible, "0% は断る");
+    Require(!PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 1.0, 3.0).possible, "100% は断る");
+    Require(!PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1},
+                std::numeric_limits<double>::quiet_NaN(), 3.0).possible, "読めない位置は断る");
+    // 何枚でも: 部材1 と部材3 を 25% で。後ろから分けるので前の番号はずれない。
+    const auto both = PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {0, 2}, 0.25, 2.0);
+    Require(both.possible && both.partsAfter == 5, "部材1 と部材3 を分けて 5 枚: " + both.messageJa);
+    RequireNear(both.railParameters[1], 0.075, 1.0e-12, "部材1 は 0.3 × 0.25");
+    RequireNear(both.railParameters[4], 0.775, 1.0e-12, "部材3 は 0.7 + 0.3 × 0.25");
+    // 真ん中(50%)は、これまでの等分と同じ形と言い方。
+    const auto half = PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {1}, 0.5, 3.0);
+    const auto equal = PreviewBandSplitEach(ThreeParts(), ThreeWidths(), {1}, 2, 3.0);
+    Require(half.railParameters == equal.railParameters && half.messageJa == equal.messageJa,
+        "50% は等分と同じ");
+    // 無い番号は、分け方の決まりと同じ一文で断る。
+    Require(!PreviewBandSplitAt(ThreeParts(), ThreeWidths(), {5}, 0.25, 3.0).possible,
+        "部材6 は無い");
 }
 
 KACHA_V2_TEST(band_partition, 隣り合う何枚でも1枚にでき捨てる値を元の番号で言う)

@@ -458,6 +458,7 @@ void V2MainWindow::MergeFabricationParts()
 }
 
 //! 「部材を分ける」。棚の「対象部材」で挙げた部材(何枚でも)を、それぞれ棚の枚数に等分する。
+//! 2 枚のときは棚の位置(番号の小さい側から %)で分ける(F-06 位置指定)。
 void V2MainWindow::SplitFabricationPart()
 {
     const auto numbers = SelectedPartNumbers();
@@ -482,9 +483,14 @@ void V2MainWindow::SplitFabricationPart()
     const std::size_t pieces = fabricationDock_ == nullptr
         ? 2
         : static_cast<std::size_t>(std::max(2, fabricationDock_->SplitPieces()));
-    ProposeOrApplyPartition(QStringLiteral("部材を分ける"), numbers,
-        kachakacha::v2::fabrication::PreviewBandSplitEach(rails, widths, numbers, pieces,
-            minimumMm),
+    // 2 枚なら位置を選べる(F-06)。50% は等分と同じ形と言い方になる(core が同じ道を通す)。
+    const int percent = fabricationDock_ == nullptr ? 50 : fabricationDock_->SplitPercent();
+    const auto preview = pieces == 2
+        ? kachakacha::v2::fabrication::PreviewBandSplitAt(rails, widths, numbers,
+              static_cast<double>(percent) / 100.0, minimumMm)
+        : kachakacha::v2::fabrication::PreviewBandSplitEach(rails, widths, numbers, pieces,
+              minimumMm);
+    ProposeOrApplyPartition(QStringLiteral("部材を分ける"), numbers, preview,
         kachakacha::v2::fabrication::RemapForSplitEach(BandValuesNow(), parts, numbers,
             pieces));
 }

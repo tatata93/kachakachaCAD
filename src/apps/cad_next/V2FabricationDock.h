@@ -174,6 +174,9 @@ public:
     //! 「部材を分ける」で 1 枚を何枚に等分するか(2〜8)。人が欄に打つのと同じ道。
     [[nodiscard]] int SplitPieces() const;
     void SetSplitPieces(int pieces);
+    //! 2 枚に分けるときの位置(番号の小さい側から、5〜95%)。等分(3 枚以上)では使わない。
+    [[nodiscard]] int SplitPercent() const;
+    void SetSplitPercent(int percent);
 
 private:
     QWidget* BuildApproxInput(QWidget* body);
@@ -210,6 +213,8 @@ private:
     QDoubleSpinBox* reliefLigament_ = nullptr;
     //! 「部材を分ける」の枚数(等分)。
     QSpinBox* splitPieces_ = nullptr;
+    //! 「部材を分ける」の位置(%)。2 枚のときだけ効く(F-06 位置指定)。
+    QSpinBox* splitPercent_ = nullptr;
     QDoubleSpinBox* thickness_ = nullptr;
     QDoubleSpinBox* deviation_ = nullptr;
     QDoubleSpinBox* assembly_ = nullptr;

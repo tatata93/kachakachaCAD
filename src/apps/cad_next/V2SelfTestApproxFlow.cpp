@@ -590,7 +590,31 @@ using kachakacha::v2::domain::Visibility;
         return false;
     }
     window.RunCommand("edit.undo");
-    return Explain("1 回の元に戻すで分ける前へ戻る", panels() == before);
+    if (!Explain("1 回の元に戻すで分ける前へ戻る", panels() == before)) {
+        return false;
+    }
+    // 2 枚なら位置を選べる(F-06): 部材1 を番号の小さい側から 25% の位置で分ける。
+    std::vector<double> railsBefore;
+    std::vector<double> widthsBefore;
+    if (!Explain("帯の境目が読める", window.CurrentBandPartition(railsBefore, widthsBefore)
+                                        && railsBefore.size() >= 3)) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.FabricationDock().SetSplitPieces(2);
+    window.FabricationDock().SetSplitPercent(25);
+    window.RunCommand("fabrication.split_part");   // 1 度目: 見せる
+    const bool saidWhere = window.StatusText().contains(QStringLiteral("25%"));
+    window.RunCommand("fabrication.split_part");   // 2 度目: 当てる
+    std::vector<double> railsAfter;
+    std::vector<double> widthsAfter;
+    const bool read = window.CurrentBandPartition(railsAfter, widthsAfter);
+    const double expected = railsBefore[0] + (railsBefore[1] - railsBefore[0]) * 0.25;
+    window.FabricationDock().SetSplitPercent(50);
+    return Explain((std::string("位置 25% で分けると、部材1 の 1/4 のところに境目が入る(帯は ")
+                       + window.StatusText().toStdString() + ")").c_str(),
+        saidWhere && read && railsAfter.size() == railsBefore.size() + 1
+            && std::abs(railsAfter[1] - expected) < 1.0e-9 && panels() == before + 1);
 }
 
 } // namespace
@@ -608,7 +632,7 @@ std::vector<SelfTestCase> ApproximationFlowCases()
             CaseApproximationBendsAndOutputs},
         {"近似は1回の取り消しで戻り、保存して開き直しても残る",
             CaseApproximationUndoAndReopen},
-        {"部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻る",
+        {"部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻り位置も選べる",
             CaseSplitIntoPiecesAndMergeRange},
         {"製作の表示は元の面と近似の姿を出し分け文書は変えない",
             CaseFabricationDisplayTogglesAreViewOnly},

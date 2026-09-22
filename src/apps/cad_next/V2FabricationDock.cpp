@@ -649,14 +649,32 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     auto* splitPart = MakeRun(splitRow, QStringLiteral("部材を分ける"),
         "fabrication.split_part", this);
     splitPart->setToolTip(QStringLiteral("「対象部材」の部材(何枚でも)を、それぞれ右の枚数に"
-                                         "等分します。1度目は下見です。もう一度押すと実行します。"));
+                                         "等分します。2 枚のときは右の位置で分けます。"
+                                         "1度目は下見です。もう一度押すと実行します。"));
     splitPieces_ = new QSpinBox(splitRow);
     splitPieces_->setRange(2, 8);
     splitPieces_->setValue(2);
     splitPieces_->setSuffix(QStringLiteral(" 枚に"));
     splitPieces_->setToolTip(QStringLiteral("1 枚を何枚に等分するか。"));
+    // 2 枚に分けるときだけ、位置を選べる(番号の小さい側から測る)。3 枚以上は等分。
+    splitPercent_ = new QSpinBox(splitRow);
+    splitPercent_->setRange(5, 95);
+    splitPercent_->setSingleStep(5);
+    splitPercent_->setValue(50);
+    splitPercent_->setPrefix(QStringLiteral("位置 "));
+    splitPercent_->setSuffix(QStringLiteral(" %"));
+    splitPercent_->setToolTip(QStringLiteral("2 枚に分けるときの位置。部材の番号が小さい側から"
+                                             "測った幅の割合です(50% が真ん中)。"));
+    QObject::connect(splitPieces_, &QSpinBox::valueChanged, splitPercent_, [this](int pieces) {
+        splitPercent_->setEnabled(pieces == 2);
+        splitPercent_->setToolTip(pieces == 2
+                ? QStringLiteral("2 枚に分けるときの位置。部材の番号が小さい側から"
+                                 "測った幅の割合です(50% が真ん中)。")
+                : QStringLiteral("3 枚以上は等分します。位置は 2 枚に分けるときだけ使います。"));
+    });
     splitLayout->addWidget(splitPart, 1);
     splitLayout->addWidget(splitPieces_);
+    splitLayout->addWidget(splitPercent_);
     layout->addWidget(splitRow);
     auto* mergeParts = MakeRun(editWidget, QStringLiteral("部材を1つにする"),
         "fabrication.merge_parts", this);
@@ -1078,6 +1096,18 @@ void V2FabricationDock::SetSplitPieces(int pieces)
 {
     if (splitPieces_ != nullptr) {
         splitPieces_->setValue(pieces);
+    }
+}
+
+int V2FabricationDock::SplitPercent() const
+{
+    return splitPercent_ == nullptr || !splitPercent_->isEnabled() ? 50 : splitPercent_->value();
+}
+
+void V2FabricationDock::SetSplitPercent(int percent)
+{
+    if (splitPercent_ != nullptr) {
+        splitPercent_->setValue(percent);
     }
 }
 

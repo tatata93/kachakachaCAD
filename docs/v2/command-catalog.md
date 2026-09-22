@@ -69,9 +69,9 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `draw.arc` | 円弧 | 方式+方式別入力 | Wire(Arc) | AT-WIR-007 |
 | `draw.bezier` | ベジェ | 4制御点 | Wire(Bezier) | AT-WIR-001 |
 | `draw.spline` | スプライン | 通過点2以上、degree | Wire(B-spline) | AT-WIR-001 |
-| `wire.trim` | トリム | 対象segment、境界、残す側 | TransformWire | AT-WIR-006 |
-| `wire.extend` | 延長 | 対象端、境界/長さ | TransformWire | AT-WIR-006 |
-| `wire.split` | 分割 | segment、parameter/交点 | TransformWire | AT-WIR-001,006 |
+| `wire.trim` | トリム | 何も選ばず道具を持ち線上をホバー→消える区間(画面の全線との最近交点間、無ければ線ごと)がプレビューされ、押すと確定。先に2本選ぶ旧手順(対象線+境界+残す側)も可 | TransformWire(区間を除いた残り。円は円弧化、真ん中なら2本の open wire) | AT-WIR-006 |
+| `wire.extend` | 延長 | 何も選ばず道具を持ち端点近くをホバー→伸びる先(画面の全線のうち最近傍)がプレビューされ、押すと確定。先に2本選ぶ旧手順(対象端+境界)も可 | TransformWire | AT-WIR-006 |
+| `wire.split` | 分割 | 何も選ばず道具を持ち線上をホバー→最近傍交点に×がプレビューされ、押すと確定。先に2本以上選ぶ旧手順(segment、parameter/交点)も可 | TransformWire(2本のwireに分割) | AT-WIR-001,006 |
 | `wire.move` | 移動 | ワイヤー、2点 | TransformWire | AT-WIR-006 |
 | `wire.copy` | コピー | ワイヤー、2点 | TransformWire | AT-WIR-006 |
 | `wire.mirror` | ミラー複製 | ワイヤー、鏡の線2点 | TransformWire | AT-WIR-006 |

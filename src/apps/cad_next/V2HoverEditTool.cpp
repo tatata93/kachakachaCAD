@@ -178,7 +178,9 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
         feature.id = window_.ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
         feature.type = FeatureType::TransformWire;
         feature.displayName = label;
-        feature.inputEntityIds = {outcome.source.entityId};
+        // 元の線は入力に **しない**。残った鎖は形をそのまま持つ(作り直しに元は要らない)ので、
+        // 元の線は消せる。入力にすると「使っている」扱いで消せず、隠れた線が一覧に残る
+        // (PC 自己試験 HP-TR-01 2026-09-23)。Inventor と同じく、消した区間は無くなる。
         kachakacha::v2::domain::CreateWireDefinition wire;
         wire.segments = outcome.chains[index];
         wire.construction = outcome.source.construction;

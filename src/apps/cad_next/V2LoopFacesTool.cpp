@@ -224,7 +224,7 @@ EntityId V2LoopFacesTool::ReplaceWire(std::size_t selection,
     feature.id = window_.ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::TransformWire;
     feature.displayName = label;
-    feature.inputEntityIds = {sourceId};
+    // 元の線は入力にしない(形をそのまま持つので、元の線は消してよい。隠れた線を残さない)。
     kachakacha::v2::domain::CreateWireDefinition wire;
     wire.segments = {segment};
     wire.construction = source->construction;

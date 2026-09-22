@@ -170,7 +170,7 @@ using kachakacha::v2::modeling::DrawingTool;
             && CountOfKind(window, EntityKind::Wire) == wiresBefore)) {
         return false;
     }
-    (void)window.HandleToolKey(Qt::Key_Escape, nullptr);
+    (void)window.Viewport().PressEscape();
     return Explain("Esc で選択道具へ戻る", window.Session().CurrentTool() == DrawingTool::Select);
 }
 

@@ -1,4 +1,5 @@
 #include "V2ExtrudeDock.h"
+#include "V2PanelFrame.h"
 
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
@@ -67,7 +68,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
 
     // 1. 入力。**対象と輪郭を別の欄にする**(UI の正本「1. 入力」)。
     // 1本の文字列にしていたので、どちらを選び直すのか読めなかった。
-    layout->addWidget(new QLabel(QStringLiteral("1. 入力"), body_));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("1. 入力")));
     auto* targetRow = new QHBoxLayout();
     targetRow->addWidget(new QLabel(QStringLiteral("対象"), body_));
     targetValue_ = new QLabel(body_);
@@ -92,7 +93,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     input_->setWordWrap(true);
     input_->setVisible(false);
 
-    layout->addWidget(new QLabel(QStringLiteral("2. 結果"), body_));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("2. 結果")));
 
 }
 
@@ -214,7 +215,7 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     BuildOptionRows(layout);
 
     // 3. 状態と、下の3つのボタン(UI の正本「3. 状態」と actions)。
-    layout->addWidget(new QLabel(QStringLiteral("3. 状態"), body_));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("3. 状態")));
     result_ = new QLabel(body_);
     result_->setWordWrap(true);
     layout->addWidget(result_);
@@ -238,6 +239,7 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     buttons->addWidget(cancel_);
     buttons->addWidget(rePreview_);
     buttons->addWidget(confirm_);
+    MarkCancelConfirm(cancel_, confirm_);
     rootLayout->addLayout(buttons);
     setWidget(body_);
 

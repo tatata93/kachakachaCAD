@@ -144,6 +144,9 @@ void Note(const char* what);
 //! 配列(直線/円形)の棚(HP-AR、指示書 D-23)。
 [[nodiscard]] std::vector<SelfTestCase> ArrayCases();
 
+//! 道具の棚の共通の枠(HP-PF、C-10)。節の並び・キャンセルと確定・作図の共通。
+[[nodiscard]] std::vector<SelfTestCase> PanelFrameCases();
+
 //! 生成の「作り方」カード(HP-GN、matrix F-13/F-14)。現在状態 / Flat 0% / Target 100%。
 [[nodiscard]] std::vector<SelfTestCase> GenerateCases();
 

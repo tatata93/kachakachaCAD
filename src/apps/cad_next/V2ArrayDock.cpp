@@ -1,4 +1,5 @@
 #include "V2ArrayDock.h"
+#include "V2PanelFrame.h"
 
 #include <QComboBox>
 #include <QDockWidget>
@@ -41,7 +42,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(8);
 
-    layout->addWidget(new QLabel(QStringLiteral("作り方"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
     auto* methodRow = new QWidget(body);
     auto* methodLayout = new QHBoxLayout(methodRow);
     methodLayout->setContentsMargins(0, 0, 0, 0);
@@ -72,6 +73,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     hint_->setWordWrap(true);
     layout->addWidget(hint_);
 
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 設定")));
     auto* form = new QFormLayout();
     layout->addLayout(form);
     count_ = new QSpinBox(body);
@@ -115,6 +117,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     buttonsLayout->setContentsMargins(0, 0, 0, 0);
     cancel_ = new QPushButton(QStringLiteral("キャンセル"), buttons);
     confirm_ = new QPushButton(QStringLiteral("確定"), buttons);
+    MarkCancelConfirm(cancel_, confirm_);
     buttonsLayout->addWidget(cancel_);
     buttonsLayout->addWidget(confirm_);
     layout->addWidget(buttons);

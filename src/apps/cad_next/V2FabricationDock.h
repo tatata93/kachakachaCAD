@@ -45,6 +45,10 @@ public:
     void SetCandidateHandler(std::function<void(int)> handler);
     //! 対象の「解除」を押した。
     void SetClearSourcesHandler(std::function<void()> handler);
+    //! 近似の「キャンセル Esc」(共通の枠、C-10)。窓が Esc と同じ道へつなぐ。
+    void SetCancelHandler(std::function<void()> handler);
+    //! 試験から: 近似の段のキャンセルを押す(見えていて押せるときだけ)。
+    [[nodiscard]] bool ClickCancelApprox();
     //! 表示(F-04): 元の面・近似の姿を出すか。見るだけの切り替えで、文書は変えない。
     [[nodiscard]] bool ShowSource() const;
     [[nodiscard]] bool ShowApprox() const;
@@ -180,6 +184,7 @@ public:
 
 private:
     QWidget* BuildApproxInput(QWidget* body);
+    QWidget* BuildDisplayRow(QWidget* page);
     QWidget* BuildOptionsForm(QWidget* body);
     QWidget* BuildRangeAndMaterial(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
@@ -264,6 +269,8 @@ private:
     std::vector<QPushButton*> bendPresets_;
     class QSlider* bendSlider_ = nullptr;
     QPushButton* confirmApprox_ = nullptr;
+    QPushButton* cancelApprox_ = nullptr;
+    std::function<void()> cancelHandler_;
     std::function<void(int)> candidateHandler_;
     std::function<void()> clearSourcesHandler_;
     std::function<void()> displayHandler_;

@@ -23,6 +23,7 @@ void V2MainWindow::BuildEditingShelves()
     cornerDock_ = new V2CornerDock(this);
     cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
     cornerDock_->SetChoiceChangedHandler([this] { RefreshCornerPreview(); });
+    cornerDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
     fabricationDock_ = new V2FabricationDock(this);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
@@ -37,6 +38,12 @@ void V2MainWindow::BuildEditingShelves()
         ChooseApproxCandidate(candidate);
     });
     fabricationDock_->SetClearSourcesHandler([this] { ClearApproxSources(); });
+    // 近似の「キャンセル Esc」(共通の枠、C-10)。Esc と同じ道。
+    fabricationDock_->SetCancelHandler([this] {
+        if (!HandleToolKey(Qt::Key_Escape, nullptr)) {
+            SetStatus(QStringLiteral("近似: いまやめるものはありません。"));
+        }
+    });
     // 表示の切り替え(元の面・近似の姿)。見るだけなので文書は変えず、描き直すだけ。
     fabricationDock_->SetDisplayHandler([this] {
         RefreshShapeViews();
@@ -101,6 +108,16 @@ void V2MainWindow::BuildRightShelves()
             viewport_->SetPreferredCursorField(fieldId);
         }
     });
+    // 共通の枠(C-10): スナップは状態行の Snap と同じ値。キャンセル・確定は 3D で
+    // Esc・Enter を押したのと同じ道(窓の道具のキーの受け口も通る)。
+    drawingDock_->SetSnapChecked(snapEnabled_);
+    drawingDock_->SetSnapHandler([this](bool on) {
+        if (on != snapEnabled_) {
+            ToggleSnap();
+        }
+    });
+    drawingDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
+    drawingDock_->SetConfirmHandler([this] { SendKeyToViewport(Qt::Key_Return); });
 
     // グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。見え方だけで、文書は変えない。
     gridDock_ = new V2GridDock(this);

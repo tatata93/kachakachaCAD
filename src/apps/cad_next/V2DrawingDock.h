@@ -23,6 +23,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
+class QVBoxLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -89,8 +90,22 @@ public:
     //! カードが名指しした入力欄(空なら既定)。画面が 3D の入力列へ伝える。
     void SetCursorFieldHandler(std::function<void(const QString& fieldId)> handler);
 
+    // ---- 共通とキャンセル・確定(道具の棚の共通の枠、C-10) ----
+    //! 「スナップ有効」。状態行の Snap と同じ切り替えを映す(窓が持つ値を入れる)。
+    void SetSnapChecked(bool on);
+    [[nodiscard]] bool SnapChecked() const;
+    void SetSnapHandler(std::function<void(bool on)> handler);
+    //! 「キャンセル Esc」「確定 Enter」。窓が Esc・Enter と同じ道へつなぐ。
+    void SetCancelHandler(std::function<void()> handler);
+    void SetConfirmHandler(std::function<void()> handler);
+    //! 試験から: 見えていて押せるときだけ押す。
+    [[nodiscard]] bool ClickSnap();
+    [[nodiscard]] bool ClickCancel();
+    [[nodiscard]] bool ClickConfirm();
+
 private:
     void BuildArcRows(QFormLayout* form);
+    void BuildCommonAndActions(QVBoxLayout* layout, QWidget* page);
     void RebuildMethodCards();
     void ChooseMethod(int index);
     [[nodiscard]] QToolButton* MethodButton(const QString& labelJa) const;
@@ -137,4 +152,10 @@ private:
     std::function<void()> createWireHandler_;
     bool loading_ = false;
     std::function<void(const QString&)> cursorFieldHandler_;
+    QCheckBox* snap_ = nullptr;
+    QPushButton* cancel_ = nullptr;
+    QPushButton* confirm_ = nullptr;
+    std::function<void(bool)> snapHandler_;
+    std::function<void()> cancelHandler_;
+    std::function<void()> confirmHandler_;
 };

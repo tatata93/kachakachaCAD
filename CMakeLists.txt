@@ -639,6 +639,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ExplorerModel.cpp
     src/next/kachakacha/app/ToolRoleLabels.cpp
     src/next/kachakacha/app/ToolFooter.cpp
+    src/next/kachakacha/app/PanelFrame.cpp
     src/next/kachakacha/app/StatusLine.cpp
     src/next/kachakacha/app/DrawingMethodCards.cpp
     src/next/kachakacha/app/ToolKeys.cpp
@@ -841,6 +842,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(surface_deviation_limit_tests tests_v2/surface_deviation_limit_tests.cpp)
     kachakacha_add_v2_test(tool_role_labels_tests tests_v2/tool_role_labels_tests.cpp)
     kachakacha_add_v2_test(tool_footer_tests tests_v2/tool_footer_tests.cpp)
+    kachakacha_add_v2_test(panel_frame_tests tests_v2/panel_frame_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
     kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
@@ -983,6 +985,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestDrawingMethods.cpp
         src/apps/cad_next/V2SelfTestPartPanel.cpp
         src/apps/cad_next/V2SelfTestArray.cpp
+        src/apps/cad_next/V2SelfTestPanelFrame.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -1055,6 +1058,9 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2Shelves.cpp
         src/apps/cad_next/V2OperationPanelHost.cpp
         src/apps/cad_next/V2OperationPanelHost.h
+        src/apps/cad_next/V2PanelFrame.cpp
+        src/apps/cad_next/V2PanelFrame.h
+        src/apps/cad_next/V2MainWindowTypes.h
         src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2SelfTestEdit.cpp
         src/apps/cad_next/V2ExportCommands.cpp

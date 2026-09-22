@@ -41,6 +41,7 @@
 #include "kachakacha/app/ToolRoleLabels.h"
 
 #include "V2ExtrudeDialog.h"
+#include "V2MainWindowTypes.h"
 #include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
@@ -311,15 +312,7 @@ public:
     //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
     //! 0mm など作れない量なら理由を出して偽を返す。
     bool ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice);
-    //! 決めたひと組。**覚える形** と **カーネルへ渡す形** を分けて持つ。分けないと、
-    //! 渡すために向きを畳んだ値がそのまま覚えられて次に「数値で決める」に化け、
-    //! 逆に覚える形だけにすると矢印と作る形が別々に向きを当て直すことになる。
-    struct PreparedExtrudeChoice {
-        //! 人が選んだ決め方のまま。次の初期値になる。
-        kachakacha::v2::app::ExtrudeChoice remembered;
-        //! 向きを解いたもの。作る形はこれで作る。
-        kachakacha::v2::app::ExtrudeChoice resolved;
-    };
+    using PreparedExtrudeChoice = V2PreparedExtrudeChoice;   // 形と説明は V2MainWindowTypes.h
     //! 読み取った入力の片方を外して選び直す(EX-07)。
     //! target が真なら加工する立体、偽なら輪郭・面を外す。もう片方は残す。
     void ReselectExtrudeInput(bool target);
@@ -546,6 +539,8 @@ public:
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
     void ToggleSnap();
+    void SendKeyToViewport(int key);   //!< 棚のキャンセル・確定 = 3D の Esc・Enter
+    [[nodiscard]] bool SnapEnabled() const noexcept { return snapEnabled_; }
     //! 見え方の段を当てる。段の中身は core が決める。
     void ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage);
     //! 一覧で名前を書き換え始める(F2)。
@@ -989,15 +984,7 @@ private:
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> extrudeOutlines_;
     //! 直前の確定で出来た部品。平面ごとの足す・引くで、次の平面の相手にする。
     std::vector<kachakacha::v2::base::EntityId> adoptedExtrudeParts_;
-    //! 下見を出した瞬間の入力の写し(オーナー指示 §9)。**下見と確定は同じ写しから作る。**
-    //! 確定のときに選択を読み直すと、下見のあとに選択が変わった分だけ別の形が出来る。
-    //! 選択が変わったら写しを作り直し、下見も出し直す(黙って読み直さない)。
-    struct ExtrudeSnapshot {
-        kachakacha::v2::app::ExtrudePlan plan;
-        std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
-        //! 面を押しているか。面の縁は `faceProfileLoops_` が持つ。
-        bool facePushPull = false;
-    };
+    using ExtrudeSnapshot = V2ExtrudeSnapshot;   // 形と説明は V2MainWindowTypes.h
     std::optional<ExtrudeSnapshot> extrudeSnapshot_;
     //! 「開始側の輪郭ワイヤー」を作るときの、押す前の輪郭。確定の間だけ持つ。
     //! **元の輪郭は触らない。**ここから新しい文書のワイヤーを作る。
@@ -1046,13 +1033,7 @@ private:
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
-    //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。
-    //! 確定のときに選び直さない。見たものと違う面が出来るのを防ぐ。
-    struct SurfaceSnapshot {
-        kachakacha::v2::modeling::GuideTable table;
-        kachakacha::v2::modeling::GuideSurfaceResult built;
-        std::vector<std::pair<kachakacha::v2::modeling::GuideTable, kachakacha::v2::modeling::GuideSurfaceResult>> batch;   // 一括の 2 つ目以降
-    };
+    using SurfaceSnapshot = V2SurfaceSnapshot;   // 形と説明は V2MainWindowTypes.h
     std::optional<SurfaceSnapshot> surfaceSnapshot_;
     kachakacha::v2::app::SurfaceRoleAnalysis surfaceRoles_;
     V2SurfaceDock* surfaceDock_ = nullptr;
@@ -1186,20 +1167,7 @@ private:
     //! 画面から窓へ戻ってくる知らせを、まとめて繋ぐ。組み立ての続き。
     void WireViewportCallbacks();
     void HandleSelectionChanged();
-    //! 「選択に正対」の相手。点と、はっきりしている面の向き。
-    struct FacingTarget {
-        std::vector<kachakacha::v2::geometry::Vector3> points;
-        //! 作業平面のように向きがはっきりしているときだけ入る。推さない。
-        std::optional<kachakacha::v2::geometry::Vector3> normal;
-        std::optional<kachakacha::v2::geometry::Vector3> uAxis;
-        //! 正対の相手になったものの数。画面の一文に出す。
-        int count = 0;
-        //! 向きを変えない相手か(立体そのものなど)。中央と大きさだけ合わせる。
-        bool keepOrientation = false;
-        //! 複数選んだときの決まり(Q1 の契約): **向きは向きを持つ最初の1つ、収まりは全部**が決める。
-        //! 向きの違う相手が混じっていたら真になり、帯にそう出る(黙ってどれかの向きにしない)。
-        bool mixedDirections = false;
-    };
+    using FacingTarget = V2FacingTarget;   // 形と説明は V2MainWindowTypes.h
     //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
     bool facingFromBehind_ = false;
     //! 直前の作り直しで作れなかったものの名前。作れていれば空。
@@ -1243,16 +1211,7 @@ public:
         const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま部材ごとに持っている値。引き継ぎの元になる。
     [[nodiscard]] kachakacha::v2::fabrication::BandValueRemap BandValuesNow() const;
-    //! 分け方を変える前に見せている案。1度目の指示で用意し(**文書は変えない**、Codex Q1-Q5-R3 B1)、
-    //! 2度目で当てる。やめる・道具を替える・別の指示を出すと消える。
-    struct PendingPartition {
-        QString what;
-        std::vector<std::size_t> numbers;
-        //! どの模型の、どの値に対して見せた案か。変わっていたら当てない。
-        std::string signature;
-        kachakacha::v2::fabrication::BandPartitionPreview preview;
-        kachakacha::v2::fabrication::BandValueRemap carried;
-    };
+    using PendingPartition = V2PendingPartition;   // 形と説明は V2MainWindowTypes.h
     std::optional<PendingPartition> pendingPartition_;
 public:
     //! 見せている案を捨てる。やめたとき・道具を替えたときに通る。
@@ -1282,14 +1241,7 @@ public:
     [[nodiscard]] int UnfoldBaseRailNow() const;
     //! いまの製作モデルの部材の数。
     [[nodiscard]] std::size_t FabricationPanelCount() const;
-    //! 棚の「曲げる部材」の欄を1回だけ読んだ結果。
-    //! **空欄と、書いてあって読めない字を、型で分ける。**
-    struct PartNumberSelection {
-        bool blank = true;                  //!< 何も書いていない
-        bool unreadable = false;            //!< 書いてあるが読めない
-        std::string whyJa;                  //!< 読めない理由
-        std::vector<std::size_t> numbers;   //!< 0 起点
-    };
+    using PartNumberSelection = V2PartNumberSelection;   // 形と説明は V2MainWindowTypes.h
     [[nodiscard]] PartNumberSelection ReadPartNumbers() const;
     //! 棚の「曲げる部材」に書いた番号。0 起点。
     [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;

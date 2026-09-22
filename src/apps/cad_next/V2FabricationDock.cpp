@@ -1,4 +1,5 @@
 #include "V2FabricationDock.h"
+#include "V2PanelFrame.h"
 
 #include "kachakacha/app/ApproxInput.h"
 
@@ -97,33 +98,25 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(2);
     confirmApprox_ = MakeRun(buttons, QStringLiteral("製作モデルを作る(確定 Enter)"), "fabrication.create", this);
-    buttonLayout->addWidget(confirmApprox_);
+    // キャンセルと確定は共通の枠の形(C-10)。キャンセルは Esc と同じ(近似をやめる)。
+    cancelApprox_ = new QPushButton(buttons);
+    MarkCancelConfirm(cancelApprox_, confirmApprox_);
+    QObject::connect(cancelApprox_, &QPushButton::clicked, this, [this] {
+        if (cancelHandler_) {
+            cancelHandler_();
+        }
+    });
+    auto* actionRow = new QHBoxLayout();
+    actionRow->setContentsMargins(0, 0, 0, 0);
+    actionRow->addWidget(cancelApprox_);
+    actionRow->addWidget(confirmApprox_, 1);
+    buttonLayout->addLayout(actionRow);
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("近似プレビューを更新"), "fabrication.preview_update", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択境界を開口 / 折り線にする"), "fabrication.assign_role", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択した開いた線を切れ目にする"), "fabrication.assign_relief_cut", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("接続する部材の範囲を決める"), "fabrication.set_connection_scope", this));
     approximationLayout->addWidget(buttons);
-    // 表示(F-04)。元の面と近似の姿を見比べる。見るだけの切り替えで、文書は変えない。
-    // 誤差の色分けは、近似の核が点ごとの外れを返さないので押せない形で理由を出す。
-    auto* display = new QWidget(approximationPage);
-    auto* displayLayout = new QHBoxLayout(display);
-    displayLayout->setContentsMargins(0, 0, 0, 0);
-    displayLayout->addWidget(new QLabel(QStringLiteral("表示"), display));
-    showSource_ = new QCheckBox(QStringLiteral("元の面"), display);
-    showSource_->setChecked(true);
-    showSource_->setToolTip(QStringLiteral("近似の元にした面を出します。消しても文書は変わりません。"));
-    showApprox_ = new QCheckBox(QStringLiteral("近似の姿"), display);
-    showApprox_->setChecked(true);
-    showApprox_->setToolTip(QStringLiteral("いまの曲げ状態での部材の境目と姿を出します。"));
-    auto* heatmap = new QCheckBox(QStringLiteral("誤差の色"), display);
-    heatmap->setEnabled(false);
-    heatmap->setToolTip(QStringLiteral("近似の核が点ごとの外れを返さないので、まだ塗れません"
-                                       "(最大誤差は数で出ています)。"));
-    displayLayout->addWidget(showSource_);
-    displayLayout->addWidget(showApprox_);
-    displayLayout->addWidget(heatmap);
-    displayLayout->addStretch(1);
-    approximationLayout->addWidget(display);
+    approximationLayout->addWidget(BuildDisplayRow(approximationPage));
     approximationLayout->addStretch(1);
     stages_->addTab(approximationPage, QStringLiteral("1 近似モデル"));
 
@@ -168,27 +161,41 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     RefreshMethodRows();
 }
 
+//! 表示(F-04)の行。コンストラクタを 100 行以内に保つために分けた。
+QWidget* V2FabricationDock::BuildDisplayRow(QWidget* page)
+{
+    // 表示(F-04)。元の面と近似の姿を見比べる。見るだけの切り替えで、文書は変えない。
+    // 誤差の色分けは、近似の核が点ごとの外れを返さないので押せない形で理由を出す。
+    auto* display = new QWidget(page);
+    auto* displayLayout = new QHBoxLayout(display);
+    displayLayout->setContentsMargins(0, 0, 0, 0);
+    displayLayout->addWidget(MakePanelSectionTitle(display, QStringLiteral("表示")));
+    showSource_ = new QCheckBox(QStringLiteral("元の面"), display);
+    showSource_->setChecked(true);
+    showSource_->setToolTip(QStringLiteral("近似の元にした面を出します。消しても文書は変わりません。"));
+    showApprox_ = new QCheckBox(QStringLiteral("近似の姿"), display);
+    showApprox_->setChecked(true);
+    showApprox_->setToolTip(QStringLiteral("いまの曲げ状態での部材の境目と姿を出します。"));
+    auto* heatmap = new QCheckBox(QStringLiteral("誤差の色"), display);
+    heatmap->setEnabled(false);
+    heatmap->setToolTip(QStringLiteral("近似の核が点ごとの外れを返さないので、まだ塗れません"
+                                       "(最大誤差は数で出ています)。"));
+    displayLayout->addWidget(showSource_);
+    displayLayout->addWidget(showApprox_);
+    displayLayout->addWidget(heatmap);
+    displayLayout->addStretch(1);
+    return display;
+}
+
 QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
 {
     auto* box = new QWidget(body);
     auto* layout = new QVBoxLayout(box);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(2);
-    auto* row = new QHBoxLayout();
-    row->addWidget(new QLabel(QStringLiteral("対象"), box));
-    sourcesValue_ = new QLabel(QStringLiteral("(3D で面か立体を押してください)"), box);
-    sourcesValue_->setWordWrap(true);
-    row->addWidget(sourcesValue_, 1);
-    clearSources_ = new QPushButton(QStringLiteral("解除"), box);
-    QObject::connect(clearSources_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearSourcesHandler_) {
-            clearSourcesHandler_();
-        }
-    });
-    row->addWidget(clearSources_);
-    layout->addLayout(row);
     // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
-    layout->addWidget(new QLabel(QStringLiteral("作り方"), box));
+    // 正本の順(見出し → 作り方 → 対象 → 近似条件 → …、C-10)で、作り方を先に置く。
+    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("作り方")));
     // 4 枚を 2×2 に。横 1 列だと 330px の棚で 2 枚しか見えなかった(PC 画面 2026-09-19)。
     auto* policyRow = new QGridLayout();
     policyRow->setHorizontalSpacing(2);
@@ -209,7 +216,20 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     }
     layout->addLayout(policyRow);
     ShowPolicy(0);
-    layout->addWidget(new QLabel(QStringLiteral("候補(実際に作って比べます)"), box));
+    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("対象")));
+    auto* row = new QHBoxLayout();
+    sourcesValue_ = new QLabel(QStringLiteral("(3D で面か立体を押してください)"), box);
+    sourcesValue_->setWordWrap(true);
+    row->addWidget(sourcesValue_, 1);
+    clearSources_ = new QPushButton(QStringLiteral("解除"), box);
+    QObject::connect(clearSources_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearSourcesHandler_) {
+            clearSourcesHandler_();
+        }
+    });
+    row->addWidget(clearSources_);
+    layout->addLayout(row);
+    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("候補(実際に作って比べます)")));
     for (int index = 0; index < 3; ++index) {
         auto* button = new QPushButton(box);
         button->setCheckable(true);
@@ -283,6 +303,20 @@ void V2FabricationDock::SetShowApprox(bool shown)
 void V2FabricationDock::SetDisplayHandler(std::function<void()> handler)
 {
     displayHandler_ = std::move(handler);
+}
+
+void V2FabricationDock::SetCancelHandler(std::function<void()> handler)
+{
+    cancelHandler_ = std::move(handler);
+}
+
+bool V2FabricationDock::ClickCancelApprox()
+{
+    if (cancelApprox_ == nullptr || !cancelApprox_->isVisible() || !cancelApprox_->isEnabled()) {
+        return false;
+    }
+    cancelApprox_->click();
+    return true;
 }
 
 void V2FabricationDock::SetClearSourcesHandler(std::function<void()> handler)
@@ -434,6 +468,7 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     // 380px の棚に収める: 長いラベルの行は折り返し、伸ばせる欄は伸ばす。
     form_->setRowWrapPolicy(QFormLayout::WrapLongRows);
     form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    form_->addRow(MakePanelSectionTitle(formWidget, QStringLiteral("近似条件")));
     method_ = new QComboBox(formWidget);
     method_->addItem(QStringLiteral("V1方式(帯へ近似し直す)"));
     method_->addItem(QStringLiteral("V2方式(面を分類して展開)"));

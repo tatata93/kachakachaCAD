@@ -1,4 +1,5 @@
 #include "V2BooleanDock.h"
+#include "V2PanelFrame.h"
 
 #include <QDockWidget>
 #include <QHBoxLayout>
@@ -34,8 +35,8 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    // 1. 操作。押して切り替える。押された形が、いまの操作。
-    layout->addWidget(new QLabel(QStringLiteral("1. 操作"), body));
+    // 1. 作り方(足す・引く)。押して切り替える。押された形が、いまの作り方(正本の methods)。
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
     auto* operations = new QHBoxLayout();
     add_ = new QPushButton(QStringLiteral("足す"), body);
     cut_ = new QPushButton(QStringLiteral("引く"), body);
@@ -58,7 +59,7 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     BuildRows(layout);
 
     // 3. 状態。
-    layout->addWidget(new QLabel(QStringLiteral("3. 状態"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -80,6 +81,7 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addStretch(1);
     actions->addWidget(confirm_);
+    MarkCancelConfirm(cancel_, confirm_);
     layout->addLayout(actions);
 }
 
@@ -87,7 +89,7 @@ void V2BooleanDock::BuildRows(QVBoxLayout* layout)
 {
     // 2. 入力。土台 / 相手。欄ごとに「ここへ選ぶ」と「解除」。
     // 3D の次のクリックがどの欄へ入るかは、押された形の「ここへ選ぶ」でいつも見えている。
-    layout->addWidget(new QLabel(QStringLiteral("2. 入力"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("2. 入力")));
     const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
                          QPushButton** clear, BooleanSlot slot) {
         auto* line = new QHBoxLayout();

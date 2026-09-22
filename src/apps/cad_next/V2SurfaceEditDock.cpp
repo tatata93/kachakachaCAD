@@ -1,4 +1,5 @@
 #include "V2SurfaceEditDock.h"
+#include "V2PanelFrame.h"
 
 #include <QComboBox>
 #include <QDockWidget>
@@ -67,8 +68,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     BuildOperationCards(layout);
 
     // 2. 入力。欄の名前と入れたものを 1 行ずつ。3D で押すと入り、押し直すと外れる。
-    auto* inputTitle = new QLabel(QStringLiteral("2. 入力(3D で押すと入り、押し直すと外れます)"), body);
-    inputTitle->setWordWrap(true);
+    auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("2. 入力(3D で押すと入り、押し直すと外れます)"));
     layout->addWidget(inputTitle);
     entries_ = new QTreeWidget(body);
     entries_->setColumnCount(2);
@@ -99,7 +99,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     BuildOptions(layout);
 
     // 4. 状態。
-    layout->addWidget(new QLabel(QStringLiteral("4. 状態"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -127,13 +127,14 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addStretch(1);
     actions->addWidget(confirm_);
+    MarkCancelConfirm(cancel_, confirm_);
     rootLayout->addLayout(actions);
 }
 
 void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)
 {
     // 1. 作り方。押された形がいまの作り方。
-    layout->addWidget(new QLabel(QStringLiteral("1. 作り方"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("1. 作り方")));
     const auto& operations = kachakacha::v2::app::SurfaceEditOperations();
     for (std::size_t index = 0; index < operations.size() && index < cards_.size(); ++index) {
         const SurfaceEditOperation operation = operations[index];
@@ -154,7 +155,7 @@ void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)
 void V2SurfaceEditDock::BuildOptions(QVBoxLayout* layout)
 {
     // 3. 設定。作り方で使うものだけ出す。
-    layout->addWidget(new QLabel(QStringLiteral("3. 設定"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("3. 設定")));
     auto* form = new QFormLayout();
     continuityALabel_ = new QLabel(QStringLiteral("滑らかさ"), widget());
     continuityA_ = new QComboBox(widget());

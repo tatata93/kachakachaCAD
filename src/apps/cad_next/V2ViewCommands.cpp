@@ -10,6 +10,7 @@
 #include "V2SurfaceEditTool.h"
 #include "V2OperationPanelHost.h"
 
+#include "V2DrawingDock.h"
 #include "V2SurfaceDock.h"
 
 #include "V2EntityTree.h"
@@ -22,7 +23,10 @@
 #include "kachakacha/document/Commands.h"
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QDockWidget>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QPoint>
 #include <QString>
@@ -53,6 +57,19 @@ bool V2MainWindow::IsViewCommand(std::string_view id)
         || id == "entity.rename";
 }
 
+//! 3D に Esc・Enter を押したのと同じ道(窓の道具のキーの受け口 → 3D の手つき)。
+//! 棚のキャンセル・確定のボタンが使う。キーを知らない人もマウスだけで同じことができる。
+void V2MainWindow::SendKeyToViewport(int key)
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(viewport_, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(viewport_, &release);
+}
+
 void V2MainWindow::ToggleSnap()
 {
     snapEnabled_ = !snapEnabled_;
@@ -63,6 +80,9 @@ void V2MainWindow::ToggleSnap()
     // 画面がその両方をまとめて持つ。片方だけ見ると、S を離した瞬間に
     // 切ってあったはずの吸着が戻る。
     viewport_->SetSnapSuppressed(!snapEnabled_);
+    if (drawingDock_ != nullptr) {
+        drawingDock_->SetSnapChecked(snapEnabled_);   // 作図の棚の「共通」も同じ値
+    }
     SetStatus(snapEnabled_ ? QStringLiteral("吸着を入れました。")
                            : QStringLiteral("吸着を切りました(Sでも一時的に止められます)。"));
 }

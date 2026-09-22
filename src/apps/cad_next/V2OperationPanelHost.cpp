@@ -91,6 +91,17 @@ bool V2OperationPanelHost::Shows(kachakacha::v2::app::Shelf shelf) const
         != shownShelves_.end();
 }
 
+QWidget* V2OperationPanelHost::CurrentPage() const
+{
+    const auto found = pageByShelf_.find(current_);
+    return found == pageByShelf_.end() ? nullptr : found->second;
+}
+
+QString V2OperationPanelHost::CurrentShelfTitle() const
+{
+    return title_->text();
+}
+
 kachakacha::v2::app::Shelf V2OperationPanelHost::CurrentShelf() const noexcept
 {
     return current_;

@@ -1,4 +1,5 @@
 #include "V2SurfaceDock.h"
+#include "V2PanelFrame.h"
 
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/SurfaceRoleAssist.h"
@@ -69,7 +70,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
 void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
 {
     // 1. 作り方。**常時見せる。**いまどの作り方なのかが、どこにも出ていなかった。
-    layout->addWidget(new QLabel(QStringLiteral("1. 作り方"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("1. 作り方")));
     for (const GuideSurfaceMethod method : kachakacha::v2::app::MainSurfaceMethods()) {
         // 名前と入力の数を 2 行に分ける。1 行に並べると 380px の棚より広くなり、棚に横の
         // スクロールが出て、おまかせの説明まで右で切れた(PC の絵 2026-09-22)。
@@ -191,7 +192,7 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
     // 欄ごとに「ここへ選ぶ」と「解除」。**3D の次のクリックがどの欄へ入るかは、
     // 押された形の「ここへ選ぶ」でいつも見えている**(引継ぎ 2026-09-17 の 1)。
     // 1本ずつ外すのは 3D でもう一度押すか、一覧の行を選んで「× 外す」。
-    layout->addWidget(new QLabel(QStringLiteral("2. 入力"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("2. 入力")));
     for (int index = 0; index < kachakacha::v2::app::kSurfaceSlotCount; ++index) {
         BuildSlotRow(layout, index);
     }
@@ -255,7 +256,7 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
 void V2SurfaceDock::BuildOrderRows(QVBoxLayout* layout)
 {
     // 3. 断面順。**いまの生成順を番号つきで出す。**
-    layout->addWidget(new QLabel(QStringLiteral("3. 断面順"), widget()));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("3. 断面順")));
     auto* modes = new QHBoxLayout();
     orderAuto_ = new QPushButton(QStringLiteral("自動"), widget());
     orderManual_ = new QPushButton(QStringLiteral("手動固定"), widget());
@@ -331,7 +332,7 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     BuildOrderRows(layout);
 
     // 4. 状態。
-    layout->addWidget(new QLabel(QStringLiteral("4. 状態"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -369,6 +370,7 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addWidget(reset_);
     actions->addWidget(confirm_);
+    MarkCancelConfirm(cancel_, confirm_);
     rootLayout->addLayout(actions);
 }
 

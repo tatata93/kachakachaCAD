@@ -51,6 +51,8 @@ public:
     void SetPairText(const QString& first, const QString& second);
     //! 種類・残す側・B の切戻しを変えたときに呼ぶもの(下見を出し直す)。
     void SetChoiceChangedHandler(std::function<void()> handler);
+    //! 「キャンセル Esc」(共通の枠、C-10)。窓が Esc と同じ道へつなぐ。
+    void SetCancelHandler(std::function<void()> handler);
 
     // ---- 試験から ----
     void SetFillet(bool fillet);
@@ -65,6 +67,7 @@ public:
 
 private:
     void RefreshKind();
+    void Connect();
     void EmitSize();
 
     QComboBox* kind_ = nullptr;
@@ -77,6 +80,8 @@ private:
     QDoubleSpinBox* secondSetback_ = nullptr;
     QDoubleSpinBox* radius_ = nullptr;
     QPushButton* create_ = nullptr;
+    QPushButton* cancel_ = nullptr;
+    std::function<void()> cancelHandler_;
     QCheckBox* onlyVertex_ = nullptr;
     QDoubleSpinBox* vertex_ = nullptr;
     QPushButton* corner_ = nullptr;

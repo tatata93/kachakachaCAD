@@ -1,4 +1,5 @@
 #include "V2CornerDock.h"
+#include "V2PanelFrame.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -6,6 +7,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
@@ -13,6 +15,8 @@
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <utility>
 
 namespace {
 
@@ -46,25 +50,34 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
+    // 道具の棚の共通の枠(C-10): 作り方 → 入力 → 設定 → キャンセル・確定。
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
+    kind_ = new QComboBox(body);
+    kind_->addItem(QStringLiteral("C面取り"));
+    kind_->addItem(QStringLiteral("R丸め"));
+    layout->addWidget(kind_);
     auto* hint = new QLabel(QStringLiteral(
         "線を 2 本、直す順に選んでから作ります(1 本目が A、2 本目が B)。"
         "離れた線は交点まで自動で延ばします。"), body);
     hint->setWordWrap(true);
     layout->addWidget(hint);
 
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 入力")));
+    auto* inputWidget = new QWidget(body);
+    auto* inputForm = new QFormLayout(inputWidget);
+    inputForm->setContentsMargins(0, 0, 0, 0);
+    first_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
+    second_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
+    inputForm->addRow(QStringLiteral("直線 A"), first_);
+    inputForm->addRow(QStringLiteral("直線 B"), second_);
+    layout->addWidget(inputWidget);
+
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 設定")));
     auto* formWidget = new QWidget(body);
     form_ = new QFormLayout(formWidget);
     form_->setContentsMargins(0, 0, 0, 0);
-    kind_ = new QComboBox(formWidget);
-    kind_->addItem(QStringLiteral("C面取り"));
-    kind_->addItem(QStringLiteral("R丸め"));
-    form_->addRow(QStringLiteral("加工種類"), kind_);
-    first_ = new QLabel(QStringLiteral("(未選択)"), formWidget);
-    second_ = new QLabel(QStringLiteral("(未選択)"), formWidget);
-    form_->addRow(QStringLiteral("直線 A"), first_);
     firstKeep_ = MakeSideCombo(formWidget);
     form_->addRow(QStringLiteral("A の残す側"), firstKeep_);
-    form_->addRow(QStringLiteral("直線 B"), second_);
     secondKeep_ = MakeSideCombo(formWidget);
     form_->addRow(QStringLiteral("B の残す側"), secondKeep_);
     size_ = MakeMm(formWidget, 0.0);
@@ -78,12 +91,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     form_->addRow(QStringLiteral("半径"), radius_);
     layout->addWidget(formWidget);
 
-    create_ = new QPushButton(QStringLiteral("C面取りを作成"), body);
-    create_->setObjectName(QStringLiteral("primaryButton"));
-    layout->addWidget(create_);
-
-    auto* cornerTitle = new QLabel(QStringLiteral("ポリラインの角"), body);
-    cornerTitle->setStyleSheet(QStringLiteral("font-weight: 600;"));
+    auto* cornerTitle = MakePanelSectionTitle(body, QStringLiteral("ポリラインの角(別の道具)"));
     layout->addWidget(cornerTitle);
     auto* cornerWidget = new QWidget(body);
     auto* cornerForm = new QFormLayout(cornerWidget);
@@ -107,8 +115,34 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setWidget(body);
-    setWidget(scroll);
+    // 下のキャンセル・確定は巻物の外(いつも見える)。確定は「C面取りを作成 / R丸めを作成」。
+    auto* root = new QWidget(this);
+    auto* rootLayout = new QVBoxLayout(root);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->addWidget(scroll, 1);
+    create_ = new QPushButton(QStringLiteral("C面取りを作成"), root);
+    cancel_ = new QPushButton(root);
+    MarkCancelConfirm(cancel_, create_);
+    auto* actions = new QHBoxLayout();
+    actions->setContentsMargins(6, 0, 6, 6);
+    actions->addWidget(cancel_);
+    actions->addStretch(1);
+    actions->addWidget(create_);
+    rootLayout->addLayout(actions);
+    setWidget(root);
+    QObject::connect(cancel_, &QPushButton::clicked, this, [this] {
+        if (cancelHandler_) {
+            cancelHandler_();
+        }
+    });
 
+    Connect();
+    RefreshKind();
+}
+
+//! 欄とボタンの便りを繋ぐ。コンストラクタを 100 行以内に保つために分けた。
+void V2CornerDock::Connect()
+{
     QObject::connect(kind_, &QComboBox::currentIndexChanged, this, [this] {
         RefreshKind();
         if (!loading_ && choiceChangedHandler_) {
@@ -131,7 +165,6 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     QObject::connect(radius_, &QDoubleSpinBox::valueChanged, this, [this] { EmitSize(); });
     QObject::connect(create_, &QPushButton::clicked, this, [this] { PressCreate(); });
     QObject::connect(corner_, &QPushButton::clicked, this, [this] { PressCorner(); });
-    RefreshKind();
 }
 
 void V2CornerDock::RefreshKind()
@@ -140,7 +173,8 @@ void V2CornerDock::RefreshKind()
     form_->setRowVisible(size_, !fillet);
     form_->setRowVisible(secondSetback_, !fillet);
     form_->setRowVisible(radius_, fillet);
-    create_->setText(fillet ? QStringLiteral("R丸めを作成") : QStringLiteral("C面取りを作成"));
+    create_->setText(fillet ? QStringLiteral("R丸めを作成(確定 Enter)")
+                            : QStringLiteral("C面取りを作成(確定 Enter)"));
 }
 
 void V2CornerDock::EmitSize()
@@ -260,6 +294,11 @@ QString V2CornerDock::FirstText() const
 QString V2CornerDock::SecondText() const
 {
     return second_->text();
+}
+
+void V2CornerDock::SetCancelHandler(std::function<void()> handler)
+{
+    cancelHandler_ = std::move(handler);
 }
 
 QString V2CornerDock::CreateButtonText() const

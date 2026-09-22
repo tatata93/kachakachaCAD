@@ -1,5 +1,7 @@
 #include "V2DrawingDock.h"
+#include "V2PanelFrame.h"
 
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDockWidget>
@@ -78,8 +80,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     interactiveLayout->setSpacing(6);
 
     // 作り方カード(正本の methods)。作り方を先に選び、必要な欄だけを出す。
-    methodTitle_ = new QLabel(QStringLiteral("作り方"), interactivePage);
-    methodTitle_->setObjectName(QStringLiteral("drawingMethodTitle"));
+    methodTitle_ = MakePanelSectionTitle(interactivePage, QStringLiteral("作り方"));
     interactiveLayout->addWidget(methodTitle_);
     methodRow_ = new QWidget(interactivePage);
     // 横一列に並べると 380px の棚で 4 枚目(円弧の「始点接線・半径・中心角」)が切れて
@@ -95,7 +96,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     hint_->setWordWrap(true);
     interactiveLayout->addWidget(hint_);
 
-    toolTitle_ = new QLabel(QStringLiteral("入力"), interactivePage);
+    toolTitle_ = MakePanelSectionTitle(interactivePage, QStringLiteral("入力"));
     interactiveLayout->addWidget(toolTitle_);
     toolForm_ = new QFormLayout();
     toolForm_->setContentsMargins(0, 0, 0, 0);
@@ -103,9 +104,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     BuildArcRows(toolForm_);
     interactiveLayout->addLayout(toolForm_);
 
-    auto* optionTitle = new QLabel(QStringLiteral("オプション"), interactivePage);
-    optionTitle->setObjectName(QStringLiteral("drawingOptionTitle"));
-    interactiveLayout->addWidget(optionTitle);
+    interactiveLayout->addWidget(MakePanelSectionTitle(interactivePage, QStringLiteral("オプション")));
     construction_ = new QCheckBox(QStringLiteral("補助線として作図"), interactivePage);
     interactiveLayout->addWidget(construction_);
     keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), interactivePage);
@@ -117,7 +116,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     QObject::connect(keepPoints_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
     QObject::connect(controlPolygon_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
 
-    interactiveLayout->addStretch(1);
+    BuildCommonAndActions(interactiveLayout, interactivePage);
     inputModes_->addTab(interactivePage, QStringLiteral("画面で作図"));
 
     auto* coordinatePage = new QWidget(inputModes_);
@@ -150,6 +149,98 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     ApplyArcVisibility();
     ApplyDirectWireVisibility();
     ApplyToolRows();
+}
+
+//! 共通(スナップ)と、下のキャンセル・確定(道具の棚の共通の枠、C-10)。
+//! コンストラクタを 100 行以内に保つために分けた。
+void V2DrawingDock::BuildCommonAndActions(QVBoxLayout* layout, QWidget* page)
+{
+    // 共通(正本の作図の棚: どの道具でも同じもの)。スナップは状態行の Snap と同じ切り替え。
+    layout->addWidget(MakePanelSectionTitle(page, QStringLiteral("共通")));
+    snap_ = new QCheckBox(QStringLiteral("スナップ有効"), page);
+    snap_->setChecked(true);
+    snap_->setToolTip(QStringLiteral("点・線の端・交点へ吸い付けます。状態行の Snap と同じ切り替えで、"
+                                     "S を押している間だけ止めることもできます。"));
+    layout->addWidget(snap_);
+    QObject::connect(snap_, &QCheckBox::toggled, this, [this](bool on) {
+        if (!loading_ && snapHandler_) {
+            snapHandler_(on);
+        }
+    });
+
+    layout->addStretch(1);
+    // キャンセル・確定(共通の枠)。3D で Esc・Enter を押したのと同じ道を通る
+    // (Ctrl やキーを知らなくても、マウスだけで折れ線を締めたり、やめたりできる)。
+    layout->addLayout(MakeCancelConfirmRow(page, &cancel_, &confirm_));
+    confirm_->setToolTip(QStringLiteral("いま引いている線を締めて作ります(Enter と同じ)。"));
+    QObject::connect(cancel_, &QPushButton::clicked, this, [this] {
+        if (cancelHandler_) {
+            cancelHandler_();
+        }
+    });
+    QObject::connect(confirm_, &QPushButton::clicked, this, [this] {
+        if (confirmHandler_) {
+            confirmHandler_();
+        }
+    });
+}
+
+void V2DrawingDock::SetSnapChecked(bool on)
+{
+    if (snap_ == nullptr) {
+        return;
+    }
+    loading_ = true;
+    snap_->setChecked(on);
+    loading_ = false;
+}
+
+bool V2DrawingDock::SnapChecked() const
+{
+    return snap_ != nullptr && snap_->isChecked();
+}
+
+void V2DrawingDock::SetSnapHandler(std::function<void(bool)> handler)
+{
+    snapHandler_ = std::move(handler);
+}
+
+void V2DrawingDock::SetCancelHandler(std::function<void()> handler)
+{
+    cancelHandler_ = std::move(handler);
+}
+
+void V2DrawingDock::SetConfirmHandler(std::function<void()> handler)
+{
+    confirmHandler_ = std::move(handler);
+}
+
+namespace {
+
+[[nodiscard]] bool ClickIfUsable(QAbstractButton* button)
+{
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;   // 見えていない・押せないものは押せない。
+    }
+    button->click();
+    return true;
+}
+
+} // namespace
+
+bool V2DrawingDock::ClickSnap()
+{
+    return ClickIfUsable(snap_);
+}
+
+bool V2DrawingDock::ClickCancel()
+{
+    return ClickIfUsable(cancel_);
+}
+
+bool V2DrawingDock::ClickConfirm()
+{
+    return ClickIfUsable(confirm_);
 }
 
 void V2DrawingDock::SetTool(kachakacha::v2::modeling::DrawingTool tool)

@@ -26,6 +26,10 @@ public:
     void SetHint(const QString& hintJa);
     [[nodiscard]] QString HintText() const;
 
+    //! いま出している棚(試験から: 節の並びとキャンセル・確定を読む、C-10)。無ければ nullptr。
+    [[nodiscard]] QWidget* CurrentPage() const;
+    //! 見出しの字(棚の名前。棚が無ければ「現在の操作」)。
+    [[nodiscard]] QString CurrentShelfTitle() const;
     [[nodiscard]] bool Shows(kachakacha::v2::app::Shelf shelf) const;
     [[nodiscard]] kachakacha::v2::app::Shelf CurrentShelf() const noexcept;
 

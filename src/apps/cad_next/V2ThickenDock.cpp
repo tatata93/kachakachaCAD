@@ -1,4 +1,5 @@
 #include "V2ThickenDock.h"
+#include "V2PanelFrame.h"
 
 #include <QComboBox>
 #include <QDockWidget>
@@ -37,9 +38,12 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    // 1. 入力。面は1つだけの欄なので、「選び直す」だけでよい
+    // 1. 作り方(正本の順: 見出し → 作り方 → 入力 → 設定 → 状態 → キャンセル・確定、C-10)。
+    BuildPlacementCards(layout);
+
+    // 2. 入力。面は何枚でも入る欄なので、「選び直す」だけでよい
     // (2つ以上の欄がある足す・引くと違い、次のクリックの行き先で迷う余地がない)。
-    layout->addWidget(new QLabel(QStringLiteral("1. 入力"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 入力")));
     auto* inputRow = new QHBoxLayout();
     inputRow->addWidget(new QLabel(QStringLiteral("面"), body));
     surfaceValue_ = new QLabel(body);
@@ -54,17 +58,15 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     inputRow->addWidget(reselect_);
     layout->addLayout(inputRow);
 
-    BuildPlacementCards(layout);
-
     // 3. 厚み。「平面まで」の間は相手の作業平面の欄に差し替わる。
     auto* form = new QFormLayout();
-    thicknessLabel_ = new QLabel(QStringLiteral("3. 厚み"), body);
+    thicknessLabel_ = MakePanelSectionTitle(body, QStringLiteral("3. 厚み"));
     thickness_ = new QDoubleSpinBox(body);
     thickness_->setRange(0.0, 1000.0);
     thickness_->setDecimals(3);
     thickness_->setSuffix(QStringLiteral(" mm"));
     form->addRow(thicknessLabel_, thickness_);
-    targetLabel_ = new QLabel(QStringLiteral("3. 相手の作業平面"), body);
+    targetLabel_ = MakePanelSectionTitle(body, QStringLiteral("3. 相手の作業平面"));
     target_ = new QComboBox(body);
     form->addRow(targetLabel_, target_);
     layout->addLayout(form);
@@ -84,7 +86,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     });
 
     // 4. 状態。
-    layout->addWidget(new QLabel(QStringLiteral("4. 状態"), body));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -106,13 +108,14 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addStretch(1);
     actions->addWidget(confirm_);
+    MarkCancelConfirm(cancel_, confirm_);
     layout->addLayout(actions);
 }
 
 void V2ThickenDock::BuildPlacementCards(QVBoxLayout* layout)
 {
-    // 2. 作り方。外側・中央・内側・平面まで。押して切り替える(押された形がいまの作り方)。
-    layout->addWidget(new QLabel(QStringLiteral("2. 作り方"), widget()));
+    // 1. 作り方。外側・中央・内側・平面まで。押して切り替える(押された形がいまの作り方)。
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("1. 作り方")));
     auto* cards = new QHBoxLayout();
     outsideCard_ = new QPushButton(QStringLiteral("外側"), widget());
     centeredCard_ = new QPushButton(QStringLiteral("中央"), widget());

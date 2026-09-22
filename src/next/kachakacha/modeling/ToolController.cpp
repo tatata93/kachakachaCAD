@@ -388,13 +388,19 @@ Result<ToolOutput> ToolSession::Finish()
 Result<ToolOutput> ToolSession::BuildKeepingPoints(const std::vector<Vector3>& points) const
 {
     auto built = Build(points);
-    // 指した点を作図点として残す。形を作る道具のときだけ(作図点の道具は二重になる)。
-    if (built.HasValue() && settings_.keepPoints && !built.Value().segments.empty()) {
-        ToolOutput output = built.Value();
-        output.keptPoints = points;
-        return Result<ToolOutput>::Success(std::move(output));
+    if (!built.HasValue() || built.Value().segments.empty()) {
+        return built;
     }
-    return built;
+    ToolOutput output = built.Value();
+    // 指した点を作図点として残す。形を作る道具のときだけ(作図点の道具は二重になる)。
+    if (settings_.keepPoints) {
+        output.keptPoints = points;
+    }
+    // ベジェの制御多角形を補助線として残す。ベジェは指した 4 点がそのまま制御点。
+    if (settings_.keepControlPolygon && tool_ == DrawingTool::Bezier && points.size() >= 2) {
+        output.controlPolygon = points;
+    }
+    return Result<ToolOutput>::Success(std::move(output));
 }
 
 void ToolSession::Cancel()

@@ -71,6 +71,8 @@ struct ToolSettings {
     bool construction = false;
     //! 指定した点を作図点として残すか(V1 の「指定した点を作図点として残す」)。
     bool keepPoints = false;
+    //! ベジェの制御多角形(制御点を順に結んだ折れ線)を補助線として残すか。
+    bool keepControlPolygon = false;
     //! いま描いている作業平面の向き。矩形の辺、円と円弧の面はこれで決まる。
     //! XY と決め打ちしていたので、前から見る面(ZX)の上では矩形も円も作れなかった。
     Vector3 planeNormal{0.0, 0.0, 1.0};
@@ -101,6 +103,8 @@ struct ToolOutput {
     bool construction = false;
     //! 形を決めるのに指した点(keepPoints のとき)。作図点として文書へ残す。
     std::vector<Vector3> keptPoints;
+    //! ベジェの制御点(keepControlPolygon のとき)。順に結んだ折れ線を補助線として文書へ残す。
+    std::vector<Vector3> controlPolygon;
 };
 
 //! 作図ツール1つぶんの進行。

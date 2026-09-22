@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <variant>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -493,6 +494,40 @@ KACHA_V2_TEST(session, 指定した点を残すと線と点がひとまとまり
     Require(fixture.session.Undo(), "戻せる");
     RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 0,
         "一度で線も点も消える");
+}
+
+KACHA_V2_TEST(session, ベジェの制御多角形を補助線として残し一度で戻る)
+{
+    // D-11: ベジェの 4 つの制御点を順に結んだ折れ線を、補助線として文書へ残す。
+    Fixture fixture;
+    ToolSettings settings;
+    settings.keepControlPolygon = true;
+    fixture.session.SetToolSettings(settings);
+    fixture.session.SelectTool(DrawingTool::Bezier);
+    Require(fixture.session.Click(fixture.At({0.0, 0.0, 0.0})).placedPoint, "1点目");
+    Require(fixture.session.Click(fixture.At({10.0, 20.0, 0.0})).placedPoint, "2点目");
+    Require(fixture.session.Click(fixture.At({30.0, 20.0, 0.0})).placedPoint, "3点目");
+    const auto done = fixture.session.Click(fixture.At({40.0, 0.0, 0.0}));
+    Require(done.committed, "確定");
+    RequireCount(done.createdEntityIds.size(), 2, "ベジェ 1 + 制御多角形 1");
+    const auto& snapshot = fixture.session.GetDocument().Snapshot();
+    int construction = 0;
+    for (const auto& entity : snapshot.entities) {
+        construction += entity.construction ? 1 : 0;
+    }
+    Require(construction == 1, "制御多角形は補助線(面や押し出しの輪郭に拾われない)");
+    std::size_t polygonSegments = 0;
+    for (const auto& feature : snapshot.features) {
+        if (const auto* wire = std::get_if<kachakacha::v2::domain::CreateWireDefinition>(
+                &feature.definition);
+            wire != nullptr && wire->construction) {
+            polygonSegments = wire->segments.size();
+        }
+    }
+    RequireCount(polygonSegments, 3, "4 つの制御点を結ぶ 3 本の線");
+    Require(fixture.session.Undo(), "戻せる");
+    RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 0,
+        "一度でベジェも制御多角形も消える");
 }
 
 KACHA_V2_TEST(session, 聞き手が先に消えても場面の知らせで落ちない)

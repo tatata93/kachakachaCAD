@@ -118,6 +118,7 @@ private:
     QDoubleSpinBox* arcSweep_ = nullptr;
     QCheckBox* construction_ = nullptr;
     QCheckBox* keepPoints_ = nullptr;
+    QCheckBox* controlPolygon_ = nullptr;
     QComboBox* wireKind_ = nullptr;
     std::array<std::array<QDoubleSpinBox*, 3>, 4> wirePoints_{};
     QDoubleSpinBox* wireRadius_ = nullptr;

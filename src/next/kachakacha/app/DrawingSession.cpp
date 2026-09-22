@@ -329,9 +329,10 @@ ClickResult DrawingSession::Commit(const ToolOutput& output, std::string_view la
     }
 
     const EntityId createdId = entity.id;
-    // 指した点も残すときは、線と点をひとまとまりにする(元に戻すのは一度で済む)。
+    // 指した点や制御多角形も残すときは、線とひとまとまりにする(元に戻すのは一度で済む)。
     const bool keepPoints = !output.keptPoints.empty();
-    if (keepPoints) {
+    const bool together = keepPoints || output.controlPolygon.size() >= 2;
+    if (together) {
         document_.BeginCompound(feature.displayName);
     }
     const auto commandResult = document_.Run(
@@ -345,11 +346,57 @@ ClickResult DrawingSession::Commit(const ToolOutput& output, std::string_view la
         if (keepPoints) {
             AddKeptPoints(output, result);
         }
+        if (output.controlPolygon.size() >= 2) {
+            AddControlPolygon(output, result);
+        }
     }
-    if (keepPoints) {
+    if (together) {
         document_.EndCompound();
     }
     return result;
+}
+
+void DrawingSession::AddControlPolygon(const ToolOutput& output, ClickResult& result)
+{
+    // 制御点を順に結んだ折れ線。**補助線**として残す(面や押し出しの輪郭に拾われない)。
+    CreateWireDefinition definition;
+    for (std::size_t index = 1; index < output.controlPolygon.size(); ++index) {
+        const auto line = geometry::CurveSegment::MakeLine(output.controlPolygon[index - 1],
+            output.controlPolygon[index]);
+        if (!line.HasValue()) {
+            continue;   // 重なった制御点は飛ばす
+        }
+        definition.segments.push_back(line.Value());
+        definition.segmentIds.push_back(ids_->NextTyped<IdKind::Segment>());
+    }
+    if (definition.segments.empty()) {
+        return;
+    }
+    definition.construction = true;
+    Feature feature;
+    feature.id = ids_->NextTyped<IdKind::Feature>();
+    feature.type = FeatureTypeFor(DrawingTool::Polyline);
+    feature.displayName = "制御多角形";
+    Entity entity;
+    entity.id = ids_->NextTyped<IdKind::Entity>();
+    entity.kind = EntityKind::Wire;
+    entity.displayName = feature.displayName;
+    entity.createdBy = feature.id;
+    entity.construction = true;
+    const std::vector<geometry::CurveSegment> segments = definition.segments;
+    feature.definition = std::move(definition);
+    feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+    const auto added = document_.Run(AddFeatureCommand(feature, {entity}, "制御多角形"));
+    if (!added.committed) {
+        result.diagnostics.insert(result.diagnostics.end(), added.diagnostics.begin(),
+            added.diagnostics.end());
+        return;
+    }
+    result.createdEntityIds.push_back(entity.id);
+    for (const geometry::CurveSegment& segment : segments) {
+        scene_.curves.push_back(
+            SnapCurve{entity.id, ids_->NextTyped<IdKind::Segment>(), segment, true});
+    }
 }
 
 void DrawingSession::AddKeptPoints(const ToolOutput& output, ClickResult& result)

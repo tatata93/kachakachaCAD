@@ -27,6 +27,8 @@ struct DrawingShelfRows {
     bool construction = false;
     //! 指定した点を作図点として残す。点を置く道具すべて。
     bool keepPoints = false;
+    //! 制御多角形を補助線として残す。ベジェだけ。
+    bool controlPolygon = false;
     //! 数値で線を作る。道具に関係なくいつでも使える(別の区画)。
     bool directWire = true;
 
@@ -34,7 +36,7 @@ struct DrawingShelfRows {
     //! 空のまま出すと「壊れた」ように見えるので、代わりに使い方を出す。
     [[nodiscard]] bool ToolSectionEmpty() const noexcept
     {
-        return !arc && !construction && !keepPoints;
+        return !arc && !construction && !keepPoints && !controlPolygon;
     }
 };
 

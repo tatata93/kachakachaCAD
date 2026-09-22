@@ -14,12 +14,17 @@ DrawingShelfRows DrawingShelfRowsFor(DrawingTool tool) noexcept
         rows.construction = true;
         rows.keepPoints = true;
         break;
+    case DrawingTool::Bezier:
+        // ベジェだけ、制御多角形を補助線として残せる(D-11)。
+        rows.controlPolygon = true;
+        rows.construction = true;
+        rows.keepPoints = true;
+        break;
     case DrawingTool::Point:
     case DrawingTool::Line:
     case DrawingTool::Polyline:
     case DrawingTool::Rectangle:
     case DrawingTool::Circle:
-    case DrawingTool::Bezier:
     case DrawingTool::Spline:
     case DrawingTool::ConnectTwoPoints:
         rows.construction = true;

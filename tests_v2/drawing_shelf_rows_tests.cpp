@@ -48,6 +48,15 @@ KACHA_V2_TEST(drawing_shelf, ベジェには決める欄が無い)
     }
 }
 
+KACHA_V2_TEST(drawing_shelf, 制御多角形の欄はベジェのときだけ出る)
+{
+    // D-11: 制御点を順に結んだ折れ線を補助線として残す。制御点があるのはベジェだけ。
+    for (const DrawingTool tool : kAllTools) {
+        Require(DrawingShelfRowsFor(tool).controlPolygon == (tool == DrawingTool::Bezier),
+            std::string(DrawingToolNameJa(tool)) + ": 制御多角形の欄はベジェのときだけ");
+    }
+}
+
 KACHA_V2_TEST(drawing_shelf, 線を引かない道具では道具の区画が空になる)
 {
     for (const DrawingTool tool : {DrawingTool::Select, DrawingTool::Move,

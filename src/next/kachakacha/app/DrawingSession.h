@@ -202,6 +202,8 @@ private:
     void AddToScene(const modeling::ToolOutput& output, base::EntityId entityId);
     //! 指した点を作図点として文書へ残す(keepPoints)。
     void AddKeptPoints(const modeling::ToolOutput& output, ClickResult& result);
+    //! ベジェの制御多角形を補助線として足す(線と同じまとまりの中で呼ぶ)。
+    void AddControlPolygon(const modeling::ToolOutput& output, ClickResult& result);
 
     Document document_;
     base::IdGenerator* ids_ = nullptr;

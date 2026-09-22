@@ -110,8 +110,12 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     interactiveLayout->addWidget(construction_);
     keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), interactivePage);
     interactiveLayout->addWidget(keepPoints_);
+    // ベジェだけ: 制御点を順に結んだ折れ線を補助線として残す(D-11)。
+    controlPolygon_ = new QCheckBox(QStringLiteral("制御多角形を補助線として残す"), interactivePage);
+    interactiveLayout->addWidget(controlPolygon_);
     QObject::connect(construction_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
     QObject::connect(keepPoints_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
+    QObject::connect(controlPolygon_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
 
     interactiveLayout->addStretch(1);
     inputModes_->addTab(interactivePage, QStringLiteral("画面で作図"));
@@ -200,6 +204,7 @@ void V2DrawingDock::ApplyToolRows()
     }
     construction_->setVisible(rows.construction);
     keepPoints_->setVisible(rows.keepPoints);
+    controlPolygon_->setVisible(rows.controlPolygon);
     toolTitle_->setVisible(rows.arc);
     // 一文はいつも出す。作り方があればそのカードの一文、無ければ道具の使い方。
     if (methodIndex_ >= 0 && methodIndex_ < static_cast<int>(methodCards_.size())) {
@@ -451,6 +456,7 @@ ToolSettings V2DrawingDock::Settings() const
     settings.sweepAngleRad = arcSweep_->value() * kPi / 180.0;
     settings.construction = construction_->isChecked();
     settings.keepPoints = keepPoints_->isChecked();
+    settings.keepControlPolygon = controlPolygon_->isChecked();
     return settings;
 }
 
@@ -462,6 +468,7 @@ void V2DrawingDock::SetSettings(const ToolSettings& settings)
     arcSweep_->setValue(settings.sweepAngleRad * 180.0 / kPi);
     construction_->setChecked(settings.construction);
     keepPoints_->setChecked(settings.keepPoints);
+    controlPolygon_->setChecked(settings.keepControlPolygon);
     loading_ = false;
     RebuildMethodCards();   // 円弧の作り方が変わったなら、押されたカードも変わる
     ApplyArcVisibility();

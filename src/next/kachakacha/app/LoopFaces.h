@@ -41,9 +41,12 @@ enum class LoopFaceMethod {
     Loft,          //!< ロフト(輪が無く、開いた断面が並んでいる)
 };
 
-//! その輪に使える作り方(表で人が変えるとき用)。
-[[nodiscard]] std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t edgeCount,
+//! その輪に使える作り方(表で人が変えるとき用)。sideCount は側の数(LoopFace::sideCount)。
+[[nodiscard]] std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t sideCount,
     bool planar, bool loft);
+
+//! 角と見なす折れの角度(度)。これより小さい折れは同じ側とする(裾の直線 2 本など)。
+inline constexpr double kLoopSideCornerDeg = 35.0;
 
 //! T 字で分けたあとの「片」。faces / gaps はこの番号を指す。
 //! 分けていない線は selections と同じ番号(piece i == selection i)。分けた線の片は後ろに足す。
@@ -81,6 +84,12 @@ struct LoopFace {
     std::vector<std::size_t> selections;   //!< 輪をたどる順の選択番号
     std::vector<bool> forward;             //!< その線を始点→終点の向きにたどるか
     std::vector<LoopFaceEdge> edges;       //!< 辺ごとの隣(selections と同じ並び。ロフトは空)
+    //! **側**(角で区切った辺の束)。裾の直線 2 本のように接線でつながる辺は 1 つの側に数える。
+    //! 5 本の線でも角が 4 つなら「4 辺」= 四辺面(Coons)にできる(2026-09-24 オーナー報告:
+    //! 裾が 2 本に割れて 5 辺になり、境界面(膜)に落ちてへこんだ)。
+    //! sideOf[k] は selections[k] の側の番号(0 から、輪をたどる順。最初の角から数える)。
+    std::vector<std::size_t> sideOf;
+    std::size_t sideCount = 0;             //!< 側の数(角の数。角が無ければ 1)
     LoopFaceMethod method = LoopFaceMethod::Planar;
     double planeDeviationMm = 0.0;         //!< 最小二乗平面からのずれ(平面判定に使った値)
     double areaMm2 = 0.0;                  //!< 囲む面積(Newell)

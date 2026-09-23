@@ -185,7 +185,10 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     }
     widgets.method->setCurrentIndex(face.methodIndex);
     line->addWidget(widgets.method, 1);
-    widgets.edges = new QLabel(QStringLiteral("辺 %1").arg(face.edgeCount), widgets.row);
+    widgets.edges = new QLabel(face.lineCount > 0 && face.lineCount != face.edgeCount
+            ? QStringLiteral("辺 %1(線 %2)").arg(face.edgeCount).arg(face.lineCount)
+            : QStringLiteral("辺 %1").arg(face.edgeCount),
+        widgets.row);
     line->addWidget(widgets.edges);
     widgets.status = new QLabel(face.statusJa, widgets.row);
     line->addWidget(widgets.status);

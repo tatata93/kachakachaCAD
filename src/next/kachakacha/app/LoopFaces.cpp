@@ -3,6 +3,7 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/LoopGraph.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/Units.h"
 #include "kachakacha/geometry/CurveTrim.h"
 #include "kachakacha/geometry/WireConnect.h"
 #include "kachakacha/modeling/GuideSurfaceSampling.h"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <sstream>
 
 namespace kachakacha::v2::app {
@@ -242,6 +244,79 @@ void NormalizeCycle(LoopCycle& cycle)
     return false;
 }
 
+
+//! 点列の端から少し入った所への向き(端の向き)。fromStart なら始点側、そうでなければ終点側。
+//! 標本の 1 区間だけでは短すぎて向きが暴れるので、全長の 5%(最低 joinMm)進んだ点を使う。
+[[nodiscard]] Vector3 EndDirection(const std::vector<Vector3>& points, bool fromStart, double minMm)
+{
+    if (points.size() < 2) {
+        return Vector3{};
+    }
+    double total = 0.0;
+    for (std::size_t k = 1; k < points.size(); ++k) {
+        total += (points[k] - points[k - 1]).Length();
+    }
+    const double reach = std::max(total * 0.05, minMm);
+    const Vector3 origin = fromStart ? points.front() : points.back();
+    double walked = 0.0;
+    Vector3 target = fromStart ? points.back() : points.front();
+    if (fromStart) {
+        for (std::size_t k = 1; k < points.size(); ++k) {
+            walked += (points[k] - points[k - 1]).Length();
+            if (walked >= reach) { target = points[k]; break; }
+        }
+    } else {
+        for (std::size_t k = points.size() - 1; k > 0; --k) {
+            walked += (points[k] - points[k - 1]).Length();
+            if (walked >= reach) { target = points[k - 1]; break; }
+        }
+    }
+    return geometry::Normalized(target - origin);
+}
+
+//! 輪の辺を角で束ねて「側」にする(ヘッダの LoopFace::sideOf)。角 = 折れが kLoopSideCornerDeg 以上。
+void GroupSides(const std::vector<LoopEdge>& edges, const LoopCycle& cycle, LoopFace& face,
+    double joinMm)
+{
+    const std::size_t n = cycle.edges.size();
+    face.sideOf.assign(n, 0);
+    face.sideCount = 0;
+    if (n == 0) {
+        return;
+    }
+    // 辺 k の終わり(たどる向き)と辺 k+1 の始まりの折れ角。
+    std::vector<bool> cornerBefore(n, false);   // 辺 k の始まりが角か
+    for (std::size_t k = 0; k < n; ++k) {
+        const std::size_t prev = (k + n - 1) % n;
+        const LoopEdge& a = edges[cycle.edges[prev]];
+        const LoopEdge& b = edges[cycle.edges[k]];
+        // EndDirection は端から内側へ向く向き。辺 a を出るときの進行方向はその逆、
+        // 辺 b に入るときの進行方向はそのまま。たどる向きで使う端が変わる。
+        const Vector3 travelOut = cycle.forward[prev] ? -EndDirection(a.points, false, joinMm)
+                                                      : -EndDirection(a.points, true, joinMm);
+        const Vector3 travelIn = cycle.forward[k] ? EndDirection(b.points, true, joinMm)
+                                                  : EndDirection(b.points, false, joinMm);
+        const double c = std::clamp(geometry::Dot(travelOut, travelIn), -1.0, 1.0);
+        const double turnDeg = std::acos(c) * 180.0 / geometry::kPi;
+        cornerBefore[k] = turnDeg >= kLoopSideCornerDeg;
+    }
+    const auto firstCorner = std::find(cornerBefore.begin(), cornerBefore.end(), true);
+    if (firstCorner == cornerBefore.end()) {
+        face.sideCount = 1;   // 角の無い輪(円など): 1 つの側
+        return;
+    }
+    const std::size_t start = static_cast<std::size_t>(firstCorner - cornerBefore.begin());
+    std::size_t side = 0;
+    for (std::size_t step = 0; step < n; ++step) {
+        const std::size_t k = (start + step) % n;
+        if (step > 0 && cornerBefore[k]) {
+            ++side;
+        }
+        face.sideOf[k] = side;
+    }
+    face.sideCount = side + 1;
+}
+
 [[nodiscard]] LoopFace MakeFace(const std::vector<LoopEdge>& edges, LoopCycle cycle,
     const geometry::GeometryTolerance& tolerance)
 {
@@ -258,13 +333,15 @@ void NormalizeCycle(LoopCycle& cycle)
         face.previewLines.back().push_back(face.ring.front());
     }
     face.areaMm2 = EnclosedArea(edges, cycle);
+    GroupSides(edges, cycle, face,
+        std::max(tolerance.interactiveJoinMm, tolerance.modelLinearMm * 100.0));
     const geometry::PlaneFit fit = geometry::FitPlane(face.ring);
     face.planeDeviationMm = fit.valid ? fit.maximumDeviationMm
                                       : std::numeric_limits<double>::infinity();
     if (fit.valid && fit.maximumDeviationMm <= tolerance.modelLinearMm) {
         face.method = LoopFaceMethod::Planar;
-    } else if (cycle.edges.size() == 4) {
-        face.method = LoopFaceMethod::FourEdge;
+    } else if (face.sideCount == 4) {
+        face.method = LoopFaceMethod::FourEdge;   // 辺の本数ではなく側の数で決める
     } else {
         face.method = LoopFaceMethod::BoundaryFill;
     }
@@ -636,7 +713,7 @@ std::string LoopFaceMethodLabelJa(LoopFaceMethod method)
     return "";
 }
 
-std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t edgeCount, bool planar, bool loft)
+std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t sideCount, bool planar, bool loft)
 {
     if (loft) {
         return {LoopFaceMethod::Loft};
@@ -645,10 +722,10 @@ std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t edgeCount, bool pl
     if (planar) {
         choices.push_back(LoopFaceMethod::Planar);
     }
-    if (edgeCount == 4) {
+    if (sideCount == 4) {
         choices.push_back(LoopFaceMethod::FourEdge);
     }
-    if (!planar || edgeCount != 4) {
+    if (!planar || sideCount != 4) {
         choices.push_back(LoopFaceMethod::BoundaryFill);
     }
     return choices;
@@ -881,16 +958,44 @@ Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selecti
     }
     table.method = face.method == LoopFaceMethod::FourEdge ? GuideSurfaceMethod::FourEdgePatch
                                                             : GuideSurfaceMethod::BoundaryFill;
-    for (std::size_t e = 0; e < face.selections.size(); ++e) {
-        const auto added = modeling::AddSelectionAsNewRow(table, ChainRole::BoundarySide,
-            selections[face.selections[e]]);
-        if (!added.HasValue()) {
-            return Out::Failure(added.Diagnostics());
+    // 四辺面は側ごとに 1 行(側の中の辺は 1 行につなぐ)。境界面は辺ごとに 1 行。
+    const bool bySide = face.method == LoopFaceMethod::FourEdge
+        && face.sideOf.size() == face.selections.size() && face.sideCount == 4;
+    // 最初の角から始める(側 0 の最初の辺)。
+    std::size_t start = 0;
+    if (bySide) {
+        for (std::size_t e = 0; e < face.selections.size(); ++e) {
+            const std::size_t prev = (e + face.selections.size() - 1) % face.selections.size();
+            if (face.sideOf[e] == 0 && face.sideOf[prev] != 0) {
+                start = e;
+                break;
+            }
         }
-        table = added.Value();
+    }
+    std::optional<std::size_t> openSide;
+    for (std::size_t step = 0; step < face.selections.size(); ++step) {
+        const std::size_t e = (start + step) % face.selections.size();
+        const bool continueRow = bySide && openSide.has_value() && face.sideOf[e] == *openSide;
+        if (continueRow) {
+            const auto appended = AppendSelectionToRow(table, table.rows.size() - 1,
+                selections[face.selections[e]], tolerance);
+            if (!appended.HasValue()) {
+                return Out::Failure(appended.Diagnostics());
+            }
+            table = appended.Value();
+        } else {
+            const auto added = modeling::AddSelectionAsNewRow(table, ChainRole::BoundarySide,
+                selections[face.selections[e]]);
+            if (!added.HasValue()) {
+                return Out::Failure(added.Diagnostics());
+            }
+            table = added.Value();
+            openSide = bySide ? std::optional<std::size_t>(face.sideOf[e]) : std::nullopt;
+        }
         // 辺の連続: 支持面があるときだけ。無ければ G0 のまま(黙って G1 にしない)。
+        // 側に複数の辺があれば、支持面を持つ最初の辺の条件をその側に使う。
         const bool hasSupport = e < supports.size() && !supports[e].IsNil();
-        if (e < continuity.size() && hasSupport) {
+        if (e < continuity.size() && hasSupport && table.rows.back().supportSurfaceId.IsNil()) {
             table.rows.back().continuity = continuity[e];
             table.rows.back().supportSurfaceId = supports[e];
         }

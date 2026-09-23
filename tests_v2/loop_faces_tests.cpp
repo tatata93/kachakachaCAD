@@ -765,4 +765,71 @@ KACHA_V2_TEST(loop_faces, continuity_reaches_the_table_only_with_a_support_surfa
         "without continuity input every row is G0");
 }
 
+// ---- 側(角で束ねた辺): 裾が 2 本の直線に割れていても 4 辺 = 四辺面 ----
+
+KACHA_V2_TEST(loop_faces, a_gently_bent_bottom_counts_as_one_side_so_five_lines_are_a_four_edge_patch)
+{
+    // 前頭部の区画(2026-09-24 オーナー報告): 側面の円弧の代わりに折れた線でも同じ。
+    // 上辺(高い)・右辺・裾 2 本(170° で折れる)・左辺 = 線 5 本、角 4 つ。
+    const Vector3 a{0, 0, 0};
+    const Vector3 b{0, 0, 30};      // 左辺は縦
+    const Vector3 c{60, 0, 30};     // 上辺
+    const Vector3 d{60, 0, 0};      // 右辺は縦
+    const Vector3 m{30, 5, 0};      // 裾の折れ点(少し y へ)。170° 程度の折れ
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "左", L(a, b)));
+    selections.push_back(Sel(1, "上", L(b, c)));
+    selections.push_back(Sel(2, "右", L(c, d)));
+    selections.push_back(Sel(3, "裾1", L(d, m)));
+    selections.push_back(Sel(4, "裾2", L(m, a)));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "five lines plan");
+    RequireEqual(std::to_string(plan.Value().faces.size()), "1", "one loop");
+    const LoopFace& face = plan.Value().faces.front();
+    RequireEqual(std::to_string(face.selections.size()), "5", "five edges");
+    RequireEqual(std::to_string(face.sideCount), "4", "but four sides (the bottom bend is not a corner)");
+    Require(face.method == LoopFaceMethod::FourEdge, "so it is a four-edge patch, not a boundary fill");
+    // 裾 1 と裾 2 は同じ側。
+    std::size_t bottomSide = 99;
+    for (std::size_t e = 0; e < face.selections.size(); ++e) {
+        if (face.selections[e] == 3) { bottomSide = face.sideOf[e]; }
+    }
+    for (std::size_t e = 0; e < face.selections.size(); ++e) {
+        if (face.selections[e] == 4) {
+            RequireEqual(std::to_string(face.sideOf[e]), std::to_string(bottomSide), "both hem lines share a side");
+        }
+    }
+    const auto table = LoopFaceTable(selections, face, MakeTolerance());
+    Require(table.HasValue(), "four-edge table builds");
+    RequireEqual(std::to_string(table.Value().rows.size()), "4", "four boundary rows (the hem is one row)");
+    Require(table.Value().method == GuideSurfaceMethod::FourEdgePatch, "method is FourEdgePatch");
+    int twoLineRows = 0;
+    for (const auto& row : table.Value().rows) {
+        if (row.sourceWireIds.size() == 2) { ++twoLineRows; }
+    }
+    RequireEqual(std::to_string(twoLineRows), "1", "exactly one row holds the two hem lines");
+    Require(kachakacha::v2::app::LoopFaceMethodChoices(face.sideCount, false, false).front() == LoopFaceMethod::FourEdge,
+        "choices offer four-edge first");
+}
+
+KACHA_V2_TEST(loop_faces, a_sharp_bend_is_a_corner_so_five_lines_stay_five_sides)
+{
+    const Vector3 a{0, 0, 0};
+    const Vector3 b{0, 0, 30};
+    const Vector3 c{60, 0, 30};
+    const Vector3 d{60, 0, 0};
+    const Vector3 m{30, 25, 0};     // 裾が大きく折れる(角)
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "左", L(a, b)));
+    selections.push_back(Sel(1, "上", L(b, c)));
+    selections.push_back(Sel(2, "右", L(c, d)));
+    selections.push_back(Sel(3, "裾1", L(d, m)));
+    selections.push_back(Sel(4, "裾2", L(m, a)));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "plans");
+    const LoopFace& face = plan.Value().faces.front();
+    RequireEqual(std::to_string(face.sideCount), "5", "a real corner keeps five sides");
+    Require(face.method == LoopFaceMethod::BoundaryFill, "five sides fall back to boundary fill");
+}
+
 KACHA_V2_TEST_MAIN("loop_faces_tests")

@@ -39,7 +39,8 @@ struct V2LoopFaceRow {
     int number = 1;                       //!< ① から
     std::vector<QString> methodChoicesJa; //!< 作り方の選択肢(表示名)
     int methodIndex = 0;                  //!< いま選ばれている選択肢
-    int edgeCount = 0;                    //!< 辺の数(ロフトなら断面の数)
+    int edgeCount = 0;                    //!< 辺(側)の数(ロフトなら断面の数)
+    int lineCount = 0;                    //!< 線の本数(辺の数と違えば「辺 4(線 5)」と出す)
     QString statusJa;                     //!< 「✓」「最大ずれ 0.02 mm」など
     bool make = true;                     //!< 作るか
     std::vector<V2LoopEdgeCell> edges;    //!< 隣のある辺(連続 G0/G1/G2 を押して回す)

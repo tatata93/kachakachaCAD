@@ -65,7 +65,7 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
             return;
         }
         const LoopFace& item = plan_->faces[static_cast<std::size_t>(face)];
-        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(item.selections.size(),
+        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(item.sideCount,
             item.method == LoopFaceMethod::Planar, item.method == LoopFaceMethod::Loft);
         if (methodIndex >= 0 && static_cast<std::size_t>(methodIndex) < choices.size()) {
             methodOverride_[static_cast<std::size_t>(face)] = choices[static_cast<std::size_t>(methodIndex)];
@@ -425,7 +425,7 @@ void V2LoopFacesTool::ShowDock()
         const LoopFace& face = plan_->faces[at];
         V2LoopFaceRow row;
         row.number = static_cast<int>(at + 1);
-        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(face.selections.size(),
+        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(face.sideCount,
             face.method == LoopFaceMethod::Planar, face.method == LoopFaceMethod::Loft);
         const LoopFaceMethod current = MethodOf(at);
         for (std::size_t index = 0; index < choices.size(); ++index) {
@@ -434,7 +434,10 @@ void V2LoopFacesTool::ShowDock()
                 row.methodIndex = static_cast<int>(index);
             }
         }
-        row.edgeCount = static_cast<int>(face.selections.size());
+        // 辺の数は「側」(角で区切った辺の束)。裾の直線 2 本は 1 辺と数える。線の本数が違えば括弧で言う。
+        row.edgeCount = static_cast<int>(face.method == LoopFaceMethod::Loft ? face.selections.size()
+                                                                              : face.sideCount);
+        row.lineCount = static_cast<int>(face.selections.size());
         row.statusJa = face.method == LoopFaceMethod::Planar || face.method == LoopFaceMethod::Loft
             ? QStringLiteral("✓")
             : QStringLiteral("平面から %1 mm").arg(face.planeDeviationMm, 0, 'f', 3);

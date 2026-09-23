@@ -207,6 +207,9 @@ struct CreateGuideSurfaceDefinition {
     //! 古い文書には無い鍵なので、空で読む(全部 G0、支持面なし = これまでと同じ意味)。
     std::vector<int> continuity;
     std::vector<EntityId> supportSurfaces;
+    //! 独立したGPT版の生成経路。旧データはfalseのまま評価する。
+    bool gptBuilder = false;
+    double gptToleranceMm = 0.01;
 };
 
 //! 面の編集(合わせる・つなぐ・整える・対称に写す)。出来るのは新しい形状ガイドの面で、

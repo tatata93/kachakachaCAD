@@ -560,6 +560,8 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.revolveAngleRad = loader.NumberOr(definition, "revolveAngleRad", 0.0);
         // 断面順の手動固定。古い文書には無いので偽で読む(開いても面は変わらない)。
         made.lockSectionOrder = loader.BoolOr(definition, "lockSectionOrder", false);
+        made.gptBuilder = loader.BoolOr(definition, "gptBuilder", false);
+        made.gptToleranceMm = loader.NumberOr(definition, "gptToleranceMm", 0.01);
         // 四辺面の張り方と連続条件・支持面。古い文書には無いので、標準・全部 G0 で読む。
         made.fourEdgeStyle = static_cast<int>(loader.NumberOr(definition, "fourEdgeStyle", 0.0));
         if (definition.Find("continuity") != nullptr) {

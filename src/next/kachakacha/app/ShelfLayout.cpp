@@ -32,6 +32,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::EdgeFinish: return "辺の丸め・面取り";
     case Shelf::ShellSplit:   return "シェル・分割";
     case Shelf::LoopFaces:    return "面にする";
+    case Shelf::GptSurface: return "面生成 GPT版";
     }
     return "なし";
 }
@@ -43,7 +44,7 @@ const std::vector<Shelf>& AllShelves()
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
         Shelf::Boolean, Shelf::Thicken, Shelf::Array, Shelf::SurfaceEdit, Shelf::SurfaceAnalysis,
-        Shelf::Solid, Shelf::EdgeFinish, Shelf::ShellSplit, Shelf::LoopFaces,
+        Shelf::Solid, Shelf::EdgeFinish, Shelf::ShellSplit, Shelf::LoopFaces, Shelf::GptSurface,
     };
     return all;
 }

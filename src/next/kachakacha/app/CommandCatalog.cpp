@@ -350,6 +350,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
         // 中では今までの GuideTable をそのまま使う。
         // 線から面(オーナー決定 2026-09-22): 線を選ぶだけで、閉じた輪を全部面にする。
         // 「面を作る」の入口 1 つの方針に、迷わない近道を **足す**(置き換えない)。
+        {"surface.gpt_create", "GPT版", CommandMode::Tool, "surface", "",
+            SelectionPredicate::Always, "ワイヤーを追加してください。",
+            "外周と内側の線から近似面を張る、または複数断面を一覧順につなぎます。"
+            "プレビューで全入力線の最大・RMS偏差を確認し、Enterで確定、Escで取消します。",
+            true, {"AT-GPT-S001", "AT-GPT-S002"}},
         {"surface.from_lines", "面にする", CommandMode::Tool, "surface", "Shift+F",
             SelectionPredicate::OneOrMoreWires, "線を1つ以上選んでください。",
             "選んだ線の端点のつながりから閉じた輪を全部見つけ、平面 / 四辺面 / 境界面(輪が無ければロフト)で面にします。"

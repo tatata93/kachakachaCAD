@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2GptSurfaceTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
@@ -61,6 +62,7 @@ namespace {
 //! 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
 void V2MainWindow::EndOwnedToolsBut(const void* keep)
 {
+    if (gptSurface_ != nullptr && gptSurface_.get() != keep) { gptSurface_->End(); }
     if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
         solidTool_->End();
     }
@@ -80,6 +82,20 @@ void V2MainWindow::EndOwnedToolsBut(const void* keep)
 //! ここで引き受けたら真。構えて待つ道(ArmCommand)は通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (id == "surface.gpt_create") {
+        const auto selected = viewport_->Selection();
+        ClearPendingCommand();
+        if (surfaceShelfShown_) { EndSurfacePreview(); }
+        if (approxShelfShown_) { EndApprox(); }
+        if (booleanShelfShown_) { EndBoolean(); }
+        if (thickenShelfShown_) { EndThicken(); }
+        if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        EndOwnedToolsBut(gptSurface_.get());
+        viewport_->SetSelection(selected);
+        gptSurface_->Begin();
+        return true;
+    }
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand();
         RunGuideCommand(id);

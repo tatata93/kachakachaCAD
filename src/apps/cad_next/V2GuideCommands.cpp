@@ -12,6 +12,7 @@
 //! 面が作れるかどうかの判断は、1つもここに書かない。
 
 #include "V2MainWindow.h"
+#include "V2GptSurfaceTool.h"
 
 #include "kachakacha/app/ExplorerModel.h"
 
@@ -340,6 +341,7 @@ bool V2MainWindow::RebuildGuideSurfaceShape(const kachakacha::v2::domain::Featur
     if (definition == nullptr) {
         return false;
     }
+    if (definition->gptBuilder) { return gptSurface_->Rebuild(feature, output); }
     const auto table = kachakacha::v2::app::GuideTableFromDefinition(
         session_->GetDocument(), session_->Scene(), *definition);
     if (!table.HasValue()) {

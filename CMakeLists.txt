@@ -599,6 +599,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DirectWireEntry.cpp
     src/next/kachakacha/app/LoopGraph.cpp
+    src/next/kachakacha/app/GptSurface.cpp
     src/next/kachakacha/app/LoopFaces.cpp
     src/next/kachakacha/app/WireFacts.cpp
     src/next/kachakacha/app/OuterLoopSplit.cpp
@@ -738,6 +739,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctLoftSurface.cpp
+    src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceAnalysis.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
@@ -1088,6 +1090,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ShellSplitTool.cpp
         src/apps/cad_next/V2HoverEditTool.cpp
         src/apps/cad_next/V2LoopFacesDock.cpp
+        src/apps/cad_next/V2ToolPreviewFaces.cpp
+        src/apps/cad_next/V2GptSurfaceTool.cpp
         src/apps/cad_next/V2LoopFacesTool.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp

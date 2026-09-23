@@ -17,6 +17,7 @@
 #include "V2LoopFacesDock.h"
 
 #include "kachakacha/app/LoopFaces.h"
+#include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QString>
@@ -46,6 +47,11 @@ public:
     }
     //! 輪 face のいまの作り方(上書きがあればそれ)。
     [[nodiscard]] kachakacha::v2::app::LoopFaceMethod MethodOf(std::size_t face) const;
+    //! 輪 face の辺 edge の連続(隣が無い辺・平面の輪は G0)。
+    [[nodiscard]] kachakacha::v2::modeling::SurfaceContinuity ContinuityOf(std::size_t face,
+        std::size_t edge) const;
+    //! 辺の連続を G0 → G1 → G2 → G0 と回す(棚の欄、3D の Tab)。回せたら真。
+    [[nodiscard]] bool CycleContinuity(std::size_t face, std::size_t edge);
 
 private:
     [[nodiscard]] bool Replan();
@@ -64,6 +70,16 @@ private:
         const std::string& label);
     [[nodiscard]] bool Confirm();
     void CloseOneGap(int index);
+    //! すでにある面の縁(核の外周)を折れ線にして渡す(辺の連続の相手を探す)。
+    [[nodiscard]] std::vector<kachakacha::v2::app::LoopNeighborCurve> Neighbors() const;
+    //! 3D で置いている辺(隣のある辺のうち、いちばん近いもの)の連続を回す(Tab)。
+    [[nodiscard]] bool CycleContinuityAtHover();
+    //! 作る順(同じ計画の輪を支持面にする辺は、その輪を先に作る)。
+    [[nodiscard]] std::vector<std::size_t> BuildOrder() const;
+    //! 輪 face の辺ごとの連続と支持面(builtIds: 同じ計画で先に作った輪の面)。
+    void EdgeSupports(std::size_t face, const std::vector<kachakacha::v2::base::EntityId>& builtIds,
+        std::vector<kachakacha::v2::modeling::SurfaceContinuity>& continuity,
+        std::vector<kachakacha::v2::base::EntityId>& supports) const;
 
     V2MainWindow& window_;
     V2LoopFacesDock* dock_ = nullptr;
@@ -72,6 +88,8 @@ private:
     //! 輪ごとの上書き(作り方・作るか)。計画し直すと輪の数に合わせて作り直す。
     std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methodOverride_;
     std::vector<bool> make_;
+    //! 輪ごと・辺ごとの連続(G0/G1/G2)。隣のある辺だけ意味を持つ。
+    std::vector<std::vector<kachakacha::v2::modeling::SurfaceContinuity>> continuity_;
     //! ずれごとの「そのまま」(寄せない)。
     std::vector<bool> leaveGap_;
     //! 許容(端)の上書き(棚で変えたとき)。

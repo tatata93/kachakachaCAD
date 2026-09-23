@@ -13,10 +13,13 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/geometry/CurveSampling.h"
 
 #include <QString>
 #include <Qt>
 
+#include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,6 +31,7 @@ using kachakacha::v2::app::LoopSplit;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::geometry::CurveSegment;
+using kachakacha::v2::modeling::SurfaceContinuity;
 
 namespace {
 
@@ -80,6 +84,12 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
                 ShowPreview();
             }
         });
+    dock_->SetContinuityHandler([this](int face, int edge) {
+        if (face >= 0 && edge >= 0
+            && CycleContinuity(static_cast<std::size_t>(face), static_cast<std::size_t>(edge))) {
+            ShowPreview();
+        }
+    });
     dock_->SetToleranceHandler([this](double joinMm) {
         joinMm_ = joinMm;
         if (plan_.has_value() && Replan()) {
@@ -127,7 +137,7 @@ kachakacha::v2::geometry::GeometryTolerance V2LoopFacesTool::ToleranceNow() cons
 
 bool V2LoopFacesTool::Replan()
 {
-    auto planned = kachakacha::v2::app::PlanLoopFaces(selections_, ToleranceNow());
+    auto planned = kachakacha::v2::app::PlanLoopFaces(selections_, ToleranceNow(), Neighbors());
     if (!planned.HasValue()) {
         plan_.reset();
         window_.ReportDiagnostics(planned.Diagnostics());
@@ -138,6 +148,12 @@ bool V2LoopFacesTool::Replan()
     if (methodOverride_.size() != plan_->faces.size()) {
         methodOverride_.assign(plan_->faces.size(), std::nullopt);
         make_.assign(plan_->faces.size(), true);
+        continuity_.assign(plan_->faces.size(), {});
+    }
+    for (std::size_t at = 0; at < plan_->faces.size(); ++at) {
+        if (continuity_[at].size() != plan_->faces[at].edges.size()) {
+            continuity_[at].assign(plan_->faces[at].edges.size(), SurfaceContinuity::G0);
+        }
     }
     if (leaveGap_.size() != plan_->gaps.size()) {
         leaveGap_.assign(plan_->gaps.size(), false);
@@ -151,6 +167,167 @@ LoopFaceMethod V2LoopFacesTool::MethodOf(std::size_t face) const
         return LoopFaceMethod::Planar;
     }
     return methodOverride_[face].value_or(plan_->faces[face].method);
+}
+
+SurfaceContinuity V2LoopFacesTool::ContinuityOf(std::size_t face, std::size_t edge) const
+{
+    if (!plan_.has_value() || face >= continuity_.size() || edge >= continuity_[face].size()) {
+        return SurfaceContinuity::G0;
+    }
+    const LoopFaceMethod method = MethodOf(face);
+    if (method != LoopFaceMethod::FourEdge && method != LoopFaceMethod::BoundaryFill) {
+        return SurfaceContinuity::G0;   // 平面・ロフトに辺の連続は付かない
+    }
+    const auto& item = plan_->faces[face].edges[edge];
+    if (!item.neighborSurface.has_value() && !item.neighborFace.has_value()) {
+        return SurfaceContinuity::G0;   // 隣が無ければ相手が無い
+    }
+    return continuity_[face][edge];
+}
+
+bool V2LoopFacesTool::CycleContinuity(std::size_t face, std::size_t edge)
+{
+    if (!plan_.has_value() || face >= continuity_.size() || edge >= continuity_[face].size()) {
+        return false;
+    }
+    const auto& item = plan_->faces[face].edges[edge];
+    if (!item.neighborSurface.has_value() && !item.neighborFace.has_value()) {
+        window_.SetStatus(QStringLiteral("面にする: 輪 %1 の辺 %2 には隣の面が無いので、連続は付けられません。")
+                .arg(static_cast<int>(face + 1)).arg(static_cast<int>(edge + 1)));
+        return false;
+    }
+    const LoopFaceMethod method = MethodOf(face);
+    if (method != LoopFaceMethod::FourEdge && method != LoopFaceMethod::BoundaryFill) {
+        window_.SetStatus(QStringLiteral("面にする: 輪 %1 は平面なので辺の連続は付けられません。"
+                                         "作り方を境界面に変えると付けられます。")
+                .arg(static_cast<int>(face + 1)));
+        return false;
+    }
+    auto& value = continuity_[face][edge];
+    value = value == SurfaceContinuity::G0 ? SurfaceContinuity::G1
+        : value == SurfaceContinuity::G1  ? SurfaceContinuity::G2
+                                          : SurfaceContinuity::G0;
+    window_.SetStatus(QStringLiteral("面にする: 輪 %1 の辺 %2 を %3 にしました。")
+            .arg(static_cast<int>(face + 1)).arg(static_cast<int>(edge + 1))
+            .arg(QString::fromUtf8(std::string(kachakacha::v2::modeling::SurfaceContinuityName(value)).c_str())));
+    return true;
+}
+
+//! 3D で置いている点にいちばん近い、隣のある辺。無ければ偽。
+bool V2LoopFacesTool::CycleContinuityAtHover()
+{
+    if (!plan_.has_value()) {
+        return false;
+    }
+    const auto hover = window_.viewport_->HoverPosition();
+    if (!hover.has_value()) {
+        window_.SetStatus(QStringLiteral("面にする: Tab は、3D で辺の上に置いてから押します。"));
+        return true;
+    }
+    std::optional<std::pair<std::size_t, std::size_t>> best;
+    double bestMm = 0.0;
+    for (std::size_t f = 0; f < plan_->faces.size(); ++f) {
+        const LoopFace& face = plan_->faces[f];
+        for (std::size_t e = 0; e < face.edges.size(); ++e) {
+            if (!face.edges[e].neighborSurface.has_value() && !face.edges[e].neighborFace.has_value()) {
+                continue;
+            }
+            const std::size_t piece = face.selections[e];
+            if (piece >= plan_->pieces.size()) {
+                continue;
+            }
+            for (const CurveSegment& segment : plan_->pieces[piece].segments) {
+                const double d = segment.ClosestPoint(*hover).distance;
+                if (!best.has_value() || d < bestMm) {
+                    best = std::make_pair(f, e);
+                    bestMm = d;
+                }
+            }
+        }
+    }
+    if (!best.has_value()) {
+        window_.SetStatus(QStringLiteral("面にする: 隣の面がある辺が無いので、連続を付ける辺がありません。"));
+        return true;
+    }
+    if (CycleContinuity(best->first, best->second)) {
+        ShowPreview();
+    }
+    return true;
+}
+
+std::vector<kachakacha::v2::app::LoopNeighborCurve> V2LoopFacesTool::Neighbors() const
+{
+    std::vector<kachakacha::v2::app::LoopNeighborCurve> curves;
+    const double tol = std::max(ToleranceNow().interactiveJoinMm, 0.01) * 0.5;
+    for (const auto& [key, boundary] : window_.guideEdges_) {
+        const auto id = EntityId::Parse(key);
+        if (!id.has_value()) {
+            continue;
+        }
+        for (const CurveSegment& segment : boundary) {
+            kachakacha::v2::app::LoopNeighborCurve curve;
+            curve.surface = *id;
+            curve.polyline = kachakacha::v2::geometry::SampleChain({segment}, tol);
+            curves.push_back(std::move(curve));
+        }
+    }
+    return curves;
+}
+
+std::vector<std::size_t> V2LoopFacesTool::BuildOrder() const
+{
+    std::vector<std::size_t> order;
+    std::vector<bool> placed(plan_->faces.size(), false);
+    bool progress = true;
+    while (progress) {
+        progress = false;
+        for (std::size_t f = 0; f < plan_->faces.size(); ++f) {
+            if (placed[f] || !make_[f]) {
+                continue;
+            }
+            bool ready = true;
+            const LoopFace& face = plan_->faces[f];
+            for (std::size_t e = 0; e < face.edges.size() && ready; ++e) {
+                const auto& other = face.edges[e].neighborFace;
+                if (other.has_value() && *other < placed.size() && make_[*other] && !placed[*other]
+                    && ContinuityOf(f, e) != SurfaceContinuity::G0) {
+                    ready = false;   // 相手の輪を先に作る
+                }
+            }
+            if (ready) {
+                order.push_back(f);
+                placed[f] = true;
+                progress = true;
+            }
+        }
+    }
+    for (std::size_t f = 0; f < plan_->faces.size(); ++f) {
+        if (!placed[f] && make_[f]) {
+            order.push_back(f);   // 互いに相手(輪どうし)。番号順に作り、後の辺は G0 になる
+        }
+    }
+    return order;
+}
+
+void V2LoopFacesTool::EdgeSupports(std::size_t face, const std::vector<EntityId>& builtIds,
+    std::vector<SurfaceContinuity>& continuity, std::vector<EntityId>& supports) const
+{
+    const LoopFace& item = plan_->faces[face];
+    continuity.assign(item.edges.size(), SurfaceContinuity::G0);
+    supports.assign(item.edges.size(), EntityId{});
+    for (std::size_t e = 0; e < item.edges.size(); ++e) {
+        const SurfaceContinuity order = ContinuityOf(face, e);
+        if (order == SurfaceContinuity::G0) {
+            continue;
+        }
+        const auto& edge = item.edges[e];
+        if (edge.neighborSurface.has_value()) {
+            supports[e] = *edge.neighborSurface;
+        } else if (edge.neighborFace.has_value() && *edge.neighborFace < builtIds.size()) {
+            supports[e] = builtIds[*edge.neighborFace];   // まだ作っていなければ Nil → G0 のまま
+        }
+        continuity[e] = order;
+    }
 }
 
 //! 輪は実線の下見、ずれは赤系の破線と × 印。棚に輪の表、一番下の一行に内訳、案内に次の手。
@@ -175,6 +352,19 @@ void V2LoopFacesTool::ShowPreview()
             const std::size_t source = piece < plan_->pieces.size() ? plan_->pieces[piece].source : piece;
             if (source < selections_.size()) {
                 labels.push_back({selections_[source].sourceWireId, std::to_string(at + 1)});
+            }
+        }
+        // 辺の連続(G1/G2)は、その辺の線に札で出す。
+        for (std::size_t e = 0; e < face.edges.size(); ++e) {
+            const SurfaceContinuity order = ContinuityOf(at, e);
+            if (order == SurfaceContinuity::G0) {
+                continue;
+            }
+            const std::size_t piece = face.selections[e];
+            const std::size_t source = piece < plan_->pieces.size() ? plan_->pieces[piece].source : piece;
+            if (source < selections_.size()) {
+                labels.push_back({selections_[source].sourceWireId,
+                    std::string(kachakacha::v2::modeling::SurfaceContinuityName(order))});
             }
         }
     }
@@ -240,6 +430,24 @@ void V2LoopFacesTool::ShowDock()
             ? QStringLiteral("✓")
             : QStringLiteral("平面から %1 mm").arg(face.planeDeviationMm, 0, 'f', 3);
         row.make = make_[at];
+        const bool allowed = current == LoopFaceMethod::FourEdge || current == LoopFaceMethod::BoundaryFill;
+        for (std::size_t e = 0; e < face.edges.size(); ++e) {
+            const auto& edge = face.edges[e];
+            if (!edge.neighborSurface.has_value() && !edge.neighborFace.has_value()) {
+                continue;
+            }
+            V2LoopEdgeCell cell;
+            cell.edge = static_cast<int>(e);
+            std::string neighborLabel;
+            if (edge.neighborSurface.has_value()) {
+                const auto* entity = window_.session_->GetDocument().FindEntity(*edge.neighborSurface);
+                neighborLabel = entity != nullptr ? entity->displayName : std::string("?");
+            }
+            cell.neighborJa = Text(kachakacha::v2::app::LoopFaceEdgeTextJa(edge, neighborLabel));
+            cell.continuityIndex = static_cast<int>(ContinuityOf(at, e));
+            cell.allowed = allowed;
+            row.edges.push_back(cell);
+        }
         view.faces.push_back(row);
     }
     for (std::size_t at = 0; at < plan_->gaps.size(); ++at) {
@@ -280,6 +488,9 @@ bool V2LoopFacesTool::HandleKey(int key)
         Clear();
         window_.SetStatus(QStringLiteral("面にする: やめました。何も変えていません。"));
         return true;
+    }
+    if (key == Qt::Key_Tab) {
+        return CycleContinuityAtHover();
     }
     if (key != Qt::Key_Return && key != Qt::Key_Enter) {
         return false;
@@ -565,13 +776,15 @@ int V2LoopFacesTool::BuildFaces()
 {
     const auto tolerance = ToleranceNow();
     int made = 0;
-    for (std::size_t at = 0; at < plan_->faces.size(); ++at) {
-        if (at < make_.size() && !make_[at]) {
-            continue;
-        }
+    std::vector<EntityId> builtIds(plan_->faces.size());
+    for (const std::size_t at : BuildOrder()) {
         LoopFace face = plan_->faces[at];
         face.method = MethodOf(at);
-        const auto table = kachakacha::v2::app::LoopFaceTable(selections_, face, tolerance);
+        std::vector<SurfaceContinuity> continuity;
+        std::vector<EntityId> supports;
+        EdgeSupports(at, builtIds, continuity, supports);
+        const auto table = kachakacha::v2::app::LoopFaceTable(selections_, face, tolerance,
+            continuity, supports);
         if (!table.HasValue()) {
             window_.ReportDiagnostics(table.Diagnostics());
             return 0;
@@ -585,9 +798,16 @@ int V2LoopFacesTool::BuildFaces()
         for (const std::size_t selection : face.selections) {
             inputs.push_back(selections_[selection].sourceWireId);
         }
-        if (window_.AdoptGuideSurface(table.Value(), *built, inputs, MethodLabel(face.method)).IsNil()) {
+        bool smooth = false;
+        for (const auto& row : table.Value().rows) {
+            smooth = smooth || row.continuity != SurfaceContinuity::G0;
+        }
+        const std::string label = MethodLabel(face.method) + (smooth ? "(辺の連続あり)" : "");
+        const EntityId id = window_.AdoptGuideSurface(table.Value(), *built, inputs, label);
+        if (id.IsNil()) {
             return 0;
         }
+        builtIds[at] = id;
         ++made;
     }
     return made;

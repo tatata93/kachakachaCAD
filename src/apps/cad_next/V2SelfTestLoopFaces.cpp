@@ -20,6 +20,7 @@
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/Vector3.h"
+#include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QPointF>
@@ -423,6 +424,83 @@ void SelectAllWires(V2MainWindow& window)
     return Explain("1 回の取り消しで端がまた離れる", !WiresFormClosedLoop(window));
 }
 
+//! HP-LF-07。辺の連続(UI 設計 2-3/2-4)。先に四角 A を面にしてから、A の右辺を共有する四角 B を
+//! 面にする。B の共有辺には「すでにある面の縁」の欄が出て、G0 → G1 → G2 と回せる(棚の欄と 3D の Tab)。
+//! 平面の輪では回せない(四辺面に変えると回せる)。Enter で作ると、連続を付けた札の面が増える。
+[[nodiscard]] bool CaseLoopFacesEdgeContinuity(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    window.RunCommand("file.new");
+    const EntityId a1 = DrawLineAtByHand(window, 0.30, 0.30, 0.50, 0.30);
+    const EntityId shared = DrawLineAtByHand(window, 0.50, 0.30, 0.50, 0.70);
+    const EntityId a3 = DrawLineAtByHand(window, 0.50, 0.70, 0.30, 0.70);
+    const EntityId a4 = DrawLineAtByHand(window, 0.30, 0.70, 0.30, 0.30);
+    if (!Explain("四角 A を手で引ける", !a1.IsNil() && !shared.IsNil() && !a3.IsNil() && !a4.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    const int surfacesStart = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("A を面にできる", window.LoopFacesTool().Active()
+            && window.HandleToolKey(Qt::Key_Return, nullptr)
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesStart + 1)) {
+        return false;
+    }
+    const EntityId b1 = DrawLineAtByHand(window, 0.50, 0.30, 0.70, 0.30);
+    const EntityId b2 = DrawLineAtByHand(window, 0.70, 0.30, 0.70, 0.70);
+    const EntityId b3 = DrawLineAtByHand(window, 0.70, 0.70, 0.50, 0.70);
+    if (!Explain("四角 B の 3 本を手で引ける", !b1.IsNil() && !b2.IsNil() && !b3.IsNil())) {
+        return false;
+    }
+    kachakacha::v2::app::SelectionSet four;
+    four.entityIds = {shared, b1, b2, b3};
+    window.Viewport().SetSelection(four);
+    window.RunCommand("surface.from_lines");
+    auto& tool = window.LoopFacesTool();
+    if (!Explain("B の輪が 1 つ見つかる", tool.Active() && tool.Plan().has_value()
+            && tool.Plan()->faces.size() == 1 && tool.Plan()->faces[0].edges.size() == 4)) {
+        return false;
+    }
+    int edgeWithNeighbor = -1;
+    for (std::size_t e = 0; e < 4; ++e) {
+        if (tool.Plan()->faces[0].edges[e].neighborSurface.has_value()) {
+            edgeWithNeighbor = static_cast<int>(e);
+        }
+    }
+    if (!Explain("共有辺だけが すでにある面 A の縁 と分かる", edgeWithNeighbor >= 0)
+        || !Explain((std::string("棚にその辺の連続の欄が出る(")
+                        + tool.Dock()->EdgeCellTextJa(0, edgeWithNeighbor).toStdString() + ")").c_str(),
+            tool.Dock()->EdgeCellTextJa(0, edgeWithNeighbor).contains(QStringLiteral("G0")))
+        || !Explain("平面の輪では回せない(押しても偽)", !tool.Dock()->CycleContinuity(0, edgeWithNeighbor))
+        || !Explain("四辺面に変えられる", tool.Dock()->ChooseMethod(0, 1)
+            && tool.MethodOf(0) == LoopFaceMethod::FourEdge)
+        || !Explain("欄を押すと G1 になる", tool.Dock()->CycleContinuity(0, edgeWithNeighbor)
+            && tool.ContinuityOf(0, static_cast<std::size_t>(edgeWithNeighbor)) == SurfaceContinuity::G1)
+        || !Explain("欄の文が G1 に変わる",
+            tool.Dock()->EdgeCellTextJa(0, edgeWithNeighbor).contains(QStringLiteral("G1")))) {
+        return false;
+    }
+    // 3D で共有辺の上に置いて Tab。
+    auto& viewport = window.Viewport();
+    viewport.HoverAt(QPointF(viewport.width() * 0.50, viewport.height() * 0.50));
+    if (!Explain("辺の上で Tab を押すと G2 になる", window.HandleToolKey(Qt::Key_Tab, nullptr)
+            && tool.ContinuityOf(0, static_cast<std::size_t>(edgeWithNeighbor)) == SurfaceContinuity::G2)
+        || !Explain("もう一度 Tab で G0 に戻る", window.HandleToolKey(Qt::Key_Tab, nullptr)
+            && tool.ContinuityOf(0, static_cast<std::size_t>(edgeWithNeighbor)) == SurfaceContinuity::G0)
+        || !Explain("さらに Tab で G1", window.HandleToolKey(Qt::Key_Tab, nullptr)
+            && tool.ContinuityOf(0, static_cast<std::size_t>(edgeWithNeighbor)) == SurfaceContinuity::G1)) {
+        return false;
+    }
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("Enter で G1 の辺を持つ四辺面が作れる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain((std::string("形状ガイドが 1 枚増える(") + window.StatusText().toStdString() + ")").c_str(),
+            CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで戻る", CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -440,6 +518,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesDockChoices},
         {"HP-LF-06 線を選ぶと事実の行(載る面・長さ・端のつながり)が出て、[寄せる]でその場で寄る",
             CaseWireFactsRowShowsGapAndCloses},
+        {"HP-LF-07 面にするは共有辺に連続の欄を出し、欄と Tab で G0→G1→G2 を回して作る",
+            CaseLoopFacesEdgeContinuity},
     };
 }
 

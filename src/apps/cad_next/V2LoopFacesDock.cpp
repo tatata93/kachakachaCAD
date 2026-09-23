@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <algorithm>
 #include <utility>
 
 namespace {
@@ -122,7 +123,12 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     auto* body = widget();
     FaceRowWidgets widgets;
     widgets.row = new QWidget(body);
-    auto* line = new QHBoxLayout(widgets.row);
+    widgets.column = new QVBoxLayout(widgets.row);
+    widgets.column->setContentsMargins(0, 0, 0, 0);
+    widgets.column->setSpacing(1);
+    auto* first = new QWidget(widgets.row);
+    widgets.column->addWidget(first);
+    auto* line = new QHBoxLayout(first);
     line->setContentsMargins(0, 0, 0, 0);
     widgets.number = new QLabel(CircledNumber(face.number), widgets.row);
     line->addWidget(widgets.number);
@@ -140,6 +146,42 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     widgets.make->setChecked(face.make);
     line->addWidget(widgets.make);
     return widgets;
+}
+
+//! 辺の連続の欄(隣のある辺だけ)。「辺 2 G1」を押すと G0 → G1 → G2 → G0 と回る。
+//! 平面の輪では押せない(平面に連続は付かない。欄は出して、なぜ押せないかを tip で言う)。
+void V2LoopFacesDock::AddEdgeLine(FaceRowWidgets& widgets, int faceIndex, const V2LoopFaceRow& face)
+{
+    if (face.edges.empty()) {
+        return;
+    }
+    widgets.edgeLine = new QWidget(widgets.row);
+    auto* line = new QHBoxLayout(widgets.edgeLine);
+    line->setContentsMargins(18, 0, 0, 0);
+    line->setSpacing(4);
+    auto* caption = new QLabel(QStringLiteral("連続"), widgets.edgeLine);
+    line->addWidget(caption);
+    static const char* kNames[3] = {"G0", "G1", "G2"};
+    for (const V2LoopEdgeCell& cell : face.edges) {
+        const int order = std::clamp(cell.continuityIndex, 0, 2);
+        auto* button = new QPushButton(
+            QStringLiteral("辺 %1 %2").arg(cell.edge + 1).arg(QString::fromUtf8(kNames[order])),
+            widgets.edgeLine);
+        button->setEnabled(cell.allowed);
+        button->setToolTip(cell.allowed
+                ? cell.neighborJa + QStringLiteral("。押すと G0 → G1 → G2 と回ります(3D でその辺に置いて Tab でも)")
+                : cell.neighborJa + QStringLiteral("。平面の輪には連続を付けられません(境界面に変えると付けられます)"));
+        const int edge = cell.edge;
+        QObject::connect(button, &QPushButton::clicked, this, [this, faceIndex, edge] {
+            if (!loading_ && continuityHandler_) {
+                continuityHandler_(faceIndex, edge);
+            }
+        });
+        line->addWidget(button);
+        widgets.edgeButtons.emplace_back(edge, button);
+    }
+    line->addStretch(1);
+    widgets.column->addWidget(widgets.edgeLine);
 }
 
 V2LoopFacesDock::GapRowWidgets V2LoopFacesDock::MakeGapRow(int gap, const V2LoopGapRow& row)
@@ -181,8 +223,9 @@ void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
     for (std::size_t index = 0; index < faces.size(); ++index) {
         const V2LoopFaceRow& face = faces[index];
         FaceRowWidgets widgets = MakeFaceRow(face);
-        facesLayout_->addWidget(widgets.row);
         const int faceIndex = static_cast<int>(index);
+        AddEdgeLine(widgets, faceIndex, face);
+        facesLayout_->addWidget(widgets.row);
         QObject::connect(widgets.method, &QComboBox::currentIndexChanged, this,
             [this, faceIndex](int methodIndex) {
                 if (!loading_ && methodHandler_) {
@@ -313,6 +356,37 @@ bool V2LoopFacesDock::ToggleMake(int face)
 bool V2LoopFacesDock::TypeTolerance(double joinMm)
 {
     return TypeIfUsable(tolerance_, joinMm);
+}
+
+void V2LoopFacesDock::SetContinuityHandler(std::function<void(int, int)> handler)
+{
+    continuityHandler_ = std::move(handler);
+}
+
+bool V2LoopFacesDock::CycleContinuity(int face, int edge)
+{
+    if (face < 0 || face >= static_cast<int>(faceRows_.size())) {
+        return false;
+    }
+    for (const auto& [index, button] : faceRows_[static_cast<std::size_t>(face)].edgeButtons) {
+        if (index == edge) {
+            return ClickIfUsable(button);
+        }
+    }
+    return false;
+}
+
+QString V2LoopFacesDock::EdgeCellTextJa(int face, int edge) const
+{
+    if (face < 0 || face >= static_cast<int>(faceRows_.size())) {
+        return QString();
+    }
+    for (const auto& [index, button] : faceRows_[static_cast<std::size_t>(face)].edgeButtons) {
+        if (index == edge) {
+            return button->text();
+        }
+    }
+    return QString();
 }
 
 int V2LoopFacesDock::FaceRowCount() const

@@ -15,6 +15,7 @@
 #include <QString>
 
 #include <functional>
+#include <utility>
 #include <vector>
 
 class QCheckBox;
@@ -25,6 +26,14 @@ class QPushButton;
 class QVBoxLayout;
 class QWidget;
 
+//! 輪の辺 1 つ(連続の欄)。隣が無い辺は出さない。
+struct V2LoopEdgeCell {
+    int edge = 0;                //!< 辺の番号(0 から。表示は 1 から)
+    QString neighborJa;          //!< 「すでにある面 面 3 の縁」「輪 2 と共有」
+    int continuityIndex = 0;     //!< 0 = G0, 1 = G1, 2 = G2
+    bool allowed = true;         //!< この作り方(四辺面・境界面)で連続を付けられるか。平面は偽
+};
+
 //! 「面にする」の棚の 1 行(輪 1 つ)。
 struct V2LoopFaceRow {
     int number = 1;                       //!< ① から
@@ -33,6 +42,7 @@ struct V2LoopFaceRow {
     int edgeCount = 0;                    //!< 辺の数(ロフトなら断面の数)
     QString statusJa;                     //!< 「✓」「最大ずれ 0.02 mm」など
     bool make = true;                     //!< 作るか
+    std::vector<V2LoopEdgeCell> edges;    //!< 隣のある辺(連続 G0/G1/G2 を押して回す)
 };
 
 //! ずれの 1 行。
@@ -64,6 +74,8 @@ public:
     //! [寄せる] / [そのまま](そのままはトグル: 押すと leave が反転する)。
     void SetGapHandlers(std::function<void(int gap)> close, std::function<void(int gap)> leave);
     void SetToleranceHandler(std::function<void(double joinMm)> handler);
+    //! 辺の連続の欄を押した(G0 → G1 → G2 → G0 と回す)。
+    void SetContinuityHandler(std::function<void(int face, int edge)> handler);
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel);
 
     //! 見えていて押せるものを実際に押す(自己試験用)。
@@ -74,6 +86,10 @@ public:
     [[nodiscard]] bool ChooseMethod(int face, int methodIndex);
     [[nodiscard]] bool ToggleMake(int face);
     [[nodiscard]] bool TypeTolerance(double joinMm);
+    //! 辺の連続の欄を押す(自己試験用)。欄が無い・押せないなら偽。
+    [[nodiscard]] bool CycleContinuity(int face, int edge);
+    //! 辺の連続の欄の文(「辺 2 G1」)。無ければ空。
+    [[nodiscard]] QString EdgeCellTextJa(int face, int edge) const;
 
     [[nodiscard]] int FaceRowCount() const;
     [[nodiscard]] int GapRowCount() const;
@@ -94,6 +110,9 @@ private:
         QLabel* edges = nullptr;
         QLabel* status = nullptr;
         QCheckBox* make = nullptr;
+        QVBoxLayout* column = nullptr;
+        QWidget* edgeLine = nullptr;
+        std::vector<std::pair<int, QPushButton*>> edgeButtons;   //!< 辺の番号と欄
     };
     //! ずれ 1 行分の持ち物(3. 節)。
     struct GapRowWidgets {
@@ -106,6 +125,7 @@ private:
     void RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces);
     void RebuildGapSection(const V2LoopFacesView& view);
     [[nodiscard]] FaceRowWidgets MakeFaceRow(const V2LoopFaceRow& face);
+    void AddEdgeLine(FaceRowWidgets& widgets, int faceIndex, const V2LoopFaceRow& face);
     [[nodiscard]] GapRowWidgets MakeGapRow(int gap, const V2LoopGapRow& row);
 
     QVBoxLayout* facesLayout_ = nullptr;
@@ -123,6 +143,7 @@ private:
 
     std::function<void(int, int)> methodHandler_;
     std::function<void(int, bool)> makeHandler_;
+    std::function<void(int, int)> continuityHandler_;
     std::function<void(int)> closeGapHandler_;
     std::function<void(int)> leaveGapHandler_;
     std::function<void(double)> toleranceHandler_;

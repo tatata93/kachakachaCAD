@@ -14,6 +14,7 @@
 
 namespace kachakacha::v2::app {
 
+using base::EntityId;
 using base::MakeError;
 using base::Result;
 using geometry::CurveKind;
@@ -688,8 +689,75 @@ std::string LoopSplitTextJa(const std::vector<GuideTableSelection>& selections,
         + std::to_string(split.parameters.size()) + " か所で分けます)";
 }
 
+
+//! 点から折れ線までの距離。
+[[nodiscard]] double DistanceToPolyline(const Vector3& p, const std::vector<Vector3>& polyline)
+{
+    if (polyline.empty()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    double best = (p - polyline.front()).Length();
+    for (std::size_t k = 1; k < polyline.size(); ++k) {
+        const Vector3 a = polyline[k - 1];
+        const Vector3 b = polyline[k];
+        const Vector3 ab = b - a;
+        const double len2 = geometry::Dot(ab, ab);
+        double t = len2 > 0.0 ? geometry::Dot(p - a, ab) / len2 : 0.0;
+        t = std::clamp(t, 0.0, 1.0);
+        const Vector3 q{a.x + ab.x * t, a.y + ab.y * t, a.z + ab.z * t};
+        best = std::min(best, (p - q).Length());
+    }
+    return best;
+}
+
+//! 片の線が、すでにある面の縁の折れ線に重なるか(標本点が全部 tol 以内)。
+[[nodiscard]] bool PieceLiesOn(const std::vector<CurveSegment>& chain,
+    const std::vector<Vector3>& polyline, double tolMm)
+{
+    const std::vector<Vector3> samples = geometry::SampleChain(chain, tolMm * 0.5);
+    if (samples.size() < 2) {
+        return false;
+    }
+    return std::all_of(samples.begin(), samples.end(),
+        [&](const Vector3& p) { return DistanceToPolyline(p, polyline) <= tolMm; });
+}
+
+//! 輪の辺ごとに隣(すでにある面の縁 / 同じ計画の別の輪)を書く。
+void AnnotateNeighbors(LoopFacePlan& plan, const std::vector<LoopNeighborCurve>& neighbors,
+    double joinMm)
+{
+    const double tolMm = std::max(joinMm * 10.0, 0.05);
+    for (std::size_t f = 0; f < plan.faces.size(); ++f) {
+        LoopFace& face = plan.faces[f];
+        if (face.method == LoopFaceMethod::Loft) {
+            continue;
+        }
+        face.edges.assign(face.selections.size(), LoopFaceEdge{});
+        for (std::size_t e = 0; e < face.selections.size(); ++e) {
+            const std::size_t piece = face.selections[e];
+            for (std::size_t g = 0; g < plan.faces.size(); ++g) {
+                const LoopFace& other = plan.faces[g];
+                if (g != f && other.method != LoopFaceMethod::Loft
+                    && std::find(other.selections.begin(), other.selections.end(), piece)
+                        != other.selections.end()) {
+                    face.edges[e].neighborFace = g;
+                }
+            }
+            if (piece >= plan.pieces.size()) {
+                continue;
+            }
+            for (const LoopNeighborCurve& curve : neighbors) {
+                if (PieceLiesOn(plan.pieces[piece].segments, curve.polyline, tolMm)) {
+                    face.edges[e].neighborSurface = curve.surface;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selections,
-    const geometry::GeometryTolerance& tolerance)
+    const geometry::GeometryTolerance& tolerance, const std::vector<LoopNeighborCurve>& neighbors)
 {
     using Out = Result<LoopFacePlan>;
     const double joinMm = std::max(tolerance.interactiveJoinMm, tolerance.modelLinearMm * 100.0);
@@ -767,11 +835,14 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
     if (!plan.gaps.empty()) {
         plan.summaryJa += "・ずれ " + std::to_string(plan.gaps.size());
     }
+    AnnotateNeighbors(plan, neighbors, joinMm);
     return Out::Success(std::move(plan));
 }
 
 Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selections,
-    const LoopFace& face, const geometry::GeometryTolerance& tolerance)
+    const LoopFace& face, const geometry::GeometryTolerance& tolerance,
+    const std::vector<modeling::SurfaceContinuity>& continuity,
+    const std::vector<EntityId>& supports)
 {
     using Out = Result<GuideTable>;
     for (const std::size_t index : face.selections) {
@@ -810,15 +881,32 @@ Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selecti
     }
     table.method = face.method == LoopFaceMethod::FourEdge ? GuideSurfaceMethod::FourEdgePatch
                                                             : GuideSurfaceMethod::BoundaryFill;
-    for (const std::size_t selection : face.selections) {
+    for (std::size_t e = 0; e < face.selections.size(); ++e) {
         const auto added = modeling::AddSelectionAsNewRow(table, ChainRole::BoundarySide,
-            selections[selection]);
+            selections[face.selections[e]]);
         if (!added.HasValue()) {
             return Out::Failure(added.Diagnostics());
         }
         table = added.Value();
+        // 辺の連続: 支持面があるときだけ。無ければ G0 のまま(黙って G1 にしない)。
+        const bool hasSupport = e < supports.size() && !supports[e].IsNil();
+        if (e < continuity.size() && hasSupport) {
+            table.rows.back().continuity = continuity[e];
+            table.rows.back().supportSurfaceId = supports[e];
+        }
     }
     return Out::Success(table);
+}
+
+std::string LoopFaceEdgeTextJa(const LoopFaceEdge& edge, const std::string& neighborSurfaceLabel)
+{
+    if (edge.neighborSurface.has_value()) {
+        return "すでにある面 " + neighborSurfaceLabel + " の縁";
+    }
+    if (edge.neighborFace.has_value()) {
+        return "輪 " + std::to_string(*edge.neighborFace + 1) + " と共有";
+    }
+    return "隣なし";
 }
 
 Result<LoopGapFix> CloseLoopGap(const std::vector<GuideTableSelection>& selections,

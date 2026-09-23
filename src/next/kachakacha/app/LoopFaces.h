@@ -64,10 +64,23 @@ struct LoopSplit {
 
 [[nodiscard]] std::string LoopFaceMethodLabelJa(LoopFaceMethod method);
 
+//! すでにある面の縁(呼び手が核の外周から折れ線にして渡す)。辺の連続の相手を探すのに使う。
+struct LoopNeighborCurve {
+    base::EntityId surface;
+    std::vector<geometry::Vector3> polyline;
+};
+
+//! 輪の辺 1 つ(selections と同じ並び)で隣り合うもの。連続(G0/G1/G2)はこの相手に対して決める。
+struct LoopFaceEdge {
+    std::optional<base::EntityId> neighborSurface;   //!< すでにある面の縁に重なる
+    std::optional<std::size_t> neighborFace;         //!< 同じ計画の別の輪(faces の番号)もこの辺を使う
+};
+
 //! 面になる輪 1 つ。
 struct LoopFace {
     std::vector<std::size_t> selections;   //!< 輪をたどる順の選択番号
     std::vector<bool> forward;             //!< その線を始点→終点の向きにたどるか
+    std::vector<LoopFaceEdge> edges;       //!< 辺ごとの隣(selections と同じ並び。ロフトは空)
     LoopFaceMethod method = LoopFaceMethod::Planar;
     double planeDeviationMm = 0.0;         //!< 最小二乗平面からのずれ(平面判定に使った値)
     double areaMm2 = 0.0;                  //!< 囲む面積(Newell)
@@ -107,16 +120,26 @@ struct LoopFacePlan {
     const std::vector<modeling::GuideTableSelection>& selections, const LoopSplit& split);
 
 //! 面になる輪と、ずれを挙げる。線が 1 本も無ければ断る。線が多すぎれば UI-R012。
-//! 輪が無くてずれも無ければ UI-R011。
+//! 輪が無くてずれも無ければ UI-R011。neighbors を渡すと、輪の辺がすでにある面の縁に重なるか
+//! (連続の相手)も faces[].edges に書く。同じ計画の 2 つの輪が 1 本の線を使えば互いに相手になる。
 [[nodiscard]] base::Result<LoopFacePlan> PlanLoopFaces(
     const std::vector<modeling::GuideTableSelection>& selections,
-    const geometry::GeometryTolerance& tolerance);
+    const geometry::GeometryTolerance& tolerance,
+    const std::vector<LoopNeighborCurve>& neighbors = {});
 
 //! 輪 1 つを、面を作る表にする(平面は外形 1 行、四辺面・境界面は辺ごとに 1 行、ロフトは断面ごと)。
 //! T 字で分けた片が残っている計画(splits が空でない)では作れない(先に線を分けて計画し直す)。
+//! continuity / supports は辺ごと(face.selections と同じ並び。空なら全部 G0)。
+//! 四辺面・境界面の辺だけに効く。支持面(supports)が無い辺は G0 のまま(黙って G1 にしない)。
 [[nodiscard]] base::Result<modeling::GuideTable> LoopFaceTable(
     const std::vector<modeling::GuideTableSelection>& selections, const LoopFace& face,
-    const geometry::GeometryTolerance& tolerance);
+    const geometry::GeometryTolerance& tolerance,
+    const std::vector<modeling::SurfaceContinuity>& continuity = {},
+    const std::vector<base::EntityId>& supports = {});
+
+//! 辺の隣の一文。「すでにある面 面 3 の縁」「輪 ② と共有」「隣なし」。
+[[nodiscard]] std::string LoopFaceEdgeTextJa(const LoopFaceEdge& edge,
+    const std::string& neighborSurfaceLabel);
 
 //! T 字で線を実際に分けた形(片ごとの線)。呼び手はこれを新しい線として文書へ入れる。
 [[nodiscard]] base::Result<std::vector<std::vector<geometry::CurveSegment>>> SplitLoopSource(

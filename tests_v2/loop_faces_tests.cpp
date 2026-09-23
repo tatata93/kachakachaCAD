@@ -652,4 +652,117 @@ KACHA_V2_TEST(loop_graph, prune_dead_ends_marks_only_the_dangling_edge)
     Require(!edges[3].alive, "the dangling edge is pruned");
 }
 
+// ---- 辺の隣(連続の相手): 同じ計画の輪どうし / すでにある面の縁 ----
+
+KACHA_V2_TEST(loop_faces, shared_line_makes_the_two_loops_each_others_neighbor)
+{
+    const Vector3 a{0, 0, 0};
+    const Vector3 b{2, 0, 0};
+    const Vector3 c{2, 2, 0};
+    const Vector3 d{0, 2, 0};
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "ab", L(a, b)));
+    selections.push_back(Sel(1, "bc", L(b, c)));
+    selections.push_back(Sel(2, "cd", L(c, d)));
+    selections.push_back(Sel(3, "da", L(d, a)));
+    selections.push_back(Sel(4, "ac", L(a, c)));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "plans");
+    const LoopFacePlan& value = plan.Value();
+    RequireEqual(std::to_string(value.faces.size()), "2", "two triangles");
+    for (std::size_t f = 0; f < 2; ++f) {
+        const LoopFace& face = value.faces[f];
+        RequireEqual(std::to_string(face.edges.size()), "3", "one edge entry per side");
+        int shared = 0;
+        for (std::size_t e = 0; e < face.selections.size(); ++e) {
+            if (face.selections[e] == 4) {
+                Require(face.edges[e].neighborFace.has_value()
+                        && *face.edges[e].neighborFace == 1 - f,
+                    "the diagonal's neighbor is the other triangle");
+                Require(!face.edges[e].neighborSurface.has_value(), "no existing surface there");
+                ++shared;
+            } else {
+                Require(!face.edges[e].neighborFace.has_value(), "outer sides have no neighbor");
+            }
+        }
+        RequireEqual(std::to_string(shared), "1", "exactly one shared edge");
+    }
+}
+
+KACHA_V2_TEST(loop_faces, an_edge_on_an_existing_surface_boundary_names_that_surface)
+{
+    const Vector3 a{0, 0, 0};
+    const Vector3 b{2, 0, 0};
+    const Vector3 c{2, 2, 1};
+    const Vector3 d{0, 2, 1};
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "ab", L(a, b)));
+    selections.push_back(Sel(1, "bc", L(b, c)));
+    selections.push_back(Sel(2, "cd", L(c, d)));
+    selections.push_back(Sel(3, "da", L(d, a)));
+    // すでにある面の縁(核の折れ線): ab に重なる。
+    std::vector<kachakacha::v2::app::LoopNeighborCurve> neighbors;
+    kachakacha::v2::app::LoopNeighborCurve curve;
+    curve.surface = WireId(90);
+    curve.polyline = {Vector3{0, 0, 0}, Vector3{1, 0, 0}, Vector3{2, 0, 0}};
+    neighbors.push_back(curve);
+    const auto plan = PlanLoopFaces(selections, MakeTolerance(), neighbors);
+    Require(plan.HasValue(), "plans");
+    const LoopFace& face = plan.Value().faces.front();
+    Require(face.method == LoopFaceMethod::Planar || face.method == LoopFaceMethod::FourEdge, "a quad");
+    int named = 0;
+    for (std::size_t e = 0; e < face.selections.size(); ++e) {
+        if (face.selections[e] == 0) {
+            Require(face.edges[e].neighborSurface.has_value()
+                    && *face.edges[e].neighborSurface == WireId(90),
+                "ab lies on the existing surface's boundary");
+            ++named;
+        } else {
+            Require(!face.edges[e].neighborSurface.has_value(), "other sides touch no surface");
+        }
+    }
+    RequireEqual(std::to_string(named), "1", "exactly one edge names the surface");
+    Require(kachakacha::v2::app::LoopFaceEdgeTextJa(face.edges[0], "面 3").find("面 3") != std::string::npos
+            || kachakacha::v2::app::LoopFaceEdgeTextJa(face.edges[0], "面 3") == "隣なし",
+        "edge text is one of the known forms");
+}
+
+KACHA_V2_TEST(loop_faces, continuity_reaches_the_table_only_with_a_support_surface)
+{
+    const Vector3 a{0, 0, 0};
+    const Vector3 b{2, 0, 1};
+    const Vector3 c{2, 2, 0};
+    const Vector3 d{0, 2, 1};
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "ab", L(a, b)));
+    selections.push_back(Sel(1, "bc", L(b, c)));
+    selections.push_back(Sel(2, "cd", L(c, d)));
+    selections.push_back(Sel(3, "da", L(d, a)));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "plans");
+    const LoopFace& face = plan.Value().faces.front();
+    Require(face.method == LoopFaceMethod::FourEdge, "saddle quad is a four-edge patch");
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    std::vector<SurfaceContinuity> continuity(4, SurfaceContinuity::G1);
+    std::vector<EntityId> supports(4);
+    supports[1] = WireId(90);   // 2 番目の辺だけ支持面がある
+    const auto table = LoopFaceTable(selections, face, MakeTolerance(), continuity, supports);
+    Require(table.HasValue(), "table builds");
+    RequireEqual(std::to_string(table.Value().rows.size()), "4", "four boundary rows");
+    for (std::size_t r = 0; r < 4; ++r) {
+        const auto& row = table.Value().rows[r];
+        if (r == 1) {
+            Require(row.continuity == SurfaceContinuity::G1 && row.supportSurfaceId == WireId(90),
+                "the supported edge keeps G1 and its support");
+        } else {
+            Require(row.continuity == SurfaceContinuity::G0 && row.supportSurfaceId.IsNil(),
+                "an edge without a support stays G0 (never silently G1)");
+        }
+    }
+    // 平面の輪には連続を付けない(表は外形 1 行のまま)。
+    const auto planar = LoopFaceTable(selections, face, MakeTolerance());
+    Require(planar.HasValue() && planar.Value().rows[1].continuity == SurfaceContinuity::G0,
+        "without continuity input every row is G0");
+}
+
 KACHA_V2_TEST_MAIN("loop_faces_tests")

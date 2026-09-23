@@ -5,10 +5,10 @@
 - Current task ID: `UI-P1-007`
 - Execution Mode: `STAGED`
 - Review Effort: `EXTRA_HIGH`
-- Current Stage: `2/2 integration`
+- Current Stage: `1/2 foundation`
 - Last PASS task: `UI-P1-006`
-- Current status: `revision`
-- Current note: Stage 2 file-limit repair ready; resume gates and reviews
+- Current status: `blocked`
+- Current note: Blocked: CTest failed with exit code 8
 
 ## Important design decisions
 
@@ -20,4 +20,4 @@
 
 ## Next action
 
-Resume Stage 2 from gates and reviews.
+Inspect the current report, review, task worktree, and ledger status before continuing.

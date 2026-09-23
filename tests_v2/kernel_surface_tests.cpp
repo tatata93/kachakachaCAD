@@ -10,6 +10,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/geometry/ArcBuilders.h"
+#include "kachakacha/geometry/Units.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <Geom_Hyperbola.hxx>
@@ -18,6 +19,7 @@
 #include <gp_Hypr.hxx>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -585,6 +587,41 @@ KACHA_V2_TEST(kernel_fill, ねじれた4辺でも張れて境界を通る)
     const auto built = Build(request);
     Require(built.HasValue(), "面が出来ること");
     Require(built.Value().maximumDeviationMm <= 1.0e-3, "境界を通っている");
+}
+
+
+KACHA_V2_TEST(kernel_fill, 円弧で膨らんだ外周の境界面は膜のように垂れない)
+{
+    // 2026-09-24 オーナー報告: 前頭部の区画(側面の円弧 + 断面の円弧 + 裾の直線 2 本)を境界面で張ると
+    // 内側がへこんだ。初期面を Coons にしたので、内側は外周の膨らみに追従する。
+    // 四分の一の丸屋根: 半径 30 の円弧 2 本(y = 0 の面と x = 0 の面)と、裾の折れ線(2 本)。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    const auto arcXZ = CurveSegment::MakeCircularArc({0, 0, 0}, {0, -1, 0}, {1, 0, 0}, 30.0,
+        0.0, kachakacha::v2::geometry::kPi / 2.0);   // (30,0,0) → (0,0,30)
+    const auto arcYZ = CurveSegment::MakeCircularArc({0, 0, 0}, {-1, 0, 0}, {0, 0, 1}, 30.0,
+        0.0, kachakacha::v2::geometry::kPi / 2.0);   // (0,0,30) → (0,30,0)
+    Require(arcXZ.HasValue() && arcYZ.HasValue(), "円弧が作れること");
+    GuideChain a; a.role = ChainRole::BoundarySide; a.index = 1; a.segments = {arcXZ.Value()};
+    GuideChain b; b.role = ChainRole::BoundarySide; b.index = 2; b.segments = {arcYZ.Value()};
+    request.chains.push_back(a);
+    request.chains.push_back(b);
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 3, {0, 30, 0}, {15, 22, 0}));
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 4, {15, 22, 0}, {30, 0, 0}));
+    const auto built = Build(request);
+    Require(built.HasValue(), "円弧 2 本と裾 2 本の境界面が張れること");
+    Require(built.Value().maximumDeviationMm <= 1.0e-3, "境界を通っている");
+    // 内側の標本: 原点からの距離が 30 の球面に近いはず。膜が垂れると真ん中が 20 を切る。
+    double lowest = 1.0e9;
+    for (const Vector3& point : built.Value().samples.points) {
+        // 縁の近く(裾)は除いて、屋根の真ん中あたりを見る。
+        if (point.z > 8.0 && point.x > 5.0 && point.y > 5.0) {
+            lowest = std::min(lowest, point.Length());
+        }
+    }
+    Require(lowest < 1.0e8, "内側の標本がある");
+    Require(lowest >= 24.0,
+        "内側が垂れていない(原点からの距離が 24 mm 以上。実際 " + std::to_string(lowest) + ")");
 }
 
 KACHA_V2_TEST(kernel_fill, 非平面の5辺でも分割せず1枚を張る)

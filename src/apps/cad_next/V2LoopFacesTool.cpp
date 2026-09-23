@@ -96,6 +96,7 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
             ShowPreview();
         }
     });
+    dock_->SetReopenHandler([this] { (void)ReopenRecent(); });
     dock_->SetActionHandlers([this] { (void)Confirm(); },
         [this] {
             Clear();
@@ -106,8 +107,14 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
 void V2LoopFacesTool::Start()
 {
     Clear();
+    recent_.reset();
+    dock_->HideRecent();
     selections_.clear();
     joinMm_.reset();
+    methodOverride_.clear();
+    make_.clear();
+    continuity_.clear();
+    leaveGap_.clear();
     for (const EntityId& id : window_.viewport_->Selection().entityIds) {
         const auto chosen = kachakacha::v2::app::GuideSelectionOf(
             window_.session_->GetDocument(), window_.session_->Scene(), id);
@@ -540,14 +547,89 @@ bool V2LoopFacesTool::Confirm()
         window_.AdoptCurrentDocument();
         return true;
     }
+    Recent recent;
+    for (const auto& selection : selections_) {
+        recent.wireIds.push_back(selection.sourceWireId);
+    }
+    recent.methods = methodOverride_;
+    recent.make = make_;
+    recent.continuity = continuity_;
+    recent.leaveGap = leaveGap_;
+    recent.joinMm = joinMm_;
+    recent.made = made;
     Clear();
     window_.AdoptCurrentDocument();
     window_.RefreshShapeViews();
     window_.RefreshEntityList();
+    recent.revision = document.Revision();
+    recent_ = std::move(recent);
+    ShowRecent();
     window_.SetStatus(QStringLiteral("面にする: %1 枚作りました(%2)。元の線は残しています。%3")
             .arg(made)
             .arg(summary)
             .arg(unused.isEmpty() ? QString() : QStringLiteral("使わなかった線: %1。").arg(unused)));
+    return true;
+}
+
+//! 作った直後の棚: 「直前: 面にする(n 枚)」と [開いて直す]。別の道具を持つと消える。
+void V2LoopFacesTool::ShowRecent()
+{
+    if (!recent_.has_value()) {
+        dock_->HideRecent();
+        return;
+    }
+    dock_->ShowRecent(QStringLiteral("直前: 面にする(%1 枚)").arg(recent_->made));
+    window_.RefreshRightShelves();
+}
+
+void V2LoopFacesTool::End()
+{
+    Clear();
+    if (recent_.has_value()) {
+        recent_.reset();
+        dock_->HideRecent();
+        window_.RefreshRightShelves();
+    }
+}
+
+bool V2LoopFacesTool::ReopenRecent()
+{
+    if (!recent_.has_value()) {
+        return false;
+    }
+    const Recent recent = *recent_;
+    if (window_.session_->GetDocument().Revision() != recent.revision) {
+        recent_.reset();
+        dock_->HideRecent();
+        window_.RefreshRightShelves();
+        window_.SetStatus(QStringLiteral("面にする: そのあとに別の変更があるので、直前の操作は開けません。"
+                                         "元に戻す(Ctrl+Z)で戻ってから、線を選んで面にし直してください。"));
+        return false;
+    }
+    // 作ったものを 1 回の取り消しで戻し、同じ線で構え直す(選んだ作り方・作るか・連続・そのまま も戻す)。
+    window_.RunCommand("edit.undo");
+    kachakacha::v2::app::SelectionSet same;
+    same.entityIds = recent.wireIds;
+    window_.viewport_->SetSelection(same);
+    Start();
+    if (!plan_.has_value()) {
+        return false;
+    }
+    joinMm_ = recent.joinMm;
+    if (recent.methods.size() == methodOverride_.size()) {
+        methodOverride_ = recent.methods;
+        make_ = recent.make;
+        continuity_ = recent.continuity;
+    }
+    if (recent.leaveGap.size() == leaveGap_.size()) {
+        leaveGap_ = recent.leaveGap;
+    }
+    if (joinMm_.has_value() && !Replan()) {
+        return false;
+    }
+    ShowPreview();
+    window_.SetStatus(QStringLiteral("面にする: 直前の操作を開きました(作ったものは戻しました)。"
+                                     "作り方・連続・許容を変えて Enter で作り直します。Esc でやめます。"));
     return true;
 }
 

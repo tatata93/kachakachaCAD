@@ -16,6 +16,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/LoopFaces.h"
+#include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/CurveSegment.h"
@@ -501,6 +502,54 @@ void SelectAllWires(V2MainWindow& window)
     return Explain("1 回の取り消しで戻る", CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
 }
 
+//! HP-LF-08。直前の操作(UI 設計 2-6)。作った直後、棚に「直前: 面にする(n 枚)」と [開いて直す] が出る。
+//! 開くと作ったものが 1 回の取り消しで戻り、同じ線で構え直す(値を変えて Enter で作り直せる)。
+//! そのあとに別の変更があれば開けない(黙って別の変更を戻さない)。
+[[nodiscard]] bool CaseLoopFacesRecentReopens(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
+    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.50, 0.70);
+    const EntityId third = DrawLineAtByHand(window, 0.50, 0.70, 0.30, 0.30);
+    if (!Explain("三角形を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    auto& tool = window.LoopFacesTool();
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("Enter で作れる", tool.Active() && window.HandleToolKey(Qt::Key_Return, nullptr)
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)
+        || !Explain("作ったあと道具は構えを解く", !tool.Active())
+        || !Explain("直前の操作が残る", tool.HasRecent())
+        || !Explain((std::string("棚に「直前: 面にする(1 枚)」が出る(") + tool.Dock()->RecentTextJa().toStdString() + ")").c_str(),
+            tool.Dock()->RecentTextJa().contains(QStringLiteral("直前")) && tool.Dock()->RecentTextJa().contains(QStringLiteral("1 枚")))
+        || !Explain("直前の操作の棚が出ている", window.ShelfShown(kachakacha::v2::app::Shelf::LoopFaces))) {
+        return false;
+    }
+    if (!Explain("[開いて直す] が押せる", tool.Dock()->ClickReopen())
+        || !Explain("作ったものは戻る(形状ガイドが元の数)", CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore)
+        || !Explain("同じ線で構え直す(輪 1 つ)", tool.Active() && tool.Plan().has_value() && tool.Plan()->faces.size() == 1)
+        || !Explain("作り方を境界面に変えて Enter で作り直せる", tool.Dock()->ChooseMethod(0, 1)
+            && tool.MethodOf(0) == LoopFaceMethod::BoundaryFill
+            && window.HandleToolKey(Qt::Key_Return, nullptr)
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)) {
+        return false;
+    }
+    // そのあとに別の変更(線を 1 本足す)があれば、開けない。
+    const EntityId extra = DrawLineAtByHand(window, 0.10, 0.10, 0.20, 0.10);
+    if (!Explain("別の線を足せる", !extra.IsNil())) {
+        return false;
+    }
+    window.SelectTool(DrawingTool::Select);
+    const int wiresNow = CountOfKind(window, EntityKind::Wire);
+    const bool reopened = tool.HasRecent() && tool.ReopenRecent();
+    return Explain("別の変更のあとは開けない(黙って別の変更を戻さない)", !reopened)
+        && Explain("線は減っていない", CountOfKind(window, EntityKind::Wire) == wiresNow)
+        && Explain((std::string("状態行に「開けません」が出る(") + window.StatusText().toStdString() + ")").c_str(),
+            !tool.HasRecent() || window.StatusText().contains(QStringLiteral("開けません")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -520,6 +569,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseWireFactsRowShowsGapAndCloses},
         {"HP-LF-07 面にするは共有辺に連続の欄を出し、欄と Tab で G0→G1→G2 を回して作る",
             CaseLoopFacesEdgeContinuity},
+        {"HP-LF-08 作った直後に「直前の操作」が出て、開いて直すと 1 回の取り消しで戻って構え直す",
+            CaseLoopFacesRecentReopens},
     };
 }
 

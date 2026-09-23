@@ -68,6 +68,13 @@ public:
 
     //! 計画を映す。行は毎回作り直す(輪の数が変わる)。
     void ShowView(const V2LoopFacesView& view);
+    //! 直前の操作(UI 設計 2-6): 「直前: 面にする(3 枚)」と [開いて直す]。作ったあとに出す。
+    //! 開くと 1 回の取り消しで元に戻し、同じ線・同じ選択で構え直す(値を変えて Enter で作り直す)。
+    void ShowRecent(const QString& textJa);
+    void HideRecent();
+    void SetReopenHandler(std::function<void()> handler);
+    [[nodiscard]] bool ClickReopen();
+    [[nodiscard]] QString RecentTextJa() const;
 
     void SetMethodHandler(std::function<void(int face, int methodIndex)> handler);
     void SetMakeHandler(std::function<void(int face, bool make)> handler);
@@ -128,6 +135,10 @@ private:
     void AddEdgeLine(FaceRowWidgets& widgets, int faceIndex, const V2LoopFaceRow& face);
     [[nodiscard]] GapRowWidgets MakeGapRow(int gap, const V2LoopGapRow& row);
 
+    QWidget* recentRow_ = nullptr;
+    QLabel* recent_ = nullptr;
+    QPushButton* reopen_ = nullptr;
+    QWidget* planBody_ = nullptr;   //!< 計画の段(1.〜4. と確定)。直前の操作だけのときは隠す
     QVBoxLayout* facesLayout_ = nullptr;
     QVBoxLayout* gapsLayout_ = nullptr;
     QDoubleSpinBox* tolerance_ = nullptr;
@@ -144,6 +155,7 @@ private:
     std::function<void(int, int)> methodHandler_;
     std::function<void(int, bool)> makeHandler_;
     std::function<void(int, int)> continuityHandler_;
+    std::function<void()> reopenHandler_;
     std::function<void(int)> closeGapHandler_;
     std::function<void(int)> leaveGapHandler_;
     std::function<void(double)> toleranceHandler_;

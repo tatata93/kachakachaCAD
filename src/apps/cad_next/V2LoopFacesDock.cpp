@@ -66,8 +66,32 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     setObjectName(QStringLiteral("loopFacesDock"));
     auto* body = new QWidget(this);
     setWidget(body);
-    auto* layout = new QVBoxLayout(body);
-    layout->setContentsMargins(6, 6, 6, 6);
+    auto* outer = new QVBoxLayout(body);
+    outer->setContentsMargins(6, 6, 6, 6);
+    outer->setSpacing(4);
+
+    // 直前の操作(作ったあとに出す)。
+    recentRow_ = new QWidget(body);
+    auto* recentLine = new QHBoxLayout(recentRow_);
+    recentLine->setContentsMargins(0, 0, 0, 0);
+    recent_ = new QLabel(recentRow_);
+    recent_->setWordWrap(true);
+    recentLine->addWidget(recent_, 1);
+    reopen_ = new QPushButton(QStringLiteral("開いて直す"), recentRow_);
+    reopen_->setToolTip(QStringLiteral("1 回の取り消しで元に戻し、同じ線で構え直します。値を変えて Enter で作り直せます"));
+    QObject::connect(reopen_, &QPushButton::clicked, this, [this] {
+        if (reopenHandler_) {
+            reopenHandler_();
+        }
+    });
+    recentLine->addWidget(reopen_);
+    recentRow_->hide();
+    outer->addWidget(recentRow_);
+
+    planBody_ = new QWidget(body);
+    outer->addWidget(planBody_);
+    auto* layout = new QVBoxLayout(planBody_);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
@@ -276,6 +300,8 @@ void V2LoopFacesDock::RebuildGapSection(const V2LoopFacesView& view)
 void V2LoopFacesDock::ShowView(const V2LoopFacesView& view)
 {
     loading_ = true;
+    recentRow_->hide();
+    planBody_->show();
     tolerance_->setValue(view.joinMm);
     RebuildFaceRows(view.faces);
     RebuildGapSection(view);
@@ -356,6 +382,39 @@ bool V2LoopFacesDock::ToggleMake(int face)
 bool V2LoopFacesDock::TypeTolerance(double joinMm)
 {
     return TypeIfUsable(tolerance_, joinMm);
+}
+
+void V2LoopFacesDock::ShowRecent(const QString& textJa)
+{
+    recent_->setText(textJa);
+    recentRow_->show();
+    planBody_->hide();
+}
+
+void V2LoopFacesDock::HideRecent()
+{
+    recent_->setText(QString());
+    recentRow_->hide();
+    planBody_->show();
+}
+
+void V2LoopFacesDock::SetReopenHandler(std::function<void()> handler)
+{
+    reopenHandler_ = std::move(handler);
+}
+
+bool V2LoopFacesDock::ClickReopen()
+{
+    if (recentRow_->isHidden() || !reopenHandler_) {
+        return false;
+    }
+    reopenHandler_();
+    return true;
+}
+
+QString V2LoopFacesDock::RecentTextJa() const
+{
+    return recent_->text();
 }
 
 void V2LoopFacesDock::SetContinuityHandler(std::function<void(int, int)> handler)

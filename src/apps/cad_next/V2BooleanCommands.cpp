@@ -70,8 +70,9 @@ void V2MainWindow::EndOwnedToolsBut(const void* keep)
     if (shellSplitTool_ != nullptr && shellSplitTool_.get() != keep && shellSplitTool_->Active()) {
         shellSplitTool_->End();
     }
-    if (loopFaces_ != nullptr && loopFaces_.get() != keep && loopFaces_->Active()) {
-        loopFaces_->Clear();
+    if (loopFaces_ != nullptr && loopFaces_.get() != keep
+        && (loopFaces_->Active() || loopFaces_->HasRecent())) {
+        loopFaces_->End();
     }
 }
 

@@ -118,7 +118,7 @@ parameter schemaのdiscriminatorにする。
 | `surface.match` | 面を合わせる | 道具から始める。直す面の縁 → 合わせ先の縁(面の縁の近くを押す)、G0/G1/G2 | GuideSurface(新しい面。元の面は残す) | AT-SRF-005 |
 | `surface.bridge` | 面をつなぐ | 道具から始める。縁 A → 縁 B、両端の G0/G1/G2、張りの強さ | GuideSurface | AT-SRF-006 |
 | `surface.refit` | 面を整える | 道具から始める。面 1〜任意、許容(mm)。1 枚ずつ作り直す | GuideSurface(面ごと) | AT-SRF-007 |
-| `surface.mirror` | 対称に写す | 道具から始める。面 1〜任意、対称面(車体の中心 / X=0 / Z=0 / 作業平面) | GuideSurface(面ごと) | AT-SRF-008 |
+| `surface.mirror` | 対称に写す | 道具から始める。面 1〜任意、対称面(車体の中心 / X=0 / Z=0 / 作業平面)。近道 Shift+M(M は測定) | GuideSurface(面ごと) | AT-SRF-008 |
 | `surface.iso_curves` | U/V 線を取り出す | 道具から始める。面 1〜任意、向き(U/V/両方)と本数 | Wire | AT-SRF-009 |
 | `guide.revolve` | 回転体 | 断面の線 1 本以上 + 軸の直線 1(最後に選ぶ)、回転体の角度(度) | GuideSurface を断面 1 本ごとに 1 枚(作り方 Revolve: 核が断面を軸のまわりに回した面を作る。写しのロフトではない。まとめて 1 回で戻る)。REV-E001〜E003、GEO-G009 | AT-GEO-003 |
 | `guide.set_method` | 面の作り方 | 常時。使わない役割の行が残っていれば断る | 表の method | AT-GEO-008 |

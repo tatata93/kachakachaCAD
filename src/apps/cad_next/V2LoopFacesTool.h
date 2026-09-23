@@ -22,6 +22,7 @@
 
 #include <QString>
 
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -38,6 +39,12 @@ public:
     [[nodiscard]] bool HandleKey(int key);
     //! 下見を片づけて構えを解く。
     void Clear();
+    //! 別の道具を持った: 構えも「直前の操作」も片づける。
+    void End();
+    //! 直前の操作(作ったあと)。棚に「直前: 面にする(n 枚)[開いて直す]」を出している間だけ真。
+    [[nodiscard]] bool HasRecent() const noexcept { return recent_.has_value(); }
+    //! 直前の操作を開く: 1 回の取り消しで元に戻し、同じ線・同じ選択で構え直す。開けたら真。
+    [[nodiscard]] bool ReopenRecent();
     //! 棚(自分の棚を持つ道具)。
     [[nodiscard]] V2LoopFacesDock* Dock() const noexcept { return dock_; }
     //! いまの計画(試験から見る)。
@@ -94,4 +101,18 @@ private:
     std::vector<bool> leaveGap_;
     //! 許容(端)の上書き(棚で変えたとき)。
     std::optional<double> joinMm_;
+
+    //! 直前の操作(UI 設計 2-6)。作った直後の入力と選択。文書の版が変わったら開けない。
+    struct Recent {
+        std::vector<kachakacha::v2::base::EntityId> wireIds;
+        std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methods;
+        std::vector<bool> make;
+        std::vector<std::vector<kachakacha::v2::modeling::SurfaceContinuity>> continuity;
+        std::vector<bool> leaveGap;
+        std::optional<double> joinMm;
+        int made = 0;
+        std::uint64_t revision = 0;
+    };
+    std::optional<Recent> recent_;
+    void ShowRecent();
 };

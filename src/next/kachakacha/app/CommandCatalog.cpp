@@ -384,7 +384,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "形を許容の内側に保ったまま、制御点の少ない面に作り直します。前後の最大のずれと"
             "制御点の数を出します。許容に届かない・減らないときは作りません。",
             true, {"AT-SRF-007"}},
-        {"surface.mirror", "対称に写す", CommandMode::Dialog, "surface_mirror", "",
+        {"surface.mirror", "対称に写す", CommandMode::Dialog, "surface_mirror", "Shift+M",
             SelectionPredicate::Always, "",
             "面を対称面(車体の中心など)に写し、境目で面が折れていないかを測ります。何枚でも写せます。",
             true, {"AT-SRF-008"}},

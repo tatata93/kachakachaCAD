@@ -47,7 +47,6 @@ private:
     QLabel* status_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool active_ = false;
-    bool mirroring_ = false;
     kachakacha::v2::domain::CreateGuideSurfaceDefinition definition_;
     std::optional<kachakacha::v2::modeling::GuideSurfaceResult> preview_;
     std::uint64_t previewRevision_ = 0;

@@ -65,7 +65,8 @@ Result<TopoDS_Shape> GenerateSections(const app::GptSurfaceRequest& request,
     const geometry::GeometryTolerance& tolerance)
 {
     BRepOffsetAPI_ThruSections loft(false, false, tolerance.modelLinearMm);
-    loft.CheckCompatibility(true);
+    // 入力の向き・継ぎ目を利用者が指定するため、自動反転はしない。
+    loft.CheckCompatibility(false);
     for (const auto& curve : request.curves) {
         const auto wire = ToWire(curve.segments, tolerance.modelLinearMm);
         if (!wire.HasValue()) { return Result<TopoDS_Shape>::Failure(wire.Diagnostics()); }
@@ -146,7 +147,7 @@ Result<GuideSurfaceResult> BuildGptSurface(const app::GptSurfaceRequest& raw,
         value.maximumDeviationMm = deviation.Value().maximum;
         value.rmsDeviationMm = std::sqrt(deviation.Value().squared / static_cast<double>(deviation.Value().count));
         return Result<GuideSurfaceResult>::Success(std::move(value), result.Diagnostics());
-    } catch (const Standard_Failure& failure) {
+    } catch (const Standard_Failure&) {
         return Result<GuideSurfaceResult>::Failure(MakeError("GPT-S003",
             "GPT版の面生成を完了できませんでした。", "入力線の交差・接続・断面順を確認してください。"));
     }

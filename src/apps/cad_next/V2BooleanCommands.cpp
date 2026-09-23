@@ -80,9 +80,8 @@ void V2MainWindow::EndOwnedToolsBut(const void* keep)
 
 //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの。
 //! ここで引き受けたら真。構えて待つ道(ArmCommand)は通さない。
-bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
+void V2MainWindow::BeginGptSurface()
 {
-    if (id == "surface.gpt_create") {
         const auto selected = viewport_->Selection();
         ClearPendingCommand();
         if (surfaceShelfShown_) { EndSurfacePreview(); }
@@ -94,6 +93,12 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         EndOwnedToolsBut(gptSurface_.get());
         viewport_->SetSelection(selected);
         gptSurface_->Begin();
+}
+
+bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
+{
+    if (id == "surface.gpt_create") {
+        BeginGptSurface();
         return true;
     }
     if (id == "surface.create" && !surfaceShelfShown_) {

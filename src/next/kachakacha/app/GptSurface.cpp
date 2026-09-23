@@ -1,4 +1,5 @@
 #include "kachakacha/app/GptSurface.h"
+#include "kachakacha/app/SceneBuilder.h"
 
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/WireChain.h"
@@ -12,6 +13,22 @@ namespace {
 using base::MakeError;
 using base::Result;
 using geometry::CurveSegment;
+
+modeling::SnapScene SourceScene(const document::Document& document, modeling::SnapScene scene)
+{
+    // 非表示は作図時の選択だけを制限する。保存した面の依存元は非表示でも必要。
+    auto snapshot = document.Snapshot();
+    for (auto& entity : snapshot.entities) { entity.visibility = domain::Visibility::Visible; }
+    for (auto& group : snapshot.groups) { group.visible = true; }
+    base::DeterministicIdGenerator ids;
+    const auto stored = BuildSceneFromDocument(snapshot, ids);
+    std::set<base::EntityId> present;
+    for (const auto& curve : scene.curves) { present.insert(curve.entityId); }
+    for (const auto& curve : stored.curves) {
+        if (present.count(curve.entityId) == 0) { scene.curves.push_back(curve); }
+    }
+    return scene;
+}
 
 Result<GptSurfaceRequest> Fail(const std::string& reason, const std::string& fix)
 {
@@ -97,6 +114,9 @@ Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
             if (curve.closed != checked.front().closed) {
                 return Fail("開いた断面と閉じた断面が混ざっています。", "全断面の開閉をそろえてください。");
             }
+            if (curve.segments.size() != checked.front().segments.size()) {
+                return Fail("断面ごとの辺数が異なります。", "対応する辺の数をそろえてください。自動分割はしません。");
+            }
         }
     } else {
         if (boundary.segments.empty()) { return Fail("外周がありません。", "囲みの線を外周へ追加してください。"); }
@@ -116,7 +136,12 @@ Result<GptSurfaceRequest> ResolveGptSurface(const document::Document& document,
         || definition.chains.size() != definition.roles.size()) {
         return Fail("GPT版の作り方または役割が不正です。", "外周または断面の入力を指定し直してください。");
     }
+    if (definition.offsetDistanceMm != 0.0 || definition.revolveAngleRad != 0.0
+        || definition.fourEdgeStyle != 0 || !definition.continuity.empty() || !definition.supportSurfaces.empty()) {
+        return Fail("GPT版では扱えない追加条件があります。", "オフセット・回転・支持面・連続条件を指定せず作成してください。");
+    }
     GptSurfaceRequest request;
+    const auto sources = SourceScene(document, scene);
     request.loft = definition.method == kGptSectionsMethod;
     request.maximumDeviationMm = definition.gptToleranceMm;
     std::set<std::pair<base::EntityId, base::SegmentId>> used;
@@ -136,7 +161,7 @@ Result<GptSurfaceRequest> ResolveGptSurface(const document::Document& document,
                 return Fail(curve.label + "の元ワイヤーを解決できません。", "ワイヤー全体を選び直してください。");
             }
             std::vector<CurveSegment> segments;
-            for (const auto& source : scene.curves) {
+            for (const auto& source : sources.curves) {
                 if (source.entityId != ref.entityId || (!ref.segmentId.IsNil() && source.segmentId != ref.segmentId)) { continue; }
                 if (!used.insert({source.entityId, source.segmentId}).second) {
                     return Fail(entity->displayName + "が重複しています。", "同じ線を複数の役割へ入れないでください。");

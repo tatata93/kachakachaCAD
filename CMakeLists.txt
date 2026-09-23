@@ -986,6 +986,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     endfunction()
 
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
+    kachakacha_add_v2_kernel_test(gpt_surface_tests tests_v2/gpt_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_edit_tests tests_v2/kernel_surface_edit_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_analysis_tests tests_v2/kernel_surface_analysis_tests.cpp)
@@ -1027,6 +1028,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestShellSplit.cpp
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
+        src/apps/cad_next/V2SelfTestGptSurface.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp

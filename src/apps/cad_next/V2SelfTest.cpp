@@ -149,6 +149,8 @@ namespace {
     cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
     const std::vector<SelfTestCase> loopFaces = LoopFacesCases();
     cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
+    const auto gptSurface = GptSurfaceCases();
+    cases.insert(cases.end(), gptSurface.begin(), gptSurface.end());
     return cases;
 }
 

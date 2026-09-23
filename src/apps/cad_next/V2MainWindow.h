@@ -1,8 +1,6 @@
 #pragma once
 
-//! V2の本体窓(WP-08)。画面は薄く保つ(道具を選ぶ・案内文・一覧と診断・見た目の切替)。
-//! 幾何の判断はすべて core にある(architecture-and-data.md DOC-002)。
-//! AUTOMOC を使っていないので Q_OBJECT は付けない。信号の受け口はラムダで繋ぐ。
+//! V2本体窓(WP-08)。幾何判断はcore(DOC-002)。AUTOMOCなし、信号はラムダで接続。
 
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
@@ -880,6 +878,7 @@ private:
     void RunSetAssembly();
     void RunFabricationCreate();
     //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
+    void BeginGptSurface();
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
     //! 自分の棚を持つ道具(立体・辺の丸め面取り・シェル分割・面にする)を、keep 以外やめる。
     void EndOwnedToolsBut(const void* keep);

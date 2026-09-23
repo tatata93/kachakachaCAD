@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 #include <QPainter>
+#include <QColor>
 #include <QPolygonF>
 
 void V2Viewport::SetToolPreviewFaces(

@@ -10,6 +10,12 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QComboBox>
+#include <QDockWidget>
+#include <QObject>
+#include <QString>
+#include <QStringList>
+#include <QTreeWidgetItem>
+#include <QWidget>
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QPushButton>
@@ -90,6 +96,7 @@ void V2GptSurfaceTool::BuildActions(QVBoxLayout* layout)
     button("gptSurfaceUp", QStringLiteral("選択行を上へ"), [this] { EditRow(-1); });
     button("gptSurfaceDown", QStringLiteral("選択行を下へ"), [this] { EditRow(1); });
     button("gptSurfaceReverse", QStringLiteral("選択行の向きを反転"), [this] { EditRow(2); });
+    button("gptSurfaceApplyRole", QStringLiteral("選択行を上の役割に変更"), [this] { EditRow(3); });
     button("gptSurfaceReset", QStringLiteral("入力を空にする"), [this] {
         definition_.chains.clear(); definition_.roles.clear(); Invalidate(); RefreshList();
     });
@@ -185,7 +192,7 @@ void V2GptSurfaceTool::Add(const std::vector<base::EntityId>& ids, bool grouped)
 
 void V2GptSurfaceTool::HandleSelectionChanged()
 {
-    if (!active_ || mirroring_) { return; }
+    if (!active_) { return; }
     if (const auto picked = window_.viewport_->TakeLastToolPick(); picked.has_value()) {
         Add({*picked}, false);
     }
@@ -199,6 +206,12 @@ void V2GptSurfaceTool::EditRow(int operation)
     if (operation == 0) {
         definition_.chains.erase(definition_.chains.begin() + index);
         definition_.roles.erase(definition_.roles.begin() + index);
+    } else if (operation == 3) {
+        if (role_->currentIndex() == 3) {
+            status_->setText(QStringLiteral("外周・通る線・新しい断面のいずれかを上の欄で選んでください。")); return;
+        }
+        definition_.roles[at] = role_->currentIndex() == 0 ? app::kGptBoundaryRole
+            : role_->currentIndex() == 1 ? app::kGptInteriorRole : app::kGptSectionRole;
     } else if (operation == 2) {
         auto& chain = definition_.chains[at];
         std::reverse(chain.segments.begin(), chain.segments.end());
@@ -215,6 +228,7 @@ void V2GptSurfaceTool::EditRow(int operation)
 
 void V2GptSurfaceTool::RefreshList()
 {
+    const int selectedRow = list_->indexOfTopLevelItem(list_->currentItem());
     list_->clear();
     for (std::size_t row = 0; row < definition_.chains.size(); ++row) {
         QStringList names;
@@ -229,6 +243,9 @@ void V2GptSurfaceTool::RefreshList()
         auto* item = new QTreeWidgetItem(list_, {QStringLiteral("%1 %2%3").arg(row + 1).arg(label)
             .arg(reversed ? QStringLiteral(" ←") : QStringLiteral(" →")), names.join(QStringLiteral(" + "))});
         item->setToolTip(1, names.join(QStringLiteral(" + ")));
+    }
+    if (selectedRow >= 0 && list_->topLevelItemCount() > 0) {
+        list_->setCurrentItem(list_->topLevelItem(std::min(selectedRow, list_->topLevelItemCount() - 1)));
     }
 }
 

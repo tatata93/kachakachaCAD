@@ -33,7 +33,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `file.save_as` | 名前を付けて保存 | 有効Document | 新しいパスへ原子的保存 | AT-EXP-004 |
 | `edit.undo` | 元に戻す | Undoあり | 直前transactionを戻す | AT-DOC-005 |
 | `edit.redo` | やり直す | Redoあり | 直前Undoを戻す | AT-DOC-005 |
-| `edit.delete` | 削除 | ワイヤー1つ以上 | 選んだものを消す。下流があれば断る | AT-DOC-005 |
+| `edit.delete` | 削除 | 消すものを1つ以上(線・面・作業平面・部品・近似モデル・生成物) | 選んだものを消す(何個でも 1 回の取り消し)。原点の平面と、下流があるものは理由を出して断る | AT-DOC-005 |
 | `view.hide_selected` | 選択を隠す | 線・部品・形状ガイドの面を1つ以上 | 画面から隠す。形は消えない | AT-UIX-010 |
 | `view.show_all` | すべて表示 | 有効Document | 隠したものを全部出す | AT-UIX-010 |
 | `selection.activate` | 選択 | 常時 | 選択toolへ戻る | AT-UIX-001 |

@@ -84,6 +84,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::OneOrMoreHideable:
         // 線・部品・面のどれでも隠せる。作業平面はグリッドの棚で消す。
         return facts.wires + facts.parts + facts.guideSurfaces >= 1;
+    case SelectionPredicate::OneOrMoreDeletable:
+        // 作られたもの(createdBy を持つもの)は何でも消す対象。原点の平面は文書が断る。
+        return facts.derivedEntities >= 1;
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane:
         return facts.guideSurfaces == 1 && facts.workPlanes == 1;
     case SelectionPredicate::GuideSurfacesAndOneWorkPlane:

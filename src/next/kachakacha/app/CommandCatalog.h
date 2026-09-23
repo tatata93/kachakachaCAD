@@ -80,6 +80,10 @@ enum class SelectionPredicate {
     //! 立体と面が画面に出るようになったので、線だけでは足りない。
     //! 隠せないと、見たくない部品が画面に居座る。
     OneOrMoreHideable,
+    //! 消せるものを 1 つ以上(線・面・作業平面・部品・近似モデル・生成物…作られたもの全部)。
+    //! 「ワイヤーだけ」にしていたので、面や作業平面や近似モデルを選んでも削除が押せなかった
+    //! (オーナー指摘 2026-09-24)。原点の平面や使われているものは、押したあとに文書が理由を言う。
+    OneOrMoreDeletable,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

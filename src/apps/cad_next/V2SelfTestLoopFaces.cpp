@@ -16,6 +16,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/LoopFaces.h"
+#include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
@@ -550,6 +551,76 @@ void SelectAllWires(V2MainWindow& window)
             !tool.HasRecent() || window.StatusText().contains(QStringLiteral("開けません")));
 }
 
+//! HP-LF-09。削除はワイヤー以外(面・作業平面)にも効く(オーナー指摘 2026-09-24)。
+//! 面を選んで Del → 消える(線は残る)。面に使われている線を選んで Del → 理由を言って断る。
+//! 原点の平面を選んで Del → 「原点の基準平面は消せません」。
+[[nodiscard]] bool CaseDeleteWorksForNonWires(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
+    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.50, 0.70);
+    const EntityId third = DrawLineAtByHand(window, 0.50, 0.70, 0.30, 0.30);
+    if (!Explain("三角形を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("面にするで 1 枚作れる", window.LoopFacesTool().Active()
+            && window.HandleToolKey(Qt::Key_Return, nullptr)
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)) {
+        return false;
+    }
+    EntityId surface;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::GuideSurface) {
+            surface = entity.id;
+        }
+    }
+    // 面に使われている線は断る(理由つき)。
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(first);
+    window.Viewport().SetSelection(one);
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    window.RunCommand("edit.delete");
+    if (!Explain("面に使われている線は消えない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
+        || !Explain((std::string("状態行に「使っている」の理由が出る(") + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("使っている")))) {
+        return false;
+    }
+    // 面を選んで Del。
+    one.entityIds = {surface};
+    window.Viewport().SetSelection(one);
+    QString reason;
+    if (!Explain((std::string("面を選ぶと削除が押せる(") + reason.toStdString() + ")").c_str(),
+            window.CommandEnabled("edit.delete", &reason))) {
+        return false;
+    }
+    window.RunCommand("edit.delete");
+    if (!Explain("面が消える", CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore)
+        || !Explain("線は残る", CountOfKind(window, EntityKind::Wire) == wiresBefore)) {
+        return false;
+    }
+    // 原点の平面は断る。
+    const auto top = kachakacha::v2::app::OriginPlaneId(window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::modeling::StandardPlaneKind::XY);
+    if (!Explain("原点の平面 top_XY がある", top.has_value())) {
+        return false;
+    }
+    one.entityIds = {*top};
+    window.Viewport().SetSelection(one);
+    const int planesBefore = CountOfKind(window, EntityKind::WorkPlane);
+    window.RunCommand("edit.delete");
+    if (!Explain("原点の平面は消えない", CountOfKind(window, EntityKind::WorkPlane) == planesBefore)
+        || !Explain((std::string("状態行に「原点の基準平面は消せません」が出る(") + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("原点の基準平面は消せません")))) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("面の削除は 1 回の取り消しで戻る",
+        CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -571,6 +642,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesEdgeContinuity},
         {"HP-LF-08 作った直後に「直前の操作」が出て、開いて直すと 1 回の取り消しで戻って構え直す",
             CaseLoopFacesRecentReopens},
+        {"HP-LF-09 削除は面・作業平面にも効き、使われている線と原点の平面は理由を言って断る",
+            CaseDeleteWorksForNonWires},
     };
 }
 

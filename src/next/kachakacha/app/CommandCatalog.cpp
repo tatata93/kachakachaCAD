@@ -39,6 +39,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane: return "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。";
     case SelectionPredicate::GuideSurfacesAndOneWorkPlane: return "形状ガイドの面を1つ以上と、相手の作業平面を1つ選んでください。";
     case SelectionPredicate::OneOrMoreHideable: return "線・部品・面のどれかを選んでください。";
+    case SelectionPredicate::OneOrMoreDeletable: return "消すものを1つ以上選んでください。";
     }
     return "";
 }
@@ -72,8 +73,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "戻した操作をやり直します。", true,
             {"AT-DOC-005"}},
         {"edit.delete", "削除", CommandMode::Instant, "delete", "Del",
-            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
-            "選んだものを消します。下流があるものは、理由を出して断ります。", true,
+            SelectionPredicate::OneOrMoreDeletable, "消すものを1つ以上選んでください。",
+            "選んだもの(線・面・作業平面・部品・近似モデル・生成物)を消します。原点の平面と、下流があるものは、理由を出して断ります。", true,
             {"AT-DOC-005"}},
         {"view.hide_selected", "選択を隠す", CommandMode::Instant, "hide", "Ctrl+H",
             SelectionPredicate::OneOrMoreHideable, "線・部品・面のどれかを選んでください。",

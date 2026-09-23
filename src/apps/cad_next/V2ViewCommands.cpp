@@ -202,33 +202,50 @@ void V2MainWindow::DeleteSelected()
     }
     int removed = 0;
     int refused = 0;
+    QString reason;
+    // 同じ操作が作った複数のもの(近似モデルの部材など)を 2 度消さない。
+    std::vector<kachakacha::v2::base::FeatureId> done;
+    // 何個消しても 1 回の取り消しで戻る。
+    session_->GetDocument().BeginCompound("削除");
     for (const auto& id : selection.entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity == nullptr) {
+        if (entity == nullptr || entity->createdBy.IsNil()) {
             continue;
         }
+        if (std::find(done.begin(), done.end(), entity->createdBy) != done.end()) {
+            continue;
+        }
+        done.push_back(entity->createdBy);
         // 下流があるものは消さない。消すと、そこから作った物の作り方が消える。
         const auto result = session_->GetDocument().Run(RemoveFeatureCommand(
             entity->createdBy, RemovePolicy::RefuseIfUsed, "削除"));
         if (result.committed) {
             ++removed;
-        } else {
-            ++refused;
+            continue;
+        }
+        ++refused;
+        // 断った理由は文書が言う(原点の平面 / 使われている)。最初の 1 つを状態行に出す。
+        if (reason.isEmpty() && !result.diagnostics.empty()) {
+            reason = QString::fromStdString(result.diagnostics.front().summaryJa + " "
+                + result.diagnostics.front().detailsJa);
         }
     }
+    session_->GetDocument().EndCompound();
     viewport_->PruneSelection();
     AdoptCurrentDocument();
+    RefreshShapeViews();
+    RefreshEntityList();
     if (removed == 0) {
-        SetStatus(QStringLiteral(
-            "削除: どれも消せませんでした。ここから作った物があるためです"
-            "(隠すなら Ctrl+H)。"));
+        SetStatus(QStringLiteral("削除: どれも消せませんでした。%1(隠すなら Ctrl+H)")
+                .arg(reason.isEmpty() ? QStringLiteral("消せるものを選んでいません。") : reason));
         return;
     }
     SetStatus(refused == 0
             ? QStringLiteral("%1個を消しました。").arg(removed)
-            : QStringLiteral("%1個を消しました。%2個は、ここから作った物があるので残しました。")
+            : QStringLiteral("%1個を消しました。%2個は残しました: %3")
                   .arg(removed)
-                  .arg(refused));
+                  .arg(refused)
+                  .arg(reason));
 }
 
 void V2MainWindow::AdoptTreeSelection()

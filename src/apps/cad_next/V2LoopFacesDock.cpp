@@ -10,6 +10,7 @@
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLayout>
 #include <QObject>
 #include <QPushButton>
 #include <QString>
@@ -31,9 +32,31 @@ namespace {
     return QStringLiteral("(%1)").arg(number);
 }
 
+//! 行を片づける。欄の合図の中(押した欄自身のスロット)から作り直すことがあるので、
+//! その場で delete せず、隠して外して deleteLater(合図を出している最中の欄を消さない)。
+void Retire(QLayout* layout, QWidget* widget)
+{
+    if (widget == nullptr) {
+        return;
+    }
+    widget->hide();
+    if (layout != nullptr) {
+        layout->removeWidget(widget);
+    }
+    widget->setParent(nullptr);
+    widget->deleteLater();
+}
+
+//! 見えていて押せるか。作り直した直後の欄は(親が見えていても)まだ表示の合図が届いていないので、
+//! isVisible ではなく「隠されていない」で見る。
+[[nodiscard]] bool Usable(const QWidget* widget)
+{
+    return widget != nullptr && !widget->isHidden() && widget->isEnabled();
+}
+
 [[nodiscard]] bool ClickIfUsable(QAbstractButton* button)
 {
-    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+    if (!Usable(button)) {
         return false;
     }
     button->click();
@@ -42,7 +65,7 @@ namespace {
 
 [[nodiscard]] bool TypeIfUsable(QDoubleSpinBox* box, double value)
 {
-    if (box == nullptr || !box->isVisible() || !box->isEnabled()) {
+    if (!Usable(box)) {
         return false;
     }
     box->setValue(value);
@@ -51,7 +74,7 @@ namespace {
 
 [[nodiscard]] bool ChooseIfUsable(QComboBox* box, int index)
 {
-    if (box == nullptr || !box->isVisible() || !box->isEnabled() || index < 0 || index >= box->count()) {
+    if (!Usable(box) || index < 0 || index >= box->count()) {
         return false;
     }
     box->setCurrentIndex(index);
@@ -241,7 +264,7 @@ V2LoopFacesDock::GapRowWidgets V2LoopFacesDock::MakeGapRow(int gap, const V2Loop
 void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
 {
     for (const FaceRowWidgets& widgets : faceRows_) {
-        delete widgets.row;
+        Retire(facesLayout_, widgets.row);
     }
     faceRows_.clear();
     for (std::size_t index = 0; index < faces.size(); ++index) {
@@ -250,6 +273,7 @@ void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
         const int faceIndex = static_cast<int>(index);
         AddEdgeLine(widgets, faceIndex, face);
         facesLayout_->addWidget(widgets.row);
+        widgets.row->show();
         QObject::connect(widgets.method, &QComboBox::currentIndexChanged, this,
             [this, faceIndex](int methodIndex) {
                 if (!loading_ && methodHandler_) {
@@ -268,32 +292,35 @@ void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
 void V2LoopFacesDock::RebuildGapSection(const V2LoopFacesView& view)
 {
     for (const GapRowWidgets& widgets : gapRows_) {
-        delete widgets.row;
+        Retire(gapsLayout_, widgets.row);
     }
     gapRows_.clear();
     for (QLabel* label : splitLabels_) {
-        delete label;
+        Retire(gapsLayout_, label);
     }
     splitLabels_.clear();
-    delete unusedLabel_;
+    Retire(gapsLayout_, unusedLabel_);
     unusedLabel_ = nullptr;
 
     auto* body = widget();
     for (std::size_t index = 0; index < view.gaps.size(); ++index) {
         GapRowWidgets widgets = MakeGapRow(static_cast<int>(index), view.gaps[index]);
         gapsLayout_->addWidget(widgets.row);
+        widgets.row->show();
         gapRows_.push_back(widgets);
     }
     for (const QString& line : view.splitsJa) {
         auto* label = new QLabel(line, body);
         label->setWordWrap(true);
         gapsLayout_->addWidget(label);
+        label->show();
         splitLabels_.push_back(label);
     }
     if (!view.unusedJa.isEmpty()) {
         unusedLabel_ = new QLabel(view.unusedJa, body);
         unusedLabel_->setWordWrap(true);
         gapsLayout_->addWidget(unusedLabel_);
+        unusedLabel_->show();
     }
 }
 

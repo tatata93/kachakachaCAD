@@ -282,12 +282,24 @@ void V2MainWindow::CloseSelectedWireEnd(bool atEnd)
         SetStatus(QStringLiteral("寄せる: この端は寄せられません(離れていないか、直線ではありません)。"));
         return;
     }
-    kachakacha::v2::app::WireEditFields fields = editDock_->WireFields();
-    if (fields.points.size() < 2) {
+    // 欄(小数 3 桁に丸まる)ではなく定義そのものから欄を作り、その端だけを相手の端(正確な点)に置き換えて、
+    // いつもの「変更を適用」で入れる(1 回の取り消しで戻る)。動かさない端は丸めない。
+    const auto* entity = session_->GetDocument().FindEntity(selection.entityIds.front());
+    const auto* feature = entity != nullptr ? session_->GetDocument().FindFeature(entity->createdBy) : nullptr;
+    const auto* wire = feature != nullptr
+        ? std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&feature->definition)
+        : nullptr;
+    if (wire == nullptr) {
+        SetStatus(QStringLiteral("寄せる: 選んだものの作り方が見つかりません。"));
+        return;
+    }
+    const auto made = kachakacha::v2::app::WireEditFieldsOf(*wire);
+    if (!made.HasValue() || made.Value().points.size() < 2) {
         SetStatus(QStringLiteral("寄せる: 点の表が無いので寄せられません。"));
         return;
     }
-    // 点の表のその端を相手の端(丸めない正確な点)に置き、いつもの「変更を適用」で入れる(1 回の取り消しで戻る)。
+    kachakacha::v2::app::WireEditFields fields = made.Value();
+    fields.construction = entity->construction;
     fields.points[atEnd ? fields.points.size() - 1 : 0] = fact.target;
     ApplySelectedEdit(&fields);
     SetStatus(QStringLiteral("寄せる: %1 の%2を %3 へ ")

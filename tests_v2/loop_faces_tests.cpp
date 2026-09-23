@@ -26,6 +26,10 @@ using kachakacha::v2::app::LoopFacePlan;
 using kachakacha::v2::app::LoopFaceTable;
 using kachakacha::v2::app::LoopGap;
 using kachakacha::v2::app::LoopGapTextJa;
+using kachakacha::v2::app::LoopPieceLabelJa;
+using kachakacha::v2::app::LoopSplitTextJa;
+using kachakacha::v2::app::SplitLoopSource;
+namespace modeling = kachakacha::v2::modeling;
 using kachakacha::v2::app::PlanLoopFaces;
 using kachakacha::v2::app::MakeLoopEdge;
 using kachakacha::v2::app::LoopEdge;
@@ -498,14 +502,89 @@ KACHA_V2_TEST(loop_faces, empty_selection_is_refused)
     RequireEqual(plan.Diagnostics().front().code, "UI-R004", "no-input code is UI-R004");
 }
 
-KACHA_V2_TEST(loop_faces, two_unrelated_lines_have_no_loop_and_no_gap)
+// 輪も無くずれも無い開いた線が並んでいれば、ロフト(断面の並び)として提案する(2026-09-23 拡張)。
+KACHA_V2_TEST(loop_faces, two_unrelated_open_lines_become_a_loft)
 {
     std::vector<GuideTableSelection> selections;
     selections.push_back(Sel(0, "far1", L(Vector3{0, 0, 0}, Vector3{1, 0, 0})));
     selections.push_back(Sel(1, "far2", L(Vector3{100, 100, 0}, Vector3{101, 100, 0})));
     const auto plan = PlanLoopFaces(selections, MakeTolerance());
-    Require(!plan.HasValue(), "two unrelated lines are refused");
+    Require(plan.HasValue(), "two open lines are offered as a loft");
+    RequireEqual(std::to_string(plan.Value().faces.size()), "1", "one loft face");
+    Require(plan.Value().faces.front().method == LoopFaceMethod::Loft, "method is Loft");
+    RequireEqual(std::to_string(plan.Value().faces.front().selections.size()), "2",
+        "both lines are sections");
+    const auto table = LoopFaceTable(selections, plan.Value().faces.front(), MakeTolerance());
+    Require(table.HasValue(), "the loft table is built");
+    Require(table.Value().method == modeling::GuideSurfaceMethod::RuledSections,
+        "two sections make a ruled surface");
+    RequireEqual(std::to_string(table.Value().rows.size()), "2", "two section rows");
+}
+
+// 線が触れ合っている(輪にならない T 字だけ)なら、ロフトにはしない。
+KACHA_V2_TEST(loop_faces, touching_lines_without_a_loop_are_refused)
+{
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "a", L(Vector3{0, 0, 0}, Vector3{10, 0, 0})));
+    selections.push_back(Sel(1, "b", L(Vector3{10, 0, 0}, Vector3{10, 10, 0})));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(!plan.HasValue(), "an open L shape is refused");
     RequireEqual(plan.Diagnostics().front().code, "UI-R011", "no-loop code is UI-R011");
+}
+
+// T 字: 線の端が別の線の途中に乗っていれば、その線を分けた片で輪を探す。
+KACHA_V2_TEST(loop_faces, a_line_ending_on_the_middle_of_another_splits_it)
+{
+    // 三角 (0,0)-(10,0)-(5,8) の底辺の真ん中 (5,0) へ、頂点から線を下ろす。
+    std::vector<GuideTableSelection> selections;
+    selections.push_back(Sel(0, "base", L(Vector3{0, 0, 0}, Vector3{10, 0, 0})));
+    selections.push_back(Sel(1, "right", L(Vector3{10, 0, 0}, Vector3{5, 8, 0})));
+    selections.push_back(Sel(2, "left", L(Vector3{5, 8, 0}, Vector3{0, 0, 0})));
+    selections.push_back(Sel(3, "drop", L(Vector3{5, 8, 0}, Vector3{5, 0, 0})));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "the plan is made");
+    RequireEqual(std::to_string(plan.Value().splits.size()), "1", "one split");
+    RequireEqual(std::to_string(plan.Value().splits.front().source), "0", "the base is split");
+    RequireNear(plan.Value().splits.front().parameters.front(), 0.5, 1.0e-9, "at its middle");
+    RequireEqual(std::to_string(plan.Value().faces.size()), "2", "two triangles");
+    Require(plan.Value().pieces.size() == 6, "4 originals + 2 pieces");
+    Require(plan.Value().pieces[0].split, "the base is marked split");
+    Require(plan.Value().pieces[4].part && plan.Value().pieces[5].part, "the two pieces are parts");
+    Require(LoopSplitTextJa(selections, plan.Value().splits.front()).find("途中に乗って")
+            != std::string::npos,
+        "the split sentence names the junction");
+    // 片の名前。
+    RequireEqual(LoopPieceLabelJa(selections, plan.Value(), 4), std::string("base(片 1)"), "piece 1 label");
+    // 実際に分けると 2 本の線になる。
+    const auto parts = SplitLoopSource(selections, plan.Value().splits.front());
+    Require(parts.HasValue(), "the base is split into parts");
+    RequireEqual(std::to_string(parts.Value().size()), "2", "two parts");
+    RequireNear(Distance(parts.Value()[0].back().EndPoint(), Vector3{5, 0, 0}), 0.0, 1.0e-9,
+        "the first part ends at the junction");
+    // 表は、片が分けられる前(番号が selections の外)では作れない(UI-R013)。
+    const auto table = LoopFaceTable(selections, plan.Value().faces.front(), MakeTolerance());
+    Require(!table.HasValue(), "the table waits for the split");
+    RequireEqual(table.Diagnostics().front().code, "UI-R013", "split-pending code");
+}
+
+// 円の途中に 2 本の線の端が乗る(円を 2 か所で分ける)。
+KACHA_V2_TEST(loop_faces, a_circle_is_split_where_two_lines_land_on_it)
+{
+    std::vector<GuideTableSelection> selections;
+    GuideTableSelection circle = Sel(0, "circle", L(Vector3{0, 0, 0}, Vector3{1, 0, 0}));
+    circle.segments = {CurveSegment::MakeCircle(Vector3{0, 0, 0}, Vector3{0, 0, 1}, Vector3{1, 0, 0}, 5.0).Value()};
+    selections.push_back(circle);
+    selections.push_back(Sel(1, "spoke1", L(Vector3{0, 0, 0}, Vector3{5, 0, 0})));
+    selections.push_back(Sel(2, "spoke2", L(Vector3{0, 0, 0}, Vector3{0, 5, 0})));
+    const auto plan = PlanLoopFaces(selections, MakeTolerance());
+    Require(plan.HasValue(), "the plan is made");
+    RequireEqual(std::to_string(plan.Value().splits.size()), "1", "the circle is split once (2 places)");
+    RequireEqual(std::to_string(plan.Value().splits.front().parameters.size()), "2", "two places");
+    const auto parts = SplitLoopSource(selections, plan.Value().splits.front());
+    Require(parts.HasValue(), "the circle is split into arcs");
+    RequireEqual(std::to_string(parts.Value().size()), "2", "two arcs");
+    // 2 枚: 扇(spoke1, 円弧の短い方, spoke2)と、残り。
+    RequireEqual(std::to_string(plan.Value().faces.size()), "2", "two faces");
 }
 
 KACHA_V2_TEST(loop_faces, too_many_disconnected_lines_are_refused)

@@ -3,7 +3,9 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/LoopGraph.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/CurveTrim.h"
 #include "kachakacha/geometry/WireConnect.h"
+#include "kachakacha/modeling/GuideSurfaceSampling.h"
 
 #include <algorithm>
 #include <cmath>
@@ -27,6 +29,7 @@ namespace {
 constexpr const char* kNoLoop = "UI-R011";
 constexpr const char* kTooMany = "UI-R012";
 constexpr const char* kNoInput = "UI-R004";
+constexpr const char* kSplitPending = "UI-R013";
 constexpr std::size_t kMaximumEdges = 24;
 
 //! ずれとして挙げる距離の上限。いちばん長い線の 1/4 か、許容差の 10 倍の大きいほう。
@@ -58,7 +61,7 @@ constexpr std::size_t kMaximumEdges = 24;
 }
 
 //! 行き止まりの端(次数 1 の節)どうしで近いものを、近い順に組にする。
-[[nodiscard]] std::vector<LoopGap> FindGaps(const std::vector<GuideTableSelection>& selections,
+[[nodiscard]] std::vector<LoopGap> FindGaps(const std::vector<LoopPiece>& pieces,
     const std::vector<LoopEdge>& edges, const LoopGraph& graph, double nearMissMm)
 {
     const std::vector<int> degree = Degrees(edges, graph.NodeCount());
@@ -109,8 +112,8 @@ constexpr std::size_t kMaximumEdges = 24;
         gap.secondSelection = ends[pair.b].selection;
         gap.secondAtEnd = ends[pair.b].atEnd;
         gap.distanceMm = pair.distance;
-        const auto isLine = [&](std::size_t selection) {
-            const auto& segments = selections[selection].segments;
+        const auto isLine = [&](std::size_t piece) {
+            const auto& segments = pieces[piece].segments;
             return segments.size() == 1 && segments.front().Kind() == CurveKind::Line;
         };
         gap.movable = isLine(gap.firstSelection) || isLine(gap.secondSelection);
@@ -189,16 +192,70 @@ void NormalizeCycle(LoopCycle& cycle)
         cycle.forward.end());
 }
 
+//! 平面の輪の中に、すでに採った同じ平面の輪の重心があるか(2D の点の内外、平面の局所座標で)。
+[[nodiscard]] bool ContainsAcceptedFace(const LoopFace& face, const std::vector<LoopFace>& accepted,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const geometry::PlaneFit fit = geometry::FitPlane(face.ring);
+    if (!fit.valid) {
+        return false;
+    }
+    const Vector3 normal = geometry::Normalized(fit.normal);
+    // 平面の局所座標。
+    Vector3 u = geometry::Cross(normal, Vector3{0.0, 0.0, 1.0});
+    if (u.Length() < 1.0e-6) {
+        u = geometry::Cross(normal, Vector3{0.0, 1.0, 0.0});
+    }
+    u = geometry::Normalized(u);
+    const Vector3 v = geometry::Cross(normal, u);
+    const auto local = [&](const Vector3& p) {
+        const Vector3 d = p - fit.origin;
+        return std::pair<double, double>{geometry::Dot(d, u), geometry::Dot(d, v)};
+    };
+    const auto inside = [&](const Vector3& p) {
+        const auto [px, py] = local(p);
+        bool in = false;
+        const std::size_t n = face.ring.size();
+        for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
+            const auto [xi, yi] = local(face.ring[i]);
+            const auto [xj, yj] = local(face.ring[j]);
+            if ((yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+                in = !in;
+            }
+        }
+        return in;
+    };
+    const double planeTolerance = std::max(tolerance.modelLinearMm * 100.0, 1.0e-6);
+    for (const LoopFace& other : accepted) {
+        if (other.method != LoopFaceMethod::Planar || other.ring.empty()) {
+            continue;
+        }
+        const Vector3 centroid = geometry::Centroid(other.ring);
+        if (std::abs(geometry::Dot(centroid - fit.origin, normal)) > planeTolerance) {
+            continue;   // 別の平面
+        }
+        if (inside(centroid)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] LoopFace MakeFace(const std::vector<LoopEdge>& edges, LoopCycle cycle,
     const geometry::GeometryTolerance& tolerance)
 {
     NormalizeCycle(cycle);
     LoopFace face;
+    face.edgeIndices = cycle.edges;
     for (std::size_t at = 0; at < cycle.edges.size(); ++at) {
         face.selections.push_back(edges[cycle.edges[at]].selection);
         face.forward.push_back(cycle.forward[at]);
     }
     face.ring = CycleRing(edges, cycle);
+    if (!face.ring.empty()) {
+        face.previewLines.push_back(face.ring);
+        face.previewLines.back().push_back(face.ring.front());
+    }
     face.areaMm2 = EnclosedArea(edges, cycle);
     const geometry::PlaneFit fit = geometry::FitPlane(face.ring);
     face.planeDeviationMm = fit.valid ? fit.maximumDeviationMm
@@ -247,11 +304,12 @@ void NormalizeCycle(LoopCycle& cycle)
         const double area = EnclosedArea(edges, cycle);
         keyed.push_back({std::move(cycle), area});
     }
+    // 小さい輪から採る(大きい輪は小さい輪の合わさりであることが多い)。同じ大きさなら辺の少ない順。
     std::stable_sort(keyed.begin(), keyed.end(), [](const Keyed& l, const Keyed& r) {
-        if (l.cycle.edges.size() != r.cycle.edges.size()) {
-            return l.cycle.edges.size() < r.cycle.edges.size();
+        if (std::abs(l.area - r.area) > 1.0e-9 * std::max(1.0, std::max(l.area, r.area))) {
+            return l.area < r.area;
         }
-        return l.area < r.area;
+        return l.cycle.edges.size() < r.cycle.edges.size();
     });
     std::vector<int> used(edges.size(), 0);
     std::vector<LoopFace> faces;
@@ -261,10 +319,17 @@ void NormalizeCycle(LoopCycle& cycle)
         if (crowded) {
             continue;
         }
-        for (const std::size_t edge : item.cycle.edges) {
+        LoopFace face = MakeFace(edges, std::move(item.cycle), tolerance);
+        // 同じ平面に載る輪で、すでに採った小さい輪を中に含むものは、その合わさり(円 + 2 本の
+        // 半径で言えば、扇 2 つに対する円板)なので面にしない。
+        if (face.method == LoopFaceMethod::Planar && ContainsAcceptedFace(face, faces, tolerance)) {
+            continue;
+        }
+        for (const std::size_t edge : face.edgeIndices) {
             ++used[edge];
         }
-        faces.push_back(MakeFace(edges, std::move(item.cycle), tolerance));
+        face.edgeIndices.clear();
+        faces.push_back(std::move(face));
     }
     return faces;
 }
@@ -278,6 +343,285 @@ void NormalizeCycle(LoopCycle& cycle)
     return out.str();
 }
 
+
+//! 線の端が別の線の途中に乗っている(T 字)ところ。
+struct TJunction {
+    std::size_t target = 0;        //!< 乗られている線(選択番号)
+    std::size_t segmentIndex = 0;  //!< その線の何本目の区間か
+    double parameter = 0.0;        //!< 区間の中の t
+    Vector3 point{};
+    std::size_t by = 0;            //!< 乗っている端を持つ線
+};
+
+[[nodiscard]] Vector3 ChainStart(const std::vector<CurveSegment>& chain)
+{
+    return chain.front().StartPoint();
+}
+[[nodiscard]] Vector3 ChainEnd(const std::vector<CurveSegment>& chain)
+{
+    return chain.back().EndPoint();
+}
+
+//! 線 by の端 p が、線 target の途中に乗っているか。乗っていれば区間と t。
+[[nodiscard]] std::optional<TJunction> JunctionOf(const std::vector<GuideTableSelection>& selections,
+    std::size_t target, std::size_t by, const Vector3& p, double joinMm)
+{
+    const auto& chain = selections[target].segments;
+    const bool closed = (ChainStart(chain) - ChainEnd(chain)).Length() <= joinMm;
+    if (!closed && ((p - ChainStart(chain)).Length() <= joinMm
+                       || (p - ChainEnd(chain)).Length() <= joinMm)) {
+        return std::nullopt;   // 端と端。T 字ではなく普通のつながり。
+    }
+    for (std::size_t k = 0; k < chain.size(); ++k) {
+        const auto closest = chain[k].ClosestPoint(p);
+        if (closest.distance > joinMm) {
+            continue;
+        }
+        // 区間の端にぴったりなら、隣の区間の継ぎ目 = 分けなくてよい(節になる)。
+        const bool atSegmentEnd = closest.parameter <= 1.0e-6 || closest.parameter >= 1.0 - 1.0e-6;
+        if (atSegmentEnd && !(closed && chain.size() == 1)) {
+            if (chain.size() > 1) {
+                return std::nullopt;   // 折れ線の角に乗っている: 角は端点として節になる
+            }
+            return std::nullopt;
+        }
+        TJunction junction;
+        junction.target = target;
+        junction.segmentIndex = k;
+        junction.parameter = closest.parameter;
+        junction.point = closest.point;
+        junction.by = by;
+        return junction;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::vector<TJunction> FindTJunctions(
+    const std::vector<GuideTableSelection>& selections, double joinMm)
+{
+    std::vector<TJunction> found;
+    for (std::size_t by = 0; by < selections.size(); ++by) {
+        const auto& chain = selections[by].segments;
+        if (chain.empty()) {
+            continue;
+        }
+        for (const Vector3& p : {ChainStart(chain), ChainEnd(chain)}) {
+            for (std::size_t target = 0; target < selections.size(); ++target) {
+                if (target == by || selections[target].segments.empty()) {
+                    continue;
+                }
+                const auto junction = JunctionOf(selections, target, by, p, joinMm);
+                if (!junction.has_value()) {
+                    continue;
+                }
+                const bool known = std::any_of(found.begin(), found.end(), [&](const TJunction& other) {
+                    return other.target == target && (other.point - junction->point).Length() <= joinMm;
+                });
+                if (!known) {
+                    found.push_back(*junction);
+                }
+            }
+        }
+    }
+    return found;
+}
+
+//! 線(区間の並び)を、区間ごとの t で分けて片にする。円は最初の区切りを継ぎ目にした一周の円弧に
+//! 読み替えてから分ける。
+[[nodiscard]] Result<std::vector<std::vector<CurveSegment>>> SplitChainAt(
+    const std::vector<CurveSegment>& chain, std::vector<std::pair<std::size_t, double>> cuts)
+{
+    using Out = Result<std::vector<std::vector<CurveSegment>>>;
+    std::sort(cuts.begin(), cuts.end());
+    std::vector<std::vector<CurveSegment>> parts;
+    std::vector<CurveSegment> current;
+    for (std::size_t k = 0; k < chain.size(); ++k) {
+        CurveSegment rest = chain[k];
+        double base = 0.0;
+        bool circle = rest.Kind() == CurveKind::Circle;
+        for (const auto& [index, t] : cuts) {
+            if (index != k) {
+                continue;
+            }
+            if (circle) {
+                // 一周の円弧にする(継ぎ目 = この区切り)。以後の t は継ぎ目からの位置。
+                geometry::CutPoint cut;
+                cut.parameter = t;
+                cut.point = rest.Evaluate(t);
+                const auto seam = geometry::SplitAtCut(rest, cut);
+                if (!seam.HasValue()) {
+                    return Out::Failure(seam.Diagnostics());
+                }
+                rest = seam.Value().first;
+                base = t;
+                circle = false;
+                continue;
+            }
+            const double local = base >= 1.0 - 1.0e-9 ? 1.0 : (t - base) / (1.0 - base);
+            if (local <= 1.0e-6 || local >= 1.0 - 1.0e-6) {
+                continue;
+            }
+            const auto split = rest.Split(local);
+            if (!split.HasValue()) {
+                return Out::Failure(split.Diagnostics());
+            }
+            current.push_back(*split.Value().first);
+            parts.push_back(current);
+            current.clear();
+            rest = *split.Value().second;
+            base = t;
+        }
+        current.push_back(rest);
+    }
+    parts.push_back(current);
+    return Out::Success(std::move(parts));
+}
+
+//! 分けた線の区切り(元の t は円の継ぎ目からの位置に直す)。
+[[nodiscard]] std::vector<std::pair<std::size_t, double>> CutsOf(const LoopSplit& split,
+    const std::vector<CurveSegment>& chain)
+{
+    std::vector<std::pair<std::size_t, double>> cuts;
+    const std::size_t count = chain.size();
+    for (const double global : split.parameters) {
+        const double scaled = global * static_cast<double>(count);
+        std::size_t index = static_cast<std::size_t>(std::floor(scaled));
+        if (index >= count) {
+            index = count - 1;
+        }
+        cuts.emplace_back(index, scaled - static_cast<double>(index));
+    }
+    if (count == 1 && chain.front().Kind() == CurveKind::Circle && cuts.size() > 1) {
+        // 継ぎ目(最初の区切り)からの位置に直す。
+        std::sort(cuts.begin(), cuts.end());
+        const double seam = cuts.front().second;
+        for (std::size_t at = 1; at < cuts.size(); ++at) {
+            double t = cuts[at].second - seam;
+            if (t < 0.0) {
+                t += 1.0;
+            }
+            cuts[at].second = t;
+        }
+        // 先頭は継ぎ目そのもの(SplitChainAt が円の読み替えに使う)。
+    }
+    return cuts;
+}
+
+//! T 字から、分ける線の一覧と片を作る。
+[[nodiscard]] Result<std::vector<LoopSplit>> CollectSplits(
+    const std::vector<GuideTableSelection>& selections, const std::vector<TJunction>& junctions)
+{
+    using Out = Result<std::vector<LoopSplit>>;
+    std::vector<LoopSplit> splits;
+    for (const TJunction& junction : junctions) {
+        auto found = std::find_if(splits.begin(), splits.end(),
+            [&](const LoopSplit& split) { return split.source == junction.target; });
+        if (found == splits.end()) {
+            LoopSplit split;
+            split.source = junction.target;
+            splits.push_back(split);
+            found = splits.end() - 1;
+        }
+        const double count = static_cast<double>(selections[junction.target].segments.size());
+        found->parameters.push_back((static_cast<double>(junction.segmentIndex) + junction.parameter) / count);
+        found->points.push_back(junction.point);
+        found->bySelections.push_back(junction.by);
+    }
+    for (LoopSplit& split : splits) {
+        // t の昇順にそろえる(points / bySelections も一緒に)。
+        std::vector<std::size_t> order(split.parameters.size());
+        for (std::size_t at = 0; at < order.size(); ++at) {
+            order[at] = at;
+        }
+        std::sort(order.begin(), order.end(),
+            [&](std::size_t l, std::size_t r) { return split.parameters[l] < split.parameters[r]; });
+        LoopSplit sorted = split;
+        for (std::size_t at = 0; at < order.size(); ++at) {
+            sorted.parameters[at] = split.parameters[order[at]];
+            sorted.points[at] = split.points[order[at]];
+            sorted.bySelections[at] = split.bySelections[order[at]];
+        }
+        split = sorted;
+    }
+    std::sort(splits.begin(), splits.end(),
+        [](const LoopSplit& l, const LoopSplit& r) { return l.source < r.source; });
+    return Out::Success(std::move(splits));
+}
+
+//! 片の一覧: 分けていない線はそのまま(同じ番号)、分けた線は印だけ残して片を後ろに足す。
+[[nodiscard]] Result<std::vector<LoopPiece>> MakePieces(
+    const std::vector<GuideTableSelection>& selections, const std::vector<LoopSplit>& splits)
+{
+    using Out = Result<std::vector<LoopPiece>>;
+    std::vector<LoopPiece> pieces;
+    for (std::size_t index = 0; index < selections.size(); ++index) {
+        LoopPiece piece;
+        piece.source = index;
+        piece.segments = selections[index].segments;
+        pieces.push_back(std::move(piece));
+    }
+    for (const LoopSplit& split : splits) {
+        const auto parts = SplitChainAt(selections[split.source].segments,
+            CutsOf(split, selections[split.source].segments));
+        if (!parts.HasValue()) {
+            return Out::Failure(parts.Diagnostics());
+        }
+        pieces[split.source].split = true;
+        for (const auto& part : parts.Value()) {
+            LoopPiece piece;
+            piece.source = split.source;
+            piece.segments = part;
+            piece.part = true;
+            pieces.push_back(std::move(piece));
+        }
+    }
+    return Out::Success(std::move(pieces));
+}
+
+//! 輪が無いとき: 開いた線が互いに触れずに並んでいればロフト(断面の順は重心の主軸)。
+[[nodiscard]] std::optional<LoopFace> LoftFace(const std::vector<LoopEdge>& edges,
+    const LoopGraph& graph)
+{
+    std::vector<int> degree(graph.NodeCount(), 0);
+    for (const LoopEdge& edge : edges) {
+        ++degree[edge.from];
+        ++degree[edge.to];
+    }
+    std::vector<modeling::detail::SampledChain> sampled;
+    std::vector<std::size_t> indices;
+    for (std::size_t at = 0; at < edges.size(); ++at) {
+        const LoopEdge& edge = edges[at];
+        if (edge.from == edge.to || degree[edge.from] != 1 || degree[edge.to] != 1) {
+            return std::nullopt;   // 触れている線がある: 断面の並びではない
+        }
+        modeling::detail::SampledChain chain;
+        chain.chainIndex = at;
+        chain.points = edge.points;
+        chain.centroid = geometry::Centroid(edge.points);
+        sampled.push_back(std::move(chain));
+        indices.push_back(at);
+    }
+    if (sampled.size() < 2) {
+        return std::nullopt;
+    }
+    const auto ordering = modeling::detail::OrderSections(sampled, indices);
+    LoopFace face;
+    face.method = LoopFaceMethod::Loft;
+    for (const std::size_t at : ordering.chainIndices) {
+        face.selections.push_back(edges[at].selection);
+        face.forward.push_back(true);
+        face.previewLines.push_back(edges[at].points);
+    }
+    // 断面の端どうしを結ぶ線(下見で、どこからどこへ渡るかが見える)。
+    for (std::size_t at = 0; at + 1 < ordering.chainIndices.size(); ++at) {
+        const auto& a = edges[ordering.chainIndices[at]].points;
+        const auto& b = edges[ordering.chainIndices[at + 1]].points;
+        face.previewLines.push_back(std::vector<Vector3>{a.front(), b.front()});
+        face.previewLines.push_back(std::vector<Vector3>{a.back(), b.back()});
+    }
+    return face;
+}
+
 } // namespace
 
 std::string LoopFaceMethodLabelJa(LoopFaceMethod method)
@@ -286,8 +630,62 @@ std::string LoopFaceMethodLabelJa(LoopFaceMethod method)
     case LoopFaceMethod::Planar:       return "平面";
     case LoopFaceMethod::FourEdge:     return "四辺面";
     case LoopFaceMethod::BoundaryFill: return "境界面(近似)";
+    case LoopFaceMethod::Loft:         return "ロフト";
     }
     return "";
+}
+
+std::vector<LoopFaceMethod> LoopFaceMethodChoices(std::size_t edgeCount, bool planar, bool loft)
+{
+    if (loft) {
+        return {LoopFaceMethod::Loft};
+    }
+    std::vector<LoopFaceMethod> choices;
+    if (planar) {
+        choices.push_back(LoopFaceMethod::Planar);
+    }
+    if (edgeCount == 4) {
+        choices.push_back(LoopFaceMethod::FourEdge);
+    }
+    if (!planar || edgeCount != 4) {
+        choices.push_back(LoopFaceMethod::BoundaryFill);
+    }
+    return choices;
+}
+
+std::string LoopPieceLabelJa(const std::vector<GuideTableSelection>& selections,
+    const LoopFacePlan& plan, std::size_t piece)
+{
+    if (piece >= plan.pieces.size()) {
+        return piece < selections.size() ? selections[piece].label : "?";
+    }
+    const LoopPiece& item = plan.pieces[piece];
+    const std::string base = item.source < selections.size() ? selections[item.source].label : "?";
+    if (!item.part) {
+        return base;
+    }
+    int number = 0;
+    for (std::size_t at = 0; at <= piece; ++at) {
+        if (plan.pieces[at].part && plan.pieces[at].source == item.source) {
+            ++number;
+        }
+    }
+    return base + "(片 " + std::to_string(number) + ")";
+}
+
+std::string LoopSplitTextJa(const std::vector<GuideTableSelection>& selections,
+    const LoopSplit& split)
+{
+    std::string who;
+    for (const std::size_t by : split.bySelections) {
+        if (!who.empty()) {
+            who += "・";
+        }
+        who += by < selections.size() ? selections[by].label : "?";
+    }
+    const std::string target = split.source < selections.size() ? selections[split.source].label : "?";
+    return who + " の端が " + target + " の途中に乗っています(" + target + " を "
+        + std::to_string(split.parameters.size()) + " か所で分けます)";
 }
 
 Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selections,
@@ -295,32 +693,54 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
 {
     using Out = Result<LoopFacePlan>;
     const double joinMm = std::max(tolerance.interactiveJoinMm, tolerance.modelLinearMm * 100.0);
-    LoopGraph graph(joinMm);
-    std::vector<LoopEdge> edges;
-    for (std::size_t index = 0; index < selections.size(); ++index) {
-        if (!selections[index].segments.empty()) {
-            edges.push_back(MakeLoopEdge(index, selections[index].segments, graph));
-        }
+    std::size_t given = 0;
+    for (const auto& selection : selections) {
+        given += selection.segments.empty() ? 0 : 1;
     }
-    if (edges.empty()) {
+    if (given == 0) {
         return Out::Failure(MakeError(kNoInput, "選んだ線がありません。", "線を選んでから押してください。"));
     }
-    if (edges.size() > kMaximumEdges) {
+    if (given > kMaximumEdges) {
         return Out::Failure(MakeError(kTooMany, "選んだ線が多すぎて、外周を決められません。",
-            std::to_string(edges.size()) + " 本(上限 " + std::to_string(kMaximumEdges)
+            std::to_string(given) + " 本(上限 " + std::to_string(kMaximumEdges)
                 + " 本)。面ごとに分けて選んでください。"));
     }
     LoopFacePlan plan;
+    // T 字: 端が別の線の途中に乗っていれば、その線を分けた片で輪を探す。
+    const auto splits = CollectSplits(selections, FindTJunctions(selections, joinMm));
+    if (!splits.HasValue()) {
+        return Out::Failure(splits.Diagnostics());
+    }
+    plan.splits = splits.Value();
+    const auto pieces = MakePieces(selections, plan.splits);
+    if (!pieces.HasValue()) {
+        return Out::Failure(pieces.Diagnostics());
+    }
+    plan.pieces = pieces.Value();
+    LoopGraph graph(joinMm);
+    std::vector<LoopEdge> edges;
+    for (std::size_t index = 0; index < plan.pieces.size(); ++index) {
+        const LoopPiece& piece = plan.pieces[index];
+        if (!piece.split && !piece.segments.empty()) {
+            edges.push_back(MakeLoopEdge(index, piece.segments, graph));
+        }
+    }
     // ずれは、行き止まりを外す前の次数で見る(外すと次数 1 が消えて分からなくなる)。
-    plan.gaps = FindGaps(selections, edges, graph, NearMissMm(edges, joinMm));
+    plan.gaps = FindGaps(plan.pieces, edges, graph, NearMissMm(edges, joinMm));
+    const std::vector<LoopEdge> before = edges;
     PruneDeadEnds(edges, graph.NodeCount());
     plan.faces = ChooseFaces(edges, FindLoopCycles(edges), tolerance);
+    if (plan.faces.empty() && plan.gaps.empty()) {
+        if (auto loft = LoftFace(before, graph)) {
+            plan.faces.push_back(std::move(*loft));
+        }
+    }
     std::vector<bool> inFace(selections.size(), false);
-    int counts[3] = {0, 0, 0};
+    int counts[4] = {0, 0, 0, 0};
     for (const LoopFace& face : plan.faces) {
         ++counts[static_cast<int>(face.method)];
-        for (const std::size_t selection : face.selections) {
-            inFace[selection] = true;
+        for (const std::size_t piece : face.selections) {
+            inFace[plan.pieces[piece].source] = true;
         }
     }
     for (std::size_t index = 0; index < selections.size(); ++index) {
@@ -335,6 +755,12 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
     }
     plan.summaryJa = "平面 " + std::to_string(counts[0]) + "・四辺面 " + std::to_string(counts[1])
         + "・境界面 " + std::to_string(counts[2]);
+    if (counts[3] > 0) {
+        plan.summaryJa += "・ロフト " + std::to_string(counts[3]);
+    }
+    if (!plan.splits.empty()) {
+        plan.summaryJa += "・T 字 " + std::to_string(plan.splits.size());
+    }
     if (!plan.unused.empty()) {
         plan.summaryJa += "・使わない線 " + std::to_string(plan.unused.size());
     }
@@ -348,7 +774,27 @@ Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selecti
     const LoopFace& face, const geometry::GeometryTolerance& tolerance)
 {
     using Out = Result<GuideTable>;
+    for (const std::size_t index : face.selections) {
+        if (index >= selections.size()) {
+            return Out::Failure(MakeError(kSplitPending, "T 字で分けた線がまだ分けられていません。",
+                "先に線を分けてから(Enter)、もう一度計画します。"));
+        }
+    }
     GuideTable table;
+    if (face.method == LoopFaceMethod::Loft) {
+        table.method = face.selections.size() == 2 ? GuideSurfaceMethod::RuledSections
+                                                    : GuideSurfaceMethod::LoftSections;
+        for (const std::size_t selection : face.selections) {
+            const auto added = modeling::AddSelectionAsNewRow(table, ChainRole::Section,
+                selections[selection]);
+            if (!added.HasValue()) {
+                return Out::Failure(added.Diagnostics());
+            }
+            table = added.Value();
+        }
+        table.lockSectionOrder = true;   // 並びは計画が決めた(重心の主軸)
+        return Out::Success(table);
+    }
     if (face.method == LoopFaceMethod::Planar) {
         table.method = GuideSurfaceMethod::PlanarBoundary;
         // 外形 1 行に、輪をたどる順に足す(向きは足すときにそろう)。
@@ -425,6 +871,17 @@ Result<LoopGapFix> CloseLoopGap(const std::vector<GuideTableSelection>& selectio
     }
     fix.movedMm = gap.distanceMm;
     return Out::Success(std::move(fix));
+}
+
+Result<std::vector<std::vector<CurveSegment>>> SplitLoopSource(
+    const std::vector<GuideTableSelection>& selections, const LoopSplit& split)
+{
+    using Out = Result<std::vector<std::vector<CurveSegment>>>;
+    if (split.source >= selections.size() || selections[split.source].segments.empty()) {
+        return Out::Failure(MakeError(kNoInput, "選んだ線がありません。", {}));
+    }
+    const auto& chain = selections[split.source].segments;
+    return SplitChainAt(chain, CutsOf(split, chain));
 }
 
 std::string LoopGapTextJa(const std::vector<GuideTableSelection>& selections, const LoopGap& gap)

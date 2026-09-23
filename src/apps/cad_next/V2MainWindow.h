@@ -1156,8 +1156,13 @@ private:
     void RunHistoryCommand(bool undo);
     //! 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの欄を出し直す。
     void RefreshEditDock();
+    //! 事実の行(載る面・長さ・端のつながり)を編集の棚に出す(線を 1 本選んだとき)。
+    void ShowWireFacts(const kachakacha::v2::base::EntityId& wireId);
+    //! 事実の行の [寄せる]: 選んだ直線の端(atEnd: 終点側)を、近い相手の端へ動かす。
+    void CloseSelectedWireEnd(bool atEnd);
     //! 「変更を適用」。欄の値を core で定義にし、文書へ入れる。
-    void ApplySelectedEdit();
+    //! wireOverride があれば、棚の欄ではなくその欄で線を直す(事実の行の [寄せる] が正確な点を渡す)。
+    void ApplySelectedEdit(const kachakacha::v2::app::WireEditFields* wireOverride = nullptr);
     //! 「平面内角度」の基準(作成元平面か、作業中の平面)。name にその名前を書く。
     [[nodiscard]] kachakacha::v2::modeling::WorkPlaneFrame EditAngleFrame(
         const std::optional<kachakacha::v2::base::EntityId>& sourcePlaneId,

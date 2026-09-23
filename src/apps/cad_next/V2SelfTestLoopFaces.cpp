@@ -10,6 +10,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2EditDock.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -383,6 +384,45 @@ void SelectAllWires(V2MainWindow& window)
             window.StatusText().contains(QStringLiteral("作りません")));
 }
 
+//! HP-LF-06。事実の行(UI 設計 2-5)。線を 1 本選ぶと、編集の棚に 載る面・長さ・端のつながりが出る。
+//! 端が離れていれば何 mm かを言い、[始点を寄せる] でその場で寄る。1 回の取り消しで戻る。
+[[nodiscard]] bool CaseWireFactsRowShowsGapAndCloses(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
+    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.50, 0.70);
+    const EntityId third = DrawLineAtByHand(window, 0.52, 0.70, 0.30, 0.30);
+    if (!Explain("端をずらした 3 本を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil())) {
+        return false;
+    }
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(third);
+    window.Viewport().SetSelection(one);
+    auto& dock = window.EditDock();
+    const QString facts = dock.FactsTextJa();
+    if (!Explain((std::string("事実の行に 載る面 が出る(") + facts.toStdString() + ")").c_str(),
+            facts.contains(QStringLiteral("載る面")))
+        || !Explain("載る面は 上面 XY(上から見て引いた線)", facts.contains(QStringLiteral("上面 XY")))
+        || !Explain("長さが出る", facts.contains(QStringLiteral("長さ")))
+        || !Explain("始点は 2 本目の終点まで何 mm 離れているかが出る",
+            facts.contains(QStringLiteral("始点 →")) && facts.contains(QStringLiteral("離れています")))
+        || !Explain("終点は 1 本目の始点につながっている(0.000 mm)",
+            facts.contains(QStringLiteral("終点 →")) && facts.contains(QStringLiteral("(0.000 mm)")))) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    if (!Explain("[始点を寄せる] が押せる", dock.PressCloseGap(false))
+        || !Explain("寄せると 3 本は端点でつながって輪になる", WiresFormClosedLoop(window))
+        || !Explain("線の本数は変わらない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
+        || !Explain((std::string("寄せたあとの事実の行は つながっている(") + dock.FactsTextJa().toStdString() + ")").c_str(),
+            !dock.FactsTextJa().contains(QStringLiteral("離れています")))
+        || !Explain("[寄せる] はもう出ない(押しても偽)", !dock.PressCloseGap(false))) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで端がまた離れる", !WiresFormClosedLoop(window));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -398,6 +438,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesSplitsTJunction},
         {"HP-LF-05 面にするの棚で輪を外す・作り方を変える・ずれをそのままにできる",
             CaseLoopFacesDockChoices},
+        {"HP-LF-06 線を選ぶと事実の行(載る面・長さ・端のつながり)が出て、[寄せる]でその場で寄る",
+            CaseWireFactsRowShowsGapAndCloses},
     };
 }
 

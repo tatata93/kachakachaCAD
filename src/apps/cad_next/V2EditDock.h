@@ -57,6 +57,15 @@ public:
 
     void SetApplyHandler(std::function<void()> handler);
     void PressApply();
+    //! 事実の行(UI 設計 2026-09-23 2-5): 載る面・長さ・始点と終点のつながり。線を選んだときに出す。
+    //! closeStart / closeEnd が真なら、その端に [寄せる] を出す(直線の端を相手の端へ動かす)。
+    void ShowFacts(const QString& text, bool closeStart, bool closeEnd);
+    void ClearFacts();
+    //! [寄せる] を押したとき(atEnd: 終点側か)。
+    void SetCloseGapHandler(std::function<void(bool atEnd)> handler);
+    [[nodiscard]] QString FactsTextJa() const;
+    //! 試験から [寄せる] を押す。出ていなければ偽。
+    [[nodiscard]] bool PressCloseGap(bool atEnd);
     void SetMessage(const QString& text);
     [[nodiscard]] QString MessageText() const;
     [[nodiscard]] QString SelectionText() const;
@@ -123,6 +132,11 @@ private:
     QPushButton* apply_ = nullptr;
     QLabel* message_ = nullptr;
     std::function<void()> applyHandler_;
+    QWidget* factsRow_ = nullptr;
+    QLabel* facts_ = nullptr;
+    QPushButton* closeStart_ = nullptr;
+    QPushButton* closeEnd_ = nullptr;
+    std::function<void(bool)> closeGapHandler_;
     kachakacha::v2::app::WireEditShape shape_ = kachakacha::v2::app::WireEditShape::Line;
     std::vector<kachakacha::v2::base::EntityId> planeIds_;
 };

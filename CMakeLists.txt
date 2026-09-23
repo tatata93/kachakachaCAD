@@ -600,6 +600,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/DirectWireEntry.cpp
     src/next/kachakacha/app/LoopGraph.cpp
     src/next/kachakacha/app/LoopFaces.cpp
+    src/next/kachakacha/app/WireFacts.cpp
     src/next/kachakacha/app/OuterLoopSplit.cpp
     src/next/kachakacha/app/IntersectionPoints.cpp
     src/next/kachakacha/app/EntityEdit.cpp
@@ -806,6 +807,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(wire_connect_tests tests_v2/wire_connect_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
     kachakacha_add_v2_test(loop_faces_tests tests_v2/loop_faces_tests.cpp)
+    kachakacha_add_v2_test(wire_facts_tests tests_v2/wire_facts_tests.cpp)
     kachakacha_add_v2_test(corner_curves_tests tests_v2/corner_curves_tests.cpp)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(profile_region_tests tests_v2/profile_region_tests.cpp)

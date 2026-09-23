@@ -6,11 +6,15 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/EntityEdit.h"
+#include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/WireFacts.h"
 #include "kachakacha/document/Commands.h"
 
 #include <QString>
 
+#include <cstddef>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -202,6 +206,7 @@ void V2MainWindow::RefreshEditDock()
             measure = kachakacha::v2::app::MeasureLine(shown.points[0], shown.points[1], frame);
         }
         editDock_->ShowWire(name, shown, measure, frameName);
+        ShowWireFacts(entity->id);
         return;
     }
     editDock_->ShowNothing(QStringLiteral("%1「%2」は数値で編集できません。作業平面か線を選んでください。")
@@ -210,7 +215,89 @@ void V2MainWindow::RefreshEditDock()
                 name));
 }
 
-void V2MainWindow::ApplySelectedEdit()
+namespace {
+
+//! 文書の線を全部、表の束にする(事実の行は選んでいない線も相手にする)。target は wireId の番号。
+[[nodiscard]] std::vector<kachakacha::v2::modeling::GuideTableSelection> AllWireSelections(
+    const kachakacha::v2::document::Document& document, const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::base::EntityId& wireId, std::size_t* target)
+{
+    std::vector<kachakacha::v2::modeling::GuideTableSelection> wires;
+    *target = std::numeric_limits<std::size_t>::max();
+    for (const auto& entity : document.Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::Wire
+            || entity.visibility == kachakacha::v2::domain::Visibility::Hidden) {
+            continue;
+        }
+        auto chosen = kachakacha::v2::app::GuideSelectionOf(document, scene, entity.id);
+        if (!chosen.has_value()) {
+            continue;
+        }
+        if (entity.id == wireId) {
+            *target = wires.size();
+        }
+        wires.push_back(std::move(*chosen));
+    }
+    return wires;
+}
+
+} // namespace
+
+void V2MainWindow::ShowWireFacts(const kachakacha::v2::base::EntityId& wireId)
+{
+    using kachakacha::v2::app::WireEndRelation;
+    std::size_t target = 0;
+    const auto wires = AllWireSelections(session_->GetDocument(), session_->Scene(), wireId, &target);
+    if (target >= wires.size()) {
+        editDock_->ClearFacts();
+        return;
+    }
+    const auto facts = kachakacha::v2::app::DescribeWire(wires, target,
+        session_->GetDocument().Snapshot().settings.tolerance);
+    const auto closable = [](const kachakacha::v2::app::WireEndFact& fact) {
+        return fact.relation == WireEndRelation::Near && fact.movable;
+    };
+    editDock_->ShowFacts(QString::fromStdString(kachakacha::v2::app::WireFactsTextJa(wires, facts)),
+        !facts.closed && closable(facts.start), !facts.closed && closable(facts.end));
+}
+
+void V2MainWindow::CloseSelectedWireEnd(bool atEnd)
+{
+    using kachakacha::v2::app::WireEndRelation;
+    const auto& selection = viewport_->Selection();
+    if (selection.entityIds.size() != 1 || !editDock_->IsShowingWire()) {
+        SetStatus(QStringLiteral("寄せる: 線を 1 本選んでください。"));
+        return;
+    }
+    std::size_t target = 0;
+    const auto wires = AllWireSelections(session_->GetDocument(), session_->Scene(),
+        selection.entityIds.front(), &target);
+    if (target >= wires.size()) {
+        return;
+    }
+    const auto facts = kachakacha::v2::app::DescribeWire(wires, target,
+        session_->GetDocument().Snapshot().settings.tolerance);
+    const auto& fact = atEnd ? facts.end : facts.start;
+    if (facts.closed || fact.relation != WireEndRelation::Near || !fact.movable) {
+        SetStatus(QStringLiteral("寄せる: この端は寄せられません(離れていないか、直線ではありません)。"));
+        return;
+    }
+    kachakacha::v2::app::WireEditFields fields = editDock_->WireFields();
+    if (fields.points.size() < 2) {
+        SetStatus(QStringLiteral("寄せる: 点の表が無いので寄せられません。"));
+        return;
+    }
+    // 点の表のその端を相手の端(丸めない正確な点)に置き、いつもの「変更を適用」で入れる(1 回の取り消しで戻る)。
+    fields.points[atEnd ? fields.points.size() - 1 : 0] = fact.target;
+    ApplySelectedEdit(&fields);
+    SetStatus(QStringLiteral("寄せる: %1 の%2を %3 へ ")
+            .arg(QString::fromStdString(wires[target].label),
+                atEnd ? QStringLiteral("終点") : QStringLiteral("始点"),
+                QString::fromStdString(wires[fact.other].label))
+        + QStringLiteral("%1 mm 動かしました。").arg(fact.distanceMm, 0, 'f', 3));
+}
+
+void V2MainWindow::ApplySelectedEdit(const kachakacha::v2::app::WireEditFields* wireOverride)
 {
     using kachakacha::v2::document::SetConstructionCommand;
     using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
@@ -254,7 +341,7 @@ void V2MainWindow::ApplySelectedEdit()
         }
     } else if (const auto* wire = std::get_if<kachakacha::v2::domain::CreateWireDefinition>(
                    &feature->definition)) {
-        const auto fields = editDock_->WireFields();
+        const auto fields = wireOverride != nullptr ? *wireOverride : editDock_->WireFields();
         const auto edited = kachakacha::v2::app::EditedWireDefinition(*wire, fields,
             EditAngleFrame(fields.sourcePlaneId, nullptr), *ids_);
         if (!edited.HasValue()) {

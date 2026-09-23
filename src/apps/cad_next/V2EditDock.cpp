@@ -64,6 +64,33 @@ V2EditDock::V2EditDock(QWidget* parent)
     selection_->setWordWrap(true);
     layout->addWidget(selection_);
 
+    // 事実の行: 載る面・長さ・端のつながり。ずれがあれば [寄せる]。
+    factsRow_ = new QWidget(body);
+    auto* factsLayout = new QVBoxLayout(factsRow_);
+    factsLayout->setContentsMargins(0, 0, 0, 0);
+    factsLayout->setSpacing(2);
+    facts_ = new QLabel(factsRow_);
+    facts_->setWordWrap(true);
+    facts_->setObjectName(QStringLiteral("factsLabel"));
+    factsLayout->addWidget(facts_);
+    auto* closeRow = new QWidget(factsRow_);
+    auto* closeLayout = new QHBoxLayout(closeRow);
+    closeLayout->setContentsMargins(0, 0, 0, 0);
+    closeStart_ = new QPushButton(QStringLiteral("始点を寄せる"), closeRow);
+    closeEnd_ = new QPushButton(QStringLiteral("終点を寄せる"), closeRow);
+    QObject::connect(closeStart_, &QPushButton::clicked, this, [this] {
+        if (closeGapHandler_) { closeGapHandler_(false); }
+    });
+    QObject::connect(closeEnd_, &QPushButton::clicked, this, [this] {
+        if (closeGapHandler_) { closeGapHandler_(true); }
+    });
+    closeLayout->addWidget(closeStart_);
+    closeLayout->addWidget(closeEnd_);
+    closeLayout->addStretch(1);
+    factsLayout->addWidget(closeRow);
+    factsRow_->hide();
+    layout->addWidget(factsRow_);
+
     pages_ = new QStackedWidget(body);
     nothing_ = new QLabel(QStringLiteral("作業平面か線を 1 つ選ぶと、その数値がここに出ます。"),
         pages_);
@@ -283,6 +310,7 @@ void V2EditDock::EnsurePointRows(std::size_t count)
 
 void V2EditDock::ShowNothing(const QString& reason)
 {
+    ClearFacts();
     selection_->setText(QStringLiteral("選択なし"));
     nothing_->setText(reason.isEmpty()
             ? QStringLiteral("作業平面か線を 1 つ選ぶと、その数値がここに出ます。")
@@ -294,6 +322,7 @@ void V2EditDock::ShowNothing(const QString& reason)
 
 void V2EditDock::ShowPlane(const QString& name, const PlaneEditFields& fields)
 {
+    ClearFacts();
     selection_->setText(QStringLiteral("作業平面: %1").arg(name));
     SetVector3(planeOrigin_, fields.origin);
     SetVector3(planeNormal_, fields.normal);
@@ -438,6 +467,42 @@ void V2EditDock::PressApply()
 void V2EditDock::SetMessage(const QString& text)
 {
     message_->setText(text);
+}
+
+void V2EditDock::ShowFacts(const QString& text, bool closeStart, bool closeEnd)
+{
+    facts_->setText(text);
+    closeStart_->setVisible(closeStart);
+    closeEnd_->setVisible(closeEnd);
+    factsRow_->setVisible(!text.isEmpty());
+}
+
+void V2EditDock::ClearFacts()
+{
+    facts_->setText(QString());
+    closeStart_->hide();
+    closeEnd_->hide();
+    factsRow_->hide();
+}
+
+void V2EditDock::SetCloseGapHandler(std::function<void(bool)> handler)
+{
+    closeGapHandler_ = std::move(handler);
+}
+
+QString V2EditDock::FactsTextJa() const
+{
+    return facts_->text();
+}
+
+bool V2EditDock::PressCloseGap(bool atEnd)
+{
+    QPushButton* button = atEnd ? closeEnd_ : closeStart_;
+    if (button == nullptr || button->isHidden() || !closeGapHandler_) {
+        return false;
+    }
+    closeGapHandler_(atEnd);
+    return true;
 }
 
 QString V2EditDock::MessageText() const

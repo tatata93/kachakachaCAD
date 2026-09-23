@@ -24,6 +24,7 @@ void V2MainWindow::BuildEditingShelves()
     // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
     editDock_ = new V2EditDock(this);
     editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
+    editDock_->SetCloseGapHandler([this](bool atEnd) { CloseSelectedWireEnd(atEnd); });
     editDock_->hide();
     // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
     cornerDock_ = new V2CornerDock(this);

@@ -1085,6 +1085,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ShellSplitDock.cpp
         src/apps/cad_next/V2ShellSplitTool.cpp
         src/apps/cad_next/V2HoverEditTool.cpp
+        src/apps/cad_next/V2LoopFacesDock.cpp
         src/apps/cad_next/V2LoopFacesTool.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp

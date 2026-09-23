@@ -218,7 +218,7 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
                                 for (const bool analyzing : {false, true}) {
                                     for (const Shelf owned :
                                         {Shelf::None, Shelf::Solid, Shelf::EdgeFinish,
-                                            Shelf::ShellSplit}) {
+                                            Shelf::ShellSplit, Shelf::LoopFaces}) {
                                         for (const Shelf shelf : ShelvesFor(mode, tool,
                                                  extruding, surfacing, booleaning, thickening,
                                                  editing, analyzing, owned)) {
@@ -278,6 +278,8 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         "「辺の丸め・面取り」の棚も、棚の決め方そのものから出る");
     Require(reachable.count(static_cast<int>(Shelf::ShellSplit)) == 1,
         "「シェル・分割」の棚も、棚の決め方そのものから出る");
+    Require(reachable.count(static_cast<int>(Shelf::LoopFaces)) == 1,
+        "「面にする」の棚も、棚の決め方そのものから出る");
 }
 
 KACHA_V2_TEST(shelf, 足す引くの最中はその棚が前に出る)

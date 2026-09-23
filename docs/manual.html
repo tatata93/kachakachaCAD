@@ -281,7 +281,7 @@
           <tr data-command="workplane.create"><td>作業平面を作る</td><td><code>workplane.create</code></td><td>12通りから作成。</td></tr>
           <tr data-command="grid.edit"><td>グリッド</td><td><code>grid.edit</code></td><td>主間隔と副点数。</td></tr>
           <tr data-command="grid.move_origin"><td>グリッド原点を移動</td><td><code>grid.move_origin</code></td><td>幾何点へ原点移動。</td></tr>
-          <tr data-command="surface.from_lines"><td>線から面</td><td><code>surface.from_lines</code></td><td>選んだ線の端点のつながりから閉じた輪を全部見つけ、平面 / 四辺面 / 境界面で面にする。端が離れていれば、どこが何 mm かを言い、Enter で直線の端を寄せてから作る。元の線は残る。</td></tr>
+          <tr data-command="surface.from_lines"><td>面にする</td><td><code>surface.from_lines</code></td><td>選んだ線の端点のつながりから閉じた輪を全部見つけ、平面 / 四辺面 / 境界面(輪が無ければロフト)で面にする。線の端が別の線の途中に乗っていれば(T 字)そこで分ける。端が離れていれば、どこが何 mm かを言い、寄せるか そのままかを選べる。輪ごとに作り方を変えられる。元の線は残る。近道 Shift+F(F は全体表示)。</td></tr>
           <tr data-command="surface.create"><td>面を作る</td><td><code>surface.create</code></td><td>線や面から面を作る、ただ1つの入口。作り方は選んだものから薦め、右の棚で変えられる。</td></tr>
           <tr data-command="surface.match"><td>面を合わせる</td><td><code>surface.match</code></td><td>直す面の縁を隣の面の縁へ G0/G1/G2 で合わせる。縁は面の縁の近くを押して選ぶ。元の面は残し、合わせた新しい面を作る。</td></tr>
           <tr data-command="surface.bridge"><td>面をつなぐ</td><td><code>surface.bridge</code></td><td>2 枚の面の縁のあいだを渡す面を作る。両端の滑らかさと張りの強さを選ぶ。</td></tr>

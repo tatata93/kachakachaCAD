@@ -72,6 +72,8 @@ enum class Shelf {
     EdgeFinish,
     //! 「シェル・分割」の欄(部品の形状編集、matrix P-13)。
     ShellSplit,
+    //! 「面にする」の欄(線から面。輪の表・ずれ・T 字、matrix D-43)。
+    LoopFaces,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

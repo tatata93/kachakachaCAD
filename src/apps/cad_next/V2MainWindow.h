@@ -879,6 +879,8 @@ private:
     void RunFabricationCreate();
     //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
+    //! 自分の棚を持つ道具(立体・辺の丸め面取り・シェル分割・面にする)を、keep 以外やめる。
+    void EndOwnedToolsBut(const void* keep);
     //! 「足す・引く」の道具(引継ぎ 2026-09-17 の 4、V2BooleanCommands.cpp)。
     void RunBooleanTool(kachakacha::v2::app::BooleanKind kind);
     [[nodiscard]] static kachakacha::v2::app::BooleanKind BooleanKindForCommand(std::string_view id);

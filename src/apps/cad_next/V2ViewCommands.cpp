@@ -7,6 +7,7 @@
 
 #include "V2MainWindow.h"
 #include "V2EdgeFinishTool.h"
+#include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
@@ -891,6 +892,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Solid:       return solidTool_ != nullptr ? solidTool_->Dock() : nullptr;
     case Shelf::EdgeFinish:  return edgeFinishTool_ != nullptr ? edgeFinishTool_->Dock() : nullptr;
     case Shelf::ShellSplit:    return shellSplitTool_ != nullptr ? shellSplitTool_->Dock() : nullptr;
+    case Shelf::LoopFaces:   return loopFaces_ != nullptr ? loopFaces_->Dock() : nullptr;
     case Shelf::None:        break;
     }
     return nullptr;
@@ -907,6 +909,9 @@ kachakacha::v2::app::Shelf V2MainWindow::OwnedToolShelf() const
     }
     if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) {
         return Shelf::ShellSplit;
+    }
+    if (loopFaces_ != nullptr && loopFaces_->Active()) {
+        return Shelf::LoopFaces;
     }
     return Shelf::None;
 }

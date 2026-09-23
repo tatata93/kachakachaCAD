@@ -1,9 +1,10 @@
-//! 「線から面」の人の道(HP-LF、オーナー要望 2026-09-22)。
+//! 「面にする」(線から面)の人の道(HP-LF、オーナー要望 2026-09-22、UI 設計 2026-09-23)。
 //!
-//! 線を選んで「線から面」を押すだけで、端点のつながりから閉じた輪を全部見つけて
+//! 線を選んで「面にする」を押すだけで、端点のつながりから閉じた輪を全部見つけて
 //! 面にする(V2LoopFacesTool)。端が離れていれば黙って寄せず、どこが何 mm 離れて
-//! いるかを言い、Enter で寄せてから作る・Esc でやめるを人が選ぶ。元の線は残す。
-//! 作る・寄せるはまとめて 1 回の取り消しで戻る。
+//! いるかを言い、Enter で寄せてから作る・[そのまま]で寄せない・Esc でやめるを人が選ぶ。
+//! 線の端が別の線の途中に乗っていれば(T 字)、Enter のときにその線を分けてから作る。
+//! 棚の輪の表で、作らない輪を外せる。元の線は残す。作る・寄せる・分けるはまとめて 1 回の取り消しで戻る。
 //!
 //! 選ぶのは実際に画面へ引く道(ClickAt / HoverAt)だけ。
 
@@ -139,7 +140,7 @@ void SelectAllWires(V2MainWindow& window)
     SelectAllWires(window);
     window.RunCommand("surface.from_lines");
     auto& tool = window.LoopFacesTool();
-    if (!Explain("線から面の道具が構える", tool.Active())
+    if (!Explain("面にするの道具が構える", tool.Active())
         || !Explain("計画が出る", tool.Plan().has_value())) {
         return false;
     }
@@ -148,9 +149,10 @@ void SelectAllWires(V2MainWindow& window)
             && plan.faces.front().method == LoopFaceMethod::Planar
             && plan.faces.front().selections.size() == 3)
         || !Explain("ずれは無い", plan.gaps.empty())
-        || !Explain((std::string("一番下の一行に「線から面」が出る(")
+        || !Explain((std::string("一番下の一行に「面にする」が出る(")
                         + window.ToolFooterTextJa().toStdString() + ")").c_str(),
-            window.ToolFooterTextJa().contains(QStringLiteral("線から面")))) {
+            window.ToolFooterTextJa().contains(QStringLiteral("面にする")))
+        || !Explain("棚の輪の表に 1 行", tool.Dock() != nullptr && tool.Dock()->FaceRowCount() == 1)) {
         return false;
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
@@ -197,7 +199,7 @@ void SelectAllWires(V2MainWindow& window)
     SelectAllWires(window);
     window.RunCommand("surface.from_lines");
     auto& tool = window.LoopFacesTool();
-    if (!Explain("線から面の道具が構える", tool.Active())
+    if (!Explain("面にするの道具が構える", tool.Active())
         || !Explain("計画が出る", tool.Plan().has_value())) {
         return false;
     }
@@ -205,9 +207,12 @@ void SelectAllWires(V2MainWindow& window)
     if (!Explain("ずれが1つだけ見つかる", plan.gaps.size() == 1)
         || !Explain("直線どうしなので寄せられる", plan.gaps.front().movable)
         || !Explain("輪はまだ無い(閉じていない)", plan.faces.empty())
-        || !Explain((std::string("状態行に「離れています」が出る(")
+        || !Explain((std::string("状態行に「離れて」が出る(")
                         + window.StatusText().toStdString() + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("離れています")))) {
+            window.StatusText().contains(QStringLiteral("離れて")))
+        || !Explain("棚のずれの行に mm の数が出る", tool.Dock() != nullptr
+            && tool.Dock()->GapRowCount() == 1
+            && tool.Dock()->GapRowTextJa(0).contains(QStringLiteral("mm")))) {
         return false;
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
@@ -248,7 +253,7 @@ void SelectAllWires(V2MainWindow& window)
     }
     SelectAllWires(window);
     window.RunCommand("surface.from_lines");
-    if (!Explain("線から面の道具が構える", window.LoopFacesTool().Active())) {
+    if (!Explain("面にするの道具が構える", window.LoopFacesTool().Active())) {
         return false;
     }
     const std::uint64_t revision = window.Session().GetDocument().Revision();
@@ -263,17 +268,136 @@ void SelectAllWires(V2MainWindow& window)
     return true;
 }
 
+
+//! HP-LF-04。四角の底辺の途中から上辺の途中へ線を 1 本。端が別の線の途中に乗る(T 字)。
+//! 系が底辺と上辺をそこで分け、輪を 2 つ見つける。Enter で分けてから 2 枚作る。
+//! 分けた線は 2 本ずつになるが形は変わらず、1 回の取り消しで線も面も戻る。
+[[nodiscard]] bool CaseLoopFacesSplitsTJunction(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId bottom = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
+    const EntityId right = DrawLineAtByHand(window, 0.70, 0.30, 0.70, 0.70);
+    const EntityId top = DrawLineAtByHand(window, 0.70, 0.70, 0.30, 0.70);
+    const EntityId left = DrawLineAtByHand(window, 0.30, 0.70, 0.30, 0.30);
+    const EntityId middle = DrawLineAtByHand(window, 0.50, 0.30, 0.50, 0.70);
+    if (!Explain("四角と、底辺の途中から上辺の途中への線を手で引ける",
+            !bottom.IsNil() && !right.IsNil() && !top.IsNil() && !left.IsNil()
+                && !middle.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    auto& tool = window.LoopFacesTool();
+    if (!Explain("面にするの道具が構える", tool.Active())
+        || !Explain("計画が出る", tool.Plan().has_value())) {
+        return false;
+    }
+    const auto& plan = *tool.Plan();
+    if (!Explain((std::string("T 字が 2 つ(底辺と上辺)見つかる(実際 ")
+                    + std::to_string(plan.splits.size()) + ")").c_str(), plan.splits.size() == 2)
+        || !Explain((std::string("輪が 2 つ、どちらも平面(実際 ")
+                        + std::to_string(plan.faces.size()) + ")").c_str(),
+            plan.faces.size() == 2 && plan.faces[0].method == LoopFaceMethod::Planar
+                && plan.faces[1].method == LoopFaceMethod::Planar)
+        || !Explain("ずれは無い", plan.gaps.empty())
+        || !Explain("棚に T 字の一文が出る", tool.Dock() != nullptr
+            && tool.Dock()->SplitTextJa().contains(QStringLiteral("途中に乗って")))) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("Enterで分けてから作れる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("作ると道具は構えを解く", !window.LoopFacesTool().Active())
+        || !Explain("分けた 2 本が 2 本ずつになる(5 → 7 本)",
+            CountOfKind(window, EntityKind::Wire) == wiresBefore + 2)
+        || !Explain("形状ガイドが 2 枚増える",
+            CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 2)
+        || !Explain((std::string("状態行に「作りました」が出る(")
+                        + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("作りました")))) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで線の本数も形状ガイドも元へ戻る",
+        CountOfKind(window, EntityKind::Wire) == wiresBefore
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
+}
+
+//! HP-LF-05。棚の輪の表: ひし形と対角線(輪 2 つ)。2 つ目を「作らない」にすると Enter で 1 枚だけ。
+//! ずれの [そのまま] は寄せない(HP-LF-02 の形で、Enter しても面は作らず文書も変わらない)。
+[[nodiscard]] bool CaseLoopFacesDockChoices(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId a = DrawLineAtByHand(window, 0.30, 0.50, 0.50, 0.30);
+    const EntityId b = DrawLineAtByHand(window, 0.50, 0.30, 0.70, 0.50);
+    const EntityId c = DrawLineAtByHand(window, 0.70, 0.50, 0.50, 0.70);
+    const EntityId d = DrawLineAtByHand(window, 0.50, 0.70, 0.30, 0.50);
+    const EntityId diagonal = DrawLineAtByHand(window, 0.50, 0.30, 0.50, 0.70);
+    if (!Explain("ひし形と対角線を手で引ける",
+            !a.IsNil() && !b.IsNil() && !c.IsNil() && !d.IsNil() && !diagonal.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    auto& tool = window.LoopFacesTool();
+    if (!Explain("面にするの道具が構える", tool.Active() && tool.Plan().has_value())
+        || !Explain("輪が 2 つ(対角線を挟む三角 2 つ)", tool.Plan()->faces.size() == 2)
+        || !Explain("棚の輪の表に 2 行", tool.Dock() != nullptr && tool.Dock()->FaceRowCount() == 2)
+        || !Explain("2 つ目の輪を「作らない」にできる", tool.Dock()->ToggleMake(1))
+        || !Explain("1 つ目の作り方を境界面に変えられる", tool.Dock()->ChooseMethod(0, 1)
+            && tool.MethodOf(0) == LoopFaceMethod::BoundaryFill)
+        || !Explain("平面に戻せる", tool.Dock()->ChooseMethod(0, 0)
+            && tool.MethodOf(0) == LoopFaceMethod::Planar)) {
+        return false;
+    }
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("Enterで作れる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("外した輪は作らないので 1 枚だけ増える",
+            CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    // ずれの [そのまま]。
+    window.RunCommand("file.new");
+    const EntityId first = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
+    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.50, 0.70);
+    const EntityId third = DrawLineAtByHand(window, 0.52, 0.70, 0.30, 0.30);
+    if (!Explain("端をずらした 3 本を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    auto& gapTool = window.LoopFacesTool();
+    if (!Explain("ずれが 1 つ見つかる", gapTool.Active() && gapTool.Plan().has_value()
+            && gapTool.Plan()->gaps.size() == 1)
+        || !Explain("[そのまま] を押せる", gapTool.Dock() != nullptr && gapTool.Dock()->ClickLeaveGap(0))) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    return Explain("Enter しても寄せず、輪が無いので面は作らない", window.HandleToolKey(Qt::Key_Return, nullptr))
+        && Explain("道具の構えが解ける", !window.LoopFacesTool().Active())
+        && Explain("文書の版は変わらない(寄せていない)",
+            window.Session().GetDocument().Revision() == revision)
+        && Explain((std::string("状態行に「作りません」が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("作りません")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
 {
     return {
-        {"HP-LF-01 線から面は閉じた輪を全部見つけて面にし、元の線を残す",
+        {"HP-LF-01 面にするは閉じた輪を全部見つけて面にし、元の線を残す",
             CaseLoopFacesMakesFaceKeepsLines},
-        {"HP-LF-02 線から面はずれを言い、Enterで直線の端を寄せてから作る",
+        {"HP-LF-02 面にするはずれを言い、Enterで直線の端を寄せてから作る",
             CaseLoopFacesReportsGapAndCloses},
-        {"HP-LF-03 線から面はEscで何も変えない",
+        {"HP-LF-03 面にするはEscで何も変えない",
             CaseLoopFacesEscapeChangesNothing},
+        {"HP-LF-04 面にするはT字で線を分けてから輪を全部作り、1回の取り消しで戻る",
+            CaseLoopFacesSplitsTJunction},
+        {"HP-LF-05 面にするの棚で輪を外す・作り方を変える・ずれをそのままにできる",
+            CaseLoopFacesDockChoices},
     };
 }
 

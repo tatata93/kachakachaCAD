@@ -57,6 +57,24 @@ namespace {
 
 } // namespace
 
+//! 自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割・面にする)は 1 つだけ構える。
+//! 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
+void V2MainWindow::EndOwnedToolsBut(const void* keep)
+{
+    if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
+        solidTool_->End();
+    }
+    if (edgeFinishTool_ != nullptr && edgeFinishTool_.get() != keep && edgeFinishTool_->Active()) {
+        edgeFinishTool_->End();
+    }
+    if (shellSplitTool_ != nullptr && shellSplitTool_.get() != keep && shellSplitTool_->Active()) {
+        shellSplitTool_->End();
+    }
+    if (loopFaces_ != nullptr && loopFaces_.get() != keep && loopFaces_->Active()) {
+        loopFaces_->Clear();
+    }
+}
+
 //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの。
 //! ここで引き受けたら真。構えて待つ道(ArmCommand)は通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
@@ -64,14 +82,6 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand();
         RunGuideCommand(id);
-        return true;
-    }
-    // 線から面。線が選ばれていれば、輪を探して下見 → Enter で作る(V2LoopFacesTool)。
-    // 選んでいなければ、構えて待つ道(ArmCommand)へ通す。
-    QString reason;
-    if (id == "surface.from_lines" && CommandEnabled(id, &reason)) {
-        ClearPendingCommand();
-        loopFaces_->Start();
         return true;
     }
     // 近似も道具から始める。何も選んでいなくても棚が出て、3D で対象を押せる。
@@ -93,19 +103,16 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         RunThickenTool();
         return true;
     }
-    // 自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割)は 1 つだけ構える。
-    // 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
-    const auto endOwnedToolsBut = [this](const void* keep) {
-        if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
-            solidTool_->End();
-        }
-        if (edgeFinishTool_ != nullptr && edgeFinishTool_.get() != keep && edgeFinishTool_->Active()) {
-            edgeFinishTool_->End();
-        }
-        if (shellSplitTool_ != nullptr && shellSplitTool_.get() != keep && shellSplitTool_->Active()) {
-            shellSplitTool_->End();
-        }
-    };
+    const auto endOwnedToolsBut = [this](const void* keep) { EndOwnedToolsBut(keep); };
+    // 線から面。線が選ばれていれば、輪を探して下見 → Enter で作る(V2LoopFacesTool)。
+    // 選んでいなければ、構えて待つ道(ArmCommand)へ通す。
+    QString reason;
+    if (id == "surface.from_lines" && CommandEnabled(id, &reason)) {
+        ClearPendingCommand();
+        endOwnedToolsBut(loopFaces_.get());
+        loopFaces_->Start();
+        return true;
+    }
     // 立体を作る(回転体・ロフト立体・スイープ)も道具から始める。何も選んでいなくても棚が出て、
     // 3D で線を押すと種類で欄に入る(P-08/P-09)。構えている間の2度目は確定。
     if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {

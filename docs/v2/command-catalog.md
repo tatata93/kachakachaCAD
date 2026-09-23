@@ -113,7 +113,7 @@ parameter schemaのdiscriminatorにする。
 
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
-| `surface.from_lines` | 線から面 | 選んだ線(端点のつながりから閉じた輪を全部見つける。平面 / 4 辺で平らでない → 四辺面 / それ以外 → 境界面)。端が離れていれば Enter で直線の端を寄せてから作る。元の線は残す | GuideSurface(輪ごとに 1 枚) | AT-GEO-001, AT-GEO-002, AT-GEO-008 |
+| `surface.from_lines` | 面にする | 選んだ線(端点のつながりから閉じた輪を全部見つける。平面 / 4 辺で平らでない → 四辺面 / それ以外 → 境界面 / 輪が無ければロフト)。T 字で線を分ける。端が離れていれば 寄せるか そのまま。輪ごとに作り方を変えられる。元の線は残す。近道 Shift+F | GuideSurface(輪ごとに 1 枚) | AT-GEO-001, AT-GEO-002, AT-GEO-008 |
 | `surface.create` | 面を作る | 選んだ線・面、作り方(推奨あり)、役割スロット、断面順 | GuideSurface | AT-GEO-001から006, AT-GEO-008, AT-UIX-007 |
 | `surface.match` | 面を合わせる | 道具から始める。直す面の縁 → 合わせ先の縁(面の縁の近くを押す)、G0/G1/G2 | GuideSurface(新しい面。元の面は残す) | AT-SRF-005 |
 | `surface.bridge` | 面をつなぐ | 道具から始める。縁 A → 縁 B、両端の G0/G1/G2、張りの強さ | GuideSurface | AT-SRF-006 |

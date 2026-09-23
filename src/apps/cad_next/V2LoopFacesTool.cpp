@@ -42,13 +42,15 @@ namespace {
 
 constexpr const char* kLabelJa = "面にする";
 
+//! 作った面(形状ガイド)の名前。「平面」だけだと作業平面と紛れる(オーナー指摘 2026-09-23)ので、
+//! 「面を作る」と同じく「面」を頭に付け、作り方は括弧で言う。
 [[nodiscard]] std::string MethodLabel(LoopFaceMethod method)
 {
     switch (method) {
-    case LoopFaceMethod::Planar:       return "平面";
-    case LoopFaceMethod::FourEdge:     return "四辺面";
-    case LoopFaceMethod::BoundaryFill: return "境界面";
-    case LoopFaceMethod::Loft:         return "ロフト";
+    case LoopFaceMethod::Planar:       return "面(平面)";
+    case LoopFaceMethod::FourEdge:     return "面(四辺面)";
+    case LoopFaceMethod::BoundaryFill: return "面(境界面)";
+    case LoopFaceMethod::Loft:         return "面(ロフト)";
     }
     return "面";
 }

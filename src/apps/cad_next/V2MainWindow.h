@@ -1,8 +1,6 @@
 #pragma once
 
-//! V2の本体窓(WP-08)。画面は薄く保つ(道具を選ぶ・案内文・一覧と診断・見た目の切替)。
-//! 幾何の判断はすべて core にある(architecture-and-data.md DOC-002)。
-//! AUTOMOC を使っていないので Q_OBJECT は付けない。信号の受け口はラムダで繋ぐ。
+//! V2本体窓(WP-08)。幾何判断はcore(DOC-002)。AUTOMOCなし、信号はラムダで接続。
 
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
@@ -100,6 +98,7 @@ class V2SolidTool;
 class V2EdgeFinishTool;
 class V2ShellSplitTool;
 class V2HoverEditTool;
+class V2GptSurfaceTool;
 class V2LoopFacesTool;
 
 //! 見た目。
@@ -115,6 +114,7 @@ class V2MainWindow final : public QMainWindow {
     friend class V2EdgeFinishTool;        // 辺の丸め・面取り(同じ)
     friend class V2ShellSplitTool;        // シェル・分割(同じ)
     friend class V2HoverEditTool;         // トリム・延長・分割(線の上に置いて押す)
+    friend class V2GptSurfaceTool;
     friend class V2LoopFacesTool;         // 線から面(輪を探して面にする)
 public:
     V2MainWindow();
@@ -878,6 +878,7 @@ private:
     void RunSetAssembly();
     void RunFabricationCreate();
     //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
+    void BeginGptSurface();
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
     //! 自分の棚を持つ道具(立体・辺の丸め面取り・シェル分割・面にする)を、keep 以外やめる。
     void EndOwnedToolsBut(const void* keep);
@@ -1070,6 +1071,7 @@ private:
     std::unique_ptr<V2EdgeFinishTool> edgeFinishTool_;
     std::unique_ptr<V2ShellSplitTool> shellSplitTool_;
     std::unique_ptr<V2HoverEditTool> hoverEdit_;
+    std::unique_ptr<V2GptSurfaceTool> gptSurface_;
     std::unique_ptr<V2LoopFacesTool> loopFaces_;
     //! 自分の棚を持つ道具(立体を作る・辺の丸め面取り)が構えていれば、その棚。無ければ None。
     [[nodiscard]] kachakacha::v2::app::Shelf OwnedToolShelf() const;

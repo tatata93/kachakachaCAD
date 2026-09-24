@@ -6,6 +6,7 @@
 //! 「見やすくしただけ」のつもりが寸法を変えたことになる。
 
 #include "V2MainWindow.h"
+#include "V2GptSurfaceTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
@@ -910,6 +911,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::EdgeFinish:  return edgeFinishTool_ != nullptr ? edgeFinishTool_->Dock() : nullptr;
     case Shelf::ShellSplit:    return shellSplitTool_ != nullptr ? shellSplitTool_->Dock() : nullptr;
     case Shelf::LoopFaces:   return loopFaces_ != nullptr ? loopFaces_->Dock() : nullptr;
+    case Shelf::GptSurface: return gptSurface_ != nullptr ? gptSurface_->Dock() : nullptr;
     case Shelf::None:        break;
     }
     return nullptr;
@@ -918,6 +920,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
 kachakacha::v2::app::Shelf V2MainWindow::OwnedToolShelf() const
 {
     using kachakacha::v2::app::Shelf;
+    if (gptSurface_ != nullptr && gptSurface_->Active()) { return Shelf::GptSurface; }
     if (solidTool_ != nullptr && solidTool_->Active()) {
         return Shelf::Solid;
     }

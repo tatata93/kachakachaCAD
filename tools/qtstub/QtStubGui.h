@@ -261,6 +261,7 @@ public:
     [[nodiscard]] QRect rect() const;
     void fill(const QColor&);
     [[nodiscard]] bool isNull() const;
+    [[nodiscard]] bool save(const QString&, const char* = nullptr, int = -1) const;
     [[nodiscard]] QImage toImage() const;
     static QPixmap fromImage(const QImage&);
     [[nodiscard]] QPixmap scaled(const QSize&, Qt::AspectRatioMode = Qt::IgnoreAspectRatio,

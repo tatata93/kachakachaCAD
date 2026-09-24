@@ -18,6 +18,9 @@
 
 namespace Qt {
 enum ContextMenuPolicy { NoContextMenu, DefaultContextMenu, CustomContextMenu };
+enum TextInteractionFlag { NoTextInteraction = 0, TextSelectableByMouse = 1, TextSelectableByKeyboard = 2,
+    TextBrowserInteraction = 13 };
+using TextInteractionFlags = int;
 
 enum GlobalColor { white, black, transparent, gray, red, blue, green, darkGray, lightGray };
 enum AlignmentFlagValue { AlignLeft = 1, AlignRight = 2, AlignHCenter = 4, AlignTop = 8,
@@ -114,6 +117,8 @@ public:
     [[nodiscard]] QString arg(const QString&, const QString&) const;
     [[nodiscard]] QString arg(const QString&, const QString&, const QString&) const;
     [[nodiscard]] QString arg(int) const;
+    [[nodiscard]] QString arg(unsigned long) const;
+    [[nodiscard]] QString arg(unsigned long long) const;
     [[nodiscard]] QString arg(double, int = 0, char = 'g', int = -1) const;
     [[nodiscard]] QString arg(double, int, char, int, QChar) const;
     QString& append(const QString&);
@@ -131,6 +136,13 @@ public:
     bool operator<(const QString&) const;
 };
 
+class QDir {
+public:
+    [[nodiscard]] static QString tempPath();
+    [[nodiscard]] static QString currentPath();
+    [[nodiscard]] static bool mkpath(const QString&);
+};
+
 class QStringList {
 public:
     QStringList() = default;
@@ -142,6 +154,8 @@ public:
     [[nodiscard]] QString at(int) const;
     [[nodiscard]] QString join(const QString&) const;
     QStringList& operator<<(const QString&);
+    void push_back(const QString&);
+    void append(const QString&);
     [[nodiscard]] const QString* begin() const;
     [[nodiscard]] const QString* end() const;
     QString& operator[](int);

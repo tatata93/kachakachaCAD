@@ -74,6 +74,7 @@ enum class Shelf {
     ShellSplit,
     //! 「面にする」の欄(線から面。輪の表・ずれ・T 字、matrix D-43)。
     LoopFaces,
+    GptSurface,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

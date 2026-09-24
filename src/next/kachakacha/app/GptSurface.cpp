@@ -1,0 +1,185 @@
+#include "kachakacha/app/GptSurface.h"
+#include "kachakacha/app/SceneBuilder.h"
+
+#include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/WireChain.h"
+
+#include <algorithm>
+#include <cmath>
+#include <set>
+
+namespace kachakacha::v2::app {
+namespace {
+using base::MakeError;
+using base::Result;
+using geometry::CurveSegment;
+
+modeling::SnapScene SourceScene(const document::Document& document, modeling::SnapScene scene)
+{
+    // 非表示は作図時の選択だけを制限する。保存した面の依存元は非表示でも必要。
+    auto snapshot = document.Snapshot();
+    for (auto& entity : snapshot.entities) { entity.visibility = domain::Visibility::Visible; }
+    for (auto& group : snapshot.groups) { group.visible = true; }
+    base::DeterministicIdGenerator ids;
+    const auto stored = BuildSceneFromDocument(snapshot, ids);
+    std::set<base::EntityId> present;
+    for (const auto& curve : scene.curves) { present.insert(curve.entityId); }
+    for (const auto& curve : stored.curves) {
+        if (present.count(curve.entityId) == 0) { scene.curves.push_back(curve); }
+    }
+    return scene;
+}
+
+Result<GptSurfaceRequest> Fail(const std::string& reason, const std::string& fix)
+{
+    return Result<GptSurfaceRequest>::Failure(MakeError("GPT-S001", reason, fix));
+}
+
+Result<GptSurfaceCurve> Connected(GptSurfaceCurve curve,
+    const geometry::GeometryTolerance& tolerance)
+{
+    std::vector<geometry::ChainInput> inputs;
+    for (std::size_t index = 0; index < curve.segments.size(); ++index) {
+        std::array<std::uint8_t, 16> bytes{};
+        for (std::size_t byte = 0; byte < sizeof(index); ++byte) {
+            bytes[15 - byte] = static_cast<std::uint8_t>((index + 1) >> (byte * 8));
+        }
+        inputs.push_back({{}, base::SegmentId(base::Uuid(bytes)), curve.segments[index]});
+    }
+    auto chain = geometry::AnalyzeChain(inputs, tolerance);
+    if (!chain.HasValue()) {
+        return Result<GptSurfaceCurve>::Failure(chain.Diagnostics());
+    }
+    curve.segments.clear();
+    curve.closed = chain.Value().order.closed;
+    for (const auto& ordered : chain.Value().order.segments) {
+        const auto found = std::find_if(inputs.begin(), inputs.end(), [&](const auto& input) {
+            return input.segmentId == ordered.segmentId;
+        });
+        if (ordered.reversed) {
+            const auto reversed = geometry::ReverseCurve(found->segment);
+            if (!reversed.HasValue()) { return Result<GptSurfaceCurve>::Failure(reversed.Diagnostics()); }
+            curve.segments.push_back(reversed.Value());
+        } else {
+            curve.segments.push_back(found->segment);
+        }
+    }
+    const auto anchor = std::find_if(chain.Value().order.segments.begin(), chain.Value().order.segments.end(),
+        [&](const auto& ordered) { return ordered.segmentId == inputs.front().segmentId; });
+    if (anchor->reversed) {
+        std::reverse(curve.segments.begin(), curve.segments.end());
+        for (auto& segment : curve.segments) {
+            const auto reversed = geometry::ReverseCurve(segment);
+            if (!reversed.HasValue()) { return Result<GptSurfaceCurve>::Failure(reversed.Diagnostics()); }
+            segment = reversed.Value();
+        }
+    }
+    const auto intersections = geometry::FindSelfIntersections(curve.segments, curve.closed, tolerance);
+    if (!intersections.HasValue()) { return Result<GptSurfaceCurve>::Failure(intersections.Diagnostics()); }
+    if (!intersections.Value().empty()) {
+        return Result<GptSurfaceCurve>::Failure(MakeError("GPT-S002",
+            curve.label + "が自己交差しています。", "交差しない外周または断面を選び直してください。"));
+    }
+    return Result<GptSurfaceCurve>::Success(std::move(curve));
+}
+} // namespace
+
+Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
+    const geometry::GeometryTolerance& tolerance)
+{
+    if (!std::isfinite(request.maximumDeviationMm) || request.maximumDeviationMm <= 0.0) {
+        return Fail("許容偏差が正の有限値ではありません。", "許容偏差をmmで指定してください。");
+    }
+    GptSurfaceCurve boundary;
+    boundary.label = "外周";
+    std::vector<GptSurfaceCurve> checked;
+    for (auto curve : request.curves) {
+        const bool allowed = request.loft ? curve.role == kGptSectionRole
+            : curve.role == kGptBoundaryRole || curve.role == kGptInteriorRole;
+        if (!allowed || curve.segments.empty()) {
+            return Fail(curve.label + "の役割または線が不正です。", "作り方に合う役割を指定してください。");
+        }
+        if (!request.loft && curve.role == kGptBoundaryRole) {
+            boundary.segments.insert(boundary.segments.end(), curve.segments.begin(), curve.segments.end());
+            continue;
+        }
+        const auto connected = Connected(curve, tolerance);
+        if (!connected.HasValue()) { return Result<GptSurfaceRequest>::Failure(connected.Diagnostics()); }
+        checked.push_back(connected.Value());
+    }
+    if (request.loft) {
+        if (checked.size() < 2) { return Fail("断面が2つ以上必要です。", "線を選び、断面を追加してください。"); }
+        for (const auto& curve : checked) {
+            if (curve.closed != checked.front().closed) {
+                return Fail("開いた断面と閉じた断面が混ざっています。", "全断面の開閉をそろえてください。");
+            }
+            if (curve.segments.size() != checked.front().segments.size()) {
+                return Fail("断面ごとの辺数が異なります。", "対応する辺の数をそろえてください。自動分割はしません。");
+            }
+        }
+    } else {
+        if (boundary.segments.empty()) { return Fail("外周がありません。", "囲みの線を外周へ追加してください。"); }
+        const auto connected = Connected(boundary, tolerance);
+        if (!connected.HasValue()) { return Result<GptSurfaceRequest>::Failure(connected.Diagnostics()); }
+        if (!connected.Value().closed) { return Fail("外周が閉じていません。", "端点を接続してください。自動で隙間は埋めません。"); }
+        checked.insert(checked.begin(), connected.Value());
+    }
+    request.curves = std::move(checked);
+    return Result<GptSurfaceRequest>::Success(std::move(request));
+}
+
+Result<GptSurfaceRequest> ResolveGptSurface(const document::Document& document,
+    const modeling::SnapScene& scene, const domain::CreateGuideSurfaceDefinition& definition)
+{
+    if (!definition.gptBuilder || (definition.method != kGptBoundaryMethod && definition.method != kGptSectionsMethod)
+        || definition.chains.size() != definition.roles.size()) {
+        return Fail("GPT版の作り方または役割が不正です。", "外周または断面の入力を指定し直してください。");
+    }
+    if (definition.offsetDistanceMm != 0.0 || definition.revolveAngleRad != 0.0
+        || definition.fourEdgeStyle != 0 || !definition.continuity.empty() || !definition.supportSurfaces.empty()) {
+        return Fail("GPT版では扱えない追加条件があります。", "オフセット・回転・支持面・連続条件を指定せず作成してください。");
+    }
+    GptSurfaceRequest request;
+    const auto sources = SourceScene(document, scene);
+    request.loft = definition.method == kGptSectionsMethod;
+    request.maximumDeviationMm = definition.gptToleranceMm;
+    std::set<std::pair<base::EntityId, base::SegmentId>> used;
+    for (std::size_t row = 0; row < definition.chains.size(); ++row) {
+        const auto& chain = definition.chains[row];
+        GptSurfaceCurve curve;
+        curve.role = definition.roles[row];
+        curve.label = "入力 " + std::to_string(row + 1);
+        if (!chain.reversed.empty() && chain.reversed.size() != chain.segments.size()) {
+            return Fail("線の向きの情報が不正です。", "該当する入力を追加し直してください。");
+        }
+        for (std::size_t refIndex = 0; refIndex < chain.segments.size(); ++refIndex) {
+            const auto& ref = chain.segments[refIndex];
+            const auto* entity = document.FindEntity(ref.entityId);
+            if (entity == nullptr || entity->kind != domain::EntityKind::Wire
+                || ref.startParameter != 0.0 || ref.endParameter != 1.0) {
+                return Fail(curve.label + "の元ワイヤーを解決できません。", "ワイヤー全体を選び直してください。");
+            }
+            std::vector<CurveSegment> segments;
+            for (const auto& source : sources.curves) {
+                if (source.entityId != ref.entityId || (!ref.segmentId.IsNil() && source.segmentId != ref.segmentId)) { continue; }
+                if (!used.insert({source.entityId, source.segmentId}).second) {
+                    return Fail(entity->displayName + "が重複しています。", "同じ線を複数の役割へ入れないでください。");
+                }
+                segments.push_back(source.segment);
+            }
+            if (segments.empty()) { return Fail(entity->displayName + "の曲線がありません。", "元ワイヤーのエラーを直してください。"); }
+            if (!chain.reversed.empty() && chain.reversed[refIndex]) {
+                std::reverse(segments.begin(), segments.end());
+                for (auto& segment : segments) {
+                    const auto reverse = geometry::ReverseCurve(segment);
+                    if (!reverse.HasValue()) { return Result<GptSurfaceRequest>::Failure(reverse.Diagnostics()); }
+                    segment = reverse.Value();
+                }
+            }
+            curve.segments.insert(curve.segments.end(), segments.begin(), segments.end());
+        }
+        request.curves.push_back(std::move(curve));
+    }
+    return ValidateGptSurface(std::move(request), document.Snapshot().settings.tolerance);
+}
+} // namespace kachakacha::v2::app

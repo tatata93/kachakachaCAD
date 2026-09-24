@@ -32,6 +32,7 @@ public:
     virtual bool eventFilter(QObject*, QEvent*);
     virtual bool event(QEvent*);
     template<class T> [[nodiscard]] QList<T> findChildren() const { return QList<T>{}; }
+    template<class T> [[nodiscard]] T findChild(const QString& = QString()) const { return nullptr; }
     bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}
@@ -140,6 +141,7 @@ public:
     QGridLayout() = default;
     explicit QGridLayout(QWidget*) {}
     void addWidget(QWidget*, int, int);
+    void addWidget(QWidget*, int, int, int, int);
     void setHorizontalSpacing(int);
     void setVerticalSpacing(int);
 };
@@ -244,6 +246,7 @@ public:
     [[nodiscard]] QString text() const;
     void setAlignment(Qt::Alignment);
     void setWordWrap(bool);
+    void setTextInteractionFlags(Qt::TextInteractionFlags);
 };
 
 class QListWidgetItem {
@@ -308,7 +311,9 @@ public:
     [[nodiscard]] QFont font(int) const;
     QTreeWidgetItem() = default;
     explicit QTreeWidgetItem(class QTreeWidget*) {}
+    QTreeWidgetItem(class QTreeWidget*, const QStringList&) {}
     explicit QTreeWidgetItem(QTreeWidgetItem*) {}
+    QTreeWidgetItem(QTreeWidgetItem*, const QStringList&) {}
     void setText(int, const QString&);
     [[nodiscard]] QString text(int) const;
     void setForeground(int, const QColor&);
@@ -489,6 +494,7 @@ public:
     explicit QComboBox(QWidget*) {}
     void addItem(const QString&);
     void addItem(const QString&, const QVariant&);
+    void addItems(const QStringList&);
     void clear();
     [[nodiscard]] int count() const;
     [[nodiscard]] int currentIndex() const;

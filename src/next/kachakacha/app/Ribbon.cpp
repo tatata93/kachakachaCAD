@@ -81,7 +81,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
         {"surface", "面作成",
             // 2026-09-22: 「ガイド付きロフト」は「ロフト面」へ統合(ガイド 0〜任意)。
             // 互換の入口は面の棚の「その他」に残す。空いた場所へ「四辺面」。
-            {Tool("面にする", "surface.from_lines"), Surface("平面", kPlanar), Surface("ルールド面", kRuled),
+            {Tool("GPT版", "surface.gpt_create"), Tool("面にする", "surface.from_lines"), Surface("平面", kPlanar), Surface("ルールド面", kRuled),
                 Surface("ロフト面", kLoft),
                 Surface("境界面", kBoundaryFill), Surface("四辺面", kFourEdgePatch),
                 Surface("曲線網", kGordon), Surface("離した面", kOffsetGuide, true),

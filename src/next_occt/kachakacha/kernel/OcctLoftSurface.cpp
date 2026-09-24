@@ -377,9 +377,13 @@ template<class Function>
             joined = piece;
             continue;
         }
+        // Add の最後の引数(MinM)を次数にして、つなぎ目の節を **消させない**。既定(0)だと
+        // つなぎ目の節を許容(0.01 mm)の中で外そうとして折れを丸め、辺が線から 0.016 mm
+        // 外れて GEO-G008 で断られた(オーナーの atama.kcd2、HP-LF-10、2026-09-24)。
         GeomConvert_CompCurveToBSplineCurve concat(joined);
+        const int keepJoin = std::max(joined->Degree(), piece->Degree());
         if (!concat.Add(piece, std::max(tolerance.interactiveJoinMm, Tol3d(tolerance)),
-                true)) {
+                true, true, keepJoin)) {
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "四辺面の辺の曲線をつなげませんでした。", "辺の中の線どうしが離れています。"));
         }
@@ -489,7 +493,9 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
         }
         const std::size_t next = (best + 1) % curves.size();
         GeomConvert_CompCurveToBSplineCurve concat(curves[best]);
-        if (!concat.Add(curves[next], std::max(tolerance.interactiveJoinMm, Tol3d(tolerance)), true)) {
+        const int keepJoin = std::max(curves[best]->Degree(), curves[next]->Degree());   // 節を消さない
+        if (!concat.Add(curves[next], std::max(tolerance.interactiveJoinMm, Tol3d(tolerance)), true,
+                true, keepJoin)) {
             return {};
         }
         curves[best] = concat.BSplineCurve();

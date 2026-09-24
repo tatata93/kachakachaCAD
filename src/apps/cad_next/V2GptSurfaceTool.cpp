@@ -10,6 +10,8 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QComboBox>
+#include <QCheckBox>
+#include <QColor>
 #include <QDockWidget>
 #include <QObject>
 #include <QString>
@@ -44,7 +46,7 @@ V2GptSurfaceTool::~V2GptSurfaceTool()
 
 void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
 {
-    auto* hint = new QLabel(QStringLiteral("線をクリックして追加 → プレビュー → 確定"), dock_->widget());
+    auto* hint = new QLabel(QStringLiteral("線をまとめて選ぶ → 自動判定 → プレビュー。番号と矢印で確認。登録済みの線を押すと修正する行を選べます。"), dock_->widget());
     hint->setWordWrap(true);
     layout->addWidget(hint);
     method_ = new QComboBox(dock_->widget());
@@ -56,10 +58,12 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
     role_->addItems({QStringLiteral("外周へ追加"), QStringLiteral("内側の通る線へ追加"),
         QStringLiteral("新しい断面として追加"), QStringLiteral("一覧の選択行へ追加")});
     layout->addWidget(role_);
+    BuildAssist(layout);
     list_ = new QTreeWidget(dock_->widget());
     list_->setObjectName(QStringLiteral("gptSurfaceInputs"));
     list_->setHeaderLabels({QStringLiteral("役割・順番"), QStringLiteral("ワイヤー")});
     list_->setMinimumHeight(130);
+    QObject::connect(list_, &QTreeWidget::itemSelectionChanged, dock_, [this] { RefreshMarks(); });
     layout->addWidget(list_);
     tolerance_ = new QDoubleSpinBox(dock_->widget());
     tolerance_->setObjectName(QStringLiteral("gptSurfaceTolerance"));
@@ -74,6 +78,9 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
     status_->setWordWrap(true);
     status_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(status_);
+    QObject::connect(role_, &QComboBox::currentIndexChanged, dock_, [this](int index) {
+        if (active_ && definition_.method == app::kGptBoundaryMethod && index != 0) { automatic_->setChecked(false); }
+    });
     QObject::connect(method_, &QComboBox::currentIndexChanged, dock_, [this](int index) { ChangeMode(index); });
     QObject::connect(tolerance_, &QDoubleSpinBox::valueChanged, dock_, [this](double value) {
         definition_.gptToleranceMm = value;
@@ -117,6 +124,8 @@ void V2GptSurfaceTool::Begin()
     definition_.gptBuilder = true;
     definition_.method = app::kGptBoundaryMethod;
     definition_.gptToleranceMm = tolerance_->value();
+    candidate_ = 0;
+    automatic_->setChecked(true);
     active_ = true;
     method_->setCurrentIndex(0);
     role_->setCurrentIndex(0);
@@ -132,6 +141,8 @@ void V2GptSurfaceTool::End()
     if (!active_) { return; }
     active_ = false;
     Invalidate();
+    window_.viewport_->HideToolRoleLabels();
+    window_.viewport_->SetRoleColors({});
     window_.viewport_->SetToolPickActive(false);
     window_.viewport_->SetToolPickToggle(false);
     window_.ShowToolFooter(QString());
@@ -147,6 +158,9 @@ void V2GptSurfaceTool::ChangeMode(int mode)
         }
     }
     role_->setCurrentIndex(mode == 0 ? 0 : 2);
+    automatic_->setEnabled(mode == 0);
+    nextBoundary_->setEnabled(false);
+    candidate_ = 0;
     Invalidate();
     RefreshList();
 }
@@ -189,14 +203,26 @@ void V2GptSurfaceTool::Add(const std::vector<base::EntityId>& ids, bool grouped)
         } else { next.chains.push_back(added); next.roles.push_back(role); }
     }
     definition_ = std::move(next);
+    candidate_ = 0;
     Invalidate();
     RefreshList();
+    AutoBoundary();
 }
 
 void V2GptSurfaceTool::HandleSelectionChanged()
 {
     if (!active_) { return; }
     if (const auto picked = window_.viewport_->TakeLastToolPick(); picked.has_value()) {
+        for (std::size_t row = 0; row < definition_.chains.size(); ++row) {
+            for (const auto& ref : definition_.chains[row].segments) {
+                if (ref.entityId == *picked) {
+                    list_->setCurrentItem(list_->topLevelItem(static_cast<int>(row)));
+                    RefreshMarks();
+                    status_->setText(QStringLiteral("%1 行目を選択しました。黄色の線と矢印を確認して役割・向きを変更できます。").arg(row + 1));
+                    return;
+                }
+            }
+        }
         Add({*picked}, false);
     }
 }
@@ -205,6 +231,7 @@ void V2GptSurfaceTool::EditRow(int operation)
 {
     const int index = list_->indexOfTopLevelItem(list_->currentItem());
     if (index < 0) { status_->setText(QStringLiteral("一覧の行を選んでください。")); return; }
+    automatic_->setChecked(false);
     const auto at = static_cast<std::size_t>(index);
     int selectedAfter = index;
     if (operation == 0) {
@@ -251,16 +278,21 @@ void V2GptSurfaceTool::RefreshList()
         auto* item = new QTreeWidgetItem(list_, {QStringLiteral("%1 %2%3").arg(row + 1).arg(label)
             .arg(reversed ? QStringLiteral(" ←") : QStringLiteral(" →")), names.join(QStringLiteral(" + "))});
         item->setToolTip(1, names.join(QStringLiteral(" + ")));
+        item->setForeground(0, role == app::kGptBoundaryRole ? QColor(160, 70, 210)
+            : role == app::kGptInteriorRole ? QColor(20, 135, 85) : QColor(190, 100, 10));
     }
     if (selectedRow >= 0 && list_->topLevelItemCount() > 0) {
         list_->setCurrentItem(list_->topLevelItem(std::min(selectedRow, list_->topLevelItemCount() - 1)));
     }
+    RefreshMarks();
 }
 
 void V2GptSurfaceTool::Invalidate()
 {
     if (preview_.has_value()) { kernel::ReleaseShape(preview_->handle); preview_.reset(); }
     confirm_->setEnabled(false);
+    nextBoundary_->setEnabled(false);
+    autoSummary_.clear();
     window_.viewport_->HideToolPreview();
     window_.viewport_->SetToolPreviewFaces({});
     status_->setText(QStringLiteral("入力 %1 行。プレビューで接続と全入力線からのずれを確認します。")
@@ -270,9 +302,15 @@ void V2GptSurfaceTool::Invalidate()
 void V2GptSurfaceTool::Preview()
 {
     Invalidate();
+    if (!AutoBoundary()) { return; }
     const auto& document = window_.session_->GetDocument();
     const auto request = app::ResolveGptSurface(document, window_.session_->Scene(), definition_);
     if (!request.HasValue()) {
+        if (request.FirstDiagnostic().code == "GEO-W002") {
+            status_->setText(QStringLiteral("外周に分岐があります。「外周と内部線を自動で判別」をオンにするか、"
+                "画面の番号の線を押して、内側の線の役割を「通る線」へ変更してください。"));
+            return;
+        }
         status_->setText(QString::fromStdString(request.FirstSummaryJa() + "\n" + request.FirstDiagnostic().detailsJa)); return;
     }
     const auto made = kernel::BuildGptSurface(request.Value(), document.Snapshot().settings.tolerance);
@@ -298,6 +336,8 @@ void V2GptSurfaceTool::ShowResult(const modeling::GuideSurfaceResult& result)
         .arg(definition_.method == app::kGptBoundaryMethod ? QStringLiteral("外周と通る線から張った面（近似）")
             : QStringLiteral("一覧順の断面をつないだ面"))
         .arg(result.maximumDeviationMm, 0, 'g', 7).arg(result.rmsDeviationMm, 0, 'g', 7).arg(result.areaMm2, 0, 'g', 7));
+    if (!autoSummary_.isEmpty()) { status_->setText(autoSummary_ + QStringLiteral("\n") + status_->text()); }
+    RefreshMarks();
     confirm_->setEnabled(true);
 }
 

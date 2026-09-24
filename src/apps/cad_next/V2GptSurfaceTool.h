@@ -7,6 +7,7 @@
 
 class V2MainWindow;
 class QComboBox;
+class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
@@ -32,6 +33,9 @@ private:
     void ChangeMode(int mode);
     void EditRow(int operation);
     void RefreshList();
+    void BuildAssist(QVBoxLayout* layout);
+    bool AutoBoundary();
+    void RefreshMarks();
     void Invalidate();
     void Preview();
     void Confirm();
@@ -42,6 +46,10 @@ private:
     QDockWidget* dock_ = nullptr;
     QComboBox* method_ = nullptr;
     QComboBox* role_ = nullptr;
+    QCheckBox* automatic_ = nullptr;
+    QPushButton* nextBoundary_ = nullptr;
+    std::size_t candidate_ = 0;
+    QString autoSummary_;
     QDoubleSpinBox* tolerance_ = nullptr;
     QTreeWidget* list_ = nullptr;
     QLabel* status_ = nullptr;

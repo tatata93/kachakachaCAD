@@ -213,6 +213,23 @@ void V2Viewport::DrawToolRoleLabels(QPainter& painter) const
         }
         // 線の真上に置くと線に重なって読めない。少し上へ逃がす。
         const QPointF at(screen->x() + 6.0, screen->y() - 6.0);
+        if (label.arrowToward.has_value()) {
+            const auto toward = ToScreen(*label.arrowToward);
+            if (toward.has_value()) {
+                const double dx = toward->x() - screen->x(), dy = toward->y() - screen->y();
+                const double length = std::sqrt(dx * dx + dy * dy);
+                painter.setPen(QPen(label.color, label.emphasized ? 4.0 : 2.0));
+                painter.drawEllipse(*screen, label.emphasized ? 6.0 : 3.0, label.emphasized ? 6.0 : 3.0);
+                if (length > 0.01) {
+                    const QPointF tip(screen->x() + dx / length * 28.0, screen->y() + dy / length * 28.0);
+                    painter.drawLine(*screen, tip);
+                    painter.drawLine(tip, QPointF(tip.x() - dx / length * 9.0 + dy / length * 5.0,
+                        tip.y() - dy / length * 9.0 - dx / length * 5.0));
+                    painter.drawLine(tip, QPointF(tip.x() - dx / length * 9.0 - dy / length * 5.0,
+                        tip.y() - dy / length * 9.0 + dx / length * 5.0));
+                }
+            }
+        }
         painter.setPen(QPen(QColor(255, 255, 255, 235), 3.0));
         painter.drawText(at, label.text);
         painter.setPen(QPen(label.color.isValid() ? label.color : palette_.selected, 1.0));

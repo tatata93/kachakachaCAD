@@ -251,6 +251,8 @@ public:
         QString text;
         //! 役割の色(面を作るときの色分けと同じ)。無効なら選択の色。
         QColor color;
+        std::optional<kachakacha::v2::geometry::Vector3> arrowToward;
+        bool emphasized = false;
     };
     void ShowToolRoleLabels(std::vector<PlacedRoleLabel> labels);
     void HideToolRoleLabels();

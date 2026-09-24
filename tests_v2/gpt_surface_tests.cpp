@@ -1,4 +1,6 @@
 #include "kachakacha/app/GptSurface.h"
+#include "kachakacha/app/GptSurfaceAuto.h"
+#include <algorithm>
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctGptSurface.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -202,5 +204,80 @@ KACHA_V2_TEST(gpt_surface, missing_kernel_is_explicit)
     Require(made.FirstDiagnostic().code == "GPT-S006", "missing kernel diagnostic");
 }
 #endif
+
+
+KACHA_V2_TEST(gpt_surface, automatic_boundary_separates_branch_and_keeps_every_reference)
+{
+    base::DeterministicIdGenerator ids{913};
+    modeling::SnapScene scene;
+    domain::CreateGuideSurfaceDefinition input;
+    input.gptBuilder = true;
+    input.method = app::kGptBoundaryMethod;
+    auto curves = Rectangle().curves.front().segments;
+    curves.push_back(geometry::CurveSegment::MakeCubicBezier(
+        {{0,0,0}, {12,6,4}, {28,14,4}, {40,20,0}}).Value());
+    for (const auto& curve : curves) {
+        const auto entity = ids.NextTyped<base::IdKind::Entity>();
+        const auto segment = ids.NextTyped<base::IdKind::Segment>();
+        scene.curves.push_back({entity, segment, curve});
+        input.chains.push_back({{{entity}}, {false}});
+        input.roles.push_back(app::kGptBoundaryRole);
+    }
+    const auto chosen = app::AutoGptSurfaceBoundary(scene, input, {});
+    Require(chosen.HasValue(), chosen.FirstSummaryJa());
+    Require(chosen.Value().boundaryCount == 4, "largest outer loop chosen instead of the diagonal branches");
+    Require(chosen.Value().candidateCount == 3, "all three loops offered");
+    const auto& result = chosen.Value().definition;
+    Require(result.chains.size() == 5 && result.roles.back() == app::kGptInteriorRole, "interior is retained");
+    Require(result.chains.back().segments.front().entityId == scene.curves.back().entityId, "correct interior UUID");
+    auto shuffled = input;
+    std::reverse(shuffled.chains.begin(), shuffled.chains.end());
+    const auto repeat = app::AutoGptSurfaceBoundary(scene, shuffled, {});
+    Require(repeat.HasValue(), "shuffled input also resolves");
+    for (std::size_t i = 0; i < result.chains.size(); ++i) {
+        Require(result.chains[i].segments.front().entityId == repeat.Value().definition.chains[i].segments.front().entityId,
+            "order independent of selection order");
+    }
+    const auto other = app::AutoGptSurfaceBoundary(scene, input, {}, 1);
+    Require(other.HasValue() && other.Value().boundaryCount == 3, "manual candidate cycling is concrete");
+    Require(other.Value().definition.chains.size() == 5, "alternate never drops inputs");
+    input.chains.push_back(input.chains.front());
+    Require(!app::AutoGptSurfaceBoundary(scene, input, {}).HasValue(), "duplicate input not silently lost");
+#ifdef KACHACAD_V2_WITH_OCCT
+    app::GptSurfaceRequest request;
+    for (std::size_t row = 0; row < result.chains.size(); ++row) {
+        const auto id = result.chains[row].segments.front().entityId;
+        const auto source = std::find_if(scene.curves.begin(), scene.curves.end(), [&](const auto& c) { return c.entityId == id; });
+        request.curves.push_back({{source->segment}, "auto", false, result.roles[row]});
+    }
+    const auto made = kernel::BuildGptSurface(request, {});
+    Require(made.HasValue(), made.FirstSummaryJa());
+    Require(made.Value().maximumDeviationMm <= .01, "raised branch used as an actual surface constraint");
+    kernel::ReleaseShape(made.Value().handle);
+#endif
+}
+
+KACHA_V2_TEST(gpt_surface, automatic_boundary_does_not_close_gaps_or_drop_external_lines)
+{
+    base::DeterministicIdGenerator ids{914};
+    modeling::SnapScene scene;
+    domain::CreateGuideSurfaceDefinition input;
+    auto curves = Rectangle().curves.front().segments;
+    curves.pop_back();
+    for (const auto& curve : curves) {
+        const auto entity = ids.NextTyped<base::IdKind::Entity>();
+        scene.curves.push_back({entity, ids.NextTyped<base::IdKind::Segment>(), curve});
+        input.chains.push_back({{{entity}}, {false}});
+    }
+    Require(!app::AutoGptSurfaceBoundary(scene, input, {}).HasValue(), "missing side is not bridged");
+    const auto entity = ids.NextTyped<base::IdKind::Entity>();
+    scene.curves.push_back({entity, ids.NextTyped<base::IdKind::Segment>(), Rectangle().curves.front().segments.back()});
+    input.chains.push_back({{{entity}}, {false}});
+    const auto outside = ids.NextTyped<base::IdKind::Entity>();
+    scene.curves.push_back({outside, ids.NextTyped<base::IdKind::Segment>(), Line({100,0,0},{110,0,0})});
+    input.chains.push_back({{{outside}}, {false}});
+    const auto result = app::AutoGptSurfaceBoundary(scene, input, {});
+    Require(result.HasValue() && result.Value().definition.chains.size() == 5, "outside input retained for deviation validation");
+}
 
 KACHA_V2_TEST_MAIN("gpt_surface_tests")

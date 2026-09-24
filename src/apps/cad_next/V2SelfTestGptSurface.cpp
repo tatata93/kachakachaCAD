@@ -101,7 +101,7 @@ bool CancelAndReject(V2MainWindow& window)
     if (!Explain("open boundary cannot commit", confirm != nullptr && !confirm->isEnabled())) { return false; }
     if (!Click(window, "gptSurfaceCancel")) { return false; }
     return Explain("cancel keeps document", window.Session().GetDocument().Revision() == before
-        && window.Viewport().ToolPreviewFaceCount() == 0);
+        && window.Viewport().ToolPreviewFaceCount() == 0 && window.Viewport().ToolRoleLabels().empty());
 }
 
 bool PickCompositeSections(V2MainWindow& window)
@@ -162,6 +162,12 @@ bool AutomaticBranchAndMarks(V2MainWindow& window)
         || !Explain("all five inputs shown", list->topLevelItemCount() == 5)
         || !Explain("other loops available", next->isEnabled())
         || !Explain("branch becomes interior", list->topLevelItem(4)->text(0).contains(QStringLiteral("通る線")))) { return false; }
+    if (!Click(window, "gptSurfaceNextBoundary")) { return false; }
+    auto* confirm = window.findChild<QPushButton*>(QStringLiteral("gptSurfaceConfirm"));
+    if (!Explain("alternative keeps all inputs and refuses outside constraints", list->topLevelItemCount() == 5
+        && confirm != nullptr && !confirm->isEnabled())) { return false; }
+    automatic->setChecked(false);
+    automatic->setChecked(true);
     const auto& marks = window.Viewport().ToolRoleLabels();
     if (!Explain("five numbered direction markers", marks.size() == 5 && marks.front().arrowToward.has_value())) { return false; }
     if (!Click(window, "gptSurfacePreview")

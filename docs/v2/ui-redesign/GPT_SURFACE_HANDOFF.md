@@ -22,3 +22,9 @@ _GO側は全成功時だけ同じブランチへpushする。reset・bundle merg
 
 開始時の他者変更は `wip-desktop-dh7772g-20260924-gpt-surface` の `b1924e32` に退避・push済み。
 `.worktrees/` と `Claude outputs/` は他作業なので触らない。
+
+## 2026-09-25 自動外周・方向表示の追加改修
+
+ユーザーの分岐エラー報告に対応し、自動判定を既定化。GptSurfaceAutoとV2GptSurfaceAssistを追加。
+ソースは1d6de942に途中保存し、複合ワイヤーのクリック対応と回帰試験を続けて補強した。
+現在Windows検証中。改修前の上記結果を今回の検証結果として扱わない。

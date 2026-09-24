@@ -10,8 +10,27 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <limits>
 
 using namespace kachakacha::v2;
+
+int V2GptSurfaceTool::PickedRow(const base::EntityId& id) const
+{
+    int chosen = -1;
+    double closest = std::numeric_limits<double>::infinity();
+    const auto hit = window_.viewport_->LastToolPickPoint();
+    for (std::size_t row = 0; row < definition_.chains.size(); ++row) {
+        for (const auto& ref : definition_.chains[row].segments) {
+            if (ref.entityId != id) { continue; }
+            for (const auto& source : window_.session_->Scene().curves) {
+                if (source.entityId != id || (!ref.segmentId.IsNil() && ref.segmentId != source.segmentId)) { continue; }
+                const double distance = hit.has_value() ? source.segment.ClosestPoint(*hit).distance : 0.0;
+                if (distance < closest) { chosen = static_cast<int>(row); closest = distance; }
+            }
+        }
+    }
+    return chosen;
+}
 
 void V2GptSurfaceTool::BuildAssist(QVBoxLayout* layout)
 {

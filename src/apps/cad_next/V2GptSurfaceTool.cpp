@@ -213,15 +213,12 @@ void V2GptSurfaceTool::HandleSelectionChanged()
 {
     if (!active_) { return; }
     if (const auto picked = window_.viewport_->TakeLastToolPick(); picked.has_value()) {
-        for (std::size_t row = 0; row < definition_.chains.size(); ++row) {
-            for (const auto& ref : definition_.chains[row].segments) {
-                if (ref.entityId == *picked) {
-                    list_->setCurrentItem(list_->topLevelItem(static_cast<int>(row)));
-                    RefreshMarks();
-                    status_->setText(QStringLiteral("%1 行目を選択しました。黄色の線と矢印を確認して役割・向きを変更できます。").arg(row + 1));
-                    return;
-                }
-            }
+        const int row = PickedRow(*picked);
+        if (row >= 0) {
+            list_->setCurrentItem(list_->topLevelItem(row));
+            RefreshMarks();
+            status_->setText(QStringLiteral("%1 行目を選択しました。黄色の線と矢印を確認して役割・向きを変更できます。").arg(row + 1));
+            return;
         }
         Add({*picked}, false);
     }

@@ -36,6 +36,7 @@ private:
     void BuildAssist(QVBoxLayout* layout);
     bool AutoBoundary();
     void RefreshMarks();
+    int PickedRow(const kachakacha::v2::base::EntityId& id) const;
     void Invalidate();
     void Preview();
     void Confirm();

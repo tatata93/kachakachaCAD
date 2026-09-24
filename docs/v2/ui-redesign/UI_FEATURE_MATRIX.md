@@ -196,6 +196,8 @@ UI の入口がある / 人の操作で入力を入れられる / 下見があ�
 
 | ID | 入口 | 操作 | 実装 | 受入試験 | 状態 |
 |---|---|---|---|---|---|
-| D-44 | 作図 → 面作成 → GPT版 / 形状メニュー | 外周＋内部線（近似）または複数断面、入力一覧/順序/反転、許容偏差・標本最大/RMS、面プレビュー → 確定 | GptSurface / OcctGptSurface / V2GptSurfaceTool、surface.gpt_create | AT-GPT-S001/002、HP-GPT-01〜04 | PC_TESTED(dd6aa172: ctest182/182、自己試験354/354) |
+| D-44 | 作図 → 面作成 → GPT版 / 形状メニュー | 外周＋内部線（近似）または複数断面、外周自動判定/候補切替/番号/色/矢印/入力一覧/順序/反転、許容偏差・標本最大/RMS、面プレビュー → 確定 | GptSurface / OcctGptSurface / V2GptSurfaceTool、surface.gpt_create | AT-GPT-S001/002、HP-GPT-01〜04 | PC_TESTED(dd6aa172: ctest182/182、自己試験354/354) |
 
 仕様と制約は [GPT_SURFACE.md](GPT_SURFACE.md)。既存のD-43の生成処理とは独立。
+
+2026-09-25 D-44追加改修: 自動外周と番号・矢印の検証中。上のPC_TESTEDは改修前の記録。HP-GPT-05を追加。

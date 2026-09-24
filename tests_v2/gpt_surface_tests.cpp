@@ -213,9 +213,11 @@ KACHA_V2_TEST(gpt_surface, automatic_boundary_separates_branch_and_keeps_every_r
     domain::CreateGuideSurfaceDefinition input;
     input.gptBuilder = true;
     input.method = app::kGptBoundaryMethod;
-    auto curves = Rectangle().curves.front().segments;
+    std::vector<geometry::CurveSegment> curves = {
+        Line({0,0,0},{40,0,0}), Line({40,0,0},{40,10,0}), Line({40,10,0},{40,20,0}),
+        Line({40,20,0},{0,20,0}), Line({0,20,0},{0,10,0}), Line({0,10,0},{0,0,0})};
     curves.push_back(geometry::CurveSegment::MakeCubicBezier(
-        {{0,0,0}, {12,6,4}, {28,14,4}, {40,20,0}}).Value());
+        {{0,10,0}, {12,10,4}, {28,10,4}, {40,10,0}}).Value());
     for (const auto& curve : curves) {
         const auto entity = ids.NextTyped<base::IdKind::Entity>();
         const auto segment = ids.NextTyped<base::IdKind::Segment>();
@@ -225,10 +227,10 @@ KACHA_V2_TEST(gpt_surface, automatic_boundary_separates_branch_and_keeps_every_r
     }
     const auto chosen = app::AutoGptSurfaceBoundary(scene, input, {});
     Require(chosen.HasValue(), chosen.FirstSummaryJa());
-    Require(chosen.Value().boundaryCount == 4, "largest outer loop chosen instead of the diagonal branches");
+    Require(chosen.Value().boundaryCount == 6, "largest outer loop chosen instead of the smaller branch loops");
     Require(chosen.Value().candidateCount == 3, "all three loops offered");
     const auto& result = chosen.Value().definition;
-    Require(result.chains.size() == 5 && result.roles.back() == app::kGptInteriorRole, "interior is retained");
+    Require(result.chains.size() == 7 && result.roles.back() == app::kGptInteriorRole, "interior is retained");
     Require(result.chains.back().segments.front().entityId == scene.curves.back().entityId, "correct interior UUID");
     auto shuffled = input;
     std::reverse(shuffled.chains.begin(), shuffled.chains.end());
@@ -239,8 +241,8 @@ KACHA_V2_TEST(gpt_surface, automatic_boundary_separates_branch_and_keeps_every_r
             "order independent of selection order");
     }
     const auto other = app::AutoGptSurfaceBoundary(scene, input, {}, 1);
-    Require(other.HasValue() && other.Value().boundaryCount == 3, "manual candidate cycling is concrete");
-    Require(other.Value().definition.chains.size() == 5, "alternate never drops inputs");
+    Require(other.HasValue() && other.Value().boundaryCount == 4, "manual candidate cycling is concrete");
+    Require(other.Value().definition.chains.size() == 7, "alternate never drops inputs");
     input.chains.push_back(input.chains.front());
     Require(!app::AutoGptSurfaceBoundary(scene, input, {}).HasValue(), "duplicate input not silently lost");
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -251,7 +253,7 @@ KACHA_V2_TEST(gpt_surface, automatic_boundary_separates_branch_and_keeps_every_r
         request.curves.push_back({{source->segment}, "auto", false, result.roles[row]});
     }
     const auto made = kernel::BuildGptSurface(request, {});
-    Require(made.HasValue(), made.FirstSummaryJa());
+    Require(made.HasValue(), made.FirstSummaryJa() + made.FirstDiagnostic().detailsJa);
     Require(made.Value().maximumDeviationMm <= .01, "raised branch used as an actual surface constraint");
     kernel::ReleaseShape(made.Value().handle);
 #endif

@@ -12,7 +12,9 @@
 
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomAbs_Shape.hxx>
 #include <GeomConvert.hxx>
+#include <GeomConvert_ApproxCurve.hxx>
 #include <GeomConvert_CompCurveToBSplineCurve.hxx>
 #include <GeomFill_BSplineCurves.hxx>
 #include <GeomFill_FillingStyle.hxx>
@@ -395,7 +397,7 @@ namespace {
 
 //! 核の SideCurve と同じ道を試験の中でたどり、段ごとのずれを言う(1 本の B-spline へ)。
 [[nodiscard]] occ::handle<Geom_BSplineCurve> SideLikeKernel(const std::vector<CurveSegment>& segments,
-    std::string& log)
+    std::string& log, bool approximateRational = false)
 {
     occ::handle<Geom_BSplineCurve> joined;
     for (const CurveSegment& segment : segments) {
@@ -405,6 +407,11 @@ namespace {
         if (segment.Kind() == kachakacha::v2::geometry::CurveKind::CircularArc
             && segment.SweepAngleRad() < 0.0) {
             piece->Reverse();
+        }
+        if (approximateRational && piece->IsRational()) {
+            GeomConvert_ApproxCurve approx(occ::handle<Geom_Curve>(piece), 1.0e-6, GeomAbs_C2, 32, 9);
+            Require(approx.IsDone() && approx.HasResult(), "有理の辺を多項式に近づけられる");
+            piece = approx.Curve();
         }
         const auto samples = kachakacha::v2::geometry::SampleChain({segment}, 1.0e-3);
         log += " piece(deg " + std::to_string(piece->Degree()) + ", rational "
@@ -539,8 +546,17 @@ KACHA_V2_TEST(kernel_four_edge, atamaの辺4は段ごとにどこでずれるか
             + std::to_string(WorstToCurve(SampleChain(sides[k], 1.0e-3), unified[k]));
     }
     const double unifiedDev = measure("V1 節をそろえた", unified, {0, 1, 2, 3});
-    Require(asIs <= 1.0e-3 || rotated <= 1.0e-3 || unifiedDev <= 1.0e-3, "どの辺も面の上にある:" + log);
-    Require(asIs <= 1.0e-3, "そのままの道でも面の上にある:" + log);
+    // V2: 有理(円弧)の辺を多項式に近づけてから渡す(核の SideCurve が採った道)。
+    std::vector<occ::handle<Geom_BSplineCurve>> polynomial;
+    for (std::size_t k = 0; k < sides.size(); ++k) {
+        log += "\nV2 辺 " + std::to_string(k + 1) + ":";
+        polynomial.push_back(SideLikeKernel(sides[k], log, true));
+    }
+    const double polynomialDev = measure("V2 多項式に近づけた", polynomial, {0, 1, 2, 3});
+    (void)asIs;
+    (void)rotated;
+    (void)unifiedDev;
+    Require(polynomialDev <= 1.0e-4, "多項式に近づけた辺なら面の縁が辺の上にある:" + log);
 }
 
 KACHA_V2_TEST(kernel_four_edge, 張り方で形が変わる)

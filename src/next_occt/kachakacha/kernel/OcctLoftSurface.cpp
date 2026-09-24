@@ -27,6 +27,7 @@
 #include <GeomAPI_PointsToBSplineSurface.hxx>
 #include <GeomAbs_Shape.hxx>
 #include <GeomConvert.hxx>
+#include <GeomConvert_ApproxCurve.hxx>
 #include <GeomConvert_CompCurveToBSplineCurve.hxx>
 #include <GeomFill_BSplineCurves.hxx>
 #include <GeomFill_FillingStyle.hxx>
@@ -372,6 +373,16 @@ template<class Function>
         // 1 本だけの辺でも角が逆に合う(オーナーの atama.kcd2、HP-LF-10、2026-09-24)。
         if (segment.Kind() == geometry::CurveKind::CircularArc && segment.SweepAngleRad() < 0.0) {
             piece->Reverse();
+        }
+        // 有理(円弧)の辺は多項式の B-spline に近づけてから使う。GeomFill_BSplineCurves の Coons は
+        // v 方向(2 本目・4 本目)に有理な辺が来ると、その縁が元の円弧から外れる(PC で段ごとに測った:
+        // 曲線は正確、面の縁だけ 0.016〜0.09 mm ずれる。2026-09-24、オーナーの atama.kcd2)。
+        // 近づける量は 1e-6 mm で、面の検査の許容(1e-4 mm)より十分小さい。
+        if (piece->IsRational()) {
+            GeomConvert_ApproxCurve approx(occ::handle<Geom_Curve>(piece), 1.0e-6, GeomAbs_C2, 32, 9);
+            if (approx.IsDone() && approx.HasResult() && !approx.Curve().IsNull()) {
+                piece = approx.Curve();
+            }
         }
         if (joined.IsNull()) {
             joined = piece;

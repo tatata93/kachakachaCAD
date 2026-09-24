@@ -9,6 +9,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/base/Uuid.h"
 #include "kachakacha/geometry/Units.h"
+#include "kachakacha/geometry/WireEdit.h"
 
 #include <algorithm>
 #include <array>
@@ -830,6 +831,103 @@ KACHA_V2_TEST(loop_faces, a_sharp_bend_is_a_corner_so_five_lines_stay_five_sides
     const LoopFace& face = plan.Value().faces.front();
     RequireEqual(std::to_string(face.sideCount), "5", "a real corner keeps five sides");
     Require(face.method == LoopFaceMethod::BoundaryFill, "five sides fall back to boundary fill");
+}
+
+//! オーナーの atama.kcd2(2026-09-24「全然作れない」): 裾の円弧 3 本(z = 0)+ 断面の直線 4 本
+//! (y = 0)+ 真ん中の肋の円弧(x = 0、裾の大円弧の途中に T 字で乗る)。線を引いた向きはそのまま。
+//! PC では側 3 の行に 2 本目の円弧を足すところで UI-R005(2.449 mm = 裾の円弧の弦)が出て
+//! 1 枚も作れなかった: 側の最初の辺を逆向きにたどるとき、行が線の向きのままだった。
+[[nodiscard]] std::vector<GuideTableSelection> AtamaWires()
+{
+    std::vector<GuideTableSelection> wires;
+    wires.push_back(Sel(0, "円弧", Arc({0, -8.65115876, 0}, {0, 0, -1},
+        {-0.313868727, 0.949466388, 0}, 11.1511588, 0.0, 0.638529871)));   // 裾の大円弧
+    wires.push_back(Sel(1, "円 1", Arc({-3, 0, 0}, {0, 0, 1}, {1, 0, 0}, 2.0, 1.82347658, 1.31811607)));
+    wires.push_back(Sel(2, "円 2", Arc({3, 0, 0}, {0, 0, 1}, {1, 0, 0}, 2.0, 0.0, 1.31811607)));
+    wires.push_back(Sel(3, "直線 1", L({5, 0, 0}, {3, 0, 3})));
+    wires.push_back(Sel(4, "直線 2", L({-5, 0, 0}, {-3, 0, 3})));
+    wires.push_back(Sel(5, "直線 3", L({3, 0, 3}, {0, 0, 3.5})));
+    wires.push_back(Sel(6, "直線 4", L({0, 0, 3.5}, {-3, 0, 3})));
+    wires.push_back(Sel(7, "肋", Arc({0, -0.111111111, 0.777777778}, {-1, 0, 0},
+        {0, 0.0407823695, 0.999168053}, 2.72448885, 0.0, 1.81950632)));
+    return wires;
+}
+
+//! T 字で分けたあとの線(道具の ApplySplits と同じ: 元の線を 1 つ目の片に差し替え、残りを後ろに足す)。
+[[nodiscard]] std::vector<GuideTableSelection> AfterSplits(const std::vector<GuideTableSelection>& wires,
+    const LoopFacePlan& plan)
+{
+    std::vector<GuideTableSelection> next = wires;
+    std::uint8_t nextId = 100;
+    for (const auto& split : plan.splits) {
+        const auto parts = SplitLoopSource(wires, split);
+        Require(parts.HasValue(), "the T-junction source splits");
+        next[split.source].segments = parts.Value().front();
+        for (std::size_t index = 1; index < parts.Value().size(); ++index) {
+            GuideTableSelection piece;
+            piece.sourceWireId = WireId(nextId++);
+            piece.label = wires[split.source].label + "(片 " + std::to_string(index + 1) + ")";
+            piece.segments = parts.Value()[index];
+            next.push_back(piece);
+        }
+    }
+    return next;
+}
+
+KACHA_V2_TEST(loop_faces, the_owners_atama_wires_make_two_four_edge_tables_whatever_the_drawn_direction)
+{
+    const auto wires = AtamaWires();
+    const auto first = PlanLoopFaces(wires, MakeTolerance());
+    Require(first.HasValue(), "the owner's wires plan");
+    RequireEqual(std::to_string(first.Value().splits.size()), "1", "the rib makes one T-junction");
+    RequireEqual(std::to_string(first.Value().faces.size()), "2", "left and right halves");
+    const auto split = AfterSplits(wires, first.Value());
+    RequireEqual(std::to_string(split.size()), "9", "the big arc became two pieces");
+    const auto plan = PlanLoopFaces(split, MakeTolerance());
+    Require(plan.HasValue(), "plans again after the split");
+    RequireEqual(std::to_string(plan.Value().faces.size()), "2", "still two loops");
+    for (const LoopFace& face : plan.Value().faces) {
+        Require(face.method == LoopFaceMethod::FourEdge, "each half has four sides: "
+            + std::to_string(face.sideCount));
+        const auto table = LoopFaceTable(split, face, MakeTolerance());
+        std::string why;
+        for (const auto& item : table.Diagnostics()) {
+            why += item.code + " " + item.summaryJa + " " + item.detailsJa;
+        }
+        Require(table.HasValue(), "the four-edge table builds without UI-R005: " + why);
+        RequireEqual(std::to_string(table.Value().rows.size()), "4", "one row per side");
+        std::vector<CurveSegment> ring;
+        for (const auto& row : table.Value().rows) {
+            for (std::size_t at = 0; at + 1 < row.segments.size(); ++at) {
+                Require(Distance(row.segments[at].EndPoint(), row.segments[at + 1].StartPoint()) <= 0.01,
+                    "segments inside a side row follow head to tail");
+            }
+            ring.insert(ring.end(), row.segments.begin(), row.segments.end());
+        }
+        RequireClosedChain(ring, "the four rows go round the loop in one direction");
+    }
+}
+
+//! 同じ線を全部逆向きに引いても同じ結果(向きに頼らない)。
+KACHA_V2_TEST(loop_faces, the_owners_atama_wires_drawn_backwards_still_make_both_tables)
+{
+    std::vector<GuideTableSelection> wires = AtamaWires();
+    for (auto& wire : wires) {
+        const auto reversed = kachakacha::v2::geometry::ReverseCurve(wire.segments.front());
+        Require(reversed.HasValue(), "fixture reverses");
+        wire.segments = {reversed.Value()};
+    }
+    const auto first = PlanLoopFaces(wires, MakeTolerance());
+    Require(first.HasValue(), "the reversed wires plan");
+    const auto split = AfterSplits(wires, first.Value());
+    const auto plan = PlanLoopFaces(split, MakeTolerance());
+    Require(plan.HasValue(), "plans again after the split");
+    RequireEqual(std::to_string(plan.Value().faces.size()), "2", "two loops");
+    for (const LoopFace& face : plan.Value().faces) {
+        const auto table = LoopFaceTable(split, face, MakeTolerance());
+        Require(table.HasValue(), "the table builds for reversed wires too");
+        RequireEqual(std::to_string(table.Value().rows.size()), "4", "one row per side");
+    }
 }
 
 KACHA_V2_TEST_MAIN("loop_faces_tests")

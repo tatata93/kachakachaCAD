@@ -6,6 +6,7 @@
 #include "kachakacha/geometry/Units.h"
 #include "kachakacha/geometry/CurveTrim.h"
 #include "kachakacha/geometry/WireConnect.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/modeling/GuideSurfaceSampling.h"
 
 #include <algorithm>
@@ -916,12 +917,41 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
     return Out::Success(std::move(plan));
 }
 
+namespace {
+
+//! 輪をたどる向きにそろえた選択。人が線を引いた向きは輪の向きと合っているとは限らないので、
+//! 逆向きにたどる辺は線を逆にしてから表に入れる(行の端がつながらず UI-R005 になるのを防ぐ)。
+//! 逆にできない線(種類が分からない)はそのまま返す(足すときの向き直しに任せる)。
+[[nodiscard]] GuideTableSelection AlongLoop(const GuideTableSelection& selection, bool forward)
+{
+    if (forward) {
+        return selection;
+    }
+    GuideTableSelection flipped;
+    flipped.sourceWireId = selection.sourceWireId;
+    flipped.label = selection.label;
+    for (auto item = selection.segments.rbegin(); item != selection.segments.rend(); ++item) {
+        const auto reversed = geometry::ReverseCurve(*item);
+        if (!reversed.HasValue()) {
+            return selection;
+        }
+        flipped.segments.push_back(reversed.Value());
+    }
+    return flipped;
+}
+
+} // namespace
+
 Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selections,
     const LoopFace& face, const geometry::GeometryTolerance& tolerance,
     const std::vector<modeling::SurfaceContinuity>& continuity,
     const std::vector<EntityId>& supports)
 {
     using Out = Result<GuideTable>;
+    const auto along = [&](std::size_t e) {
+        const bool forward = e < face.forward.size() ? face.forward[e] : true;
+        return AlongLoop(selections[face.selections[e]], forward);
+    };
     for (const std::size_t index : face.selections) {
         if (index >= selections.size()) {
             return Out::Failure(MakeError(kSplitPending, "T 字で分けた線がまだ分けられていません。",
@@ -946,10 +976,9 @@ Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selecti
     if (face.method == LoopFaceMethod::Planar) {
         table.method = GuideSurfaceMethod::PlanarBoundary;
         // 外形 1 行に、輪をたどる順に足す(向きは足すときにそろう)。
-        auto made = modeling::AddSelectionAsNewRow(table, ChainRole::OuterBoundary,
-            selections[face.selections.front()]);
+        auto made = modeling::AddSelectionAsNewRow(table, ChainRole::OuterBoundary, along(0));
         for (std::size_t at = 1; made.HasValue() && at < face.selections.size(); ++at) {
-            made = AppendSelectionToRow(made.Value(), 0, selections[face.selections[at]], tolerance);
+            made = AppendSelectionToRow(made.Value(), 0, along(at), tolerance);
         }
         if (!made.HasValue()) {
             return Out::Failure(made.Diagnostics());
@@ -978,14 +1007,14 @@ Result<GuideTable> LoopFaceTable(const std::vector<GuideTableSelection>& selecti
         const bool continueRow = bySide && openSide.has_value() && face.sideOf[e] == *openSide;
         if (continueRow) {
             const auto appended = AppendSelectionToRow(table, table.rows.size() - 1,
-                selections[face.selections[e]], tolerance);
+                along(e), tolerance);
             if (!appended.HasValue()) {
                 return Out::Failure(appended.Diagnostics());
             }
             table = appended.Value();
         } else {
             const auto added = modeling::AddSelectionAsNewRow(table, ChainRole::BoundarySide,
-                selections[face.selections[e]]);
+                along(e));
             if (!added.HasValue()) {
                 return Out::Failure(added.Diagnostics());
             }

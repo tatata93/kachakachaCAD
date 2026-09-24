@@ -10,6 +10,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2DrawingDock.h"
 #include "V2EditDock.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
@@ -24,6 +25,8 @@
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/app/DirectWireEntry.h"
+#include "kachakacha/modeling/WorkPlane.h"
 
 #include <QPointF>
 #include <QString>
@@ -621,6 +624,99 @@ void SelectAllWires(V2MainWindow& window)
         CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1);
 }
 
+//! 数値の線の道(右の棚「数値で線を作る」に値を入れて [線を作る] を押す)で 1 本置く。
+//! 平面の円弧は始点・通過点・終点、3D の直線は 2 点。いまの作業平面の上に置く。
+[[nodiscard]] EntityId AddWireByNumbers(V2MainWindow& window, const char* label,
+    kachakacha::v2::app::DirectWireKind kind, std::vector<Vector3> points)
+{
+    const int before = CountOfKind(window, EntityKind::Wire);
+    kachakacha::v2::app::DirectWireRequest request;
+    request.kind = kind;
+    request.points = std::move(points);
+    window.DrawingDock().SetDirectWire(request, QString::fromUtf8(label));
+    window.DrawingDock().PressCreateWire();
+    if (CountOfKind(window, EntityKind::Wire) != before + 1) {
+        return EntityId{};
+    }
+    EntityId newest;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Wire) {
+            newest = entity.id;
+        }
+    }
+    return newest;
+}
+
+//! HP-LF-10。オーナーの atama.kcd2(2026-09-24「全然作れない」)と同じ 8 本: 裾の円弧 3 本(z = 0)、
+//! 断面の直線 4 本(y = 0)、真ん中の肋の円弧(x = 0、裾の大円弧の途中に T 字で乗る)。線の向きは
+//! 引いたまま。側 3 の行で 2 本目の円弧がつながらず UI-R005(2.449 mm)で 1 枚も作れなかった。
+//! 直したあと: 四辺面 2・T 字 1 → Enter で核(四辺面)が実際に 2 枚作る。
+[[nodiscard]] bool CaseLoopFacesOwnersAtamaWires(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    using kachakacha::v2::app::DirectWireKind;
+    kachakacha::v2::modeling::WorkPlaneFrame top;   // 上面 XY(裾の円弧 3 本)
+    window.Viewport().SetWorkPlane(top);
+    const EntityId big = AddWireByNumbers(window, "円弧", DirectWireKind::PlanarArc,
+        {{-3.5, 1.936491673, 0}, {0, 2.5, 0}, {3.5, 1.936491673, 0}});
+    const EntityId leftArc = AddWireByNumbers(window, "円 1", DirectWireKind::PlanarArc,
+        {{-3.5, 1.936491673, 0}, {-4.581139, 1.224745, 0}, {-5, 0, 0}});
+    const EntityId rightArc = AddWireByNumbers(window, "円 2", DirectWireKind::PlanarArc,
+        {{5, 0, 0}, {4.581139, 1.224745, 0}, {3.5, 1.936491673, 0}});
+    const EntityId l1 = AddWireByNumbers(window, "直線 1", DirectWireKind::SpatialLine,
+        {{5, 0, 0}, {3, 0, 3}});
+    const EntityId l2 = AddWireByNumbers(window, "直線 2", DirectWireKind::SpatialLine,
+        {{-5, 0, 0}, {-3, 0, 3}});
+    const EntityId l3 = AddWireByNumbers(window, "直線 3", DirectWireKind::SpatialLine,
+        {{3, 0, 3}, {0, 0, 3.5}});
+    const EntityId l4 = AddWireByNumbers(window, "直線 4", DirectWireKind::SpatialLine,
+        {{0, 0, 3.5}, {-3, 0, 3}});
+    kachakacha::v2::modeling::WorkPlaneFrame side;   // 側面 YZ(肋の円弧): u = y, v = z
+    side.uAxis = Vector3{0, 1, 0};
+    side.vAxis = Vector3{0, 0, 1};
+    side.normal = Vector3{1, 0, 0};
+    window.Viewport().SetWorkPlane(side);
+    const EntityId rib = AddWireByNumbers(window, "肋", DirectWireKind::PlanarArc,
+        {{0, 3.5, 0}, {2.105897, 2.361355, 0}, {2.5, 0, 0}});
+    window.Viewport().SetWorkPlane(top);
+    if (!Explain("オーナーの 8 本を数値の線で置ける",
+            !big.IsNil() && !leftArc.IsNil() && !rightArc.IsNil() && !l1.IsNil() && !l2.IsNil()
+                && !l3.IsNil() && !l4.IsNil() && !rib.IsNil())) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    auto& tool = window.LoopFacesTool();
+    if (!Explain("面にするの道具が構える", tool.Active())
+        || !Explain("計画が出る", tool.Plan().has_value())) {
+        return false;
+    }
+    const auto& plan = *tool.Plan();
+    if (!Explain((std::string("四辺面 2・T 字 1(実際: ") + plan.summaryJa + ")").c_str(),
+            plan.faces.size() == 2 && plan.splits.size() == 1
+                && plan.faces[0].method == LoopFaceMethod::FourEdge
+                && plan.faces[1].method == LoopFaceMethod::FourEdge)
+        || !Explain("ずれは無い", plan.gaps.empty())) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
+    if (!Explain("Enterで分けてから作れる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("作ると道具は構えを解く", !window.LoopFacesTool().Active())
+        || !Explain("大円弧が 2 本になる(8 → 9 本)",
+            CountOfKind(window, EntityKind::Wire) == wiresBefore + 1)
+        || !Explain((std::string("四辺面が 2 枚できる(状態行: ")
+                        + window.StatusText().toStdString() + ")").c_str(),
+            CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 2
+                && window.StatusText().contains(QStringLiteral("2 枚作りました")))) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで線の本数も面も元へ戻る",
+        CountOfKind(window, EntityKind::Wire) == wiresBefore
+            && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -644,6 +740,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesRecentReopens},
         {"HP-LF-09 削除は面・作業平面にも効き、使われている線と原点の平面は理由を言って断る",
             CaseDeleteWorksForNonWires},
+        {"HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚できる",
+            CaseLoopFacesOwnersAtamaWires},
     };
 }
 

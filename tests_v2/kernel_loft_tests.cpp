@@ -7,6 +7,19 @@
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/kernel/OcctCurveConversion.h"
+
+#include <GeomAPI_ProjectPointOnCurve.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomConvert.hxx>
+#include <GeomConvert_CompCurveToBSplineCurve.hxx>
+#include <GeomFill_BSplineCurves.hxx>
+#include <GeomFill_FillingStyle.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <Geom_Curve.hxx>
+#include <Geom_Surface.hxx>
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <algorithm>
@@ -347,6 +360,107 @@ KACHA_V2_TEST(kernel_four_edge, 掃引が負の円弧と2本をつないだ辺�
     Require(built.HasValue(), "作れる: " + Why(built));
     Require(built.Value().maximumDeviationMm <= 1.0e-2,
         "4 辺の上に乗る(実際 " + std::to_string(built.Value().maximumDeviationMm) + ")");
+}
+
+namespace {
+
+//! 点列から曲線までの最大距離(段ごとのずれを測る)。
+[[nodiscard]] double WorstToCurve(const std::vector<Vector3>& points, const occ::handle<Geom_Curve>& curve)
+{
+    double worst = 0.0;
+    for (const Vector3& point : points) {
+        GeomAPI_ProjectPointOnCurve project(kachakacha::v2::kernel::ToPoint(point), curve);
+        if (project.NbPoints() > 0) {
+            worst = std::max(worst, project.LowerDistance());
+        }
+    }
+    return worst;
+}
+
+[[nodiscard]] double WorstToSurface(const std::vector<Vector3>& points,
+    const occ::handle<Geom_Surface>& surface)
+{
+    double worst = 0.0;
+    for (const Vector3& point : points) {
+        GeomAPI_ProjectPointOnSurf project(kachakacha::v2::kernel::ToPoint(point), surface);
+        if (project.NbPoints() > 0) {
+            worst = std::max(worst, project.LowerDistance());
+        }
+    }
+    return worst;
+}
+
+//! 核の SideCurve と同じ道を試験の中でたどり、段ごとのずれを言う(1 本の B-spline へ)。
+[[nodiscard]] occ::handle<Geom_BSplineCurve> SideLikeKernel(const std::vector<CurveSegment>& segments,
+    std::string& log)
+{
+    occ::handle<Geom_BSplineCurve> joined;
+    for (const CurveSegment& segment : segments) {
+        const auto curve = kachakacha::v2::kernel::ToGeomCurve(segment);
+        Require(curve.HasValue(), "線を OCCT の曲線にできる");
+        occ::handle<Geom_BSplineCurve> piece = GeomConvert::CurveToBSplineCurve(curve.Value());
+        if (segment.Kind() == kachakacha::v2::geometry::CurveKind::CircularArc
+            && segment.SweepAngleRad() < 0.0) {
+            piece->Reverse();
+        }
+        const auto samples = kachakacha::v2::geometry::SampleChain({segment}, 1.0e-3);
+        log += " piece(deg " + std::to_string(piece->Degree()) + ", rational "
+            + std::to_string(piece->IsRational() ? 1 : 0) + ", poles " + std::to_string(piece->NbPoles())
+            + ") dev " + std::to_string(WorstToCurve(samples, piece));
+        if (joined.IsNull()) {
+            joined = piece;
+            continue;
+        }
+        GeomConvert_CompCurveToBSplineCurve concat(joined);
+        const int keepJoin = std::max(joined->Degree(), piece->Degree());
+        Require(concat.Add(piece, 0.01, true, true, keepJoin), "つなげる");
+        joined = concat.BSplineCurve();
+    }
+    const auto all = kachakacha::v2::geometry::SampleChain(segments, 1.0e-3);
+    log += " | joined(deg " + std::to_string(joined->Degree()) + ", rational "
+        + std::to_string(joined->IsRational() ? 1 : 0) + ", poles " + std::to_string(joined->NbPoles())
+        + ", knots " + std::to_string(joined->NbKnots()) + ") dev " + std::to_string(WorstToCurve(all, joined));
+    if (joined->Degree() < 3) {
+        joined->IncreaseDegree(3);
+    }
+    log += " | deg3 dev " + std::to_string(WorstToCurve(all, joined));
+    return joined;
+}
+
+} // namespace
+
+KACHA_V2_TEST(kernel_four_edge, atamaの辺4は段ごとにどこでずれるか)
+{
+    using kachakacha::v2::geometry::ReverseCurve;
+    using kachakacha::v2::geometry::SampleChain;
+    const auto rib = CurveSegment::MakeCircularArc({0, -0.111111111, 0.777777778}, {-1, 0, 0},
+        {0, 0.0407823695, 0.999168053}, 2.72448885, 0.0, 1.81950632).Value();
+    const auto leftArc = CurveSegment::MakeCircularArc({-3, 0, 0}, {0, 0, 1}, {1, 0, 0}, 2.0,
+        1.82347658, 1.31811607).Value();
+    const auto bigHalf = CurveSegment::MakeCircularArc({0, -8.65115876, 0}, {0, 0, -1},
+        {-0.313868727, 0.949466388, 0}, 11.1511588, 0.0, 0.638529871 / 2.0).Value();
+    const std::vector<std::vector<CurveSegment>> sides{
+        {ReverseCurve(rib).Value()},
+        {CurveSegment::MakeLine({0, 0, 3.5}, {-3, 0, 3}).Value()},
+        {CurveSegment::MakeLine({-3, 0, 3}, {-5, 0, 0}).Value()},
+        {ReverseCurve(leftArc).Value(), bigHalf}};
+    std::string log;
+    std::vector<occ::handle<Geom_BSplineCurve>> curves;
+    for (std::size_t k = 0; k < sides.size(); ++k) {
+        log += "\n辺 " + std::to_string(k + 1) + ":";
+        curves.push_back(SideLikeKernel(sides[k], log));
+    }
+    GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
+    const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
+    Require(!surface.IsNull(), "Coons が張れる");
+    log += "\n面(rational " + std::to_string(surface->IsURational() || surface->IsVRational() ? 1 : 0) + "):";
+    double worst = 0.0;
+    for (std::size_t k = 0; k < sides.size(); ++k) {
+        const double dev = WorstToSurface(SampleChain(sides[k], 1.0e-3), surface);
+        log += " 辺 " + std::to_string(k + 1) + " dev " + std::to_string(dev);
+        worst = std::max(worst, dev);
+    }
+    Require(worst <= 1.0e-3, "どの辺も面の上にある:" + log);
 }
 
 KACHA_V2_TEST(kernel_four_edge, 張り方で形が変わる)

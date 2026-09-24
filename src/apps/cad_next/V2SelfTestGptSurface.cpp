@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTreeWidget>
+#include <Qt>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -109,7 +110,7 @@ bool PickCompositeSections(V2MainWindow& window)
     DrawLine(window, .5, .65, .7, .65);
     std::vector<geometry::Vector3> midpoints;
     for (const auto& curve : window.Session().Scene().curves) { midpoints.push_back(curve.segment.Evaluate(.5)); }
-    if (midpoints.size() != 4) { return false; }
+    if (!Explain(("four source segments: " + std::to_string(midpoints.size())).c_str(), midpoints.size() == 4)) { return false; }
     window.Viewport().SetSelection({});
     window.RunCommand("surface.gpt_create");
     auto* method = window.findChild<QComboBox*>(QStringLiteral("gptSurfaceMethod"));
@@ -120,12 +121,17 @@ bool PickCompositeSections(V2MainWindow& window)
     const auto pick = [&](std::size_t index) {
         const auto screen = window.Viewport().Mapping().Project(midpoints[index]);
         if (!screen.has_value()) { return false; }
-        window.Viewport().ClickAt(QPointF(screen->x, screen->y));
+        window.Viewport().SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
         return true;
     };
     for (int row = 0; row < 2; ++row) {
         role->setCurrentIndex(2);
-        if (!pick(static_cast<std::size_t>(row * 2)) || list->topLevelItemCount() != row + 1) { return false; }
+        if (!pick(static_cast<std::size_t>(row * 2)) || !Explain(("new section row " + std::to_string(row)
+            + " has count " + std::to_string(list->topLevelItemCount())).c_str(), list->topLevelItemCount() == row + 1)) {
+            const auto* status = window.findChild<QLabel*>(QStringLiteral("gptSurfaceStatus"));
+            if (status != nullptr) { Note(status->text().toStdString().c_str()); }
+            return false;
+        }
         list->setCurrentItem(list->topLevelItem(row));
         role->setCurrentIndex(3);
         if (!pick(static_cast<std::size_t>(row * 2 + 1))) { return false; }

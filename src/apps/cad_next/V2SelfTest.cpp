@@ -12,6 +12,8 @@
 #include <QStringList>
 
 #include <exception>
+#include <cstdlib>
+#include <string>
 #include <iostream>
 #include <vector>
 
@@ -184,7 +186,11 @@ int RunSelfTest()
 {
     const std::vector<SelfTestCase> cases = AllCases();
     int failed = 0;
+    int total = 0;
+    const char* filter = std::getenv("KACHACAD_SELF_TEST_FILTER");
     for (const SelfTestCase& item : cases) {
+        if (filter != nullptr && std::string(item.name).find(filter) == std::string::npos) { continue; }
+        ++total;
         // 先に名前を出しておく。途中で落ちたとき、どのケースで落ちたかが残る。
         // 落ちると PASS/FAIL のどちらも出ないので、名前が無いと追えない。
         std::cout << "RUN  " << item.name << std::endl;
@@ -195,10 +201,9 @@ int RunSelfTest()
             ++failed;
         }
     }
-    const int total = static_cast<int>(cases.size());
     std::cout << "cad_next self-test: " << (total - failed) << " passed, " << failed
               << " failed, " << total << " total\n";
-    return failed == 0 ? 0 : 1;
+    return failed == 0 && total > 0 ? 0 : 1;
 }
 
 } // namespace kachakacha::v2::selftest

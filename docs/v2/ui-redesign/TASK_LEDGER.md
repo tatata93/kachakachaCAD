@@ -270,11 +270,12 @@ matrix の BLOCKED_BACKEND のうち、核か core で作れるものを本物�
 | F-11 展開先(作業面/XY) | 展開先を XY平面/現在の作業面/新しい作業面 にする | 近似モデル + 展開先の指定 → その平面上の展開曲線 | `LayoutPattern`/`PlacePanelCurves`(紙 A4 固定) | 展開先は紙(PaperSize)固定で、平面や作業面を渡す引数がない |
 | F-12 表裏反転 | 展開した型紙を裏返す | 近似モデル(+反転の指定) → 鏡像の展開曲線 | `PlacePanelCurves`(向きは1通りのみ) | placement/LayoutPattern に mirror・反転のフラグがない |
 
-## 2026-09-24 GPT版の独立面生成（実装・検証中）
+## 2026-09-24 GPT版の独立面生成（PC_TESTED）
 
 オーナー指定: 既存の面生成とは独立し、外周＋内部線と複数断面の両方を使う。
 `surface.gpt_create` をCommandCatalog/Ribbon/UiMode/V2Menus/manual/command-catalogへ登録。
 仕様・操作は [GPT_SURFACE.md](GPT_SURFACE.md)、途中状態は [GPT_SURFACE_HANDOFF.md](GPT_SURFACE_HANDOFF.md)。
 入力の全件検査、近似の明記、許容偏差と標本最大/RMS、文書外の面プレビュー、
 確定・取消・保存フラグ・再生成を実装。試験はgpt_surface_testsとHP-GPT-01〜04。
-Windowsビルド・テストは進行中。PC_VERIFIEDではない。
+PC_TESTED: `a11ec4f6`、Windowsビルド、ctest182/182、旧自己試験終了コード0、V2自己試験353/353、GPT幾何8/8、HP-GPT-01〜04合格。
+詳細と検証条件は [GPT_SURFACE_VALIDATION.md](GPT_SURFACE_VALIDATION.md)。

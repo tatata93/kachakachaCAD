@@ -64,6 +64,16 @@ Result<GptSurfaceCurve> Connected(GptSurfaceCurve curve,
             curve.segments.push_back(found->segment);
         }
     }
+    const auto anchor = std::find_if(chain.Value().order.segments.begin(), chain.Value().order.segments.end(),
+        [&](const auto& ordered) { return ordered.segmentId == inputs.front().segmentId; });
+    if (anchor->reversed) {
+        std::reverse(curve.segments.begin(), curve.segments.end());
+        for (auto& segment : curve.segments) {
+            const auto reversed = geometry::ReverseCurve(segment);
+            if (!reversed.HasValue()) { return Result<GptSurfaceCurve>::Failure(reversed.Diagnostics()); }
+            segment = reversed.Value();
+        }
+    }
     const auto intersections = geometry::FindSelfIntersections(curve.segments, curve.closed, tolerance);
     if (!intersections.HasValue()) { return Result<GptSurfaceCurve>::Failure(intersections.Diagnostics()); }
     if (!intersections.Value().empty()) {
@@ -95,18 +105,7 @@ Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
         }
         const auto connected = Connected(curve, tolerance);
         if (!connected.HasValue()) { return Result<GptSurfaceRequest>::Failure(connected.Diagnostics()); }
-        // 1本の断面の向きは入力の始点を優先する。明示反転もここで保持する。
-        auto next = connected.Value();
-        if (!next.closed && (next.segments.front().StartPoint() - curve.segments.front().StartPoint()).Length()
-            > tolerance.modelLinearMm) {
-            std::reverse(next.segments.begin(), next.segments.end());
-            for (auto& segment : next.segments) {
-                const auto reversed = geometry::ReverseCurve(segment);
-                if (!reversed.HasValue()) { return Result<GptSurfaceRequest>::Failure(reversed.Diagnostics()); }
-                segment = reversed.Value();
-            }
-        }
-        checked.push_back(std::move(next));
+        checked.push_back(connected.Value());
     }
     if (request.loft) {
         if (checked.size() < 2) { return Fail("断面が2つ以上必要です。", "線を選び、断面を追加してください。"); }

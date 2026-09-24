@@ -276,5 +276,5 @@ matrix の BLOCKED_BACKEND のうち、核か core で作れるものを本物�
 `surface.gpt_create` をCommandCatalog/Ribbon/UiMode/V2Menus/manual/command-catalogへ登録。
 仕様・操作は [GPT_SURFACE.md](GPT_SURFACE.md)、途中状態は [GPT_SURFACE_HANDOFF.md](GPT_SURFACE_HANDOFF.md)。
 入力の全件検査、近似の明記、許容偏差と標本最大/RMS、文書外の面プレビュー、
-確定・取消・保存フラグ・再生成を実装。試験はgpt_surface_testsとHP-GPT-01〜03。
+確定・取消・保存フラグ・再生成を実装。試験はgpt_surface_testsとHP-GPT-01〜04。
 Windowsビルド・テストは進行中。PC_VERIFIEDではない。

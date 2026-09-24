@@ -18,6 +18,7 @@
 #include <QWidget>
 #include <QDoubleSpinBox>
 #include <QLabel>
+#include <QGridLayout>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -82,27 +83,29 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
 
 void V2GptSurfaceTool::BuildActions(QVBoxLayout* layout)
 {
-    const auto button = [&](const char* name, const QString& label, auto handler) {
+    auto* actions = new QGridLayout;
+    layout->addLayout(actions);
+    const auto button = [&](const char* name, const QString& label, int row, int column, auto handler, int span = 1) {
         auto* made = new QPushButton(label, dock_->widget());
         made->setObjectName(QString::fromLatin1(name));
         QObject::connect(made, &QPushButton::clicked, dock_, handler);
-        layout->addWidget(made);
+        actions->addWidget(made, row, column, 1, span);
         return made;
     };
-    button("gptSurfaceAddSelection", QStringLiteral("選択した線をまとめて追加"), [this] {
+    button("gptSurfaceAddSelection", QStringLiteral("選択した線をまとめて追加"), 0, 0, [this] {
         Add(window_.viewport_->Selection().entityIds, true);
-    });
-    button("gptSurfaceRemove", QStringLiteral("選択行を外す"), [this] { EditRow(0); });
-    button("gptSurfaceUp", QStringLiteral("選択行を上へ"), [this] { EditRow(-1); });
-    button("gptSurfaceDown", QStringLiteral("選択行を下へ"), [this] { EditRow(1); });
-    button("gptSurfaceReverse", QStringLiteral("選択行の向きを反転"), [this] { EditRow(2); });
-    button("gptSurfaceApplyRole", QStringLiteral("選択行を上の役割に変更"), [this] { EditRow(3); });
-    button("gptSurfaceReset", QStringLiteral("入力を空にする"), [this] {
+    }, 3);
+    button("gptSurfaceRemove", QStringLiteral("行を外す"), 1, 0, [this] { EditRow(0); });
+    button("gptSurfaceApplyRole", QStringLiteral("上の役割を選択行へ適用"), 1, 1, [this] { EditRow(3); }, 2);
+    button("gptSurfaceUp", QStringLiteral("行を上へ"), 2, 0, [this] { EditRow(-1); });
+    button("gptSurfaceDown", QStringLiteral("行を下へ"), 2, 1, [this] { EditRow(1); });
+    button("gptSurfaceReverse", QStringLiteral("向きを反転"), 2, 2, [this] { EditRow(2); });
+    button("gptSurfaceReset", QStringLiteral("入力を空にする"), 3, 0, [this] {
         definition_.chains.clear(); definition_.roles.clear(); Invalidate(); RefreshList();
-    });
-    button("gptSurfacePreview", QStringLiteral("プレビュー"), [this] { Preview(); });
-    confirm_ = button("gptSurfaceConfirm", QStringLiteral("この面を確定"), [this] { Confirm(); });
-    button("gptSurfaceCancel", QStringLiteral("取消"), [this] { End(); });
+    }, 2);
+    button("gptSurfaceCancel", QStringLiteral("取消"), 3, 2, [this] { End(); });
+    button("gptSurfacePreview", QStringLiteral("プレビュー"), 4, 0, [this] { Preview(); });
+    confirm_ = button("gptSurfaceConfirm", QStringLiteral("この面を確定"), 4, 1, [this] { Confirm(); }, 2);
     confirm_->setEnabled(false);
 }
 
@@ -203,6 +206,7 @@ void V2GptSurfaceTool::EditRow(int operation)
     const int index = list_->indexOfTopLevelItem(list_->currentItem());
     if (index < 0) { status_->setText(QStringLiteral("一覧の行を選んでください。")); return; }
     const auto at = static_cast<std::size_t>(index);
+    int selectedAfter = index;
     if (operation == 0) {
         definition_.chains.erase(definition_.chains.begin() + index);
         definition_.roles.erase(definition_.roles.begin() + index);
@@ -220,10 +224,14 @@ void V2GptSurfaceTool::EditRow(int operation)
     } else {
         const int target = index + operation;
         if (target < 0 || target >= static_cast<int>(definition_.chains.size())) { return; }
+        selectedAfter = target;
         std::swap(definition_.chains[at], definition_.chains[static_cast<std::size_t>(target)]);
         std::swap(definition_.roles[at], definition_.roles[static_cast<std::size_t>(target)]);
     }
     Invalidate(); RefreshList();
+    if (list_->topLevelItemCount() > 0) {
+        list_->setCurrentItem(list_->topLevelItem(std::min(selectedAfter, list_->topLevelItemCount() - 1)));
+    }
 }
 
 void V2GptSurfaceTool::RefreshList()

@@ -218,7 +218,7 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
                                 for (const bool analyzing : {false, true}) {
                                     for (const Shelf owned :
                                         {Shelf::None, Shelf::Solid, Shelf::EdgeFinish,
-                                            Shelf::ShellSplit, Shelf::LoopFaces}) {
+                                            Shelf::ShellSplit, Shelf::LoopFaces, Shelf::GptSurface}) {
                                         for (const Shelf shelf : ShelvesFor(mode, tool,
                                                  extruding, surfacing, booleaning, thickening,
                                                  editing, analyzing, owned)) {

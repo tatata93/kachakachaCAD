@@ -78,23 +78,23 @@ void V2MainWindow::EndOwnedToolsBut(const void* keep)
     }
 }
 
-//! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの。
-//! ここで引き受けたら真。構えて待つ道(ArmCommand)は通さない。
+//! 選択済みの線を保持して、GPT版の独立した面生成を構える。
 void V2MainWindow::BeginGptSurface()
 {
-        const auto selected = viewport_->Selection();
-        ClearPendingCommand();
-        if (surfaceShelfShown_) { EndSurfacePreview(); }
-        if (approxShelfShown_) { EndApprox(); }
-        if (booleanShelfShown_) { EndBoolean(); }
-        if (thickenShelfShown_) { EndThicken(); }
-        if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
-        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-        EndOwnedToolsBut(gptSurface_.get());
-        viewport_->SetSelection(selected);
-        gptSurface_->Begin();
+    const auto selected = viewport_->Selection();
+    ClearPendingCommand();
+    if (surfaceShelfShown_) { EndSurfacePreview(); }
+    if (approxShelfShown_) { EndApprox(); }
+    if (booleanShelfShown_) { EndBoolean(); }
+    if (thickenShelfShown_) { EndThicken(); }
+    if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
+    SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    EndOwnedToolsBut(gptSurface_.get());
+    viewport_->SetSelection(selected);
+    gptSurface_->Begin();
 }
 
+//! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
     if (id == "surface.gpt_create") {

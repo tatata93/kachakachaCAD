@@ -47,6 +47,10 @@ KACHA_V2_TEST(gpt_surface, validates_every_input)
     request = Rectangle();
     request.maximumDeviationMm = std::numeric_limits<double>::quiet_NaN();
     Require(!app::ValidateGptSurface(request, {}).HasValue(), "nonfinite tolerance rejected");
+    request = Rectangle();
+    request.curves.front().segments = {Line({0,0,0},{20,20,0}), Line({20,20,0},{0,20,0}),
+        Line({0,20,0},{20,0,0}), Line({20,0,0},{0,0,0})};
+    Require(!app::ValidateGptSurface(request, {}).HasValue(), "self crossing boundary rejected");
 }
 
 KACHA_V2_TEST(gpt_surface, sections_need_consistent_open_or_closed)
@@ -117,6 +121,25 @@ KACHA_V2_TEST(gpt_surface, saved_references_hidden_sources_and_duplicate_rejecti
     Require(restored.chains.front().segments.front().entityId == wire.id, "UUID source preserved");
 }
 
+KACHA_V2_TEST(gpt_surface, section_direction_uses_first_edge_even_when_it_is_in_the_middle)
+{
+    app::GptSurfaceRequest request;
+    request.loft = true;
+    for (double z : {0.0, 10.0}) {
+        request.curves.push_back({{Line({10,0,z}, {20,0,z}), Line({0,0,z}, {10,0,z}),
+            Line({20,0,z}, {30,0,z})}, "unordered section", false, app::kGptSectionRole});
+    }
+    const auto checked = app::ValidateGptSurface(request, {});
+    Require(checked.HasValue(), checked.FirstSummaryJa());
+    RequireNear(checked.Value().curves.front().segments.front().StartPoint().x, 0, 1e-9,
+        "first input edge points forward even when not at the endpoint");
+    request.curves.front().segments.front() = Line({20,0,0}, {10,0,0});
+    const auto reversed = app::ValidateGptSurface(request, {});
+    Require(reversed.HasValue(), reversed.FirstSummaryJa());
+    RequireNear(reversed.Value().curves.front().segments.front().StartPoint().x, 30, 1e-9,
+        "explicit opposite anchor direction is retained");
+}
+
 #ifdef KACHACAD_V2_WITH_OCCT
 KACHA_V2_TEST(gpt_surface, planar_boundary_area_and_all_constraints)
 {
@@ -153,6 +176,22 @@ KACHA_V2_TEST(gpt_surface, composite_sections_create_real_surface)
     Require(made.HasValue(), made.FirstSummaryJa());
     RequireNear(made.Value().areaMm2, 2.0 * std::sqrt(500.0) * 30.0, 0.01, "prismatic loft area");
     Require(made.Value().maximumDeviationMm <= request.maximumDeviationMm, "all sections measured");
+    kernel::ReleaseShape(made.Value().handle);
+}
+
+KACHA_V2_TEST(gpt_surface, closed_curved_sections_preserve_circles)
+{
+    app::GptSurfaceRequest request;
+    request.loft = true;
+    request.curves = {{{geometry::CurveSegment::MakeCircle({0,0,0}, {0,0,1}, {1,0,0}, 20).Value()},
+        "lower circle", true, app::kGptSectionRole},
+        {{geometry::CurveSegment::MakeCircle({0,0,30}, {0,0,1}, {1,0,0}, 10).Value()},
+        "upper circle", true, app::kGptSectionRole}};
+    const auto made = kernel::BuildGptSurface(request, {});
+    Require(made.HasValue(), made.FirstSummaryJa());
+    RequireNear(made.Value().areaMm2, std::acos(-1.0) * 30 * std::sqrt(1000.0), .01,
+        "analytic conical frustum area");
+    Require(made.Value().maximumDeviationMm <= .01, "both circles pass deviation check");
     kernel::ReleaseShape(made.Value().handle);
 }
 #else

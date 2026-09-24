@@ -59,6 +59,14 @@ struct ContinuityMeasure {
     double g2Error = -1.0;
 };
 
+//! 境界面の初期面(2026-09-24 オーナー報告「膜がへこむ」)。
+//! BRepOffsetAPI_MakeFilling は初期面を与えないと外周の最小二乗平面から始め、曲げエネルギー最小の
+//! 「膜」を張る。円弧が上に膨らんでいてもその膨らみを内側へ運ぶ情報が無く、平面へ向かって垂れる。
+//! 外周(ring: 輪をたどる順の鎖の番号)を、折れの小さいつなぎ目から束ねて 3〜4 側にし、四辺面と同じ
+//! 道(SideCurve → SnapCorners → GeomFill Coons)で面にする。作れなければ空の面(呼び手はこれまでどおり)。
+[[nodiscard]] TopoDS_Face CoonsFromRing(const modeling::GuideSurfaceRequest& request,
+    const std::vector<std::size_t>& ring, const geometry::GeometryTolerance& tolerance);
+
 //! 1 本の境界辺を足す。G1/G2 なら支持面(その辺が乗っている面)に対して足し、控えを残す。
 //! edge を渡せばその辺を、空なら鎖の曲線を 1 本ずつ辺にして足す。
 [[nodiscard]] base::Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,

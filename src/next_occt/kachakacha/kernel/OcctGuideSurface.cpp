@@ -1,7 +1,6 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
-#include "kachakacha/geometry/Units.h"
 #include "kachakacha/modeling/GuideSurfaceSampling.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/SurfaceDeviationLimit.h"
@@ -26,10 +25,6 @@
 #include <NCollection_Array1.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
-#include <GeomFill_BSplineCurves.hxx>
-#include <GeomFill_FillingStyle.hxx>
-#include <Geom_BSplineCurve.hxx>
-#include <Geom_BSplineSurface.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
@@ -230,108 +225,6 @@ template<class Function>
 constexpr int kNetworkPointsPerChain = 9;
 
 
-//! 境界面の初期面(2026-09-24 オーナー報告「膜がへこむ」)。
-//!
-//! BRepOffsetAPI_MakeFilling は初期面を与えないと外周の最小二乗平面から始め、曲げエネルギー最小の
-//! 「膜」を張る。円弧が上に膨らんでいてもその膨らみを内側へ運ぶ情報が無く、平面へ向かって垂れる。
-//! ここでは外周を角で 3〜4 つの「側」に束ね、Coons(四辺面)を初期面にする。膨らみは Coons が持ち、
-//! 外周・通る線・連続条件は MakeFilling がそのまま守る(初期面は出発点であって拘束ではない)。
-//! 側が 2 つ以下、または 5 つ以上で束ねきれなければ何もしない(これまでどおり)。
-[[nodiscard]] TopoDS_Face CoonsInitialFace(const GuideSurfaceRequest& request,
-    const std::vector<std::size_t>& ring, const GeometryTolerance& tolerance)
-{
-    if (ring.size() < 3) {
-        return TopoDS_Face();
-    }
-    const double samplingTolerance = modeling::detail::SamplingToleranceMm(tolerance);
-    // 1. 輪をたどる向きに点列を並べる(端点が合う向きを選ぶ)。
-    std::vector<std::vector<Vector3>> chains;
-    for (const std::size_t index : ring) {
-        std::vector<Vector3> points =
-            geometry::SampleChain(request.chains[index].segments, samplingTolerance);
-        if (points.size() < 2) {
-            return TopoDS_Face();
-        }
-        if (!chains.empty()) {
-            const Vector3 tail = chains.back().back();
-            if ((points.front() - tail).Length() > (points.back() - tail).Length()) {
-                std::reverse(points.begin(), points.end());
-            }
-        } else if (ring.size() >= 2) {
-            // 最初の線は、2 本目のどちらかの端に近い方を終点にする。
-            const std::vector<Vector3> next =
-                geometry::SampleChain(request.chains[ring[1]].segments, samplingTolerance);
-            if (!next.empty()) {
-                const double endGap = std::min((points.back() - next.front()).Length(),
-                    (points.back() - next.back()).Length());
-                const double startGap = std::min((points.front() - next.front()).Length(),
-                    (points.front() - next.back()).Length());
-                if (startGap < endGap) {
-                    std::reverse(points.begin(), points.end());
-                }
-            }
-        }
-        chains.push_back(std::move(points));
-    }
-    // 2. 折れ角(つなぎ目)。小さい順に束ねて 4 側にする。
-    const auto direction = [](const std::vector<Vector3>& points, bool atEnd) {
-        const std::size_t n = points.size();
-        const Vector3 a = atEnd ? points[n - 2] : points[0];
-        const Vector3 b = atEnd ? points[n - 1] : points[1];
-        return geometry::Normalized(b - a);
-    };
-    const auto turnDeg = [&](const std::vector<Vector3>& a, const std::vector<Vector3>& b) {
-        const double c = std::clamp(geometry::Dot(direction(a, true), direction(b, false)), -1.0, 1.0);
-        return std::acos(c) * 180.0 / geometry::kPi;
-    };
-    while (chains.size() > 4) {
-        std::size_t best = 0;
-        double bestDeg = 1.0e9;
-        for (std::size_t k = 0; k < chains.size(); ++k) {
-            const double deg = turnDeg(chains[k], chains[(k + 1) % chains.size()]);
-            if (deg < bestDeg) {
-                bestDeg = deg;
-                best = k;
-            }
-        }
-        const std::size_t next = (best + 1) % chains.size();
-        chains[best].insert(chains[best].end(), chains[next].begin() + 1, chains[next].end());
-        chains.erase(chains.begin() + static_cast<std::ptrdiff_t>(next));
-    }
-    // 3. 側ごとに B-spline(3 次)。端は隣と同じ点にする(Coons は角が合っていることを要る)。
-    std::vector<occ::handle<Geom_BSplineCurve>> curves;
-    for (std::size_t k = 0; k < chains.size(); ++k) {
-        std::vector<Vector3>& points = chains[k];
-        points.back() = chains[(k + 1) % chains.size()].front();
-        NCollection_Array1<gp_Pnt> array(1, static_cast<int>(points.size()));
-        for (std::size_t i = 0; i < points.size(); ++i) {
-            array.SetValue(static_cast<int>(i + 1), ToPoint(points[i]));
-        }
-        GeomAPI_PointsToBSpline fit(array, 3, 8, GeomAbs_C2, samplingTolerance);
-        if (!fit.IsDone() || fit.Curve().IsNull()) {
-            return TopoDS_Face();
-        }
-        occ::handle<Geom_BSplineCurve> curve = fit.Curve();
-        if (curve->Degree() < 3) {
-            curve->IncreaseDegree(3);
-        }
-        curves.push_back(curve);
-    }
-    occ::handle<Geom_BSplineSurface> surface;
-    if (curves.size() == 4) {
-        GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
-        surface = patch.Surface();
-    } else if (curves.size() == 3) {
-        GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], GeomFill_CoonsStyle);
-        surface = patch.Surface();
-    }
-    if (surface.IsNull()) {
-        return TopoDS_Face();
-    }
-    BRepBuilderAPI_MakeFace face(occ::handle<Geom_Surface>(surface), Precision::Confusion());
-    return face.IsDone() ? face.Face() : TopoDS_Face();
-}
-
 [[nodiscard]] Result<TopoDS_Shape> BuildFillingOnce(const GuideSurfaceRequest& request,
     const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
     bool boundaryFill, bool useInitialSurface, detail::ContinuityMeasure& measure)
@@ -375,7 +268,7 @@ constexpr int kNetworkPointsPerChain = 9;
             }
             // 初期面: 外周から Coons を作れれば渡す(膜が平面へ垂れない)。作れなければこれまでどおり。
             if (useInitialSurface) {
-                const TopoDS_Face initial = CoonsInitialFace(request, ring, tolerance);
+                const TopoDS_Face initial = detail::CoonsFromRing(request, ring, tolerance);
                 if (!initial.IsNull()) {
                     filler.LoadInitSurface(initial);
                 }

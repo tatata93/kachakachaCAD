@@ -7,6 +7,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/Units.h"
 #include "kachakacha/modeling/GordonGrid.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/LoftInput.h"
@@ -410,6 +411,86 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
     }
 }
 
+
+//! 輪の鎖を B-spline にし、端点が合う向きにそろえる(最初の鎖は 2 本目に近い端を終点にする)。
+[[nodiscard]] std::vector<occ::handle<Geom_BSplineCurve>> RingCurves(
+    const GuideSurfaceRequest& request, const std::vector<std::size_t>& ring,
+    const GeometryTolerance& tolerance)
+{
+    std::vector<occ::handle<Geom_BSplineCurve>> curves;
+    for (const std::size_t index : ring) {
+        if (index >= request.chains.size() || request.chains[index].segments.empty()) {
+            return {};
+        }
+        auto curve = SideCurve(request.chains[index].segments, false, tolerance);
+        if (!curve.HasValue() || curve.Value().IsNull()) {
+            return {};
+        }
+        curves.push_back(curve.Value());
+    }
+    if (curves.size() < 3) {
+        return {};
+    }
+    // 1 本目の向き: 終点が 2 本目のどちらかの端に近くなるように。
+    {
+        const gp_Pnt s2 = curves[1]->StartPoint();
+        const gp_Pnt e2 = curves[1]->EndPoint();
+        const double endGap = std::min(curves[0]->EndPoint().Distance(s2), curves[0]->EndPoint().Distance(e2));
+        const double startGap = std::min(curves[0]->StartPoint().Distance(s2), curves[0]->StartPoint().Distance(e2));
+        if (startGap < endGap) {
+            curves[0]->Reverse();
+        }
+    }
+    for (std::size_t k = 1; k < curves.size(); ++k) {
+        const gp_Pnt tail = curves[k - 1]->EndPoint();
+        if (curves[k]->StartPoint().Distance(tail) > curves[k]->EndPoint().Distance(tail)) {
+            curves[k]->Reverse();
+        }
+    }
+    return curves;
+}
+
+//! 隣り合う 2 本のつなぎ目の折れ角(度)。
+[[nodiscard]] double TurnDegBetween(const occ::handle<Geom_BSplineCurve>& a,
+    const occ::handle<Geom_BSplineCurve>& b)
+{
+    gp_Pnt p;
+    gp_Vec out;
+    gp_Vec in;
+    a->D1(a->LastParameter(), p, out);
+    b->D1(b->FirstParameter(), p, in);
+    if (out.Magnitude() < 1.0e-12 || in.Magnitude() < 1.0e-12) {
+        return 0.0;
+    }
+    return out.Angle(in) * 180.0 / kachakacha::v2::geometry::kPi;
+}
+
+//! 折れの小さいつなぎ目から順に束ねて、side 本にする。つなげなかったら空。
+[[nodiscard]] std::vector<occ::handle<Geom_BSplineCurve>> MergeToSides(
+    std::vector<occ::handle<Geom_BSplineCurve>> curves, std::size_t sides,
+    const GeometryTolerance& tolerance)
+{
+    while (curves.size() > sides) {
+        std::size_t best = 0;
+        double bestDeg = 1.0e9;
+        for (std::size_t k = 0; k < curves.size(); ++k) {
+            const double deg = TurnDegBetween(curves[k], curves[(k + 1) % curves.size()]);
+            if (deg < bestDeg) {
+                bestDeg = deg;
+                best = k;
+            }
+        }
+        const std::size_t next = (best + 1) % curves.size();
+        GeomConvert_CompCurveToBSplineCurve concat(curves[best]);
+        if (!concat.Add(curves[next], std::max(tolerance.interactiveJoinMm, Tol3d(tolerance)), true)) {
+            return {};
+        }
+        curves[best] = concat.BSplineCurve();
+        curves.erase(curves.begin() + static_cast<std::ptrdiff_t>(next));
+    }
+    return curves;
+}
+
 //! G1 の許容(度)と G2 の許容(曲率の差)。核の MakeFilling に渡す目標よりゆるく、
 //! 目で見て折れ目が分からない程度。超えたら「滑らかにできなかった」と言って断る。
 constexpr double kG1LimitDeg = kContinuityG1LimitDeg;
@@ -615,6 +696,43 @@ struct SampleContinuity {
 }
 
 } // namespace
+
+TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<std::size_t>& ring,
+    const GeometryTolerance& tolerance)
+{
+    const auto made = Guarded([&]() -> Result<TopoDS_Face> {
+        using Out = Result<TopoDS_Face>;
+        std::vector<occ::handle<Geom_BSplineCurve>> curves = RingCurves(request, ring, tolerance);
+        if (curves.size() < 3) {
+            return Out::Success(TopoDS_Face());
+        }
+        curves = MergeToSides(std::move(curves), curves.size() == 3 ? 3 : 4, tolerance);
+        if (curves.size() != 3 && curves.size() != 4) {
+            return Out::Success(TopoDS_Face());
+        }
+        for (auto& curve : curves) {
+            // Coons は各方向に制御点 4 つ以上を要る。直線・短い円弧は 3 次へ上げる。
+            if (curve->Degree() < 3) {
+                curve->IncreaseDegree(3);
+            }
+        }
+        SnapCorners(curves);
+        occ::handle<Geom_BSplineSurface> surface;
+        if (curves.size() == 4) {
+            GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
+            surface = patch.Surface();
+        } else {
+            GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], GeomFill_CoonsStyle);
+            surface = patch.Surface();
+        }
+        if (surface.IsNull()) {
+            return Out::Success(TopoDS_Face());
+        }
+        BRepBuilderAPI_MakeFace face(occ::handle<Geom_Surface>(surface), Precision::Confusion());
+        return Out::Success(face.IsDone() ? face.Face() : TopoDS_Face());
+    }, "境界面の初期面");
+    return made.HasValue() ? made.Value() : TopoDS_Face();
+}
 
 Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
     const GuideSurfaceRequest& request, std::size_t chainIndex,

@@ -1,6 +1,7 @@
 // 作図の1本の流れ。スナップ → ツール → 文書コマンド。
 // 画面が無くても、作図の筋道がそのまま確かめられること自体がここの成果。
 #include "kachakacha/app/DrawingSession.h"
+#include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <algorithm>
@@ -86,6 +87,20 @@ KACHA_V2_TEST(session, 線を1本引くと文書が変わる)
     RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 1,
         "文書のオブジェクト数");
     RequireCount(fixture.session.GetDocument().Snapshot().features.size(), 1, "指示の数");
+}
+
+KACHA_V2_TEST(session, drawn_segment_id_survives_scene_rebuild)
+{
+    Fixture fixture;
+    fixture.session.SelectTool(DrawingTool::Line);
+    Require(fixture.session.Click(fixture.At({10,10,0})).placedPoint, "first point");
+    Require(fixture.session.Click(fixture.At({60,10,0})).committed, "line committed");
+    const auto snapshot = fixture.session.GetDocument().Snapshot();
+    const auto& wire = std::get<kachakacha::v2::domain::CreateWireDefinition>(snapshot.features.front().definition);
+    const auto liveId = fixture.session.Scene().curves.front().segmentId;
+    Require(liveId == wire.segmentIds.front(), "live selection refers to the persisted Segment UUID");
+    const auto rebuilt = kachakacha::v2::app::BuildSceneFromDocument(snapshot, fixture.ids);
+    Require(rebuilt.curves.front().segmentId == liveId, "rebuild does not break a picked SegmentRef");
 }
 
 KACHA_V2_TEST(session, 引いたばかりの線の端点へ吸着できる)

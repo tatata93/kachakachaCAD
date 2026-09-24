@@ -5,6 +5,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/geometry/ArcBuilders.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
@@ -314,6 +315,38 @@ KACHA_V2_TEST(kernel_four_edge, 並びと向きが逆でも作れる)
     const auto built = Build(Patch(FourEdgeStyle::Coons, true));
     Require(built.HasValue(), "作れる: " + Why(built));
     Require(built.Value().maximumDeviationMm <= 1.0e-3, "4辺の上に乗る");
+}
+
+KACHA_V2_TEST(kernel_four_edge, 掃引が負の円弧と2本をつないだ辺でも作れる_オーナーのatama)
+{
+    // 2026-09-24 オーナー報告「全然作れない」(atama.kcd2)。面にするは輪をたどる向きに辺をそろえる
+    // ので、逆向きにした円弧(掃引が負)が辺に入る。ToGeomCurve は負の掃引を区間の入れ替えで渡す
+    // ため、曲線のまま使う SideCurve では向きが線と逆になり、2 本目がつながらなかった。
+    using kachakacha::v2::geometry::ReverseCurve;
+    const auto rib = CurveSegment::MakeCircularArc({0, -0.111111111, 0.777777778}, {-1, 0, 0},
+        {0, 0.0407823695, 0.999168053}, 2.72448885, 0.0, 1.81950632);   // (0,0,3.5) → (0,2.5,0)
+    const auto leftArc = CurveSegment::MakeCircularArc({-3, 0, 0}, {0, 0, 1}, {1, 0, 0}, 2.0,
+        1.82347658, 1.31811607);   // (-3.5,1.94,0) → (-5,0,0)
+    const auto bigHalf = CurveSegment::MakeCircularArc({0, -8.65115876, 0}, {0, 0, -1},
+        {-0.313868727, 0.949466388, 0}, 11.1511588, 0.0, 0.638529871 / 2.0);   // (-3.5,1.94) → (0,2.5)
+    Require(rib.HasValue() && leftArc.HasValue() && bigHalf.HasValue(), "円弧が作れること");
+    const auto ribBack = ReverseCurve(rib.Value());
+    const auto leftBack = ReverseCurve(leftArc.Value());
+    Require(ribBack.HasValue() && leftBack.HasValue(), "逆向きにできること");
+    Require(ribBack.Value().SweepAngleRad() < 0.0, "逆向きの円弧は掃引が負");
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::FourEdgePatch;
+    GuideChain a; a.role = ChainRole::BoundarySide; a.index = 1; a.segments = {ribBack.Value()};
+    GuideChain d; d.role = ChainRole::BoundarySide; d.index = 4;
+    d.segments = {leftBack.Value(), bigHalf.Value()};   // (-5,0,0) → (-3.5,1.94,0) → (0,2.5,0)
+    request.chains.push_back(a);
+    request.chains.push_back(Path(ChainRole::BoundarySide, 2, {{0, 0, 3.5}, {-3, 0, 3}}));
+    request.chains.push_back(Path(ChainRole::BoundarySide, 3, {{-3, 0, 3}, {-5, 0, 0}}));
+    request.chains.push_back(d);
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れる: " + Why(built));
+    Require(built.Value().maximumDeviationMm <= 1.0e-2,
+        "4 辺の上に乗る(実際 " + std::to_string(built.Value().maximumDeviationMm) + ")");
 }
 
 KACHA_V2_TEST(kernel_four_edge, 張り方で形が変わる)

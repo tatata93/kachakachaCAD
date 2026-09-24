@@ -366,6 +366,13 @@ template<class Function>
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "四辺面の辺を B-spline にできませんでした。", {}));
         }
+        // 掃引が負の円弧(逆向きにした円弧)は、ToGeomCurve が区間を入れ替えて渡すので曲線の
+        // 向きが線の向きと逆になる(ToEdge は辺を反転して合わせる)。ここは曲線のまま使うので
+        // 自分で反転する。合わせないと 2 本目がつながらず「辺の曲線をつなげませんでした」になり、
+        // 1 本だけの辺でも角が逆に合う(オーナーの atama.kcd2、HP-LF-10、2026-09-24)。
+        if (segment.Kind() == geometry::CurveKind::CircularArc && segment.SweepAngleRad() < 0.0) {
+            piece->Reverse();
+        }
         if (joined.IsNull()) {
             joined = piece;
             continue;

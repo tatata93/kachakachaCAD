@@ -701,13 +701,17 @@ void SelectAllWires(V2MainWindow& window)
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
     const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
-    if (!Explain("Enterで分けてから作れる", window.HandleToolKey(Qt::Key_Return, nullptr))
+    const bool entered = window.HandleToolKey(Qt::Key_Return, nullptr);
+    // 落ちたときに理由が残るよう、状態行と知らせを一文に入れる。
+    const std::string after = "(線 " + std::to_string(CountOfKind(window, EntityKind::Wire)) + "/"
+        + std::to_string(wiresBefore) + "、面 " + std::to_string(CountOfKind(window, EntityKind::GuideSurface))
+        + "/" + std::to_string(surfacesBefore) + "、状態行: " + window.StatusText().toStdString()
+        + "、知らせ: " + window.DiagnosticText().toStdString() + ")";
+    if (!Explain("Enterで分けてから作れる", entered)
         || !Explain("作ると道具は構えを解く", !window.LoopFacesTool().Active())
-        || !Explain("大円弧が 2 本になる(8 → 9 本)",
-            CountOfKind(window, EntityKind::Wire) == wiresBefore + 1)
-        || !Explain((std::string("四辺面が 2 枚できる(状態行: ")
-                        + window.StatusText().toStdString() + ")").c_str(),
-            CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 2
+        || !Explain(("四辺面が 2 枚できて大円弧が 2 本になる(8 → 9 本)" + after).c_str(),
+            CountOfKind(window, EntityKind::Wire) == wiresBefore + 1
+                && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 2
                 && window.StatusText().contains(QStringLiteral("2 枚作りました")))) {
         return false;
     }

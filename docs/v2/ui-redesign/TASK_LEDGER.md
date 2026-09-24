@@ -277,5 +277,5 @@ matrix の BLOCKED_BACKEND のうち、核か core で作れるものを本物�
 仕様・操作は [GPT_SURFACE.md](GPT_SURFACE.md)、途中状態は [GPT_SURFACE_HANDOFF.md](GPT_SURFACE_HANDOFF.md)。
 入力の全件検査、近似の明記、許容偏差と標本最大/RMS、文書外の面プレビュー、
 確定・取消・保存フラグ・再生成を実装。試験はgpt_surface_testsとHP-GPT-01〜04。
-PC_TESTED: `a11ec4f6`、Windowsビルド、ctest182/182、旧自己試験終了コード0、V2自己試験353/353、GPT幾何8/8、HP-GPT-01〜04合格。
+PC_TESTED: `dd6aa172`、Windowsビルド、ctest182/182、旧自己試験終了コード0、V2自己試験354/354、GPT幾何8/8、HP-GPT-01〜04合格。
 詳細と検証条件は [GPT_SURFACE_VALIDATION.md](GPT_SURFACE_VALIDATION.md)。

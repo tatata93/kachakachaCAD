@@ -1,13 +1,13 @@
 # GPT版面生成の引継ぎ
 
 2026-09-24。ブランチ `codex/v2-wp01-build-scaffold`、基点 `6ed2b931`。
-**実装・Windows自動検証完了。** ソース検証コミット `a11ec4f6aa16066f3219d6743c939a54cdef0d41`。
+**実装・Windows自動検証完了。** ソース検証コミット `dd6aa17245120b4f4de7ea793ceec1b0fb6af20b`。
 
 実装: GptSurface入力検査、OcctGptSurfaceの外周/内部拘束・断面生成、
 V2GptSurfaceToolの一覧/プレビュー/確定、保存フラグと再生成、命令・リボン・メニュー接続。
 既存の面生成とは独立。外部AI通信はない。操作は [GPT_SURFACE.md](GPT_SURFACE.md)。
 
-検証: Windowsビルド、ctest182/182、旧アプリ自己試験終了コード0、V2自己試験353/353。
+検証: Windowsビルド、ctest182/182、旧アプリ自己試験終了コード0、V2自己試験354/354。
 GPT幾何8/8、HP-GPT-01〜04、構造検査16/16合格。
 詳細・検証条件は [GPT_SURFACE_VALIDATION.md](GPT_SURFACE_VALIDATION.md)。
 機能の残作業はなし。穴付き外周・G1/G2・辺数の異なる断面は仕様上の対象外。

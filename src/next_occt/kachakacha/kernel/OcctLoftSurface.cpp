@@ -702,12 +702,20 @@ TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<
 {
     const auto made = Guarded([&]() -> Result<TopoDS_Face> {
         using Out = Result<TopoDS_Face>;
+        // G1/G2 の辺があるときは初期面を渡さない(PC 2026-09-24: 初期面を渡すと支持面への G1 が
+        // 効かず、G0 と同じ形になった)。3 側の Coons も渡さない(PC: 3 本の GeomFill が落ちた)。
+        for (const std::size_t index : ring) {
+            if (index < request.chains.size()
+                && request.chains[index].continuity != modeling::SurfaceContinuity::G0) {
+                return Out::Success(TopoDS_Face());
+            }
+        }
         std::vector<occ::handle<Geom_BSplineCurve>> curves = RingCurves(request, ring, tolerance);
-        if (curves.size() < 3) {
+        if (curves.size() < 4) {
             return Out::Success(TopoDS_Face());
         }
-        curves = MergeToSides(std::move(curves), curves.size() == 3 ? 3 : 4, tolerance);
-        if (curves.size() != 3 && curves.size() != 4) {
+        curves = MergeToSides(std::move(curves), 4, tolerance);
+        if (curves.size() != 4) {
             return Out::Success(TopoDS_Face());
         }
         for (auto& curve : curves) {
@@ -717,14 +725,8 @@ TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<
             }
         }
         SnapCorners(curves);
-        occ::handle<Geom_BSplineSurface> surface;
-        if (curves.size() == 4) {
-            GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
-            surface = patch.Surface();
-        } else {
-            GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], GeomFill_CoonsStyle);
-            surface = patch.Surface();
-        }
+        GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
+        const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
         if (surface.IsNull()) {
             return Out::Success(TopoDS_Face());
         }

@@ -20,6 +20,9 @@
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
+#include <gp_Pnt.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <algorithm>
@@ -450,17 +453,94 @@ KACHA_V2_TEST(kernel_four_edge, atamaの辺4は段ごとにどこでずれるか
         log += "\n辺 " + std::to_string(k + 1) + ":";
         curves.push_back(SideLikeKernel(sides[k], log));
     }
-    GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
-    const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
-    Require(!surface.IsNull(), "Coons が張れる");
-    log += "\n面(rational " + std::to_string(surface->IsURational() || surface->IsVRational() ? 1 : 0) + "):";
-    double worst = 0.0;
-    for (std::size_t k = 0; k < sides.size(); ++k) {
-        const double dev = WorstToSurface(SampleChain(sides[k], 1.0e-3), surface);
-        log += " 辺 " + std::to_string(k + 1) + " dev " + std::to_string(dev);
-        worst = std::max(worst, dev);
+    const auto measure = [&](const char* name, const std::vector<occ::handle<Geom_BSplineCurve>>& c,
+                             const std::vector<std::size_t>& order) {
+        GeomFill_BSplineCurves patch(c[order[0]], c[order[1]], c[order[2]], c[order[3]], GeomFill_CoonsStyle);
+        const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
+        Require(!surface.IsNull(), std::string("Coons が張れる: ") + name);
+        log += std::string("\n") + name + "(U rational " + std::to_string(surface->IsURational() ? 1 : 0)
+            + " V rational " + std::to_string(surface->IsVRational() ? 1 : 0) + ", U knots "
+            + std::to_string(surface->NbUKnots()) + " V knots " + std::to_string(surface->NbVKnots()) + "):";
+        double worst = 0.0;
+        for (std::size_t k = 0; k < sides.size(); ++k) {
+            const double dev = WorstToSurface(SampleChain(sides[k], 1.0e-3), surface);
+            log += " 辺 " + std::to_string(k + 1) + " dev " + std::to_string(dev);
+            worst = std::max(worst, dev);
+        }
+        // 逆向きにも測る: 面の縁(等パラメータ線)を細かく標本し、元の 4 辺の曲線までの距離。
+        // 面の縁が元の辺と一致していれば 0。ここが 0 で上が 0 でなければ、測り方(最短点探し)の問題。
+        double u1 = 0.0, u2 = 0.0, v1 = 0.0, v2 = 0.0;
+        surface->Bounds(u1, u2, v1, v2);
+        const auto edgeWorst = [&](const occ::handle<Geom_Curve>& iso) {
+            double edge = 0.0;
+            for (int i = 0; i <= 60; ++i) {
+                const double t = iso->FirstParameter()
+                    + (iso->LastParameter() - iso->FirstParameter()) * i / 60.0;
+                const gp_Pnt point = iso->Value(t);
+                double nearest = 1.0e9;
+                for (const auto& side : c) {
+                    GeomAPI_ProjectPointOnCurve project(point, side);
+                    if (project.NbPoints() > 0) {
+                        nearest = std::min(nearest, project.LowerDistance());
+                    }
+                }
+                edge = std::max(edge, nearest);
+            }
+            return edge;
+        };
+        log += " | 縁→辺: u1 " + std::to_string(edgeWorst(surface->UIso(u1))) + " u2 "
+            + std::to_string(edgeWorst(surface->UIso(u2))) + " v1 " + std::to_string(edgeWorst(surface->VIso(v1)))
+            + " v2 " + std::to_string(edgeWorst(surface->VIso(v2)));
+        return worst;
+    };
+    const double asIs = measure("V0 そのまま", curves, {0, 1, 2, 3});
+    const double rotated = measure("V3 辺 4 を先頭に", curves, {3, 0, 1, 2});
+    // V1: 向かい合う辺の節をこちらでそろえてから渡す(GeomFill の SetSameDistribution に仕事を残さない)。
+    // GeomFill は C3・C4 を逆向きにして C1・C2 と組にするので、鏡にした節を入れる。
+    std::vector<occ::handle<Geom_BSplineCurve>> unified;
+    for (const auto& c : curves) {
+        unified.push_back(occ::handle<Geom_BSplineCurve>::DownCast(c->Copy()));
     }
-    Require(worst <= 1.0e-3, "どの辺も面の上にある:" + log);
+    const auto normalize = [](const occ::handle<Geom_BSplineCurve>& c) {
+        TColStd_Array1OfReal knots(1, c->NbKnots());
+        c->Knots(knots);
+        const double first = knots(1);
+        const double last = knots(c->NbKnots());
+        for (int i = 1; i <= c->NbKnots(); ++i) {
+            knots(i) = (knots(i) - first) / (last - first);
+        }
+        c->SetKnots(knots);
+    };
+    const auto insertMirrored = [](const occ::handle<Geom_BSplineCurve>& into,
+                                   const occ::handle<Geom_BSplineCurve>& from, bool mirror) {
+        TColStd_Array1OfReal knots(1, from->NbKnots());
+        TColStd_Array1OfInteger mults(1, from->NbKnots());
+        from->Knots(knots);
+        from->Multiplicities(mults);
+        TColStd_Array1OfReal k2(1, from->NbKnots());
+        TColStd_Array1OfInteger m2(1, from->NbKnots());
+        for (int i = 1; i <= from->NbKnots(); ++i) {
+            const int j = mirror ? from->NbKnots() + 1 - i : i;
+            k2(i) = mirror ? 1.0 - knots(j) : knots(j);
+            m2(i) = mults(j);
+        }
+        into->InsertKnots(k2, m2, 1.0e-9, false);
+    };
+    for (const auto& c : unified) {
+        normalize(c);
+    }
+    insertMirrored(unified[0], unified[2], true);
+    insertMirrored(unified[2], unified[0], true);
+    insertMirrored(unified[1], unified[3], true);
+    insertMirrored(unified[3], unified[1], true);
+    for (std::size_t k = 0; k < unified.size(); ++k) {
+        log += "\nV1 辺 " + std::to_string(k + 1) + " knots " + std::to_string(unified[k]->NbKnots())
+            + " poles " + std::to_string(unified[k]->NbPoles()) + " dev "
+            + std::to_string(WorstToCurve(SampleChain(sides[k], 1.0e-3), unified[k]));
+    }
+    const double unifiedDev = measure("V1 節をそろえた", unified, {0, 1, 2, 3});
+    Require(asIs <= 1.0e-3 || rotated <= 1.0e-3 || unifiedDev <= 1.0e-3, "どの辺も面の上にある:" + log);
+    Require(asIs <= 1.0e-3, "そのままの道でも面の上にある:" + log);
 }
 
 KACHA_V2_TEST(kernel_four_edge, 張り方で形が変わる)

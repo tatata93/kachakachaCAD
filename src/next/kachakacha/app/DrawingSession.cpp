@@ -390,6 +390,7 @@ void DrawingSession::AddControlPolygon(const ToolOutput& output, ClickResult& re
     entity.createdBy = feature.id;
     entity.construction = true;
     const std::vector<geometry::CurveSegment> segments = definition.segments;
+    const auto segmentIds = definition.segmentIds;
     feature.definition = std::move(definition);
     feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
     const auto added = document_.Run(AddFeatureCommand(feature, {entity}, "制御多角形"));
@@ -399,9 +400,9 @@ void DrawingSession::AddControlPolygon(const ToolOutput& output, ClickResult& re
         return;
     }
     result.createdEntityIds.push_back(entity.id);
-    for (const geometry::CurveSegment& segment : segments) {
+    for (std::size_t index = 0; index < segments.size(); ++index) {
         scene_.curves.push_back(
-            SnapCurve{entity.id, ids_->NextTyped<IdKind::Segment>(), segment, true});
+            SnapCurve{entity.id, segmentIds[index], segments[index], true});
     }
 }
 
@@ -442,9 +443,14 @@ void DrawingSession::AddToScene(const ToolOutput& output, EntityId entityId)
     for (const Vector3& point : output.points) {
         scene_.points.push_back(SnapDrawingPoint{entityId, point});
     }
-    for (const geometry::CurveSegment& segment : output.segments) {
-        scene_.curves.push_back(SnapCurve{entityId, ids_->NextTyped<IdKind::Segment>(),
-            segment, output.construction});
+    if (!output.segments.empty()) {
+        // 作図直後も保存・Undo/Redo後も、同じSegment UUIDを参照する。
+        const auto* entity = document_.FindEntity(entityId);
+        const auto& wire = std::get<CreateWireDefinition>(document_.FindFeature(entity->createdBy)->definition);
+        for (std::size_t index = 0; index < output.segments.size(); ++index) {
+            scene_.curves.push_back(SnapCurve{entityId, wire.segmentIds[index],
+                output.segments[index], output.construction});
+        }
     }
 }
 

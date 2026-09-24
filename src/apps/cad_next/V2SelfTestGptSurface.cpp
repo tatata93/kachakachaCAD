@@ -3,6 +3,8 @@
 #include "V2Viewport.h"
 #include "kachakacha/app/Selection.h"
 #include <QComboBox>
+#include <QCheckBox>
+#include <QTreeWidgetItem>
 #include <QApplication>
 #include <QDir>
 #include <QPixmap>
@@ -99,7 +101,7 @@ bool CancelAndReject(V2MainWindow& window)
     if (!Explain("open boundary cannot commit", confirm != nullptr && !confirm->isEnabled())) { return false; }
     if (!Click(window, "gptSurfaceCancel")) { return false; }
     return Explain("cancel keeps document", window.Session().GetDocument().Revision() == before
-        && window.Viewport().ToolPreviewFaceCount() == 0);
+        && window.Viewport().ToolPreviewFaceCount() == 0 && window.Viewport().ToolRoleLabels().empty());
 }
 
 bool PickCompositeSections(V2MainWindow& window)
@@ -142,12 +144,60 @@ bool PickCompositeSections(V2MainWindow& window)
     if (!Click(window, "gptSurfacePreview") || !Click(window, "gptSurfaceConfirm")) { return false; }
     return Explain("picked composite sections produce a surface", CountOfKind(window, domain::EntityKind::GuideSurface) == 1);
 }
+bool AutomaticBranchAndMarks(V2MainWindow& window)
+{
+    DrawLine(window, .3, .3, .7, .3);
+    DrawLine(window, .7, .3, .7, .7);
+    DrawLine(window, .7, .7, .3, .7);
+    DrawLine(window, .3, .7, .3, .3);
+    DrawLine(window, .3, .3, .7, .7);
+    const auto interior = window.Session().Scene().curves.back();
+    SelectWires(window);
+    window.RunCommand("surface.gpt_create");
+    auto* automatic = window.findChild<QCheckBox*>(QStringLiteral("gptSurfaceAutomatic"));
+    auto* list = window.findChild<QTreeWidget*>(QStringLiteral("gptSurfaceInputs"));
+    auto* next = window.findChild<QPushButton*>(QStringLiteral("gptSurfaceNextBoundary"));
+    if (automatic == nullptr || list == nullptr || next == nullptr) { return false; }
+    if (!Explain("automatic classification is the default", automatic->isChecked())
+        || !Explain("all five inputs shown", list->topLevelItemCount() == 5)
+        || !Explain("other loops available", next->isEnabled())
+        || !Explain("branch becomes interior", list->topLevelItem(4)->text(0).contains(QStringLiteral("通る線")))) { return false; }
+    if (!Click(window, "gptSurfaceNextBoundary")) { return false; }
+    auto* confirm = window.findChild<QPushButton*>(QStringLiteral("gptSurfaceConfirm"));
+    if (!Explain("alternative keeps all inputs and refuses outside constraints", list->topLevelItemCount() == 5
+        && confirm != nullptr && !confirm->isEnabled())) { return false; }
+    automatic->setChecked(false);
+    automatic->setChecked(true);
+    const auto& marks = window.Viewport().ToolRoleLabels();
+    if (!Explain("five numbered direction markers", marks.size() == 5 && marks.front().arrowToward.has_value())) { return false; }
+    if (!Click(window, "gptSurfacePreview")
+        || !Explain("branched selection makes a face", window.Viewport().ToolPreviewFaceCount() > 0)) { return false; }
+    const auto screen = window.Viewport().Mapping().Project(interior.segment.Evaluate(.5));
+    if (!screen.has_value()) { return false; }
+    window.Viewport().SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+    if (!Explain("picking registered interior selects matching row", list->indexOfTopLevelItem(list->currentItem()) == 4)) { return false; }
+    const auto before = window.Viewport().ToolRoleLabels().back();
+    if (!Explain("selected input is emphasized", before.emphasized) || !Click(window, "gptSurfaceReverse")) { return false; }
+    const auto after = window.Viewport().ToolRoleLabels().back();
+    if (!Explain("manual edits disable inference", !automatic->isChecked())
+        || !Explain("arrow reverses on screen", before.arrowToward.has_value() && after.arrowToward.has_value()
+            && (*before.arrowToward - *after.arrowToward).Length() > 0.1)) { return false; }
+    if (!Click(window, "gptSurfacePreview")) { return false; }
+    QApplication::processEvents();
+    window.grab().save(QDir::tempPath() + QStringLiteral("/kachakacha-gpt-auto-marks.png"));
+    if (!Click(window, "gptSurfaceConfirm")) { return false; }
+    return Explain("confirmation keeps wires and removes temporary marks", CountOfKind(window, domain::EntityKind::Wire) == 5
+        && CountOfKind(window, domain::EntityKind::GuideSurface) == 1 && window.Viewport().ToolRoleLabels().empty()
+        && !window.Viewport().RoleColorOf(interior.entityId).has_value());
+}
+
 }
 std::vector<SelfTestCase> GptSurfaceCases()
 {
     return {{"HP-GPT-01 外周・下見・確定・Undo/Redo・保存再読込", Boundary},
         {"HP-GPT-02 複数断面から面を作る", Sections},
         {"HP-GPT-03 不完全な外周を拒否・取消で文書不変", CancelAndReject},
-        {"HP-GPT-04 クリックで複合断面を追加・並べ替え・確定", PickCompositeSections}};
+        {"HP-GPT-04 クリックで複合断面を追加・並べ替え・確定", PickCompositeSections},
+        {"HP-GPT-05 分岐から外周自動判定・番号矢印・クリック修正", AutomaticBranchAndMarks}};
 }
 }

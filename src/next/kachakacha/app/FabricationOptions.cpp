@@ -15,7 +15,7 @@ namespace {
 
 constexpr const char* kBadBoundaryText = "UI-F001";
 constexpr const char* kBadPartCount = "UI-F002";
-constexpr const char* kBadEqualCount = "UI-F007";
+constexpr const char* kBadEqualCount = "UI-F008";
 constexpr const char* kBadMinimumWidth = "UI-F003";
 constexpr const char* kBadFidelity = "UI-F004";
 constexpr const char* kBadRange = "UI-F005";

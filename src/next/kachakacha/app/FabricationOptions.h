@@ -14,7 +14,7 @@
 //! - UI-F004 再現度は 1〜20 にしてください。
 //! - UI-F005 面の範囲は 0〜1 の中で、最小を最大より小さくしてください。
 //! - UI-F006 部材番号が範囲外です。
-//! - UI-F007 枚数は 0(自動)か 1〜200 にしてください。
+//! - UI-F008 枚数は 0(自動)か 1〜200 にしてください。
 
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/base/Diagnostic.h"

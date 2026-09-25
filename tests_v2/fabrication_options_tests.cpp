@@ -71,8 +71,8 @@ KACHA_V2_TEST(fabrication_options, 欄の値は範囲の外を断り作り方と
     FabricationChoice badCount = fresh;
     badCount.equalPartCount = 201;
     Require(!CheckFabricationChoice(badCount).HasValue()
-            && CheckFabricationChoice(badCount).Diagnostics().front().code == "UI-F007",
-        "枚数 201 は UI-F007 で断る");
+            && CheckFabricationChoice(badCount).Diagnostics().front().code == "UI-F008",
+        "枚数 201 は UI-F008 で断る");
     FabricationChoice badAxis = fresh;
     badAxis.splitAxis = 9;
     Require(!CheckFabricationChoice(badAxis).HasValue(), "知らない向きは断る");

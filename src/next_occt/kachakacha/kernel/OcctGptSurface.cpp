@@ -44,6 +44,10 @@ Result<TopoDS_Shape> GenerateBoundary(const app::GptSurfaceRequest& request,
         if (face.IsDone()) { return Result<TopoDS_Shape>::Success(face.Shape()); }
     }
     BRepOffsetAPI_MakeFilling filling;
+    // 小さい前頭部の複数円弧も、既定の15標本・2反復では線の間で外れる。
+    // 拘束線を密に評価し、十分な区間で滑らかな曲面へ近似する。
+    filling.SetResolParam(2, 30, 2, false);
+    filling.SetApproxParam(10, 32);
     filling.SetConstrParam(tolerance.modelLinearMm, tolerance.modelLinearMm,
         tolerance.modelAngularRad, tolerance.modelLinearMm);
     for (const auto& curve : request.curves) {

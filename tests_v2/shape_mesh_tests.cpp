@@ -3,6 +3,8 @@
 #include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/modeling/ShapeMesh.h"
 #include "kachakacha/view/ShapeShading.h"
+#include "kachakacha/view/SurfaceRaster.h"
+#include "kachakacha/geometry/ScreenMapping.h"
 
 #include <cmath>
 
@@ -270,6 +272,44 @@ KACHA_V2_TEST(mesh_pick, 面に分かれていない形でも落ちない)
     Require(hits.size() == 1, "1つ");
     Require(hits.front().faceIndex == kachakacha::v2::modeling::kNoFaceIndex,
         "面の番号は無い");
+}
+
+
+KACHA_V2_TEST(shading, smooth_raster_is_opaque_without_triangle_seams)
+{
+    const auto mapping = kachakacha::v2::geometry::MakeOrthographicMapping({5,5,0}, {0,0,-1}, {0,1,0}, 12, 120, 120);
+    SurfaceRaster raster(120,120);
+    const auto mesh = FlatSquare();
+    for (auto triangle : mesh.triangles) {
+        for (std::size_t i=0; i<3; ++i) {
+            const double x = triangle.points[i].x / 10;
+            triangle.vertexNormals[i] = Vector3{x*.8, 0, 1};
+        }
+        raster.Draw(triangle,mapping,{0,0,-1},false,0x91bed9);
+    }
+    const auto& pixels = raster.Pixels();
+    for (int y=11; y<109; ++y) {
+        for (int x=11; x<109; ++x) {
+            Require((pixels[static_cast<std::size_t>(y)*120+x] >> 24) == 255, "no transparent triangle cracks");
+        }
+    }
+    Require(pixels[60*120+20] != pixels[60*120+100], "normals vary smoothly inside faces");
+    for (int x=15; x<105; ++x) {
+        Require(pixels[40*120+x] == pixels[80*120+x], "shared diagonal has no shading seam");
+    }
+}
+
+KACHA_V2_TEST(shading, raster_depth_is_independent_of_shape_order)
+{
+    const auto mapping = kachakacha::v2::geometry::MakeOrthographicMapping({5,5,0}, {0,0,-1}, {0,1,0}, 12, 80,80);
+    SurfaceRaster first(80,80), second(80,80);
+    const auto front=FlatSquare(2), back=FlatSquare(0);
+    for (const auto& t:front.triangles) { first.Draw(t,mapping,{0,0,-1},false,0xff0000); }
+    for (const auto& t:back.triangles) { first.Draw(t,mapping,{0,0,-1},false,0x0000ff); }
+    for (const auto& t:back.triangles) { second.Draw(t,mapping,{0,0,-1},false,0x0000ff); }
+    for (const auto& t:front.triangles) { second.Draw(t,mapping,{0,0,-1},false,0xff0000); }
+    Require(first.Pixels() == second.Pixels(), "hidden shapes do not bleed through based on draw order");
+    Require((first.Pixels()[40*80+40] & 255) == 0, "front red surface occludes blue surface");
 }
 
 KACHA_V2_TEST_MAIN("shape_mesh_tests")

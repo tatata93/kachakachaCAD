@@ -87,6 +87,7 @@ void V2Viewport::HideToolPreview()
     }
     toolPreview_.clear();
     toolPreviewFaces_.clear();
+    toolPreviewMesh_ = {};
     update();
 }
 
@@ -94,7 +95,6 @@ void V2Viewport::HideToolPreview()
 //! **出来上がりの線であって、文書の線ではない。**同じ見た目にすると取り違える。
 void V2Viewport::DrawToolPreview(QPainter& painter) const
 {
-    DrawToolPreviewFaces(painter);
     // 下見の面の解析(面を作る・面の編集の最中も、ゼブラや曲率を見られる)。
     for (const AnalysisView& view : analysisViews_) {
         if (!view.entityId.IsNil()) {

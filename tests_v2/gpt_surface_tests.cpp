@@ -1,4 +1,6 @@
 #include "kachakacha/app/GptSurface.h"
+#include "kachakacha/geometry/ArcBuilders.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/app/GptSurfaceAuto.h"
 #include <algorithm>
 #include "kachakacha/base/TestHarness.h"
@@ -194,6 +196,34 @@ KACHA_V2_TEST(gpt_surface, closed_curved_sections_preserve_circles)
     RequireNear(made.Value().areaMm2, std::acos(-1.0) * 30 * std::sqrt(1000.0), .01,
         "analytic conical frustum area");
     Require(made.Value().maximumDeviationMm <= .01, "both circles pass deviation check");
+    kernel::ReleaseShape(made.Value().handle);
+}
+
+KACHA_V2_TEST(gpt_surface, owners_head_shell_is_smooth_and_has_no_bottom)
+{
+    const auto arc = [](geometry::Vector3 a,geometry::Vector3 b,geometry::Vector3 c) {
+        return geometry::ArcThroughThreePoints(a,b,c).Value();
+    };
+    app::GptSurfaceRequest request;
+    request.curves = {{{arc({-3.5,1.936491673,0},{0,2.5,0},{3.5,1.936491673,0}),
+        arc({-3.5,1.936491673,0},{-4.581139,1.224745,0},{-5,0,0}),
+        arc({5,0,0},{4.581139,1.224745,0},{3.5,1.936491673,0}),
+        Line({5,0,0},{3,0,3}),Line({-5,0,0},{-3,0,3}),
+        Line({3,0,3},{0,0,3.5}),Line({0,0,3.5},{-3,0,3})}, "outer",true,app::kGptBoundaryRole},
+        {{arc({0,0,3.5},{0,2.105897,2.361355},{0,2.5,0})},"rib",false,app::kGptInteriorRole}};
+    const auto made=kernel::BuildGptSurface(request,{});
+    Require(made.HasValue(), made.FirstMessageJa());
+    const auto mesh=kernel::BuildShapeMesh(made.Value().handle);
+    Require(mesh.HasValue(),mesh.FirstMessageJa());
+    Require(!mesh.Value().closed && mesh.Value().faceCount == 1, "single continuous open shell, no invented bottom");
+    Require(made.Value().maximumDeviationMm <= .01, "outer arcs and central rib honored");
+    Require(mesh.Value().minimum.z >= -.02 && mesh.Value().maximum.z <= 3.6, "no undershoot or spurious ridge above the head");
+    std::size_t smooth=0;
+    for (const auto& triangle:mesh.Value().triangles) {
+        for (const auto& normal:triangle.vertexNormals) { RequireNear(normal.Length(),1,1e-5,"unit surface normal"); }
+        if ((triangle.vertexNormals[0]-triangle.vertexNormals[1]).Length() > 1e-4) { ++smooth; }
+    }
+    Require(smooth > 20, "curved shading uses actual surface normals rather than triangle facets");
     kernel::ReleaseShape(made.Value().handle);
 }
 #else

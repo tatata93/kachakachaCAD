@@ -180,7 +180,7 @@ public:
     struct ShapeView {
         kachakacha::v2::base::EntityId entityId;
         kachakacha::v2::modeling::ShapeMesh mesh;
-        //! 面(形状ガイド)なら true。立体より薄く塗り、裏も描く。
+        //! 面(形状ガイド)なら true。不透明な連続陰影で、裏も描く。
         bool surface = false;
     };
     //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
@@ -270,7 +270,8 @@ public:
     //! いまは「面を作る」が使う(オーナー指示 2026-09-15 §12)。
     void ShowToolPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines);
     void HideToolPreview();
-    void SetToolPreviewFaces(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces);
+    void SetToolPreviewFaces(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces,
+        const kachakacha::v2::modeling::ShapeMesh* smoothMesh = nullptr);
     [[nodiscard]] std::size_t ToolPreviewFaceCount() const { return toolPreviewFaces_.size(); }
     //! いま下見に出している線。試験が「見えているとおりか」を見るために要る。
     [[nodiscard]] const std::vector<std::vector<kachakacha::v2::geometry::Vector3>>&
@@ -778,6 +779,7 @@ private:
     //! 道具の下見の線。細い破線で出す。
     void DrawToolPreview(QPainter& painter) const;
     void DrawToolPreviewFaces(QPainter& painter) const;
+    void DrawSmoothShapes(QPainter& painter) const;
     //! 解析で塗り替えた面と、重ねる線(V2ViewportAnalysis.cpp)。
     void DrawAnalysisShape(QPainter& painter, const AnalysisView& view) const;
     void DrawAnalysisLines(QPainter& painter, const AnalysisView& view) const;
@@ -1025,6 +1027,7 @@ private:
     //! 道具の下見の線。空なら何も描かない。
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreview_;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreviewFaces_;
+    kachakacha::v2::modeling::ShapeMesh toolPreviewMesh_;
     EditPreview editPreview_;
     std::function<bool(const QPointF&)> editClickCallback_;
     //! 3D の中の役割の札。空なら何も描かない。

@@ -11,6 +11,7 @@
 #include <BRepBndLib.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
@@ -27,6 +28,7 @@
 #include <TopoDS_Shape.hxx>
 #include <TopAbs_State.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Dir.hxx>
 #include <gp_Pnt2d.hxx>
 
 #endif
@@ -41,12 +43,11 @@ using geometry::Vector3;
 
 double DeflectionForSize(double boundingDiagonalMm) noexcept
 {
-    // 対角の 1/500 を狙う。0.02mm より細かくしても画面では見えず、
-    // 5mm より粗いと円が多角形に見える。その間に収める。
+    // 小さな模型を拡大しても曲面の輪郭が多角形にならない表示分割。
     if (!std::isfinite(boundingDiagonalMm) || boundingDiagonalMm <= 0.0) {
         return 0.1;
     }
-    return std::clamp(boundingDiagonalMm / 500.0, 0.02, 5.0);
+    return std::clamp(boundingDiagonalMm / 3000.0, 0.0005, 1.0);
 }
 
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -95,6 +96,7 @@ void CollectTriangles(const TopoDS_Shape& shape, ShapeMesh& mesh)
         }
         const gp_Trsf transform = location.Transformation();
         const bool reversed = face.Orientation() == TopAbs_REVERSED;
+        BRepLib_ToolTriangulatedShape::ComputeNormals(face, facets);
         for (int index = 1; index <= facets->NbTriangles(); ++index) {
             int first = 0;
             int second = 0;
@@ -110,6 +112,13 @@ void CollectTriangles(const TopoDS_Shape& shape, ShapeMesh& mesh)
             triangle.points[0] = ToVector(facets->Node(first).Transformed(transform));
             triangle.points[1] = ToVector(facets->Node(second).Transformed(transform));
             triangle.points[2] = ToVector(facets->Node(third).Transformed(transform));
+            if (facets->HasNormals()) {
+                const std::array<int, 3> nodes{first, second, third};
+                for (std::size_t at = 0; at < nodes.size(); ++at) {
+                    const gp_Dir normal = facets->Normal(nodes[at]).Transformed(transform);
+                    triangle.vertexNormals[at] = Vector3{normal.X(), normal.Y(), normal.Z()} * (reversed ? -1.0 : 1.0);
+                }
+            }
             mesh.triangles.push_back(triangle);
         }
     }
@@ -214,7 +223,7 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
     try {
         const double chosen = deflectionMm > 0.0 ? deflectionMm
                                                  : DeflectionForSize(DiagonalOf(shape));
-        BRepMesh_IncrementalMesh mesh(shape, chosen, Standard_False, 0.5, Standard_True);
+        BRepMesh_IncrementalMesh mesh(shape, chosen, Standard_False, 0.12, Standard_True);
         (void)mesh;
         ShapeMesh made;
         made.closed = IsClosedSolid(shape);

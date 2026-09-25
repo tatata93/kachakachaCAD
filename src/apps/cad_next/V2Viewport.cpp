@@ -733,6 +733,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     // 線はこの道具の主役なので、必ず上に出す。
     DrawShapes(painter);
     DrawProfileRegions(painter);
+    DrawToolPreviewFaces(painter);
     DrawDocument(painter);
     DrawGuideRows(painter);
     DrawPreview(painter);

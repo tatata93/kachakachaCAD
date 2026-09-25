@@ -7,7 +7,10 @@
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/geometry/CurveSampling.h"
+
+#ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
 
 #include <GeomAPI_ProjectPointOnCurve.hxx>
@@ -25,6 +28,7 @@
 #include <gp_Pnt.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
+#endif
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <algorithm>
@@ -557,6 +561,29 @@ KACHA_V2_TEST(kernel_four_edge, atamaの辺4は段ごとにどこでずれるか
     (void)rotated;
     (void)unifiedDev;
     Require(polynomialDev <= 1.0e-4, "多項式に近づけた辺なら面の縁が辺の上にある:" + log);
+}
+
+KACHA_V2_TEST(kernel_four_edge, 面の網には頼めばUV線の格子が入り頼まなければ入らない)
+{
+    // オーナー指示 2026-09-25: 作った面の形が分かりにくいので格子を入れる。
+    const auto built = Build(Patch(FourEdgeStyle::Coons));
+    Require(built.HasValue(), "作れる: " + Why(built));
+    const auto plain = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle);
+    Require(plain.HasValue() && plain.Value().isoLines.empty(), "頼まなければ格子は入らない(立体の道)");
+    const auto gridded = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle, 0.0, 8);
+    Require(gridded.HasValue(), "格子つきでも網にできる");
+    const auto& mesh = gridded.Value();
+    Require(mesh.isoLines.size() == 16,
+        "1 方向 8 本ずつ、切れていない面なら 16 本(実際 " + std::to_string(mesh.isoLines.size()) + ")");
+    // 格子の点は面の上(外接箱の中で、四辺面の膨らみの範囲 z ∈ [0, 14] あたり)にある。
+    for (const auto& line : mesh.isoLines) {
+        Require(line.size() >= 2, "1 本は 2 点以上");
+        for (const Vector3& point : line) {
+            Require(point.x >= -1.0e-6 && point.x <= 60.0 + 1.0e-6 && point.y >= -1.0e-6
+                    && point.y <= 40.0 + 1.0e-6 && point.z >= -1.0e-3 && point.z <= 15.0,
+                "格子の点が面の広がりの中にある");
+        }
+    }
 }
 
 KACHA_V2_TEST(kernel_four_edge, 張り方で形が変わる)

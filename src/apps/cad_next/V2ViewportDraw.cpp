@@ -718,6 +718,29 @@ void V2Viewport::DrawShapes(QPainter& painter) const
     }
 }
 
+void V2Viewport::DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, const QColor& edge,
+    bool emphasized) const
+{
+    QColor grid = edge;
+    grid.setAlpha(emphasized ? 150 : 110);
+    painter.setPen(QPen(grid, 0.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    for (const auto& line : shape.mesh.isoLines) {
+        QPolygonF path;
+        bool ok = true;
+        for (const Vector3& point : line) {
+            const auto screen = ToScreen(point);
+            if (!screen.has_value()) {
+                ok = false;
+                break;
+            }
+            path << *screen;
+        }
+        if (ok && path.size() >= 2) {
+            painter.drawPolyline(path);
+        }
+    }
+}
+
 void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
 {
     using kachakacha::v2::view::BackFacing;
@@ -779,6 +802,11 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
         edge = SemanticColor(SemanticState::Hover);
     }
     painter.setBrush(Qt::NoBrush);
+    // 面の格子(U/V 線)。稜線より細く薄く、稜線の下に。塗りだけだと膨らみやねじれが読めない
+    // (オーナー指示 2026-09-25「作った面の形がわかりにくいからグリッドを入れて」)。
+    if (shape.surface && !shape.mesh.isoLines.empty()) {
+        DrawSurfaceGrid(painter, shape, edge, selected || hovered);
+    }
     painter.setPen(QPen(edge, selected || hovered ? 2.0 : 1.1, Qt::SolidLine, Qt::RoundCap,
         Qt::RoundJoin));
     for (const auto& line : shape.mesh.edges) {

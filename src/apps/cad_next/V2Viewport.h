@@ -760,6 +760,9 @@ private:
     void DrawShapes(QPainter& painter) const;
     //! 形1つ分。塗りと稜線。
     void DrawOneShape(QPainter& painter, const ShapeView& shape) const;
+    //! 面の格子(U/V 線)。稜線より細く薄く描く。
+    void DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, const QColor& edge,
+        bool emphasized) const;
     void DrawDocument(QPainter& painter) const;
     //! 閉じた輪郭の内側。線の下へ半透明で敷く。
     void DrawProfileRegions(QPainter& painter) const;

@@ -37,6 +37,11 @@ using kachakacha::v2::modeling::ShapeMesh;
 
 } // namespace
 
+namespace {
+//! 面の格子(U/V 線)の本数(1 方向)。多いと線で塗りが隠れ、少ないと形が読めない。
+constexpr int kSurfaceGridLinesPerDirection = 8;
+} // namespace
+
 void V2MainWindow::RefreshShapeViews()
 {
     if (viewport_ == nullptr) {
@@ -78,8 +83,10 @@ void V2MainWindow::RefreshShapeViews()
             if (cached != shapeMeshes_.end()) {
                 view.mesh = cached->second;
             } else {
-                // まだ網にしていない形。ここで1度だけ作る。
-                auto made = kachakacha::v2::kernel::BuildShapeMesh(entry.second);
+                // まだ網にしていない形。ここで1度だけ作る。面には U/V の格子を入れる
+                // (塗りだけだと膨らみ・ねじれが読めない。オーナー指示 2026-09-25)。
+                auto made = kachakacha::v2::kernel::BuildShapeMesh(entry.second, 0.0,
+                    surface ? kSurfaceGridLinesPerDirection : 0);
                 if (!made.HasValue()) {
                     // 出せない形は黙って飛ばさない。知らせに出して、残りは出す。
                     ReportDiagnostics(made.Diagnostics());

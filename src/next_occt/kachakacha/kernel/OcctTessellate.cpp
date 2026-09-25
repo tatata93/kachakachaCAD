@@ -9,10 +9,13 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBndLib.hxx>
+#include <BRepClass_FaceClassifier.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GCPnts_QuasiUniformDeflection.hxx>
+#include <Geom_Surface.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -22,7 +25,9 @@
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopAbs_State.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 
 #endif
 
@@ -152,7 +157,53 @@ void CollectEdges(const TopoDS_Shape& shape, double deflectionMm, ShapeMesh& mes
 
 } // namespace
 
-Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double deflectionMm)
+std::vector<std::vector<Vector3>> FaceIsoLines(const TopoDS_Face& face, int count)
+{
+    std::vector<std::vector<Vector3>> lines;
+    if (count <= 0 || face.IsNull()) {
+        return lines;
+    }
+    double u0 = 0.0;
+    double u1 = 0.0;
+    double v0 = 0.0;
+    double v1 = 0.0;
+    BRepTools::UVBounds(face, u0, u1, v0, v1);
+    const occ::handle<Geom_Surface> surface = BRep_Tool::Surface(face);
+    if (surface.IsNull() || !(u1 > u0) || !(v1 > v0)) {
+        return lines;
+    }
+    constexpr int kSteps = 64;
+    // 1 本の線を面の内側だけの折れ線にする(トリムで外に出たところで切る)。
+    const auto add = [&](bool alongU, double fixed, double from, double to) {
+        std::vector<Vector3> run;
+        for (int k = 0; k <= kSteps; ++k) {
+            const double at = from + (to - from) * k / kSteps;
+            const double u = alongU ? at : fixed;
+            const double v = alongU ? fixed : at;
+            const bool inside =
+                BRepClass_FaceClassifier(face, gp_Pnt2d(u, v), 1.0e-7).State() != TopAbs_OUT;
+            if (inside) {
+                run.push_back(ToVector(surface->Value(u, v)));
+                continue;
+            }
+            if (run.size() >= 2) {
+                lines.push_back(run);
+            }
+            run.clear();
+        }
+        if (run.size() >= 2) {
+            lines.push_back(run);
+        }
+    };
+    for (int k = 1; k <= count; ++k) {
+        add(true, v0 + (v1 - v0) * k / (count + 1), u0, u1);
+        add(false, u0 + (u1 - u0) * k / (count + 1), v0, v1);
+    }
+    return lines;
+}
+
+Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double deflectionMm,
+    int isoLinesPerDirection)
 {
     TopoDS_Shape shape;
     if (!LookupShape(handle, shape)) {
@@ -169,6 +220,12 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
         made.closed = IsClosedSolid(shape);
         CollectTriangles(shape, made);
         CollectEdges(shape, chosen, made);
+        if (isoLinesPerDirection > 0) {
+            for (TopExp_Explorer faces(shape, TopAbs_FACE); faces.More(); faces.Next()) {
+                auto lines = FaceIsoLines(TopoDS::Face(faces.Current()), isoLinesPerDirection);
+                made.isoLines.insert(made.isoLines.end(), lines.begin(), lines.end());
+            }
+        }
         if (made.Empty()) {
             return Result<ShapeMesh>::Failure(MakeError(kTessellateFailed,
                 "その形は画面に出せませんでした。",
@@ -185,7 +242,7 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
 
 #else
 
-Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle, double)
+Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle, double, int)
 {
     return Result<ShapeMesh>::Failure(MakeError(kTessellateFailed,
         "その形は画面に出せませんでした。",

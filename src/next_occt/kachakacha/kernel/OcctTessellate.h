@@ -16,8 +16,12 @@
 //! 小さい部品は面が10枚になり、大きい部品は三角形が何十万枚にもなる。
 
 #include "kachakacha/base/Diagnostic.h"
-#include "kachakacha/modeling/ShapeMesh.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
+#include "kachakacha/modeling/ShapeMesh.h"
+
+#ifdef KACHACAD_V2_WITH_OCCT
+class TopoDS_Face;
+#endif
 
 namespace kachakacha::v2::kernel {
 
@@ -30,7 +34,15 @@ inline constexpr const char* kTessellateUnknownShape = "KER-M002";
 
 //! 形を網にする。三角形と稜線と外接箱が入る。
 //! deflectionMm に 0 以下を渡すと、大きさから決める。
+//! isoLinesPerDirection が 1 以上なら、面ごとに U/V の格子線をその本数ずつ入れる(面の内側だけ)。
+//! 立体には要らない(稜線で形が読める)ので、面(形状ガイド)を出すときだけ渡す。
 [[nodiscard]] base::Result<modeling::ShapeMesh> BuildShapeMesh(
-    modeling::KernelShapeHandle handle, double deflectionMm = 0.0);
+    modeling::KernelShapeHandle handle, double deflectionMm = 0.0, int isoLinesPerDirection = 0);
+
+#ifdef KACHACAD_V2_WITH_OCCT
+//! 面 1 枚の U/V の格子線(面の内側だけ、外に出たら切る)。1 方向 count 本ずつ。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> FaceIsoLines(const TopoDS_Face& face,
+    int count);
+#endif
 
 } // namespace kachakacha::v2::kernel

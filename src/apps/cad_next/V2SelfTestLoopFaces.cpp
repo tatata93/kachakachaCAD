@@ -715,6 +715,17 @@ void SelectAllWires(V2MainWindow& window)
                 && window.StatusText().contains(QStringLiteral("2 枚作りました")))) {
         return false;
     }
+    // 作った面には U/V の格子が乗る(オーナー指示 2026-09-25: 形が分かりにくい)。
+    int gridded = 0;
+    for (const auto& view : window.Viewport().ShapeViews()) {
+        if (view.surface && !view.mesh.isoLines.empty()) {
+            ++gridded;
+        }
+    }
+    if (!Explain((std::string("作った 2 枚の面の両方に格子(U/V 線)が乗る(実際 ")
+                    + std::to_string(gridded) + " 枚)").c_str(), gridded == 2)) {
+        return false;
+    }
     window.RunCommand("edit.undo");
     return Explain("1 回の取り消しで線の本数も面も元へ戻る",
         CountOfKind(window, EntityKind::Wire) == wiresBefore
@@ -744,7 +755,7 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesRecentReopens},
         {"HP-LF-09 削除は面・作業平面にも効き、使われている線と原点の平面は理由を言って断る",
             CaseDeleteWorksForNonWires},
-        {"HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚できる",
+        {"HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚でき、面に格子が乗る",
             CaseLoopFacesOwnersAtamaWires},
     };
 }

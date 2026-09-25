@@ -55,6 +55,9 @@ struct ShapeMesh {
     std::vector<MeshTriangle> triangles;
     //! 稜線。1本が折れ線(2点以上)。
     std::vector<std::vector<Vector3>> edges;
+    //! 面の格子(U/V 線、面の内側だけ)。面(形状ガイド)にだけ入る。形が読めるように薄く重ねる
+    //! (オーナー指示 2026-09-25「作った面の形がわかりにくいからグリッドを入れて」)。
+    std::vector<std::vector<Vector3>> isoLines;
     //! 外接箱。空なら minimum > maximum になる。
     Vector3 minimum{};
     Vector3 maximum{};

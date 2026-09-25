@@ -271,6 +271,23 @@ KACHA_V2_TEST(feature_definition, 展開の基準にする辺が保存して読�
         "書いていない古い文書は先頭が基準");
 }
 
+KACHA_V2_TEST(feature_definition, 切る向きと角で割ると枚数が保存して読み直せる)
+{
+    // オーナー指示 2026-09-25: 縦/横割り、縁の角で割る、面 1 枚を何枚に。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    made.splitAxis = 4;
+    made.splitAtCorners = true;
+    made.equalPartCount = 6;
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    Require(back.splitAxis == 4 && back.splitAtCorners && back.equalPartCount == 6,
+        "横・角で割る・6 枚が残る");
+    CreateFabricationModelDefinition plain;
+    plain.parts = {Ent(1)};
+    const auto old = RoundTrip(FeatureType::CreateFabricationModel, plain);
+    Require(!old.splitAtCorners && old.equalPartCount == 0, "書いていない古い文書は角で割らず枚数 0");
+}
+
 KACHA_V2_TEST(feature_definition, 曲げ半径が無い古い文書は全部自動で読める)
 {
     CreateFabricationModelDefinition made;

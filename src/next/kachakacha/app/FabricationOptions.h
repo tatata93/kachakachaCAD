@@ -14,6 +14,7 @@
 //! - UI-F004 再現度は 1〜20 にしてください。
 //! - UI-F005 面の範囲は 0〜1 の中で、最小を最大より小さくしてください。
 //! - UI-F006 部材番号が範囲外です。
+//! - UI-F007 枚数は 0(自動)か 1〜200 にしてください。
 
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/base/Diagnostic.h"
@@ -27,8 +28,13 @@ namespace kachakacha::v2::app {
 
 struct FabricationChoice {
     FabricationMethod method = FabricationMethod::BandApproximation;
-    //! 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)。V1 方式だけが使う。
-    int splitAxis = 2;
+    //! 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)、3 = 縦に割る、4 = 横に割る。V1 方式だけが使う。
+    //! 既定は縦(鉄道前面の「みかんの皮」割り。オーナー期待形 2026-09-25)。
+    int splitAxis = 3;
+    //! 縁の角(折れ)で必ず割る。既定で真(屋根と側面の境の角にレールを置く)。
+    bool splitAtCorners = true;
+    //! 枚数で割る(0 = 許容偏差か手動境界から)。既定は面 1 枚あたり 4。
+    int equalPartCount = 4;
     bool automaticBoundaries = true;
     int maximumPartCount = 12;
     double minimumPartWidthMm = 4.0;
@@ -67,7 +73,7 @@ void ApplyFabricationChoice(domain::CreateFabricationModelDefinition& definition
 [[nodiscard]] FabricationChoice FabricationChoiceOf(
     const domain::CreateFabricationModelDefinition& definition);
 
-//! 分割軸の名前(欄の並び: 自動 / U / V の順ではなく、値 0/1/2 の名前)。
+//! 分割軸の名前(値 0/1/2/3/4 の名前: U / V / 自動 / 縦 / 横)。
 [[nodiscard]] std::string_view SplitAxisNameJa(int splitAxis) noexcept;
 
 // ---- 部材ごとの曲げ(V1 の part_model_part_assembly) ----

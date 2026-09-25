@@ -548,6 +548,7 @@ public:
     void setSingleStep(double);
     void setPrefix(const QString&);
     void setSuffix(const QString&);
+    void setSpecialValueText(const QString&);
     void setValue(double);
     [[nodiscard]] double value() const;
     void (*valueChanged)(double);

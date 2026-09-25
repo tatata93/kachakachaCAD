@@ -41,6 +41,20 @@ enum class BandSplitAxis {
 
 [[nodiscard]] std::string_view BandSplitAxisNameJa(BandSplitAxis axis) noexcept;
 
+//! 切る向きの指定(人の言葉)。U/V は面のパラメータで、面によって向きが違う。
+//! 縦/横は世界の上下(z)で決める: 縦 = 上下に走る線で割る(鉄道前面の「みかんの皮」割り、
+//! レールは裾から屋根へ走る)、横 = 水平に走る線で割る(ペットボトルの肩のような帯)。
+//! 作り方(CreateFabricationModelDefinition::splitAxis)の値 0〜4 と同じ並び。
+enum class BandSplitDirection {
+    U = 0,
+    V = 1,
+    Auto = 2,        //!< 曲がっている方向を横切る(ChooseSplitAxis)
+    Vertical = 3,    //!< 縦に割る
+    Horizontal = 4,  //!< 横に割る
+};
+
+[[nodiscard]] std::string_view BandSplitDirectionNameJa(BandSplitDirection direction) noexcept;
+
 //! 近似の決め方。V1 の PartApproximationOptions と同じ。
 struct BandApproximationOptions {
     BandSplitAxis splitAxis = BandSplitAxis::V;
@@ -54,6 +68,13 @@ struct BandApproximationOptions {
     double minimumPartWidthMm = 4.0;
     //! 手動境界(分割軸のパラメータ、0 と 1 の間)。
     std::vector<double> manualBoundaries;
+    //! 面の縁の角(折れ)で必ず割る(オーナー期待形 2026-09-25: 屋根と側面の境の角を通るレール)。
+    //! 分割軸に沿う 2 本の縁(s = 0 と s = 1)を見て、cornerAngleDeg より大きく折れる所を境界にする。
+    bool splitAtCorners = false;
+    double cornerAngleDeg = 35.0;
+    //! 1 以上なら「枚数で割る」: 角の区間ごとに幅に応じて配り、区間の中は実幅で等分する。
+    //! 0 なら許容偏差から(automaticBoundaries)か手動境界から。細すぎる帯は作るが結果で言う。
+    int equalPartCount = 0;
 };
 
 //! 格子の標本を、連続なパラメータ面として読む。V1 の PartSource に当たる。
@@ -69,6 +90,18 @@ public:
 private:
     SurfacePatchSamples samples_;
 };
+
+//! 縦/横/自動/U/V の指定を、この面の実際の軸に決める。
+[[nodiscard]] BandSplitAxis ResolveSplitAxis(const SampledSurface& source,
+    BandSplitDirection direction);
+
+//! その軸のレール(t = 一定の線)がどれだけ上下(z)に走るか(0〜1。1 = まっすぐ上下)。
+//! 縦割りはこの値が大きい軸、横割りは小さい軸を選ぶ。
+[[nodiscard]] double MeasureRailVerticality(const SampledSurface& source, BandSplitAxis axis);
+
+//! 分割軸に沿う縁(s = 0 と s = 1)の角(折れ)のパラメータ(昇順、0 と 1 は含まない)。
+[[nodiscard]] std::vector<double> CornerParameters(const SampledSurface& source,
+    BandSplitAxis axis, double cornerAngleDeg);
 
 //! 近似で出来た帯1つ。
 struct ApproximatedBand {
@@ -86,6 +119,11 @@ struct BandApproximationResult {
     bool reachedRequestedTolerance = true; //!< 全帯が許容偏差以下か
     //! 帯の境目(昇順、帯数+1)。展開と折りに渡す。
     std::vector<double> railParameters;
+    //! 角で置いた境目(railParameters の中のもの)。
+    std::vector<double> cornerParameters;
+    //! いちばん細い帯の実幅と、最小幅を下回ったか(枚数で割ったときは作るが言う)。
+    double narrowestWidthMm = 0.0;
+    bool narrowerThanMinimum = false;
 };
 
 //! 面を帯へ近似分割する。V1 の ApproximatePlateParts。

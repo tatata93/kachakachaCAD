@@ -398,7 +398,7 @@ namespace kachakacha::v2::selftest {
         return false;
     }
     dock.SetStageIndex(0);
-    dock.SetSplitAxisIndex(2);   // V 方向
+    dock.SetSplitAxisIndex(4);   // V 方向(欄の並びは 縦 / 横 / 自動 / U / V)
     dock.SetAutomaticBoundaries(false);
     dock.SetManualBoundariesText(QStringLiteral("0.25, 0.5"));
     dock.SetMaximumPartCount(20);
@@ -434,7 +434,7 @@ namespace kachakacha::v2::selftest {
                 QStringLiteral("0.3")))) {
         return false;
     }
-    dock.SetSplitAxisIndex(0);
+    dock.SetSplitAxisIndex(0);   // 縦に戻す(既定)
     // 棚のボタンは台帳の命令を通す。選ばずに押すと理由が出る。
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     dock.PressRun("fabrication.create");

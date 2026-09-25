@@ -358,11 +358,17 @@ struct CreateFabricationModelDefinition {
     //! 1 = V1 方式(帯へ近似し直す。二重曲面も切る)。
     int method = 0;
     //! 帯近似の決め方(method = 1 のとき)。fabrication::BandApproximationOptions と同じ。
-    int splitAxis = 2; //!< 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)
+    //! 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)、3 = 縦に割る(上下に走る線で)、
+    //! 4 = 横に割る(水平に走る線で)。fabrication::BandSplitDirection と同じ値。
+    int splitAxis = 2;
     bool automaticBoundaries = true;
     int maximumPartCount = 12;
     double minimumPartWidthMm = 4.0;
     std::vector<double> manualBoundaries;
+    //! 面の縁の角(折れ)で必ず割る(オーナー期待形 2026-09-25)。古い文書は偽で読む。
+    bool splitAtCorners = false;
+    //! 1 以上なら枚数で割る(角の区間ごとに幅で配って等分)。0 なら許容偏差か手動境界から。
+    int equalPartCount = 0;
 
     //! 開口(窓など)にする線と、折り線にする線。どの部材のものかは、
     //! 外周と同じ平面に載っているかで決まる(人に選ばせない)。

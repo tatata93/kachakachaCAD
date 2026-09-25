@@ -7,6 +7,7 @@
 #include "kachakacha/fabrication/BandApproximation.h"
 #include "kachakacha/fabrication/BandFold.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -399,6 +400,77 @@ KACHA_V2_TEST(band_approximation, 帯をまたぐ窓は帯ごとに切り出さ�
     RequireEqual(std::to_string(pieces[1].band), std::string("1"), "真ん中の帯にも片がある");
     Require(pieces[1].points.size() >= 4, "真ん中は四角");
     Require(ClipLoopIntoBands(loop, {0.1, 0.9}, {0.0, 1.0}).empty(), "長さ違いは空");
+}
+
+KACHA_V2_TEST(band_approximation, 縦割りは上下に走るレールの軸を選び横割りはその逆)
+{
+    // 四分の一円筒: u は x に沿ってまっすぐ、v は弧(y-z 面で上下に動く)。
+    // 軸 U のレール(u = 一定)は弧に沿って上下に走る → 縦割り。軸 V のレールは水平 → 横割り。
+    const SampledSurface source(QuarterCylinder());
+    using kachakacha::v2::fabrication::BandSplitDirection;
+    using kachakacha::v2::fabrication::MeasureRailVerticality;
+    using kachakacha::v2::fabrication::ResolveSplitAxis;
+    Require(MeasureRailVerticality(source, BandSplitAxis::U) > 0.5, "U のレールは上下に走る");
+    Require(MeasureRailVerticality(source, BandSplitAxis::V) < 0.05, "V のレールは水平");
+    Require(ResolveSplitAxis(source, BandSplitDirection::Vertical) == BandSplitAxis::U, "縦割り = U");
+    Require(ResolveSplitAxis(source, BandSplitDirection::Horizontal) == BandSplitAxis::V, "横割り = V");
+    Require(ResolveSplitAxis(source, BandSplitDirection::U) == BandSplitAxis::U, "U は U");
+    Require(ResolveSplitAxis(source, BandSplitDirection::Auto) == ChooseSplitAxis(source), "自動は曲がりで");
+}
+
+KACHA_V2_TEST(band_approximation, 縁の角で必ず割り枚数は幅で配る)
+{
+    // 裾(v = 0)はまっすぐ、上の縁(v = 1)は u = 0.5 で 45° 折れる(屋根と側面の境のような角)。
+    const SampledSurface source(Grid(9, 33, [](double u, double v) {
+        const double zTop = u < 0.5 ? 0.0 : (u - 0.5) * 60.0;
+        return Vector3{u * 60.0, v * 40.0, v * zTop};
+    }));
+    using kachakacha::v2::fabrication::CornerParameters;
+    const auto corners = CornerParameters(source, BandSplitAxis::U, 35.0);
+    Require(corners.size() == 1, "角は 1 つ(実際 " + std::to_string(corners.size()) + ")");
+    Require(std::abs(corners.front() - 0.5) < 0.02, "角は u = 0.5(実際 " + std::to_string(corners.front()) + ")");
+    BandApproximationOptions options;
+    options.splitAxis = BandSplitAxis::U;
+    options.splitAtCorners = true;
+    options.equalPartCount = 4;
+    options.minimumPartWidthMm = 1.0;
+    const auto made = ApproximateBands(source, options);
+    Require(made.HasValue(), "作れる");
+    RequireEqual(std::to_string(made.Value().bands.size()), std::string("4"), "4 枚");
+    RequireEqual(std::to_string(made.Value().cornerParameters.size()), std::string("1"), "角の境目を覚えている");
+    bool railAtCorner = false;
+    for (const double rail : made.Value().railParameters) {
+        railAtCorner = railAtCorner || std::abs(rail - corners.front()) < 1.0e-9;
+    }
+    Require(railAtCorner, "角のところにレールがある");
+    // 角で割らなければ角のレールは無い。
+    options.splitAtCorners = false;
+    const auto plain = ApproximateBands(source, options);
+    Require(plain.HasValue() && plain.Value().cornerParameters.empty(), "角で割らないと角の境目は無い");
+}
+
+KACHA_V2_TEST(band_approximation, 枚数で割ると実幅がそろい細すぎれば言う)
+{
+    const SampledSurface source(SphereCap());
+    BandApproximationOptions options;
+    options.splitAxis = BandSplitAxis::V;
+    options.equalPartCount = 5;
+    options.minimumPartWidthMm = 4.0;
+    const auto made = ApproximateBands(source, options);
+    Require(made.HasValue(), "作れる");
+    RequireEqual(std::to_string(made.Value().bands.size()), std::string("5"), "5 枚");
+    double widest = 0.0;
+    double narrowest = 1.0e9;
+    for (const auto& band : made.Value().bands) {
+        widest = std::max(widest, band.widthMm);
+        narrowest = std::min(narrowest, band.widthMm);
+    }
+    Require(widest - narrowest < widest * 0.1, "幅がそろう(" + std::to_string(narrowest) + "〜" + std::to_string(widest) + ")");
+    Require(!made.Value().narrowerThanMinimum, "球の帽子の 5 枚は 4 mm より広い");
+    options.equalPartCount = 60;
+    const auto thin = ApproximateBands(source, options);
+    Require(thin.HasValue() && thin.Value().bands.size() == 60, "60 枚でも作る");
+    Require(thin.Value().narrowerThanMinimum, "細すぎることを結果で言う");
 }
 
 KACHA_V2_TEST_MAIN("band_approximation_tests")

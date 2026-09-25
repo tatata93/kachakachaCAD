@@ -25,12 +25,14 @@
 #include "kachakacha/app/SurfacePreview.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Feature.h"
 
 #include <QString>
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 using kachakacha::v2::base::EntityId;
@@ -365,27 +367,68 @@ void V2MainWindow::ConfirmApprox()
     }
     const auto definition = approxDefinitions_[chosen];
     const auto evaluation = *approxEvaluations_[chosen];
-    Feature feature;
-    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
-    feature.type = FeatureType::CreateFabricationModel;
-    feature.displayName = "近似モデル";
-    feature.inputEntityIds = definition.parts;
-    feature.definition = definition;
-    Entity entity;
-    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
-    entity.kind = EntityKind::FabricationModel;
-    entity.displayName = "近似モデル";
-    entity.createdBy = feature.id;
-    feature.outputs.push_back(
-        FeatureOutput{"fabrication", entity.id, EntityKind::FabricationModel});
-    const auto added = session_->GetDocument().Run(
-        AddFeatureCommand(feature, {entity}, "製作モデルを作る"));
-    if (!added.committed) {
-        ReportDiagnostics(added.diagnostics);
+    // 帯へ近似し直す方式で面が 2 枚以上なら、面ごとに近似モデルを 1 つずつ作る(曲げ状態・
+    // 部材の編集は近似モデル 1 つ = 帯メッシュ 1 つで動くため)。1 回の取り消しで全部戻る。
+    std::vector<std::pair<kachakacha::v2::domain::CreateFabricationModelDefinition,
+        kachakacha::v2::app::FabricationEvaluation>> jobs;
+    if (evaluation.method == kachakacha::v2::app::FabricationMethod::BandApproximation
+        && evaluation.bandFaces.size() > 1) {
+        const double tolerance =
+            session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+        for (const auto& part : definition.parts) {
+            auto one = definition;
+            one.parts = {part};
+            const auto sources = FabricationSourcesFor(one.parts, one.splitSolidFaces);
+            const auto made = kachakacha::v2::app::EvaluateFabrication(one, sources,
+                FabricationMarkingsFor(one), tolerance);
+            if (!made.HasValue()) {
+                ReportDiagnostics(made.Diagnostics());
+                return;
+            }
+            jobs.emplace_back(one, made.Value());
+        }
+    } else {
+        jobs.emplace_back(definition, evaluation);
+    }
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+        "製作モデルを作る");
+    std::vector<std::pair<std::string, kachakacha::v2::app::FabricationEvaluation>> made;
+    std::size_t number = 0;
+    for (const auto& job : jobs) {
+        ++number;
+        Feature feature;
+        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = FeatureType::CreateFabricationModel;
+        feature.displayName = jobs.size() > 1 ? "近似モデル " + std::to_string(number) : "近似モデル";
+        feature.inputEntityIds = job.first.parts;
+        feature.definition = job.first;
+        Entity entity;
+        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind = EntityKind::FabricationModel;
+        entity.displayName = feature.displayName;
+        entity.createdBy = feature.id;
+        feature.outputs.push_back(
+            FeatureOutput{"fabrication", entity.id, EntityKind::FabricationModel});
+        const auto added = session_->GetDocument().Run(
+            AddFeatureCommand(feature, {entity}, "製作モデルを作る"));
+        if (!added.committed) {
+            ReportDiagnostics(added.diagnostics);
+            return;
+        }
+        made.emplace_back(entity.id.ToString(), job.second);
+    }
+    if (!transaction.Commit()) {
+        SetStatus(QStringLiteral("製作モデルを作る: 途中で失敗したので、何も変えていません。"));
         return;
     }
-    fabricationModels_[entity.id.ToString()] = evaluation;
-    const QString summary = QString::fromStdString(evaluation.summaryJa);
+    for (auto& item : made) {
+        fabricationModels_[item.first] = std::move(item.second);
+    }
+    QString summary = QString::fromStdString(evaluation.summaryJa);
+    if (jobs.size() > 1) {
+        summary = QStringLiteral("面 %1 枚をそれぞれ近似モデルにしました(1 回の取り消しで全部戻る)。")
+                      .arg(jobs.size()) + summary;
+    }
     EndApprox();
     AdoptCurrentDocument();
     RefreshFabricationView();

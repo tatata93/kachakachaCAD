@@ -85,9 +85,18 @@ struct FabricationEvaluation {
     std::vector<fabrication::PatternPanel> panels;
     //! panels と同じ並び・同じ数。
     std::vector<PanelOrigin> panelOrigins;
-    //! V1 方式のとき。帯の切り方と、近似メッシュ(曲げ状態の形の元)。
+    //! V1 方式のとき。帯の切り方と、近似メッシュ(曲げ状態の形の元)。最初の面のもの。
     std::optional<fabrication::BandApproximationResult> bands;
     std::optional<fabrication::BandMesh> bandMesh;
+    //! 面ごとの帯(2 枚以上の面を 1 つの近似モデルにしたとき、2 枚目以降もここにある)。
+    //! 曲げ状態の個別の折りは最初の面だけ。下見のレールはここから全部の面を出す。
+    struct BandedFace {
+        base::EntityId entityId;
+        std::optional<std::size_t> faceIndex;
+        fabrication::BandApproximationResult bands;
+        fabrication::BandMesh mesh;
+    };
+    std::vector<BandedFace> bandFaces;
     double maximumDeviationMm = 0.0;
     bool reachedTolerance = true;
     std::string summaryJa;
@@ -102,6 +111,10 @@ struct FabricationEvaluation {
 //! 定義から帯近似の決め方を組み立てる。許容偏差は定義の targetMaxDeviation。
 [[nodiscard]] fabrication::BandApproximationOptions BandOptionsOf(
     const domain::CreateFabricationModelDefinition& definition);
+
+//! 定義の splitAxis(0〜4)を切る向きにする。
+[[nodiscard]] fabrication::BandSplitDirection SplitDirectionOf(
+    const domain::CreateFabricationModelDefinition& definition) noexcept;
 
 //! 作る。断るときは理由を言う。
 [[nodiscard]] base::Result<FabricationEvaluation> EvaluateFabrication(

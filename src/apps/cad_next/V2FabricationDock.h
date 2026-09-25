@@ -174,7 +174,12 @@ public:
     void SetManualBoundariesText(const QString& text);
     void SetAutomaticBoundaries(bool automatic);
     void SetMaximumPartCount(int count);
+    //! 切る向きの欄の位置: 0 縦 / 1 横 / 2 自動 / 3 U / 4 V。
     void SetSplitAxisIndex(int index);
+    [[nodiscard]] int SplitAxisIndex() const;
+    //! 縁の角で割る・面 1 枚の枚数(人が欄に打つのと同じ道)。
+    void SetSplitAtCorners(bool on);
+    void SetEqualPartCount(int count);
     //! 「部材を分ける」で 1 枚を何枚に等分するか(2〜8)。人が欄に打つのと同じ道。
     [[nodiscard]] int SplitPieces() const;
     void SetSplitPieces(int pieces);
@@ -206,6 +211,8 @@ private:
     QComboBox* method_ = nullptr;
     QFormLayout* form_ = nullptr;
     QComboBox* splitAxis_ = nullptr;
+    QCheckBox* splitAtCorners_ = nullptr;
+    QDoubleSpinBox* equalParts_ = nullptr;
     QCheckBox* automatic_ = nullptr;
     //! 立体を面ごとに分けるか。V2 方式(面を分類して展開)だけが使う。
     QCheckBox* splitSolidFaces_ = nullptr;

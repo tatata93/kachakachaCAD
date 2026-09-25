@@ -11,11 +11,13 @@
 #include "V2SelfTest.h"
 
 #include "V2DrawingDock.h"
+#include "V2FabricationDock.h"
 #include "V2EditDock.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/app/LoopFaces.h"
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/ShelfLayout.h"
@@ -31,6 +33,8 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -651,7 +655,8 @@ void SelectAllWires(V2MainWindow& window)
 //! 断面の直線 4 本(y = 0)、真ん中の肋の円弧(x = 0、裾の大円弧の途中に T 字で乗る)。線の向きは
 //! 引いたまま。側 3 の行で 2 本目の円弧がつながらず UI-R005(2.449 mm)で 1 枚も作れなかった。
 //! 直したあと: 四辺面 2・T 字 1 → Enter で核(四辺面)が実際に 2 枚作る。
-[[nodiscard]] bool CaseLoopFacesOwnersAtamaWires(V2MainWindow& window)
+//! オーナーの atama.kcd2 と同じ 8 本を数値の線で置く(失敗なら偽)。
+[[nodiscard]] bool PlaceAtamaWires(V2MainWindow& window)
 {
     window.RunCommand("file.new");
     using kachakacha::v2::app::DirectWireKind;
@@ -679,9 +684,13 @@ void SelectAllWires(V2MainWindow& window)
     const EntityId rib = AddWireByNumbers(window, "肋", DirectWireKind::PlanarArc,
         {{0, 3.5, 0}, {2.105897, 2.361355, 0}, {2.5, 0, 0}});
     window.Viewport().SetWorkPlane(top);
-    if (!Explain("オーナーの 8 本を数値の線で置ける",
-            !big.IsNil() && !leftArc.IsNil() && !rightArc.IsNil() && !l1.IsNil() && !l2.IsNil()
-                && !l3.IsNil() && !l4.IsNil() && !rib.IsNil())) {
+    return !big.IsNil() && !leftArc.IsNil() && !rightArc.IsNil() && !l1.IsNil() && !l2.IsNil()
+        && !l3.IsNil() && !l4.IsNil() && !rib.IsNil();
+}
+
+[[nodiscard]] bool CaseLoopFacesOwnersAtamaWires(V2MainWindow& window)
+{
+    if (!Explain("オーナーの 8 本を数値の線で置ける", PlaceAtamaWires(window))) {
         return false;
     }
     SelectAllWires(window);
@@ -732,6 +741,101 @@ void SelectAllWires(V2MainWindow& window)
             && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore);
 }
 
+
+//! HP-AP-05。オーナー指示 2026-09-25「現状の近似はその形で出てこないのでボタン一つで」。
+//! atama の 8 本 → 面にする → 面 2 枚を選んで 近似 を押すだけで、既定(縦に割る・縁の角で割る・
+//! 面 1 枚 4 枚)の候補 B が、片側 4 部材 × 2、屋根と側面の境の角(±3,0,3)を通るレール、
+//! 裾から上の輪郭へ上下に走るレールになる。Enter で面ごとに近似モデルが 1 つずつでき、1 回で戻る。
+[[nodiscard]] bool CaseApproxOneButtonOnAtama(V2MainWindow& window)
+{
+    if (!Explain("オーナーの 8 本を置ける", PlaceAtamaWires(window))) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    if (!Explain("面にする → Enter で四辺面 2 枚",
+            window.HandleToolKey(Qt::Key_Return, nullptr)
+                && CountOfKind(window, EntityKind::GuideSurface) == 2)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    window.RunCommand("fabrication.create");
+    if (!Explain("面 2 枚を選んで 近似 を押すと 2 枚とも対象に入る",
+            window.ApproxShelfShown() && window.ApproxInput().sources.size() == 2)) {
+        return false;
+    }
+    auto& dock = window.FabricationDock();
+    if (!Explain("既定は 縦に割る・角で割る・面 1 枚を 4 枚",
+            dock.SplitAxisIndex() == 0 && dock.Choice().splitAtCorners
+                && dock.Choice().equalPartCount == 4)) {
+        return false;
+    }
+    const auto& outcomes = window.ApproxOutcomes();
+    const auto& evaluations = window.ApproxEvaluations();
+    if (!Explain((std::string("候補 B(帯)が作れて 8 部材(実際 ")
+                    + (outcomes.size() > 1 ? std::to_string(outcomes[1].partCount) : "-") + ")").c_str(),
+            outcomes.size() > 1 && outcomes[1].available && outcomes[1].partCount == 8
+                && evaluations.size() > 1 && evaluations[1].has_value()
+                && evaluations[1]->bandFaces.size() == 2)) {
+        return false;
+    }
+    // レールは裾(z = 0)から上の輪郭(z ≥ 3)へ上下に走り、角(±3, 0, 3)を通るものがある
+    // (四辺面ではその角は面の角なので、端のレール = 側面の縁の線がそこを通る)。
+    bool cornerRail = false;
+    bool verticalRails = true;
+    for (const auto& face : evaluations[1]->bandFaces) {
+        if (face.bands.bands.size() != 4) {
+            verticalRails = false;
+        }
+        for (const auto& rail : face.mesh.world) {
+            double low = 1.0e9;
+            double high = -1.0e9;
+            for (const Vector3& point : rail) {
+                low = std::min(low, point.z);
+                high = std::max(high, point.z);
+                const double dx = std::abs(std::abs(point.x) - 3.0);
+                if (dx < 0.15 && std::abs(point.y) < 0.15 && std::abs(point.z - 3.0) < 0.15) {
+                    cornerRail = true;
+                }
+            }
+            verticalRails = verticalRails && high - low > 2.5;
+        }
+    }
+    if (!Explain("片側 4 部材ずつで、レールは上下に走る", verticalRails)
+        || !Explain("屋根と側面の境の角を通るレールがある", cornerRail)
+        || !Explain("下見のレールが 3D に出る", !window.Viewport().ToolPreview().empty())) {
+        return false;
+    }
+    // 横に割ると、レールは水平(上下の動きが小さい)になる。
+    dock.SetSplitAxisIndex(1);
+    const auto& horizontal = window.ApproxEvaluations();
+    bool flatRails = horizontal.size() > 1 && horizontal[1].has_value();
+    if (flatRails) {
+        for (const auto& face : horizontal[1]->bandFaces) {
+            for (std::size_t row = 1; row + 1 < face.mesh.world.size(); ++row) {
+                double low = 1.0e9;
+                double high = -1.0e9;
+                for (const Vector3& point : face.mesh.world[row]) {
+                    low = std::min(low, point.z);
+                    high = std::max(high, point.z);
+                }
+                flatRails = flatRails && high - low < 1.5;
+            }
+        }
+    }
+    if (!Explain("横に割ると内側のレールが水平になる", flatRails)) {
+        return false;
+    }
+    dock.SetSplitAxisIndex(0);
+    if (!Explain("Enter で確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("面ごとに近似モデルが 1 つずつできる(2 つ)", window.FabricationModelCount() == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで 2 つとも戻る", window.FabricationModelCount() == 0);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -757,6 +861,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseDeleteWorksForNonWires},
         {"HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚でき、面に格子が乗る",
             CaseLoopFacesOwnersAtamaWires},
+        {"HP-AP-05 atama の面 2 枚を選んで 近似 を押すだけで縦割り 4 部材 × 2(角のレールつき)、横割りも選べる",
+            CaseApproxOneButtonOnAtama},
     };
 }
 

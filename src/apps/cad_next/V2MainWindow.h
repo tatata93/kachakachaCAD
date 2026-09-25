@@ -253,15 +253,10 @@ public:
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! いま近似の道具が動いているか。試験から見る。
     [[nodiscard]] bool ApproxShelfShown() const noexcept { return approxShelfShown_; }
-    [[nodiscard]] const kachakacha::v2::app::ApproxInputState& ApproxInput() const
-    {
-        return approxInput_;
-    }
-    [[nodiscard]] const std::vector<kachakacha::v2::app::ApproxCandidateOutcome>&
-    ApproxOutcomes() const
-    {
-        return approxOutcomes_;
-    }
+    [[nodiscard]] const kachakacha::v2::app::ApproxInputState& ApproxInput() const { return approxInput_; }
+    [[nodiscard]] const auto& ApproxOutcomes() const { return approxOutcomes_; }
+    //! 候補を実際に作った結果(帯の切り方・レール)。試験が形を確かめる。
+    [[nodiscard]] const auto& ApproxEvaluations() const { return approxEvaluations_; }
     //! 選んだものから分かる事実。作り方を薦めるのに使う。
     [[nodiscard]] kachakacha::v2::app::SurfaceSelectionFacts SurfaceFactsNow() const;
     //! 入力から表を組み立てる。**作る直前の1回だけ。**

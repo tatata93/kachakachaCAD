@@ -34,8 +34,9 @@ using kachakacha::v2::fabrication::FreezeOutput;
 
 namespace {
 
-//! 分割軸の欄の並び: 自動 / U / V。値は 2 / 0 / 1。
-constexpr int kSplitAxisValues[3] = {2, 0, 1};
+//! 切る向きの欄の並び: 縦 / 横 / 自動 / U / V。値は 3 / 4 / 2 / 0 / 1(FabricationChoice::splitAxis)。
+constexpr int kSplitAxisValues[5] = {3, 4, 2, 0, 1};
+constexpr int kSplitAxisChoices = 5;
 
 [[nodiscard]] QDoubleSpinBox* MakeCount(QWidget* parent, double minimum, double maximum)
 {
@@ -473,12 +474,23 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     method_->addItem(QStringLiteral("V1方式(帯へ近似し直す)"));
     method_->addItem(QStringLiteral("V2方式(面を分類して展開)"));
     form_->addRow(QStringLiteral("方式"), method_);
+    // 切る向きは人の言葉で(縦 = 上下に走る線で割る「みかんの皮」、横 = 水平の帯)。
+    // U/V は面のパラメータで、面によって向きが違うので後ろに置く(オーナー指示 2026-09-25)。
     splitAxis_ = new QComboBox(formWidget);
+    splitAxis_->addItem(QStringLiteral("縦に割る(上下に走る線で)"));
+    splitAxis_->addItem(QStringLiteral("横に割る(水平に走る線で)"));
     splitAxis_->addItem(QStringLiteral("自動(曲がっている方向を横切る)"));
     splitAxis_->addItem(QStringLiteral("U 方向で切る"));
     splitAxis_->addItem(QStringLiteral("V 方向で切る"));
-    form_->addRow(QStringLiteral("分割軸"), splitAxis_);
-    automatic_ = new QCheckBox(QStringLiteral("許すずれから自動で切る"), formWidget);
+    form_->addRow(QStringLiteral("切る向き"), splitAxis_);
+    splitAtCorners_ = new QCheckBox(QStringLiteral("縁の角(折れ)で必ず割る"), formWidget);
+    splitAtCorners_->setChecked(true);
+    form_->addRow(QStringLiteral("角"), splitAtCorners_);
+    equalParts_ = MakeCount(formWidget, 0.0, 200.0);
+    equalParts_->setValue(4.0);
+    equalParts_->setSpecialValueText(QStringLiteral("0(許すずれから)"));
+    form_->addRow(QStringLiteral("面 1 枚を何枚に"), equalParts_);
+    automatic_ = new QCheckBox(QStringLiteral("許すずれから自動で切る(枚数が 0 のとき)"), formWidget);
     automatic_->setChecked(true);
     form_->addRow(QStringLiteral("境界"), automatic_);
     manual_ = new QLineEdit(formWidget);
@@ -903,6 +915,8 @@ void V2FabricationDock::Connect()
         Emit();
     });
     QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
+    QObject::connect(splitAtCorners_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(equalParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
     for (QCheckBox* shown : {showSource_, showApprox_}) {
@@ -953,6 +967,8 @@ void V2FabricationDock::RefreshMethodRows()
     // 分割軸・境界・上限・最小幅は V1 方式(帯)だけが使う。V2 方式では隠す。
     const bool band = method_->currentIndex() == 0;
     form_->setRowVisible(splitAxis_, band);
+    form_->setRowVisible(splitAtCorners_, band);
+    form_->setRowVisible(equalParts_, band);
     form_->setRowVisible(automatic_, band);
     form_->setRowVisible(manual_, band);
     form_->setRowVisible(maxParts_, band);
@@ -975,7 +991,9 @@ FabricationChoice V2FabricationDock::Choice() const
     choice.method = method_->currentIndex() == 0 ? FabricationMethod::BandApproximation
                                                  : FabricationMethod::ClassifyFaces;
     const int axisIndex = splitAxis_->currentIndex();
-    choice.splitAxis = axisIndex >= 0 && axisIndex < 3 ? kSplitAxisValues[axisIndex] : 2;
+    choice.splitAxis = axisIndex >= 0 && axisIndex < kSplitAxisChoices ? kSplitAxisValues[axisIndex] : 3;
+    choice.splitAtCorners = splitAtCorners_->isChecked();
+    choice.equalPartCount = static_cast<int>(equalParts_->value());
     choice.automaticBoundaries = automatic_->isChecked();
     choice.splitSolidFaces = splitSolidFaces_->isChecked();
     choice.maximumPartCount = static_cast<int>(maxParts_->value());
@@ -1012,11 +1030,13 @@ void V2FabricationDock::SetChoice(const FabricationChoice& choice)
 {
     loading_ = true;
     method_->setCurrentIndex(choice.method == FabricationMethod::BandApproximation ? 0 : 1);
-    for (int index = 0; index < 3; ++index) {
+    for (int index = 0; index < kSplitAxisChoices; ++index) {
         if (kSplitAxisValues[index] == choice.splitAxis) {
             splitAxis_->setCurrentIndex(index);
         }
     }
+    splitAtCorners_->setChecked(choice.splitAtCorners);
+    equalParts_->setValue(static_cast<double>(choice.equalPartCount));
     automatic_->setChecked(choice.automaticBoundaries);
     splitSolidFaces_->setChecked(choice.splitSolidFaces);
     manual_->setText(QString::fromStdString(
@@ -1271,6 +1291,21 @@ void V2FabricationDock::SetMaximumPartCount(int count)
 void V2FabricationDock::SetSplitAxisIndex(int index)
 {
     splitAxis_->setCurrentIndex(index);
+}
+
+int V2FabricationDock::SplitAxisIndex() const
+{
+    return splitAxis_->currentIndex();
+}
+
+void V2FabricationDock::SetSplitAtCorners(bool on)
+{
+    splitAtCorners_->setChecked(on);
+}
+
+void V2FabricationDock::SetEqualPartCount(int count)
+{
+    equalParts_->setValue(static_cast<double>(count));
 }
 
 double V2FabricationDock::RadiusMm() const

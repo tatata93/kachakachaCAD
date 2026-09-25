@@ -15,6 +15,7 @@ namespace {
 
 constexpr const char* kBadBoundaryText = "UI-F001";
 constexpr const char* kBadPartCount = "UI-F002";
+constexpr const char* kBadEqualCount = "UI-F007";
 constexpr const char* kBadMinimumWidth = "UI-F003";
 constexpr const char* kBadFidelity = "UI-F004";
 constexpr const char* kBadRange = "UI-F005";
@@ -114,6 +115,14 @@ Result<FabricationChoice> CheckFabricationChoice(const FabricationChoice& choice
             "切れ目の先に残す幅は 0 より大きい数にしてください。",
             std::to_string(choice.minimumReliefLigamentMm) + " mm"));
     }
+    if (choice.equalPartCount < 0 || choice.equalPartCount > kMaxPartCount) {
+        return Out::Failure(MakeError(kBadEqualCount, "枚数は 0(自動)か 1〜200 にしてください。",
+            std::to_string(choice.equalPartCount)));
+    }
+    if (choice.splitAxis < 0 || choice.splitAxis > 4) {
+        return Out::Failure(MakeError(kBadEqualCount, "切る向きは 自動 / 縦 / 横 / U / V のどれかです。",
+            std::to_string(choice.splitAxis)));
+    }
     if (choice.fidelity < 1 || choice.fidelity > kMaxFidelity) {
         return Out::Failure(MakeError(kBadFidelity, "再現度は 1〜20 にしてください。",
             std::to_string(choice.fidelity)));
@@ -144,6 +153,8 @@ void ApplyFabricationChoice(domain::CreateFabricationModelDefinition& definition
     definition.maximumReliefDepthRatio = choice.maximumReliefDepthRatio;
     definition.minimumReliefLigamentMm = choice.minimumReliefLigamentMm;
     definition.manualBoundaries = choice.manualBoundaries;
+    definition.splitAtCorners = choice.splitAtCorners;
+    definition.equalPartCount = choice.equalPartCount;
     definition.rangeUMin = choice.rangeUMin;
     definition.rangeUMax = choice.rangeUMax;
     definition.rangeVMin = choice.rangeVMin;
@@ -163,6 +174,8 @@ FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefini
     choice.minimumPartWidthMm = definition.minimumPartWidthMm;
     choice.fidelity = definition.fidelity;
     choice.manualBoundaries = definition.manualBoundaries;
+    choice.splitAtCorners = definition.splitAtCorners;
+    choice.equalPartCount = definition.equalPartCount;
     choice.rangeUMin = definition.rangeUMin;
     choice.rangeUMax = definition.rangeUMax;
     choice.rangeVMin = definition.rangeVMin;
@@ -235,6 +248,8 @@ std::string_view SplitAxisNameJa(int splitAxis) noexcept
     switch (splitAxis) {
     case 0:  return "U 方向で切る";
     case 1:  return "V 方向で切る";
+    case 3:  return "縦に割る(上下に走る線で)";
+    case 4:  return "横に割る(水平に走る線で)";
     default: return "自動(曲がっている方向を横切る)";
     }
 }

@@ -55,6 +55,27 @@ KACHA_V2_TEST(fabrication_options, 欄の値は範囲の外を断り作り方と
     Require(back.method == FabricationMethod::BandApproximation && back.splitAxis == 1
             && !back.automaticBoundaries && back.maximumPartCount == 20 && back.fidelity == 8,
         "戻る");
+    // 縦/横・角で割る・枚数(オーナー指示 2026-09-25)も往復する。既定は 縦・角で割る・4 枚。
+    FabricationChoice fresh;
+    Require(fresh.splitAxis == 3 && fresh.splitAtCorners && fresh.equalPartCount == 4,
+        "既定は縦に割る・角で割る・面 1 枚を 4 枚");
+    fresh.splitAxis = 4;
+    fresh.splitAtCorners = false;
+    fresh.equalPartCount = 0;
+    CreateFabricationModelDefinition horizontal;
+    ApplyFabricationChoice(horizontal, fresh);
+    Require(horizontal.splitAxis == 4 && !horizontal.splitAtCorners && horizontal.equalPartCount == 0,
+        "横・角で割らない・枚数 0 が作り方に入る");
+    const auto backAgain = FabricationChoiceOf(horizontal);
+    Require(backAgain.splitAxis == 4 && !backAgain.splitAtCorners && backAgain.equalPartCount == 0, "戻る");
+    FabricationChoice badCount = fresh;
+    badCount.equalPartCount = 201;
+    Require(!CheckFabricationChoice(badCount).HasValue()
+            && CheckFabricationChoice(badCount).Diagnostics().front().code == "UI-F007",
+        "枚数 201 は UI-F007 で断る");
+    FabricationChoice badAxis = fresh;
+    badAxis.splitAxis = 9;
+    Require(!CheckFabricationChoice(badAxis).HasValue(), "知らない向きは断る");
 
     FabricationChoice tooMany = choice;
     tooMany.maximumPartCount = 0;

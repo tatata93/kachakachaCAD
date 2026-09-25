@@ -9,6 +9,7 @@
 #include "kachakacha/geometry/WireChain.h"
 
 #include <algorithm>
+#include <limits>
 #include <cmath>
 
 namespace kachakacha::v2::app {
@@ -204,10 +205,8 @@ struct BandedSource {
     using Out = Result<BandedSource>;
     const fabrication::SampledSurface surface(*source.samples);
     fabrication::BandApproximationOptions options = BandOptionsOf(definition);
-    if (definition.splitAxis == 2) {
-        // 自動: 曲がっている方向を横切るように切る。
-        options.splitAxis = fabrication::ChooseSplitAxis(surface);
-    }
+    // 自動 / 縦 / 横 は面ごとに実際の軸へ決める(縦横は世界の上下、自動は曲がりで)。
+    options.splitAxis = fabrication::ResolveSplitAxis(surface, SplitDirectionOf(definition));
     const auto bands = fabrication::ApproximateBands(surface, options);
     if (!bands.HasValue()) {
         return Out::Failure(bands.Diagnostics());
@@ -296,6 +295,8 @@ struct BandedSource {
                 approximated.Value().bands.maximumDeviationMm);
             made.reachedTolerance = made.reachedTolerance
                 && approximated.Value().bands.reachedRequestedTolerance;
+            made.bandFaces.push_back(FabricationEvaluation::BandedFace{source.entityId,
+                source.faceIndex, approximated.Value().bands, approximated.Value().mesh});
             banded.push_back(std::move(approximated.Value()));
             continue;
         }
@@ -336,6 +337,17 @@ struct BandedSource {
     made.summaryJa = "帯へ近似して " + std::to_string(made.panels.size())
         + " 枚の部材にしました。ずれは最大 " + Rounded(made.maximumDeviationMm) + " mm"
         + (made.reachedTolerance ? "(許容内)" : "(許容を超えています)") + "。";
+    // 枚数で割ったときは細すぎる帯も作る。黙らずに言う(作れない細さは人が決める)。
+    double narrowest = std::numeric_limits<double>::infinity();
+    bool narrower = false;
+    for (const auto& face : made.bandFaces) {
+        narrower = narrower || face.bands.narrowerThanMinimum;
+        narrowest = std::min(narrowest, face.bands.narrowestWidthMm);
+    }
+    if (narrower) {
+        made.summaryJa += "いちばん細い帯は " + Rounded(narrowest) + " mm で、最小幅 "
+            + Rounded(definition.minimumPartWidthMm) + " mm より細い。";
+    }
     return Out::Success(std::move(made));
 }
 
@@ -378,11 +390,23 @@ std::optional<std::size_t> PanelIndexForPick(const FabricationEvaluation& evalua
     return std::nullopt;
 }
 
+fabrication::BandSplitDirection SplitDirectionOf(
+    const domain::CreateFabricationModelDefinition& definition) noexcept
+{
+    switch (definition.splitAxis) {
+    case 0: return fabrication::BandSplitDirection::U;
+    case 1: return fabrication::BandSplitDirection::V;
+    case 3: return fabrication::BandSplitDirection::Vertical;
+    case 4: return fabrication::BandSplitDirection::Horizontal;
+    default: return fabrication::BandSplitDirection::Auto;
+    }
+}
+
 fabrication::BandApproximationOptions BandOptionsOf(
     const domain::CreateFabricationModelDefinition& definition)
 {
     fabrication::BandApproximationOptions options;
-    // 2(自動)のときの実際の軸は、面ごとに EvaluateFabrication が決める。ここでは V にしておく。
+    // 2(自動)・3(縦)・4(横)のときの実際の軸は、面ごとに EvaluateFabrication が決める。ここでは V にしておく。
     options.splitAxis = definition.splitAxis == 0 ? fabrication::BandSplitAxis::U
                                                   : fabrication::BandSplitAxis::V;
     options.automaticBoundaries = definition.automaticBoundaries;
@@ -390,6 +414,8 @@ fabrication::BandApproximationOptions BandOptionsOf(
     options.maximumPartCount = definition.maximumPartCount;
     options.minimumPartWidthMm = definition.minimumPartWidthMm;
     options.manualBoundaries = definition.manualBoundaries;
+    options.splitAtCorners = definition.splitAtCorners;
+    options.equalPartCount = definition.equalPartCount;
     return options;
 }
 
@@ -519,7 +545,20 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     }
     const auto rails = fabrication::BuildBandFoldRails(*evaluation.bandMesh,
         creaseRelative, state.bandProgress, liftMm);
-    return rails.HasValue() ? rails.Value() : std::vector<std::vector<geometry::Vector3>>{};
+    std::vector<std::vector<geometry::Vector3>> lines =
+        rails.HasValue() ? rails.Value() : std::vector<std::vector<geometry::Vector3>>{};
+    // 2 枚目以降の面: 折りの個別値は持たないので、全体の曲げ具合だけで出す。
+    for (std::size_t face = 1; face < evaluation.bandFaces.size(); ++face) {
+        const auto& mesh = evaluation.bandFaces[face].mesh;
+        const std::vector<double> relative(static_cast<std::size_t>(mesh.CreaseCount()), 1.0);
+        const std::vector<double> progress(static_cast<std::size_t>(mesh.BandCount()),
+            state.masterProgress);
+        const auto more = fabrication::BuildBandFoldRails(mesh, relative, progress, liftMm);
+        if (more.HasValue()) {
+            lines.insert(lines.end(), more.Value().begin(), more.Value().end());
+        }
+    }
+    return lines;
 }
 
 std::vector<AdaptedWire> AdaptConnectionWires(const BandMesh& mesh,

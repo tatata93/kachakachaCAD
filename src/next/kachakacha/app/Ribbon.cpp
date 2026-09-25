@@ -140,7 +140,7 @@ const std::vector<RibbonCategory>& PartCategories()
 const std::vector<RibbonCategory>& FabricationCategories()
 {
     static const std::vector<RibbonCategory> categories{
-        {"approx", "近似", {Tool("近似", "fabrication.create")}},
+        {"approx", "近似", {Tool("GPT版", "fabrication.gpt_create"), Tool("近似", "fabrication.create")}},
         {"edit", "部材編集",
             {Tool("近似部品編集", "fabrication.edit_part"), Tool("分割", "fabrication.split_part"),
                 Tool("結合", "fabrication.merge_parts"), Tool("切れ目", "fabrication.assign_relief_cut"),

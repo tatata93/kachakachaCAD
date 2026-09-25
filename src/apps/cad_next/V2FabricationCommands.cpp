@@ -9,6 +9,7 @@
 //! 扱えるふりをしない。
 
 #include "V2MainWindow.h"
+#include "V2GptFabricationTool.h"
 
 #include "kachakacha/app/FabricationOptions.h"
 
@@ -235,6 +236,7 @@ bool V2MainWindow::RebuildFabricationModel(const kachakacha::v2::domain::Feature
     if (definition == nullptr) {
         return false;
     }
+    if (definition->method == 2) { return gptFabrication_->Rebuild(feature, output); }
     const auto sources = FabricationSourcesFor(definition->parts, definition->splitSolidFaces);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
@@ -301,6 +303,7 @@ void V2MainWindow::RefreshFabricationView()
         rails.clear();
     }
     viewport_->SetFoldPreview(std::move(rails));
+    RefreshShapeViews();
     processContext_.fabricationBuilt = !fabricationPanels_.empty();
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
     processContext_.patternBuilt = !patternPages_.empty();

@@ -18,6 +18,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GptSurfaceTool.h"
+#include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
@@ -71,6 +72,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (viewport_ == nullptr) {
         return false;
     }
+    if (gptFabrication_ != nullptr && gptFabrication_->HandleKey(key)) { return true; }
     if (gptSurface_ != nullptr && gptSurface_->HandleKey(key)) { return true; }
     if (!pendingCommandId_.empty()) {
         if (key == Qt::Key_Escape) {

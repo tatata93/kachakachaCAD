@@ -88,7 +88,7 @@ void V2MainWindow::BuildMenus()
         "part.mirror", "part.rotate", "part.array_linear", "part.array_circular", "derived.freeze"});
 
     QMenu* fabrication = menuBar()->addMenu(QStringLiteral("製作(&B)"));
-    addCommands(fabrication, {"fabrication.create", "fabrication.assign_role",
+    addCommands(fabrication, {"fabrication.gpt_create", "fabrication.create", "fabrication.assign_role",
         "fabrication.assign_relief_cut", "fabrication.preview_update", "fabrication.create_pattern",
         "fabrication.set_assembly", "fabrication.set_method", "fabrication.merge_parts",
         "fabrication.split_part", "fabrication.set_unfold_base", "fabrication.freeze_output",

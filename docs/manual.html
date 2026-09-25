@@ -326,6 +326,7 @@
           <tr data-command="part.array_linear"><td>部品を直線に並べる</td><td><code>part.array_linear</code></td><td>個数・間隔・向きで部品を並べる(パターン)。</td></tr>
           <tr data-command="part.array_circular"><td>部品を円に並べる</td><td><code>part.array_circular</code></td><td>個数・中心・角度で部品を円に並べる。</td></tr>
           <tr data-command="derived.freeze"><td>現在状態を固定</td><td><code>derived.freeze</code></td><td>派生要素を独立実体へ。</td></tr>
+          <tr data-command="fabrication.gpt_create"><td>GPT版近似</td><td><code>fabrication.gpt_create</code></td><td>製作→近似→GPT版。形状ガイドの面を追加し、許容偏差・最大部材数・最小幅・板厚・曲げ方向を指定してプレビューします。実際の外周を残した一方向曲げの柱面への近似です。標本最大/RMSと部材数を確認し、許容内なら確定または「確定して型紙へ」。組立0〜100%で長さを保って曲げます。元の面は残り、1回のUndoで戻せます。穴を分割線が横切る条件や、手動の開口線・折り線・切れ目は未対応として拒否します。入力を捨てません。厚み付き部品への固定は未対応で、輪郭の線と型紙SVG/DXF等へ出力できます。外部AI通信はありません。</td></tr>
           <tr data-command="fabrication.create"><td>製作モデルを作る</td><td><code>fabrication.create</code></td><td>元を別の製作近似へ。</td></tr>
           <tr data-command="fabrication.assign_role"><td>境界の役割</td><td><code>fabrication.assign_role</code></td><td>開口または折り線。</td></tr>
           <tr data-command="fabrication.assign_relief_cut"><td>切れ目にする</td><td><code>fabrication.assign_relief_cut</code></td><td>部材非分離の切れ目。</td></tr>

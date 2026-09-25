@@ -308,6 +308,9 @@ void V2MainWindow::FreezeFabricationState()
     std::string stateName = "型紙の形";
     const bool committed = FreezeEachModel(session_->GetDocument(), "現在状態を固定", jobs,
         [&](const FreezeJob& job) {
+            if (!job.evaluated.gptPanels.empty()) {
+                return FreezeGptContours(job.definition, job.evaluated, wires);
+            }
             if (!job.evaluated.bandMesh.has_value()) {
                 // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
                 return FreezeFlatPanels(job.evaluated.panels, wires);
@@ -354,6 +357,10 @@ void V2MainWindow::FreezeTargetShape()
     int parts = 0;
     const bool committed = FreezeEachModel(session_->GetDocument(), "目標形状(100%)を固定", jobs,
         [&](const FreezeJob& job) {
+            if (!job.evaluated.gptPanels.empty()) {
+                auto target = job.definition; target.masterPercent = 100; target.bandProgress.clear();
+                return FreezeGptContours(target, job.evaluated, wires);
+            }
             if (!job.evaluated.bandMesh.has_value()) {
                 // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
                 return FreezeFlatPanels(job.evaluated.panels, wires);
@@ -413,6 +420,9 @@ void V2MainWindow::FreezeContourWires()
     std::string stateName = "型紙の形";
     const bool committed = FreezeEachModel(session_->GetDocument(), "輪郭を線にする", jobs,
         [&](const FreezeJob& job) {
+            if (!job.evaluated.gptPanels.empty()) {
+                return FreezeGptContours(job.definition, job.evaluated, wires);
+            }
             if (!job.evaluated.bandMesh.has_value()) {
                 // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
                 return FreezeFlatPanels(job.evaluated.panels, wires);

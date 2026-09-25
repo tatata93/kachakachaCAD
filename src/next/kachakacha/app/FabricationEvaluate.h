@@ -16,6 +16,7 @@
 //! OCCT を使わない。
 
 #include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/fabrication/GptApproximation.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/BandApproximation.h"
@@ -35,6 +36,7 @@ namespace kachakacha::v2::app {
 
 //! 近似の方式。定義の `method` と同じ並び。
 enum class FabricationMethod {
+    GptApproximation = 2,
     ClassifyFaces = 0, //!< V2 方式
     BandApproximation = 1, //!< V1 方式
 };
@@ -90,6 +92,8 @@ struct FabricationEvaluation {
     std::optional<fabrication::BandMesh> bandMesh;
     double maximumDeviationMm = 0.0;
     bool reachedTolerance = true;
+    double rmsDeviationMm = 0.0;
+    std::vector<fabrication::GptApproxPanel> gptPanels;
     std::string summaryJa;
 };
 

@@ -328,7 +328,7 @@ void V2GptSurfaceTool::ShowResult(const modeling::GuideSurfaceResult& result)
         faces.push_back({triangle.points[0], triangle.points[1], triangle.points[2]});
     }
     window_.viewport_->ShowToolPreview(mesh.Value().edges);
-    window_.viewport_->SetToolPreviewFaces(std::move(faces));
+    window_.viewport_->SetToolPreviewFaces(std::move(faces), &mesh.Value());
     status_->setText(QStringLiteral("%1\n全入力線の標本偏差: 最大 %2 mm / RMS %3 mm\n面積 %4 mm²。確定すると元の線を残して面を作ります。")
         .arg(definition_.method == app::kGptBoundaryMethod ? QStringLiteral("外周と通る線から張った面（近似）")
             : QStringLiteral("一覧順の断面をつないだ面"))

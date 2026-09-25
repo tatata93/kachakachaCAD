@@ -701,6 +701,7 @@ void V2Viewport::DrawShapes(QPainter& painter) const
     if (shapeViews_.empty() || !display_.shapesVisible) {
         return;
     }
+    DrawSmoothShapes(painter);
     for (const ShapeView& shape : shapeViews_) {
         // 解析で塗り替える面は、ふだんの塗りの代わりに解析の色で描く。
         const AnalysisView* analysis = AnalysisFor(shape.entityId);
@@ -720,58 +721,14 @@ void V2Viewport::DrawShapes(QPainter& painter) const
 
 void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
 {
-    using kachakacha::v2::view::BackFacing;
-    using kachakacha::v2::view::LambertShade;
-    using kachakacha::v2::view::PainterOrder;
-    using kachakacha::v2::view::StandardLightDirection;
-
     const bool selected = !shape.entityId.IsNil()
         && kachakacha::v2::app::IsSelected(selection_, shape.entityId);
     const bool hovered = !selected && !shape.entityId.IsNil()
         && shape.entityId == hoveredEntityId_;
-    const Vector3 forward = kachakacha::v2::view::ForwardOf(orientation_);
-    const Vector3 light = StandardLightDirection();
-    // 選んでいるものはテーマの選択色、面は青緑、立体は灰。
-    // 選択色を固定で書くと、テーマを替えたときに稜線(テーマの色)と塗りが食い違う。
-    const QColor base = selected ? SemanticColor(SemanticState::Selected)
-        : (shape.surface ? QColor(0x45, 0x84, 0x8e) : QColor(0x9a, 0xa5, 0xad));
-    // 面は薄く。奥の線が透けて見えないと、面の裏に何があるか分からない。
-    const int alpha = shape.surface ? (selected ? 150 : 105) : (selected ? 225 : 200);
-
-    painter.setPen(Qt::NoPen);
-    const auto order = PainterOrder(shape.mesh.triangles, forward);
-    for (const std::size_t index : order) {
-        const auto& triangle = shape.mesh.triangles[index];
-        if (triangle.normal == Vector3{}) {
-            continue;   // 潰れた三角形。塗っても線にしかならない。
-        }
-        // 閉じた立体では裏を飛ばす。開いた面は裏から見ることがあるので飛ばさない。
-        if (shape.mesh.closed && BackFacing(triangle, forward)) {
-            continue;
-        }
-        QPolygonF polygon;
-        bool ok = true;
-        for (const Vector3& point : triangle.points) {
-            const auto screen = ToScreen(point);
-            if (!screen.has_value()) {
-                ok = false;
-                break;
-            }
-            polygon << *screen;
-        }
-        if (!ok) {
-            continue;
-        }
-        const double shade = LambertShade(triangle.normal, light);
-        QColor color = base.lighter(static_cast<int>(60.0 + shade * 80.0));
-        color.setAlpha(alpha);
-        painter.setBrush(color);
-        painter.drawPolygon(polygon);
-    }
     // 稜線を上から重ねる。三角形の網だけだと継ぎ目が全部見えて形が読めない。
     // 選択と Hover の色はテーマが持つものを使う。ここで固定の色を書くと、
     // Windows 95 テーマへ替えたときに2つの状態が同じ色になる。
-    QColor edge(0x3a, 0x44, 0x4a);
+    QColor edge = palette_.background.red() > 160 ? QColor(0x36, 0x52, 0x66) : QColor(0xc9, 0xdf, 0xeb);
     if (selected) {
         // 塗りより濃くする。同じ色だと稜線が塗りに溶けて、形の境目が読めない。
         edge = SemanticColor(SemanticState::Selected).darker(125);

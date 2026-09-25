@@ -661,6 +661,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/view/FacingPlan.cpp
     src/next/kachakacha/view/PatternView.cpp
     src/next/kachakacha/view/ShapeShading.cpp
+    src/next/kachakacha/view/SurfaceRaster.cpp
     src/next/kachakacha/view/ViewOrientation.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/modeling/ExtrudeInput.cpp
@@ -1094,6 +1095,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2HoverEditTool.cpp
         src/apps/cad_next/V2LoopFacesDock.cpp
         src/apps/cad_next/V2ToolPreviewFaces.cpp
+        src/apps/cad_next/V2SurfaceRendering.cpp
         src/apps/cad_next/V2GptSurfaceTool.cpp
         src/apps/cad_next/V2GptSurfaceAssist.cpp
         src/apps/cad_next/V2LoopFacesTool.cpp

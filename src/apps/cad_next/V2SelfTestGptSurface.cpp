@@ -1,6 +1,8 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2DrawingDock.h"
+#include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/Selection.h"
 #include <QComboBox>
 #include <QCheckBox>
@@ -191,6 +193,54 @@ bool AutomaticBranchAndMarks(V2MainWindow& window)
         && !window.Viewport().RoleColorOf(interior.entityId).has_value());
 }
 
+bool SmoothHeadShell(V2MainWindow& window)
+{
+    using app::DirectWireKind;
+    using geometry::Vector3;
+    window.resize(1440,900);
+    QApplication::processEvents();
+    const auto wire = [&](DirectWireKind kind, std::vector<Vector3> points) {
+        app::DirectWireRequest request;
+        request.kind=kind; request.points=std::move(points);
+        window.DrawingDock().SetDirectWire(request, QStringLiteral("形状線"));
+        window.DrawingDock().PressCreateWire();
+    };
+    modeling::WorkPlaneFrame top;
+    window.Viewport().SetWorkPlane(top);
+    wire(DirectWireKind::PlanarArc, {{-3.5,1.936491673,0},{0,2.5,0},{3.5,1.936491673,0}});
+    wire(DirectWireKind::PlanarArc, {{-3.5,1.936491673,0},{-4.581139,1.224745,0},{-5,0,0}});
+    wire(DirectWireKind::PlanarArc, {{5,0,0},{4.581139,1.224745,0},{3.5,1.936491673,0}});
+    wire(DirectWireKind::SpatialLine, {{5,0,0},{3,0,3}});
+    wire(DirectWireKind::SpatialLine, {{-5,0,0},{-3,0,3}});
+    wire(DirectWireKind::SpatialLine, {{3,0,3},{0,0,3.5}});
+    wire(DirectWireKind::SpatialLine, {{0,0,3.5},{-3,0,3}});
+    modeling::WorkPlaneFrame side;
+    side.uAxis={0,1,0};side.vAxis={0,0,1};side.normal={1,0,0};
+    window.Viewport().SetWorkPlane(side);
+    wire(DirectWireKind::PlanarArc, {{0,3.5,0},{2.105897,2.361355,0},{2.5,0,0}});
+    window.Viewport().SetWorkPlane(top);
+    if (!Explain("eight owner shape wires", CountOfKind(window,domain::EntityKind::Wire)==8)) { return false; }
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    window.Viewport().SetViewCenter({0,1,1.5});
+    window.Viewport().SetVisibleWidthMm(14);
+    SelectWires(window);
+    window.RunCommand("surface.gpt_create");
+    if (!Click(window,"gptSurfacePreview")) { return false; }
+    if (!Explain("smooth shell preview",window.Viewport().ToolPreviewFaceCount()>0)) {
+        Note(window.findChild<QLabel*>(QStringLiteral("gptSurfaceStatus"))->text().toStdString().c_str());
+        return false;
+    }
+    QApplication::processEvents();
+    window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-gpt-smooth-preview.png"));
+    if (!Click(window,"gptSurfaceConfirm")) { return false; }
+    window.Viewport().SetSelection({});
+    QApplication::processEvents();
+    window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-gpt-smooth-shell.png"));
+    const auto& shapes=window.Viewport().ShapeViews();
+    return Explain("one open smooth shell retaining all source wires", shapes.size()==1 && !shapes.front().mesh.closed
+        && shapes.front().mesh.faceCount==1 && CountOfKind(window,domain::EntityKind::Wire)==8);
+}
+
 }
 std::vector<SelfTestCase> GptSurfaceCases()
 {
@@ -198,6 +248,7 @@ std::vector<SelfTestCase> GptSurfaceCases()
         {"HP-GPT-02 複数断面から面を作る", Sections},
         {"HP-GPT-03 不完全な外周を拒否・取消で文書不変", CancelAndReject},
         {"HP-GPT-04 クリックで複合断面を追加・並べ替え・確定", PickCompositeSections},
-        {"HP-GPT-05 分岐から外周自動判定・番号矢印・クリック修正", AutomaticBranchAndMarks}};
+        {"HP-GPT-05 分岐から外周自動判定・番号矢印・クリック修正", AutomaticBranchAndMarks},
+        {"HP-GPT-06 前頭部の滑らかな開いた殻・面表示", SmoothHeadShell}};
 }
 }

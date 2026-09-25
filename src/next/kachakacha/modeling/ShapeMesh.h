@@ -42,6 +42,8 @@ struct MeshTriangle {
     //! 番号は核が面を辿った順で、その形を組み立て直すまでは変わらない。
     //! **組み立て直すと変わりうる。** 文書に残す名前としては使わない。
     std::size_t faceIndex = kNoFaceIndex;
+    //! 表示用の曲面法線。面の境界では共有しない（実際の稜を丸めない）。
+    std::array<Vector3, 3> vertexNormals{};
 
     //! 重心。奥行きを測るのに使う。
     [[nodiscard]] Vector3 Center() const noexcept

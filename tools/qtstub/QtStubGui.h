@@ -251,6 +251,7 @@ public:
     [[nodiscard]] int width() const;
     [[nodiscard]] int height() const;
     void setDevicePixelRatio(double);
+    unsigned char* scanLine(int);
 };
 
 class QPixmap : public QPaintDevice {

@@ -352,8 +352,12 @@ template<class Function>
 }
 
 //! 1 辺(1 本以上の曲線)を 1 本の B-spline にする。輪をたどる向きに合わせる。
+//! polynomialArcs: 有理(円弧)の辺を多項式に近づける(四辺面の本番の面に使う。境界面の初期面には
+//! 使わない: 初期面は張り直しの出発点なので厳密でなくてよく、近づけた高次の曲線を MakeFilling の
+//! 初期面に渡すと PC で落ちた(2026-09-25、kernel_surface_tests の Access violation))。
 [[nodiscard]] Result<occ::handle<Geom_BSplineCurve>> SideCurve(
-    const std::vector<CurveSegment>& segments, bool reversed, const GeometryTolerance& tolerance)
+    const std::vector<CurveSegment>& segments, bool reversed, const GeometryTolerance& tolerance,
+    bool polynomialArcs)
 {
     using Out = Result<occ::handle<Geom_BSplineCurve>>;
     occ::handle<Geom_BSplineCurve> joined;
@@ -378,7 +382,7 @@ template<class Function>
         // v 方向(2 本目・4 本目)に有理な辺が来ると、その縁が元の円弧から外れる(PC で段ごとに測った:
         // 曲線は正確、面の縁だけ 0.016〜0.09 mm ずれる。2026-09-24、オーナーの atama.kcd2)。
         // 近づける量は 1e-6 mm で、面の検査の許容(1e-4 mm)より十分小さい。
-        if (piece->IsRational()) {
+        if (polynomialArcs && piece->IsRational()) {
             GeomConvert_ApproxCurve approx(occ::handle<Geom_Curve>(piece), 1.0e-6, GeomAbs_C2, 32, 9);
             if (approx.IsDone() && approx.HasResult() && !approx.Curve().IsNull()) {
                 piece = approx.Curve();
@@ -444,7 +448,7 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
         if (index >= request.chains.size() || request.chains[index].segments.empty()) {
             return {};
         }
-        auto curve = SideCurve(request.chains[index].segments, false, tolerance);
+        auto curve = SideCurve(request.chains[index].segments, false, tolerance, false);
         if (!curve.HasValue() || curve.Value().IsNull()) {
             return {};
         }
@@ -882,7 +886,7 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
         std::vector<occ::handle<Geom_BSplineCurve>> curves;
         for (std::size_t k = 0; k < 4; ++k) {
             auto curve = SideCurve(request.chains[plan.sides[k]].segments, plan.reversed[k],
-                tolerance);
+                tolerance, true);
             if (!curve.HasValue()) {
                 return Out::Failure(curve.Diagnostics());
             }

@@ -299,8 +299,8 @@ matrix の BLOCKED_BACKEND のうち、核か core で作れるものを本物�
 PC_TESTED: `dd6aa172`、Windowsビルド、ctest182/182、旧自己試験終了コード0、V2自己試験354/354、GPT幾何8/8、HP-GPT-01〜04合格。
 詳細と検証条件は [GPT_SURFACE_VALIDATION.md](GPT_SURFACE_VALIDATION.md)。
 
-## 2026-09-25 GPT版の自動外周・方向表示（検証中）
+## 2026-09-25 GPT版の自動外周・方向表示（PC_TESTED）
 
 実使用で外周＋内部線が分岐として拒否される問題に対応。外周候補の自動判定・切替、
 番号/色/方向矢印、登録線クリックから対応行の修正を追加。全参照を保持し、手動指定は固定。
-追加試験: gpt_surfaceの自動判定2件、HP-GPT-05。PC検証結果は完了後に記録する。
+追加試験: gpt_surfaceの自動判定2件、HP-GPT-05。PC_TESTED: `3102580a`、Windowsビルド・ctest182/182、旧自己試験終了0、V2自己試験355/355。GPT幾何10/10、作図32/32、HP-GPT-01〜05合格。

@@ -39,8 +39,8 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
         QObject::connect(box,&QDoubleSpinBox::valueChanged,dock_,[this](double){Invalidate();}); return box;
     };
     tolerance_=number("gptFabricationTolerance",QStringLiteral("許容偏差 "),.25,.001,100);
-    width_=number("gptFabricationWidth",QStringLiteral("最小幅 "),.5,.01,1000);
-    thickness_=number("gptFabricationThickness",QStringLiteral("板厚 "),.2,.001,100);
+    width_=number("gptFabricationWidth",QStringLiteral("分割方向の最小幅 "),.5,.01,1000);
+    thickness_=number("gptFabricationThickness",QStringLiteral("板厚（記録） "),.2,.001,100);
     count_=new QSpinBox(dock_->widget()); count_->setObjectName(QStringLiteral("gptFabricationCount"));
     count_->setRange(1,64); count_->setValue(12); count_->setPrefix(QStringLiteral("最大部材数 ")); layout->addWidget(count_);
     direction_=new QComboBox(dock_->widget()); direction_->setObjectName(QStringLiteral("gptFabricationDirection"));
@@ -117,7 +117,7 @@ void V2GptFabricationTool::HandleSelectionChanged()
 void V2GptFabricationTool::Invalidate()
 {
     preview_.reset(); if (!active_) { return; }
-    confirm_->setEnabled(false); pattern_->setEnabled(false); panels_->clear(); window_.viewport_->HideToolPreview();
+    confirm_->setEnabled(false); pattern_->setEnabled(false); panels_->clear(); window_.viewport_->HideToolPreview(); window_.viewport_->HideToolRoleLabels();
     status_->setText(QStringLiteral("条件を指定してプレビューしてください。元の面は変更しません。"));
 }
 base::Result<app::FabricationEvaluation> V2GptFabricationTool::Evaluate(
@@ -147,20 +147,28 @@ void V2GptFabricationTool::Preview()
         auto* row=new QTreeWidgetItem(panels_); row->setText(0,QString::fromStdString(panel.pattern.panelId));
         row->setText(1,QString::number(panel.maximumMm,'g',6));
     }
-    status_->setText(QString::fromStdString(preview_->summaryJa)+QStringLiteral("\n柱面への近似です。標本偏差は全域の上界ではありません。"));
+    status_->setText(QString::fromStdString(preview_->summaryJa)+QStringLiteral("\n柱面への近似です。標本偏差は全域の上界ではありません。板厚は記録のみで、型紙は中立面から作ります。"));
     confirm_->setEnabled(preview_->reachedTolerance); pattern_->setEnabled(preview_->reachedTolerance); ShowPreview();
 }
 void V2GptFabricationTool::ShowPreview()
 {
     if (!active_ || !preview_) { return; }
     modeling::ShapeMesh mesh; std::vector<std::vector<geometry::Vector3>> faces;
+    std::vector<V2Viewport::PlacedRoleLabel> labels;
     for (const auto& panel:preview_->gptPanels) {
-        const auto part=fabrication::GptPanelMesh(panel,definition_.masterPercent/100.0);
+        const double progress=definition_.masterPercent/100.0;
+        const auto part=fabrication::GptPanelMesh(panel,progress);
+        geometry::Point2 center{};
+        for (const auto& p:panel.pattern.outline) { center.u+=p.u; center.v+=p.v; }
+        center.u/=panel.pattern.outline.size(); center.v/=panel.pattern.outline.size();
+        labels.push_back({panel.Point(center,progress),QString::fromStdString(panel.pattern.panelId),
+            QColor(100,220,255),panel.Point({center.u+panel.lengths.back()*.15,center.v},progress),false});
         mesh.triangles.insert(mesh.triangles.end(),part.triangles.begin(),part.triangles.end());
         mesh.edges.insert(mesh.edges.end(),part.edges.begin(),part.edges.end());
     }
     for (const auto& triangle:mesh.triangles) { faces.push_back({triangle.points[0],triangle.points[1],triangle.points[2]}); }
     window_.viewport_->ShowToolPreview(mesh.edges); window_.viewport_->SetToolPreviewFaces(std::move(faces),&mesh);
+    window_.viewport_->ShowToolRoleLabels(std::move(labels));
 }
 void V2GptFabricationTool::Confirm(bool pattern)
 {
@@ -181,7 +189,8 @@ void V2GptFabricationTool::Confirm(bool pattern)
         preview_->panels[i].panelId=name; preview_->gptPanels[i].pattern.panelId=name;
     }
     window_.fabricationModels_[entity.id.ToString()]=*preview_;
-    End(); window_.AdoptCurrentDocument(); window_.RefreshFabricationView(); window_.RefreshShapeViews();
+    End(); window_.fabricationDock_->SetShowSource(false); window_.fabricationDock_->SetShowApprox(true);
+    window_.AdoptCurrentDocument(); window_.RefreshFabricationView(); window_.RefreshShapeViews();
     window_.viewport_->SetSelection(app::SelectionSet{{entity.id}}); window_.SetStatus(QString::fromStdString(summary));
     if (pattern) { window_.RunCommand("fabrication.create_pattern"); }
 }

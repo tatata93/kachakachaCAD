@@ -234,7 +234,8 @@ void V2MainWindow::AddApproximationRows(QTreeWidgetItem* modelItem,
     }
     const auto& evaluation = found->second;
     auto* candidate = new QTreeWidgetItem(modelItem);
-    candidate->setText(0, evaluation.bandMesh.has_value() ? QStringLiteral("候補: 帯で近似")
+    candidate->setText(0, !evaluation.gptPanels.empty() ? QStringLiteral("候補: GPT版近似")
+        : evaluation.bandMesh.has_value() ? QStringLiteral("候補: 帯で近似")
                                                             : QStringLiteral("候補: 面ごとに展開"));
     candidate->setText(1, QStringLiteral("候補"));
     candidate->setFlags(candidate->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);

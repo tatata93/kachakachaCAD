@@ -242,6 +242,8 @@ bool SmoothHeadShell(V2MainWindow& window)
 }
 
 }
+bool MakeGptHeadFixture(V2MainWindow& window) { return SmoothHeadShell(window); }
+
 std::vector<SelfTestCase> GptSurfaceCases()
 {
     return {{"HP-GPT-01 外周・下見・確定・Undo/Redo・保存再読込", Boundary},

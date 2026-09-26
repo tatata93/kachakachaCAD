@@ -93,6 +93,7 @@ struct FabricationEvaluation {
     double maximumDeviationMm = 0.0;
     bool reachedTolerance = true;
     double rmsDeviationMm = 0.0;
+    double maximumSeamGapMm = 0.0;
     std::vector<fabrication::GptApproxPanel> gptPanels;
     std::string summaryJa;
 };

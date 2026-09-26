@@ -60,7 +60,7 @@ base::Result<fabrication::GptApproxSource> ReadFace(const TopoDS_Face& face,doub
     }
     double u0,u1,v0,v1; BRepTools::UVBounds(face,u0,u1,v0,v1);
     BRepAdaptor_Surface surface(face);
-    for (int cells=32;cells<=256;cells*=2) {
+    for (int cells=64;cells<=256;cells*=2) {
         source.samples.clear(); double error=0;
         for (int row=0;row<cells;++row) {
             for (int col=0;col<cells;++col) {
@@ -83,6 +83,13 @@ base::Result<fabrication::GptApproxSource> ReadFace(const TopoDS_Face& face,doub
 base::Result<app::FabricationEvaluation> BuildGptFabrication(
     const domain::CreateFabricationModelDefinition& definition,const std::vector<GptFabricationInput>& inputs)
 {
+    if (!std::isfinite(definition.targetMaxDeviation.value) || definition.targetMaxDeviation.value<=0
+        || !std::isfinite(definition.materialThickness.value) || definition.materialThickness.value<=0
+        || !std::isfinite(definition.minimumPartWidthMm) || definition.minimumPartWidthMm<=0
+        || definition.maximumPartCount<1 || definition.maximumPartCount>64
+        || definition.splitAxis<0 || definition.splitAxis>2) {
+        return Out::Failure(base::MakeError("GPT-F001","近似の数値条件が不正です。","偏差・板厚・部材数・最小幅を確認してください。"));
+    }
     if (inputs.empty() || inputs.size()!=definition.parts.size() || !definition.openingWires.empty()
         || !definition.foldWires.empty() || !definition.reliefCutWires.empty() || !definition.connectionWires.empty()
         || !definition.automaticBoundaries || !definition.manualBoundaries.empty()
@@ -105,6 +112,7 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
                 const auto made=fabrication::ApproximateGpt(source.Value(),options);
                 if (!made.HasValue()) { return Out::Failure(made.Diagnostics()); }
                 result.reachedTolerance=result.reachedTolerance && made.Value().reached;
+                result.maximumSeamGapMm=std::max(result.maximumSeamGapMm,made.Value().seamGapMm);
                 for (auto panel:made.Value().panels) {
                     panel.pattern.panelId="GPT 部材"+std::to_string(result.panels.size()+1);
                     squared+=panel.squaredMm; samples+=panel.sampleCount;
@@ -118,7 +126,7 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
         result.rmsDeviationMm=std::sqrt(squared/std::max(std::size_t(1),samples));
         std::ostringstream note;
         note<<"GPT近似 "<<result.panels.size()<<" 部材 / 標本最大 "<<result.maximumDeviationMm
-            <<" mm / RMS "<<result.rmsDeviationMm<<" mm。";
+            <<" mm / RMS "<<result.rmsDeviationMm<<" mm / 部材間の隙間 "<<result.maximumSeamGapMm<<" mm。";
         if (!result.reachedTolerance) { note<<"許容未達。部材数を増やすか最小幅・許容を変更してください。"; }
         result.summaryJa=note.str(); return Out::Success(std::move(result));
     } catch (const Standard_Failure&) {

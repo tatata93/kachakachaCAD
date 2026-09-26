@@ -506,10 +506,13 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
 {
     if (!evaluation.gptPanels.empty()) {
         std::vector<std::vector<geometry::Vector3>> loops;
-        for (const auto& panel : evaluation.gptPanels) {
-            loops.push_back(fabrication::GptPanelLoop(panel, panel.pattern.outline, definition.masterPercent / 100.0));
+        for (std::size_t index = 0; index < evaluation.gptPanels.size(); ++index) {
+            const auto& panel = evaluation.gptPanels[index];
+            const double progress = definition.bandProgress.size() == evaluation.gptPanels.size()
+                ? definition.bandProgress[index] : definition.masterPercent / 100.0;
+            loops.push_back(fabrication::GptPanelLoop(panel, panel.pattern.outline, progress));
             for (const auto& hole : panel.pattern.openings) {
-                loops.push_back(fabrication::GptPanelLoop(panel, hole, definition.masterPercent / 100.0));
+                loops.push_back(fabrication::GptPanelLoop(panel, hole, progress));
             }
         }
         return loops;

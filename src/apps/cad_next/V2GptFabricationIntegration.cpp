@@ -41,7 +41,7 @@ bool V2MainWindow::FreezeGptContours(const domain::CreateFabricationModelDefinit
     const app::FabricationEvaluation& evaluation,int& wires)
 {
     if (freezeOutput_ != fabrication::FreezeOutput::WiresOnly) {
-        ReportDiagnostics({base::MakeError("GPT-F009", "GPT版の部品への厚み付き固定は未対応です。", "「輪郭を線にする」または型紙のSVG/DXF出力を使用してください。")});
+        ReportDiagnostics({base::MakeError("GPT-F006", "GPT版の部品への厚み付き固定は未対応です。", "「輪郭を線にする」または型紙のSVG/DXF出力を使用してください。")});
         return false;
     }
     for (std::size_t index=0;index<evaluation.gptPanels.size();++index) {

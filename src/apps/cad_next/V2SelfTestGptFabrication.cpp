@@ -12,6 +12,7 @@
 #include <QPixmap>
 #include <QString>
 #include <QFile>
+#include <QIODevice>
 namespace kachakacha::v2::selftest {
 bool MakeGptHeadFixture(V2MainWindow& window);
 namespace {

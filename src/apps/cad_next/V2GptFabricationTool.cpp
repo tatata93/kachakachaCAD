@@ -5,6 +5,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/app/ExplorerModel.h"
 #include <QComboBox>
+#include <QColor>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QSpinBox>

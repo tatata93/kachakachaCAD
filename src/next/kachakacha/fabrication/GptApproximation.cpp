@@ -148,8 +148,17 @@ std::pair<double,double> MeasureSeam(GptApproxResult& result,const GptApproxPane
     auto a=loop.back();
     for (const auto& b:loop) {
         if (std::abs(a.y-cut)<1e-7 && std::abs(b.y-cut)<1e-7) {
-            for (int i=0;i<=64;++i) {
-                const auto p=a+(b-a)*(i/64.);
+            std::vector<double> positions{0,1};
+            if (std::abs(b.x-a.x)>1e-12) {
+                for (const auto* section:{&panel.profile,&previous.profile}) {
+                    for (const auto& knot:*section) {
+                        const double t=(knot.u-a.x)/(b.x-a.x);
+                        if (t>0 && t<1) { positions.push_back(t); }
+                    }
+                }
+            }
+            for (double t:positions) {
+                const auto p=a+(b-a)*t;
                 const auto world=frame.origin+frame.u*p.x+frame.v*p.y+frame.normal*p.z;
                 const auto difference=map(previous,world)-map(panel,world);
                 const double gap=Dot(difference,frame.normal);

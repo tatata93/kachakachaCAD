@@ -240,6 +240,15 @@ void V2MainWindow::RefreshApproxForSelectionChange()
     const auto added = Missing(now, approxMirror_);
     const auto removed = Missing(approxMirror_, now);
     const auto& document = session_->GetDocument();
+    // 対象が文書から消えた(削除・取り消し)なら、外すのではなく道具を解く。
+    // 対象 0 のまま構えていると、線を押しても選択から外されて何もできなくなる。
+    for (const EntityId& id : removed) {
+        if (document.FindEntity(id) == nullptr) {
+            EndApprox();
+            SetStatus(QStringLiteral("近似: 対象にしていた面が無くなったので、近似をやめました。"));
+            return;
+        }
+    }
     std::vector<EntityId> accepted;
     for (const EntityId& id : added) {
         const auto* entity = document.FindEntity(id);

@@ -129,6 +129,18 @@ class DeterministicIdGenerator final : public IdGenerator {
 public:
     explicit DeterministicIdGenerator(std::uint64_t seed = 1) : counter_(seed) {}
     [[nodiscard]] Uuid Next() override;
+    //! 次に振る通し番号。
+    [[nodiscard]] std::uint64_t Counter() const noexcept { return counter_; }
+    //! counter までの番号は使われているものとして、その先から振る(開いた文書の ID と
+    //! 重ならないように。DOC-C003「同じ ID のオブジェクトが既にあります」の元)。
+    void SkipPast(std::uint64_t counter) noexcept
+    {
+        if (counter >= counter_) {
+            counter_ = counter + 1;
+        }
+    }
+    //! この生成器が振った ID なら、その通し番号。違えば nullopt。
+    [[nodiscard]] static std::optional<std::uint64_t> CounterOf(const Uuid& id) noexcept;
 
 private:
     std::uint64_t counter_ = 1;

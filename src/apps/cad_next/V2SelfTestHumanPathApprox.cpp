@@ -12,7 +12,10 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ApproxInput.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/app/UiMode.h"
+#include "kachakacha/domain/Entity.h"
 #include "kachakacha/domain/Feature.h"
 
 #include <QPointF>
@@ -257,6 +260,71 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("0 を押すと 0", dock.ClickBendPreset(0) && std::abs(dock.AssemblyPercent()) < 1.0e-9);
 }
 
+//! 構えたまま線を押しても選べない(近似は面と立体しか受けない)ことを確かめてから、
+//! 面を消す → 近似が解けて、線を押せば選べて Del で消える。
+[[nodiscard]] bool WiresBecomeSelectableAfterApproxEnds(V2MainWindow& window, const char* how)
+{
+    if (!Explain((std::string(how) + ": 近似が解けている").c_str(), !window.ApproxShelfShown())
+        || !Explain((std::string(how) + ": 一番下の一行から 近似 が消える").c_str(),
+            !window.ToolFooterTextJa().contains(QStringLiteral("近似")))
+        || !Explain((std::string(how) + ": 線を押すと選べる").c_str(),
+            ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    QString reason;
+    if (!Explain((std::string(how) + ": 削除が押せる(" + reason.toStdString() + ")").c_str(),
+            window.CommandEnabled("edit.delete", &reason))) {
+        return false;
+    }
+    window.RunCommand("edit.delete");
+    return Explain((std::string(how) + ": 線が消える").c_str(),
+        CountOfKind(window, EntityKind::Wire) == wiresBefore - 1);
+}
+
+//! HP-AP-06。オーナー報告(2026-09-26)「面を削除した後などに線を消したり選択したりできない」。
+//! 近似を構えて面を対象にしたまま、その面を消す → 近似は解けて線が選べる。
+//! 構えたままモードを替えても解ける。構えている間は線を押しても選ばれない(それが元の症状)。
+[[nodiscard]] bool CaseHumanPathApproxEndsWhenSourceVanishes(V2MainWindow& window)
+{
+    if (!ArmApproxOnFreshSurface(window)
+        || !Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))
+        || !Explain("構えている間は線を押しても選ばれない(面と立体しか受けない)",
+            !ClickOnAnyCurve(window, Qt::NoModifier) && window.ApproxShelfShown())) {
+        return false;
+    }
+    // 面を左の一覧などから選んで Del(3D で押すと対象から外れるだけなので、選択を直接入れる)。
+    kachakacha::v2::app::SelectionSet one;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::GuideSurface) {
+            one.entityIds = {entity.id};
+        }
+    }
+    window.Viewport().SetSelection(one);
+    if (!Explain("面を選んでも近似は構えたまま", window.ApproxShelfShown())) {
+        return false;
+    }
+    window.RunCommand("edit.delete");
+    if (!Explain("面が消える", CountOfKind(window, EntityKind::GuideSurface) == 0)
+        || !WiresBecomeSelectableAfterApproxEnds(window, "面を消した後")) {
+        return false;
+    }
+    // 取り消しで面が戻っても、近似は構え直さない(線はそのまま選べる)。
+    window.RunCommand("edit.undo");
+    window.RunCommand("edit.undo");
+    if (!Explain("取り消しで面と線が戻る", CountOfKind(window, EntityKind::GuideSurface) == 1)
+        || !Explain("戻っても近似は構えない", !window.ApproxShelfShown())) {
+        return false;
+    }
+    // モードを替えると解ける。
+    if (!ArmApproxOnFreshSurface(window)
+        || !Explain("構えてから面を画面で拾える(2度目)", ClickOnAnyGuideSurface(window))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    return WiresBecomeSelectableAfterApproxEnds(window, "作図へ替えた後");
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathApproxCases()
@@ -270,6 +338,8 @@ std::vector<SelfTestCase> HumanPathApproxCases()
             CaseHumanPathApproxPolicyChoosesCandidate},
         {"HP-AP-04 曲げ状態の基準値は組立率を打って当てる道を通る",
             CaseHumanPathBendPresetsApplyAssembly},
+        {"HP-AP-06 対象の面が消えるかモードを替えると近似は解け、線が選べて消せる",
+            CaseHumanPathApproxEndsWhenSourceVanishes},
     };
 }
 

@@ -11,6 +11,7 @@
 
 #include "V2EntityTree.h"
 
+#include "kachakacha/app/DocumentIds.h"
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/app/CommandAvailability.h"
@@ -360,6 +361,9 @@ void V2MainWindow::SetMode(UiMode mode)
     }
     // 構えていた命令も捨てる。別のモードへ移ったなら、その命令はもう関係ない。
     ClearPendingCommand();
+    // 3D で対象を拾う道具(面を作る・近似・足す引く・厚み…)も解く。残すと、作図モードへ
+    // 移ったのに画面の押下が道具に取られて線が選べず、消せもしない(オーナー報告 2026-09-27)。
+    EndArmedTools();
     RefreshCommandVisibility();
     if (ribbon_ != nullptr) {
         ribbon_->ShowMode(mode);   // 帯のカテゴリと道具はモードで入れ替わる
@@ -372,6 +376,58 @@ void V2MainWindow::SetMode(UiMode mode)
     RefreshProcessSteps();
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
             .arg(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str())));
+}
+
+//! 3D で対象を拾う道具を全部解く(面を作る・近似・足す引く・厚み・面の編集・持ち主のある道具)。
+//! 文書の入れ替え・モードの切り替え・拾っていた物が消えたときに呼ぶ。選んでいるものは触らない。
+void V2MainWindow::EndArmedTools()
+{
+    if (surfaceShelfShown_) { EndSurfacePreview(); }
+    if (approxShelfShown_) { EndApprox(); }
+    if (booleanShelfShown_) { EndBoolean(); }
+    if (thickenShelfShown_) { EndThicken(); }
+    if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
+    if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
+    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
+    if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
+    if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
+    if (gptFabrication_ != nullptr) { gptFabrication_->End(); }
+    if (gptSurface_ != nullptr) { gptSurface_->End(); }
+    if (loopFaces_ != nullptr) { loopFaces_->Clear(); }
+    if (viewport_ != nullptr) {
+        // 道具が消し忘れた札・下見・拾いの構えを念のため全部消す。
+        viewport_->HideToolPreview();
+        viewport_->HideToolRoleLabels();
+        viewport_->SetToolPickActive(false);
+        viewport_->SetToolPickToggle(false);
+    }
+    ShowToolFooter(QString());
+}
+
+//! 拾っていた物(面を作るの線、近似の面)が文書から消えたら、その道具を解く。
+//! 消したあとや取り消しのあとに、無い物を指したまま構えていると線が選べなくなる。
+void V2MainWindow::EndToolsWhoseInputsVanished()
+{
+    const auto& document = session_->GetDocument();
+    const auto missing = [&](const std::vector<kachakacha::v2::base::EntityId>& ids) {
+        for (const auto& id : ids) {
+            if (document.FindEntity(id) == nullptr) {
+                return true;
+            }
+        }
+        return false;
+    };
+    if (approxShelfShown_ && missing(approxInput_.sources)) {
+        EndApprox();
+        SetStatus(QStringLiteral("近似: 対象にしていた面が無くなったので、近似をやめました。"));
+    }
+    if (surfaceShelfShown_
+        && (missing(surfaceInput_.sections) || missing(surfaceInput_.guides)
+            || missing(surfaceInput_.boundaries) || missing(surfaceInput_.sourceSurfaces)
+            || missing(surfaceInput_.centerlines))) {
+        EndSurfacePreview();
+        SetStatus(QStringLiteral("面を作る: 欄に入れていた線が無くなったので、面を作るのをやめました。"));
+    }
 }
 
 int V2MainWindow::VisibleCommandCount() const
@@ -750,6 +806,10 @@ void V2MainWindow::RefreshProcessSteps()
 
 void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snapshot)
 {
+    // 開いた文書の ID より先から振る。番号が 1 へ戻ると前の回の ID とぶつかり、面を作る・
+    // 固定するときに DOC-C003「同じ ID のオブジェクトが既にあります」で断られる
+    // (オーナー報告 2026-09-27: 面生成に失敗)。
+    kachakacha::v2::app::AdvanceIdsPastDocument(*ids_, snapshot);
     const auto problems = session_->GetDocument().ResetTo(std::move(snapshot));
     bool refused = false;
     for (const auto& diagnostic : problems) {
@@ -769,17 +829,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     // 消えてしまわないよう、ここで履歴の境界にする(開く・新規と同じ扱い)。
     session_->GetDocument().MarkHistoryBoundary();
     // 文書が入れ替わった。構えていた道具はやめる。古い入力を新しい文書へ持ち越さない。
-    if (surfaceShelfShown_) { EndSurfacePreview(); }
-    if (approxShelfShown_) { EndApprox(); }
-    if (booleanShelfShown_) { EndBoolean(); }
-    if (thickenShelfShown_) { EndThicken(); }
-    if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
-    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
-    if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
-    if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
-    if (gptFabrication_ != nullptr) { gptFabrication_->End(); }
-    if (gptSurface_ != nullptr) { gptSurface_->End(); }
-    if (loopFaces_ != nullptr) { loopFaces_->Clear(); }
+    EndArmedTools();
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));

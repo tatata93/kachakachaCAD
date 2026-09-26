@@ -56,6 +56,25 @@ Uuid RandomIdGenerator::Next()
     return Uuid(bytes);
 }
 
+std::optional<std::uint64_t> DeterministicIdGenerator::CounterOf(const Uuid& id) noexcept
+{
+    const auto& bytes = id.Bytes();
+    for (std::size_t index = 0; index < 8; ++index) {
+        // 前半は 0 の目印(6 番目は版の印 0x40 が付く)。
+        if (bytes[index] != (index == 6 ? 0x40 : 0x00)) {
+            return std::nullopt;
+        }
+    }
+    if ((bytes[8] & 0xC0) != 0x80) {
+        return std::nullopt;
+    }
+    std::uint64_t counter = static_cast<std::uint64_t>(bytes[8] & 0x3F);
+    for (std::size_t index = 9; index < 16; ++index) {
+        counter = (counter << 8) | bytes[index];
+    }
+    return counter;
+}
+
 Uuid DeterministicIdGenerator::Next()
 {
     std::array<std::uint8_t, 16> bytes{};

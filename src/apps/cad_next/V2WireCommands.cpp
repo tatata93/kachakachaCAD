@@ -774,6 +774,8 @@ void V2MainWindow::AdoptCurrentDocument()
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
     viewport_->PruneSelection();
+    // 拾っていた物が消えた道具(近似・面を作る)は解く(消したあと・取り消しのあと)。
+    EndToolsWhoseInputsVanished();
     RefreshEntityList();
     RefreshExportCounts();
     RefreshCommandVisibility();

@@ -88,7 +88,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "part.rotate", "part.array_linear", "part.array_circular", "derived.freeze",
     };
     static const std::vector<std::string_view> fabrication{
-        "fabrication.create", "fabrication.assign_role", "fabrication.assign_relief_cut",
+        "fabrication.gpt_create", "fabrication.create", "fabrication.assign_role", "fabrication.assign_relief_cut",
         "fabrication.preview_update",
         "fabrication.create_pattern", "fabrication.set_assembly",
         "fabrication.set_method", "fabrication.freeze_output", "fabrication.merge_parts", "fabrication.split_part",
@@ -125,7 +125,7 @@ const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
         "part.extrude", "part.thicken", "part.boolean_add", "part.boolean_cut",
     };
     static const std::vector<std::string_view> fabrication{
-        "fabrication.create", "fabrication.create_pattern", "fabrication.assign_role",
+        "fabrication.gpt_create", "fabrication.create", "fabrication.create_pattern", "fabrication.assign_role",
     };
     static const std::vector<std::string_view> output{
         "export.validate", "export.stl", "export.step", "export.svg", "export.dxf",

@@ -356,6 +356,7 @@ struct BandedSource {
 std::string_view FabricationMethodNameJa(FabricationMethod method) noexcept
 {
     switch (method) {
+    case FabricationMethod::GptApproximation: return "GPT版（柱面近似）";
     case FabricationMethod::ClassifyFaces:     return "面を分類して展開(V2方式)";
     case FabricationMethod::BandApproximation: return "帯へ近似し直す(V1方式)";
     }
@@ -365,6 +366,7 @@ std::string_view FabricationMethodNameJa(FabricationMethod method) noexcept
 FabricationMethod FabricationMethodOf(
     const domain::CreateFabricationModelDefinition& definition) noexcept
 {
+    if (definition.method == 2) { return FabricationMethod::GptApproximation; }
     return definition.method == 1 ? FabricationMethod::BandApproximation
                                   : FabricationMethod::ClassifyFaces;
 }
@@ -425,6 +427,9 @@ Result<FabricationEvaluation> EvaluateFabrication(
     double toleranceMm)
 {
     using Out = Result<FabricationEvaluation>;
+    if (definition.method == 2) {
+        return Out::Failure(MakeError("GPT-F006", "GPT版は元の面から再計算してください。", "既存方式へ置き換えず、GPT版の欄を使用してください。"));
+    }
     if (sources.empty()) {
         return Out::Failure(MakeError("FAB-M001", "近似する元がありません。",
             "平らな1枚を持つ部品か、形状ガイドを選んでください。"));
@@ -525,6 +530,19 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     const domain::CreateFabricationModelDefinition& definition,
     const FabricationEvaluation& evaluation, double liftMm)
 {
+    if (!evaluation.gptPanels.empty()) {
+        std::vector<std::vector<geometry::Vector3>> loops;
+        for (std::size_t index = 0; index < evaluation.gptPanels.size(); ++index) {
+            const auto& panel = evaluation.gptPanels[index];
+            const double progress = definition.bandProgress.size() == evaluation.gptPanels.size()
+                ? definition.bandProgress[index] : definition.masterPercent / 100.0;
+            loops.push_back(fabrication::GptPanelLoop(panel, panel.pattern.outline, progress));
+            for (const auto& hole : panel.pattern.openings) {
+                loops.push_back(fabrication::GptPanelLoop(panel, hole, progress));
+            }
+        }
+        return loops;
+    }
     if (!evaluation.bandMesh.has_value()) {
         return {};
     }

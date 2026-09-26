@@ -100,6 +100,7 @@ void V2MainWindow::RefreshShapeViews()
     };
     take(guideShapes_, true);
     take(partShapes_, false);
+    AppendGptFabricationViews(shapes);
     // もう文書にない形の網は捨てる。持ち続けると、開き直すたびに増える。
     shapeMeshes_ = std::move(keep);
     viewport_->SetShapeViews(std::move(shapes));

@@ -355,7 +355,7 @@ struct CreateFabricationModelDefinition {
     int fidelity = 6;
 
     //! 近似の方式。0 = V2 方式(面を分類して展開できなければ断る)、
-    //! 1 = V1 方式(帯へ近似し直す。二重曲面も切る)。
+    //! 1 = V1 方式(帯へ近似し直す。二重曲面も切る)、2 = GPT版(外周を保つ柱面近似)。
     int method = 0;
     //! 帯近似の決め方(method = 1 のとき)。fabrication::BandApproximationOptions と同じ。
     //! 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)、3 = 縦に割る(上下に走る線で)、

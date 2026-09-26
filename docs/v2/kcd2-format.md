@@ -977,3 +977,9 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 `document.json` 以外のentryは、この版が意味を知らないものも含めて読み込み時に保持し、
 保存し直したときにそのまま書き戻す。新しい版が付けたサムネイルや追加データを、
 古い版で開いて保存しただけで失わないため。
+
+### 2026-09-25 製作近似GPT版
+CreateFabricationModelDefinitionのmethod=2はGPT版の柱面近似。parts（形状ガイドUUID）、
+targetMaxDeviation、maximumPartCount、minimumPartWidthMm、splitAxis（0/1/2自動）、
+materialThickness、masterPercentを既存キーで保存。0/1は変更しない。2を0へ代替しない。
+部材の形は元B-Repと保存条件から再生成し、表示メッシュを正本として保存しない。

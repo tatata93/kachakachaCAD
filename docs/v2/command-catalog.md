@@ -165,6 +165,7 @@ parameter schemaのdiscriminatorにする。
 
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
+| `fabrication.gpt_create` | GPT版近似 | 面を選択→許容偏差・部材数・最小幅・方向→近似下見→確定/型紙。既存近似とは独立した柱面近似。標本最大/RMSを表示し許容未達は確定不可 | FabricationModel | AT-GPT-F001, AT-GPT-F002 |
 | `fabrication.create` | 製作モデルを作る | Part か GuideSurface 1 以上(何個でも 1 つのモデルへ)、strategy、settings | FabricationModel | AT-FAB-001から005 |
 | `fabrication.assign_role` | 境界の役割 | WireChain、role | Fabrication Feature更新 | AT-FAB-006 |
 | `fabrication.assign_relief_cut` | 切れ目にする | 開いたワイヤー1以上 | Fabrication Feature更新(reliefCutWires)。平らな部材の型紙に切れ目(RELIEF 層)。閉じた線は FAB-M005、部材に載っていなければ FAB-M003 | AT-FAB-006 |

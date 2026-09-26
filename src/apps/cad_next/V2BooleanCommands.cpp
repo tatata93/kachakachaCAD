@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GptSurfaceTool.h"
+#include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2LoopFacesTool.h"
 #include "V2ShellSplitTool.h"
@@ -62,6 +63,7 @@ namespace {
 //! 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
 void V2MainWindow::EndOwnedToolsBut(const void* keep)
 {
+    if (gptFabrication_ != nullptr && gptFabrication_.get() != keep) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_.get() != keep) { gptSurface_->End(); }
     if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
         solidTool_->End();
@@ -97,6 +99,7 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (id == "fabrication.gpt_create") { BeginGptFabrication(); return true; }
     if (id == "surface.gpt_create") {
         BeginGptSurface();
         return true;

@@ -1,5 +1,6 @@
 #include "V2MainWindow.h"
 #include "V2GptSurfaceTool.h"
+#include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2HoverEditTool.h"
@@ -291,6 +292,7 @@ void V2MainWindow::HandleSelectionChanged()
 {
     // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
     HighlightTreeForSelection();
+    if (gptFabrication_ != nullptr) { gptFabrication_->HandleSelectionChanged(); }
     if (gptSurface_ != nullptr) { gptSurface_->HandleSelectionChanged(); }
     // 構えている命令があれば、そろったかを見る。
     RefreshPendingCommand(false);
@@ -775,6 +777,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
     if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
     if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
+    if (gptFabrication_ != nullptr) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr) { gptSurface_->End(); }
     if (loopFaces_ != nullptr) { loopFaces_->Clear(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
@@ -1072,6 +1075,7 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
+    if (gptFabrication_ != nullptr && gptFabrication_->Active()) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_->Active()) { gptSurface_->End(); }
     RememberToolForMeasure(tool);   // 測定へ持ち替えるなら、いまの道具を戻り先に(C-16)
     session_->SelectTool(tool);
@@ -1252,6 +1256,8 @@ void V2MainWindow::RunCommand(std::string_view id)
                 .arg(QString::fromUtf8(std::string(id).c_str())));
         return;
     }
+    if (gptFabrication_ != nullptr && gptFabrication_->Active() && id != "fabrication.gpt_create"
+        && id.substr(0, 5) != "view.") { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_->Active() && id != "surface.gpt_create"
         && id.substr(0, 5) != "view.") { gptSurface_->End(); }
     // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。

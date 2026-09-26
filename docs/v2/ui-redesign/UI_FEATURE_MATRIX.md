@@ -205,3 +205,5 @@ UI の入口がある / 人の操作で入力を入れられる / 下見があ�
 2026-09-25 D-44追加改修: PC_TESTED(`1210b82f5`: ctest182/182、V2自己試験357/357)。
 HP-GPT-06で前頭部8本から連続した開いた面を作る。GPT幾何11/11、表示24/24。
 面・立体の不透明な連続陰影、細かな輪郭、同じ陰影のGPTプレビューを追加。撮影確認済み。
+
+| F-GPT | 製作 → 近似 → GPT版 | 面・許容・部材数・最小幅・方向、部材下見と最大/RMS、組立率、確定/型紙 | GptApproximation / OcctGptFabrication / V2GptFabricationTool | AT-GPT-F001/002、HP-GPT-F01/F02 | PC_TESTED: fc1ff8cab。ctest183/183、V2通常/配布359/359。制約はGPT_FABRICATION_VALIDATION.md |

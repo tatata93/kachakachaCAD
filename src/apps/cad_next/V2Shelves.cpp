@@ -5,6 +5,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GptSurfaceTool.h"
+#include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2HoverEditTool.h"
@@ -210,6 +211,7 @@ void V2MainWindow::BuildOutputShelves()
     // トリム・延長・分割(線の上に置いて押す。Inventor の手順)。
     hoverEdit_ = std::make_unique<V2HoverEditTool>(*this);
     gptSurface_ = std::make_unique<V2GptSurfaceTool>(*this);
+    gptFabrication_ = std::make_unique<V2GptFabricationTool>(*this);
     loopFaces_ = std::make_unique<V2LoopFacesTool>(*this);
     viewport_->SetEditClickCallback([this](const QPointF& position) {
         return hoverEdit_ != nullptr && hoverEdit_->Click(position);

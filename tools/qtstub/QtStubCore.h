@@ -143,6 +143,27 @@ public:
     [[nodiscard]] static bool mkpath(const QString&);
 };
 
+class QByteArray;
+//! QFile / QIODevice(Codex の自己試験が型紙の出力を読むのに使う)。
+class QIODevice {
+public:
+    enum OpenModeFlag { NotOpen = 0, ReadOnly = 1, WriteOnly = 2, ReadWrite = 3, Text = 16 };
+    using OpenMode = int;
+};
+
+class QFile : public QIODevice {
+public:
+    QFile() = default;
+    explicit QFile(const QString&);
+    [[nodiscard]] bool open(OpenMode);
+    void close();
+    [[nodiscard]] long long size() const;
+    [[nodiscard]] bool exists() const;
+    [[nodiscard]] static bool exists(const QString&);
+    [[nodiscard]] static bool remove(const QString&);
+    [[nodiscard]] QByteArray readAll();
+};
+
 class QStringList {
 public:
     QStringList() = default;

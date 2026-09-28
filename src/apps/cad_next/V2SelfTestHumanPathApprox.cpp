@@ -260,9 +260,23 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("0 を押すと 0", dock.ClickBendPreset(0) && std::abs(dock.AssemblyPercent()) < 1.0e-9);
 }
 
+//! いま選んでいるもののうち、その種類のものの数。
+[[nodiscard]] int CountSelectedOfKind(V2MainWindow& window, EntityKind kind)
+{
+    int count = 0;
+    for (const auto& id : window.Viewport().Selection().entityIds) {
+        const auto* entity = window.Session().GetDocument().FindEntity(id);
+        count += entity != nullptr && entity->kind == kind ? 1 : 0;
+    }
+    return count;
+}
+
 //! 構えたまま線を押しても選べない(近似は面と立体しか受けない)ことを確かめてから、
 //! 面を消す → 近似が解けて、線を押せば選べて Del で消える。
-[[nodiscard]] bool WiresBecomeSelectableAfterApproxEnds(V2MainWindow& window, const char* how)
+//! wireFree: その線を使う面が無く、Del で実際に消えることまで見る。面が残っていれば
+//! 「使っている」と断る(HP-LF-09)ので、削除の道へ届いたことだけ見る。
+[[nodiscard]] bool WiresBecomeSelectableAfterApproxEnds(V2MainWindow& window, const char* how,
+    bool wireFree)
 {
     if (!Explain((std::string(how) + ": 近似が解けている").c_str(), !window.ApproxShelfShown())
         || !Explain((std::string(how) + ": 一番下の一行から 近似 が消える").c_str(),
@@ -278,6 +292,11 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     window.RunCommand("edit.delete");
+    if (!wireFree) {
+        return Explain((std::string(how) + ": 面に使われている線は「使っている」と断られる(削除の道へ届く)").c_str(),
+            CountOfKind(window, EntityKind::Wire) == wiresBefore
+                && window.StatusText().contains(QStringLiteral("使っている")));
+    }
     return Explain((std::string(how) + ": 線が消える").c_str(),
         CountOfKind(window, EntityKind::Wire) == wiresBefore - 1);
 }
@@ -288,9 +307,13 @@ using kachakacha::v2::domain::EntityKind;
 [[nodiscard]] bool CaseHumanPathApproxEndsWhenSourceVanishes(V2MainWindow& window)
 {
     if (!ArmApproxOnFreshSurface(window)
-        || !Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))
-        || !Explain("構えている間は線を押しても選ばれない(面と立体しか受けない)",
-            !ClickOnAnyCurve(window, Qt::NoModifier) && window.ApproxShelfShown())) {
+        || !Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))) {
+        return false;
+    }
+    // 構えている間に線を押しても、線は選択に残らない(面と立体しか受けない。対象の面は残る)。
+    (void)ClickOnAnyCurve(window, Qt::NoModifier);
+    if (!Explain("構えている間は線を押しても線は選ばれない(面と立体しか受けない)",
+            CountSelectedOfKind(window, EntityKind::Wire) == 0 && window.ApproxShelfShown())) {
         return false;
     }
     // 面を左の一覧などから選んで Del(3D で押すと対象から外れるだけなので、選択を直接入れる)。
@@ -306,7 +329,7 @@ using kachakacha::v2::domain::EntityKind;
     }
     window.RunCommand("edit.delete");
     if (!Explain("面が消える", CountOfKind(window, EntityKind::GuideSurface) == 0)
-        || !WiresBecomeSelectableAfterApproxEnds(window, "面を消した後")) {
+        || !WiresBecomeSelectableAfterApproxEnds(window, "面を消した後", true)) {
         return false;
     }
     // 取り消しで面が戻っても、近似は構え直さない(線はそのまま選べる)。
@@ -322,7 +345,7 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
-    return WiresBecomeSelectableAfterApproxEnds(window, "作図へ替えた後");
+    return WiresBecomeSelectableAfterApproxEnds(window, "作図へ替えた後", false);
 }
 
 } // namespace

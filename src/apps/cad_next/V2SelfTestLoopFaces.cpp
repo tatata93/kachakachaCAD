@@ -918,8 +918,9 @@ void SelectAllWires(V2MainWindow& window)
     viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
     if (!Explain("何も選んでいなければ最後のモデルが現在", window.CurrentFabricationModel() == models[1])
         || !Explain("下見は 8 帯(4 + 4)", viewport.FoldPreviewRailCount() == 16)
-        || !Explain("最後のモデルの帯は選択色(1)、もう 1 つは素(0)",
-            viewport.FoldPreviewEmphasis(4) == 1 && viewport.FoldPreviewEmphasis(0) == 0)) {
+        // (対象部材の欄に番号が残っていれば、その帯は 2。どちらでも「強調されている」)
+        || !Explain("最後のモデルの帯は強調(1 か 2)、もう 1 つは素(0)",
+            viewport.FoldPreviewEmphasis(4) >= 1 && viewport.FoldPreviewEmphasis(0) == 0)) {
         return false;
     }
     // 3D で 1 つ目のモデルの元の面を押す → そのモデルが現在。押した帯が対象部材になり塗られる。

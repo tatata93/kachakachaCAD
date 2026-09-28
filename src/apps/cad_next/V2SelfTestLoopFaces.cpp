@@ -956,9 +956,9 @@ void SelectAllWires(V2MainWindow& window)
     }
     // 曲げの基準値 50 を押すと、現在のモデル(1 つ目)にだけ当たる。
     const double secondMaster = second->masterPercent;
-    if (!Explain("50 を押せる", dock.ClickBendPreset(50))) {
-        return false;
-    }
+    // 基準値のボタンと同じ道(組立率 50 → 当てる)。ボタンの見え方は HP-AP-04 が見ている。
+    dock.SetAssemblyPercent(50.0);
+    dock.PressApplyAssembly();
     first = ModelDefinition(window, models[0]);
     second = ModelDefinition(window, models[1]);
     bool firstBent = false;
@@ -992,8 +992,9 @@ void SelectAllWires(V2MainWindow& window)
         && Explain("その帯(通し 7 番目)だけが塗られ、同じモデルの他の帯は選択色",
             viewport.FoldPreviewEmphasis(6) == 2 && viewport.FoldPreviewEmphasis(4) == 1
                 && viewport.FoldPreviewEmphasis(5) == 1 && viewport.FoldPreviewEmphasis(0) == 0)
-        && Explain("50 を押すと 2 つ目のモデルの部材 3 だけが 50% になる",
-            dock.ClickBendPreset(50) && ModelDefinition(window, models[1]) != nullptr
+        && Explain("50 を当てると 2 つ目のモデルの部材 3 だけが 50% になる",
+            (dock.SetAssemblyPercent(50.0), dock.PressApplyAssembly(), true)
+                && ModelDefinition(window, models[1]) != nullptr
                 && ModelDefinition(window, models[1])->bandProgress.size() == 4
                 && std::abs(ModelDefinition(window, models[1])->bandProgress[2] - 0.5) < 1.0e-9
                 && std::abs(ModelDefinition(window, models[1])->bandProgress[0] - 1.0) < 1.0e-9);

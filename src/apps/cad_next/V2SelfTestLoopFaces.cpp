@@ -861,7 +861,7 @@ void SelectAllWires(V2MainWindow& window)
             continue;
         }
         // 曲がった面は外接箱の真ん中が面の上に無いことがある。三角形の真ん中を順に試す。
-        for (std::size_t at = shape.mesh.triangles.size() / 2; at < shape.mesh.triangles.size(); ++at) {
+        for (std::size_t at = 0; at < shape.mesh.triangles.size(); ++at) {
             const auto screen = viewport.Mapping().Project(shape.mesh.triangles[at].Center());
             if (!screen.has_value()
                 || !viewport.PickShapeAt(QPointF(screen->x, screen->y)).has_value()) {
@@ -926,7 +926,20 @@ void SelectAllWires(V2MainWindow& window)
     // 3D で 1 つ目のモデルの元の面を押す → そのモデルが現在。押した帯が対象部材になり塗られる。
     auto& dock = window.FabricationDock();
     dock.SetStageIndex(1);
-    if (!Explain("3D で 1 つ目の元の面を押せる", ClickOnSurfaceOf(window, firstSource))
+    dock.SetShowSource(true);
+    // 上から見たままだと側面は線にしか見えず押せない。斜めから全体を見る。
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    viewport.FitToDocument();
+    int surfacesShown = 0;
+    bool firstShown = false;
+    for (const auto& shape : viewport.ShapeViews()) {
+        surfacesShown += shape.surface && !shape.mesh.Empty() ? 1 : 0;
+        firstShown = firstShown || shape.entityId == firstSource;
+    }
+    if (!Explain((std::string("3D で 1 つ目の元の面を押せる(面 ") + std::to_string(surfacesShown)
+                    + (firstShown ? " 枚、1 つ目あり" : " 枚、1 つ目なし") + ", 選択 "
+                    + std::to_string(viewport.Selection().entityIds.size()) + ")").c_str(),
+            ClickOnSurfaceOf(window, firstSource))
         || !Explain("押した面のモデルが現在になる", window.CurrentFabricationModel() == models[0])
         || !Explain((std::string("対象部材に番号が入る(") + dock.PartNumbersText().toStdString() + ")").c_str(),
             !dock.PartNumbersText().trimmed().isEmpty())

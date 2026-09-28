@@ -257,14 +257,54 @@ kachakacha::v2::base::EntityId V2MainWindow::CurrentFabricationModelId() const
             return id;
         }
     }
+    // 3D で押せるのは近似モデルそのものではなく元の面。元の面を選んでいれば、その面から
+    // 作った近似モデル(面ごとに 1 つ)。最後のモデルにしか曲げが効かなかった(オーナー報告 2026-09-28)。
+    const auto& document = session_->GetDocument();
     kachakacha::v2::base::EntityId last;
-    for (const auto& entity : session_->GetDocument().Snapshot().entities) {
-        if (entity.kind == kachakacha::v2::domain::EntityKind::FabricationModel
-            && fabricationModels_.count(entity.id.ToString()) != 0) {
-            last = entity.id;
+    for (const auto& entity : document.Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::FabricationModel
+            || fabricationModels_.count(entity.id.ToString()) == 0) {
+            continue;
+        }
+        last = entity.id;
+        const auto* feature = document.FindFeature(entity.createdBy);
+        if (feature == nullptr) {
+            continue;
+        }
+        for (const auto& id : viewport_->Selection().entityIds) {
+            if (std::find(feature->inputEntityIds.begin(), feature->inputEntityIds.end(), id)
+                != feature->inputEntityIds.end()) {
+                return entity.id;
+            }
         }
     }
     return last;
+}
+
+void V2MainWindow::RefreshFoldEmphasis()
+{
+    if (viewport_ != nullptr && !foldGroups_.empty()) {
+        viewport_->SetFoldEmphasis(FoldEmphasisFor(foldGroups_));
+    }
+}
+
+//! 下見の帯ごとの強調(V2Viewport::SetFoldPreview の emphasis)。
+//! いまの近似モデルの帯は 1、その「対象部材」に挙げた帯は 2。ほかは 0。
+//! 帯は面ごとの帯の順(部材の番号の順)に並ぶので、部材 n は n 番目の帯。
+std::vector<int> V2MainWindow::FoldEmphasisFor(const std::vector<FoldGroup>& groups) const
+{
+    std::vector<int> emphasis;
+    const auto current = CurrentFabricationModelId();
+    const auto targets = ReadPartNumbers().numbers;
+    for (const auto& group : groups) {
+        const bool mine = group.bands && group.model == current;
+        for (std::size_t band = 0; band < group.pairs; ++band) {
+            const bool target = mine
+                && std::find(targets.begin(), targets.end(), band) != targets.end();
+            emphasis.push_back(target ? 2 : mine ? 1 : 0);
+        }
+    }
+    return emphasis;
 }
 
 void V2MainWindow::RefreshFabricationView()
@@ -272,6 +312,7 @@ void V2MainWindow::RefreshFabricationView()
     // 全近似モデルの部材を並べ直す。型紙はこの並びから作る。
     fabricationPanels_.clear();
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails;
+    std::vector<FoldGroup> groups;
     for (const auto& entity : session_->GetDocument().Snapshot().entities) {
         if (entity.kind != kachakacha::v2::domain::EntityKind::FabricationModel) {
             continue;
@@ -292,17 +333,23 @@ void V2MainWindow::RefreshFabricationView()
                     &feature->definition)) {
             // いまの曲げ状態での姿勢。画面のプレビューと固定・出力を同じ道にする。
             // V1 で、プレビューと出力を別の作り方にして食い違った教訓である。
+            const std::size_t before = rails.size();
             for (auto& rail : kachakacha::v2::app::FoldedRailsOf(*definition,
                      found->second, 8.0)) {
                 rails.push_back(std::move(rail));
             }
+            // GPT 版は輪(外形 + 開口)で、帯の組ではない。強調は帯の近似だけ。
+            groups.push_back(FoldGroup{entity.id, (rails.size() - before + 1) / 2,
+                found->second.gptPanels.empty()});
         }
     }
     // 表示で「近似の姿」を消しているなら出さない(F-04。見るだけの切り替え)。
     if (fabricationDock_ != nullptr && !fabricationDock_->ShowApprox()) {
         rails.clear();
+        groups.clear();
     }
-    viewport_->SetFoldPreview(std::move(rails));
+    foldGroups_ = std::move(groups);
+    viewport_->SetFoldPreview(std::move(rails), FoldEmphasisFor(foldGroups_));
     RefreshShapeViews();
     processContext_.fabricationBuilt = !fabricationPanels_.empty();
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());

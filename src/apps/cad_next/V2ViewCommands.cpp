@@ -20,6 +20,7 @@
 #include "V2SurfaceDock.h"
 
 #include "V2EntityTree.h"
+#include "V2FabricationDock.h"
 
 #include "kachakacha/app/SurfaceFacing.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
@@ -276,6 +277,9 @@ void V2MainWindow::AdoptTreeSelection()
         }
         next.entityIds.push_back(id);
     };
+    // 近似モデルの下の「部材 n」の行: その近似モデルを選び、「対象部材」を n にする。
+    // 行だけ選んでも何も起きず、曲げ状態が最後のモデルにしか当たらなかった(オーナー報告 2026-09-28)。
+    QString partNumbers;
     for (QTreeWidgetItem* item : entityTree_->selectedItems()) {
         if (item == nullptr) {
             continue;
@@ -283,6 +287,13 @@ void V2MainWindow::AdoptTreeSelection()
         const auto id = idOf(item);
         if (!id.IsNil()) {
             add(id);
+            continue;
+        }
+        const int partNumber = item->data(0, Qt::UserRole).toInt();
+        if (partNumber > 0 && item->parent() != nullptr && item->parent()->parent() != nullptr) {
+            add(idOf(item->parent()->parent()));
+            partNumbers += (partNumbers.isEmpty() ? QString() : QStringLiteral(", "))
+                + QString::number(partNumber);
             continue;
         }
         // グループや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
@@ -293,6 +304,10 @@ void V2MainWindow::AdoptTreeSelection()
     syncingSelection_ = true;
     viewport_->SetSelection(next);
     syncingSelection_ = false;
+    if (!partNumbers.isEmpty() && fabricationDock_ != nullptr) {
+        fabricationDock_->SetPartNumbersText(partNumbers);
+    }
+    RefreshFoldEmphasis();
     // 選択が変わったあとの後始末は、3D 画面で選んだときと同じ道を通す。
     RefreshExportCounts();
     RefreshMeasurements();

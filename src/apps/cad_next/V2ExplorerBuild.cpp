@@ -23,6 +23,7 @@
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QVariant>
 
 #include <array>
 #include <functional>
@@ -248,6 +249,8 @@ void V2MainWindow::AddApproximationRows(QTreeWidgetItem* modelItem,
         part->setText(0, QStringLiteral("部材 %1").arg(static_cast<int>(index + 1)));
         part->setText(1, QStringLiteral("近似部品"));
         part->setFlags(part->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+        // 行を選ぶと、その近似モデルが選ばれて「対象部材」がこの番号になる(AdoptTreeSelection)。
+        part->setData(0, Qt::UserRole, QVariant(static_cast<int>(index + 1)));
     }
     // 役割の線(開口・折り線・切れ目)。どの線がこの近似モデルの何になっているかを、
     // 近似の単位で読めるようにする(F-15)。線そのものはワイヤーの節にある(ここは写し)。

@@ -13,6 +13,7 @@
 #include "V2DrawingDock.h"
 #include "V2FabricationDock.h"
 #include "V2EditDock.h"
+#include "V2EntityTree.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -23,6 +24,7 @@
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/domain/Feature.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
@@ -30,6 +32,8 @@
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
+#include <QApplication>
+#include <QTreeWidgetItem>
 #include <QPointF>
 #include <QString>
 
@@ -39,6 +43,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace kachakacha::v2::selftest {
@@ -836,6 +841,150 @@ void SelectAllWires(V2MainWindow& window)
     return Explain("1 回の取り消しで 2 つとも戻る", window.FabricationModelCount() == 0);
 }
 
+//! 近似モデルの作り方の定義(無ければ nullptr)。
+[[nodiscard]] const kachakacha::v2::domain::CreateFabricationModelDefinition* ModelDefinition(
+    V2MainWindow& window, const EntityId& model)
+{
+    const auto* entity = window.Session().GetDocument().FindEntity(model);
+    const auto* feature = entity == nullptr ? nullptr
+        : window.Session().GetDocument().FindFeature(entity->createdBy);
+    return feature == nullptr ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(&feature->definition);
+}
+
+//! その面の塗りの真ん中を素のクリックで押す(ID を選択へ直接入れない)。
+[[nodiscard]] bool ClickOnSurfaceOf(V2MainWindow& window, const EntityId& surface)
+{
+    auto& viewport = window.Viewport();
+    for (const auto& shape : viewport.ShapeViews()) {
+        if (!shape.surface || shape.mesh.Empty() || !(shape.entityId == surface)) {
+            continue;
+        }
+        // 曲がった面は外接箱の真ん中が面の上に無いことがある。三角形の真ん中を順に試す。
+        for (std::size_t at = shape.mesh.triangles.size() / 2; at < shape.mesh.triangles.size(); ++at) {
+            const auto screen = viewport.Mapping().Project(shape.mesh.triangles[at].Center());
+            if (!screen.has_value()
+                || !viewport.PickShapeAt(QPointF(screen->x, screen->y)).has_value()) {
+                continue;
+            }
+            viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+            const auto& picked = viewport.Selection().entityIds;
+            if (std::find(picked.begin(), picked.end(), surface) != picked.end()) {
+                return true;   // 手前に別の面がかぶる三角形なら次を試す
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
+//! HP-AP-07。オーナー報告 2026-09-28「選択した部材がわからない」「選んだ面の曲げ状態を確認したいのに
+//! 最後の一つしか曲げられない」。近似モデルが 2 つあるとき、3D で元の面を押すか一覧で「部材 n」を
+//! 選ぶと、そのモデルが現在になって曲げがそこへ当たり、下見ではそのモデルの帯が選択色、対象部材の帯が塗られる。
+[[nodiscard]] bool CaseApproxSelectedModelAndPartAreVisible(V2MainWindow& window)
+{
+    if (!Explain("オーナーの 8 本を置ける", PlaceAtamaWires(window))) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    if (!Explain("面にする → Enter で四辺面 2 枚",
+            window.HandleToolKey(Qt::Key_Return, nullptr)
+                && CountOfKind(window, EntityKind::GuideSurface) == 2)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似 → Enter で近似モデルが 2 つ", window.ApproxShelfShown()
+            && window.HandleToolKey(Qt::Key_Return, nullptr) && window.FabricationModelCount() == 2)) {
+        return false;
+    }
+    std::vector<EntityId> models;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::FabricationModel) {
+            models.push_back(entity.id);
+        }
+    }
+    const auto* first = ModelDefinition(window, models[0]);
+    const auto* second = ModelDefinition(window, models[1]);
+    if (!Explain("2 つとも作り方が読める", models.size() == 2 && first != nullptr && second != nullptr)) {
+        return false;
+    }
+    const auto* firstEntity = window.Session().GetDocument().FindEntity(models[0]);
+    const auto* firstFeature = window.Session().GetDocument().FindFeature(firstEntity->createdBy);
+    const EntityId firstSource = firstFeature->inputEntityIds.front();
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    if (!Explain("何も選んでいなければ最後のモデルが現在", window.CurrentFabricationModel() == models[1])
+        || !Explain("下見は 8 帯(4 + 4)", viewport.FoldPreviewRailCount() == 16)
+        || !Explain("最後のモデルの帯は選択色(1)、もう 1 つは素(0)",
+            viewport.FoldPreviewEmphasis(4) == 1 && viewport.FoldPreviewEmphasis(0) == 0)) {
+        return false;
+    }
+    // 3D で 1 つ目のモデルの元の面を押す → そのモデルが現在。押した帯が対象部材になり塗られる。
+    auto& dock = window.FabricationDock();
+    dock.SetStageIndex(1);
+    if (!Explain("3D で 1 つ目の元の面を押せる", ClickOnSurfaceOf(window, firstSource))
+        || !Explain("押した面のモデルが現在になる", window.CurrentFabricationModel() == models[0])
+        || !Explain((std::string("対象部材に番号が入る(") + dock.PartNumbersText().toStdString() + ")").c_str(),
+            !dock.PartNumbersText().trimmed().isEmpty())
+        || !Explain("そのモデルの帯が選択色になり、最後のモデルの帯は素に戻る",
+            viewport.FoldPreviewEmphasis(0) >= 1 && viewport.FoldPreviewEmphasis(4) == 0)) {
+        return false;
+    }
+    bool painted = false;
+    for (int band = 0; band < 4; ++band) {
+        painted = painted || viewport.FoldPreviewEmphasis(band) == 2;
+    }
+    if (!Explain("対象部材の帯が塗られる(2)", painted)) {
+        return false;
+    }
+    // 曲げの基準値 50 を押すと、現在のモデル(1 つ目)にだけ当たる。
+    const double secondMaster = second->masterPercent;
+    if (!Explain("50 を押せる", dock.ClickBendPreset(50))) {
+        return false;
+    }
+    first = ModelDefinition(window, models[0]);
+    second = ModelDefinition(window, models[1]);
+    bool firstBent = false;
+    for (const double progress : first->bandProgress) {
+        firstBent = firstBent || std::abs(progress - 0.5) < 1.0e-9;
+    }
+    if (!Explain("1 つ目のモデルの対象部材が 50% になる", firstBent)
+        || !Explain("2 つ目のモデルは変わらない",
+            std::abs(second->masterPercent - secondMaster) < 1.0e-9 && second->bandProgress.empty())) {
+        return false;
+    }
+    // 一覧で 2 つ目のモデルの「部材 3」を選ぶ → そのモデルが現在、対象部材 = 3、その帯が塗られる。
+    QTreeWidgetItem* modelRow = window.ItemOfEntity(models[1]);
+    QTreeWidgetItem* partsRow = nullptr;
+    for (int child = 0; modelRow != nullptr && child < modelRow->childCount(); ++child) {
+        if (modelRow->child(child)->text(0) == QStringLiteral("部材")) {
+            partsRow = modelRow->child(child);
+        }
+    }
+    if (!Explain("一覧に 2 つ目のモデルの「部材」の節がある(4 枚)",
+            partsRow != nullptr && partsRow->childCount() == 4)) {
+        return false;
+    }
+    window.EntityTree()->clearSelection();
+    partsRow->child(2)->setSelected(true);
+    QApplication::processEvents();
+    return Explain("「部材 3」を選ぶと 2 つ目のモデルが現在になる",
+               window.CurrentFabricationModel() == models[1])
+        && Explain((std::string("対象部材が 3(") + dock.PartNumbersText().toStdString() + ")").c_str(),
+            dock.PartNumbersText().trimmed() == QStringLiteral("3"))
+        && Explain("その帯(通し 7 番目)だけが塗られ、同じモデルの他の帯は選択色",
+            viewport.FoldPreviewEmphasis(6) == 2 && viewport.FoldPreviewEmphasis(4) == 1
+                && viewport.FoldPreviewEmphasis(5) == 1 && viewport.FoldPreviewEmphasis(0) == 0)
+        && Explain("50 を押すと 2 つ目のモデルの部材 3 だけが 50% になる",
+            dock.ClickBendPreset(50) && ModelDefinition(window, models[1]) != nullptr
+                && ModelDefinition(window, models[1])->bandProgress.size() == 4
+                && std::abs(ModelDefinition(window, models[1])->bandProgress[2] - 0.5) < 1.0e-9
+                && std::abs(ModelDefinition(window, models[1])->bandProgress[0] - 1.0) < 1.0e-9);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -863,6 +1012,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseLoopFacesOwnersAtamaWires},
         {"HP-AP-05 atama の面 2 枚を選んで 近似 を押すだけで縦割り 4 部材 × 2(角のレールつき)、横割りも選べる",
             CaseApproxOneButtonOnAtama},
+        {"HP-AP-07 近似モデルが 2 つあるとき、3D で押した面・一覧の「部材 n」のモデルが現在になり、曲げはそこへ当たり、帯が色分けされる",
+            CaseApproxSelectedModelAndPartAreVisible},
     };
 }
 

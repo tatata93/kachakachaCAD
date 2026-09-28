@@ -623,10 +623,34 @@ public:
 
     //! 近似モデルの曲げ状態の姿勢(帯ごとの下レール・上レール)。
     //! 画面のプレビューと固定・出力を同じ点列にする。別の作り方にすると食い違う。
-    void SetFoldPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails);
+    //! emphasis は帯(レール 2 本の組)ごとの強調: 0 = ほか、1 = いまの近似モデル、
+    //! 2 = 「対象部材」に挙げた部材(塗って目立たせる。オーナー指示 2026-09-28)。足りない分は 0。
+    void SetFoldPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails,
+        std::vector<int> emphasis = {});
     [[nodiscard]] int FoldPreviewRailCount() const
     {
         return static_cast<int>(foldPreview_.size());
+    }
+    //! 強調だけ差し替える(選択や「対象部材」が変わったとき。レールは作り直さない)。
+    void SetFoldEmphasis(std::vector<int> emphasis)
+    {
+        foldEmphasis_ = std::move(emphasis);
+        update();
+    }
+    //! その画面の位置にある下見の帯(0 から。レール 2 本の組の番号)を全部。重なりの順は見ない。
+    [[nodiscard]] std::vector<int> FoldBandsAt(const QPointF& position) const;
+    //! 最後に SelectAt で押した画面の位置(帯を押したかを窓が見る。1 回きり。読むと消える)。
+    [[nodiscard]] std::optional<QPointF> TakeLastSelectPoint() noexcept
+    {
+        const auto point = lastSelectPoint_;
+        lastSelectPoint_.reset();
+        return point;
+    }
+    //! その帯(0 から)の強調(0/1/2)。試験から読む。
+    [[nodiscard]] int FoldPreviewEmphasis(int band) const
+    {
+        return band >= 0 && static_cast<std::size_t>(band) < foldEmphasis_.size()
+            ? foldEmphasis_[static_cast<std::size_t>(band)] : 0;
     }
     //! 残した寸法(D-33)。測った点を結ぶ線と「名前 値」を 3D に描く。文書の写し。
     struct KeptDimensionView {
@@ -772,6 +796,7 @@ private:
     void DrawControlPoints(QPainter& painter) const;
     //! 近似モデルの曲げ状態。帯のレールを折れ線で出す。
     void DrawFoldPreview(QPainter& painter) const;
+    void DrawFoldBands(QPainter& painter, int level) const;
     //! 残した寸法。測った点を結ぶ細い線と、両端の短い印、名前と値。
     void DrawKeptDimensions(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
@@ -1067,6 +1092,8 @@ private:
     std::function<void()> documentChangedCallback_;
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> foldPreview_;
+    std::vector<int> foldEmphasis_;   //!< 帯ごとの強調(SetFoldPreview)
+    std::optional<QPointF> lastSelectPoint_;   //!< 最後に押した画面の位置(SelectAt)
     std::vector<KeptDimensionView> keptDimensions_;
     //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
     struct BodyDrag {

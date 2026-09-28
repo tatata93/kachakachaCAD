@@ -472,9 +472,10 @@ void V2Viewport::DrawKeptDimensions(QPainter& painter) const
 }
 
 void V2Viewport::SetFoldPreview(
-    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails)
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails, std::vector<int> emphasis)
 {
     foldPreview_ = std::move(rails);
+    foldEmphasis_ = std::move(emphasis);
     update();
 }
 
@@ -486,9 +487,36 @@ void V2Viewport::DrawFoldPreview(QPainter& painter) const
     // 帯ごとに下レール・上レールの2本が並ぶ。帯を閉じた輪で描くと、
     // 曲げ具合を変えたときに帯が「板」として動くのが見える。
     // 帯はまだ確定した形ではない。ほかの途中経過と同じ Preview のペンで出す(§3 規則3)。
-    painter.setPen(PreviewPen());
-    painter.setBrush(Qt::NoBrush);
+    // いまの近似モデルの帯は選択色の線、「対象部材」の帯は選択色で塗る(どれを選んで
+    // いるのかが見えないと、曲げ状態も部材の編集もどこに当たるのか分からない)。
+    const QColor selected = SemanticColor(SemanticState::Selected);
+    QColor fill = selected;
+    fill.setAlphaF(0.28);
+    // 強い強調ほど後に描く。塗りが隣の帯の線に隠れないように。
+    for (int level = 0; level <= 2; ++level) {
+        if (level == 0) {
+            painter.setPen(PreviewPen());
+            painter.setBrush(Qt::NoBrush);
+        } else if (level == 1) {
+            painter.setPen(QPen(selected, SemanticWidthPx(SemanticState::Preview), Qt::SolidLine,
+                Qt::RoundCap, Qt::RoundJoin));
+            painter.setBrush(Qt::NoBrush);
+        } else {
+            painter.setPen(QPen(selected, SemanticWidthPx(SemanticState::Selected), Qt::SolidLine,
+                Qt::RoundCap, Qt::RoundJoin));
+            painter.setBrush(fill);
+        }
+        DrawFoldBands(painter, level);
+    }
+}
+
+//! その強調の帯だけを描く(ペンと筆は呼ぶ側が決める)。
+void V2Viewport::DrawFoldBands(QPainter& painter, int level) const
+{
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
+        if (FoldPreviewEmphasis(static_cast<int>(index / 2)) != level) {
+            continue;
+        }
         const auto& bottom = foldPreview_[index];
         const auto& top = foldPreview_[index + 1];
         QPainterPath path;

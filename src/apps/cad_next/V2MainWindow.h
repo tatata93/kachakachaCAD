@@ -945,6 +945,13 @@ private:
         kachakacha::v2::app::FabricationMethod::BandApproximation;
     //! 選んでいる(または最後に作った)近似モデル。無ければ空の id。
     [[nodiscard]] kachakacha::v2::base::EntityId CurrentFabricationModelId() const;
+    //! 下見のレールの、近似モデルごとの組(帯 = レール 2 本)。GPT 版は輪なので bands = false。
+    struct FoldGroup { kachakacha::v2::base::EntityId model; std::size_t pairs = 0; bool bands = true; };
+    [[nodiscard]] std::vector<int> FoldEmphasisFor(const std::vector<FoldGroup>& groups) const;
+    void RefreshFoldEmphasis();   //!< 選択・「対象部材」が変わった。下見の強調だけ出し直す
+    bool PickFoldBandFromLastClick(const std::optional<QPointF>& point);   //!< 押した位置が下見の帯なら、その部材を対象に
+    bool foldBandPicking_ = false;
+    std::vector<FoldGroup> foldGroups_;   //!< いま 3D に出している下見の組(RefreshFabricationView)
     //! 元になるものを、いま画面が持っている材料から集める。作るときも作り直すときも同じ。
     [[nodiscard]] std::vector<kachakacha::v2::app::FabricationSource>
     FabricationSourcesFor(const std::vector<kachakacha::v2::base::EntityId>& ids,

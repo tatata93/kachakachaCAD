@@ -47,6 +47,11 @@ void V2MainWindow::BuildEditingShelves()
         ChooseApproxCandidate(candidate);
     });
     fabricationDock_->SetClearSourcesHandler([this] { ClearApproxSources(); });
+    // 「対象部材」が変わったら、3D の下見でその部材を塗り直す(どれを選んだかが見える)。
+    fabricationDock_->SetPartNumbersChangedHandler([this] {
+        RefreshFoldEmphasis();
+        RefreshFabricationPartInfo(CurrentFabricationModelId());
+    });
     // 近似の「キャンセル Esc」(共通の枠、C-10)。Esc と同じ道。
     fabricationDock_->SetCancelHandler([this] {
         if (!HandleToolKey(Qt::Key_Escape, nullptr)) {

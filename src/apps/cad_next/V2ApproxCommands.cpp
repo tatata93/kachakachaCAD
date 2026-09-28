@@ -275,9 +275,14 @@ void V2MainWindow::RunFabricationCreate()
         return;
     }
     // 選んであるもののうち、面と立体を対象に取り込む(選んでから押す道も残す)。
+    // 先に他の道具(面を作るなど)を解く。解くと選択が空になる道具があるので、選択は先に控える。
+    const auto selected = viewport_->Selection().entityIds;
+    EndArmedTools();
+    // 製作の棚を前へ。工程タブは「1 近似モデル」。(モードの切り替えも道具を解くので、構えるのはその後。)
+    SetMode(kachakacha::v2::app::UiMode::Fabrication);
     approxInput_ = kachakacha::v2::app::ApproxInputState{};
     const auto& document = session_->GetDocument();
-    for (const EntityId& id : viewport_->Selection().entityIds) {
+    for (const EntityId& id : selected) {
         const auto* entity = document.FindEntity(id);
         if (entity != nullptr
             && (entity->kind == EntityKind::Part || entity->kind == EntityKind::GuideSurface)) {
@@ -285,8 +290,6 @@ void V2MainWindow::RunFabricationCreate()
         }
     }
     approxShelfShown_ = true;
-    // 製作の棚を前へ。工程タブは「1 近似モデル」。
-    SetMode(kachakacha::v2::app::UiMode::Fabrication);
     if (fabricationDock_ != nullptr) {
         fabricationDock_->SetStageIndex(0);
     }

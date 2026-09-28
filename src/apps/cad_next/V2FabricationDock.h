@@ -93,6 +93,8 @@ public:
     //! 3D で部材を押しても書き込む(F-05/06/07)。
     [[nodiscard]] QString PartNumbersText() const;
     void SetPartNumbersText(const QString& text);
+    //! 「対象部材」の欄が変わったら呼ぶもの(3D の下見の色分けを出し直す)。
+    void SetPartNumbersChangedHandler(std::function<void()> handler);
     //! 「対象部材」の下に出す読み取り専用の一言(方式 / 最大誤差)。試験から読む。
     void SetPartInfoText(const QString& text);
     [[nodiscard]] QString PartInfoText() const;
@@ -285,6 +287,7 @@ private:
     QCheckBox* showApprox_ = nullptr;
     std::function<void(const QString&, int)> materialHandler_;
     std::function<void()> choiceChanged_;
+    std::function<void()> partNumbersChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;
     std::function<void(double, const QString&)> assemblyHandler_;
     std::function<void(double, bool)> radiusHandler_;

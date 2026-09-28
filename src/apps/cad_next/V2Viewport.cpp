@@ -850,6 +850,7 @@ void V2Viewport::PruneSelection()
 
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
+    lastSelectPoint_ = position;
     if (ToggleProfileRegionAt(position)) {
         return;
     }
@@ -883,6 +884,45 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
         ModeForTogglePick(picked, ModeForToolPick(picked, mode))));
     ReportSelectionCount();
+}
+
+std::vector<int> V2Viewport::FoldBandsAt(const QPointF& position) const
+{
+    // 帯の輪(下レール → 上レールの逆順)を画面へ映し、偶奇則で内側かを見る。
+    std::vector<int> hits;
+    for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
+        std::vector<QPointF> ring;
+        const auto append = [&](const std::vector<kachakacha::v2::geometry::Vector3>& rail,
+                                bool reverse) {
+            for (std::size_t at = 0; at < rail.size(); ++at) {
+                const auto screen = ToScreen(rail[reverse ? rail.size() - 1 - at : at]);
+                if (screen.has_value()) {
+                    ring.push_back(*screen);
+                }
+            }
+        };
+        append(foldPreview_[index], false);
+        append(foldPreview_[index + 1], true);
+        if (ring.size() < 3) {
+            continue;
+        }
+        bool inside = false;
+        for (std::size_t a = 0, b = ring.size() - 1; a < ring.size(); b = a++) {
+            const QPointF& p = ring[a];
+            const QPointF& q = ring[b];
+            if ((p.y() > position.y()) != (q.y() > position.y())) {
+                const double x = p.x()
+                    + (position.y() - p.y()) * (q.x() - p.x()) / (q.y() - p.y());
+                if (position.x() < x) {
+                    inside = !inside;
+                }
+            }
+        }
+        if (inside) {
+            hits.push_back(static_cast<int>(index / 2));
+        }
+    }
+    return hits;
 }
 
 void V2Viewport::ReportSelectionCount()

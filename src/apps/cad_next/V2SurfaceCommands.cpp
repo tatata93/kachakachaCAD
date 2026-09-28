@@ -336,7 +336,10 @@ void V2MainWindow::RefreshSurfacePreview()
 void V2MainWindow::RunSurfaceCreate()
 {
     if (!surfaceShelfShown_) {
-        // 始めるとき。選んだものを取り込み、作り方を薦める(§11)。
+        // 始めるとき。ほかの道具(近似など)は解く。2 つ構えたままにすると、片方をやめても
+        // もう片方が画面の押下を取り続けて線が選べない。選んだものはそのまま取り込む。
+        EndArmedTools();
+        // 選んだものを取り込み、作り方を薦める(§11)。
         const auto facts = SurfaceFactsNow();
         // 作り方を人が選んでいなければ、おまかせ(初心者の入口): 押した線の役割と作り方を
         // 線のつながりから決める(V2SurfaceRoles.cpp)。作り方のカードを押すと切れる。

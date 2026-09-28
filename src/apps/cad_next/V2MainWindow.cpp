@@ -324,6 +324,8 @@ void V2MainWindow::HandleSelectionChanged()
     }
     // 製作モードで部材を押したら「対象部材」欄をその番号にする(F-05/06/07)。
     RefreshFabricationPartPickForSelectionChange();
+    // 選んだ近似モデルと対象部材を、3D の下見で色分けする。
+    RefreshFoldEmphasis();
     // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
     RefreshExtrudeForSelectionChange();
     RefreshExportCounts();
@@ -398,6 +400,7 @@ void V2MainWindow::EndArmedTools()
         // 道具が消し忘れた札・下見・拾いの構えを念のため全部消す。
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
+        viewport_->SetRoleColors({});   // 境界辺などの紫の色分けも残さない(オーナー報告 2026-09-28)
         viewport_->SetToolPickActive(false);
         viewport_->SetToolPickToggle(false);
     }

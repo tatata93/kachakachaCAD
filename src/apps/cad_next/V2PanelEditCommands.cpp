@@ -22,11 +22,13 @@
 #include "kachakacha/document/Document.h"
 #include "kachakacha/fabrication/BandPartition.h"
 
+#include <QPointF>
 #include <QString>
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -47,8 +49,18 @@ std::size_t V2MainWindow::FabricationPanelCount() const
 //! Replace は置き換えに、Ctrl は足す・外すになる。
 void V2MainWindow::RefreshFabricationPartPickForSelectionChange()
 {
-    if (viewport_ == nullptr || fabricationDock_ == nullptr || approxShelfShown_
+    if (viewport_ == nullptr) {
+        return;
+    }
+    // 押した位置は 1 回きり。ここで読まないと、後の(一覧などからの)選択変更で古い押し跡が効く。
+    const auto clicked = viewport_->TakeLastSelectPoint();
+    if (fabricationDock_ == nullptr || approxShelfShown_
         || Mode() != kachakacha::v2::app::UiMode::Fabrication) {
+        return;
+    }
+    // 押した場所が下見の帯の上なら、その帯の部材(帯の近似は元の面を押しても、どの帯かまでは
+    // 分からなかった。オーナー報告 2026-09-28「選択した部材がわからない」)。
+    if (PickFoldBandFromLastClick(clicked)) {
         return;
     }
     const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
@@ -90,6 +102,67 @@ void V2MainWindow::RefreshFabricationPartPickForSelectionChange()
     }
     fabricationDock_->SetPartNumbersText(text);
     ShowRoleLabels(labels);
+}
+
+//! 最後に 3D で押した位置が下見の帯の上なら、その帯の近似モデルを現在にして
+//! 「対象部材」をその番号にする。押していなければ偽。
+bool V2MainWindow::PickFoldBandFromLastClick(const std::optional<QPointF>& point)
+{
+    if (foldBandPicking_ || !point.has_value()) {
+        return false;
+    }
+    const auto hits = viewport_->FoldBandsAt(*point);
+    if (hits.empty()) {
+        return false;
+    }
+    // 帯が画面で重なっていれば、押した元の面から決まる現在のモデルの帯を優先する。
+    const auto current = CurrentFabricationModelId();
+    const auto groupOf = [&](int band, std::size_t& local) -> const FoldGroup* {
+        std::size_t offset = 0;
+        for (const auto& group : foldGroups_) {
+            if (static_cast<std::size_t>(band) < offset + group.pairs) {
+                local = static_cast<std::size_t>(band) - offset;
+                return &group;
+            }
+            offset += group.pairs;
+        }
+        return nullptr;
+    };
+    std::size_t local = 0;
+    const FoldGroup* chosen = nullptr;
+    for (const int band : hits) {
+        std::size_t at = 0;
+        const FoldGroup* group = groupOf(band, at);
+        if (group == nullptr || !group->bands) {
+            continue;   // GPT 版の輪は番号の付け方が違う。
+        }
+        if (chosen == nullptr || group->model == current) {
+            chosen = group;
+            local = at;
+            if (group->model == current) {
+                break;
+            }
+        }
+    }
+    if (chosen != nullptr) {
+        const auto& group = *chosen;
+        const int number = static_cast<int>(local) + 1;
+        if (!(current == group.model)) {
+            // 帯が元の面から離れて(曲げ 0% で持ち上がって)いても、押した帯のモデルを選ぶ。
+            kachakacha::v2::app::SelectionSet one;
+            one.entityIds.push_back(group.model);
+            foldBandPicking_ = true;
+            viewport_->SetSelection(one);
+            foldBandPicking_ = false;
+        }
+        fabricationDock_->SetPartNumbersText(QString::number(number));
+        RefreshFabricationPartInfo(group.model);
+        RefreshFoldEmphasis();
+        SetStatus(QStringLiteral("部材 %1 を対象にしました(曲げ状態・部材の編集はこの部材に当たります)。")
+                .arg(number));
+        return true;
+    }
+    return false;
 }
 
 //! いまの帯の境目と、部材ごとの幅。近似がまだなら空。

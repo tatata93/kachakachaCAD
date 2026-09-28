@@ -661,6 +661,11 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     radiusLayout->addWidget(radiusState_);
     bend->addRow(QStringLiteral("半径"), radiusRow);
     parts_ = new QLineEdit(bendWidget);
+    QObject::connect(parts_, &QLineEdit::textChanged, this, [this] {
+        if (partNumbersChanged_) {
+            partNumbersChanged_();
+        }
+    });
     parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
     parts_->setToolTip(QStringLiteral(
         "3D で部材を押すと、押した番号がここに入ります(Ctrl で足す・外す)。"
@@ -1174,6 +1179,11 @@ QString V2FabricationDock::PartNumbersText() const
 void V2FabricationDock::SetPartNumbersText(const QString& text)
 {
     parts_->setText(text);
+}
+
+void V2FabricationDock::SetPartNumbersChangedHandler(std::function<void()> handler)
+{
+    partNumbersChanged_ = std::move(handler);
 }
 
 void V2FabricationDock::SetPartInfoText(const QString& text)

@@ -208,5 +208,6 @@ HP-GPT-06で前頭部8本から連続した開いた面を作る。GPT幾何11/1
 
 | F-GPT | 製作 → 近似 → GPT版 | 面・許容・部材数・最小幅・方向、部材下見と最大/RMS、組立率、確定/型紙 | GptApproximation / OcctGptFabrication / V2GptFabricationTool | AT-GPT-F001/002、HP-GPT-F01/F02 | PC_TESTED: fc1ff8cab。ctest183/183、V2通常/配布359/359。制約はGPT_FABRICATION_VALIDATION.md |
 
-## 2026-09-29 近似の自動間隔（実装・PC検証中）
+## 2026-09-29 近似の自動間隔（PC_TESTED）
 従来の帯近似とGPT版で `adaptiveSpacing` を切り替える。既存命令内の設定。詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。
+PC: 実装5cc67c5ac、サンプル7855864b4。ctest184/184、画面366/366、配布版366/366。HP-GPT-F03/F04合格。

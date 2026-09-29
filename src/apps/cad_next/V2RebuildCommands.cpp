@@ -350,8 +350,12 @@ void V2MainWindow::RebuildKernelShapes()
     // 帯はすぐ次の操作で書き換わる。作り直せなかったものは窓が覚えておく。
     // 覚えていないと、試験が落ちたときに「何が作れなかったのか」が残らない。
     rebuildProblems_ = names;
-    SetStatus(QStringLiteral("開きました。%1個の形を作り直しました。"
-                             "%2 は作り直せませんでした。")
-            .arg(made)
-            .arg(names));
+    // 開いたときだけでなく、取り消し・部材の編集のあとにも通る。「開きました」と言わない。
+    // 知らせにも残す。帯は次の操作ですぐ書き換わるので、面が 3D から消えた理由が追えなくなる
+    // (オーナー報告 2026-09-29: 面が一覧に残ったまま 3D から消えた)。
+    const QString problem = QStringLiteral("作り直せなかった形: %1 — 文書には残っていますが 3D には出ません"
+                                           "(上の知らせが理由です。線を選び直して面にし直すか、元に戻してください)。")
+                                .arg(names);
+    AddDiagnostic(problem);
+    SetStatus(QStringLiteral("%1個の形を作り直しました。%2").arg(made).arg(problem));
 }

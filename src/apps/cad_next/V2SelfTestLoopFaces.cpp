@@ -1000,6 +1000,91 @@ void SelectAllWires(V2MainWindow& window)
                 && std::abs(ModelDefinition(window, models[1])->bandProgress[0] - 1.0) < 1.0e-9);
 }
 
+//! 3D に出ている面(形状ガイド)の枚数。文書に残っていても核の形が無ければ見えない。
+[[nodiscard]] int SurfacesShownIn3D(V2MainWindow& window)
+{
+    int count = 0;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        count += shape.surface && !shape.mesh.Empty() ? 1 : 0;
+    }
+    return count;
+}
+
+//! HP-AP-08。オーナー報告 2026-09-29: atama の 8 本を面にすると四辺面が 2 枚でき、片方に近似
+//! (RebuildKernelShapes を通る)をかけると、選んでいない側の面が 3D から消えて一覧にだけ残った。
+//! 原因は、輪と逆向きに引かれた最初の辺を持つ四辺面が、保存した作り方から作り直せず(UI-R005)、
+//! 核の形が落ちていたこと。作り直しが両方とも通り、2 枚とも 3D に残ることを見る。
+[[nodiscard]] bool CaseApproxKeepsOtherFaceVisible(V2MainWindow& window)
+{
+    if (!Explain("オーナーの 8 本を置ける", PlaceAtamaWires(window))) {
+        return false;
+    }
+    SelectAllWires(window);
+    window.RunCommand("surface.from_lines");
+    if (!Explain("面にする → Enter で四辺面 2 枚",
+            window.HandleToolKey(Qt::Key_Return, nullptr)
+                && CountOfKind(window, EntityKind::GuideSurface) == 2)) {
+        return false;
+    }
+    if (!Explain("作った直後は 2 枚とも 3D に出る", SurfacesShownIn3D(window) == 2)) {
+        return false;
+    }
+    // 取り消し → やり直しは、作った面を核から作り直す道(RebuildKernelShapes)を通る。
+    // 逆向きの辺で作り直せないと、ここで片方が消えていた。
+    window.RunCommand("edit.undo");
+    window.RunCommand("edit.redo");
+    if (!Explain("取り消し・やり直しのあとも 2 枚とも文書にある",
+            CountOfKind(window, EntityKind::GuideSurface) == 2)
+        || !Explain((std::string("取り消し・やり直しのあとも 2 枚とも 3D に出る(実際 ")
+                        + std::to_string(SurfacesShownIn3D(window)) + " 枚、作り直せなかったもの「"
+                        + window.RebuildProblems().toStdString() + "」)").c_str(),
+            SurfacesShownIn3D(window) == 2 && window.RebuildProblems().isEmpty())) {
+        return false;
+    }
+    // 片方の面を選んで近似 → 確定(RebuildKernelShapes を通る)。もう片方が消えないこと。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    // 全部選ぶと 2 枚とも対象になる。1 枚だけにするため、最初の 1 枚に絞る。
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface);
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds = {surfaces.entityIds.front()};
+    window.Viewport().SetSelection(one);
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似 → Enter で近似モデルが 1 つできる",
+            window.ApproxShelfShown() && window.HandleToolKey(Qt::Key_Return, nullptr)
+                && window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    return Explain((std::string("近似のあとも面は 2 枚とも 3D に残る(実際 ")
+                       + std::to_string(SurfacesShownIn3D(window)) + " 枚)").c_str(),
+               SurfacesShownIn3D(window) == 2)
+        && Explain("面は 2 枚とも文書にある", CountOfKind(window, EntityKind::GuideSurface) == 2);
+}
+
+//! HP-AP-09。オーナー報告 2026-09-29「境界辺の色分けが面を消しても残る」。役割表の行の色分け
+//! (境界辺 1〜4 の矢印)は、役割表の棚を見ている間だけ 3D に出る。棚から離れたら消える。
+[[nodiscard]] bool CaseGuideRowsOnlyWithShelf(V2MainWindow& window)
+{
+    if (!Explain("役割表の場面が作れる", window.ApplyManualState(QStringLiteral("guide-table")))
+        || !Explain("役割表の棚が前に出ている",
+            window.ShelfShown(kachakacha::v2::app::Shelf::GuideTable))
+        || !Explain("役割表の棚では行の色分けが 3D に出る", window.Viewport().GuideRowsShown() == 4)) {
+        return false;
+    }
+    // 別のモード(作図)へ移ると、役割表の棚は隠れる。色分けも消す(面を消しても残らないのと同じ道)。
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    if (!Explain("作図へ移ると役割表の棚は隠れる",
+            !window.ShelfShown(kachakacha::v2::app::Shelf::GuideTable))
+        || !Explain((std::string("棚を離れると行の色分けは消える(実際 ")
+                        + std::to_string(window.Viewport().GuideRowsShown()) + ")").c_str(),
+            window.Viewport().GuideRowsShown() == 0)) {
+        return false;
+    }
+    // 表そのものは残っている(棚を開けばまた見える)。
+    return Explain("役割表の中身は消えていない(棚を開けばまた出る)", window.GuideRowCount() == 4);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
@@ -1029,6 +1114,10 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseApproxOneButtonOnAtama},
         {"HP-AP-07 近似モデルが 2 つあるとき、3D で押した面・一覧の「部材 n」のモデルが現在になり、曲げはそこへ当たり、帯が色分けされる",
             CaseApproxSelectedModelAndPartAreVisible},
+        {"HP-AP-08 面を 2 枚作って片方を近似しても、もう片方の面は 3D に残る(逆向きの辺でも作り直せる)",
+            CaseApproxKeepsOtherFaceVisible},
+        {"HP-AP-09 役割表の行の色分け(境界辺)は役割表の棚を見ている間だけ 3D に出る",
+            CaseGuideRowsOnlyWithShelf},
     };
 }
 

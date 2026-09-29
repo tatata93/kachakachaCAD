@@ -5,10 +5,12 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/OuterLoopSplit.h"
 #include "kachakacha/geometry/ArcBuilders.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/document/Commands.h"
 
+#include <cmath>
 #include <string>
 
 using kachakacha::v2::app::AppendSelectionToRow;
@@ -32,6 +34,7 @@ using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::ChainRole;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
 using kachakacha::v2::modeling::GuideTable;
+using kachakacha::v2::modeling::GuideTableSelection;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
 
@@ -128,6 +131,58 @@ KACHA_V2_TEST(guide_table_build, 役割と向きと作り方が作り直しで�
     // 逆にした行は、線の向きも逆で戻る(始点が x=100 側)。
     Require(again.rows[1].segments.front().StartPoint().x > 99.0, "逆向きの線で戻る");
     Require(GuideTableInputIds(again).size() == 4, "入力の id が4つ");
+}
+
+// 「面にする」は輪をたどる向きに最初の線を逆にしてから 2 本目を足す。保存した作り方には
+// その逆が残らないので、作り直しで 2 本目が行の端につながらず UI-R005 になっていた
+// (オーナー報告 2026-09-29: 面が一覧に残ったまま 3D から消える)。行を逆にして足し直す。
+KACHA_V2_TEST(guide_table_build, 最初の線が逆向きに引かれた行も作り直しで同じ形に戻る)
+{
+    Fixture fixture;
+    const auto a = fixture.AddLine({10, 0, 0}, {0, 0, 0}, "a");   // 輪と逆向きに引いた線
+    const auto b = fixture.AddLine({0, 0, 0}, {0, 10, 0}, "b");
+    const auto scene = fixture.Scene();
+    const auto& tolerance = fixture.document.Snapshot().settings.tolerance;
+    // 作ったときの行: a を逆にしてから b を足す(始点 (0,0) → 終点 (0,10) ではなく
+    // 始点 (10,0)... ではない。a 逆 = (0,0)→(10,0) では b が付かないので、輪の向きは (10,0)→(0,0)→(0,10))。
+    GuideTable table;
+    table.method = GuideSurfaceMethod::FourEdgePatch;
+    auto chosenA = GuideSelectionOf(fixture.document, scene, a);
+    auto chosenB = GuideSelectionOf(fixture.document, scene, b);
+    Require(chosenA.has_value() && chosenB.has_value(), "線が拾える");
+    // a は引いた向き (10,0)→(0,0) のままで b がつながる。逆に引いた側を試すため、
+    // 行の最初を「b を逆にしたもの」にして a を足す: (0,10)→(0,0) → a 逆 (0,0)→(10,0)。
+    GuideTableSelection bFlipped;
+    bFlipped.sourceWireId = chosenB->sourceWireId;
+    bFlipped.label = chosenB->label;
+    bFlipped.segments.push_back(
+        kachakacha::v2::geometry::ReverseCurve(chosenB->segments.front()).Value());
+    auto made = kachakacha::v2::modeling::AddSelectionAsNewRow(table, ChainRole::BoundarySide, bFlipped);
+    Require(made.HasValue(), "逆にした b で行が始まる");
+    auto appended = AppendSelectionToRow(made.Value(), 0, *chosenA, tolerance);
+    Require(appended.HasValue(), "a が足せる(引いた向きと逆でも足すときにそろう)");
+    table = appended.Value();
+    const auto start = table.rows[0].segments.front().StartPoint();
+    const auto end = table.rows[0].segments.back().EndPoint();
+    Require(std::abs(start.y - 10.0) < 1.0e-9 && std::abs(end.x - 10.0) < 1.0e-9,
+        "作ったときの行は (0,10) → (0,0) → (10,0)");
+
+    // 保存 → 作り直し。前は b を引いた向きのまま始めて a が付かず UI-R005 だった。
+    auto definition = DefinitionFromGuideTable(table);
+    for (int round = 0; round < 2; ++round) {
+        const auto rebuilt = GuideTableFromDefinition(fixture.document, scene, definition);
+        Require(rebuilt.HasValue(), "作り直せる(" + std::to_string(round + 1) + " 回目)");
+        const auto& row = rebuilt.Value().rows[0];
+        RequireEqual(std::to_string(row.segments.size()), std::string("2"), "線 2 本");
+        const auto s2 = row.segments.front().StartPoint();
+        const auto e2 = row.segments.back().EndPoint();
+        const bool same = std::abs(s2.y - 10.0) < 1.0e-9 && std::abs(e2.x - 10.0) < 1.0e-9;
+        const bool mirrored = std::abs(s2.x - 10.0) < 1.0e-9 && std::abs(e2.y - 10.0) < 1.0e-9;
+        Require(same || mirrored, "同じ輪をたどる行に戻る(向きは問わない)");
+        Require((row.segments.front().EndPoint() - row.segments.back().StartPoint()).Length() < 1.0e-9,
+            "2 本が (0,0) でつながっている");
+        definition = DefinitionFromGuideTable(rebuilt.Value());
+    }
 }
 
 KACHA_V2_TEST(guide_table_build, 元の線が消えていれば理由を出して断る)

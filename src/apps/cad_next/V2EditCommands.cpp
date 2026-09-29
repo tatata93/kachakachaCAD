@@ -123,7 +123,11 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
     RebuildKernelShapes();
-    SetStatus(undo ? QStringLiteral("元に戻しました。") : QStringLiteral("やり直しました。"));
+    // 作り直せなかった形があれば、その知らせを「元に戻しました」で上書きしない。
+    const QString problems = rebuildProblems_.isEmpty()
+        ? QString()
+        : QStringLiteral(" 作り直せなかった形: %1(知らせを見てください)。").arg(rebuildProblems_);
+    SetStatus((undo ? QStringLiteral("元に戻しました。") : QStringLiteral("やり直しました。")) + problems);
 }
 
 // ---- 編集の棚 ----

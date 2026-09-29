@@ -1183,6 +1183,7 @@ private:
         const kachakacha::v2::app::ExportRequest& request);
     //! 足りない役割の案内だけを消す・足す。ほかの知らせは残す。
     void ClearGuideGuidance();
+    void RefreshGuideRowsOverlay();   //!< 役割表の行の色分けは、役割表の棚を見ている間だけ 3D に出す
     void AddGuideGuidance(const QString& text);
     //! 案内を作り直して画面へ出す。6つがそろった形で出す(AT-UIX-002)。
     void RefreshGuide();

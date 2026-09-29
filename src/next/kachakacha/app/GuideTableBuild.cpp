@@ -242,7 +242,24 @@ Result<GuideTable> AppendSelectionToRow(const GuideTable& table, std::size_t row
         flipped.segments.push_back(reversed.Value());
     }
     const auto retried = modeling::AddSelectionToRow(table, rowIndex, flipped, tolerance);
-    return retried.HasValue() ? retried : direct;
+    if (retried.HasValue()) {
+        return retried;
+    }
+    // 行の最初の線が輪と逆向きに引かれていて、次の線が行の**始点**につながることがある
+    // (「面にする」は輪をたどる向きに線を逆にしてから表に入れる。保存した作り方には
+    // 最初の線を逆にしたことが残らないので、開き直し・取り消しの作り直しで UI-R005 になり、
+    // 面が一覧に残ったまま 3D から消えていた。オーナー報告 2026-09-29)。行を逆にしてもう一度。
+    const auto reversedRow = modeling::ReverseRow(table, rowIndex);
+    if (!reversedRow.HasValue()) {
+        return direct;
+    }
+    const auto atStart = modeling::AddSelectionToRow(reversedRow.Value(), rowIndex, selection, tolerance);
+    if (atStart.HasValue()) {
+        return atStart;
+    }
+    const auto atStartFlipped =
+        modeling::AddSelectionToRow(reversedRow.Value(), rowIndex, flipped, tolerance);
+    return atStartFlipped.HasValue() ? atStartFlipped : direct;
 }
 
 Result<GuideTable> AddSelectionsAsConnectedRow(const GuideTable& table, ChainRole role,

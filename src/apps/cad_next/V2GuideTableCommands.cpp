@@ -12,6 +12,7 @@
 
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QColor>
@@ -344,7 +345,8 @@ void V2MainWindow::RefreshGuideTable()
         guideTableView_->resizeColumnToContents(column);
     }
     // 3Dへ同じ色で出す。色は core の式が決めるので、表と3Dがずれようがない。
-    viewport_->SetGuideTableRows(views);
+    // ただし出すのは役割表の棚を見ている間だけ(RefreshGuideRowsOverlay)。
+    RefreshGuideRowsOverlay();
     // 足りない役割の案内は、そのつど出し直す。前の案内を残すと、
     // 入れ終わったあとも「入っていません」が並んだままになる。
     ClearGuideGuidance();
@@ -359,6 +361,22 @@ void V2MainWindow::RefreshGuideTable()
                 QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
         }
     }
+}
+
+//! 役割表の行(境界辺 1〜4 などの矢印つきの色分け)を 3D に出すのは、役割表の棚を見ている
+//! 間だけ。面を作った後も出しっぱなしにすると、紫の「境界辺」が面を消しても残り、
+//! 線を消して戻すまで消えなかった(オーナー報告 2026-09-29)。表そのものは残す(棚を開けば見える)。
+void V2MainWindow::RefreshGuideRowsOverlay()
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+    if (!ShelfShown(kachakacha::v2::app::Shelf::GuideTable)) {
+        viewport_->SetGuideTableRows({});
+        return;
+    }
+    viewport_->SetGuideTableRows(kachakacha::v2::modeling::BuildGuideTableView(guideTable_,
+        session_->GetDocument().Snapshot().settings.tolerance));
 }
 
 void V2MainWindow::ClearGuideGuidance()

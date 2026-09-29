@@ -209,6 +209,8 @@ bool V2MainWindow::ApplyGuideTableState()
     }
     viewport_->SetViewDirection(ViewDirection::Isometric);
     SetMode(UiMode::Part);   // 役割テーブルは部品モードの道具である。
+    // 役割表の棚を前へ。行の色分けは棚を見ている間だけ 3D に出る(RefreshGuideRowsOverlay)。
+    ShowShelf(kachakacha::v2::app::Shelf::GuideTable);
     return true;
 }
 

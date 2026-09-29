@@ -111,9 +111,9 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     }
     // 近似も道具から始める。何も選んでいなくても棚が出て、3D で対象を押せる。
     // 構えている間の2度目は確定。
-    if (id == "fabrication.create") {
+    if (id == "fabrication.create" || id == "fabrication.preview_update") {
         ClearPendingCommand();
-        RunFabricationCreate();
+        RunFabricationCommand(id);
         return true;
     }
     if (id == "part.boolean_add" || id == "part.boolean_cut" || id == "part.boolean_intersect") {

@@ -45,11 +45,14 @@ bool RestartAdaptivePreview(V2MainWindow& window)
     if (!MakeCurvedGuideSurface(window)) { return false; }
     auto& dock=window.FabricationDock();
     auto* adaptive=window.findChild<QCheckBox*>(QStringLiteral("fabricationAdaptiveSpacing"));
-    auto* action=window.findChild<QPushButton*>(QStringLiteral("fabricationStartConfirm"));
-    if (!adaptive || !action) { return false; } adaptive->setChecked(true);
+    QPushButton* action=nullptr;
+    for (auto* button:window.findChildren<QPushButton*>(QStringLiteral("panelConfirm"))) {
+        if (button->text().contains(QStringLiteral("始める"))) { action=button; break; }
+    }
+    if (!Explain("find adaptive controls",adaptive && action)) { return false; } adaptive->setChecked(true);
     const auto revision=window.Session().GetDocument().Revision();
     window.RunCommand("fabrication.create");
-    if (!dock.ClickCancelApprox()) { return false; }
+    if (!Explain("cancel approximation",dock.ClickCancelApprox())) { return false; }
     if (!Explain("cancel returns a usable start button without changing document",
         action->isEnabled() && action->text().contains(QStringLiteral("始める"))
         && window.Viewport().ToolPreview().empty() && window.Session().GetDocument().Revision()==revision)) { return false; }
@@ -60,6 +63,9 @@ bool RestartAdaptivePreview(V2MainWindow& window)
     dock.SetManualBoundariesText(QStringLiteral("0.2, abc"));
     if (!Explain("invalid settings cannot confirm stale geometry",!action->isEnabled()
         && window.Viewport().ToolPreview().empty() && dock.MessageText().contains(QStringLiteral("UI-F001")))) { return false; }
+    window.RunCommand("fabrication.preview_update");
+    if (!Explain("explicit refresh also rejects invalid settings",!action->isEnabled()
+        && window.Viewport().ToolPreview().empty())) { return false; }
     dock.SetManualBoundariesText(QString());
     if (!Explain("correcting settings restores preview",action->isEnabled() && !window.Viewport().ToolPreview().empty())) { return false; }
     dock.SetEqualPartCount(9);
@@ -67,9 +73,10 @@ bool RestartAdaptivePreview(V2MainWindow& window)
     if (!Explain("loose tolerance is reflected immediately",window.ApproxOutcomes()[1].reachedTolerance)) { return false; }
     if (!window.ParameterDock().Apply(app::ParameterId::MaxDeviationMm,QStringLiteral("0.001"))) { return false; }
     if (!Explain("tight tolerance is reflected immediately",!window.ApproxOutcomes()[1].reachedTolerance)) { return false; }
-    if (!dock.ClickCancelApprox()) { return false; }
+    if (!Explain("cancel approximation",dock.ClickCancelApprox())) { return false; }
     action->click();
-    if (!Explain("second restart retains changed count",window.ApproxOutcomes()[1].partCount==9
+    if (!Explain("second restart retains changed count",window.ApproxOutcomes().size()==3
+        && window.ApproxOutcomes()[1].partCount==9
         && !window.Viewport().ToolPreview().empty())) { return false; }
     action->click();
     return Explain("restarted preview confirms once",window.FabricationModelCount()==1);

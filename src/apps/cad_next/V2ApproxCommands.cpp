@@ -228,6 +228,7 @@ void V2MainWindow::MirrorApproxSourcesToSelection()
 //! 入力が変わった。作り直し、下見と棚を出し直す。
 void V2MainWindow::RefreshApproxAll()
 {
+    if (!AdoptFabricationChoice()) { return; }
     EvaluateApproxCandidates();
     ShowApproxPreview();
     RefreshApproxDock();

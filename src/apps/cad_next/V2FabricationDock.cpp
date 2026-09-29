@@ -99,7 +99,6 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(2);
     confirmApprox_ = MakeRun(buttons, QStringLiteral("近似を始める"), "fabrication.create", this);
-    confirmApprox_->setObjectName(QStringLiteral("fabricationStartConfirm"));
     // キャンセルと確定は共通の枠の形(C-10)。キャンセルは Esc と同じ(近似をやめる)。
     cancelApprox_ = new QPushButton(buttons);
     MarkCancelConfirm(cancelApprox_, confirmApprox_);

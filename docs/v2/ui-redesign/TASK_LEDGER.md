@@ -352,3 +352,12 @@ Linux/cloudゲートは未実行。詳細は [GPT_FABRICATION_VALIDATION.md](GPT
 
 ## 2026-09-29 近似の分割間隔自動調整（PC_TESTED）
 従来帯近似とGPT近似に自動間隔を追加。最大偏差の大きい区間を優先し、最小幅と上限を維持。設定保存・型紙への引継ぎを実装。PC_TESTED: 実装5cc67c5ac、サンプル7855864b4。Windows全体ゲートctest184/184、画面366/366、配布版366/366、旧自己試験終了0。帯20/20、GPT6/6、構造16/16、HP-GPT-F03/F04合格。_GO.cmdで同じブランチへpush済み。Linux/cloudゲートは未実行。詳細ADAPTIVE_FABRICATION.md。
+
+## 2026-09-30 自動間隔の下見と取消後の再開（PC_TESTED）
+小型面で9枚・最小幅4 mmの指定でも下見・確定でき、最小幅未満は実測値付きで警告する。
+取消後は「近似を始める」から同じ対象・条件で再開。設定変更は下見へ即時反映し、
+「下見更新」が別命令の待機状態へ入って取消を妨げる経路も修正。
+不正入力では古い条件を使わず、修正すれば復帰する。実装ed9a68dea/527294bbb、最終検証`b3babaacd`。
+Windows全体ビルド、ctest184/184、画面368/368、配布版368/368、旧自己試験終了0。
+HP-GPT-F05/F06合格。_GO.cmdで同じブランチへpush済み。Linux/cloudは未実行。
+詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。

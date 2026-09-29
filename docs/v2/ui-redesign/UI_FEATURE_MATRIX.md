@@ -211,3 +211,12 @@ HP-GPT-06で前頭部8本から連続した開いた面を作る。GPT幾何11/1
 ## 2026-09-29 近似の自動間隔（PC_TESTED）
 従来の帯近似とGPT版で `adaptiveSpacing` を切り替える。既存命令内の設定。詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。
 PC: 実装5cc67c5ac、サンプル7855864b4。ctest184/184、画面366/366、配布版366/366。HP-GPT-F03/F04合格。
+
+## 2026-09-30 自動間隔の下見と取消後の再開（PC_TESTED）
+小型面で9枚・最小幅4 mmの指定でも下見・確定でき、最小幅未満は実測値付きで警告する。
+取消後は「近似を始める」から同じ対象・条件で再開。設定変更は下見へ即時反映し、
+「下見更新」が別命令の待機状態へ入って取消を妨げる経路も修正。
+不正入力では古い条件を使わず、修正すれば復帰する。実装ed9a68dea/527294bbb、最終検証`b3babaacd`。
+Windows全体ビルド、ctest184/184、画面368/368、配布版368/368、旧自己試験終了0。
+HP-GPT-F05/F06合格。_GO.cmdで同じブランチへpush済み。Linux/cloudは未実行。
+詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。

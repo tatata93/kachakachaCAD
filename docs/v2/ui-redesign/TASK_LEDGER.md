@@ -349,3 +349,6 @@ PC_TESTED: `fc1ff8cab`、Windowsビルド、ctest183/183、旧自己試験終了
 前頭部は許容0.25 mm・最小幅0.2 mm・上限12で11部材。最大/RMSと隣接隙間を表示する。
 未達: 厚み付き固定・内外面への板厚補正・追加手動線・穴を横切る分割・別入力面の接合調整。
 Linux/cloudゲートは未実行。詳細は [GPT_FABRICATION_VALIDATION.md](GPT_FABRICATION_VALIDATION.md)。
+
+## 2026-09-29 近似の分割間隔自動調整（実装・PC検証中）
+従来帯近似とGPT近似に自動間隔を追加。最大偏差の大きい区間を優先し、最小幅と上限を維持。設定保存・型紙への引継ぎを実装。局所曲率の比較試験は合格、Windows全体ゲートは未完了。詳細ADAPTIVE_FABRICATION.md。

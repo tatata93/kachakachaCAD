@@ -15,6 +15,7 @@ struct GptApproxOptions {
     double minimumWidthMm = .5;
     int maximumPanels = 12;
     int direction = 2; // 0/1: local directions, 2: compare four orientations
+    bool adaptiveSpacing = false;
 };
 //! A generalized cylinder: a cross section extruded along v. Never a triangle mesh.
 struct GptApproxPanel {
@@ -31,6 +32,7 @@ struct GptApproxResult {
     double maximumMm = 0, rmsMm = 0, seamGapMm = 0;
     bool reached = false;
     int direction = 0;
+    std::vector<double> railParameters; // Normalized split positions, including 0 and 1.
 };
 base::Result<GptApproxResult> ApproximateGpt(const GptApproxSource& source, const GptApproxOptions& options);
 std::vector<geometry::Vector3> GptPanelLoop(const GptApproxPanel& panel,

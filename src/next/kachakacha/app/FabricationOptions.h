@@ -32,6 +32,7 @@ struct FabricationChoice {
     //! 既定は縦(鉄道前面の「みかんの皮」割り。オーナー期待形 2026-09-25)。
     int splitAxis = 3;
     //! 縁の角(折れ)で必ず割る。既定で真(屋根と側面の境の角にレールを置く)。
+    bool adaptiveSpacing = false; // Refine high-error intervals within width/count limits.
     bool splitAtCorners = true;
     //! 枚数で割る(0 = 許容偏差か手動境界から)。既定は面 1 枚あたり 4。
     int equalPartCount = 4;

@@ -314,6 +314,7 @@ template<class Id>
         definition["minimumReliefLigamentMm"] =
             JsonValue::Number(fabrication->minimumReliefLigamentMm);
         definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
+        definition["adaptiveSpacing"] = JsonValue::Bool(fabrication->adaptiveSpacing);
         definition["splitAtCorners"] = JsonValue::Bool(fabrication->splitAtCorners);
         definition["equalPartCount"] = JsonValue::Number(
             static_cast<double>(fabrication->equalPartCount));

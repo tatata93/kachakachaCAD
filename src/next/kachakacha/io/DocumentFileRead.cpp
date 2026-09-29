@@ -627,6 +627,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.minimumReliefLigamentMm =
             loader.NumberOr(definition, "minimumReliefLigamentMm", 0.5);
         made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
+        made.adaptiveSpacing = loader.BoolOr(definition, "adaptiveSpacing", false);
         made.splitAtCorners = loader.BoolOr(definition, "splitAtCorners", false);
         made.equalPartCount = static_cast<int>(loader.NumberOr(definition, "equalPartCount", 0.0));
         made.openingWires = ReadIdArray(loader, definition, "openingWires", where);

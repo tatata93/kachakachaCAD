@@ -62,12 +62,13 @@ KACHA_V2_TEST(fabrication_options, 欄の値は範囲の外を断り作り方と
     fresh.splitAxis = 4;
     fresh.splitAtCorners = false;
     fresh.equalPartCount = 0;
+    fresh.adaptiveSpacing = true;
     CreateFabricationModelDefinition horizontal;
     ApplyFabricationChoice(horizontal, fresh);
-    Require(horizontal.splitAxis == 4 && !horizontal.splitAtCorners && horizontal.equalPartCount == 0,
+    Require(horizontal.adaptiveSpacing && horizontal.splitAxis == 4 && !horizontal.splitAtCorners && horizontal.equalPartCount == 0,
         "横・角で割らない・枚数 0 が作り方に入る");
     const auto backAgain = FabricationChoiceOf(horizontal);
-    Require(backAgain.splitAxis == 4 && !backAgain.splitAtCorners && backAgain.equalPartCount == 0, "戻る");
+    Require(backAgain.adaptiveSpacing && backAgain.splitAxis == 4 && !backAgain.splitAtCorners && backAgain.equalPartCount == 0, "戻る");
     FabricationChoice badCount = fresh;
     badCount.equalPartCount = 201;
     Require(!CheckFabricationChoice(badCount).HasValue()

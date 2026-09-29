@@ -4,6 +4,7 @@
 #include "kachakacha/kernel/OcctGptSurface.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <cmath>
+#include <algorithm>
 #include <limits>
 #include "kachakacha/geometry/ArcBuilders.h"
 using namespace kachakacha::v2;
@@ -57,6 +58,35 @@ KACHA_V2_TEST(gpt_fabrication, invalid_inputs_and_holes_are_not_ignored)
     const auto made=fabrication::ApproximateGpt(source,{.5,.5,1,2});
     Require(made.HasValue() && made.Value().panels.front().pattern.openings.size()==1,"retain opening in pattern");
 }
+KACHA_V2_TEST(gpt_fabrication, adaptive_spacing_refines_local_bend_and_respects_limits)
+{
+    fabrication::GptApproxSource source;
+    const auto point=[](int x,int y) {
+        const double t=std::max(0.0,y*.5-5.0);
+        return geometry::Vector3{x*.5,y*.5,.003*x*x+.08*t*t};
+    };
+    for (int y=-40;y<=40;++y) { for (int x=-20;x<=20;++x) { source.samples.push_back(point(x,y)); } }
+    for (int x=-20;x<20;++x) { source.boundary.push_back(point(x,-40)); }
+    for (int y=-40;y<40;++y) { source.boundary.push_back(point(20,y)); }
+    for (int x=20;x>-20;--x) { source.boundary.push_back(point(x,40)); }
+    for (int y=40;y>-40;--y) { source.boundary.push_back(point(-20,y)); }
+    fabrication::GptApproxOptions options{.0001,.5,6,0};
+    const auto uniform=fabrication::ApproximateGpt(source,options);
+    options.adaptiveSpacing=true;
+    const auto adaptive=fabrication::ApproximateGpt(source,options);
+    Require(uniform.HasValue() && adaptive.HasValue(),"both spacing modes create valid patterns");
+    const auto& result=adaptive.Value();
+    Require(!result.reached && result.panels.size()<=6,"cap and unmet tolerance remain honest");
+    double smallest=1,largest=0;
+    for (std::size_t i=1;i<result.railParameters.size();++i) {
+        const double width=result.railParameters[i]-result.railParameters[i-1];
+        smallest=std::min(smallest,width); largest=std::max(largest,width);
+    }
+    Require(largest>smallest*1.5,"adaptive spacing is not uniform");
+    Require(result.maximumMm<uniform.Value().maximumMm,"local bend error improves with same budget");
+    options.minimumWidthMm=100;
+    Require(!fabrication::ApproximateGpt(source,options).HasValue(),"minimum width cannot be silently violated");
+}
 #ifdef KACHACAD_V2_WITH_OCCT
 KACHA_V2_TEST(gpt_fabrication, brep_non_rectangular_boundary_and_pattern)
 {
@@ -103,6 +133,11 @@ KACHA_V2_TEST(gpt_fabrication, owners_head_becomes_few_manufacturable_panels)
     for (const auto& panel:made.Value().gptPanels) {
         Require(!fabrication::GptPanelMesh(panel,1).triangles.empty(),"whole part has a visible shape");
     }
+    definition.adaptiveSpacing=true;
+    const auto adaptive=kernel::BuildGptFabrication(definition,{{{},surface.Value().handle}});
+    Require(adaptive.HasValue(),adaptive.FirstMessageJa());
+    Require(adaptive.Value().reachedTolerance,adaptive.Value().summaryJa);
+    Require(adaptive.Value().panels.size()<=12,"adaptive head respects same total panel budget");
     kernel::ReleaseShape(surface.Value().handle);
 }
 #endif

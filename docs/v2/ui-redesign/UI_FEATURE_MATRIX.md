@@ -207,3 +207,6 @@ HP-GPT-06で前頭部8本から連続した開いた面を作る。GPT幾何11/1
 面・立体の不透明な連続陰影、細かな輪郭、同じ陰影のGPTプレビューを追加。撮影確認済み。
 
 | F-GPT | 製作 → 近似 → GPT版 | 面・許容・部材数・最小幅・方向、部材下見と最大/RMS、組立率、確定/型紙 | GptApproximation / OcctGptFabrication / V2GptFabricationTool | AT-GPT-F001/002、HP-GPT-F01/F02 | PC_TESTED: fc1ff8cab。ctest183/183、V2通常/配布359/359。制約はGPT_FABRICATION_VALIDATION.md |
+
+## 2026-09-29 近似の自動間隔（実装・PC検証中）
+従来の帯近似とGPT版で `adaptiveSpacing` を切り替える。既存命令内の設定。詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。

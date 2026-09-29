@@ -220,6 +220,7 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
     definition.manualBoundaries = inner;
     // 人が分けた/1 つにした境目が正本。枚数指定と角の自動分割は外す(残すと境目を上書きして
     // 「見せた形と出来た形が違う」になる。角の境目は inner にもう入っている)。
+    definition.adaptiveSpacing = false; // Explicit manual edit keeps the chosen boundaries.
     definition.equalPartCount = 0;
     definition.splitAtCorners = false;
     definition.bandProgress = carried.bandProgress;

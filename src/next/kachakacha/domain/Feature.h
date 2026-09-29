@@ -366,6 +366,7 @@ struct CreateFabricationModelDefinition {
     double minimumPartWidthMm = 4.0;
     std::vector<double> manualBoundaries;
     //! 面の縁の角(折れ)で必ず割る(オーナー期待形 2026-09-25)。古い文書は偽で読む。
+    bool adaptiveSpacing = false; // Refine high-error intervals within width/count limits.
     bool splitAtCorners = false;
     //! 1 以上なら枚数で割る(角の区間ごとに幅で配って等分)。0 なら許容偏差か手動境界から。
     int equalPartCount = 0;

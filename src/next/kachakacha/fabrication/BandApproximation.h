@@ -70,6 +70,7 @@ struct BandApproximationOptions {
     std::vector<double> manualBoundaries;
     //! 面の縁の角(折れ)で必ず割る(オーナー期待形 2026-09-25: 屋根と側面の境の角を通るレール)。
     //! 分割軸に沿う 2 本の縁(s = 0 と s = 1)を見て、cornerAngleDeg より大きく折れる所を境界にする。
+    bool adaptiveSpacing = false; // Refine high-error intervals within width/count limits.
     bool splitAtCorners = false;
     double cornerAngleDeg = 35.0;
     //! 1 以上なら「枚数で割る」: 角の区間ごとに幅に応じて配り、区間の中は実幅で等分する。

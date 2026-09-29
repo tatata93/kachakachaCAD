@@ -108,7 +108,7 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
                 const auto source=ReadFace(TopoDS::Face(e.Current()),definition.targetMaxDeviation.value);
                 if (!source.HasValue()) { return Out::Failure(source.Diagnostics()); }
                 fabrication::GptApproxOptions options{definition.targetMaxDeviation.value,
-                    definition.minimumPartWidthMm,definition.maximumPartCount-static_cast<int>(result.panels.size()),definition.splitAxis};
+                    definition.minimumPartWidthMm,definition.maximumPartCount-static_cast<int>(result.panels.size()),definition.splitAxis,definition.adaptiveSpacing};
                 const auto made=fabrication::ApproximateGpt(source.Value(),options);
                 if (!made.HasValue()) { return Out::Failure(made.Diagnostics()); }
                 result.reachedTolerance=result.reachedTolerance && made.Value().reached;

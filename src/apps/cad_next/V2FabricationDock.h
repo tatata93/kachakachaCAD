@@ -213,6 +213,7 @@ private:
     QComboBox* method_ = nullptr;
     QFormLayout* form_ = nullptr;
     QComboBox* splitAxis_ = nullptr;
+    QCheckBox* adaptive_ = nullptr;
     QCheckBox* splitAtCorners_ = nullptr;
     QDoubleSpinBox* equalParts_ = nullptr;
     QCheckBox* automatic_ = nullptr;

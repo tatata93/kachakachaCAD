@@ -235,7 +235,8 @@ bool BalancePanels(GptApproxResult& result,const std::vector<PanelBounds>& bound
     return true;
 }
 bool BuildCandidate(const GptApproxSource& source, const GptApproxOptions& options,
-    GptApproxPanel frame, int count, GptApproxResult& result)
+    GptApproxPanel frame, const std::vector<double>& cuts, GptApproxResult& result,
+    std::vector<double>& scores)
 {
     const auto local=[&](Vector3 p) { p=p-frame.origin; return Vector3{Dot(p,frame.u),Dot(p,frame.v),Dot(p,frame.normal)}; };
     std::vector<Vector3> boundary, samples;
@@ -244,11 +245,13 @@ bool BuildCandidate(const GptApproxSource& source, const GptApproxOptions& optio
     samples.insert(samples.end(),boundary.begin(),boundary.end());
     double low=boundary.front().y, high=low;
     for (const auto& p:boundary) { low=std::min(low,p.y); high=std::max(high,p.y); }
-    if ((high-low)/count < options.minimumWidthMm) { return false; }
+    const int count=static_cast<int>(cuts.size())-1;
+    result.railParameters=cuts; scores.assign(count,0);
     double square=0; std::size_t total=0;
     std::vector<PanelBounds> bounds; std::vector<std::pair<double,double>> seams;
     for (int index=0;index<count;++index) {
-        const double a=low+(high-low)*index/count, b=low+(high-low)*(index+1)/count;
+        const double a=low+(high-low)*cuts[index], b=low+(high-low)*cuts[index+1];
+        if (b-a+1e-9 < options.minimumWidthMm) { return false; }
         auto loop=Clip(Clip(boundary,a,true),b,false);
         const auto seamLoop=loop;
         if (loop.size()<3) { return false; }
@@ -294,10 +297,38 @@ bool BuildCandidate(const GptApproxSource& source, const GptApproxOptions& optio
         result.panels.push_back(std::move(panel));
     }
     result.rmsMm=std::sqrt(square/std::max(std::size_t(1),total));
+    for (int i=0;i<count;++i) {
+        scores[i]=result.panels[i].maximumMm;
+        if (i) {
+            const double gap=std::max(std::abs(seams[i].first),std::abs(seams[i].second));
+            scores[i]=std::max(scores[i],gap); scores[i-1]=std::max(scores[i-1],gap);
+        }
+    }
     (void)BalancePanels(result,bounds,seams,options.toleranceMm*(1-1e-8));
     result.reached=result.maximumMm<=options.toleranceMm && result.seamGapMm<=options.toleranceMm;
     return true;
 }
+void RefinePartition(const GptApproxSource& source,const GptApproxOptions& options,
+    const GptApproxPanel& frame,std::vector<double>& cuts,const std::vector<double>& scores)
+{
+    double low=std::numeric_limits<double>::infinity(),high=-low;
+    for (const auto& p:source.boundary) {
+        const double y=Dot(p-frame.origin,frame.v); low=std::min(low,y); high=std::max(high,y);
+    }
+    std::size_t selected=cuts.size(); double worst=-1,widest=-1;
+    for (std::size_t i=1;i<cuts.size();++i) {
+        const double width=(high-low)*(cuts[i]-cuts[i-1]);
+        if (width*.5+1e-9<options.minimumWidthMm) { continue; }
+        const double error=scores.empty() ? 0 : scores[i-1];
+        if (error>worst+1e-12 || (std::abs(error-worst)<=1e-12 && width>widest)) {
+            selected=i; worst=error; widest=width;
+        }
+    }
+    if (selected==cuts.size()) { cuts.clear(); return; }
+    const double mid=(cuts[selected-1]+cuts[selected])*.5;
+    cuts.insert(cuts.begin()+selected,mid);
+}
+
 }
 
 base::Result<GptApproxResult> ApproximateGpt(const GptApproxSource& source,const GptApproxOptions& options)
@@ -319,6 +350,7 @@ base::Result<GptApproxResult> ApproximateGpt(const GptApproxSource& source,const
     const auto plane=geometry::FitPlane(source.samples);
     if (!plane.valid) { return Out::Failure(base::MakeError("GPT-F002","面の方向を決められません。","面を小さい領域に分けてください。")); }
     GptApproxResult best; best.maximumMm=std::numeric_limits<double>::infinity();
+    std::vector<std::vector<double>> partitions(4,std::vector<double>{0,1});
     for (int count=1;count<=options.maximumPanels;++count) {
         for (int direction=0;direction<(options.direction==2 ? 4 : 2);++direction) {
             if (options.direction!=2 && options.direction!=direction) { continue; }
@@ -331,7 +363,15 @@ base::Result<GptApproxResult> ApproximateGpt(const GptApproxSource& source,const
             frame.u=oldU*std::cos(angles[direction])+oldV*std::sin(angles[direction]);
             frame.v=oldV*std::cos(angles[direction])-oldU*std::sin(angles[direction]);
             GptApproxResult candidate; candidate.direction=direction;
-            if (!BuildCandidate(source,options,frame,count,candidate)) { continue; }
+            auto& cuts=partitions[direction];
+            if (cuts.empty()) { continue; }
+            if (!options.adaptiveSpacing) {
+                cuts.clear(); for (int i=0;i<=count;++i) { cuts.push_back(double(i)/count); }
+            }
+            std::vector<double> scores;
+            const bool valid=BuildCandidate(source,options,frame,cuts,candidate,scores);
+            if (options.adaptiveSpacing) { RefinePartition(source,options,frame,cuts,valid ? scores : std::vector<double>{}); }
+            if (!valid) { continue; }
             if ((candidate.reached && !best.reached) || (candidate.reached==best.reached
                 && std::max(candidate.maximumMm,candidate.seamGapMm)<std::max(best.maximumMm,best.seamGapMm))) { best=std::move(candidate); }
         }

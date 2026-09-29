@@ -262,6 +262,43 @@ Vector3 SampledSurface::EvaluateSplit(BandSplitAxis axis, double t, double s) co
     return Evaluate(u, v);
 }
 
+namespace {
+Result<std::vector<double>> AdaptiveBoundaries(const SampledSurface& source,
+    const BandApproximationOptions& options, std::vector<double> cuts)
+{
+    using Out = Result<std::vector<double>>;
+    const auto fail = [] { return Out::Failure(MakeError(kBandBadOptions,
+        "自動間隔の条件が両立しません。",
+        "手動境界を空にして自動境界を選び、指定枚数・上限・角の数・最小幅を確認してください。")); };
+    const int target = options.equalPartCount > 0 ? options.equalPartCount : options.maximumPartCount;
+    if (options.equalPartCount < 0 || !options.automaticBoundaries || !options.manualBoundaries.empty()
+        || target > options.maximumPartCount || static_cast<int>(cuts.size()) - 1 > target) { return fail(); }
+    for (std::size_t i = 1; i < cuts.size(); ++i) {
+        if (MeasureWidth(source, options.splitAxis, cuts[i-1], cuts[i]) + 1e-9
+            < options.minimumPartWidthMm) { return fail(); }
+    }
+    while (static_cast<int>(cuts.size()) - 1 < target) {
+        std::size_t selected = cuts.size(); double worst = -1, widest = -1, midpoint = 0;
+        for (std::size_t i = 1; i < cuts.size(); ++i) {
+            const double error = EstimateChordDeviation(source, options.splitAxis, cuts[i-1], cuts[i]);
+            if (options.equalPartCount == 0 && error <= options.maximumDeviationMm) { continue; }
+            const auto halves = EqualWidthBoundaries(source, options.splitAxis, cuts[i-1], cuts[i], 2);
+            const double mid = halves[1];
+            const double width = std::min(MeasureWidth(source, options.splitAxis, cuts[i-1], mid),
+                MeasureWidth(source, options.splitAxis, mid, cuts[i]));
+            if (width + 1e-9 < options.minimumPartWidthMm || mid <= cuts[i-1]+1e-10 || mid >= cuts[i]-1e-10) { continue; }
+            if (error > worst+1e-12 || (std::abs(error-worst)<=1e-12 && width>widest)) {
+                selected=i; worst=error; widest=width; midpoint=mid;
+            }
+        }
+        if (selected == cuts.size()) { break; }
+        cuts.insert(cuts.begin()+selected, midpoint);
+    }
+    if (options.equalPartCount > 0 && static_cast<int>(cuts.size()) - 1 != target) { return fail(); }
+    return Out::Success(std::move(cuts));
+}
+}
+
 Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
     const BandApproximationOptions& options)
 {
@@ -296,7 +333,11 @@ Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
     segments.insert(segments.end(), corners.begin(), corners.end());
     segments.push_back(1.0);
     std::vector<double> boundaries;
-    if (options.equalPartCount > 0) {
+    if (options.adaptiveSpacing) {
+        const auto adaptive = AdaptiveBoundaries(source, options, segments);
+        if (!adaptive.HasValue()) { return Out::Failure(adaptive.Diagnostics()); }
+        boundaries = adaptive.Value();
+    } else if (options.equalPartCount > 0) {
         std::vector<double> widths;
         for (std::size_t k = 0; k + 1 < segments.size(); ++k) {
             widths.push_back(MeasureWidth(source, options.splitAxis, segments[k], segments[k + 1]));

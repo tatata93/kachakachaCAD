@@ -4,6 +4,7 @@
 #include <optional>
 class V2MainWindow;
 class QComboBox;
+class QCheckBox;
 class QDoubleSpinBox;
 class QSpinBox;
 class QLabel;
@@ -38,6 +39,7 @@ private:
     QDoubleSpinBox *tolerance_=nullptr,*width_=nullptr,*thickness_=nullptr,*assembly_=nullptr;
     QSpinBox* count_=nullptr;
     QComboBox* direction_=nullptr;
+    QCheckBox* adaptive_=nullptr;
     QPushButton *confirm_=nullptr,*pattern_=nullptr;
     bool active_=false;
     std::uint64_t revision_=0;

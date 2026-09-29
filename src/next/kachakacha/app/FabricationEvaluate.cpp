@@ -337,6 +337,7 @@ struct BandedSource {
     made.summaryJa = "帯へ近似して " + std::to_string(made.panels.size())
         + " 枚の部材にしました。ずれは最大 " + Rounded(made.maximumDeviationMm) + " mm"
         + (made.reachedTolerance ? "(許容内)" : "(許容を超えています)") + "。";
+    if (definition.adaptiveSpacing) { made.summaryJa += " 間隔を自動調整。"; }
     // 枚数で割ったときは細すぎる帯も作る。黙らずに言う(作れない細さは人が決める)。
     double narrowest = std::numeric_limits<double>::infinity();
     bool narrower = false;
@@ -416,6 +417,7 @@ fabrication::BandApproximationOptions BandOptionsOf(
     options.maximumPartCount = definition.maximumPartCount;
     options.minimumPartWidthMm = definition.minimumPartWidthMm;
     options.manualBoundaries = definition.manualBoundaries;
+    options.adaptiveSpacing = definition.adaptiveSpacing;
     options.splitAtCorners = definition.splitAtCorners;
     options.equalPartCount = definition.equalPartCount;
     return options;
@@ -429,6 +431,9 @@ Result<FabricationEvaluation> EvaluateFabrication(
     using Out = Result<FabricationEvaluation>;
     if (definition.method == 2) {
         return Out::Failure(MakeError("GPT-F006", "GPT版は元の面から再計算してください。", "既存方式へ置き換えず、GPT版の欄を使用してください。"));
+    }
+    if (definition.adaptiveSpacing && definition.method != 1) {
+        return Out::Failure(MakeError("FAB-B001", "自動間隔は帯近似で使ってください。", "面の分類方式は分割間隔を持ちません。"));
     }
     if (sources.empty()) {
         return Out::Failure(MakeError("FAB-M001", "近似する元がありません。",

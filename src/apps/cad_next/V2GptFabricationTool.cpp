@@ -5,6 +5,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/app/ExplorerModel.h"
 #include <QComboBox>
+#include <QCheckBox>
 #include <QColor>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
@@ -49,6 +50,9 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
     layout->addWidget(direction_);
     QObject::connect(count_,&QSpinBox::valueChanged,dock_,[this](int){Invalidate();});
     QObject::connect(direction_,&QComboBox::currentIndexChanged,dock_,[this](int){Invalidate();});
+    adaptive_=new QCheckBox(QStringLiteral("間隔を自動調整（急な曲がりを細かく）"),dock_->widget());
+    adaptive_->setObjectName(QStringLiteral("gptFabricationAdaptiveSpacing")); layout->addWidget(adaptive_);
+    QObject::connect(adaptive_,&QCheckBox::toggled,dock_,[this](bool){Invalidate();});
     panels_=new QTreeWidget(dock_->widget()); panels_->setObjectName(QStringLiteral("gptFabricationPanels"));
     panels_->setHeaderLabels({QStringLiteral("部材"),QStringLiteral("最大偏差 mm")}); layout->addWidget(panels_);
     assembly_=new QDoubleSpinBox(dock_->widget()); assembly_->setObjectName(QStringLiteral("gptFabricationAssembly"));
@@ -140,6 +144,7 @@ void V2GptFabricationTool::Preview()
     definition_.materialThickness={"",thickness_->value(),geometry::QuantityKind::Length};
     definition_.maximumPartCount=count_->value(); definition_.minimumPartWidthMm=width_->value();
     definition_.splitAxis=direction_->currentIndex()==0 ? 2 : direction_->currentIndex()-1;
+    definition_.adaptiveSpacing=adaptive_->isChecked();
     definition_.masterPercent=assembly_->value();
     const auto made=Evaluate(definition_);
     if (!made.HasValue()) { status_->setText(QString::fromStdString(made.FirstMessageJa())); return; }

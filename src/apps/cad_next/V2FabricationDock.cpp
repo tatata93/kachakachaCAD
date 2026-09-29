@@ -483,6 +483,9 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     splitAxis_->addItem(QStringLiteral("U 方向で切る"));
     splitAxis_->addItem(QStringLiteral("V 方向で切る"));
     form_->addRow(QStringLiteral("切る向き"), splitAxis_);
+    adaptive_ = new QCheckBox(QStringLiteral("間隔を自動調整（急な曲がりを細かく）"), this);
+    adaptive_->setObjectName(QStringLiteral("fabricationAdaptiveSpacing"));
+    form_->addRow(QStringLiteral("分割間隔"), adaptive_);
     splitAtCorners_ = new QCheckBox(QStringLiteral("縁の角(折れ)で必ず割る"), formWidget);
     splitAtCorners_->setChecked(true);
     form_->addRow(QStringLiteral("角"), splitAtCorners_);
@@ -920,6 +923,7 @@ void V2FabricationDock::Connect()
         Emit();
     });
     QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
+    QObject::connect(adaptive_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(splitAtCorners_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(equalParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
@@ -972,6 +976,7 @@ void V2FabricationDock::RefreshMethodRows()
     // 分割軸・境界・上限・最小幅は V1 方式(帯)だけが使う。V2 方式では隠す。
     const bool band = method_->currentIndex() == 0;
     form_->setRowVisible(splitAxis_, band);
+    form_->setRowVisible(adaptive_, band);
     form_->setRowVisible(splitAtCorners_, band);
     form_->setRowVisible(equalParts_, band);
     form_->setRowVisible(automatic_, band);
@@ -997,6 +1002,7 @@ FabricationChoice V2FabricationDock::Choice() const
                                                  : FabricationMethod::ClassifyFaces;
     const int axisIndex = splitAxis_->currentIndex();
     choice.splitAxis = axisIndex >= 0 && axisIndex < kSplitAxisChoices ? kSplitAxisValues[axisIndex] : 3;
+    choice.adaptiveSpacing = method_->currentIndex() == 0 && adaptive_->isChecked();
     choice.splitAtCorners = splitAtCorners_->isChecked();
     choice.equalPartCount = static_cast<int>(equalParts_->value());
     choice.automaticBoundaries = automatic_->isChecked();
@@ -1040,6 +1046,7 @@ void V2FabricationDock::SetChoice(const FabricationChoice& choice)
             splitAxis_->setCurrentIndex(index);
         }
     }
+    adaptive_->setChecked(choice.adaptiveSpacing);
     splitAtCorners_->setChecked(choice.splitAtCorners);
     equalParts_->setValue(static_cast<double>(choice.equalPartCount));
     automatic_->setChecked(choice.automaticBoundaries);

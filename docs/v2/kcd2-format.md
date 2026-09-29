@@ -983,3 +983,6 @@ CreateFabricationModelDefinitionのmethod=2はGPT版の柱面近似。parts（�
 targetMaxDeviation、maximumPartCount、minimumPartWidthMm、splitAxis（0/1/2自動）、
 materialThickness、masterPercentを既存キーで保存。0/1は変更しない。2を0へ代替しない。
 部材の形は元B-Repと保存条件から再生成し、表示メッシュを正本として保存しない。
+
+### 近似の自動間隔（互換追加）
+CreateFabricationModel の `adaptiveSpacing` は bool、省略時 false。従来の帯近似とGPT版の両方が使用する。境界位置は設定と元形状から再計算し、メッシュを正本として保存しない。

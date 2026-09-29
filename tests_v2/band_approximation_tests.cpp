@@ -474,3 +474,33 @@ KACHA_V2_TEST(band_approximation, 枚数で割ると実幅がそろい細すぎ�
 }
 
 KACHA_V2_TEST_MAIN("band_approximation_tests")
+
+KACHA_V2_TEST(band_approximation, adaptive_spacing_concentrates_on_local_curvature)
+{
+    const SampledSurface surface(Grid(257, 9, [](double u, double v) {
+        const double t=std::max(0.0, v-.65);
+        return Vector3{u*40, v*100, 150*t*t};
+    }));
+    BandApproximationOptions options;
+    options.minimumPartWidthMm=1; options.maximumPartCount=8; options.equalPartCount=8;
+    const auto uniform=ApproximateBands(surface,options);
+    options.adaptiveSpacing=true;
+    const auto adaptive=ApproximateBands(surface,options);
+    Require(uniform.HasValue() && adaptive.HasValue(),"both spacing modes succeed");
+    const auto& result=adaptive.Value();
+    Require(result.bands.size()==8,"requested count retained");
+    Require(result.maximumDeviationMm<uniform.Value().maximumDeviationMm*.8,"local curvature gets more resolution");
+    Require(result.bands.front().widthMm>result.bands.back().widthMm*2,"gentle portion remains wide");
+    Require(!result.narrowerThanMinimum,"minimum physical width enforced");
+    options.maximumPartCount=7;
+    Require(!ApproximateBands(surface,options).HasValue(),"count over limit is not ignored");
+    options.maximumPartCount=8; options.manualBoundaries={.3};
+    Require(!ApproximateBands(surface,options).HasValue(),"manual input is not silently discarded");
+    options.manualBoundaries.clear(); options.minimumPartWidthMm=30;
+    Require(!ApproximateBands(surface,options).HasValue(),"impossible width and count reported");
+    options.equalPartCount=0; options.minimumPartWidthMm=1; options.maximumPartCount=4;
+    options.maximumDeviationMm=1e-6;
+    const auto capped=ApproximateBands(surface,options);
+    Require(capped.HasValue() && capped.Value().bands.size()==4 && !capped.Value().reachedRequestedTolerance,
+        "cap retains adaptive spacing and honestly reports unmet tolerance");
+}

@@ -101,7 +101,7 @@ void V2MainWindow::EvaluateApproxCandidates()
             FabricationMarkingsFor(definition), tolerance);
         if (!evaluated.HasValue()) {
             outcome.available = false;
-            outcome.refusalJa = evaluated.FirstSummaryJa();
+            outcome.refusalJa = evaluated.FirstMessageJa();
             continue;
         }
         outcome.available = true;
@@ -189,6 +189,9 @@ void V2MainWindow::RefreshApproxDock()
             status += QStringLiteral("\n");
         }
         status += QString::fromStdString(line);
+    }
+    if (canConfirm) {
+        status += QStringLiteral("\n") + QString::fromStdString(approxEvaluations_[chosen]->summaryJa);
     }
     fabricationDock_->SetMessage(status);
     ShowToolFooter(approxShelfShown_

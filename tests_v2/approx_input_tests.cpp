@@ -138,3 +138,16 @@ KACHA_V2_TEST(approx_input, 作り方は候補の既定を決める)
 }
 
 KACHA_V2_TEST_MAIN("approx_input_tests")
+
+KACHA_V2_TEST(approx_input, adaptive_count_does_not_disable_other_candidates)
+{
+    kachakacha::v2::domain::CreateFabricationModelDefinition base;
+    base.adaptiveSpacing=true; base.equalPartCount=9; base.splitAtCorners=true;
+    base.minimumPartWidthMm=4; base.maximumPartCount=12;
+    const auto a=ApproxCandidateDefinition(base,0);
+    const auto b=ApproxCandidateDefinition(base,1);
+    const auto c=ApproxCandidateDefinition(base,2);
+    Require(!a.adaptiveSpacing && a.method==0,"face classification has no band spacing option");
+    Require(b.adaptiveSpacing && b.equalPartCount==9 && b.minimumPartWidthMm==4,"requested candidate retains inputs");
+    Require(!c.adaptiveSpacing && c.equalPartCount==1 && !c.splitAtCorners,"one-part candidate really stays one part");
+}

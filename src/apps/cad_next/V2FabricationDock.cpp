@@ -509,6 +509,7 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     form_->addRow(QStringLiteral("部材数の上限"), maxParts_);
     minWidth_ = MakeMm(formWidget, 0.0, 1000.0, 0.5);
     minWidth_->setValue(4.0);
+    minWidth_->setToolTip(QStringLiteral("枚数が0なら最小幅を守って分割します。枚数を指定した場合は枚数を優先し、細い部材を数値で知らせます。"));
     form_->addRow(QStringLiteral("部材の最小幅"), minWidth_);
     // 切れ目の上限。紙とプラ板と真鍮で、残してよい幅は違う。
     // 隠した既定値にすると、断られた理由が分かっても直せない。

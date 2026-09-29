@@ -267,16 +267,23 @@ Result<std::vector<double>> AdaptiveBoundaries(const SampledSurface& source,
     const BandApproximationOptions& options, std::vector<double> cuts)
 {
     using Out = Result<std::vector<double>>;
-    const auto fail = [] { return Out::Failure(MakeError(kBandBadOptions,
-        "自動間隔の条件が両立しません。",
-        "手動境界を空にして自動境界を選び、指定枚数・上限・角の数・最小幅を確認してください。")); };
+    const auto fail = [](std::string message, std::string remedy) {
+        return Out::Failure(MakeError(kBandBadOptions, std::move(message), std::move(remedy)));
+    };
     const int target = options.equalPartCount > 0 ? options.equalPartCount : options.maximumPartCount;
-    if (options.equalPartCount < 0 || !options.automaticBoundaries || !options.manualBoundaries.empty()
-        || target > options.maximumPartCount || static_cast<int>(cuts.size()) - 1 > target) { return fail(); }
-    for (std::size_t i = 1; i < cuts.size(); ++i) {
-        if (MeasureWidth(source, options.splitAxis, cuts[i-1], cuts[i]) + 1e-9
-            < options.minimumPartWidthMm) { return fail(); }
+    if (!options.automaticBoundaries || !options.manualBoundaries.empty()) {
+        return fail("自動間隔と手動境界は同時に使えません。", "手動境界を空にして自動境界を選んでください。");
     }
+    if (options.equalPartCount < 0 || target > options.maximumPartCount) {
+        return fail("指定枚数 " + std::to_string(options.equalPartCount) + " と上限 "
+            + std::to_string(options.maximumPartCount) + " が両立しません。", "枚数を0〜上限にするか、上限を増やしてください。");
+    }
+    if (static_cast<int>(cuts.size()) - 1 > target) {
+        return fail("角で分けると " + std::to_string(cuts.size()-1) + " 枚が必要です。",
+            "指定枚数・上限を増やすか、「縁の角で必ず割る」を外してください。");
+    }
+    // As in the uniform count mode, an explicit count takes priority over minimum width.
+    // Narrow pieces remain visible and are reported by narrowerThanMinimum/summaryJa.
     while (static_cast<int>(cuts.size()) - 1 < target) {
         std::size_t selected = cuts.size(); double worst = -1, widest = -1, midpoint = 0;
         for (std::size_t i = 1; i < cuts.size(); ++i) {
@@ -286,7 +293,8 @@ Result<std::vector<double>> AdaptiveBoundaries(const SampledSurface& source,
             const double mid = halves[1];
             const double width = std::min(MeasureWidth(source, options.splitAxis, cuts[i-1], mid),
                 MeasureWidth(source, options.splitAxis, mid, cuts[i]));
-            if (width + 1e-9 < options.minimumPartWidthMm || mid <= cuts[i-1]+1e-10 || mid >= cuts[i]-1e-10) { continue; }
+            if ((options.equalPartCount == 0 && width + 1e-9 < options.minimumPartWidthMm)
+                || mid <= cuts[i-1]+1e-10 || mid >= cuts[i]-1e-10) { continue; }
             if (error > worst+1e-12 || (std::abs(error-worst)<=1e-12 && width>widest)) {
                 selected=i; worst=error; widest=width; midpoint=mid;
             }
@@ -294,7 +302,9 @@ Result<std::vector<double>> AdaptiveBoundaries(const SampledSurface& source,
         if (selected == cuts.size()) { break; }
         cuts.insert(cuts.begin()+selected, midpoint);
     }
-    if (options.equalPartCount > 0 && static_cast<int>(cuts.size()) - 1 != target) { return fail(); }
+    if (options.equalPartCount > 0 && static_cast<int>(cuts.size()) - 1 != target) {
+        return fail("境界をこれ以上分割できません。", "指定枚数を減らすか、元の面の重なりや退化を確認してください。");
+    }
     return Out::Success(std::move(cuts));
 }
 }

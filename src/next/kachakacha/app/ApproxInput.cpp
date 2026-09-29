@@ -43,12 +43,16 @@ domain::CreateFabricationModelDefinition ApproxCandidateDefinition(
     switch (candidate) {
     case 0:
         made.method = 0;   // V2 方式: 面を分類して展開
+        made.adaptiveSpacing = false;
         break;
     case 2:
         made.method = 1;   // V1 方式、分割なし
         made.automaticBoundaries = true;
         made.manualBoundaries.clear();
         made.maximumPartCount = 1;
+        made.equalPartCount = 1;
+        made.splitAtCorners = false;
+        made.adaptiveSpacing = false;
         break;
     default:
         made.method = 1;   // V1 方式、欄のとおりに分割

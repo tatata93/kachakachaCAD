@@ -39,6 +39,34 @@ bool MakeSource(V2MainWindow& window)
     window.Viewport().SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),domain::EntityKind::GuideSurface));
     return true;
 }
+bool SmallAdaptivePreview(V2MainWindow& window)
+{
+    if (!MakeGptHeadFixture(window)) { return false; }
+    window.Viewport().SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),domain::EntityKind::GuideSurface));
+    auto& dock=window.FabricationDock();
+    auto choice=dock.Choice(); choice.equalPartCount=9; choice.minimumPartWidthMm=4;
+    choice.maximumPartCount=12; choice.splitAtCorners=true; choice.adaptiveSpacing=false;
+    dock.SetChoice(choice);
+    auto* checkbox=window.findChild<QCheckBox*>(QStringLiteral("fabricationAdaptiveSpacing"));
+    if (!checkbox) { return false; } checkbox->setChecked(true);
+    window.RunCommand("fabrication.create");
+    const auto& outcomes=window.ApproxOutcomes();
+    if (!Explain("small head with 9 parts and 4 mm minimum remains available",
+        outcomes.size()==3 && outcomes[1].available && outcomes[1].partCount==9
+        && outcomes[2].available && outcomes[2].partCount==1)) { return false; }
+    if (!dock.ClickCandidate(1)) { return false; }
+    if (!Explain("adaptive preview is visible",!window.Viewport().ToolPreview().empty())) { return false; }
+    if (!Explain("minimum-width conflict is visible before confirmation",
+        dock.MessageText().contains(QStringLiteral("最小幅")) && dock.MessageText().contains(QStringLiteral("指定枚数を優先")))) { return false; }
+    QApplication::processEvents();
+    window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-small-adaptive-preview.png"));
+    window.RunCommand("fabrication.create");
+    if (!Explain("small adaptive model can be confirmed",window.FabricationModelCount()==1)) { return false; }
+    if (!window.SaveAndReopen(QStringLiteral("small_adaptive.kcd2"))) { return false; }
+    window.RunCommand("fabrication.create_pattern");
+    return Explain("small adaptive model reopens and produces pattern",
+        window.FabricationModelCount()==1 && window.ShelfShown(app::Shelf::Pattern));
+}
 bool ClassicAdaptive(V2MainWindow& window)
 {
     if (!MakeCurvedGuideSurface(window)) { return false; }
@@ -150,6 +178,7 @@ std::vector<SelfTestCase> GptFabricationCases()
     return {{"HP-GPT-F01 GPT近似・取消・確定・Undo・保存再読込・型紙",Fabrication},
         {"HP-GPT-F02 前頭部のGPT近似・番号表示・型紙",HeadFabrication},
         {"HP-GPT-F03 自動間隔・両方の棚・保存・型紙",AdaptiveControls},
-        {"HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",ClassicAdaptive}};
+        {"HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",ClassicAdaptive},
+        {"HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",SmallAdaptivePreview}};
 }
 }

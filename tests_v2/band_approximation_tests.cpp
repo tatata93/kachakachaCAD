@@ -497,10 +497,30 @@ KACHA_V2_TEST(band_approximation, adaptive_spacing_concentrates_on_local_curvatu
     options.maximumPartCount=8; options.manualBoundaries={.3};
     Require(!ApproximateBands(surface,options).HasValue(),"manual input is not silently discarded");
     options.manualBoundaries.clear(); options.minimumPartWidthMm=30;
-    Require(!ApproximateBands(surface,options).HasValue(),"impossible width and count reported");
+    const auto narrow=ApproximateBands(surface,options);
+    Require(narrow.HasValue() && narrow.Value().bands.size()==8 && narrow.Value().narrowerThanMinimum,
+        "explicit count remains previewable with an honest minimum-width warning");
     options.equalPartCount=0; options.minimumPartWidthMm=1; options.maximumPartCount=4;
     options.maximumDeviationMm=1e-6;
     const auto capped=ApproximateBands(surface,options);
     Require(capped.HasValue() && capped.Value().bands.size()==4 && !capped.Value().reachedRequestedTolerance,
         "cap retains adaptive spacing and honestly reports unmet tolerance");
+}
+
+KACHA_V2_TEST(band_approximation, small_model_nine_adaptive_parts_still_preview)
+{
+    const SampledSurface surface(Grid(97, 9, [](double u, double v) {
+        const double t=std::max(0.0,v-.5);
+        return Vector3{u*3,v*5,6*t*t};
+    }));
+    BandApproximationOptions options;
+    options.adaptiveSpacing=true; options.equalPartCount=9; options.minimumPartWidthMm=4;
+    options.splitAtCorners=true;
+    const auto made=ApproximateBands(surface,options);
+    Require(made.HasValue(),made.FirstMessageJa());
+    Require(made.Value().bands.size()==9 && made.Value().narrowerThanMinimum,"nine parts plus width warning");
+    options.equalPartCount=0; options.minimumPartWidthMm=100;
+    const auto whole=ApproximateBands(surface,options);
+    Require(whole.HasValue() && whole.Value().bands.size()==1 && whole.Value().narrowerThanMinimum,
+        "an input narrower than minimum still has a preview and warning");
 }

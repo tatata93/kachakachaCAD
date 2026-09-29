@@ -348,6 +348,9 @@ struct BandedSource {
     if (narrower) {
         made.summaryJa += "いちばん細い帯は " + Rounded(narrowest) + " mm で、最小幅 "
             + Rounded(definition.minimumPartWidthMm) + " mm より細い。";
+        if (definition.adaptiveSpacing && definition.equalPartCount > 0) {
+            made.summaryJa += " 指定枚数を優先しています。幅を優先する場合は枚数を0にしてください。";
+        }
     }
     return Out::Success(std::move(made));
 }

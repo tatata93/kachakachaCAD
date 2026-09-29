@@ -258,7 +258,18 @@ void V2MainWindow::RefreshApproxForSelectionChange()
         }
     }
     if (accepted.empty() && removed.empty()) {
-        MirrorApproxSourcesToSelection();   // 受けなかったもの(線など)を選択に残さない。
+        // 受けなかったもの(線など)を選択に残さない。黙って外すと「押しても何も起きない」に
+        // 見えるので、何を押せばよいかを言う(オーナー報告 2026-09-29: 近似の反応が分からない)。
+        if (!added.empty()) {
+            // 帯は 3D の「選んでいるもの」の一言にすぐ上書きされるので、棚の欄にも残す。
+            const QString why = QStringLiteral("近似: 線は対象にできません。面か立体を押してください"
+                                               "(線から面を作るなら、先に 作図 → 面作成 → 面にする)。");
+            SetStatus(why);
+            if (fabricationDock_ != nullptr) {
+                fabricationDock_->SetMessage(why);
+            }
+        }
+        MirrorApproxSourcesToSelection();
         return;
     }
     approxInput_ = kachakacha::v2::app::WithoutApproxSources(approxInput_, removed);

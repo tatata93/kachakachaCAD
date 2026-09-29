@@ -313,7 +313,10 @@ using kachakacha::v2::domain::EntityKind;
     // 構えている間に線を押しても、線は選択に残らない(面と立体しか受けない。対象の面は残る)。
     (void)ClickOnAnyCurve(window, Qt::NoModifier);
     if (!Explain("構えている間は線を押しても線は選ばれない(面と立体しか受けない)",
-            CountSelectedOfKind(window, EntityKind::Wire) == 0 && window.ApproxShelfShown())) {
+            CountSelectedOfKind(window, EntityKind::Wire) == 0 && window.ApproxShelfShown())
+        || !Explain((std::string("線を押したら、なぜ受けないかを棚が言う(")
+                        + window.FabricationDock().MessageText().toStdString() + ")").c_str(),
+            window.FabricationDock().MessageText().contains(QStringLiteral("線は対象にできません")))) {
         return false;
     }
     // 面を左の一覧などから選んで Del(3D で押すと対象から外れるだけなので、選択を直接入れる)。

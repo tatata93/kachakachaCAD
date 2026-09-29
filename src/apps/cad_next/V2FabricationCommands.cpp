@@ -755,26 +755,27 @@ void V2MainWindow::SetConnectionScope()
             .arg(snapped));
 }
 
-void V2MainWindow::AdoptFabricationChoice()
+bool V2MainWindow::AdoptFabricationChoice()
 {
-    if (fabricationDock_ == nullptr) {
-        return;
-    }
-    // 欄の値の検査は core。断られたら理由を棚に出し、前の値のまま。
+    if (fabricationDock_ == nullptr) { return false; }
+    const auto refuse = [this](const QString& reason) {
+        if (approxShelfShown_) {
+            approxEvaluations_.clear(); approxDefinitions_.clear();
+            for (auto& outcome:approxOutcomes_) {
+                outcome.available=false; outcome.refusalJa=reason.toStdString();
+            }
+            viewport_->HideToolPreview(); RefreshApproxDock();
+        }
+        fabricationDock_->SetMessage(reason);
+        return false;
+    };
     QString boundaryError;
-    if (!fabricationDock_->ManualBoundariesReadable(&boundaryError)) {
-        fabricationDock_->SetMessage(boundaryError);
-        return;
-    }
+    if (!fabricationDock_->ManualBoundariesReadable(&boundaryError)) { return refuse(boundaryError); }
     const auto checked = kachakacha::v2::app::CheckFabricationChoice(fabricationDock_->Choice());
-    if (!checked.HasValue()) {
-        fabricationDock_->SetMessage(QString::fromStdString(checked.FirstCode()
-            + " " + checked.FirstSummaryJa()));
-        return;
-    }
-    fabricationChoice_ = checked.Value();
-    fabricationMethod_ = fabricationChoice_.method;
+    if (!checked.HasValue()) { return refuse(QString::fromStdString(checked.FirstMessageJa())); }
+    fabricationChoice_ = checked.Value(); fabricationMethod_ = fabricationChoice_.method;
     fabricationDock_->SetMessage(QString());
+    return true;
 }
 
 void V2MainWindow::RefreshFabricationDock()
@@ -791,7 +792,7 @@ void V2MainWindow::RefreshFabricationDock()
             kachakacha::v2::app::ParameterId::MaxDeviationMm));
     fabricationDock_->SetFreezeOutput(freezeOutput_);
     // 欄は「次に作る近似モデル」の値。選んでいる近似モデルがあれば、その方式と組立率も出す。
-    fabricationDock_->SetChoice(fabricationChoice_);
+    if (!approxShelfShown_) { fabricationDock_->SetChoice(fabricationChoice_); }
     const auto modelId = CurrentFabricationModelId();
     RefreshFabricationPartInfo(modelId);
     const auto* entity = session_->GetDocument().FindEntity(modelId);

@@ -40,7 +40,7 @@ public:
     // ---- 近似の入力と候補(引継ぎ 2026-09-17 の 3)。「1 近似モデル」の最上段。
     //! 対象の名前、候補の3行、選んでいる候補、確定できるか。
     void ShowApproxInput(const QString& sourcesJa, const std::vector<QString>& candidateLinesJa,
-        int selectedCandidate, bool canConfirm);
+        int selectedCandidate, bool canConfirm, bool active = true);
     //! 候補のボタンを押した(0 = A、1 = B、2 = C)。
     void SetCandidateHandler(std::function<void(int)> handler);
     //! 対象の「解除」を押した。

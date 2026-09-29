@@ -98,10 +98,12 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     auto* buttonLayout = new QVBoxLayout(buttons);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(2);
-    confirmApprox_ = MakeRun(buttons, QStringLiteral("製作モデルを作る(確定 Enter)"), "fabrication.create", this);
+    confirmApprox_ = MakeRun(buttons, QStringLiteral("近似を始める"), "fabrication.create", this);
+    confirmApprox_->setObjectName(QStringLiteral("fabricationStartConfirm"));
     // キャンセルと確定は共通の枠の形(C-10)。キャンセルは Esc と同じ(近似をやめる)。
     cancelApprox_ = new QPushButton(buttons);
     MarkCancelConfirm(cancelApprox_, confirmApprox_);
+    cancelApprox_->setEnabled(false);
     QObject::connect(cancelApprox_, &QPushButton::clicked, this, [this] {
         if (cancelHandler_) {
             cancelHandler_();
@@ -242,12 +244,12 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
         candidates_.push_back(button);
         layout->addWidget(button);
     }
-    ShowApproxInput(QString(), {}, -1, false);
+    ShowApproxInput(QString(), {}, -1, false, false);
     return box;
 }
 
 void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
-    const std::vector<QString>& candidateLinesJa, int selectedCandidate, bool canConfirm)
+    const std::vector<QString>& candidateLinesJa, int selectedCandidate, bool canConfirm, bool active)
 {
     loading_ = true;
     sourcesJa_ = sourcesJa;
@@ -267,8 +269,10 @@ void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
         button->setEnabled(index < candidateLinesJa.size());
     }
     if (confirmApprox_ != nullptr) {
-        confirmApprox_->setEnabled(canConfirm);
+        confirmApprox_->setEnabled(!active || canConfirm);
+        confirmApprox_->setText(active ? QStringLiteral("製作モデルを作る(確定 Enter)") : QStringLiteral("近似を始める"));
     }
+    if (cancelApprox_ != nullptr) { cancelApprox_->setEnabled(active); }
     loading_ = false;
 }
 

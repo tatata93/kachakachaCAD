@@ -3,6 +3,7 @@
 #include "V2Viewport.h"
 #include "V2DrawingDock.h"
 #include "V2FabricationDock.h"
+#include "V2ParameterDock.h"
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/Selection.h"
 #include <QPushButton>
@@ -38,6 +39,40 @@ bool MakeSource(V2MainWindow& window)
     if (!ClickGpt(window,"gptSurfacePreview") || !ClickGpt(window,"gptSurfaceConfirm")) { return false; }
     window.Viewport().SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),domain::EntityKind::GuideSurface));
     return true;
+}
+bool RestartAdaptivePreview(V2MainWindow& window)
+{
+    if (!MakeCurvedGuideSurface(window)) { return false; }
+    auto& dock=window.FabricationDock();
+    auto* adaptive=window.findChild<QCheckBox*>(QStringLiteral("fabricationAdaptiveSpacing"));
+    auto* action=window.findChild<QPushButton*>(QStringLiteral("fabricationStartConfirm"));
+    if (!adaptive || !action) { return false; } adaptive->setChecked(true);
+    const auto revision=window.Session().GetDocument().Revision();
+    window.RunCommand("fabrication.create");
+    if (!dock.ClickCancelApprox()) { return false; }
+    if (!Explain("cancel returns a usable start button without changing document",
+        action->isEnabled() && action->text().contains(QStringLiteral("始める"))
+        && window.Viewport().ToolPreview().empty() && window.Session().GetDocument().Revision()==revision)) { return false; }
+    action->click();
+    if (!Explain("same source restarts from the panel button",!window.Viewport().ToolPreview().empty())) { return false; }
+    dock.SetEqualPartCount(3);
+    if (!Explain("count change recomputes preview",window.ApproxOutcomes()[1].partCount==3)) { return false; }
+    dock.SetManualBoundariesText(QStringLiteral("0.2, abc"));
+    if (!Explain("invalid settings cannot confirm stale geometry",!action->isEnabled()
+        && window.Viewport().ToolPreview().empty() && dock.MessageText().contains(QStringLiteral("UI-F001")))) { return false; }
+    dock.SetManualBoundariesText(QString());
+    if (!Explain("correcting settings restores preview",action->isEnabled() && !window.Viewport().ToolPreview().empty())) { return false; }
+    dock.SetEqualPartCount(9);
+    if (!window.ParameterDock().Apply(app::ParameterId::MaxDeviationMm,QStringLiteral("5"))) { return false; }
+    if (!Explain("loose tolerance is reflected immediately",window.ApproxOutcomes()[1].reachedTolerance)) { return false; }
+    if (!window.ParameterDock().Apply(app::ParameterId::MaxDeviationMm,QStringLiteral("0.001"))) { return false; }
+    if (!Explain("tight tolerance is reflected immediately",!window.ApproxOutcomes()[1].reachedTolerance)) { return false; }
+    if (!dock.ClickCancelApprox()) { return false; }
+    action->click();
+    if (!Explain("second restart retains changed count",window.ApproxOutcomes()[1].partCount==9
+        && !window.Viewport().ToolPreview().empty())) { return false; }
+    action->click();
+    return Explain("restarted preview confirms once",window.FabricationModelCount()==1);
 }
 bool SmallAdaptivePreview(V2MainWindow& window)
 {
@@ -179,6 +214,7 @@ std::vector<SelfTestCase> GptFabricationCases()
         {"HP-GPT-F02 前頭部のGPT近似・番号表示・型紙",HeadFabrication},
         {"HP-GPT-F03 自動間隔・両方の棚・保存・型紙",AdaptiveControls},
         {"HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",ClassicAdaptive},
-        {"HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",SmallAdaptivePreview}};
+        {"HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",SmallAdaptivePreview},
+        {"HP-GPT-F06 取消と設定変更から近似をやり直す",RestartAdaptivePreview}};
 }
 }

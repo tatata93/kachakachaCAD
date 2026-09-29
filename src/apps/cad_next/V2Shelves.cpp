@@ -37,7 +37,7 @@ void V2MainWindow::BuildEditingShelves()
     fabricationDock_ = new V2FabricationDock(this);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
     fabricationDock_->SetChoiceChangedHandler([this] {
-        AdoptFabricationChoice();
+        if (!AdoptFabricationChoice()) { return; }
         // 欄が変われば、道具の最中なら候補を作り直す。欄と下見がずれたままにしない。
         if (approxShelfShown_) {
             RefreshApproxAll();
@@ -248,6 +248,7 @@ void V2MainWindow::BuildOutputShelves()
         RefreshCornerDock();
         RefreshFabricationDock();
         RefreshPartDock();
+        if (approxShelfShown_ && AdoptFabricationChoice()) { RefreshApproxAll(); }
         // 板厚を数の棚から直したときも、厚みの道具の欄と下見をそろえる。
         if (thickenShelfShown_) {
             thickenInput_.thicknessMm = kachakacha::v2::app::ParameterValueOf(

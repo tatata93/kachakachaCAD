@@ -288,6 +288,7 @@ void V2MainWindow::RunFabricationCreate()
         ConfirmApprox();
         return;
     }
+    if (!AdoptFabricationChoice()) { return; }
     // 選んであるもののうち、面と立体を対象に取り込む(選んでから押す道も残す)。
     // 先に他の道具(面を作るなど)を解く。解くと選択が空になる道具があるので、選択は先に控える。
     const auto selected = viewport_->Selection().entityIds;
@@ -370,7 +371,7 @@ void V2MainWindow::EndApprox()
         viewport_->SetToolPickToggle(false);
     }
     if (fabricationDock_ != nullptr) {
-        fabricationDock_->ShowApproxInput(QString(), {}, -1, false);
+        fabricationDock_->ShowApproxInput(QString(), {}, -1, false, false);
         fabricationDock_->SetMessage(QString());
     }
     ShowToolFooter(QString());

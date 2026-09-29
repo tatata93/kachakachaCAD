@@ -470,7 +470,7 @@ public:
     //! 製作の棚を、選んでいる近似モデル・数の棚・方式・固定の種類に合わせる。
     void RefreshFabricationDock();
     //! 製作の棚の欄を持ち直す。範囲の外なら理由を棚に出し、前の値のまま。
-    void AdoptFabricationChoice();
+    bool AdoptFabricationChoice();
     //! 材料と積層を、選んでいる部品・形状ガイド・近似モデルに付ける(SetManufacturingCommand)。
     void ApplyMaterialToSelection(const QString& material, int layers);
     //! 次に作る近似モデルの欄(方式・分割軸・境界・上限・最小幅・再現度)。

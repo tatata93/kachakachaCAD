@@ -220,3 +220,11 @@ PC: 実装5cc67c5ac、サンプル7855864b4。ctest184/184、画面366/366、配
 Windows全体ビルド、ctest184/184、画面368/368、配布版368/368、旧自己試験終了0。
 HP-GPT-F05/F06合格。_GO.cmdで同じブランチへpush済み。Linux/cloudは未実行。
 詳細は [ADAPTIVE_FABRICATION.md](ADAPTIVE_FABRICATION.md)。
+
+## 2026-10-01 近似確定時・選択部材の独立生成（PC_TESTED）
+実装 `be2d47164`。従来版・GPT版の確定時にワイヤー／ワイヤー＋近似面を自動生成可能。
+後から対象部材と曲げ率を指定し、同じkcd2または別ファイルへ生成できる。短辺を含む閉じた輪郭、
+取消・不正番号の無変更、独立保存・再読込を確認。GPT面はプロファイル区間から直接BRep面を作り、穴を維持する。
+Windows全体ビルド、ctest184/184、通常版と配布版の画面試験各372/372、旧自己試験終了0。
+HP-GEN-01〜04、GPT面幾何12/12、GPT近似8/8、構造16/16合格。_GO.cmdで指定ブランチへpush済み。
+Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICATION_GENERATION.md)。

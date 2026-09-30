@@ -32,6 +32,7 @@ enum class FreezeOutput {
     WiresOnly,
     PartsOnly,
     Both,
+    WiresAndSurfaces, //!< Desktop generation: wires plus thin approximation guide surfaces.
 };
 
 [[nodiscard]] std::string_view FreezeOutputNameJa(FreezeOutput value) noexcept;

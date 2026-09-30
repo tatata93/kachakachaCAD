@@ -1,6 +1,7 @@
 #include "V2GptFabricationTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2FabricationDock.h"
 #include "kachakacha/kernel/OcctGptFabrication.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/app/ExplorerModel.h"
@@ -64,6 +65,7 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
 }
 void V2GptFabricationTool::Actions(QVBoxLayout* layout)
 {
+    layout->addWidget(window_.fabricationDock_->BuildGenerationOptions(dock_->widget()));
     auto* actions=new QGridLayout; layout->addLayout(actions);
     const auto button=[&](const char* name,const QString& label,int row,int col,auto handler) {
         auto* made=new QPushButton(label,dock_->widget()); made->setObjectName(QString::fromLatin1(name));
@@ -198,6 +200,7 @@ void V2GptFabricationTool::Confirm(bool pattern)
     End(); window_.fabricationDock_->SetShowSource(false); window_.fabricationDock_->SetShowApprox(true);
     window_.AdoptCurrentDocument(); window_.RefreshFabricationView(); window_.RefreshShapeViews();
     window_.viewport_->SetSelection(app::SelectionSet{{entity.id}}); window_.SetStatus(QString::fromStdString(summary));
+    window_.AutomaticallyGenerate({entity.id});
     if (pattern) { window_.RunCommand("fabrication.create_pattern"); }
 }
 bool V2GptFabricationTool::Rebuild(const domain::Feature& feature,base::EntityId output)

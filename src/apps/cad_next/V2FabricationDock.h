@@ -91,6 +91,11 @@ public:
     [[nodiscard]] double AssemblyPercent() const;
     //! 部材番号の欄(V1 の「選んだ部材だけが曲がる」)。空なら全体。
     //! 3D で部材を押しても書き込む(F-05/06/07)。
+    QWidget* BuildGenerationOptions(QWidget* parent);
+    QWidget* BuildGenerationDestination(QWidget* parent);
+    int AutomaticGeneration() const { return automaticGeneration_; }
+    int GenerationDestination() const { return generationDestination_; }
+    void SetGenerationDestination(int value);
     [[nodiscard]] QString PartNumbersText() const;
     void SetPartNumbersText(const QString& text);
     //! 「対象部材」の欄が変わったら呼ぶもの(3D の下見の色分けを出し直す)。
@@ -293,6 +298,8 @@ private:
     std::function<void(double, const QString&)> assemblyHandler_;
     std::function<void(double, bool)> radiusHandler_;
     bool radiusLocked_ = false;
+    int automaticGeneration_=0, generationDestination_=0;
+    std::vector<QComboBox*> automaticGenerations_, generationDestinations_;
     std::function<void(kachakacha::v2::fabrication::FreezeOutput)> freezeHandler_;
     std::function<void(const char*)> runHandler_;
     bool loading_ = false;

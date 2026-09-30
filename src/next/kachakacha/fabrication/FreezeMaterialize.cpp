@@ -38,6 +38,9 @@ Result<MaterializeResult> MaterializeFrozenState(const FreezeBundle& bundle,
     std::string_view baseNameJa)
 {
     using Out = Result<MaterializeResult>;
+    if(bundle.output==FreezeOutput::WiresAndSurfaces) {
+        return Out::Failure(MakeError("FAB-E003","この固定処理は近似面を生成できません。","製作の生成コマンドを使用してください。"));
+    }
     if (baseNameJa.empty()) {
         return Out::Failure(MakeError("FAB-E003",
             "固定するもとの部品が見つかりません。", "名前が空です。"));

@@ -8,6 +8,7 @@ namespace kachakacha::v2::app {
 //! 保存上のmethod/rolesは共通の語彙だが、既存の面生成器は呼ばない。
 inline constexpr int kGptBoundaryMethod = 5;
 inline constexpr int kGptSectionsMethod = 2;
+inline constexpr int kGptPanelPatchesMethod = 9; // Generated analytic fabrication intervals.
 inline constexpr int kGptBoundaryRole = 5;
 inline constexpr int kGptInteriorRole = 3;
 inline constexpr int kGptSectionRole = 2;
@@ -23,6 +24,7 @@ struct GptSurfaceRequest {
     bool loft = false;
     double maximumDeviationMm = 0.01;
     std::vector<GptSurfaceCurve> curves;
+    bool panelPatches = false;
 };
 
 //! 全参照を解決する。不明な参照・役割・入力を読み飛ばさない。

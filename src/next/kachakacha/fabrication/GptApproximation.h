@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/geometry/Vector3.h"
@@ -37,5 +38,7 @@ struct GptApproxResult {
 base::Result<GptApproxResult> ApproximateGpt(const GptApproxSource& source, const GptApproxOptions& options);
 std::vector<geometry::Vector3> GptPanelLoop(const GptApproxPanel& panel,
     const std::vector<geometry::Point2>& loop, double progress);
+// Analytic profile intervals clipped by outline and openings, independent of display tessellation.
+std::vector<std::array<geometry::Vector3,4>> GptPanelPatches(const GptApproxPanel& panel,double progress);
 modeling::ShapeMesh GptPanelMesh(const GptApproxPanel& panel, double progress);
 }

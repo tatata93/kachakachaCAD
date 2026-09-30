@@ -113,6 +113,7 @@ constexpr const char* kThicknessRequired = "FAB-E001";
 std::string_view FreezeOutputNameJa(FreezeOutput value) noexcept
 {
     switch (value) {
+    case FreezeOutput::WiresAndSurfaces: return "ワイヤー＋近似面";
     case FreezeOutput::WiresOnly: return "ワイヤーのみ";
     case FreezeOutput::PartsOnly: return "部品のみ";
     case FreezeOutput::Both:      return "両方";
@@ -135,6 +136,9 @@ Result<FreezeBundle> FreezeAssemblyState(const std::vector<AssemblyPanel>& panel
     const std::vector<AssemblyFold>& folds, const AssemblyState& state,
     FreezeOutput output, const FabricationSettings& settings)
 {
+    if (output==FreezeOutput::WiresAndSurfaces) {
+        return Result<FreezeBundle>::Failure(MakeError(kBadInput,"近似面の生成には曲面の生成処理が必要です。",{}));
+    }
     if (panels.empty()) {
         return Result<FreezeBundle>::Failure(MakeError(kBadInput,
             "固定する板がありません。", {}));

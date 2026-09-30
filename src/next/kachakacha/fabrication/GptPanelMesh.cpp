@@ -2,14 +2,13 @@
 #include <algorithm>
 #include <cmath>
 namespace kachakacha::v2::fabrication {
-modeling::ShapeMesh GptPanelMesh(const GptApproxPanel& panel,double progress)
+std::vector<std::array<geometry::Vector3,4>> GptPanelPatches(const GptApproxPanel& panel,double progress)
 {
-    modeling::ShapeMesh mesh;
+    std::vector<std::array<geometry::Vector3,4>> patches;
     std::vector<std::vector<geometry::Point2>> loops{panel.pattern.outline};
     loops.insert(loops.end(),panel.pattern.openings.begin(),panel.pattern.openings.end());
     std::vector<double> breaks=panel.lengths;
     for (const auto& loop:loops) {
-        mesh.edges.push_back(GptPanelLoop(panel,loop,progress));
         for (const auto& p:loop) { breaks.push_back(p.u); }
     }
     std::sort(breaks.begin(),breaks.end());
@@ -34,11 +33,20 @@ modeling::ShapeMesh GptPanelMesh(const GptApproxPanel& panel,double progress)
             const std::array<geometry::Vector3,4> points{panel.Point({left,crossing[at-1].left},progress),
                 panel.Point({right,crossing[at-1].right},progress),panel.Point({right,crossing[at].right},progress),
                 panel.Point({left,crossing[at].left},progress)};
-            for (int last:{2,3}) {
-                modeling::MeshTriangle triangle;
-                triangle.points={points[0],points[last-1],points[last]};
-                mesh.triangles.push_back(triangle);
-            }
+            patches.push_back(points);
+        }
+    }
+    return patches;
+}
+modeling::ShapeMesh GptPanelMesh(const GptApproxPanel& panel,double progress)
+{
+    modeling::ShapeMesh mesh;
+    mesh.edges.push_back(GptPanelLoop(panel,panel.pattern.outline,progress));
+    for(const auto& hole:panel.pattern.openings) { mesh.edges.push_back(GptPanelLoop(panel,hole,progress)); }
+    for(const auto& points:GptPanelPatches(panel,progress)) {
+        for(int last:{2,3}) {
+            modeling::MeshTriangle triangle; triangle.points={points[0],points[last-1],points[last]};
+            mesh.triangles.push_back(triangle);
         }
     }
     modeling::RefreshNormals(mesh); modeling::RefreshBounds(mesh); mesh.faceCount=1;

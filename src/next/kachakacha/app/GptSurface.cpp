@@ -46,7 +46,14 @@ Result<GptSurfaceCurve> Connected(GptSurfaceCurve curve,
         }
         inputs.push_back({{}, base::SegmentId(base::Uuid(bytes)), curve.segments[index]});
     }
-    auto chain = geometry::AnalyzeChain(inputs, tolerance);
+    auto chainTolerance=tolerance;
+    bool consecutivelyConnected=true;
+    for(std::size_t i=1;i<curve.segments.size();++i) {
+        consecutivelyConnected=consecutivelyConnected && geometry::Distance(curve.segments[i-1].EndPoint(),curve.segments[i].StartPoint())<=tolerance.modelLinearMm;
+    }
+    // Exact ordered polylines may contain short edges. Their spacing is not an endpoint gap.
+    if(consecutivelyConnected) { chainTolerance.interactiveJoinMm=tolerance.modelLinearMm; }
+    auto chain = geometry::AnalyzeChain(inputs, chainTolerance);
     if (!chain.HasValue()) {
         return Result<GptSurfaceCurve>::Failure(chain.Diagnostics());
     }
@@ -99,7 +106,7 @@ Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
         if (!allowed || curve.segments.empty()) {
             return Fail(curve.label + "の役割または線が不正です。", "作り方に合う役割を指定してください。");
         }
-        if (!request.loft && curve.role == kGptBoundaryRole) {
+        if (!request.loft && !request.panelPatches && curve.role == kGptBoundaryRole) {
             boundary.segments.insert(boundary.segments.end(), curve.segments.begin(), curve.segments.end());
             continue;
         }
@@ -107,7 +114,12 @@ Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
         if (!connected.HasValue()) { return Result<GptSurfaceRequest>::Failure(connected.Diagnostics()); }
         checked.push_back(connected.Value());
     }
-    if (request.loft) {
+    if(request.panelPatches) {
+        if(checked.empty()) { return Fail("部材の面区間がありません。","近似から生成し直してください。"); }
+        for(const auto& curve:checked) {
+            if(!curve.closed || curve.role!=kGptBoundaryRole) { return Fail("面区間が閉じていません。","近似から生成し直してください。"); }
+        }
+    } else if (request.loft) {
         if (checked.size() < 2) { return Fail("断面が2つ以上必要です。", "線を選び、断面を追加してください。"); }
         for (const auto& curve : checked) {
             if (curve.closed != checked.front().closed) {
@@ -131,7 +143,7 @@ Result<GptSurfaceRequest> ValidateGptSurface(GptSurfaceRequest request,
 Result<GptSurfaceRequest> ResolveGptSurface(const document::Document& document,
     const modeling::SnapScene& scene, const domain::CreateGuideSurfaceDefinition& definition)
 {
-    if (!definition.gptBuilder || (definition.method != kGptBoundaryMethod && definition.method != kGptSectionsMethod)
+    if (!definition.gptBuilder || (definition.method != kGptBoundaryMethod && definition.method != kGptSectionsMethod && definition.method != kGptPanelPatchesMethod)
         || definition.chains.size() != definition.roles.size()) {
         return Fail("GPT版の作り方または役割が不正です。", "外周または断面の入力を指定し直してください。");
     }
@@ -142,6 +154,7 @@ Result<GptSurfaceRequest> ResolveGptSurface(const document::Document& document,
     GptSurfaceRequest request;
     const auto sources = SourceScene(document, scene);
     request.loft = definition.method == kGptSectionsMethod;
+    request.panelPatches = definition.method == kGptPanelPatchesMethod;
     request.maximumDeviationMm = definition.gptToleranceMm;
     std::set<std::pair<base::EntityId, base::SegmentId>> used;
     for (std::size_t row = 0; row < definition.chains.size(); ++row) {

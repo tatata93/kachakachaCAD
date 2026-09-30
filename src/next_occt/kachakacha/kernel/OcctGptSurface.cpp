@@ -6,6 +6,8 @@
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRep_Builder.hxx>
+#include <TopoDS_Compound.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
@@ -63,6 +65,20 @@ Result<TopoDS_Shape> GenerateBoundary(const app::GptSurfaceRequest& request,
             "指定した外周と通る線から面を張れませんでした。", "線同士の交差や矛盾する高さを確認してください。"));
     }
     return Result<TopoDS_Shape>::Success(filling.Shape());
+}
+
+Result<TopoDS_Shape> GeneratePanelPatches(const app::GptSurfaceRequest& request,
+    const geometry::GeometryTolerance& tolerance)
+{
+    TopoDS_Compound compound; BRep_Builder builder; builder.MakeCompound(compound);
+    for(const auto& curve:request.curves) {
+        const auto wire=ToWire(curve.segments,tolerance.modelLinearMm);
+        if(!wire.HasValue()) { return Result<TopoDS_Shape>::Failure(wire.Diagnostics()); }
+        BRepBuilderAPI_MakeFace face(wire.Value(),true);
+        if(!face.IsDone()) { return Result<TopoDS_Shape>::Failure(MakeError("GPT-S003","部材の面区間を作れません。","区間の平面性を確認してください。")); }
+        builder.Add(compound,face.Face());
+    }
+    return Result<TopoDS_Shape>::Success(compound);
 }
 
 Result<TopoDS_Shape> GenerateSections(const app::GptSurfaceRequest& request,
@@ -130,7 +146,8 @@ Result<GuideSurfaceResult> BuildGptSurface(const app::GptSurfaceRequest& raw,
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         const auto& request = checked.Value();
-        const auto shape = request.loft ? GenerateSections(request, tolerance) : GenerateBoundary(request, tolerance);
+        const auto shape = request.panelPatches ? GeneratePanelPatches(request,tolerance)
+            : request.loft ? GenerateSections(request, tolerance) : GenerateBoundary(request, tolerance);
         if (!shape.HasValue()) { return Result<GuideSurfaceResult>::Failure(shape.Diagnostics()); }
         if (!BRepCheck_Analyzer(shape.Value()).IsValid()) {
             return Result<GuideSurfaceResult>::Failure(MakeError("GPT-S003",

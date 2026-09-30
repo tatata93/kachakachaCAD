@@ -93,6 +93,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     // 3通りの作り方の比べ(部材数・最大のずれ)がここに出る(引継ぎ 2026-09-17 の 3)。
     approximationLayout->addWidget(BuildApproxInput(approximationPage));
     approximationLayout->addWidget(BuildOptionsForm(approximationPage));
+    approximationLayout->addWidget(BuildGenerationOptions(approximationPage));
 
     auto* buttons = new QWidget(approximationPage);
     auto* buttonLayout = new QVBoxLayout(buttons);
@@ -755,35 +756,6 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
 //! 生成(正本 fabrication mock、matrix F-13/F-14)。「固定で作るもの」の欄をすぐ上に置き、
 //! 3枚の「作り方」カード(現在状態 / Flat 0% / Target 100%)がその設定どおりに作る。
 //! コンストラクタから分けたのは、コンストラクタを100行以内に保つため。
-QWidget* V2FabricationDock::BuildFreezeSection(QWidget* body)
-{
-    auto* freezeButtons = new QWidget(body);
-    auto* freezeLayout = new QVBoxLayout(freezeButtons);
-    freezeLayout->setContentsMargins(0, 0, 0, 0);
-    freezeLayout->setSpacing(2);
-    freeze_ = new QComboBox(freezeButtons);
-    freeze_->addItem(QStringLiteral("ワイヤーのみ"));
-    freeze_->addItem(QStringLiteral("部品のみ"));
-    freeze_->addItem(QStringLiteral("両方"));
-    auto* freezeOutputRow = new QWidget(freezeButtons);
-    auto* freezeOutputLayout = new QHBoxLayout(freezeOutputRow);
-    freezeOutputLayout->setContentsMargins(0, 0, 0, 0);
-    freezeOutputLayout->addWidget(new QLabel(QStringLiteral("固定で作るもの"), freezeOutputRow));
-    freezeOutputLayout->addWidget(freeze_, 1);
-    freezeLayout->addWidget(freezeOutputRow);
-    freezeLayout->addWidget(new QLabel(QStringLiteral("生成(作り方)"), freezeButtons));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("現在状態"), "fabrication.freeze_state", this));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("Flat 0%"), "fabrication.freeze_flat", this));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("Target 100%"), "fabrication.freeze_target", this));
-    for (QPushButton* card : generateCards_) {
-        freezeLayout->addWidget(card);
-    }
-    return freezeButtons;
-}
-
 //! 展開(matrix F-11/F-12)。作り方(自動展開 / 基準辺指定 / 複数部材配置)を選び、
 //! 配置(展開先・表裏)を見せ、「展開」ボタンで走らせる。
 //!
@@ -1227,6 +1199,7 @@ FreezeOutput V2FabricationDock::FreezeOutputChoice() const
     switch (freeze_->currentIndex()) {
     case 1:  return FreezeOutput::PartsOnly;
     case 2:  return FreezeOutput::Both;
+    case 3:  return FreezeOutput::WiresAndSurfaces;
     default: return FreezeOutput::WiresOnly;
     }
 }
@@ -1236,6 +1209,7 @@ void V2FabricationDock::SetFreezeOutput(kachakacha::v2::fabrication::FreezeOutpu
     loading_ = true;
     freeze_->setCurrentIndex(value == FreezeOutput::PartsOnly ? 1
             : value == FreezeOutput::Both                     ? 2
+            : value == FreezeOutput::WiresAndSurfaces          ? 3
                                                               : 0);
     loading_ = false;
 }

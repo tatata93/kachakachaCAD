@@ -461,4 +461,11 @@ void V2MainWindow::ConfirmApprox()
     AdoptCurrentDocument();
     RefreshFabricationView();
     SetStatus(QStringLiteral("製作モデルを作る: %1").arg(summary));
+    std::vector<kachakacha::v2::base::EntityId> modelIds;
+    for (const auto& item:made) {
+        for (const auto& entity:session_->GetDocument().Snapshot().entities) {
+            if(entity.id.ToString()==item.first) { modelIds.push_back(entity.id); }
+        }
+    }
+    AutomaticallyGenerate(modelIds);
 }

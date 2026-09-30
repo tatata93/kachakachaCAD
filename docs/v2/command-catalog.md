@@ -175,7 +175,7 @@ parameter schemaのdiscriminatorにする。
 | `fabrication.set_method` | 近似の方式を切り替える | なし | (設定のみ) | AT-FAB-015 |
 | `fabrication.freeze_output` | 固定で作るもの | なし | (設定のみ) | AT-FAB-011 |
 | `fabrication.set_connection_scope` | 接続スコープ | ワイヤー | Fabrication Feature更新 + CreateWire | AT-FAB-015 |
-| `fabrication.freeze_state` | 現在状態を固定 | panel、Wire種別、Part方式、板厚位置 | Wire/Part/両方 | AT-FAB-011,012,014 |
+| `fabrication.freeze_state` | 現在状態を固定 | panel、対象部材、生成内容・生成先、板厚位置 | 短辺を含むWire/近似面/Part。同一文書または別kcd2 | AT-FAB-011,012,014 |
 | `fabrication.freeze_flat` | 展開状態(0%)を線にする | 製作モデル1 | Wire(0% の輪郭)。曲げ具合は変えない | AT-FAB-011 |
 | `fabrication.freeze_target` | 目標形状(100%)を固定 | 製作モデル1 | Wire/Part/両方(100% の目標形状)。曲げ具合は変えない | AT-FAB-011 |
 | `fabrication.freeze_wires` | 輪郭を線にする | 製作モデル1 | Wire(いまの曲げ状態の輪郭)。固定で作るものの設定に関わらず線のみ | AT-FAB-011 |
@@ -230,3 +230,7 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 
 ### 近似の分割間隔（既存命令の設定）
 `fabrication.create` の帯近似と `fabrication.gpt_create` に「間隔を自動調整」を追加。偏差の大きい区間から細分化し、最小幅と部材数上限を守る。新命令や別リボン項目は増やさない。従来版の枚数指定は不等間隔への配分に使う。
+
+既存の生成命令は対象部材欄が空なら全体、番号指定なら該当部材のみを扱う。生成先は同一文書／別kcd2。
+近似の確定時にもワイヤー／ワイヤー＋近似面の自動生成を選択できる（既定は近似モデルのみ）。
+詳細: [FABRICATION_GENERATION.md](ui-redesign/FABRICATION_GENERATION.md)。新しい命令IDは追加しない。

@@ -128,6 +128,8 @@ bool V2MainWindow::IsFreezeCommand(std::string_view id)
 void V2MainWindow::RunFreezeCommand(std::string_view id)
 {
     FocusFabricationStageFor(id);   // 生成は製作の棚の 2 段目
+    if (id != "derived.freeze" && fabricationDock_->GenerationDestination()==1) { ExportFabricationGeneration(id); return; }
+    if (id != "derived.freeze" && !ValidateGenerationParts()) { return; }
     if (id == "derived.freeze") {
         FreezeSelectedDerived();
         return;
@@ -154,44 +156,21 @@ void V2MainWindow::RunFreezeCommand(std::string_view id)
 //! 1 回の元に戻すで消えるようにまとめる(線を 1 本ずつ入れていたので、戻すのも 1 本ずつだった)。
 void V2MainWindow::FreezeFlatOutline()
 {
-    const auto jobs = FreezeJobsFor(viewport_->Selection(), session_->GetDocument(),
-        fabricationModels_);
-    if (jobs.empty()) {
-        SetStatus(QStringLiteral(
-            "Flat Wire: 先に「近似」で近似モデルを作ってください。"));
-        return;
-    }
-    int wires = 0;
-    const bool committed = FreezeEachModel(session_->GetDocument(), "展開状態(0%)を線にする",
-        jobs, [&](const FreezeJob& job) {
-            if (!job.evaluated.bandMesh.has_value()) {
-                return FreezeFlatPanels(job.evaluated.panels, wires);   // 面ごとの方式は型紙の線そのもの
-            }
-            // 文書の作り方は触らず、写しを 0% にして展開の姿勢を取る。
-            kachakacha::v2::domain::CreateFabricationModelDefinition flat = job.definition;
-            flat.masterPercent = 0.0;
-            flat.creaseProgress.clear();
-            flat.bandProgress.clear();
-            const auto rails = kachakacha::v2::app::FoldedRailsOf(flat, job.evaluated, 0.0);
-            for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
-                const std::string label = job.modelName + " 部材" + std::to_string(band / 2 + 1)
-                    + " (展開 0%)";
-                if (AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str()).IsNil()
-                    || AddPlainWire(PolylineOf(rails[band + 1]), (label + " 上").c_str()).IsNil()) {
-                    return false;
-                }
-                wires += 2;
-            }
-            return true;
-        });
-    AdoptCurrentDocument();
-    if (!committed) {
-        SetStatus(QStringLiteral("Flat Wire: 途中で作れなかったので、作る前へ戻しました。"));
-        return;
-    }
-    SetStatus(QStringLiteral("Flat Wire: 展開状態(0%)の線を %1 本作りました%2。近似モデルは残っています。")
-            .arg(wires)
-            .arg(ModelCountNote(jobs.size())));
+    const auto jobs=FreezeJobsFor(viewport_->Selection(),session_->GetDocument(),fabricationModels_);
+    if(jobs.empty()) { SetStatus(QStringLiteral("先に近似モデルを選んでください。")); return; }
+    const auto saved=freezeOutput_; freezeOutput_=kachakacha::v2::fabrication::FreezeOutput::WiresOnly;
+    int wires=0;
+    const bool committed=FreezeEachModel(session_->GetDocument(),"展開状態の輪郭を生成",jobs,[&](const FreezeJob& job){
+        auto flat=job.definition; flat.masterPercent=0; flat.bandProgress.clear(); flat.creaseProgress.clear();
+        if(!job.evaluated.gptPanels.empty()) { return FreezeGptContours(flat,job.evaluated,wires); }
+        if(!job.evaluated.bandMesh) { return FreezeFlatPanels(job.evaluated.panels,wires); }
+        int w=0,s=0,p=0;
+        if(!FreezeWithDefinition(flat,job.modelName,job.evaluated,"展開 0%",w,s,p)) { return false; }
+        wires+=w; return true;
+    });
+    freezeOutput_=saved; AdoptCurrentDocument();
+    SetStatus(committed ? QStringLiteral("Flat Wire: 短辺を含む線を%1本生成しました。").arg(wires)
+                        : QStringLiteral("生成できなかったため、元へ戻しました。"));
 }
 
 kachakacha::v2::base::EntityId V2MainWindow::AddPlainWire(
@@ -280,7 +259,7 @@ void V2MainWindow::FreezeSelectedDerived()
     }
     AdoptCurrentDocument();
     if (!committed) {
-        SetStatus(QStringLiteral("現在状態を固定: 途中で作れなかったので、固定する前へ戻しました。"));
+        SetStatus(QStringLiteral("現在状態を固定: 作れなかったため元へ戻しました。\n") + StatusText());
         return;
     }
     SetStatus(QStringLiteral(
@@ -308,12 +287,13 @@ void V2MainWindow::FreezeFabricationState()
     std::string stateName = "型紙の形";
     const bool committed = FreezeEachModel(session_->GetDocument(), "現在状態を固定", jobs,
         [&](const FreezeJob& job) {
+            stateName = kachakacha::v2::app::FoldStateSummaryJa(job.definition);
             if (!job.evaluated.gptPanels.empty()) {
-                return FreezeGptContours(job.definition, job.evaluated, wires);
+                return FreezeGptContours(job.definition, job.evaluated, wires, &surfaces);
             }
             if (!job.evaluated.bandMesh.has_value()) {
                 // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
-                return FreezeFlatPanels(job.evaluated.panels, wires);
+                return FreezeFlatPanels(job.evaluated.panels, wires, &surfaces);
             }
             stateName = kachakacha::v2::app::FoldStateSummaryJa(job.definition);
             int w = 0;
@@ -330,7 +310,7 @@ void V2MainWindow::FreezeFabricationState()
         });
     AdoptCurrentDocument();
     if (!committed) {
-        SetStatus(QStringLiteral("現在状態を固定: 途中で作れなかったので、固定する前へ戻しました。"));
+        SetStatus(QStringLiteral("現在状態を固定: 作れなかったため元へ戻しました。\n") + StatusText());
         return;
     }
     SetStatus(QStringLiteral("現在状態を固定(%1): 線 %2 本、面 %3 枚、部品 %4 個にしました%5。")
@@ -359,11 +339,11 @@ void V2MainWindow::FreezeTargetShape()
         [&](const FreezeJob& job) {
             if (!job.evaluated.gptPanels.empty()) {
                 auto target = job.definition; target.masterPercent = 100; target.bandProgress.clear();
-                return FreezeGptContours(target, job.evaluated, wires);
+                return FreezeGptContours(target, job.evaluated, wires, &surfaces);
             }
             if (!job.evaluated.bandMesh.has_value()) {
                 // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
-                return FreezeFlatPanels(job.evaluated.panels, wires);
+                return FreezeFlatPanels(job.evaluated.panels, wires, &surfaces);
             }
             // 文書の作り方は触らず、写しを 100%(目標の形)にする。FreezeFlatOutline と同じ考え。
             kachakacha::v2::domain::CreateFabricationModelDefinition target = job.definition;
@@ -384,7 +364,7 @@ void V2MainWindow::FreezeTargetShape()
     AdoptCurrentDocument();
     if (!committed) {
         SetStatus(QStringLiteral(
-            "目標形状(100%)を固定: 途中で作れなかったので、固定する前へ戻しました。"));
+            "目標形状(100%)を固定: 途中で作れなかったので、固定する前へ戻しました。\n") + StatusText());
         return;
     }
     SetStatus(QStringLiteral(
@@ -420,6 +400,7 @@ void V2MainWindow::FreezeContourWires()
     std::string stateName = "型紙の形";
     const bool committed = FreezeEachModel(session_->GetDocument(), "輪郭を線にする", jobs,
         [&](const FreezeJob& job) {
+            stateName = kachakacha::v2::app::FoldStateSummaryJa(job.definition);
             if (!job.evaluated.gptPanels.empty()) {
                 return FreezeGptContours(job.definition, job.evaluated, wires);
             }
@@ -467,7 +448,9 @@ bool V2MainWindow::FreezeWithDefinition(
         session_->GetDocument(), "固定(" + stateName + ")");
     // 持ち上げ 0 で取る。画面では帯を離して見せるが、固定するのは本当の位置。
     const auto rails = kachakacha::v2::app::FoldedRailsOf(definition, evaluated, 0.0);
+    const auto selected=SelectedPartNumbers();
     for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
+        if (!selected.empty() && std::find(selected.begin(),selected.end(),band/2)==selected.end()) { continue; }
         const std::string label = modelName + " 部材"
             + std::to_string(band / 2 + 1) + " (" + stateName + ")";
         const auto bottom = AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str());
@@ -476,13 +459,21 @@ bool V2MainWindow::FreezeWithDefinition(
             return false;
         }
         wires += 2;
+        for (const auto ends : {std::pair{rails[band].front(),rails[band+1].front()},
+                                std::pair{rails[band].back(),rails[band+1].back()}}) {
+            const auto edge=PolylineOf({ends.first,ends.second});
+            if (!edge.empty()) {
+                if(AddPlainWire(edge,(label+" 短辺").c_str()).IsNil()) { return false; }
+                ++wires;
+            }
+        }
         if (freezeOutput_ == FreezeOutput::WiresOnly) {
             continue;
         }
         // 面: 2本のレールを断面にしたルールド面。作り方はワイヤーを指すので、
         // 開き直しても作り直せる。
         AdoptCurrentDocument();
-        const auto surfaceId = CreateGuideSurfaceFromWires({bottom, top}, label + " 面");
+        const auto surfaceId = CreateGuideSurfaceFromWires({bottom, top}, label + " 近似面");
         if (surfaceId.IsNil()) {
             return false;
         }
@@ -502,6 +493,7 @@ bool V2MainWindow::FreezeWithDefinition(
     const auto folded = kachakacha::v2::fabrication::FoldBandMesh(
         *evaluated.bandMesh, state.masterProgress, state.creaseFactors,
         state.unfoldBaseRail);
+    if (selected.empty()) {
     for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
              *evaluated.bandMesh, folded, ConnectionScopeCurves(definition),
              evaluated.maximumDeviationMm + 0.35)) {
@@ -511,6 +503,7 @@ bool V2MainWindow::FreezeWithDefinition(
             ++wires;
         }
     }
+    }
     AdoptCurrentDocument();
     return transaction.Commit();
 }
@@ -519,11 +512,14 @@ bool V2MainWindow::FreezeWithDefinition(
 //! 置き直さないのは、型紙で見えている形と1mmも違わせないためである。
 //! その近似モデルの部材だけを置く(全部の近似モデルの部材を置いていた)。まとめは呼ぶ側。
 bool V2MainWindow::FreezeFlatPanels(
-    const std::vector<kachakacha::v2::fabrication::PatternPanel>& panels, int& wires)
+    const std::vector<kachakacha::v2::fabrication::PatternPanel>& panels, int& wires, int* surfaces)
 {
     using kachakacha::v2::fabrication::PatternPlacement;
     PatternPlacement placement;
-    for (const auto& panel : panels) {
+    const auto selected=SelectedPartNumbers();
+    for (std::size_t index=0;index<panels.size();++index) {
+        if(!selected.empty() && std::find(selected.begin(),selected.end(),index)==selected.end()) { continue; }
+        const auto& panel=panels[index];
         const auto placed = kachakacha::v2::fabrication::PlacePanelCurves(panel, placement);
         if (!placed.HasValue()) {
             ReportDiagnostics(placed.Diagnostics());
@@ -533,10 +529,15 @@ bool V2MainWindow::FreezeFlatPanels(
         for (const auto& curve : placed.Value()) {
             segments.push_back(curve.segment);
         }
-        if (AddPlainWire(std::move(segments), "固定した部材").IsNil()) {
+        const auto boundary=AddPlainWire(std::move(segments), "固定した部材");
+        if (boundary.IsNil()) {
             return false;
         }
         ++wires;
+        if(freezeOutput_==kachakacha::v2::fabrication::FreezeOutput::WiresAndSurfaces) {
+            if(!GenerateApproxSurface({boundary},"生成した近似面")) { return false; }
+            if(surfaces) { ++*surfaces; }
+        }
     }
     return true;
 }
@@ -561,6 +562,7 @@ void V2MainWindow::CycleFreezeOutput()
     using kachakacha::v2::fabrication::FreezeOutput;
     freezeOutput_ = freezeOutput_ == FreezeOutput::WiresOnly ? FreezeOutput::PartsOnly
         : freezeOutput_ == FreezeOutput::PartsOnly           ? FreezeOutput::Both
+        : freezeOutput_ == FreezeOutput::Both                ? FreezeOutput::WiresAndSurfaces
                                                              : FreezeOutput::WiresOnly;
     RefreshFabricationDock();
     SetStatus(QStringLiteral("固定で作るもの: %1")

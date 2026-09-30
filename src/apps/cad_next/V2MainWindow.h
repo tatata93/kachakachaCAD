@@ -591,6 +591,10 @@ public:
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
+    bool ValidateGenerationParts();
+    void ExportFabricationGeneration(std::string_view id);
+    void AutomaticallyGenerate(const std::vector<kachakacha::v2::base::EntityId>& models);
+    bool GenerateApproxSurface(const std::vector<kachakacha::v2::base::EntityId>& wires,const std::string& label);
     //! 「Target 100%」。いまの曲げ具合を変えずに、100%(目標の形)の状態を固定する。
     void FreezeTargetShape();
     //! 「輪郭を線にする」(F-14)。固定で作るものの設定に関わらず線のみ。
@@ -858,7 +862,7 @@ private:
     void BeginGptSurface();
     void BeginGptFabrication();
     bool FreezeGptContours(const kachakacha::v2::domain::CreateFabricationModelDefinition& definition,
-        const kachakacha::v2::app::FabricationEvaluation& evaluation, int& wires);
+        const kachakacha::v2::app::FabricationEvaluation& evaluation, int& wires, int* surfaces=nullptr);
     void AppendGptFabricationViews(std::vector<V2Viewport::ShapeView>& shapes) const;
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
     //! 自分の棚を持つ道具(立体・辺の丸め面取り・シェル分割・面にする)を、keep 以外やめる。
@@ -933,7 +937,7 @@ private:
         kachakacha::v2::fabrication::FreezeOutput::WiresOnly;
     //! V2 方式(曲げ状態の形が無い)の固定。型紙の線をそのまま置く。
     [[nodiscard]] bool FreezeFlatPanels(
-        const std::vector<kachakacha::v2::fabrication::PatternPanel>& panels, int& wires);
+        const std::vector<kachakacha::v2::fabrication::PatternPanel>& panels, int& wires, int* surfaces = nullptr);
     void FreezeFlatOutline();
     void ShowPartEditShelf();
     void FocusFabricationStageFor(std::string_view id);

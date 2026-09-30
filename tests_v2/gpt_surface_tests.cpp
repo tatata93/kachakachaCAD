@@ -312,4 +312,19 @@ KACHA_V2_TEST(gpt_surface, automatic_boundary_does_not_close_gaps_or_drop_extern
     Require(result.HasValue() && result.Value().definition.chains.size() == 5, "outside input retained for deviation validation");
 }
 
+KACHA_V2_TEST(gpt_surface, connected_short_edges_are_not_endpoint_gaps)
+{
+    auto request=Rectangle();
+    request.curves.front().segments={Line({0,0,0},{40,0,0}),Line({40,0,0},{40,20,0}),
+        Line({40,20,0},{0,20,0}),Line({0,20,0},{0,0,0})};
+    const auto first=request.curves.front().segments.front();
+    const auto middle=first.StartPoint()+(first.EndPoint()-first.StartPoint())*0.0001;
+    auto& edges=request.curves.front().segments;
+    edges.front()=Line(middle,first.EndPoint());
+    edges.insert(edges.begin(),Line(first.StartPoint(),middle));
+    Require(app::ValidateGptSurface(request,{}).HasValue(),"short connected edge remains valid");
+    edges.front()=Line(first.StartPoint(),middle+geometry::Vector3{0,0,.005});
+    Require(!app::ValidateGptSurface(request,{}).HasValue(),"real endpoint gap still rejected");
+}
+
 KACHA_V2_TEST_MAIN("gpt_surface_tests")

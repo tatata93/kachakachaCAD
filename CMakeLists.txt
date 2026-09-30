@@ -1036,6 +1036,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestShellSplit.cpp
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
+        src/apps/cad_next/V2SelfTestGeneration.cpp
         src/apps/cad_next/V2SelfTestGptFabrication.cpp
     src/apps/cad_next/V2SelfTestGptSurface.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
@@ -1133,6 +1134,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2SelfTestEdit.cpp
         src/apps/cad_next/V2ExportCommands.cpp
+        src/apps/cad_next/V2GenerationCommands.cpp
+        src/apps/cad_next/V2FabricationGenerationUi.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
         src/apps/cad_next/V2GuideCommands.cpp
         src/apps/cad_next/V2GuideTableCommands.cpp

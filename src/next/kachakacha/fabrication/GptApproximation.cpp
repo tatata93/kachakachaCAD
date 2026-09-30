@@ -396,7 +396,18 @@ geometry::Vector3 GptApproxPanel::Point(Point2 flat,double progress) const
 std::vector<Vector3> GptPanelLoop(const GptApproxPanel& panel,const std::vector<Point2>& loop,double progress)
 {
     std::vector<Vector3> out;
-    for (const auto& p:loop) { out.push_back(panel.Point(p,progress)); }
+    for (std::size_t i=0;i<loop.size();++i) {
+        const auto a=loop[i],b=loop[(i+1)%loop.size()];
+        out.push_back(panel.Point(a,progress));
+        if(std::abs(b.u-a.u)<1e-10) { continue; }
+        std::vector<double> fractions;
+        for(const auto position:panel.lengths) {
+            const double t=(position-a.u)/(b.u-a.u);
+            if(t>1e-9 && t<1-1e-9) { fractions.push_back(t); }
+        }
+        std::sort(fractions.begin(),fractions.end());
+        for(const auto t:fractions) { out.push_back(panel.Point({a.u+(b.u-a.u)*t,a.v+(b.v-a.v)*t},progress)); }
+    }
     if (!out.empty()) { out.push_back(out.front()); }
     return out;
 }

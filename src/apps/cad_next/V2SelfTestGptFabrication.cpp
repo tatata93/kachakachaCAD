@@ -18,6 +18,10 @@
 #include <QIODevice>
 namespace kachakacha::v2::selftest {
 bool MakeGptHeadFixture(V2MainWindow& window);
+bool GenerationSelectedSurface(V2MainWindow& window);
+bool GenerationSeparateDocument(V2MainWindow& window);
+bool GenerationGptAutomatic(V2MainWindow& window);
+bool GenerationBendStates(V2MainWindow& window);
 bool MakeCurvedGuideSurface(V2MainWindow& window);
 namespace {
 bool ClickGpt(V2MainWindow& window,const char* name)
@@ -222,6 +226,10 @@ std::vector<SelfTestCase> GptFabricationCases()
         {"HP-GPT-F03 自動間隔・両方の棚・保存・型紙",AdaptiveControls},
         {"HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",ClassicAdaptive},
         {"HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",SmallAdaptivePreview},
-        {"HP-GPT-F06 取消と設定変更から近似をやり直す",RestartAdaptivePreview}};
+        {"HP-GPT-F06 取消と設定変更から近似をやり直す",RestartAdaptivePreview},
+        {"HP-GEN-01 自動生成・選択部材・短辺・近似面・保存",GenerationSelectedSurface},
+        {"HP-GEN-02 選択部材の別文書生成・保存取消",GenerationSeparateDocument},
+        {"HP-GEN-03 GPT近似確定時のワイヤーと面生成",GenerationGptAutomatic},
+        {"HP-GEN-04 選択部材の0・37・100%生成形状",GenerationBendStates}};
 }
 }

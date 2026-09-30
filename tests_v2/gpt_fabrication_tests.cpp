@@ -3,6 +3,7 @@
 #include "kachakacha/kernel/OcctGptFabrication.h"
 #include "kachakacha/kernel/OcctGptSurface.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctExtrude.h"
 #include <cmath>
 #include <algorithm>
 #include <limits>
@@ -139,6 +140,47 @@ KACHA_V2_TEST(gpt_fabrication, owners_head_becomes_few_manufacturable_panels)
     Require(adaptive.Value().reachedTolerance,adaptive.Value().summaryJa);
     Require(adaptive.Value().panels.size()<=12,"adaptive head respects same total panel budget");
     kernel::ReleaseShape(surface.Value().handle);
+}
+#endif
+KACHA_V2_TEST(gpt_fabrication, generated_boundary_follows_profile_breaks)
+{
+    fabrication::GptApproxPanel panel; panel.u={1,0,0}; panel.v={0,1,0}; panel.normal={0,0,1};
+    panel.profile={{0,0},{1,0},{1,1}}; panel.lengths={0,1,2};
+    const std::vector<geometry::Point2> rectangle{{0,0},{2,0},{2,1},{0,1}};
+    for(const double progress:{0.0,.37,1.0}) {
+        const auto loop=fabrication::GptPanelLoop(panel,rectangle,progress);
+        Require(loop.size()==7,"both long edges include the bend");
+        double length=0;
+        for(std::size_t i=1;i<loop.size();++i) { length+=geometry::Distance(loop[i-1],loop[i]); }
+        RequireNear(length,6.,1e-8,"closed boundary preserves its actual length through bending");
+    }
+}
+#ifdef KACHACAD_V2_WITH_OCCT
+KACHA_V2_TEST(gpt_fabrication, generated_panel_faces_preserve_holes_and_bend)
+{
+    fabrication::GptApproxPanel panel; panel.u={1,0,0}; panel.v={0,1,0}; panel.normal={0,0,1};
+    panel.profile={{0,0},{1,0},{1,1}}; panel.lengths={0,1,2};
+    panel.pattern.outline={{0,0},{2,0},{2,2},{0,2}};
+    panel.pattern.openings={{{.3,.5},{.7,.5},{.7,1.5},{.3,1.5}}};
+    for(const double progress:{0.0,.37,1.0}) {
+        app::GptSurfaceRequest request; request.panelPatches=true;
+        for(const auto& patch:fabrication::GptPanelPatches(panel,progress)) {
+            app::GptSurfaceCurve curve;
+            for(std::size_t i=0;i<patch.size();++i) {
+                const auto edge=geometry::CurveSegment::MakeLine(patch[i],patch[(i+1)%patch.size()]);
+                if(edge.HasValue()) { curve.segments.push_back(edge.Value()); }
+            }
+            request.curves.push_back(curve);
+        }
+        const auto made=kernel::BuildGptSurface(request,{});
+        Require(made.HasValue(),made.FirstMessageJa());
+        RequireNear(made.Value().areaMm2,3.6,1e-6,"hole area and bend preserve surface area");
+        const auto hole=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point({.5,1},progress));
+        Require(hole.HasValue() && hole.Value()>.19,"opening is not capped");
+        const auto onFace=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point({1.5,1},progress));
+        Require(onFace.HasValue() && onFace.Value()<1e-6,"bent point lies on generated face");
+        kernel::ReleaseShape(made.Value().handle);
+    }
 }
 #endif
 KACHA_V2_TEST_MAIN("gpt_fabrication_tests")

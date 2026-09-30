@@ -179,7 +179,8 @@
         <figure><img src="manual/images/v2-steps-fabrication.png" alt="製作工程の手順"><figcaption>元形状、近似条件、役割線、組立状態、型紙の順に確認します。</figcaption></figure>
         <h3>境界線の役割</h3><table class="compact"><thead><tr><th>線</th><th>役割</th><th>結果</th></tr></thead><tbody><tr><td>閉じた輪</td><td>開口</td><td>窓、ライト穴などの抜き穴</td></tr><tr><td>開いた線</td><td>折り線</td><td>部材を切らずに折る線</td></tr><tr><td>開いた線</td><td>切れ目</td><td>部材を分離しないrelief cut</td></tr></tbody></table>
         <p>ライトや窓は曲面へ投影した閉じたワイヤーを開口に割り当てます。開口は近似面の多角化とは別に保持され、型紙プレビューでも穴として確認します。</p>
-        <h3>組み立てスライダー</h3><p>0%は展開状態、100%は組み立て状態です。途中はヒンジ軸まわりの剛体回転で補間するため、辺長、部材面積、厚み、体積を伸縮させません。任意位置で止め、<b>現在状態を固定</b>すると、ワイヤーのみ、部品のみ、または両方を独立オブジェクトとして作れます。</p>
+        <h3>確定時にも生成する</h3><p>近似の条件欄で「確定時：ワイヤーも生成」または「確定時：ワイヤー＋近似面も生成」を選べます。「近似モデルのみ」なら、後から製作の生成欄で作ります。従来版・GPT版の両方で指定できます。近似面は厚みのない形状ガイドです。独立生成は元の近似モデルを残し、後の曲げ変更には追従しません。確定後の生成を取り消しても近似モデルは残ります。</p>
+        <h3>組み立てスライダー</h3><p>0%は展開状態、100%は組み立て状態です。途中はヒンジ軸まわりの剛体回転で補間するため、辺長、部材面積、厚み、体積を伸縮させません。任意位置で止め、<b>現在状態を固定</b>すると、ワイヤーのみ、ワイヤー＋近似面、または厚み付き部品を独立オブジェクトとして作れます。対象部材に番号があればその部材だけ、空欄なら全体を生成します。短辺も含む輪郭になります。生成先は同じkcd2内／別のkcd2ファイルから選べます。別ファイルへの生成では元の文書を変更しません。</p>
         <figure><img src="manual/images/v2-mode-fabrication.png" alt="製作モデルの組立スライダー"><figcaption>元の理想形と製作近似を別に保ち、組立途中を確認します。</figcaption></figure>
         <h3>型紙プレビュー</h3><p><b>型紙を作る</b>と、型紙表示に外周、開口、折り線、切れ目が出ます。紙サイズや重なりを確認してから1:1 PDF、SVG、DXFへ出します。</p>
         <figure><img src="manual/images/v2-steps-output.png" alt="出力工程"><figcaption>対象と形式を選び、検査を通してから保存します。</figcaption></figure>
@@ -337,9 +338,9 @@
           <tr data-command="fabrication.create_pattern"><td>型紙を作る</td><td><code>fabrication.create_pattern</code></td><td>部材から平面型紙。</td></tr>
           <tr data-command="fabrication.set_assembly"><td>組立状態</td><td><code>fabrication.set_assembly</code></td><td>0～100%の途中を表示。</td></tr>
           <tr data-command="fabrication.set_method"><td>近似の方式を切り替える</td><td><code>fabrication.set_method</code></td><td>帯近似と面分類を切替。</td></tr>
-          <tr data-command="fabrication.freeze_output"><td>固定で作るもの</td><td><code>fabrication.freeze_output</code></td><td>線・部品・両方を切替。</td></tr>
+          <tr data-command="fabrication.freeze_output"><td>固定で作るもの</td><td><code>fabrication.freeze_output</code></td><td>生成内容を指定。ワイヤー＋近似面は生成欄で選択。</td></tr>
           <tr data-command="fabrication.set_connection_scope"><td>接続スコープ</td><td><code>fabrication.set_connection_scope</code></td><td>周辺線を近似形状へ追従。</td></tr>
-          <tr data-command="fabrication.freeze_state"><td>現在状態を固定</td><td><code>fabrication.freeze_state</code></td><td>任意組立率を独立要素へ。</td></tr>
+          <tr data-command="fabrication.freeze_state"><td>現在状態を固定</td><td><code>fabrication.freeze_state</code></td><td>対象部材の任意組立率を短辺込みのワイヤー／近似面へ。同じ文書または別のkcd2へ生成。</td></tr>
           <tr data-command="fabrication.freeze_flat"><td>展開状態(0%)を線にする</td><td><code>fabrication.freeze_flat</code></td><td>曲げ具合を変えずに 0% の輪郭を線へ。</td></tr>
           <tr data-command="fabrication.freeze_target"><td>目標形状(100%)を固定</td><td><code>fabrication.freeze_target</code></td><td>曲げ具合を変えずに 100% の目標形状を固定。</td></tr>
           <tr data-command="fabrication.freeze_wires"><td>輪郭を線にする</td><td><code>fabrication.freeze_wires</code></td><td>いまの曲げ状態の輪郭だけを線にする(固定で作るものの設定に関わらず線のみ)。</td></tr>
@@ -365,5 +366,6 @@
       });
     })();
   </script>
+<p>GPT版の生成した近似面は、部材の曲げ区間から直接作ります。復元に使う区間境界のワイヤーは非表示で保存されます。生成した形を含む文書は新しい実行ファイルで開いてください。</p>
 </body>
 </html>

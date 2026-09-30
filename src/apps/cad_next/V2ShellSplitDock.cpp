@@ -79,7 +79,22 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
+    layout->addWidget(MakeClearRow(body, QStringLiteral("部品"), &partValue_, &clearPart_));
+    facesRow_ = MakeClearRow(body, QStringLiteral("抜く面"), &facesValue_, &clearFaces_);
+    layout->addWidget(facesRow_);
+    QObject::connect(clearPart_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearPartHandler_) {
+            clearPartHandler_();
+        }
+    });
+    QObject::connect(clearFaces_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearFacesHandler_) {
+            clearFacesHandler_();
+        }
+    });
+
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* methodRow = new QHBoxLayout();
     // 名前は短く(右の棚は狭い画面でも窓を押し広げない幅に収める。PC 2f92305 で「狭い画面でも
     // 部品がはみ出さない」が 1024px → 1122px になった)。説明はツールチップへ。
@@ -100,22 +115,7 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
     }
     layout->addLayout(methodRow);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 入力")));
-    layout->addWidget(MakeClearRow(body, QStringLiteral("部品"), &partValue_, &clearPart_));
-    facesRow_ = MakeClearRow(body, QStringLiteral("抜く面"), &facesValue_, &clearFaces_);
-    layout->addWidget(facesRow_);
-    QObject::connect(clearPart_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearPartHandler_) {
-            clearPartHandler_();
-        }
-    });
-    QObject::connect(clearFaces_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearFacesHandler_) {
-            clearFacesHandler_();
-        }
-    });
-
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 設定")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("設定")));
     thicknessRow_ = MakeSpinRow(body, QStringLiteral("肉厚"), QStringLiteral("shellSplitThickness"),
         0.001, &thickness_);
     layout->addWidget(thicknessRow_);
@@ -141,7 +141,7 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
         }
     });
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -157,6 +157,7 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
             confirmHandler_();
         }
     });
+    PinToolActions(this, cancel_, confirm_);
 }
 
 void V2ShellSplitDock::ShowInput(const kachakacha::v2::app::ShellSplitInputState& state,

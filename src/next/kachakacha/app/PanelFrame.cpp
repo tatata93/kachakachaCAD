@@ -28,8 +28,8 @@ namespace {
 [[nodiscard]] int Rank(PanelSectionKind kind) noexcept
 {
     switch (kind) {
-    case PanelSectionKind::Method:   return 0;
-    case PanelSectionKind::Input:    return 1;
+    case PanelSectionKind::Method:   return 1;
+    case PanelSectionKind::Input:    return 0;
     case PanelSectionKind::Settings: return 2;
     case PanelSectionKind::Common:   return 3;
     case PanelSectionKind::State:    return 4;
@@ -100,7 +100,7 @@ std::string PanelSectionOrderProblemJa(const std::vector<std::string>& titlesJa)
         }
         if (rank < highest) {
             return "「" + title + "」が「" + highestTitle + "」より後ろにあります"
-                   "(約束: 作り方 → 入力 → 設定 → 共通 → 状態)。";
+                   "(約束: 入力 → 作り方 → 設定 → 共通 → 状態)。";
         }
         if (rank > highest) {
             highest = rank;

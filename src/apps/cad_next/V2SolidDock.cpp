@@ -55,11 +55,11 @@ V2SolidDock::V2SolidDock(QWidget* parent)
     toolName_->setFont(font);
     layout->addWidget(toolName_);
 
-    BuildMethods(layout);
     BuildInputs(layout);
+    BuildMethods(layout);
     BuildSettings(layout);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -76,12 +76,13 @@ V2SolidDock::V2SolidDock(QWidget* parent)
             confirmHandler_();
         }
     });
+    PinToolActions(this, cancel_, confirm_);
 }
 
 //! 1. 作り方。3 枚のカード。字と押せるかは作り方ごとに core の表(SolidMethodCards)から。
 void V2SolidDock::BuildMethods(QVBoxLayout* layout)
 {
-    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("作り方")));
     auto* row = new QHBoxLayout();
     for (std::size_t index = 0; index < cards_.size(); ++index) {
         auto* card = new QPushButton(widget());
@@ -112,7 +113,7 @@ void V2SolidDock::BuildMethods(QVBoxLayout* layout)
 //! 2. 入力。輪郭(ロフト立体は断面)と、回転軸 / 経路。
 void V2SolidDock::BuildInputs(QVBoxLayout* layout)
 {
-    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("2. 入力")));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("入力")));
     BuildSlotRow(layout, profile_, SolidSlot::Profiles);
     BuildSlotRow(layout, second_, SolidSlot::Axis);
 }
@@ -148,7 +149,7 @@ void V2SolidDock::BuildSlotRow(QVBoxLayout* layout, SlotRow& row, SolidSlot slot
 //! 3. 設定。角度(回転体)・姿勢(スイープ)・操作と相手。
 void V2SolidDock::BuildSettings(QVBoxLayout* layout)
 {
-    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("3. 設定")));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("設定")));
     auto* angleRow = new QHBoxLayout();
     angleLabel_ = new QLabel(QStringLiteral("角度"), widget());
     angleRow->addWidget(angleLabel_);

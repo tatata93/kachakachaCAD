@@ -6,6 +6,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2Viewport.h"
 
 #include <QApplication>
 #include <QString>
@@ -24,6 +25,8 @@ namespace {
 [[nodiscard]] bool RunOneCase(const SelfTestCase& item)
 {
     V2MainWindow window;
+    // 既存の2D作図ケースの明示的な前提。起動・新規の視点は別ケースで検査する。
+    window.Viewport().SetViewDirection(ViewDirection::Top);
     // 画面を出さずに試すので、ファイルダイアログを出させない。
     // 出すと、そこで止まったまま返ってこない。
     window.SetPathChooser([](bool) { return QString(); });

@@ -311,7 +311,7 @@ using kachakacha::v2::domain::Visibility;
     if (!Explain("案が出ている", window.PendingPartitionShown())) {
         return false;
     }
-    window.FabricationDock().SetPartNumbersText(QString());
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("すべて"));
     window.FabricationDock().SetAssemblyPercent(40.0);
     window.FabricationDock().PressApplyAssembly();
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
@@ -326,7 +326,7 @@ using kachakacha::v2::domain::Visibility;
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     // 値を戻しておく。以降の枚数の見比べを、この寄り道で狂わせない。
-    window.FabricationDock().SetPartNumbersText(QString());
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("すべて"));
     window.FabricationDock().SetAssemblyPercent(0.0);
     window.FabricationDock().PressApplyAssembly();
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
@@ -397,10 +397,10 @@ using kachakacha::v2::domain::Visibility;
         return false;
     }
     auto& dock = window.FabricationDock();
-    // まず空欄。1枚目の半径が出る。
+    // 対象なしでは半径を出さず、理由を示す。
     dock.SetPartNumbersText(QString());
     window.RefreshBendRadius();
-    if (!Explain("空欄なら半径の欄は触れる", dock.RadiusUsable())) {
+    if (!Explain("空欄では半径を出さない", !dock.RadiusUsable())) {
         return false;
     }
     // 読めない字を書く。**値ではなく理由が出る。**

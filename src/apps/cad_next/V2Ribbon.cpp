@@ -22,6 +22,21 @@ namespace {
     return QString::fromUtf8(std::string(value).c_str());
 }
 
+QAction* ToolProxy(QAction* source, QWidget* parent, std::function<void()> run)
+{
+    auto* action = new QAction(parent);
+    const auto sync = [source, action] {
+        action->setCheckable(source->isCheckable());
+        action->setChecked(source->isChecked());
+        action->setEnabled(source->isEnabled());
+        action->setToolTip(source->toolTip());
+    };
+    sync();
+    QObject::connect(source, &QAction::changed, action, sync);
+    QObject::connect(action, &QAction::triggered, action, [run] { run(); });
+    return action;
+}
+
 } // namespace
 
 V2Ribbon::V2Ribbon(QWidget* parent)
@@ -144,7 +159,12 @@ void V2Ribbon::RebuildTools()
             const bool plain = !tool.Blocked() && !tool.surfaceMethod.has_value()
                 && !tool.measureMode.has_value() && lookup_;
             if (plain) {
-                action = lookup_(tool.commandId);
+                if (auto* source = lookup_(tool.commandId)) {
+                    action = ToolProxy(source, this, [this, tool] {
+                        if (variantHandler_) variantHandler_(tool);
+                    });
+                    entry.ownAction = action;
+                }
             }
             if (action == nullptr) {
                 // 作り方つき、または押せない道具。帯が自分の QAction を持つ。

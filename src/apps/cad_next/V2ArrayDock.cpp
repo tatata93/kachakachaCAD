@@ -42,7 +42,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(8);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* methodRow = new QWidget(body);
     auto* methodLayout = new QHBoxLayout(methodRow);
     methodLayout->setContentsMargins(0, 0, 0, 0);
@@ -73,11 +73,10 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     hint_->setWordWrap(true);
     layout->addWidget(hint_);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 設定")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("設定")));
     auto* form = new QFormLayout();
     layout->addLayout(form);
     count_ = new QSpinBox(body);
-    // 上限は core(ArrayPlan)と同じ 200。打ち間違いで画面が固まらないようにする。
     count_->setRange(2, 200);
     count_->setValue(5);
     count_->setToolTip(QStringLiteral("元のものを含めた数です。5 なら元 + 写し4つ。"));
@@ -134,6 +133,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
 
     setWidget(body);
     ApplyMethodVisibility();
+    PinToolActions(this, cancel_, confirm_);
 }
 
 void V2ArrayDock::ApplyMethodVisibility()

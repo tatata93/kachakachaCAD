@@ -182,7 +182,7 @@ V2MainWindow::V2MainWindow()
 
     viewport_ = new V2Viewport(*session_);
     viewport_->SetWorkPlane(plane);
-    viewport_->SetViewDirection(ViewDirection::Top);
+    viewport_->SetViewDirection(ViewDirection::Isometric);
     // 正本の一番下の帯。3D の下に置く(UI の正本の footer)。
     // 状態の帯へ相乗りさせると、日本語の案内に押されて右が切れる。
     auto* central = new QWidget(this);
@@ -943,6 +943,8 @@ void V2MainWindow::RunFileCommand(std::string_view id)
     if (id == "file.new") {
         AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
         documentPath_.clear();
+        viewport_->SetViewDirection(ViewDirection::Isometric);
+        viewport_->FitToDocument();
         SetStatus(QStringLiteral("新しい文書にしました。"));
         return;
     }

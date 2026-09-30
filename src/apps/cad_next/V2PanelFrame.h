@@ -25,3 +25,10 @@ void StylePanelSectionTitle(QLabel* label);
 
 //! 既にあるボタンを、共通の枠のキャンセル・確定として名前を付ける(字も揃える)。
 void MarkCancelConfirm(QPushButton* cancel, QPushButton* confirm);
+
+//! 設定だけをスクロールさせ、取消・確定欄を下端に固定する。
+[[nodiscard]] QWidget* MakeScrollableToolPanel(QWidget* body, QWidget* footer);
+
+class QDockWidget;
+//! 既存の実行ボタンを共通の固定欄に移す（接続と状態は保持）。
+void PinToolActions(QDockWidget* dock, QPushButton* cancel, QPushButton* confirm);

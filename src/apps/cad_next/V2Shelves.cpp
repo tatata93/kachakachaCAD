@@ -65,7 +65,11 @@ void V2MainWindow::BuildEditingShelves()
     });
     fabricationDock_->SetPolicyHandler([this](int policy) { ChooseApproxPolicy(policy); });
     fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
-        SetAssemblyPercent(percent, parts);
+        if (parts.trimmed().isEmpty()) {
+            SetStatus(QStringLiteral("対象部材を選ぶか「すべて」を指定してください。"));
+            return;
+        }
+        SetAssemblyPercent(percent, parts == QStringLiteral("すべて") ? QString() : parts);
         // 曲げ具合と半径は同じことの言い換えである。片方を動かしたら両方を映す。
         RefreshBendRadius();
     });

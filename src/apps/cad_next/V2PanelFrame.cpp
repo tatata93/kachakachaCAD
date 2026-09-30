@@ -6,6 +6,10 @@
 #include <QPushButton>
 #include <QString>
 #include <QWidget>
+#include <QScrollArea>
+#include <QVBoxLayout>
+#include <QFrame>
+#include <QDockWidget>
 
 QLabel* MakePanelSectionTitle(QWidget* parent, const QString& text)
 {
@@ -63,4 +67,31 @@ void MarkCancelConfirm(QPushButton* cancel, QPushButton* confirm)
             confirm->setToolTip(QStringLiteral("いまの入力で作ります(Enter と同じ)。"));
         }
     }
+}
+
+QWidget* MakeScrollableToolPanel(QWidget* body, QWidget* footer)
+{
+    auto* panel = new QWidget(body->parentWidget());
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(panel);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(body);
+    layout->addWidget(scroll, 1);
+    footer->setObjectName(QStringLiteral("toolActionFooter"));
+    layout->addWidget(footer);
+    return panel;
+}
+
+void PinToolActions(QDockWidget* dock, QPushButton* cancel, QPushButton* confirm)
+{
+    auto* footer = new QWidget(dock);
+    auto* actions = new QHBoxLayout(footer);
+    actions->setContentsMargins(6, 4, 6, 4);
+    actions->addWidget(cancel);
+    actions->addStretch(1);
+    actions->addWidget(confirm);
+    dock->setWidget(MakeScrollableToolPanel(dock->widget(), footer));
 }

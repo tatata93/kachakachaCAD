@@ -68,7 +68,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
 
     // 1. 入力。**対象と輪郭を別の欄にする**(UI の正本「1. 入力」)。
     // 1本の文字列にしていたので、どちらを選び直すのか読めなかった。
-    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("1. 入力")));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("入力")));
     auto* targetRow = new QHBoxLayout();
     targetRow->addWidget(new QLabel(QStringLiteral("対象"), body_));
     targetValue_ = new QLabel(body_);
@@ -93,7 +93,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     input_->setWordWrap(true);
     input_->setVisible(false);
 
-    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("2. 結果")));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("結果")));
 
 }
 
@@ -215,7 +215,7 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     BuildOptionRows(layout);
 
     // 3. 状態と、下の3つのボタン(UI の正本「3. 状態」と actions)。
-    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("3. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("状態")));
     result_ = new QLabel(body_);
     result_->setWordWrap(true);
     layout->addWidget(result_);

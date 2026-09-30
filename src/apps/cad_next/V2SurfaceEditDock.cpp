@@ -65,10 +65,9 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
-    BuildOperationCards(layout);
 
     // 2. 入力。欄の名前と入れたものを 1 行ずつ。3D で押すと入り、押し直すと外れる。
-    auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("2. 入力(3D で押すと入り、押し直すと外れます)"));
+    auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("入力(3D で押すと入り、押し直すと外れます)"));
     layout->addWidget(inputTitle);
     entries_ = new QTreeWidget(body);
     entries_->setColumnCount(2);
@@ -96,10 +95,11 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
         }
     });
 
+    BuildOperationCards(layout);
     BuildOptions(layout);
 
     // 4. 状態。
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -134,7 +134,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
 void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)
 {
     // 1. 作り方。押された形がいまの作り方。
-    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("作り方")));
     const auto& operations = kachakacha::v2::app::SurfaceEditOperations();
     for (std::size_t index = 0; index < operations.size() && index < cards_.size(); ++index) {
         const SurfaceEditOperation operation = operations[index];
@@ -155,7 +155,7 @@ void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)
 void V2SurfaceEditDock::BuildOptions(QVBoxLayout* layout)
 {
     // 3. 設定。作り方で使うものだけ出す。
-    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("3. 設定")));
+    layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("設定")));
     auto* form = new QFormLayout();
     continuityALabel_ = new QLabel(QStringLiteral("滑らかさ"), widget());
     continuityA_ = new QComboBox(widget());

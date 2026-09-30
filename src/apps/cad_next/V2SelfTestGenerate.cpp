@@ -137,6 +137,14 @@ using kachakacha::v2::domain::EntityKind;
             dock.ClickGenerateCard(QStringLiteral("Target 100%")))) {
         return false;
     }
+    if (!Explain("条件選択だけでは生成しない", CountOfKind(window, EntityKind::Wire) == wiresBefore)) return false;
+    dock.SetPartNumbersText(QString());
+    dock.ClickGenerateConfirm();
+    if (!Explain("空欄では生成せず対象指定を案内する",
+        CountOfKind(window, EntityKind::Wire) == wiresBefore
+        && window.StatusText().contains(QStringLiteral("対象部材")))) return false;
+    dock.SetPartNumbersText(QStringLiteral("すべて"));
+    if (!Explain("明示した全対象で確定できる", dock.ClickGenerateConfirm())) return false;
     // F-15: 作ったものは一覧の近似モデルの下の「生成物」に並び、ワイヤーの節には増えない。
     const int made = CountOfKind(window, EntityKind::Wire) - wiresBefore
         + CountOfKind(window, EntityKind::Part) - partsBefore
@@ -182,6 +190,8 @@ using kachakacha::v2::domain::EntityKind;
             dock.ClickGenerateCard(QStringLiteral("Flat 0%")))) {
         return false;
     }
+    if (!Explain("Flatを選んだだけでは生成しない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
+        || !Explain("確定で生成する", dock.ClickGenerateConfirm())) return false;
     if (!Explain("線が増える", CountOfKind(window, EntityKind::Wire) > wiresBefore)
         || !Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1)) {
         return false;

@@ -590,10 +590,13 @@ V2MainWindow::PartNumberSelection V2MainWindow::ReadPartNumbers() const
         return selection;   // 棚が無い。空欄と同じ
     }
     const QString text = fabricationDock_->PartNumbersText().trimmed();
-    if (text.isEmpty()) {
-        return selection;   // 空欄。読めないのではない
-    }
+    if (text == QStringLiteral("すべて")) return selection;
     selection.blank = false;
+    if (text.isEmpty()) {
+        selection.unreadable = true;
+        selection.whyJa = "対象部材を選ぶか「すべて」を指定してください。";
+        return selection;
+    }
     const auto parsed = kachakacha::v2::app::ParsePartNumberList(text.toStdString());
     if (!parsed.HasValue()) {
         selection.unreadable = true;

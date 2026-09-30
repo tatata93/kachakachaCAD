@@ -84,7 +84,7 @@ void V2MainWindow::AutomaticallyGenerate(const std::vector<base::EntityId>& mode
     const int mode=fabricationDock_->AutomaticGeneration(); if(mode==0) { return; }
     const auto output=freezeOutput_; const auto parts=fabricationDock_->PartNumbersText();
     freezeOutput_=mode==1 ? fabrication::FreezeOutput::WiresOnly : fabrication::FreezeOutput::WiresAndSurfaces;
-    fabricationDock_->SetPartNumbersText(QString()); viewport_->SetSelection(app::SelectionSet{models});
+    viewport_->SetSelection(app::SelectionSet{models}); fabricationDock_->SetPartNumbersText(QStringLiteral("すべて"));
     RunFreezeCommand("fabrication.freeze_state");
     freezeOutput_=output; fabricationDock_->SetPartNumbersText(parts); RefreshFabricationDock();
     viewport_->SetSelection(app::SelectionSet{models});

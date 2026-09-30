@@ -117,7 +117,7 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* toleranceRow = new QHBoxLayout();
     toleranceRow->addWidget(new QLabel(QStringLiteral("許容(端)"), body));
     tolerance_ = new QDoubleSpinBox(body);
@@ -133,21 +133,21 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
         }
     });
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 輪")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("輪")));
     auto* facesContainer = new QWidget(body);
     facesLayout_ = new QVBoxLayout(facesContainer);
     facesLayout_->setContentsMargins(0, 0, 0, 0);
     facesLayout_->setSpacing(2);
     layout->addWidget(facesContainer);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. ずれ・T 字")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("ずれ・T 字")));
     auto* gapsContainer = new QWidget(body);
     gapsLayout_ = new QVBoxLayout(gapsContainer);
     gapsLayout_->setContentsMargins(0, 0, 0, 0);
     gapsLayout_->setSpacing(2);
     layout->addWidget(gapsContainer);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     summary_ = new QLabel(body);
     summary_->setWordWrap(true);
     layout->addWidget(summary_);
@@ -163,6 +163,7 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
             confirmHandler_();
         }
     });
+    PinToolActions(this, cancel_, confirm_);
 }
 
 V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow& face)

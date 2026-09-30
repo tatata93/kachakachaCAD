@@ -74,6 +74,11 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
 {
     setObjectName(QStringLiteral("fabricationDock"));
     auto* body = new QWidget(this);
+    actionFooter_ = new QWidget(this);
+    auto* footerLayout = new QVBoxLayout(actionFooter_);
+    footerLayout->setContentsMargins(6, 4, 6, 4);
+    approxFooter_ = new QWidget(actionFooter_);
+    footerLayout->addWidget(approxFooter_);
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
@@ -112,11 +117,10 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
             cancelHandler_();
         }
     });
-    auto* actionRow = new QHBoxLayout();
+    auto* actionRow = new QHBoxLayout(approxFooter_);
     actionRow->setContentsMargins(0, 0, 0, 0);
     actionRow->addWidget(cancelApprox_);
     actionRow->addWidget(confirmApprox_, 1);
-    buttonLayout->addLayout(actionRow);
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("近似プレビューを更新"), "fabrication.preview_update", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択境界を開口 / 折り線にする"), "fabrication.assign_role", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択した開いた線を切れ目にする"), "fabrication.assign_relief_cut", this));
@@ -156,14 +160,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     layout->addWidget(message_);
     layout->addStretch(1);
 
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    // 380px の棚に収める前提。横スクロールが出るのは中身がはみ出している合図であり、
-    // 隠すのではなく各行を折り返し・縮められるようにする(PC画面 2026-09-19)。
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setWidget(body);
-    setWidget(scroll);
+    setWidget(MakeScrollableToolPanel(body, actionFooter_));
     Connect();
     RefreshMethodRows();
 }
@@ -200,8 +197,21 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     auto* layout = new QVBoxLayout(box);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(2);
+    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("対象")));
+    auto* row = new QHBoxLayout();
+    sourcesValue_ = new QLabel(QStringLiteral("(3D で面か立体を押してください)"), box);
+    sourcesValue_->setWordWrap(true);
+    row->addWidget(sourcesValue_, 1);
+    clearSources_ = new QPushButton(QStringLiteral("解除"), box);
+    QObject::connect(clearSources_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearSourcesHandler_) {
+            clearSourcesHandler_();
+        }
+    });
+    row->addWidget(clearSources_);
+    layout->addLayout(row);
     // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
-    // 正本の順(見出し → 作り方 → 対象 → 近似条件 → …、C-10)で、作り方を先に置く。
+    // 共通UI: 対象を先に示し、その下に方法と条件を置く。
     layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("作り方")));
     // 4 枚を 2×2 に。横 1 列だと 330px の棚で 2 枚しか見えなかった(PC 画面 2026-09-19)。
     auto* policyRow = new QGridLayout();
@@ -223,19 +233,6 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     }
     layout->addLayout(policyRow);
     ShowPolicy(0);
-    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("対象")));
-    auto* row = new QHBoxLayout();
-    sourcesValue_ = new QLabel(QStringLiteral("(3D で面か立体を押してください)"), box);
-    sourcesValue_->setWordWrap(true);
-    row->addWidget(sourcesValue_, 1);
-    clearSources_ = new QPushButton(QStringLiteral("解除"), box);
-    QObject::connect(clearSources_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearSourcesHandler_) {
-            clearSourcesHandler_();
-        }
-    });
-    row->addWidget(clearSources_);
-    layout->addLayout(row);
     layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("候補(実際に作って比べます)")));
     for (int index = 0; index < 3; ++index) {
         auto* button = new QPushButton(box);

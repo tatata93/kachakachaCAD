@@ -111,6 +111,11 @@ namespace {
 
 [[nodiscard]] bool CaseViewDirections(V2MainWindow& window)
 {
+    V2MainWindow fresh;
+    if (!Explain("起動時は前右上", fresh.Viewport().Direction() == ViewDirection::Isometric)) return false;
+    fresh.Viewport().SetViewDirection(ViewDirection::Back);
+    fresh.RunCommand("file.new");
+    if (!Explain("新規でも前右上に戻る", fresh.Viewport().Direction() == ViewDirection::Isometric)) return false;
     for (const ViewDirection direction : {ViewDirection::Top, ViewDirection::Front,
              ViewDirection::Left, ViewDirection::Isometric}) {
         window.Viewport().SetViewDirection(direction);

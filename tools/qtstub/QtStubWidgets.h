@@ -180,6 +180,7 @@ public:
     [[nodiscard]] QVariant data() const;
     void trigger();
     void (*triggered)(bool);
+    void (*changed)();
 };
 
 class QMenu : public QWidget {

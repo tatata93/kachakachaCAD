@@ -51,7 +51,17 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     layout->setSpacing(4);
 
     // 道具の棚の共通の枠(C-10): 作り方 → 入力 → 設定 → キャンセル・確定。
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
+    auto* inputWidget = new QWidget(body);
+    auto* inputForm = new QFormLayout(inputWidget);
+    inputForm->setContentsMargins(0, 0, 0, 0);
+    first_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
+    second_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
+    inputForm->addRow(QStringLiteral("線 A"), first_);
+    inputForm->addRow(QStringLiteral("線 B"), second_);
+    layout->addWidget(inputWidget);
+
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     kind_ = new QComboBox(body);
     kind_->addItem(QStringLiteral("C面取り"));
     kind_->addItem(QStringLiteral("R丸め"));
@@ -62,17 +72,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     hint->setWordWrap(true);
     layout->addWidget(hint);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 入力")));
-    auto* inputWidget = new QWidget(body);
-    auto* inputForm = new QFormLayout(inputWidget);
-    inputForm->setContentsMargins(0, 0, 0, 0);
-    first_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
-    second_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
-    inputForm->addRow(QStringLiteral("線 A"), first_);
-    inputForm->addRow(QStringLiteral("線 B"), second_);
-    layout->addWidget(inputWidget);
-
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 設定")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("設定")));
     auto* formWidget = new QWidget(body);
     form_ = new QFormLayout(formWidget);
     form_->setContentsMargins(0, 0, 0, 0);
@@ -138,6 +138,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
 
     Connect();
     RefreshKind();
+    PinToolActions(this, cancel_, create_);
 }
 
 //! 欄とボタンの便りを繋ぐ。コンストラクタを 100 行以内に保つために分けた。

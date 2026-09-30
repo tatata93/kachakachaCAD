@@ -79,6 +79,14 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     interactiveLayout->setContentsMargins(4, 8, 4, 4);
     interactiveLayout->setSpacing(6);
 
+    toolTitle_ = MakePanelSectionTitle(interactivePage, QStringLiteral("入力"));
+    interactiveLayout->addWidget(toolTitle_);
+    toolForm_ = new QFormLayout();
+    toolForm_->setContentsMargins(0, 0, 0, 0);
+    toolForm_->setSpacing(3);
+    BuildArcRows(toolForm_);
+    interactiveLayout->addLayout(toolForm_);
+
     // 作り方カード(正本の methods)。作り方を先に選び、必要な欄だけを出す。
     methodTitle_ = MakePanelSectionTitle(interactivePage, QStringLiteral("作り方"));
     interactiveLayout->addWidget(methodTitle_);
@@ -95,14 +103,6 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     hint_->setObjectName(QStringLiteral("drawingNextStep"));
     hint_->setWordWrap(true);
     interactiveLayout->addWidget(hint_);
-
-    toolTitle_ = MakePanelSectionTitle(interactivePage, QStringLiteral("入力"));
-    interactiveLayout->addWidget(toolTitle_);
-    toolForm_ = new QFormLayout();
-    toolForm_->setContentsMargins(0, 0, 0, 0);
-    toolForm_->setSpacing(3);
-    BuildArcRows(toolForm_);
-    interactiveLayout->addLayout(toolForm_);
 
     interactiveLayout->addWidget(MakePanelSectionTitle(interactivePage, QStringLiteral("オプション")));
     construction_ = new QCheckBox(QStringLiteral("補助線として作図"), interactivePage);

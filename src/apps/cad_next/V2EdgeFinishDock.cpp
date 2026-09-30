@@ -42,24 +42,7 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("1. 作り方")));
-    auto* kindRow = new QHBoxLayout();
-    const char* labels[2] = {"フィレット(R 丸め)", "面取り(C)"};
-    for (std::size_t index = 0; index < kinds_.size(); ++index) {
-        auto* button = new QPushButton(QString::fromUtf8(labels[index]), body);
-        button->setCheckable(true);
-        const int kind = static_cast<int>(index);
-        QObject::connect(button, &QPushButton::clicked, this, [this, kind] {
-            if (!loading_ && kindHandler_) {
-                kindHandler_(kind);
-            }
-        });
-        kindRow->addWidget(button);
-        kinds_[index] = button;
-    }
-    layout->addLayout(kindRow);
-
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("2. 入力")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
     const auto row = [this, body, layout](const QString& name, QLabel** value, QPushButton** clear,
                          std::function<void()>* handler) {
         auto* line = new QHBoxLayout();
@@ -79,7 +62,24 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
     row(QStringLiteral("部品"), &partValue_, &clearPart_, &clearPartHandler_);
     row(QStringLiteral("辺"), &edgesValue_, &clearEdges_, &clearEdgesHandler_);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("3. 設定")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
+    auto* kindRow = new QHBoxLayout();
+    const char* labels[2] = {"フィレット(R 丸め)", "面取り(C)"};
+    for (std::size_t index = 0; index < kinds_.size(); ++index) {
+        auto* button = new QPushButton(QString::fromUtf8(labels[index]), body);
+        button->setCheckable(true);
+        const int kind = static_cast<int>(index);
+        QObject::connect(button, &QPushButton::clicked, this, [this, kind] {
+            if (!loading_ && kindHandler_) {
+                kindHandler_(kind);
+            }
+        });
+        kindRow->addWidget(button);
+        kinds_[index] = button;
+    }
+    layout->addLayout(kindRow);
+
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("設定")));
     auto* sizeRow = new QHBoxLayout();
     sizeLabel_ = new QLabel(QStringLiteral("半径"), body);
     sizeRow->addWidget(sizeLabel_);
@@ -96,7 +96,7 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
         }
     });
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("4. 状態")));
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
@@ -112,6 +112,7 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
             confirmHandler_();
         }
     });
+    PinToolActions(this, cancel_, confirm_);
 }
 
 void V2EdgeFinishDock::ShowInput(const kachakacha::v2::app::EdgeFinishInputState& state,

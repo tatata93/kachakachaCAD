@@ -369,3 +369,8 @@ HP-GPT-F05/F06合格。_GO.cmdで同じブランチへpush済み。Linux/cloud�
 Windows全体ビルド、ctest184/184、通常版と配布版の画面試験各372/372、旧自己試験終了0。
 HP-GEN-01〜04、GPT面幾何12/12、GPT近似8/8、構造16/16合格。_GO.cmdで指定ブランチへpush済み。
 Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICATION_GENERATION.md)。
+
+## 2026-10-01 共通ツールUI（進行中）
+オーナー合意は [UNIFIED_TOOL_UI.md](UNIFIED_TOOL_UI.md)。全モードの道具選択・設定順序、
+製作の道具分離、Win95操作部品、ホーム視点・回転リング、生成曲線とソリッド表示を修正する。
+未検証。既存のPC_TESTEDはこの変更の検証を意味しない。

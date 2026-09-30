@@ -61,6 +61,8 @@ using kachakacha::v2::modeling::DrawingTool;
     window.RunCommand("file.new");
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
     auto& viewport = window.Viewport();
+    // 画面の真下と作業平面の -V が一致する正対視点で、直角吸着を検査する。
+    viewport.SetViewDirection(ViewDirection::Top);
     // グリッドへ吸い付かない場所で引く。吸着先があるときは、そちらが正しい。
     viewport.SetSnapSuppressed(true);
     window.SelectTool(DrawingTool::Line);

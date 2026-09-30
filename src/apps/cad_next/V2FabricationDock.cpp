@@ -67,6 +67,24 @@ constexpr int kSplitAxisChoices = 5;
     return button;
 }
 
+void PinFabricationAction(QWidget* footer, const char* name, QPushButton* confirm,
+    V2FabricationDock* dock)
+{
+    auto* section = new QWidget(footer);
+    section->setObjectName(QString::fromUtf8(name));
+    auto* row = new QHBoxLayout(section);
+    row->setContentsMargins(0, 0, 0, 0);
+    auto* cancel = new QPushButton(section);
+    MarkCancelConfirm(cancel, confirm);
+    row->addWidget(cancel);
+    row->addStretch(1);
+    row->addWidget(confirm);
+    QObject::connect(cancel, &QPushButton::clicked, dock,
+        [dock] { dock->PressRun("selection.activate"); });
+    footer->layout()->addWidget(section);
+    section->hide();
+}
+
 } // namespace
 
 V2FabricationDock::V2FabricationDock(QWidget* parent)
@@ -148,12 +166,10 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     bendLayout->addStretch(1);
     stages_->addTab(bendPage, QStringLiteral("2 部材の編集・曲げ確認"));
 
-    auto* materialPage = new QWidget(stages_);
-    auto* materialLayout = new QVBoxLayout(materialPage);
-    materialLayout->setContentsMargins(4, 8, 4, 4);
-    materialLayout->addWidget(BuildRangeAndMaterial(materialPage));
-    materialLayout->addStretch(1);
-    stages_->addTab(materialPage, QStringLiteral("3 材料・範囲"));
+    auto* material = BuildRangeAndMaterial(bendPage);
+    approximationLayout->insertWidget(1,
+        material->findChild<QWidget*>(QStringLiteral("approximationRange")));
+    bendLayout->insertWidget(2, material);
 
     message_ = new QLabel(body);
     message_->setWordWrap(true);
@@ -546,8 +562,14 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
 
 QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
 {
-    // 範囲(V1 の plate_range)と材料・積層(plate の材料、plate_laminate)。
-    auto* widget = new QWidget(body);
+    // 範囲は近似の入力、材料は部材編集の条件として各ツールへ配置する。
+    auto* container = new QWidget(body);
+    container->setObjectName(QStringLiteral("materialOptions"));
+    auto* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* widget = new QWidget(container);
+    widget->setObjectName(QStringLiteral("approximationRange"));
+    layout->addWidget(widget);
     auto* form = new QFormLayout(widget);
     form->setContentsMargins(0, 0, 0, 0);
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
@@ -579,6 +601,11 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
     vLayout->addWidget(rangeVMax_);
     form->addRow(QStringLiteral("範囲 v"), vRow);
 
+    widget = new QWidget(container);
+    layout->addWidget(widget);
+    form = new QFormLayout(widget);
+    form->setContentsMargins(0, 0, 0, 0);
+    form->addRow(MakePanelSectionTitle(widget, QStringLiteral("材料")));
     material_ = new QLineEdit(widget);
     material_->setPlaceholderText(QStringLiteral("プラ板 0.5 など"));
     form->addRow(QStringLiteral("材料"), material_);
@@ -589,7 +616,7 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
     applyMaterial_ = new QPushButton(QStringLiteral("選んだものに当てる"), widget);
     applyMaterial_->setToolTip(QStringLiteral("材料と積層の枚数を、選んでいる部材に当てます。"));
     form->addRow(applyMaterial_);
-    return widget;
+    return container;
 }
 
 QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
@@ -609,9 +636,9 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     assembly_->setSingleStep(5.0);
     assembly_->setSuffix(QStringLiteral(" %"));
     assembly_->setValue(100.0);
-    applyAssembly_ = new QPushButton(QStringLiteral("当てる"), assemblyRow);
+    applyAssembly_ = new QPushButton(QStringLiteral("曲げを適用"), assemblyRow);
     assemblyLayout->addWidget(assembly_);
-    assemblyLayout->addWidget(applyAssembly_);
+    PinFabricationAction(actionFooter_, "bendActions", applyAssembly_, this);
     bend->addRow(QStringLiteral("組立率"), assemblyRow);
     // 曲げ状態(正本 F-10): スライダ 0〜100 と基準値 0/25/50/75/100。
     // どちらも「組立率を打って当てる」と同じ道を通る。別の道を作らない。
@@ -623,11 +650,10 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     bendSlider_ = new QSlider(Qt::Horizontal, bendRow);
     bendSlider_->setRange(0, 100);
     bendSlider_->setValue(100);
-    bendSlider_->setToolTip(QStringLiteral("0% = 実際の展開、100% = 目標の形。離すと当てます。"));
+    bendSlider_->setToolTip(QStringLiteral("0% = 実際の展開、100% = 目標の形。下端の「曲げを適用」で確定します。"));
     bendLayout->addWidget(bendSlider_, 1);
     QObject::connect(bendSlider_, &QSlider::sliderReleased, this, [this] {
         TypeAssemblyPercent(static_cast<double>(bendSlider_->value()));
-        PressApplyAssembly();
     });
     bend->addRow(QStringLiteral("曲げ状態"), bendRow);
     auto* presetRow = new QWidget(bendWidget);
@@ -636,13 +662,12 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     presetLayout->setSpacing(2);
     for (const int percent : {0, 25, 50, 75, 100}) {
         auto* preset = new QPushButton(QStringLiteral("%1").arg(percent), presetRow);
-        preset->setToolTip(QStringLiteral("組立率を %1% にして当てます。").arg(percent));
+        preset->setToolTip(QStringLiteral("組立率を %1% に設定します。「曲げを適用」で確定します。").arg(percent));
         // 40px 固定にして、5個並べても 380px の棚に収める。
         preset->setFixedWidth(40);
         preset->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         QObject::connect(preset, &QPushButton::clicked, this, [this, percent] {
             TypeAssemblyPercent(static_cast<double>(percent));
-            PressApplyAssembly();
         });
         presetLayout->addWidget(preset);
         bendPresets_.push_back(preset);
@@ -690,11 +715,11 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     splitRow->setObjectName(QStringLiteral("splitRow"));
     auto* splitLayout = new QHBoxLayout(splitRow);
     splitLayout->setContentsMargins(0, 0, 0, 0);
-    auto* splitPart = MakeRun(splitRow, QStringLiteral("部材を分ける"),
+    auto* splitPart = MakeRun(splitRow, QStringLiteral("分割をプレビュー"),
         "fabrication.split_part", this);
     splitPart->setToolTip(QStringLiteral("「対象部材」の部材(何枚でも)を、それぞれ右の枚数に"
                                          "等分します。2 枚のときは右の位置で分けます。"
-                                         "1度目は下見です。もう一度押すと実行します。"));
+                                         "下見を確認して、下端の「編集を確定」を押してください。"));
     splitPieces_ = new QSpinBox(splitRow);
     splitPieces_->setRange(2, 8);
     splitPieces_->setValue(2);
@@ -720,11 +745,11 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     splitLayout->addWidget(splitPieces_);
     splitLayout->addWidget(splitPercent_);
     layout->addWidget(splitRow);
-    auto* mergeParts = MakeRun(editWidget, QStringLiteral("部材を1つにする"),
+    auto* mergeParts = MakeRun(editWidget, QStringLiteral("結合をプレビュー"),
         "fabrication.merge_parts", this);
     mergeParts->setToolTip(QStringLiteral("「対象部材」が 1 つならその次と、2, 3, 4 のように"
                                           "隣り合う番号なら全部を 1 枚にします。"
-                                          "1度目は下見です。もう一度押すと実行します。"));
+                                          "下見を確認して、下端の「編集を確定」を押してください。"));
     layout->addWidget(mergeParts);
     auto* reliefCut = MakeRun(editWidget, QStringLiteral("開いた線を切れ目に"),
         "fabrication.assign_relief_cut", this);
@@ -734,6 +759,14 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
         "fabrication.set_unfold_base", this);
     unfoldBase->setToolTip(QStringLiteral("対象部材の辺を展開の基準にします。"));
     layout->addWidget(unfoldBase);
+    auto* confirm = new QPushButton(QStringLiteral("編集を確定"), editWidget);
+    QObject::connect(confirm, &QPushButton::clicked, this, [this] {
+        const auto command = activeCommand_;
+        partitionConfirmation_ = true;
+        PressRun(command.c_str());
+        partitionConfirmation_ = false;
+    });
+    PinFabricationAction(actionFooter_, "partitionActions", confirm, this);
     return editWidget;
 }
 
@@ -842,7 +875,7 @@ QWidget* V2FabricationDock::BuildUnfoldSection(QWidget* body)
 
     unfoldRun_ = new QPushButton(QStringLiteral("展開"), unfoldWidget);
     QObject::connect(unfoldRun_, &QPushButton::clicked, this, [this] { PressUnfold(); });
-    layout->addWidget(unfoldRun_);
+    PinFabricationAction(actionFooter_, "unfoldActions", unfoldRun_, this);
     return unfoldWidget;
 }
 

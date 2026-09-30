@@ -479,7 +479,9 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
                 kachakacha::v2::fabrication::DescribeBandPartitionJa(preview))));
         return;
     }
-    if (!sameAsShown) {
+    const bool previewOnly = fabricationDock_->ToolActive()
+        && !fabricationDock_->PartitionConfirmation();
+    if (!sameAsShown || previewOnly) {
         PendingPartition pending;
         pending.what = what;
         pending.numbers = numbers;
@@ -490,7 +492,7 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
         // 何が消えるのかを、番号だけでなく名前で言う。
         const QString dropped = DroppedValuesTextJa(carried);
         SetStatus(QStringLiteral("%1(まだ変えていません): %2%3 "
-                                 "もう一度同じ指示を出すと、この形にします。"
+                                 "下端の「編集を確定」で、この形にします。"
                                  "やめるときは Esc か道具を替えてください。")
                 .arg(what)
                 .arg(QString::fromStdString(

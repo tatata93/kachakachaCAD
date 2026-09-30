@@ -629,6 +629,7 @@ public:
 
 class QTabWidget : public QWidget {
 public:
+    void (*currentChanged)(int);
     QTabWidget() = default;
     explicit QTabWidget(QWidget*) {}
     int addTab(QWidget*, const QString&);

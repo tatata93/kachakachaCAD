@@ -49,6 +49,25 @@ constexpr double kPi = 3.14159265358979323846;
     return QString::fromUtf8(std::string(value).c_str());
 }
 
+QWidget* DrawingPanel(QWidget* body, QTabWidget* modes, QPushButton* cancel,
+    QPushButton* confirm, QPushButton* create)
+{
+    auto* footer = new QWidget(body->parentWidget());
+    auto* row = new QHBoxLayout(footer);
+    row->setContentsMargins(6, 4, 6, 4);
+    row->addWidget(cancel);
+    row->addStretch(1);
+    row->addWidget(confirm);
+    row->addWidget(create);
+    create->hide();
+    QObject::connect(modes, &QTabWidget::currentChanged, footer,
+        [confirm, create](int index) {
+            confirm->setVisible(index == 0);
+            create->setVisible(index == 1);
+        });
+    return MakeScrollableToolPanel(body, footer);
+}
+
 } // namespace
 
 V2DrawingDock::V2DrawingDock(QWidget* parent)
@@ -141,11 +160,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     inputModes_->addTab(coordinatePage, QStringLiteral("座標で作成"));
     // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
     // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(body_);
-    setWidget(scroll);
+    setWidget(DrawingPanel(body_, inputModes_, cancel_, confirm_, createWire_));
     ApplyArcVisibility();
     ApplyDirectWireVisibility();
     ApplyToolRows();

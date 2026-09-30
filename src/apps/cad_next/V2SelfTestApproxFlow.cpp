@@ -272,7 +272,7 @@ using kachakacha::v2::domain::Visibility;
     // 番号の扱いを先に見る。**丸めない。** 無い番号なら何も変わらない。
     window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
     window.RunCommand("fabrication.merge_parts");
-    window.RunCommand("fabrication.merge_parts");
+    window.FabricationDock().HandleKey(Qt::Key_Return);
     if (!Explain((std::string("無い番号は断る(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             static_cast<int>(window.FabricationPanelCount()) == before)) {
@@ -280,7 +280,7 @@ using kachakacha::v2::domain::Visibility;
     }
     window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
     window.RunCommand("fabrication.split_part");
-    window.RunCommand("fabrication.split_part");
+    window.FabricationDock().HandleKey(Qt::Key_Return);
     if (!Explain("無い番号では分けない",
             static_cast<int>(window.FabricationPanelCount()) == before)) {
         return false;
@@ -336,6 +336,9 @@ using kachakacha::v2::domain::Visibility;
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.RunCommand("fabrication.merge_parts");
     window.RunCommand("fabrication.merge_parts");
+    if (!Explain("プレビューを繰り返しても結合しない",
+        static_cast<int>(window.FabricationPanelCount()) == before)) return false;
+    window.FabricationDock().HandleKey(Qt::Key_Return);
     const int merged = static_cast<int>(window.FabricationPanelCount());
     if (!Explain((std::string("1つにすると枚数が減る(") + std::to_string(before)
                      + " → " + std::to_string(merged) + " 枚。帯は "
@@ -359,7 +362,7 @@ using kachakacha::v2::domain::Visibility;
     // 1枚目を2つに分ける。枚数が1増える。
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.RunCommand("fabrication.split_part");
-    window.RunCommand("fabrication.split_part");
+    window.FabricationDock().HandleKey(Qt::Key_Return);
     const int split = static_cast<int>(window.FabricationPanelCount());
     if (!Explain((std::string("分けると枚数が増える(") + std::to_string(merged) + " → "
                      + std::to_string(split) + " 枚。帯は "
@@ -556,7 +559,7 @@ using kachakacha::v2::domain::Visibility;
     const auto panels = [&window] { return static_cast<int>(window.FabricationPanelCount()); };
     const auto twice = [&window](const char* command) {
         window.RunCommand(command);   // 1 度目: 見せる
-        window.RunCommand(command);   // 2 度目: 当てる
+        window.FabricationDock().HandleKey(Qt::Key_Return);   // 下端の確定と同じ経路
     };
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.FabricationDock().SetSplitPieces(3);
@@ -606,7 +609,7 @@ using kachakacha::v2::domain::Visibility;
     window.FabricationDock().SetSplitPercent(40);
     window.RunCommand("fabrication.split_part");   // 1 度目: 見せる
     const bool saidWhere = window.StatusText().contains(QStringLiteral("40%"));
-    window.RunCommand("fabrication.split_part");   // 2 度目: 当てる
+    window.FabricationDock().HandleKey(Qt::Key_Return);   // 下端の確定と同じ経路
     std::vector<double> railsAfter;
     std::vector<double> widthsAfter;
     const bool read = window.CurrentBandPartition(railsAfter, widthsAfter);

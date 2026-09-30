@@ -151,11 +151,16 @@ void V2FabricationDock::FocusCommand(std::string_view command)
     const bool unfolding = command == "fabrication.create_pattern";
     const bool generating = command.find("fabrication.freeze_") == 0;
     generationFooter_->setVisible(generating);
+    actionFooter_->findChild<QWidget*>(QStringLiteral("bendActions"))->setVisible(bending);
+    actionFooter_->findChild<QWidget*>(QStringLiteral("unfoldActions"))->setVisible(unfolding);
+    actionFooter_->findChild<QWidget*>(QStringLiteral("partitionActions"))->setVisible(
+        command == "fabrication.split_part" || command == "fabrication.merge_parts");
     const auto show = [this](const char* name, bool visible) {
         if (auto* widget = stages_->findChild<QWidget*>(QString::fromUtf8(name)))
             widget->setVisible(visible);
     };
     show("bendWidget", bending);
+    show("materialOptions", command == "fabrication.edit_part");
     show("unfoldWidget", unfolding);
     show("freezeWidget", generating);
     if (generating) ChooseGenerationCommand(command);
@@ -199,6 +204,11 @@ bool V2FabricationDock::HandleKey(int key)
         PressApplyAssembly(); return true;
     }
     if (activeCommand_ == "fabrication.create_pattern") { PressUnfold(); return true; }
+    if (activeCommand_ == "fabrication.split_part" || activeCommand_ == "fabrication.merge_parts") {
+        actionFooter_->findChild<QWidget*>(QStringLiteral("partitionActions"))
+            ->findChild<QPushButton*>(QStringLiteral("panelConfirm"))->click();
+        return true;
+    }
     const auto command = activeCommand_;
     PressRun(command.c_str()); return true;
 }

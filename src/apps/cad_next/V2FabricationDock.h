@@ -176,6 +176,7 @@ public:
     void SetStageIndex(int index);
     void FocusCommand(std::string_view command);
     [[nodiscard]] bool ToolActive() const { return !activeCommand_.empty(); }
+    [[nodiscard]] bool PartitionConfirmation() const { return partitionConfirmation_; }
     void EndTool() { activeCommand_.clear(); }
     bool HandleKey(int key);
     void ChooseGenerationCommand(std::string_view command);
@@ -309,6 +310,7 @@ private:
     std::function<void(double, bool)> radiusHandler_;
     bool radiusLocked_ = false;
     std::string activeCommand_;
+    bool partitionConfirmation_ = false;
     std::string generationCommand_ = "fabrication.freeze_state";
     int automaticGeneration_=0, generationDestination_=0;
     std::vector<QComboBox*> automaticGenerations_, generationDestinations_;

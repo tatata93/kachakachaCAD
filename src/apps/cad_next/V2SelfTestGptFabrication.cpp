@@ -163,6 +163,12 @@ bool Fabrication(V2MainWindow& window)
     if (!Explain("spacing changes invalidate old preview",confirm && !confirm->isEnabled())) { return false; }
     adaptive->setChecked(spacing);
     if (!ClickGpt(window,"gptFabricationPreview")) { return false; }
+    if (!Explain("GPT confirmation stays in fixed footer", confirm->parentWidget()->objectName()
+        == QStringLiteral("toolActionFooter"))) { return false; }
+    if (!ClickGpt(window,"gptFabricationPattern")
+        || !Explain("choosing pattern output does not create a model",
+            window.Session().GetDocument().Revision()==before)
+        || !ClickGpt(window,"gptFabricationPattern")) { return false; }
     auto* assembly=window.findChild<QDoubleSpinBox*>(QStringLiteral("gptFabricationAssembly"));
     if (!assembly) { return false; } assembly->setValue(30);
     if (!ClickGpt(window,"gptFabricationCancel") || !Explain("cancel removes preview",window.Viewport().ToolPreviewFaceCount()==0

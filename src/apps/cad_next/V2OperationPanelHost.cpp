@@ -132,6 +132,9 @@ void V2OperationPanelHost::ActivateIndex(int index)
     current_ = shownShelves_[static_cast<std::size_t>(index)];
     title_->setText(ShelfText(current_));
     pages_->setCurrentWidget(pageByShelf_.at(current_));
+    // 固定した取消欄がある道具では、同じ終了操作を二重に並べない。
+    back_->setVisible(pageByShelf_.at(current_)
+        ->findChild<QWidget*>(QStringLiteral("toolActionFooter")) == nullptr);
     if (pageChoice_->currentIndex() != index) {
         const QSignalBlocker blocker(pageChoice_);
         pageChoice_->setCurrentIndex(index);

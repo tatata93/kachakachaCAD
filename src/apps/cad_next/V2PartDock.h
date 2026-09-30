@@ -20,14 +20,23 @@
 #include <QString>
 
 #include <functional>
+#include <string>
+#include <string_view>
 
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QFormLayout;
+class QPushButton;
 
 class V2PartDock final : public QDockWidget {
 public:
     explicit V2PartDock(QWidget* parent);
+    void FocusCommand(std::string_view command);
+    bool ToolActive() const { return !command_.empty(); }
+    std::string_view ActiveCommand() const { return command_; }
+    void EndTool() { command_.clear(); }
+    bool HandleKey(int key);
 
     //! 数の棚と同じ値を映す。
     void SetParameterMm(kachakacha::v2::app::ParameterId id, double value);
@@ -52,6 +61,9 @@ public:
     [[nodiscard]] QString SelectionText() const;
 
 private:
+    std::string command_;
+    QFormLayout* form_ = nullptr;
+    QPushButton* confirm_ = nullptr;
     [[nodiscard]] QDoubleSpinBox* FieldFor(kachakacha::v2::app::ParameterId id) const;
 
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;

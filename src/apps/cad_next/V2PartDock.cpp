@@ -1,4 +1,6 @@
 #include "V2PartDock.h"
+#include "V2PanelFrame.h"
+#include "kachakacha/app/CommandCatalog.h"
 
 #include <QComboBox>
 #include <QDockWidget>
@@ -28,15 +30,6 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
     return box;
 }
 
-[[nodiscard]] QPushButton* MakeRun(QWidget* parent, const QString& text, const char* command,
-    V2PartDock* dock)
-{
-    auto* button = new QPushButton(text, parent);
-    QObject::connect(button, &QPushButton::clicked, dock,
-        [dock, command] { dock->PressRun(command); });
-    return button;
-}
-
 } // namespace
 
 V2PartDock::V2PartDock(QWidget* parent)
@@ -53,6 +46,7 @@ V2PartDock::V2PartDock(QWidget* parent)
     layout->addWidget(selection_);
 
     auto* form = new QFormLayout();
+    form_ = form;
     layout->addLayout(form);
 
     extrudeDistance_ = MakeField(body, -10000.0, 10000.0, QStringLiteral(" mm"));
@@ -93,26 +87,15 @@ V2PartDock::V2PartDock(QWidget* parent)
         "治具の厚み。**正なら面の表側、負なら裏側** に当て板を作ります。0 にはできません。"));
     form->addRow(QStringLiteral("治具の厚み"), jigThickness_);
 
-    auto* buttons = new QWidget(body);
-    auto* buttonLayout = new QVBoxLayout(buttons);
-    buttonLayout->setContentsMargins(0, 0, 0, 0);
-    buttonLayout->setSpacing(2);
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("押し出し"), "part.extrude", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("面に厚みを付ける"),
-        "part.thicken", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("面を平面まで立体に"),
-        "part.thicken_to_plane", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("回転体を作る"),
-        "guide.revolve", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("治具を作る"),
-        "part.surface_jig", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("ワイヤー群から部品"),
-        "part.from_wire_cage", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("足す"), "part.boolean_add", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("引く"), "part.boolean_cut", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("現在状態を固定"),
-        "derived.freeze", this));
-    layout->addWidget(buttons);
+    auto* footer = new QWidget(this);
+    auto* footerLayout = new QVBoxLayout(footer);
+    QPushButton* cancel = nullptr;
+    footerLayout->addLayout(MakeCancelConfirmRow(footer, &cancel, &confirm_));
+    QObject::connect(cancel, &QPushButton::clicked, this, [this] { PressRun("selection.activate"); });
+    QObject::connect(confirm_, &QPushButton::clicked, this, [this] {
+        const auto command = command_;
+        if (!command.empty()) PressRun(command.c_str());
+    });
     layout->addStretch(1);
 
     const auto notify = [this](ParameterId id, QDoubleSpinBox* field) {
@@ -134,7 +117,8 @@ V2PartDock::V2PartDock(QWidget* parent)
         }
     });
 
-    setWidget(body);
+    setWidget(MakeScrollableToolPanel(body, footer));
+    FocusCommand({});
 }
 
 QDoubleSpinBox* V2PartDock::FieldFor(ParameterId id) const
@@ -220,4 +204,27 @@ void V2PartDock::SetSelectionText(const QString& text)
 QString V2PartDock::SelectionText() const
 {
     return selection_->text();
+}
+
+void V2PartDock::FocusCommand(std::string_view command)
+{
+    command_ = std::string(command);
+    const bool jig = command == "part.surface_jig";
+    form_->setRowVisible(extrudeDistance_, command == "part.extrude");
+    form_->setRowVisible(thickness_, command == "part.thicken");
+    form_->setRowVisible(placement_, command == "part.thicken");
+    form_->setRowVisible(offsetDistance_, command == "surface.offset");
+    form_->setRowVisible(revolveAngle_, command == "guide.revolve");
+    form_->setRowVisible(jigClearance_, jig);
+    form_->setRowVisible(jigThickness_, jig);
+    const auto* spec = kachakacha::v2::app::FindCommand(command);
+    confirm_->setText(spec ? QString::fromUtf8(std::string(spec->labelJa).c_str()) : QStringLiteral("確定 Enter"));
+}
+
+bool V2PartDock::HandleKey(int key)
+{
+    if (!ToolActive()) return false;
+    if (key == Qt::Key_Escape) { PressRun("selection.activate"); return true; }
+    if (key == Qt::Key_Return || key == Qt::Key_Enter) { confirm_->click(); return true; }
+    return false;
 }

@@ -1,6 +1,7 @@
 #include "V2GptSurfaceTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2PanelFrame.h"
 #include "kachakacha/app/GptSurface.h"
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/app/SurfacePreview.h"
@@ -37,6 +38,9 @@ V2GptSurfaceTool::V2GptSurfaceTool(V2MainWindow& window) : window_(window)
     auto* layout = new QVBoxLayout(panel);
     BuildControls(layout);
     BuildActions(layout);
+    auto* cancel = panel->findChild<QPushButton*>(QStringLiteral("gptSurfaceCancel"));
+    cancel->setText(QStringLiteral("キャンセル Esc"));
+    PinToolActions(dock_, cancel, confirm_);
 }
 
 V2GptSurfaceTool::~V2GptSurfaceTool()
@@ -52,7 +56,6 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
     method_ = new QComboBox(dock_->widget());
     method_->setObjectName(QStringLiteral("gptSurfaceMethod"));
     method_->addItems({QStringLiteral("外周から張る（近似）"), QStringLiteral("断面をつなぐ")});
-    layout->addWidget(method_);
     role_ = new QComboBox(dock_->widget());
     role_->setObjectName(QStringLiteral("gptSurfaceRole"));
     role_->addItems({QStringLiteral("外周へ追加"), QStringLiteral("内側の通る線へ追加"),
@@ -65,6 +68,8 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
     list_->setMinimumHeight(130);
     QObject::connect(list_, &QTreeWidget::itemSelectionChanged, dock_, [this] { RefreshMarks(); });
     layout->addWidget(list_);
+    layout->addWidget(MakePanelSectionTitle(dock_->widget(), QStringLiteral("作り方")));
+    layout->addWidget(method_);
     tolerance_ = new QDoubleSpinBox(dock_->widget());
     tolerance_->setObjectName(QStringLiteral("gptSurfaceTolerance"));
     tolerance_->setDecimals(6);

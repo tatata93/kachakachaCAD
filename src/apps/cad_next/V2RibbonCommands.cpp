@@ -49,6 +49,14 @@ void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
     // 選択済みでも道具を押しただけで生成しない。設定を見てから確定する。
     const auto id = tool.commandId;
     if (id == "selection.activate") EndArmedTools();
+    if (id == "part.surface_jig" || id == "part.from_wire_cage" || id == "derived.freeze") {
+        EndArmedTools();
+        SelectTool(DrawingTool::Select);
+        partDock_->FocusCommand(id);
+        RefreshRightShelves();
+        SetStatus(QStringLiteral("対象と条件を指定し、右ペインの下端で確定してください。"));
+        return;
+    }
     if (id == "fabrication.create" && approxShelfShown_) {
         FocusFabricationStageFor(id);
         return;

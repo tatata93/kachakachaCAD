@@ -114,6 +114,10 @@ void V2MainWindow::RefreshPendingCommand(bool confirmed)
     }
     QString reason;
     const bool satisfied = CommandEnabled(pendingCommandId_, &reason);
+    if (partDock_ != nullptr && partDock_->ToolActive() && !confirmed) {
+        SetStatus(satisfied ? QStringLiteral("対象を選びました。条件を確認して下端で確定してください。") : reason);
+        return;
+    }
     const PendingAction action =
         PendingCommandAction(command->predicate, satisfied, confirmed);
     const QString label = QString::fromUtf8(std::string(command->labelJa).c_str());

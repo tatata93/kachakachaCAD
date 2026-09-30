@@ -1,6 +1,7 @@
 #include "V2GptFabricationTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2PanelFrame.h"
 #include "V2FabricationDock.h"
 #include "kachakacha/kernel/OcctGptFabrication.h"
 #include "kachakacha/document/Commands.h"
@@ -30,6 +31,9 @@ V2GptFabricationTool::V2GptFabricationTool(V2MainWindow& window):window_(window)
     dock_->setObjectName(QStringLiteral("gptFabricationDock"));
     auto* widget=new QWidget(dock_); dock_->setWidget(widget);
     auto* layout=new QVBoxLayout(widget); Controls(layout); Actions(layout);
+    auto* cancel=widget->findChild<QPushButton*>(QStringLiteral("gptFabricationCancel"));
+    cancel->setText(QStringLiteral("キャンセル Esc"));
+    PinToolActions(dock_,cancel,confirm_);
 }
 void V2GptFabricationTool::Controls(QVBoxLayout* layout)
 {
@@ -75,8 +79,9 @@ void V2GptFabricationTool::Actions(QVBoxLayout* layout)
     button("gptFabricationClear",QStringLiteral("対象を空にする"),0,1,[this]{definition_.parts.clear();Invalidate();sources_->setText(QStringLiteral("対象なし"));});
     button("gptFabricationPreview",QStringLiteral("近似をプレビュー"),1,0,[this]{Preview();});
     button("gptFabricationCancel",QStringLiteral("取消"),1,1,[this]{End();});
-    confirm_=button("gptFabricationConfirm",QStringLiteral("この近似を確定"),2,0,[this]{Confirm();});
-    pattern_=button("gptFabricationPattern",QStringLiteral("確定して型紙へ"),2,1,[this]{Confirm(true);});
+    confirm_=button("gptFabricationConfirm",QStringLiteral("この近似を確定"),2,0,[this]{Confirm(pattern_->isChecked());});
+    pattern_=button("gptFabricationPattern",QStringLiteral("確定後に型紙を作る"),2,1,[]{});
+    pattern_->setCheckable(true);
     confirm_->setEnabled(false); pattern_->setEnabled(false);
 }
 void V2GptFabricationTool::Begin()
@@ -220,6 +225,6 @@ bool V2GptFabricationTool::HandleKey(int key)
 {
     if (!active_) { return false; }
     if (key==Qt::Key_Escape) { End(); return true; }
-    if (key==Qt::Key_Return || key==Qt::Key_Enter) { Confirm(); return true; }
+    if (key==Qt::Key_Return || key==Qt::Key_Enter) { Confirm(pattern_->isChecked()); return true; }
     return false;
 }

@@ -280,8 +280,14 @@ void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
     }
     for (std::size_t index = 0; index < candidates_.size(); ++index) {
         QPushButton* button = candidates_[index];
-        button->setText(index < candidateLinesJa.size() ? candidateLinesJa[index]
-                                                        : QStringLiteral("—"));
+        const QString details = index < candidateLinesJa.size() ? candidateLinesJa[index]
+                                                               : QStringLiteral("—");
+        button->setToolTip(details);
+        QString label = details;
+        label.replace(QStringLiteral(" / "), QStringLiteral("\n"));
+        label.replace(QStringLiteral(" — "), QStringLiteral("\n"));
+        label.replace(QStringLiteral("。"), QStringLiteral("。\n"));
+        button->setText(label.trimmed());
         button->setChecked(static_cast<int>(index) == selectedCandidate);
         button->setEnabled(index < candidateLinesJa.size());
     }
@@ -473,7 +479,7 @@ QString V2FabricationDock::CandidateTextJa(int candidate) const
     if (candidate < 0 || candidate >= static_cast<int>(candidates_.size())) {
         return QString();
     }
-    return candidates_[static_cast<std::size_t>(candidate)]->text();
+    return candidates_[static_cast<std::size_t>(candidate)]->toolTip();
 }
 
 //! 対象の欄の中身。空のときの「(3D で面か立体を押してください)」は案内であって中身ではない。

@@ -952,6 +952,7 @@ kachakacha::v2::app::Shelf V2MainWindow::OwnedToolShelf() const
         return Shelf::LoopFaces;
     }
     if (fabricationDock_ != nullptr && fabricationDock_->ToolActive()) return Shelf::Fabrication;
+    if (partDock_ != nullptr && partDock_->ToolActive()) return Shelf::Part;
     // 作った直後は「直前の操作」の行だけを出す(選択道具のあいだ。別の道具を持つと消える)。
     if (loopFaces_ != nullptr && loopFaces_->HasRecent()
         && session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

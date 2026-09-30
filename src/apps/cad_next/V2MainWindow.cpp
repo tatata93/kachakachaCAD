@@ -384,6 +384,7 @@ void V2MainWindow::SetMode(UiMode mode)
 //! 文書の入れ替え・モードの切り替え・拾っていた物が消えたときに呼ぶ。選んでいるものは触らない。
 void V2MainWindow::EndArmedTools()
 {
+    if (partDock_ != nullptr) partDock_->EndTool();
     if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
@@ -1131,6 +1132,7 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
+    if (partDock_ != nullptr) partDock_->EndTool();
     if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
     if (gptFabrication_ != nullptr && gptFabrication_->Active()) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_->Active()) { gptSurface_->End(); }
@@ -1279,6 +1281,8 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
 
 bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 {
+    if (partDock_ != nullptr && partDock_->ToolActive() && command.id != partDock_->ActiveCommand()
+        && command.id.substr(0, 5) != "view.") { partDock_->EndTool(); }
     // 作図の道具は道具へ入る。
     //
     // ただし、道具へ入るだけでは終わらないものがある。

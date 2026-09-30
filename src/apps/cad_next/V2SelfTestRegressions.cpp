@@ -17,12 +17,15 @@
 
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QApplication>
 #include <QSize>
 #include <QPushButton>
+#include <QDoubleSpinBox>
+#include <QWidget>
 #include <QScrollArea>
 #include <QString>
 
@@ -245,9 +248,43 @@ using kachakacha::v2::modeling::DrawingTool;
     return Explain("道具を持つと数の棚は引っ込む", !window.ShelfShown(Shelf::Parameter));
 }
 
+bool CaseJigToolUsesOnlyItsOwnSettings(V2MainWindow& window)
+{
+    using kachakacha::v2::domain::EntityKind;
+    if (!MakeCurvedGuideSurface(window)) return false;
+    window.RunCommand("selection.activate");
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.Viewport().SetSelection({});
+    const auto revision = window.Session().GetDocument().Revision();
+    auto* chooser = window.findChild<QScrollArea*>(QStringLiteral("idleToolChooser"));
+    if (!chooser) return false;
+    bool clicked = false;
+    for (auto* button : chooser->findChildren<QPushButton*>()) {
+        if (button->text() == QStringLiteral("治具")) { button->click(); clicked = true; break; }
+    }
+    if (!Explain("治具を先に選べる", clicked && window.PartDock().ToolActive())) return false;
+    auto* page = window.OperationHost().CurrentPage();
+    if (!page) return false;
+    int visibleFields = 0;
+    for (auto* field : page->findChildren<QDoubleSpinBox*>()) {
+        if (field->isVisible()) ++visibleFields;
+    }
+    if (!Explain("治具はすき間と厚みだけを表示する", visibleFields == 2)) return false;
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    if (!Explain("対象選択だけでは治具を生成しない",
+        window.Session().GetDocument().Revision() == revision)) return false;
+    const int before = CountOfKind(window, EntityKind::Part);
+    if (!window.PartDock().HandleKey(Qt::Key_Return)) return false;
+    if (!Explain("確定で治具ができる", CountOfKind(window, EntityKind::Part) == before + 1)) return false;
+    window.PartDock().HandleKey(Qt::Key_Escape);
+    return Explain("取消で道具を終了する", !window.PartDock().ToolActive());
+}
+
 std::vector<SelfTestCase> RegressionCases()
 {
     return {
+        {"RG-15 治具は道具と対象を選んだ後に確定する", CaseJigToolUsesOnlyItsOwnSettings},
         {"RG-09 右は1枚で、数の棚は「数の設定」でだけ前に出る",
             CaseRightPaneShowsOnePageAndNumbersHaveTheirOwnDoor},
         {"RG-02 道具を先に構えても古い右の棚が残らない",

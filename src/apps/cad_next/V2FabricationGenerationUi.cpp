@@ -137,8 +137,14 @@ QWidget* V2FabricationDock::BuildTargetSection(QWidget* body)
 
 void V2FabricationDock::FocusCommand(std::string_view command)
 {
+    if (command == "fabrication.freeze_output") return;
     const bool approx = command == "fabrication.create" || command == "fabrication.preview_update"
         || command == "fabrication.set_method" || command == "fabrication.set_connection_scope";
+    if (approx) activeCommand_.clear();
+    else if (command == "fabrication.set_assembly" || command == "fabrication.edit_part"
+        || command == "fabrication.split_part" || command == "fabrication.merge_parts"
+        || command == "fabrication.create_pattern" || command == "fabrication.set_unfold_base"
+        || command.find("fabrication.freeze_") == 0) activeCommand_ = std::string(command);
     SetStageIndex(approx ? 0 : 1);
     approxFooter_->setVisible(approx);
     const bool bending = command == "fabrication.set_assembly" || command == "fabrication.edit_part";
@@ -173,8 +179,26 @@ void V2FabricationDock::ChooseGenerationCommand(std::string_view command)
 
 bool V2FabricationDock::ClickGenerateConfirm()
 {
-    auto* button = widget()->findChild<QPushButton*>(QStringLiteral("generationConfirm"));
+    auto* button = generationFooter_->findChild<QPushButton*>(QStringLiteral("generationConfirm"));
     if (button == nullptr || !button->isVisible() || !button->isEnabled()) return false;
     button->click();
     return true;
+}
+
+bool V2FabricationDock::HandleKey(int key)
+{
+    if (!ToolActive()) return false;
+    if (key == Qt::Key_Escape) {
+        EndTool(); PressRun("selection.activate"); return true;
+    }
+    if (key != Qt::Key_Return && key != Qt::Key_Enter) return false;
+    if (activeCommand_.find("fabrication.freeze_") == 0) {
+        (void)ClickGenerateConfirm(); return true;
+    }
+    if (activeCommand_ == "fabrication.set_assembly" || activeCommand_ == "fabrication.edit_part") {
+        PressApplyAssembly(); return true;
+    }
+    if (activeCommand_ == "fabrication.create_pattern") { PressUnfold(); return true; }
+    const auto command = activeCommand_;
+    PressRun(command.c_str()); return true;
 }

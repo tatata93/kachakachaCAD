@@ -104,6 +104,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
     }
+    if (fabricationDock_ != nullptr && fabricationDock_->HandleKey(key)) return true;
     if (cornerPreviewShown_ && HandleCornerToolKey(key)) {
         return true;
     }

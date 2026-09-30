@@ -384,6 +384,7 @@ void V2MainWindow::SetMode(UiMode mode)
 //! 文書の入れ替え・モードの切り替え・拾っていた物が消えたときに呼ぶ。選んでいるものは触らない。
 void V2MainWindow::EndArmedTools()
 {
+    if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
@@ -1130,6 +1131,7 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
+    if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
     if (gptFabrication_ != nullptr && gptFabrication_->Active()) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_->Active()) { gptSurface_->End(); }
     RememberToolForMeasure(tool);   // 測定へ持ち替えるなら、いまの道具を戻り先に(C-16)

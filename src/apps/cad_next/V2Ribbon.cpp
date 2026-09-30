@@ -22,9 +22,9 @@ namespace {
     return QString::fromUtf8(std::string(value).c_str());
 }
 
-QAction* ToolProxy(QAction* source, QWidget* parent, std::function<void()> run)
+QAction* ToolProxy(QAction* source, const QString& label, QWidget* parent, std::function<void()> run)
 {
-    auto* action = new QAction(parent);
+    auto* action = new QAction(label, parent);
     const auto sync = [source, action] {
         action->setCheckable(source->isCheckable());
         action->setChecked(source->isChecked());
@@ -86,7 +86,8 @@ void V2Ribbon::ShowMode(UiMode mode)
     mode_ = mode;
     for (QToolButton* button : categoryButtons_) {
         categoryLayout_->removeWidget(button);
-        delete button;
+        button->hide();
+        button->deleteLater();
     }
     categoryButtons_.clear();
     const auto& categories = RibbonCategoriesFor(mode);
@@ -133,8 +134,9 @@ void V2Ribbon::RebuildTools()
 {
     for (ToolEntry& entry : toolButtons_) {
         toolLayout_->removeWidget(entry.button);
-        delete entry.button;
-        delete entry.ownAction;
+        entry.button->hide();
+        entry.button->deleteLater();
+        if (entry.ownAction != nullptr) entry.ownAction->deleteLater();
     }
     toolButtons_.clear();
     const auto& categories = RibbonCategoriesFor(mode_);
@@ -160,7 +162,7 @@ void V2Ribbon::RebuildTools()
                 && !tool.measureMode.has_value() && lookup_;
             if (plain) {
                 if (auto* source = lookup_(tool.commandId)) {
-                    action = ToolProxy(source, this, [this, tool] {
+                    action = ToolProxy(source, Text(tool.labelJa), this, [this, tool] {
                         if (variantHandler_) variantHandler_(tool);
                     });
                     entry.ownAction = action;

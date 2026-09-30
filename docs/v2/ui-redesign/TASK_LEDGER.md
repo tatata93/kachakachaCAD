@@ -374,3 +374,7 @@ Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICA
 オーナー合意は [UNIFIED_TOOL_UI.md](UNIFIED_TOOL_UI.md)。全モードの道具選択・設定順序、
 製作の道具分離、Win95操作部品、ホーム視点・回転リング、生成曲線とソリッド表示を修正する。
 未検証。既存のPC_TESTEDはこの変更の検証を意味しない。
+
+進捗: `1981e980a` / `b22829f2b` に一覧・配置・Win95・視点の第一段階を保存。
+Windowsビルド・コア側182テスト合格、画面と配布版は生成確定時の参照不正で失敗。
+修正中。未達はUNIFIED_TOOL_UI.mdに追跡し、検証未完了のソースを配布扱いにしない。

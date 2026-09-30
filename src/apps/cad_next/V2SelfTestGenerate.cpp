@@ -65,6 +65,10 @@ using kachakacha::v2::domain::EntityKind;
         SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));
     if (!window.Ribbon().ClickCategory(QStringLiteral("生成"))
         || !window.Ribbon().ClickTool(QStringLiteral("現在形状を生成"))) return false;
+    window.Viewport().SetSelection({});
+    window.Viewport().SetSelection(
+        SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));
+    if (!Explain("対象を選び直しても生成ツールを保持する", window.FabricationDock().ToolActive())) return false;
     return Explain("曲げ確認の段(生成のカードがある)へ切り替えられる",
         window.FabricationDock().StageIndex() == 1);
 }

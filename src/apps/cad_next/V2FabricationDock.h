@@ -175,6 +175,9 @@ public:
     [[nodiscard]] int StageIndex() const;
     void SetStageIndex(int index);
     void FocusCommand(std::string_view command);
+    [[nodiscard]] bool ToolActive() const { return !activeCommand_.empty(); }
+    void EndTool() { activeCommand_.clear(); }
+    bool HandleKey(int key);
     void ChooseGenerationCommand(std::string_view command);
     [[nodiscard]] bool ClickGenerateConfirm();
     //! 組立率の欄へ焦点を移す。メニューの「組立状態」はここへ来る(窓を出さない)。
@@ -305,6 +308,7 @@ private:
     std::function<void(double, const QString&)> assemblyHandler_;
     std::function<void(double, bool)> radiusHandler_;
     bool radiusLocked_ = false;
+    std::string activeCommand_;
     std::string generationCommand_ = "fabrication.freeze_state";
     int automaticGeneration_=0, generationDestination_=0;
     std::vector<QComboBox*> automaticGenerations_, generationDestinations_;

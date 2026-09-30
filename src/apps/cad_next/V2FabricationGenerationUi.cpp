@@ -8,6 +8,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
+#include <QLineEdit>
+#include <QTabWidget>
 namespace {
 QPushButton* RunButton(QWidget* parent,const QString& text,const char* command,V2FabricationDock* dock)
 {
@@ -19,6 +21,7 @@ QPushButton* RunButton(QWidget* parent,const QString& text,const char* command,V
 QWidget* V2FabricationDock::BuildFreezeSection(QWidget* body)
 {
     auto* freezeButtons = new QWidget(body);
+    freezeButtons->setObjectName(QStringLiteral("freezeWidget"));
     auto* freezeLayout = new QVBoxLayout(freezeButtons);
     freezeLayout->setContentsMargins(0, 0, 0, 0);
     freezeLayout->setSpacing(2);
@@ -76,4 +79,52 @@ void V2FabricationDock::SetGenerationDestination(int value)
 {
     generationDestination_=value;
     for(auto* box:generationDestinations_) { if(box->currentIndex()!=value) { box->setCurrentIndex(value); } }
+}
+
+QWidget* V2FabricationDock::BuildTargetSection(QWidget* body)
+{
+    auto* bendWidget = new QWidget(body);
+    auto* bend = new QFormLayout(bendWidget);
+    parts_ = new QLineEdit(bendWidget);
+    QObject::connect(parts_, &QLineEdit::textChanged, this, [this] {
+        if (partNumbersChanged_) {
+            partNumbersChanged_();
+        }
+    });
+    parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
+    parts_->setToolTip(QStringLiteral(
+        "3D で部材を押すと、押した番号がここに入ります(Ctrl で足す・外す)。"
+        "手で番号(1 から)を書いてもかまいません。"
+        "挙げた部材だけが曲がります(V1 と同じ)。"
+        "空にして当てると全体が動き、部材ごとの値は捨てます。"));
+    // ラベルは短く「対象部材」に。詳しい使い方は欄のツールチップに既にある
+    // (380px の棚でラベルが折り返さないため、ここでは短く)。
+    auto* partsLabel = new QLabel(QStringLiteral("対象部材"), bendWidget);
+    partsLabel->setToolTip(QStringLiteral("3D で押す、または番号を書きます。"));
+    bend->addRow(partsLabel, parts_);
+    partInfo_ = new QLabel(QStringLiteral("(3D で部材を押すと出ます)"), bendWidget);
+    partInfo_->setWordWrap(true);
+    bend->addRow(QStringLiteral("方式 / 最大誤差"), partInfo_);
+    return bendWidget;
+}
+
+void V2FabricationDock::FocusCommand(std::string_view command)
+{
+    const bool approx = command == "fabrication.create" || command == "fabrication.preview_update"
+        || command == "fabrication.set_method" || command == "fabrication.set_connection_scope";
+    SetStageIndex(approx ? 0 : 1);
+    const bool bending = command == "fabrication.set_assembly" || command == "fabrication.edit_part";
+    const bool unfolding = command == "fabrication.create_pattern";
+    const bool generating = command.find("fabrication.freeze_") == 0;
+    const auto show = [this](const char* name, bool visible) {
+        if (auto* widget = stages_->findChild<QWidget*>(QString::fromUtf8(name)))
+            widget->setVisible(visible);
+    };
+    show("bendWidget", bending);
+    show("unfoldWidget", unfolding);
+    show("freezeWidget", generating);
+    show("editWidget", !approx && !bending && !unfolding && !generating);
+    show("splitRow", command == "fabrication.split_part");
+    for (const char* id : {"fabrication.merge_parts", "fabrication.assign_relief_cut",
+             "fabrication.set_unfold_base"}) show(id, command == id);
 }

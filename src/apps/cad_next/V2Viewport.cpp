@@ -102,7 +102,7 @@ namespace {
     case ViewDirection::Isometric:
         break;
     }
-    return {1, 1, 1};
+    return {1, -1, 1};
 }
 
 //! キューブの大きさと余白(px)。

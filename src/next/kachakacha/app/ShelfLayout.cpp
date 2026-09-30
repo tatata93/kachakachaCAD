@@ -130,31 +130,9 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     case DrawingTool::Select:
         break;
     }
-    // 選択道具のときだけ、モードで変わる。
-    // 「いま何を相手にしているか」がモードで決まるためである。
-    switch (mode) {
-    case UiMode::Drawing:
-        // 選んでいるものを数値で直す欄。これが V1 の「選択内容の数値編集」に当たる。
-        return {Shelf::Edit};
-    case UiMode::Part:
-        // 道具の設定を前に出す。V1 の部品タブに当たる(オーナー指摘 2026-09-11)。
-        // 役割の表(GuideTable)はここから外した(指示書 C-09、I-03)。
-        // 右は「いまの道具の1枚だけ」なので、部品欄の後ろに表を常設すると
-        // 2枚目になってしまう。表は guide.* コマンド自身が ShowShelf で
-        // 前に出す(V2GuideTableCommands.cpp)。
-        return {Shelf::Part};
-    case UiMode::Fabrication:
-        // 1枚(指示書 C-09)。板厚・許すずれは製作の棚が SetParameterMm で数の棚へ映すので、
-        // 製作の最中に数の棚を並べる必要はない。数そのものを直したいときは
-        // 「数の設定」(view.number_settings)が自分で前へ出す。
-        return {Shelf::Fabrication};
-    case UiMode::Output:
-        // 1枚(指示書 C-09)。型紙の下見は `fabrication.create_pattern` が作ったときに
-        // 自分で前へ出す(V2FabricationCommands.cpp の ShowShelf(Pattern))。
-        // 出力モードへ入っただけで型紙の空の棚を並べると、書き出しの欄が半分に潰れる。
-        return {Shelf::Export};
-    }
-    return {Shelf::Edit};
+    (void)mode;
+    // 道具未選択: ホストが同じモードのツール一覧を表示する。
+    return {};
 }
 
 Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing,

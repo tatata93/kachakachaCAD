@@ -174,6 +174,7 @@ public:
     void SetModelText(const QString& text);
     [[nodiscard]] int StageIndex() const;
     void SetStageIndex(int index);
+    void FocusCommand(std::string_view command);
     //! 組立率の欄へ焦点を移す。メニューの「組立状態」はここへ来る(窓を出さない)。
     void FocusAssemblyField();
 
@@ -199,6 +200,7 @@ private:
     QWidget* BuildDisplayRow(QWidget* page);
     QWidget* BuildOptionsForm(QWidget* body);
     QWidget* BuildRangeAndMaterial(QWidget* body);
+    QWidget* BuildTargetSection(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
     //! 部材の編集(分ける・1つにする・切れ目・展開の基準)。曲げの段と同じ棚に置く。
     QWidget* BuildPartEditSection(QWidget* body);

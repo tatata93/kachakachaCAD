@@ -504,6 +504,7 @@ public:
     QStackedWidget() = default;
     explicit QStackedWidget(QWidget*) {}
     int addWidget(QWidget*);
+    void removeWidget(QWidget*);
     void setCurrentIndex(int);
     void setCurrentWidget(QWidget*);
     [[nodiscard]] int currentIndex() const;
@@ -626,6 +627,7 @@ public:
     [[nodiscard]] int currentIndex() const;
     void setCurrentIndex(int);
     void setDocumentMode(bool);
+    [[nodiscard]] QTabBar* tabBar() const;
     [[nodiscard]] QWidget* widget(int) const;
     void setTabText(int, const QString&);
 };

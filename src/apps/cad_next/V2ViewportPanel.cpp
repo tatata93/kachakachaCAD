@@ -32,7 +32,7 @@ QPointF V2Viewport::NavigatorCenter() const
 {
     // 操作板の中心。右上に置く。ここから先の場所は全部 core が決める。
     // 画面側で別に持つと、寄せたときにずれる。
-    return QPointF(static_cast<double>(width()) - 110.0, 110.0);
+    return QPointF(static_cast<double>(width()) - 136.0, 136.0);
 }
 
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
@@ -135,6 +135,23 @@ void V2Viewport::DragViewGadget(const QPointF& position)
     if (gadget.kind != kachakacha::v2::view::ViewGadgetKind::AxisRing
         && gadget.kind != kachakacha::v2::view::ViewGadgetKind::Orbit
         && gadget.kind != kachakacha::v2::view::ViewGadgetKind::Roll) {
+        return;
+    }
+    if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
+        const auto from = gadgetDrag_->pressPosition;
+        if (std::hypot(position.x()-from.x(), position.y()-from.y()) <= kGadgetDragThresholdPx
+            && !gadgetDrag_->moved) return;
+        const double cx = layout.cubeXPx + layout.cubeSizePx * .5;
+        const double cy = layout.cubeYPx + layout.cubeSizePx * .5;
+        double angle = std::atan2(position.y()-cy, position.x()-cx)
+            - std::atan2(from.y()-cy, from.x()-cx);
+        angle = std::atan2(std::sin(angle), std::cos(angle)) * 57.29577951308232;
+        const double sign = gadget.direction == kachakacha::v2::view::ViewGadgetDirection::Positive ? 1.0 : -1.0;
+        const double speed = kachakacha::v2::view::AxisArrowDegreesPerPixel(gadgetDrag_->modifier)
+            / kachakacha::v2::view::AxisArrowDegreesPerPixel(kachakacha::v2::view::AxisArrowModifier::None);
+        ApplyGadgetRotation(gadget, angle * sign * speed, orientation_);
+        gadgetDrag_->pressPosition = position;
+        gadgetDrag_->moved = true;
         return;
     }
     const double dx = position.x() - gadgetDrag_->pressPosition.x();
@@ -278,7 +295,13 @@ void V2Viewport::DrawViewRings(QPainter& painter,
         line.setAlpha(usable ? 170 : 90);
         painter.setPen(QPen(line, 1.6));
         painter.setBrush(Qt::NoBrush);
-        painter.drawPolygon(path);
+        painter.drawPolyline(path);
+        if (!ring.points.empty()) {
+            const auto& middle = ring.points[ring.points.size() / 2];
+            const char* axis = ring.axis == kachakacha::v2::view::RotationAxis::X ? "X"
+                : ring.axis == kachakacha::v2::view::RotationAxis::Y ? "Y" : "Z";
+            painter.drawText(QPointF(middle.x - 4.0, middle.y + 4.0), QString::fromUtf8(axis));
+        }
         // 矢じりの下に丸い座を敷く。掴めるところがどこか、目で分かるようにする。
         // **座の大きさは当たり判定と同じにする。**
         // 見えている丸より当たり判定が小さいと、押したのに反応しない。

@@ -824,7 +824,7 @@ struct BoxSelectFixture {
         return false;
     }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-    if (!Explain("選択に戻すと編集の棚", window.ShelfShown(Shelf::Edit))) {
+    if (!Explain("選択に戻すと編集設定を閉じる", !window.ShelfShown(Shelf::Edit))) {
         return false;
     }
     if (!Explain("作図の棚は引っ込む", !window.ShelfShown(Shelf::Drawing))) {
@@ -832,7 +832,7 @@ struct BoxSelectFixture {
     }
     // モードを変えると、選択道具の相手も変わる。
     window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
-    if (!Explain("製作モードの選択は製作の棚", window.ShelfShown(Shelf::Fabrication))) {
+    if (!Explain("製作モードの未選択は道具一覧", !window.ShelfShown(Shelf::Fabrication))) {
         return false;
     }
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
@@ -1061,8 +1061,8 @@ struct BoxSelectFixture {
     window.RunCommand("fabrication.create");   // 二度目で確定
     // 出力モードへ入っただけでは型紙の棚は出ない(指示書 C-09、右は1枚)。
     window.SetMode(kachakacha::v2::app::UiMode::Output);
-    if (!Explain("出力モードの右は書き出しの1枚だけ",
-            window.ShelfShown(kachakacha::v2::app::Shelf::Export)
+    if (!Explain("出力モードの未選択は道具一覧",
+            !window.ShelfShown(kachakacha::v2::app::Shelf::Export)
                 && !window.ShelfShown(kachakacha::v2::app::Shelf::Pattern))) {
         return false;
     }
@@ -1183,7 +1183,7 @@ struct BoxSelectFixture {
     using kachakacha::v2::app::Shelf;
     window.SetMode(kachakacha::v2::app::UiMode::Part);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-    if (!Explain("部品の棚が出る", window.ShelfShown(Shelf::Part))) {
+    if (!Explain("部品の未選択は道具一覧", !window.ShelfShown(Shelf::Part))) {
         return false;
     }
     // 数の棚で板厚を変えると、部品の棚にも映る。別に持つと食い違う。

@@ -36,7 +36,7 @@
 void V2MainWindow::ShowPartEditShelf()
 {
     if (fabricationDock_ != nullptr) {
-        fabricationDock_->SetStageIndex(1);
+        fabricationDock_->FocusCommand("fabrication.edit_part");
     }
     ShowShelf(kachakacha::v2::app::Shelf::Fabrication);
     SetStatus(QStringLiteral("近似部品の編集: 3D で部材を押すか「対象部材」に番号を入れ、"
@@ -59,7 +59,7 @@ void V2MainWindow::FocusFabricationStageFor(std::string_view id)
     }
     const bool approx = id == "fabrication.create" || id == "fabrication.preview_update"
         || id == "fabrication.set_method" || id == "fabrication.set_connection_scope";
-    fabricationDock_->SetStageIndex(approx ? 0 : 1);
+    fabricationDock_->FocusCommand(id);
     if (!approx && !ShelfShown(kachakacha::v2::app::Shelf::Fabrication)) {
         ShowShelf(kachakacha::v2::app::Shelf::Fabrication);
     }

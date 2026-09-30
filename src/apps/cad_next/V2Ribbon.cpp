@@ -79,7 +79,8 @@ void V2Ribbon::ShowMode(UiMode mode)
         auto* button = new QToolButton(categoryRow_);
         button->setText(Text(categories[index].labelJa));
         button->setCheckable(true);
-        button->setAutoRaise(true);
+        button->setAutoRaise(false);
+        button->setMinimumHeight(26);
         button->setObjectName(QStringLiteral("ribbonCategory"));
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ShowCategory(at); });
@@ -133,7 +134,8 @@ void V2Ribbon::RebuildTools()
             }
             auto* button = new QToolButton(toolRow_);
             button->setObjectName(QStringLiteral("ribbonTool"));
-            button->setAutoRaise(true);
+            button->setAutoRaise(false);
+            button->setMinimumHeight(26);
             button->setToolButtonStyle(Qt::ToolButtonTextOnly);
             ToolEntry entry;
             entry.button = button;

@@ -283,7 +283,7 @@ struct ViewGadget {
 //! 輪1本ぶん。画面に落とした点列と、両端の矢じり。
 struct ViewAxisRing {
     RotationAxis axis = RotationAxis::X;
-    //! 閉じた点列。最後の点は最初の点と同じにしない(閉じるのは描く側)。
+    //! 開いた円弧。末尾と先頭を結ばない。画面上の操作位置は視点に依存しない。
     std::vector<geometry::ScreenPoint> points;
     geometry::ScreenPoint positiveHead{};
     geometry::ScreenPoint positiveTangent{};

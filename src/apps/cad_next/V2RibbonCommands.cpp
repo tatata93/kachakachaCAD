@@ -46,6 +46,24 @@ void V2MainWindow::BuildRibbon(const std::map<std::string, QAction*>& byCommand)
 
 void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
 {
+    // 選択済みでも道具を押しただけで生成しない。設定を見てから確定する。
+    const auto id = tool.commandId;
+    if (id == "selection.activate") EndArmedTools();
+    if (id == "fabrication.create" && approxShelfShown_) {
+        FocusFabricationStageFor(id);
+        return;
+    }
+    if (id == "fabrication.set_assembly" || id == "fabrication.edit_part"
+        || id == "fabrication.split_part" || id == "fabrication.merge_parts"
+        || id == "fabrication.create_pattern" || id == "fabrication.set_unfold_base"
+        || id == "fabrication.freeze_state" || id == "fabrication.freeze_flat"
+        || id == "fabrication.freeze_target" || id == "fabrication.freeze_wires") {
+        EndArmedTools();
+        SelectTool(DrawingTool::Select);
+        FocusFabricationStageFor(id);
+        SetStatus(QStringLiteral("入力と条件を指定し、右ペインで確定してください。"));
+        return;
+    }
     if (tool.surfaceMethod.has_value()) {
         // 面作成: 作り方を先に決めてから、同じ「面を作る」の道具へ。
         const auto method = static_cast<kachakacha::v2::modeling::GuideSurfaceMethod>(

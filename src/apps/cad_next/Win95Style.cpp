@@ -1357,6 +1357,16 @@ void Win95Style::drawComplexControl(
     QPainter* painter,
     const QWidget* widget) const
 {
+    if (control == CC_ToolButton) {
+        // AutoRaise のボタンもホバー前から輪郭を表示する。
+        if (const auto* source = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            QStyleOptionToolButton button = *source;
+            button.state &= ~State_AutoRaise;
+            if (!(button.state & (State_Sunken | State_On))) button.state |= State_Raised;
+            QProxyStyle::drawComplexControl(control, &button, painter, widget);
+            return;
+        }
+    }
     if (DrawComplexPart1(control, option, painter, widget)) {
         return;
     }

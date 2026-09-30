@@ -22,6 +22,8 @@
 
 #include <QApplication>
 #include <QSize>
+#include <QPushButton>
+#include <QScrollArea>
 #include <QString>
 
 #include <string>
@@ -67,14 +69,26 @@ using kachakacha::v2::modeling::DrawingTool;
     // Esc で元の道具(円)へ戻ってから、選択道具に持ち替える。
     window.Viewport().PressEscape();
     window.SelectTool(DrawingTool::Select);
-    if (!Explain("選択に持ち替えると編集の棚", host.CurrentShelf() == Shelf::Edit)
+    if (!Explain("選択に持ち替えると道具一覧", host.CurrentShelf() == Shelf::None)
         || !Explain("測定の棚は残らない", !window.ShelfShown(Shelf::Measure))) {
         return false;
     }
 
+    auto* chooser = host.findChild<QScrollArea*>(QStringLiteral("idleToolChooser"));
+    if (!Explain("ツール一覧が見える", chooser != nullptr && chooser->isVisible())) return false;
+    bool clicked = false;
+    for (auto* button : chooser->findChildren<QPushButton*>()) {
+        if (button->text() == QStringLiteral("円")) { button->click(); clicked = true; break; }
+    }
+    if (!Explain("右の一覧から円を開始できる", clicked
+            && window.DrawingDock().Tool() == DrawingTool::Circle)) return false;
+    auto* back = host.findChild<QPushButton*>(QStringLiteral("operationBack"));
+    if (!Explain("一覧へ戻る操作がある", back != nullptr && back->isVisible())) return false;
+    back->click();
+    if (!Explain("一覧へ戻ると設定を閉じる", host.CurrentShelf() == Shelf::None)) return false;
     // 部品モードへ移る。作図の棚が残ったままではいけない。
     window.SetMode(UiMode::Part);
-    if (!Explain("部品モードでは部品の棚", host.CurrentShelf() == Shelf::Part)) {
+    if (!Explain("部品モードでも未選択は道具一覧", host.CurrentShelf() == Shelf::None)) {
         return false;
     }
     return Explain("作図の棚は出ない", !window.ShelfShown(Shelf::Drawing));

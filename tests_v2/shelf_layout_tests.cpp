@@ -39,7 +39,7 @@ KACHA_V2_TEST(shelf_layout, どの道具にも出す棚がある)
     // 空になると、右が真っ白になって「壊れた」ようにしか見えない。
     for (const DrawingTool tool : kAllTools) {
         for (const UiMode mode : kAllModes) {
-            Require(!ShelvesFor(mode, tool).empty(), "棚が1枚以上ある");
+            Require(ShelvesFor(mode, tool).empty() == (tool == DrawingTool::Select), "未選択のみ道具一覧");
         }
     }
 }
@@ -48,7 +48,7 @@ KACHA_V2_TEST(shelf_layout, 前に出る棚は先頭と同じ)
 {
     for (const DrawingTool tool : kAllTools) {
         for (const UiMode mode : kAllModes) {
-            Require(FrontShelfFor(mode, tool) == ShelvesFor(mode, tool).front(),
+            Require(FrontShelfFor(mode, tool) == (ShelvesFor(mode, tool).empty() ? Shelf::None : ShelvesFor(mode, tool).front()),
                 "先頭が前に出る");
         }
     }
@@ -78,8 +78,7 @@ KACHA_V2_TEST(shelf_layout, 同じ棚を2度出さない)
 KACHA_V2_TEST(shelf_layout, 作図モードの選択は編集の棚だけ)
 {
     const auto shelves = ShelvesFor(UiMode::Drawing, DrawingTool::Select);
-    Require(shelves.size() == 1, "1枚だけ");
-    Require(shelves.front() == Shelf::Edit, "選んだものを数値で直す欄");
+    Require(shelves.empty(), "未選択はツール一覧");
 }
 
 KACHA_V2_TEST(shelf_layout, 線を引くときは作図の棚)
@@ -123,21 +122,21 @@ KACHA_V2_TEST(shelf_layout, 道具はモードより強い)
 
 KACHA_V2_TEST(shelf_layout, モードごとに選択の棚が変わる)
 {
-    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::Part, "部品は部品の棚");
-    Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::Fabrication,
+    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::None, "部品は部品の棚");
+    Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::None,
         "製作は製作の棚");
-    Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::Export, "出力は書き出し");
+    Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::None, "出力は書き出し");
 }
 
 KACHA_V2_TEST(shelf_layout, どのモードにも道具の設定の棚がある)
 {
     // 部品モードだけ右が「役割の表」で、道具の設定がどこにも無かった
     // (オーナー指摘 2026-09-11)。どのモードでも、先頭は設定の棚にする。
-    Require(FrontShelfFor(UiMode::Drawing, DrawingTool::Select) == Shelf::Edit, "作図");
-    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::Part, "部品");
-    Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::Fabrication,
+    Require(FrontShelfFor(UiMode::Drawing, DrawingTool::Select) == Shelf::None, "作図");
+    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::None, "部品");
+    Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::None,
         "製作");
-    Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::Export, "出力");
+    Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::None, "出力");
 }
 
 KACHA_V2_TEST(shelf_layout, 面取りは面取りの棚1枚)
@@ -197,7 +196,7 @@ KACHA_V2_TEST(shelf, 押し出しが終われば元の棚へ戻る)
         const auto after = ShelvesFor(mode, DrawingTool::Select, false);
         Require(std::find(after.begin(), after.end(), Shelf::Extrude) == after.end(),
             "押し出しの棚は残らない");
-        Require(FrontShelfFor(mode, DrawingTool::Select, false) == after.front(),
+        Require(FrontShelfFor(mode, DrawingTool::Select, false) == Shelf::None,
             "前に出るのは並びの先頭");
     }
 }
@@ -238,6 +237,8 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
     // ここに並べてあるのは「知っていて残している」という印で、
     // 4枚目が増えたらこの関所が鳴る。
     const std::set<int> openedByOwnCommand{
+        static_cast<int>(Shelf::Edit), static_cast<int>(Shelf::Part),
+        static_cast<int>(Shelf::Fabrication), static_cast<int>(Shelf::Export),
         static_cast<int>(Shelf::WorkPlane),   // workplane.create が出す
         static_cast<int>(Shelf::Display),     // view.display_settings が出す
         // 部品モードの2枚目から外した(指示書 C-09、I-03)。

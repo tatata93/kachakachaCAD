@@ -44,6 +44,7 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     }
     // 選べば満たせる。構えて待つ。
     pendingCommandId_ = std::string(id);
+    if (IsFabricationCommand(id) || IsFreezeCommand(id)) FocusFabricationStageFor(id);
     // 押し出しを構えているなら、拾う候補も押し出しが求めるものを前へ出す(§6)。
     if (id == "part.extrude") {
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);

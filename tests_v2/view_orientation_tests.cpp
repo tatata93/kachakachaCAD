@@ -614,7 +614,7 @@ KACHA_V2_TEST(view_orientation, 操作板にV1と同じ部品がそろってい�
     RequireEqual(std::to_string(layout.rings.size()), std::string("3"), "輪は3本");
 }
 
-KACHA_V2_TEST(view_orientation, 輪は視点に追従して傾く)
+KACHA_V2_TEST(view_orientation, 回転円弧は視点が変わっても掴む位置を保つ)
 {
     // どの軸で回るかが見た目で分かるように、キューブと同じ投影で描く(ADR 0023)。
     const auto top = kachakacha::v2::view::OrientationForZone(
@@ -632,7 +632,7 @@ KACHA_V2_TEST(view_orientation, 輪は視点に追従して傾く)
             }
         }
     }
-    Require(moved, "視点が変われば輪も変わる");
+    Require(!moved, "視点が変わっても操作位置は変わらない");
 }
 
 KACHA_V2_TEST(view_orientation, 画面基準の矢印は視点が変わっても動かない)

@@ -249,7 +249,7 @@ using kachakacha::v2::domain::EntityKind;
     // 近似モデルが無いときは、押しても文書は変わらない(理由が出る)。押せる形ではある。
     window.RunCommand("file.new");
     window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
-    dock.SetStageIndex(1);
+    window.RunCommand("fabrication.set_assembly");
     const auto revision = window.Session().GetDocument().Revision();
     if (!Explain("50 を押せる", dock.ClickBendPreset(50))
         || !Explain("組立率の欄が 50 になる", std::abs(dock.AssemblyPercent() - 50.0) < 1.0e-9)

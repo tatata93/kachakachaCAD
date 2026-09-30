@@ -162,6 +162,7 @@ void V2MainWindow::BuildRightShelves()
             operationHost_->AddPage(shelf, source->widget());
         }
     }
+    operationHost_->SetToolHandler([this](const auto& tool) { RunRibbonVariant(tool); });
     operationDock_->setWidget(operationHost_);
     addDockWidget(Qt::RightDockWidgetArea, operationDock_);
     RefreshRightShelves();

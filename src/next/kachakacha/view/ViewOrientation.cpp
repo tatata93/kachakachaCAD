@@ -646,43 +646,25 @@ ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx, double sca
     if (!(scalePx > 0.0) || !orientation.IsFinite() || orientation.Norm() <= 0.0) {
         return layout;
     }
-    const Vector3 right = RightOf(orientation);
-    const Vector3 up = UpOf(orientation);
-
-    // 回転リング3本。キューブと同じ投影なので、視点に追従して傾く。
+    // 固定した円弧なので、視点によって潰れたりキューブに隠れたりしない。
+    int axisIndex = 0;
     for (const RotationAxis axis : {RotationAxis::X, RotationAxis::Y, RotationAxis::Z}) {
-        Vector3 planeU{};
-        Vector3 planeV{};
-        RingBasis(axis, planeU, planeV);
         ViewAxisRing ring;
         ring.axis = axis;
-        ring.points.reserve(static_cast<std::size_t>(kViewRingSampleCount));
-        std::size_t farthest = 0;
-        double farthestDistance = -1.0;
+        const double start = (-126.0 + axisIndex++ * 120.0) * 0.017453292519943295;
         for (int sample = 0; sample < kViewRingSampleCount; ++sample) {
-            const double angle = 6.283185307179586 * static_cast<double>(sample)
-                / static_cast<double>(kViewRingSampleCount);
-            const Vector3 point = planeU * (kViewRingRadius * std::cos(angle))
-                + planeV * (kViewRingRadius * std::sin(angle));
-            const geometry::ScreenPoint screen =
-                ProjectOntoNavigator(point, right, up, centerXPx, centerYPx, scalePx);
-            ring.points.push_back(screen);
-            const double dx = screen.x - centerXPx;
-            const double dy = screen.y - centerYPx;
-            const double distance = std::sqrt(dx * dx + dy * dy);
-            if (distance > farthestDistance) {
-                farthestDistance = distance;
-                farthest = static_cast<std::size_t>(sample);
-            }
+            const double angle = start + 1.2566370614359172 * sample / (kViewRingSampleCount - 1);
+            ring.points.push_back({centerXPx + scalePx * 2.2 * std::cos(angle),
+                centerYPx + scalePx * 2.2 * std::sin(angle)});
         }
-        // いちばん外に見えるところに矢じりを置く。そこは輪が真横を向いていないので潰れない。
-        const std::size_t opposite = (farthest + ring.points.size() / 2) % ring.points.size();
-        ring.negativeHead = ring.points[farthest];
-        ring.negativeTangent = TangentAt(ring.points, farthest);
-        ring.positiveHead = ring.points[opposite];
-        ring.positiveTangent = TangentAt(ring.points, opposite);
-        ring.positiveTangent.x = -ring.positiveTangent.x;
-        ring.positiveTangent.y = -ring.positiveTangent.y;
+        const std::size_t first = ring.points.size() / 5;
+        const std::size_t last = ring.points.size() - first - 1;
+        ring.negativeHead = ring.points[first];
+        ring.negativeTangent = TangentAt(ring.points, first);
+        ring.negativeTangent.x *= -1.0;
+        ring.negativeTangent.y *= -1.0;
+        ring.positiveHead = ring.points[last];
+        ring.positiveTangent = TangentAt(ring.points, last);
         layout.rings.push_back(std::move(ring));
     }
     for (const ViewAxisRing& ring : layout.rings) {
@@ -701,21 +683,21 @@ ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx, double sca
     // これより小さいと、狙って外れる。狙って外れる的は、無いのと同じである。
     // 置き場所はキューブ(半径 scalePx)の外側。重ねると、どちらを押したのか決まらない。
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Left,
-        RotationAxis::Y, centerXPx - 65.0, centerYPx + 71.0, 52.0, 30.0);
+        RotationAxis::Y, centerXPx - 65.0, centerYPx + 97.0, 52.0, 30.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Right,
-        RotationAxis::Y, centerXPx + 13.0, centerYPx + 71.0, 52.0, 30.0);
+        RotationAxis::Y, centerXPx + 13.0, centerYPx + 97.0, 52.0, 30.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Up,
-        RotationAxis::X, centerXPx + 71.0, centerYPx - 63.0, 30.0, 52.0);
+        RotationAxis::X, centerXPx + 97.0, centerYPx - 63.0, 30.0, 52.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Down,
-        RotationAxis::X, centerXPx + 71.0, centerYPx + 11.0, 30.0, 52.0);
+        RotationAxis::X, centerXPx + 97.0, centerYPx + 11.0, 30.0, 52.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Positive,
-        RotationAxis::Z, centerXPx - 45.0, centerYPx - 98.0, 30.0, 28.0);
+        RotationAxis::Z, centerXPx - 45.0, centerYPx - 124.0, 30.0, 28.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Negative,
-        RotationAxis::Z, centerXPx + 15.0, centerYPx - 98.0, 30.0, 28.0);
+        RotationAxis::Z, centerXPx + 15.0, centerYPx - 124.0, 30.0, 28.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Home, ViewGadgetDirection::Positive,
-        RotationAxis::X, centerXPx - 128.0, centerYPx - 98.0, 36.0, 32.0);
+        RotationAxis::X, centerXPx - 128.0, centerYPx - 124.0, 36.0, 32.0);
     AddGadget(layout.gadgets, ViewGadgetKind::AlignSelection, ViewGadgetDirection::Positive,
-        RotationAxis::X, centerXPx - 68.0, centerYPx + 109.0, 136.0, 32.0);
+        RotationAxis::X, centerXPx - 68.0, centerYPx + 139.0, 136.0, 32.0);
 
     // キューブも同じ入れ物へ入れる。別に持つと、寄せたときにずれる。
     layout.cubeSizePx = scalePx * 2.0;
@@ -838,9 +820,9 @@ std::optional<std::size_t> ViewRingAtScreen(const ViewGadgetLayout& layout, doub
     // 矢じりだけを的にすると、視点によっては潰れて狙えなくなる。
     for (const ViewAxisRing& ring : layout.rings) {
         double nearest = 1.0e18;
-        for (std::size_t index = 0; index < ring.points.size(); ++index) {
+        for (std::size_t index = 0; index + 1 < ring.points.size(); ++index) {
             const geometry::ScreenPoint& a = ring.points[index];
-            const geometry::ScreenPoint& b = ring.points[(index + 1) % ring.points.size()];
+            const geometry::ScreenPoint& b = ring.points[index + 1];
             nearest = std::min(nearest, DistanceToSegmentPx(xPx, yPx, a.x, a.y, b.x, b.y));
         }
         if (nearest > kViewRingGrabPx) {

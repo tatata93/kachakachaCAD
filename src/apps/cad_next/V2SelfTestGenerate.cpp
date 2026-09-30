@@ -11,6 +11,7 @@
 #include "V2EntityTree.h"
 #include "V2FabricationDock.h"
 #include "V2MainWindow.h"
+#include "V2Ribbon.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/Selection.h"
@@ -62,7 +63,8 @@ using kachakacha::v2::domain::EntityKind;
 {
     window.Viewport().SetSelection(
         SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));
-    window.FabricationDock().SetStageIndex(1);
+    if (!window.Ribbon().ClickCategory(QStringLiteral("生成"))
+        || !window.Ribbon().ClickTool(QStringLiteral("現在形状を生成"))) return false;
     return Explain("曲げ確認の段(生成のカードがある)へ切り替えられる",
         window.FabricationDock().StageIndex() == 1);
 }

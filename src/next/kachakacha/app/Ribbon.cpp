@@ -148,7 +148,7 @@ const std::vector<RibbonCategory>& FabricationCategories()
                 Extra("開口 / 折り線", "fabrication.assign_role"),
                 Extra("接続する部材の範囲", "fabrication.set_connection_scope")}},
         {"bend", "曲げ・展開",
-            {Tool("曲げ状態", "fabrication.edit_part"), Tool("展開", "fabrication.create_pattern"),
+            {Tool("曲げ状態", "fabrication.set_assembly"), Tool("展開", "fabrication.create_pattern"),
                 Tool("展開基準辺", "fabrication.set_unfold_base"),
                 Blocked("表裏反転", "表裏反転はまだできません(型紙の配置に鏡映がありません)")}},
         {"generate", "生成",

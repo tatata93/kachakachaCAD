@@ -1,6 +1,10 @@
 #include "V2OperationPanelHost.h"
 
 #include <QComboBox>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QPushButton>
+#include <QScrollArea>
 #include <QFont>
 #include <QLabel>
 #include <QObject>
@@ -50,6 +54,13 @@ V2OperationPanelHost::V2OperationPanelHost(QWidget* parent)
     pages_ = new QStackedWidget(this);
     pages_->setObjectName(QStringLiteral("operationPages"));
     layout->addWidget(pages_, 1);
+    back_ = new QPushButton(QStringLiteral("ツール一覧に戻る"), this);
+    back_->setObjectName(QStringLiteral("operationBack"));
+    layout->addWidget(back_);
+    QObject::connect(back_, &QPushButton::clicked, this, [this] {
+        if (toolHandler_) toolHandler_({"選択", "selection.activate", {}, {}, {}, false});
+    });
+    SetToolMode(kachakacha::v2::app::UiMode::Drawing);
 
     QObject::connect(pageChoice_, &QComboBox::currentIndexChanged, this,
         [this](int index) { ActivateIndex(index); });
@@ -109,10 +120,12 @@ kachakacha::v2::app::Shelf V2OperationPanelHost::CurrentShelf() const noexcept
 
 void V2OperationPanelHost::ActivateIndex(int index)
 {
+    back_->setVisible(index >= 0);
     if (index < 0 || index >= static_cast<int>(shownShelves_.size())) {
         current_ = kachakacha::v2::app::Shelf::None;
         title_->setText(QStringLiteral("現在の操作"));
-        pages_->setCurrentIndex(-1);
+        title_->setText(QStringLiteral("ツールを選択"));
+        pages_->setCurrentWidget(chooser_);
         return;
     }
 
@@ -134,4 +147,53 @@ void V2OperationPanelHost::SetHint(const QString& hintJa)
 QString V2OperationPanelHost::HintText() const
 {
     return hint_->text();
+}
+
+void V2OperationPanelHost::SetToolHandler(
+    std::function<void(const kachakacha::v2::app::RibbonTool&)> handler)
+{
+    toolHandler_ = std::move(handler);
+}
+
+void V2OperationPanelHost::SetToolMode(kachakacha::v2::app::UiMode mode)
+{
+    if (chooserMode_ == mode) return;
+    chooserMode_ = mode;
+    if (chooser_ != nullptr) {
+        chooser_->setObjectName(QStringLiteral("retiredToolChooser"));
+        pages_->removeWidget(chooser_);
+        chooser_->deleteLater();
+    }
+    auto* scroll = new QScrollArea(pages_);
+    scroll->setObjectName(QStringLiteral("idleToolChooser"));
+    scroll->setWidgetResizable(true);
+    auto* body = new QWidget(scroll);
+    auto* layout = new QVBoxLayout(body);
+    for (const auto& category : kachakacha::v2::app::RibbonCategoriesFor(mode)) {
+        auto* group = new QGroupBox(QString::fromUtf8(category.labelJa.data(),
+            static_cast<int>(category.labelJa.size())), body);
+        auto* grid = new QGridLayout(group);
+        int index = 0;
+        for (bool extra : {false, true}) for (const auto& tool : category.tools) {
+            if (tool.extra != extra) continue;
+            auto* button = new QPushButton(QString::fromUtf8(tool.labelJa.data(),
+                static_cast<int>(tool.labelJa.size())), group);
+            button->setObjectName(QStringLiteral("toolChoice"));
+            button->setMinimumHeight(30);
+            button->setEnabled(!tool.Blocked());
+            button->setToolTip(QString::fromUtf8(tool.blockedReasonJa.data(),
+                static_cast<int>(tool.blockedReasonJa.size())));
+            QObject::connect(button, &QPushButton::clicked, this, [this, tool] {
+                if (toolHandler_) toolHandler_(tool);
+            });
+            grid->addWidget(button, index / 2, index % 2);
+            ++index;
+        }
+        layout->addWidget(group);
+    }
+    layout->addStretch();
+    scroll->setWidget(body);
+    chooser_ = scroll;
+    pages_->addWidget(chooser_);
+    if (current_ == kachakacha::v2::app::Shelf::None) pages_->setCurrentWidget(chooser_);
 }

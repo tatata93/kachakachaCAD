@@ -21,6 +21,7 @@
 #include <QScrollArea>
 #include <QString>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -61,6 +62,7 @@ constexpr int kSplitAxisChoices = 5;
     V2FabricationDock* dock)
 {
     auto* button = new QPushButton(text, parent);
+    button->setObjectName(QString::fromUtf8(command));
     QObject::connect(button, &QPushButton::clicked, dock, [dock, command] { dock->PressRun(command); });
     return button;
 }
@@ -83,6 +85,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     stages_ = new QTabWidget(body);
     stages_->setObjectName(QStringLiteral("fabricationStages"));
     stages_->setDocumentMode(true);
+    stages_->tabBar()->hide();
     layout->addWidget(stages_, 1);
 
     auto* approximationPage = new QWidget(stages_);
@@ -127,6 +130,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     auto* bendLayout = new QVBoxLayout(bendPage);
     bendLayout->setContentsMargins(4, 8, 4, 4);
     bendLayout->setSpacing(4);
+    bendLayout->addWidget(BuildTargetSection(bendPage));
     bendLayout->addWidget(BuildBendSection(bendPage));
     // 部材の編集は曲げと同じ段に置く(引継ぎ 2026-09-17 の 5)。
     // 分ける・1つにする・切れ目・展開の基準は、曲げながら決めるものだからである。
@@ -594,6 +598,7 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
 QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
 {
     auto* bendWidget = new QWidget(body);
+    bendWidget->setObjectName(QStringLiteral("bendWidget"));
     auto* bend = new QFormLayout(bendWidget);
     bend->setContentsMargins(0, 0, 0, 0);
     bend->setRowWrapPolicy(QFormLayout::WrapLongRows);
@@ -668,26 +673,6 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     radiusLayout->addWidget(lockRadius_);
     radiusLayout->addWidget(radiusState_);
     bend->addRow(QStringLiteral("半径"), radiusRow);
-    parts_ = new QLineEdit(bendWidget);
-    QObject::connect(parts_, &QLineEdit::textChanged, this, [this] {
-        if (partNumbersChanged_) {
-            partNumbersChanged_();
-        }
-    });
-    parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
-    parts_->setToolTip(QStringLiteral(
-        "3D で部材を押すと、押した番号がここに入ります(Ctrl で足す・外す)。"
-        "手で番号(1 から)を書いてもかまいません。"
-        "挙げた部材だけが曲がります(V1 と同じ)。"
-        "空にして当てると全体が動き、部材ごとの値は捨てます。"));
-    // ラベルは短く「対象部材」に。詳しい使い方は欄のツールチップに既にある
-    // (380px の棚でラベルが折り返さないため、ここでは短く)。
-    auto* partsLabel = new QLabel(QStringLiteral("対象部材"), bendWidget);
-    partsLabel->setToolTip(QStringLiteral("3D で押す、または番号を書きます。"));
-    bend->addRow(partsLabel, parts_);
-    partInfo_ = new QLabel(QStringLiteral("(3D で部材を押すと出ます)"), bendWidget);
-    partInfo_->setWordWrap(true);
-    bend->addRow(QStringLiteral("方式 / 最大誤差"), partInfo_);
     // 「固定で作るもの」の欄は、生成の3枚のカード(現在状態 / Flat 0% / Target 100%)の
     // すぐ上に置く(コンストラクタの freezeButtons)。ここでは作らない。
     return bendWidget;
@@ -696,6 +681,7 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
 QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
 {
     auto* editWidget = new QWidget(body);
+    editWidget->setObjectName(QStringLiteral("editWidget"));
     auto* layout = new QVBoxLayout(editWidget);
     layout->setContentsMargins(0, 4, 0, 0);
     layout->setSpacing(2);
@@ -704,6 +690,7 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     // ボタン文言を短くし、外した説明はツールチップへ(380px の棚に収めるため)。
     // 分ける: 挙げた部材をそれぞれ N 枚に等分する(入力の数: 部材も枚数も決まった数ではない)。
     auto* splitRow = new QWidget(editWidget);
+    splitRow->setObjectName(QStringLiteral("splitRow"));
     auto* splitLayout = new QHBoxLayout(splitRow);
     splitLayout->setContentsMargins(0, 0, 0, 0);
     auto* splitPart = MakeRun(splitRow, QStringLiteral("部材を分ける"),
@@ -768,6 +755,7 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
 QWidget* V2FabricationDock::BuildUnfoldSection(QWidget* body)
 {
     auto* unfoldWidget = new QWidget(body);
+    unfoldWidget->setObjectName(QStringLiteral("unfoldWidget"));
     auto* layout = new QVBoxLayout(unfoldWidget);
     layout->setContentsMargins(0, 4, 0, 0);
     layout->setSpacing(2);

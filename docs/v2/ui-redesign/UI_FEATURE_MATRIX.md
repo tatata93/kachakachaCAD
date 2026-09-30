@@ -230,5 +230,5 @@ HP-GEN-01〜04、GPT面幾何12/12、GPT近似8/8、構造16/16合格。_GO.cmd�
 Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICATION_GENERATION.md)。
 
 共通配置の変更（2026-10-01）: 道具未選択は道具一覧、選択後は必要な設定と固定確定欄。
-第三段階 `3a4982454` はWindows全ゲート合格。GPT固定欄・旧部品棚の分離は追加検証中。
+第三段階 `3a4982454` はWindows全ゲート合格。GPT固定欄・旧部品棚の分離は`52301238d`でWindows全ゲート合格（画面373/373）。
 詳細と未達は [UNIFIED_TOOL_UI.md](UNIFIED_TOOL_UI.md) を参照。

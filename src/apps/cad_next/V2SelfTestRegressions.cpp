@@ -86,8 +86,8 @@ using kachakacha::v2::modeling::DrawingTool;
     if (!Explain("右の一覧から円を開始できる", clicked
             && window.DrawingDock().Tool() == DrawingTool::Circle)) return false;
     auto* back = host.findChild<QPushButton*>(QStringLiteral("operationBack"));
-    if (!Explain("一覧へ戻る操作がある", back != nullptr && back->isVisible())) return false;
-    back->click();
+    if (!Explain("固定した取消と重複する戻る操作は出さない", back != nullptr && !back->isVisible())) return false;
+    if (!Explain("下端の取消で道具を終了できる", window.DrawingDock().ClickCancel())) return false;
     if (!Explain("一覧へ戻ると設定を閉じる", host.CurrentShelf() == Shelf::None)) return false;
     // 部品モードへ移る。作図の棚が残ったままではいけない。
     window.SetMode(UiMode::Part);

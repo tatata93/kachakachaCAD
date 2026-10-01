@@ -233,5 +233,5 @@ Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICA
 第三段階 `3a4982454` はWindows全ゲート合格。GPT固定欄・旧部品棚の分離は`52301238d`でWindows全ゲート合格（画面373/373）。
 詳細と未達は [UNIFIED_TOOL_UI.md](UNIFIED_TOOL_UI.md) を参照。
 
-2026-10-02 P-01/P-02/P-03/P-04拡張は検証中。[EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTENSIONS.md)参照。
-従来のPC_TESTEDは今回の追加経路の検証を意味しない。
+2026-10-02 P-01/P-02/P-03/P-04拡張: `13d27e776`はWindows全ゲート合格（ctest184/184、画面各377/377、HP-PA通常画面6/6）。
+PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTENSIONS.md)参照。

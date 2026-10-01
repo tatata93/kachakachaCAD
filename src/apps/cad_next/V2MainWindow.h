@@ -50,6 +50,7 @@
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctBoolean.h"
+#include "kachakacha/kernel/OcctContact.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
@@ -860,6 +861,14 @@ private:
     void ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind);
     void EndBoolean();
     void ConfirmBoolean();
+    bool RefreshContactPreview();
+    bool ConfirmContact();
+    void SwapContactInputs();
+    bool PickContactRegion(const QPointF& point);
+    void ShowOverlapBrowser();
+    std::optional<kachakacha::v2::kernel::ContactResult> contactBase_;
+    std::optional<kachakacha::v2::kernel::ContactResult> contactBuilt_;
+    QString contactPreviewKey_;
     //! 「厚み」の道具(指示書 matrix P-10、V2ThickenCommands.cpp)。
     void RunThickenTool();
     void MirrorThickenToSelection();

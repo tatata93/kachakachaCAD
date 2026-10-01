@@ -147,6 +147,10 @@ parameter schemaのdiscriminatorにする。
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |
 | `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド 1 以上(何枚でも)と作業平面 1。面が平面をまたげば断る | Part を面ごとに 1 つ(まとめて 1 回で戻る) | AT-EXT-001 |
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart(閉シェルごとに 1 つ。各部品はそのシェルの線だけを記録。まとめて 1 回で戻る) | AT-GEO-010から013 |
+| `part.overlap_inspect` | めり込み一覧 | KCDの全ソリッド（非表示を含めるか選択） | 3D一覧、領域から処理へ。検査だけでは変更しない | HP-CT-02 |
+| `part.contact_wire` | 交わりにワイヤー | 部品A/B各1、生成境界を選択 | 独立Wire、元の両部品保持 | HP-CT-01,03 |
+| `part.trim_overlap` | めり込みを削る | 部品A/B各1、領域ごとに削る側を指定 | 各連結Part、任意で境界Wire | HP-CT-02 |
+| `part.split_overlap` | 交わりで分割 | 部品A/B各1、残す領域を指定 | 各連結Part、相手保持、任意で境界Wire | HP-CT-04 |
 | `part.boolean_add` | 足す | target Part 1、tool Part 1以上(何個でも。順に足す) | Part | AT-EXT-007 |
 | `part.boolean_cut` | 引く | target Part 1、tool Part 1以上(何個でも。順に引く) | 1以上のPart | AT-EXT-007 |
 | `part.boolean_intersect` | 交差 | target Part 1、tool Part 1以上(何個でも。全部に共通する部分) | Part(重ならなければ KER-B004、土台のままなら KER-B003 で断る) | AT-EXT-007 |

@@ -202,6 +202,25 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
         || definition->tools.empty()) {
         return false;
     }
+    if (definition->fragmentIndex >= 0 && definition->tools.size() == 1) {
+        const auto first = partShapes_.find(definition->targets.front().ToString());
+        const auto second = partShapes_.find(definition->tools.front().ToString());
+        if (first == partShapes_.end() || second == partShapes_.end()) return false;
+        const auto tolerance = session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
+        const auto built = definition->mode == 3
+            ? kachakacha::v2::kernel::BuildLocalTrim(first->second, second->second, definition->contactRemovals, tolerance)
+            : kachakacha::v2::kernel::BuildContact(first->second, second->second,
+            false, definition->mode == 1, definition->mode == 2,
+            session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+        if (!built.HasValue()) return false;
+        for (const auto& piece : built.Value().pieces) {
+            if (piece.fragmentIndex == definition->fragmentIndex && piece.sourceSide == definition->contactSide) {
+                partShapes_[output.ToString()] = piece.handle;
+                return true;
+            }
+        }
+        return false;
+    }
     // 材料は先に作り直してある。評価順に従っているので、ここでは必ず見つかる。
     // 見つからないなら、材料の作り直しが失敗している。黙って作らない。
     const auto base = partShapes_.find(definition->targets.front().ToString());

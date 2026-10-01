@@ -18,6 +18,8 @@
 #include <functional>
 #include <vector>
 
+class QCheckBox;
+class QListWidget;
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
@@ -31,6 +33,14 @@ public:
         const QString& targetNameJa, const QString& toolNameJa,
         const std::vector<QString>& statusLinesJa, bool canConfirm);
 
+    void SetContactHandlers(std::function<void()> update, std::function<void()> swap);
+    [[nodiscard]] bool WantsContactWire() const;
+    void SetContactRegions(const QString& key, const std::vector<QString>& names);
+    [[nodiscard]] std::vector<bool> ContactRegions() const;
+    [[nodiscard]] std::vector<int> ContactRemovals() const;
+    [[nodiscard]] int ContactRegionIndex() const;
+    void SelectContactRegion(int index);
+    void SetContactRemoval(int index, int removal);
     //! 足す / 引く / 交差を押した。
     void SetOperationHandler(std::function<void(kachakacha::v2::app::BooleanKind)> handler);
     //! その欄の「ここへ選ぶ」を押した。
@@ -61,6 +71,17 @@ private:
     [[nodiscard]] QPushButton* ArmFor(kachakacha::v2::app::BooleanSlot slot) const;
     [[nodiscard]] QPushButton* ClearFor(kachakacha::v2::app::BooleanSlot slot) const;
     void BuildRows(QVBoxLayout* layout);
+    void BuildContactRows(QVBoxLayout* layout);
+    void ShowContactOptions(kachakacha::v2::app::BooleanKind kind);
+    QCheckBox* contactWire_ = nullptr;
+    QListWidget* contactRegions_ = nullptr;
+    QPushButton* swap_ = nullptr;
+    QLabel* operationTitle_ = nullptr;
+    QLabel* targetLabel_ = nullptr;
+    QLabel* contactHint_ = nullptr;
+    QString contactKey_;
+    kachakacha::v2::app::BooleanKind kind_ = kachakacha::v2::app::BooleanKind::Add;
+    std::function<void()> contactUpdate_, contactSwap_;
 
     QPushButton* add_ = nullptr;
     QPushButton* cut_ = nullptr;

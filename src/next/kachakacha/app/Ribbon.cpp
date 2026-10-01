@@ -127,7 +127,8 @@ const std::vector<RibbonCategory>& PartCategories()
                 Blocked("面置換", "面置換はまだできません")}},
         {"boolean", "ブール演算",
             {Tool("足す", "part.boolean_add"), Tool("引く", "part.boolean_cut"),
-                Tool("交差", "part.boolean_intersect")}},
+                Tool("交差", "part.boolean_intersect"), Tool("めり込み一覧", "part.overlap_inspect"), Tool("交わりにワイヤー", "part.contact_wire"),
+                Tool("めり込みを削る", "part.trim_overlap"), Tool("交わりで分割", "part.split_overlap")}},
         {"place", "配置",
             // 線と同じ道具・同じ点の置き方で部品を動かす(P-18)。パターンは線の配列と同じ棚。
             {Tool("移動", "part.move"), Tool("回転", "part.rotate"), Tool("ミラー", "part.mirror"),

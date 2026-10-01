@@ -40,7 +40,8 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     BuildRows(layout);
 
     // 1. 作り方(足す・引く)。押して切り替える。押された形が、いまの作り方(正本の methods)。
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
+    operationTitle_ = MakePanelSectionTitle(body, QStringLiteral("作り方"));
+    layout->addWidget(operationTitle_);
     auto* operations = new QHBoxLayout();
     add_ = new QPushButton(QStringLiteral("足す"), body);
     cut_ = new QPushButton(QStringLiteral("引く"), body);
@@ -59,6 +60,7 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
         operations->addWidget(button);
     }
     layout->addLayout(operations);
+    BuildContactRows(layout);
 
 
     // 3. 状態。
@@ -97,7 +99,9 @@ void V2BooleanDock::BuildRows(QVBoxLayout* layout)
     const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
                          QPushButton** clear, BooleanSlot slot) {
         auto* line = new QHBoxLayout();
-        line->addWidget(new QLabel(name, widget()));
+        auto* label = new QLabel(name, widget());
+        if (slot == BooleanSlot::Target) targetLabel_ = label;
+        line->addWidget(label);
         *value = new QLabel(widget());
         (*value)->setWordWrap(true);
         line->addWidget(*value, 1);
@@ -127,6 +131,8 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
     const std::vector<QString>& statusLinesJa, bool canConfirm)
 {
     loading_ = true;
+    ShowContactOptions(state.kind);
+    swap_->setEnabled(!state.target.IsNil() && state.tools.size() == 1);
     add_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Add);
     cut_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Cut);
     intersect_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Intersect);
@@ -224,6 +230,7 @@ QString V2BooleanDock::ToolTextJa() const
 kachakacha::v2::app::BooleanKind V2BooleanDock::KindShown() const
 {
     using kachakacha::v2::app::BooleanKind;
+    if (kind_ == BooleanKind::ContactWire || kind_ == BooleanKind::TrimOverlap || kind_ == BooleanKind::SplitOverlap) return kind_;
     return cut_->isChecked() ? BooleanKind::Cut
         : intersect_->isChecked() ? BooleanKind::Intersect
                                   : BooleanKind::Add;

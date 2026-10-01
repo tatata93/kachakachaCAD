@@ -296,6 +296,11 @@ template<class Id>
     } else if (const auto* boolean =
                    std::get_if<domain::BooleanDefinition>(&feature.definition)) {
         definition["mode"] = JsonValue::Number(static_cast<double>(boolean->mode));
+        definition["fragmentIndex"] = JsonValue::Number(static_cast<double>(boolean->fragmentIndex));
+        definition["contactSide"] = JsonValue::Number(boolean->contactSide);
+        JsonArray removals;
+        for (const int mask : boolean->contactRemovals) removals.push_back(JsonValue::Number(mask));
+        definition["contactRemovals"] = JsonValue::Array(std::move(removals));
         definition["targets"] = WriteIdArray(boolean->targets);
         definition["tools"] = WriteIdArray(boolean->tools);
     } else if (const auto* fabrication = std::get_if<domain::CreateFabricationModelDefinition>(

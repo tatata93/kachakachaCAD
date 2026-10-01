@@ -257,10 +257,12 @@ struct CreatePartFromWireCageDefinition {
 
 //! 足す・引く。
 struct BooleanDefinition {
-    //! 0=足す 1=引く。
-    int mode = 0;
+    int mode = 0; // 0 union, 1 difference, 2 intersection, 3 local trim
     std::vector<EntityId> targets;
     std::vector<EntityId> tools;
+    int fragmentIndex = -1;
+    int contactSide = 0;
+    std::vector<int> contactRemovals; // per overlap region: 0 keep, 1 A, 2 B, 3 both
 };
 
 //! 面に厚みを付けて立体にする(工程2の「面をソリッド化する」)。

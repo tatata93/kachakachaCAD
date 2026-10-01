@@ -39,6 +39,9 @@ std::string_view BooleanOperationLabelJa(BooleanKind kind) noexcept
     case BooleanKind::Add:       return "足す";
     case BooleanKind::Cut:       return "引く";
     case BooleanKind::Intersect: return "交差";
+    case BooleanKind::ContactWire: return "交わりにワイヤー";
+    case BooleanKind::TrimOverlap: return "めり込みを削る";
+    case BooleanKind::SplitOverlap: return "交わりで分割";
     }
     return "足す";
 }
@@ -49,6 +52,9 @@ int BooleanModeOf(BooleanKind kind) noexcept
     case BooleanKind::Add:       return 0;
     case BooleanKind::Cut:       return 1;
     case BooleanKind::Intersect: return 2;
+    case BooleanKind::TrimOverlap: return 1;
+    case BooleanKind::ContactWire:
+    case BooleanKind::SplitOverlap: return 0;
     }
     return 0;
 }

@@ -4,6 +4,7 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2OverlapBrowser.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
@@ -194,6 +195,7 @@ void V2MainWindow::BuildOutputShelves()
     // 窓で全部決めてから作る道をやめ、右で見ながら決められるようにする。
     BuildSurfaceDock();
 
+    InstallContactPicker(*viewport_, [this](const QPointF& point) { return PickContactRegion(point); });
     booleanDock_ = new V2BooleanDock(this);
     booleanDock_->SetOperationHandler(
         [this](kachakacha::v2::app::BooleanKind kind) { ChooseBooleanOperation(kind); });
@@ -201,6 +203,7 @@ void V2MainWindow::BuildOutputShelves()
         [this](kachakacha::v2::app::BooleanSlot slot) { ActivateBooleanSlot(slot); });
     booleanDock_->SetClearHandler(
         [this](kachakacha::v2::app::BooleanSlot slot) { ClearBooleanSlot(slot); });
+    booleanDock_->SetContactHandlers([this] { RefreshBooleanAll(); }, [this] { SwapContactInputs(); });
     booleanDock_->SetActionHandlers([this] { ConfirmBoolean(); },
         [this] {
             EndBoolean();

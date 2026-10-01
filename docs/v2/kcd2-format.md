@@ -992,3 +992,10 @@ materialThickness、masterPercentを既存キーで保存。0/1は変更しな�
 
 ### 近似の自動間隔（互換追加）
 CreateFabricationModel の `adaptiveSpacing` は bool、省略時 false。従来の帯近似とGPT版の両方が使用する。境界位置は設定と元形状から再計算し、メッシュを正本として保存しない。
+
+
+### Booleanの領域別処理（2026-10-02）
+`mode=3` は領域別めり込み除去。`contactRemovals` は重心XYZ順の共通領域ごとの
+削除先（0なし/1A/2B/3双方）、`contactSide` は0=A/1=B。`fragmentIndex` は結果の連結領域番号。
+旧ファイルの省略値は順に空配列、0、-1。-1は従来の結果全体を保持する。
+詳しくは [CONTACT_OPERATIONS.md](ui-redesign/CONTACT_OPERATIONS.md)。

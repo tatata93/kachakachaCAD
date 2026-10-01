@@ -235,3 +235,7 @@ Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICA
 
 2026-10-02 P-01/P-02/P-03/P-04拡張: `13d27e776`はWindows全ゲート合格（ctest184/184、画面各377/377、HP-PA通常画面6/6）。
 PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTENSIONS.md)参照。
+
+
+2026-10-02 接触境界・めり込み一覧／領域別処理を実装・検証中。
+3D一覧→領域選択→処理。詳細は [CONTACT_OPERATIONS.md](CONTACT_OPERATIONS.md)。PC未検証。

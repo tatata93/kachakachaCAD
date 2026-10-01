@@ -1,3 +1,14 @@
+#include <QApplication>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QDialog>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QPushButton>
+#include <QLabel>
+#include <QWidget>
 //! 足す・引くの人の道(HP-BO)。引継ぎ 2026-09-17 の 4。
 //!
 //! 足す/引くを押す → 土台待ち → 3D で部品を押すと土台に入り、自動で相手待ちへ →
@@ -9,6 +20,9 @@
 #include "V2SelfTest.h"
 
 #include "V2BooleanDock.h"
+#include "V2ExtrudeDock.h"
+#include "kachakacha/kernel/OcctContact.h"
+#include "kachakacha/kernel/OcctExtrude.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -21,6 +35,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <variant>
 #include <vector>
@@ -295,11 +310,169 @@ using kachakacha::v2::domain::EntityKind;
         visible.entityIds.size() == 1 && window.CanExportSelectedParts());
 }
 
+[[nodiscard]] EntityId PolygonPart(V2MainWindow& window,
+    const std::vector<kachakacha::v2::geometry::Vector3>& points, const char* name)
+{
+    using namespace kachakacha::v2;
+    std::vector<geometry::CurveSegment> curves;
+    for(std::size_t i=0;i<points.size();++i) curves.push_back(geometry::CurveSegment::MakeLine(points[i],points[(i+1)%points.size()]).Value());
+    const auto wire=window.Session().AddWire(curves,false,name);
+    if(!wire.committed || !window.SaveAndReopen(QStringLiteral("contact-fixture.kcd2")))return {};
+    app::SelectionSet selection;selection.entityIds=wire.createdEntityIds;window.Viewport().SetSelection(selection);
+    window.SetMode(app::UiMode::Part);window.RunCommand("part.extrude");
+    auto& dock=window.ExtrudeDock();(void)dock.PickDirection(modeling::ExtrudeDirectionMode::WorldZ);
+    dock.TypeDistanceMm(4);dock.PressConfirm();
+    EntityId result;
+    for(const auto& e:window.Session().GetDocument().Snapshot().entities)if(e.kind==EntityKind::Part)result=e.id;
+    return result;
+}
+
+[[nodiscard]] bool ContactFixture(V2MainWindow& window,EntityId& a,EntityId& b)
+{
+    window.RunCommand("file.new");
+    a=PolygonPart(window,{{0,0,0},{10,0,0},{10,10,0},{7,10,0},{7,3,0},{3,3,0},{3,10,0},{0,10,0}},"U字");
+    b=PolygonPart(window,{{-1,6,0},{11,6,0},{11,8,0},{-1,8,0}},"横棒");
+    return !a.IsNil()&&!b.IsNil()&&VisiblePartCount(window)==2;
+}
+
+[[nodiscard]] bool CaseContactWireOnly(V2MainWindow& window)
+{
+    EntityId a,b;if(!ContactFixture(window,a,b))return false;
+    const int wires=CountOfKind(window,EntityKind::Wire);
+    window.RunCommand("part.contact_wire");
+    kachakacha::v2::app::SelectionSet selected;selected.entityIds={a,b};window.Viewport().SetSelection(selected);
+    if(!Explain("接触境界を下見できる",!window.Viewport().ToolPreview().empty()))return false;
+    if(!Explain("ワイヤーだけ確定できる",window.BooleanDock().ClickConfirm()))return false;
+    if(!Explain("元の2部品を残しワイヤーだけ増える",VisiblePartCount(window)==2 && CountOfKind(window,EntityKind::Wire)>wires))return false;
+    if(!window.SaveAndReopen(QStringLiteral("contact-wire.kcd2")))return false;
+    for(const auto& curve:window.Session().Scene().curves) {
+        if(curve.segment.Kind()!=kachakacha::v2::geometry::CurveKind::Line)return Explain("箱の境界は直線を保つ",false);
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseContactOverviewAndLocalTrim(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    EntityId a,b;if(!ContactFixture(window,a,b))return false;
+    window.Viewport().SetSelection({});window.RunCommand("part.overlap_inspect");
+    auto* browser=window.findChild<QDialog*>(QStringLiteral("overlapBrowser"));
+    if(browser==nullptr)return Explain("3Dめり込み一覧が開く",false);
+    auto* list=browser->findChild<QListWidget*>(QStringLiteral("overlapList"));
+    QPushButton* action=nullptr;
+    for(auto* button:browser->findChildren<QPushButton*>())if(button->text()==QStringLiteral("削る側を指定する"))action=button;
+    if(list==nullptr||action==nullptr)return false;
+    QElapsedTimer timer;timer.start();
+    while(timer.elapsed()<30000) {
+        QApplication::processEvents(QEventLoop::AllEvents,20);
+        if(list->count()>0)list->setCurrentRow(0);
+        if(action->isEnabled())break;
+    }
+    if(!Explain("KCD内の離れた重なりを全部表示",list->count()==2&&action->isEnabled())){browser->close();return false;}
+    action->click();QApplication::processEvents();
+    if(!Explain("一覧から選んだ組が加工対象になる",window.BooleanInput().target==a&&window.BooleanInput().tools==std::vector<EntityId>{b}))return false;
+    auto* regions=window.findChild<QListWidget*>(QStringLiteral("contactRegions"));
+    if(regions==nullptr||regions->count()!=2)return false;
+    auto* first=regions->itemWidget(regions->item(0))->findChild<QComboBox*>();
+    auto* second=regions->itemWidget(regions->item(1))->findChild<QComboBox*>();
+    if(first==nullptr||second==nullptr)return false;
+    first->setCurrentIndex(1);second->setCurrentIndex(2);regions->setCurrentRow(1);
+    auto* wireOption=window.findChild<QCheckBox*>(QStringLiteral("contactWireAlso"));
+    if(wireOption==nullptr)return false;
+    wireOption->setChecked(true);
+    if(!Explain("ワイヤー追加の切替でも領域の削除指定を保持",window.BooleanDock().ContactRemovals()==std::vector<int>{1,2}))return false;
+    wireOption->setChecked(false);
+    if(!Explain("Aから左領域、Bから右領域を削る下見",!window.Viewport().ToolPreview().empty()))return false;
+    if(!window.BooleanDock().ClickConfirm())return false;
+    bool sideA=false,sideB=false;
+    for(const auto& f:window.Session().GetDocument().Snapshot().features) {
+        const auto* def=std::get_if<domain::BooleanDefinition>(&f.definition);
+        if(def!=nullptr&&def->mode==3) {
+            if(def->contactRemovals!=std::vector<int>{1,2})return false;
+            sideA=sideA||def->contactSide==0;sideB=sideB||def->contactSide==1;
+        }
+    }
+    if(!Explain("双方の領域指定が保存される",sideA&&sideB))return false;
+    const int visible=VisiblePartCount(window);
+    window.RunCommand("edit.undo");
+    if(!Explain("1回のUndoで両部品とも戻る",VisiblePartCount(window)==2&&CountOfKind(window,EntityKind::Part)==2))return false;
+    window.RunCommand("edit.redo");
+    if(!window.SaveAndReopen(QStringLiteral("contact-local-trim.kcd2")))return false;
+    if(!Explain("領域指定から再生成できる",VisiblePartCount(window)==visible))return false;
+    int solids=0;
+    for(const auto& view:window.Viewport().ShapeViews())if(!view.surface){if(!view.mesh.closed)return false;++solids;}
+    return Explain("再生成後も各部品が閉じた立体",solids==visible);
+}
+
+[[nodiscard]] kachakacha::v2::modeling::KernelShapeHandle ContactPrism(
+    const std::vector<kachakacha::v2::geometry::CurveSegment>& curves,double distance)
+{
+    using namespace kachakacha::v2;
+    modeling::ExtrudeRequest request;request.profiles.push_back({curves,true,{},{}});
+    request.directionMode=modeling::ExtrudeDirectionMode::WorldZ;request.distanceMm=distance;request.outputs.part=true;
+    geometry::GeometryTolerance tolerance;
+    const auto analysis=modeling::AnalyzeExtrudeRequest(request,tolerance);if(!analysis.HasValue())return {};
+    const auto built=kernel::BuildExtrude(request,analysis.Value(),tolerance);
+    return built.HasValue() ? built.Value().parts.front().handle : modeling::KernelShapeHandle{};
+}
+[[nodiscard]] std::vector<kachakacha::v2::geometry::CurveSegment> ContactRectangle(double x0,double y0,double x1,double y1,double z)
+{
+    using namespace kachakacha::v2::geometry;
+    const std::vector<Vector3> points{{x0,y0,z},{x1,y0,z},{x1,y1,z},{x0,y1,z}};
+    std::vector<CurveSegment> result;
+    for(int i=0;i<4;++i)result.push_back(CurveSegment::MakeLine(points[i],points[(i+1)%4]).Value());
+    return result;
+}
+[[nodiscard]] bool CaseContactTouchAndCircle(V2MainWindow&)
+{
+    using namespace kachakacha::v2;
+    const auto a=ContactPrism(ContactRectangle(0,0,10,10,0),4);
+    const auto b=ContactPrism(ContactRectangle(10,2,15,8,0),4);
+    const auto touch=kernel::BuildContact(a,b,true,false,false,1e-6);
+    if(!Explain("面接触は境界ワイヤーを作れる",touch.HasValue()&&!touch.Value().wires.empty()))return false;
+    if(!Explain("体積ゼロの面接触は削除と区別",!kernel::BuildContact(a,b,false,false,true,1e-6).HasValue()))return false;
+    const auto circle=geometry::CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},5);
+    const auto cylinder=ContactPrism({circle.Value()},4);
+    const auto cap=ContactPrism(ContactRectangle(-8,-8,8,8,2),4);
+    const auto boundary=kernel::BuildContact(cylinder,cap,true,false,false,1e-6);
+    if(!Explain("曲面の交線を生成できる",boundary.HasValue()))return false;
+    bool curved=false;
+    for(const auto& wire:boundary.Value().wires)for(const auto& curve:wire)
+        curved=curved||curve.Kind()==geometry::CurveKind::Circle||curve.Kind()==geometry::CurveKind::CircularArc;
+    if(!Explain("円の交線を短い直線群にせず保持",curved))return false;
+    const std::vector<geometry::Vector3> uPoints{{0,0,0},{10,0,0},{10,10,0},{7,10,0},{7,3,0},{3,3,0},{3,10,0},{0,10,0}};
+    std::vector<geometry::CurveSegment> uCurves;
+    for(std::size_t i=0;i<uPoints.size();++i)uCurves.push_back(geometry::CurveSegment::MakeLine(uPoints[i],uPoints[(i+1)%uPoints.size()]).Value());
+    const auto u=ContactPrism(uCurves,4),bar=ContactPrism(ContactRectangle(-1,6,11,8,0),4);
+    const auto local=kernel::BuildLocalTrim(u,bar,{1,2},1e-6);
+    if(!Explain("異なる領域を双方から別々に削れる",local.HasValue()))return false;
+    double aVolume=0,bVolume=0;
+    for(const auto& piece:local.Value().pieces){if(piece.sourceSide==0)aVolume+=piece.volumeMm3;else bVolume+=piece.volumeMm3;}
+    return Explain("AとBそれぞれから指定した24mm3だけ除去",std::abs(aVolume-264)<1e-5&&std::abs(bVolume-72)<1e-5);
+}
+[[nodiscard]] bool CaseContactSplitSelection(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    EntityId a,b;if(!ContactFixture(window,a,b))return false;
+    app::SelectionSet selected;selected.entityIds={a,b};window.Viewport().SetSelection(selected);
+    window.RunCommand("part.split_overlap");
+    auto* regions=window.findChild<QListWidget*>(QStringLiteral("contactRegions"));
+    if(!Explain("分割後の各連結領域を選べる",regions!=nullptr&&regions->count()>=4))return false;
+    for(int i=1;i<regions->count();++i)regions->item(i)->setCheckState(Qt::Unchecked);
+    if(!window.BooleanDock().ClickConfirm())return false;
+    if(!Explain("選んだ領域だけ生成し相手を残す",VisiblePartCount(window)==2&&CountOfKind(window,EntityKind::Part)==3))return false;
+    return window.SaveAndReopen(QStringLiteral("contact-split.kcd2"))&&VisiblePartCount(window)==2;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},
+        {"HP-CT-04 分割領域を選択して生成し保存再生成", CaseContactSplitSelection},
+        {"HP-CT-01 接触境界ワイヤーのみ生成し元の両部品を保持", CaseContactWireOnly},
+        {"HP-CT-02 KCDの3Dめり込み一覧から領域別に双方を削り保存再生成", CaseContactOverviewAndLocalTrim},
         {"HP-BO-01 足す引くは土台→相手へ自動で移り、札と欄に別々に出て押し直すと外れる",
             CaseHumanPathBooleanSlotsFollowClicks},
         {"HP-BO-02 両方入ると実際の結果が下見に出て、Enter で 1回で戻せる部品になる",

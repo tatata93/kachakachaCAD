@@ -99,6 +99,7 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (id == "part.overlap_inspect") { EndArmedTools(); ShowOverlapBrowser(); return true; }
     if (id == "part.extrude" && !extrudeShelfShown_) {
         EndArmedTools();
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
@@ -121,9 +122,9 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         RunFabricationCommand(id);
         return true;
     }
-    if (id == "part.boolean_add" || id == "part.boolean_cut" || id == "part.boolean_intersect") {
-        ClearPendingCommand();
-        RunBooleanTool(BooleanKindForCommand(id));
+    if (id == "part.boolean_add" || id == "part.boolean_cut" || id == "part.boolean_intersect"
+        || id == "part.contact_wire" || id == "part.trim_overlap" || id == "part.split_overlap") {
+        ClearPendingCommand(); RunBooleanTool(BooleanKindForCommand(id));
         return true;
     }
     // 厚みも道具から始める(指示書 matrix P-10)。何も選んでいなくても棚が出て、
@@ -213,6 +214,9 @@ kachakacha::v2::kernel::BooleanOperation V2MainWindow::KernelBooleanOperation(
 kachakacha::v2::app::BooleanKind V2MainWindow::BooleanKindForCommand(std::string_view id)
 {
     using kachakacha::v2::app::BooleanKind;
+    if (id == "part.contact_wire") return BooleanKind::ContactWire;
+    if (id == "part.trim_overlap") return BooleanKind::TrimOverlap;
+    if (id == "part.split_overlap") return BooleanKind::SplitOverlap;
     return id == "part.boolean_cut" ? BooleanKind::Cut
         : id == "part.boolean_intersect" ? BooleanKind::Intersect
                                          : BooleanKind::Add;
@@ -225,6 +229,7 @@ void V2MainWindow::RunBooleanTool(kachakacha::v2::app::BooleanKind kind)
         ChooseBooleanOperation(kind);
         return;
     }
+    SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     // 選んであった部品は、選んだ順に土台・相手へ入れる(選んでから押す道も残す)。
     booleanInput_ = kachakacha::v2::app::BooleanInputState{};
     booleanInput_.kind = kind;
@@ -388,6 +393,7 @@ void V2MainWindow::RefreshBooleanDock()
 
 void V2MainWindow::RefreshBooleanAll()
 {
+    if (RefreshContactPreview()) return;
     RefreshBooleanPreview();
     RefreshBooleanDock();
 }
@@ -427,6 +433,8 @@ void V2MainWindow::ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind)
 //! やめる。文書は始める前とまったく同じ。
 void V2MainWindow::EndBoolean()
 {
+    contactBase_.reset();
+    contactBuilt_.reset();
     booleanShelfShown_ = false;
     booleanBuilt_.reset();
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
@@ -444,6 +452,7 @@ void V2MainWindow::EndBoolean()
 //! 確定。**下見に使った形をそのまま**文書へ入れる。土台と相手を隠すのも含めて1回で戻せる。
 void V2MainWindow::ConfirmBoolean()
 {
+    if (ConfirmContact()) return;
     if (!booleanBuilt_.has_value()) {
         SetStatus(QStringLiteral("%1: まだ作れません。土台と相手を入れてください。")
                 .arg(QString::fromUtf8(std::string(kachakacha::v2::app::BooleanOperationLabelJa(

@@ -760,6 +760,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
+    src/next_occt/kachakacha/kernel/OcctContact.cpp
+    src/next_occt/kachakacha/kernel/OcctLocalTrim.cpp
     src/next_occt/kachakacha/kernel/OcctTransform.cpp
     src/next_occt/kachakacha/kernel/OcctSolid.cpp
     src/next_occt/kachakacha/kernel/OcctEdgeFinish.cpp
@@ -1083,6 +1085,9 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
+        src/apps/cad_next/V2ContactCommands.cpp
+        src/apps/cad_next/V2ContactOptions.cpp
+        src/apps/cad_next/V2OverlapBrowser.cpp
         src/apps/cad_next/V2ThickenCommands.cpp
         src/apps/cad_next/V2CornerPreview.cpp
         src/apps/cad_next/V2WorkPlanePreview.cpp

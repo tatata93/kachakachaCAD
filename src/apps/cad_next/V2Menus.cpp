@@ -84,6 +84,7 @@ void V2MainWindow::BuildMenus()
         "part.fillet", "part.chamfer", "part.shell", "part.split",
         "part.thicken", "part.thickness_placement",
         "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",
+        "part.overlap_inspect", "part.contact_wire", "part.trim_overlap", "part.split_overlap",
         "part.boolean_add", "part.boolean_cut", "part.boolean_intersect", "part.move", "part.copy",
         "part.mirror", "part.rotate", "part.array_linear", "part.array_circular", "derived.freeze"});
 

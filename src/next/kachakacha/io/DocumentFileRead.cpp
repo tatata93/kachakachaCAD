@@ -603,6 +603,10 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
     }
     case FeatureType::Boolean: {
         domain::BooleanDefinition made;
+        made.contactSide = static_cast<int>(loader.NumberOr(definition, "contactSide", 0));
+        for (const double mask : ReadNumberArray(loader, definition, "contactRemovals", where))
+            made.contactRemovals.push_back(static_cast<int>(mask));
+        made.fragmentIndex = static_cast<int>(loader.NumberOr(definition, "fragmentIndex", -1));
         made.mode = static_cast<int>(loader.NumberOr(definition, "mode", 0.0));
         made.targets = ReadIdArray(loader, definition, "targets", where);
         made.tools = ReadIdArray(loader, definition, "tools", where);

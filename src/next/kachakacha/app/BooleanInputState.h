@@ -31,6 +31,9 @@ enum class BooleanKind {
     Add,
     Cut,
     Intersect,
+    ContactWire,
+    TrimOverlap,
+    SplitOverlap,
 };
 
 struct BooleanInputState {

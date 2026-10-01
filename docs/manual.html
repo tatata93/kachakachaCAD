@@ -322,6 +322,10 @@
           <tr data-command="part.sweep"><td>スイープ</td><td><code>part.sweep</code></td><td>閉じた輪郭を経路の線に沿って動かして立体にする。</td></tr>
           <tr data-command="part.boolean_add"><td>足す</td><td><code>part.boolean_add</code></td><td>二部品を一体化。</td></tr>
           <tr data-command="part.boolean_cut"><td>引く</td><td><code>part.boolean_cut</code></td><td>第一部品から第二を切削。</td></tr>
+          <tr data-command="part.overlap_inspect"><td>めり込み一覧</td><td><code>part.overlap_inspect</code></td><td>KCD全体の重なりを3D表示し、領域を選んで処置へ進む。非表示部品も検査可能。</td></tr>
+          <tr data-command="part.contact_wire"><td>交わりにワイヤー</td><td><code>part.contact_wire</code></td><td>部品A・Bの接触境界を独立ワイヤーへ。元の部品は両方残す。</td></tr>
+          <tr data-command="part.trim_overlap"><td>めり込みを削る</td><td><code>part.trim_overlap</code></td><td>重なり領域ごとに、Aから削る・Bから削る・両方から削る・残すを指定する。</td></tr>
+          <tr data-command="part.split_overlap"><td>交わりで分割</td><td><code>part.split_overlap</code></td><td>AをBの内外で分割し、残す領域を選ぶ。Bは残す。境界ワイヤーも任意で生成。</td></tr>
           <tr data-command="part.boolean_intersect"><td>交差</td><td><code>part.boolean_intersect</code></td><td>土台と相手の共通部分だけを残す(重ならなければ断る)。</td></tr>
           <tr data-command="part.move"><td>部品の移動</td><td><code>part.move</code></td><td>2 点で示した分だけ部品を動かす(元は隠す)。</td></tr>
           <tr data-command="part.copy"><td>部品のコピー</td><td><code>part.copy</code></td><td>2 点で示した分だけ離して部品を写す。</td></tr>

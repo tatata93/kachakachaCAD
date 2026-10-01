@@ -237,5 +237,7 @@ Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICA
 PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTENSIONS.md)参照。
 
 
-2026-10-02 接触境界・めり込み一覧／領域別処理を実装・検証中。
-3D一覧→領域選択→処理。詳細は [CONTACT_OPERATIONS.md](CONTACT_OPERATIONS.md)。PC未検証。
+2026-10-02 接触境界・めり込み3D一覧／領域別処理（PC_TESTED）。実装 `0bba984c6`。
+3D一覧→領域選択→処理。Windows全体検査は初回183/184、説明書識別子を修正して失敗分1/1合格。
+通常版・配布版画面各381/381、HP-CT通常Windows画面4/4、旧自己試験終了0。
+仕様・制約・検証経緯は [CONTACT_OPERATIONS.md](CONTACT_OPERATIONS.md)。Linux/cloud・目視受入は未実施。

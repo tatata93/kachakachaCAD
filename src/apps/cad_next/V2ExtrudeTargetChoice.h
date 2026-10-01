@@ -4,10 +4,13 @@
 //! 棚(V2ExtrudeDock)と詳細の窓(V2ExtrudeDialog)が同じ並びを出す。
 
 #include "kachakacha/base/Ids.h"
+#include "kachakacha/geometry/Vector3.h"
 
 #include <QString>
 
 struct ExtrudeTargetChoice {
     kachakacha::v2::base::EntityId entityId;
     QString labelJa;
+    kachakacha::v2::geometry::Vector3 direction{};
+    double parameter = -1.0;
 };

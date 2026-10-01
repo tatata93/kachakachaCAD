@@ -240,6 +240,9 @@ struct ExtrudeDefinition {
     geometry::EvaluatedValue distance;
     //! modeling::ExtrudeExtentMode / ExtrudeBooleanMode と同じ並び。
     int extentMode = 0;
+    double secondDistanceMm = 0.0;
+    std::optional<EntityId> extentTarget;
+    double targetParameter = -1.0;
     int booleanMode = 0;
     std::vector<EntityId> targets;
 };

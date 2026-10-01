@@ -74,6 +74,7 @@ std::vector<EntityId> DefinitionEntityReferences(const domain::FeatureDefinition
             } else if constexpr (std::is_same_v<T, domain::ExtrudeDefinition>) {
                 out.Add(value.profiles);
                 out.Add(value.targets);
+                out.Add(value.extentTarget);
             } else if constexpr (std::is_same_v<T, domain::CreatePartFromWireCageDefinition>) {
                 out.Add(value.wires);
             } else if constexpr (std::is_same_v<T, domain::BooleanDefinition>) {

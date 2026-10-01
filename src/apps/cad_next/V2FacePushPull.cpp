@@ -143,8 +143,11 @@ bool V2MainWindow::ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice)
     // 向きは面の外向き法線をそのまま渡す。輪郭の法線に任せると、
     // 縁の回り方しだいで裏返り、外へ引いたつもりが中へ入る。
     choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-    choice.customDirection = pushPull.reversed ? faceNormal_ * -1.0 : faceNormal_;
-    choice.booleanMode = pushPull.booleanMode;
+    choice.customDirection = pushPull.reversed ? ExtrudeBaseDirectionNow() * -1.0 : ExtrudeBaseDirectionNow();
+    if (choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart
+        && choice.extent == kachakacha::v2::modeling::ExtrudeExtentMode::Distance) {
+        choice.booleanMode = pushPull.booleanMode;
+    }
     choice.hasSelectedPart = true;
     choice.makePart = true;
     SetStatus(QStringLiteral("押し出し: %1")

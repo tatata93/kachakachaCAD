@@ -41,6 +41,7 @@ struct ExtrudeChoice {
     double secondDistanceMm = 0.5;
     //! ToTarget の相手。作業平面か、部品の面の代わりに使う平面。
     std::optional<base::EntityId> targetEntityId;
+    double targetParameter = -1.0;
 
     //! 何を作るか。1つも選ばないのは通さない。
     //! 画面の「出力」4項目と1対1(app/ExtrudeInputState.h の ExtrudeOutputs)。

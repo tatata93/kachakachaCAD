@@ -132,7 +132,8 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     secondDistance_->setValue(10.0);
     form_->addRow(QStringLiteral("逆側の距離"), secondDistance_);
     target_ = new QComboBox(body_);
-    form_->addRow(QStringLiteral("相手の面"), target_);
+    target_->setObjectName(QStringLiteral("extrudeStopReference"));
+    form_->addRow(QStringLiteral("終端の面・線・点"), target_);
 
     // 方向は 7 通り全部(P-04)。「数値で決める」は x, y, z の欄が生える。
     direction_ = new QComboBox(body_);
@@ -140,6 +141,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
         direction_->addItem(Text(kachakacha::v2::app::ExtrudeDirectionNameJa(mode)));
     }
     form_->addRow(QStringLiteral("方向"), direction_);
+    BuildDirectionReferenceRow();
     customRow_ = new QWidget(body_);
     auto* customLayout = new QHBoxLayout(customRow_);
     customLayout->setContentsMargins(0, 0, 0, 0);
@@ -155,6 +157,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     form_->addRow(QStringLiteral("向き x y z"), customRow_);
 
     reverse_ = new QPushButton(QStringLiteral("方向を反転"), body_);
+    reverse_->setCheckable(true);
     form_->addRow(QString(), reverse_);
 
     // テーパー。核に無いので押せない形 + 理由(P-07)。
@@ -403,9 +406,8 @@ void V2ExtrudeDock::ApplyRows()
     // 操作(追加・切削・新規)は、加工する立体があるときだけ意味がある。
     form_->setRowVisible(boolean_, hasTarget);
     const bool ready = plan_.readyToPreview;
-    // 面をつまんで押しているときは、向きは押す面が決める。
-    // 選べない欄を出すと「選んだのに効かない」ことになるので、そのときは隠す。
-    form_->setRowVisible(direction_, ready && !plan_.profileIsFace);
+    // 面を選んだ場合も、法線・任意方向・直線方向を選び分ける。
+    form_->setRowVisible(direction_, ready);
     form_->setRowVisible(reverse_, ready);
     form_->setRowVisible(extent_, ready);
     form_->setRowVisible(fromValue_, ready);
@@ -468,9 +470,8 @@ void V2ExtrudeDock::ApplyExtentRows()
         ready && kachakacha::v2::app::ExtentUsesSecondDistance(extent));
     form_->setRowVisible(target_, ready && kachakacha::v2::app::ExtentUsesTarget(extent));
     const ExtrudeDirectionMode direction = DirectionMode();
-    form_->setRowVisible(customRow_, ready && !plan_.profileIsFace
-        && (direction == ExtrudeDirectionMode::CustomXYZ
-            || direction == ExtrudeDirectionMode::SelectedVector));
+    form_->setRowVisible(customRow_, ready && direction == ExtrudeDirectionMode::CustomXYZ);
+    form_->setRowVisible(directionReference_, ready && direction == ExtrudeDirectionMode::SelectedVector);
 }
 
 //! 棚で選んでいる向きの決め方。7 通り全部を名前で出している(P-04)。
@@ -504,6 +505,11 @@ void V2ExtrudeDock::ChooseDirection(ExtrudeDirectionMode mode)
 
 kachakacha::v2::geometry::Vector3 V2ExtrudeDock::CustomDirection() const
 {
+    if (DirectionMode() == ExtrudeDirectionMode::SelectedVector) {
+        const int index = directionReference_->currentIndex() - 1;
+        return index >= 0 && index < static_cast<int>(directionReferences_.size())
+            ? directionReferences_[index].direction : kachakacha::v2::geometry::Vector3{};
+    }
     return kachakacha::v2::geometry::Vector3{customX_->value(), customY_->value(),
         customZ_->value()};
 }
@@ -606,7 +612,7 @@ void V2ExtrudeDock::SetTargets(const std::vector<ExtrudeTargetChoice>& targets)
     if (same) {
         return;
     }
-    const auto chosen = TargetEntityId();
+    const int chosenIndex = target_->currentIndex();
     targets_ = targets;
     const bool blocked = target_->blockSignals(true);
     target_->clear();
@@ -616,8 +622,8 @@ void V2ExtrudeDock::SetTargets(const std::vector<ExtrudeTargetChoice>& targets)
     if (targets_.empty()) {
         target_->addItem(QStringLiteral("(作業平面がありません。先に作業面を作ってください)"));
     }
+    if (chosenIndex >= 0 && chosenIndex < target_->count()) target_->setCurrentIndex(chosenIndex);
     target_->blockSignals(blocked);
-    ChooseTarget(chosen);
 }
 
 std::optional<kachakacha::v2::base::EntityId> V2ExtrudeDock::TargetEntityId() const
@@ -638,6 +644,7 @@ void V2ExtrudeDock::ChooseTarget(const std::optional<kachakacha::v2::base::Entit
     for (std::size_t index = 0; index < targets_.size(); ++index) {
         if (targets_[index].entityId == *id) {
             target_->setCurrentIndex(static_cast<int>(index));
+            break;
         }
     }
     target_->blockSignals(blocked);
@@ -899,4 +906,50 @@ void V2ExtrudeDock::ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode m
             break;
         }
     }
+}
+
+void V2ExtrudeDock::BuildDirectionReferenceRow()
+{
+    directionReference_ = new QComboBox(body_);
+    directionReference_->setObjectName(QStringLiteral("extrudeDirectionReference"));
+    directionReference_->addItem(QStringLiteral("方向に使う直線を選択"));
+    form_->addRow(QStringLiteral("方向の直線"), directionReference_);
+    QObject::connect(directionReference_, &QComboBox::currentIndexChanged, this, [this] {
+        if (!loading_ && optionHandler_) optionHandler_();
+    });
+}
+
+void V2ExtrudeDock::SetDirectionReferences(const std::vector<ExtrudeTargetChoice>& references)
+{
+    const int current = directionReference_->currentIndex() - 1;
+    const auto id = current >= 0 && current < static_cast<int>(directionReferences_.size())
+        ? directionReferences_[current].entityId : kachakacha::v2::base::EntityId{};
+    const bool blocked = directionReference_->blockSignals(true);
+    directionReferences_ = references;
+    directionReference_->clear();
+    directionReference_->addItem(QStringLiteral("方向に使う直線を選択"));
+    for (std::size_t k = 0; k < references.size(); ++k) {
+        directionReference_->addItem(references[k].labelJa);
+        if (references[k].entityId == id) directionReference_->setCurrentIndex(static_cast<int>(k + 1));
+    }
+    directionReference_->blockSignals(blocked);
+}
+
+double V2ExtrudeDock::TargetParameter() const
+{
+    const int index = target_->currentIndex();
+    return index >= 0 && index < static_cast<int>(targets_.size()) ? targets_[index].parameter : -1.0;
+}
+
+bool V2ExtrudeDock::DirectionReady() const
+{
+    const auto mode = DirectionMode();
+    return (mode != ExtrudeDirectionMode::SelectedVector && mode != ExtrudeDirectionMode::CustomXYZ)
+        || (CustomDirection().IsFinite() && CustomDirection().Length() > 1.0e-9);
+}
+
+void V2ExtrudeDock::SetReversed(bool reversed)
+{
+    reversed_ = reversed;
+    reverse_->setChecked(reversed);
 }

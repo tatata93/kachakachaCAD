@@ -586,6 +586,9 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.distance = loader.ReadExpression(definition, "distance", where);
         made.extentMode = static_cast<int>(loader.NumberOr(definition, "extentMode", 0.0));
         made.booleanMode = static_cast<int>(loader.NumberOr(definition, "booleanMode", 0.0));
+        made.secondDistanceMm = loader.NumberOr(definition, "secondDistanceMm", 0.0);
+        made.extentTarget = loader.ParseOptionalId<EntityId>(definition.Find("extentTarget"), where + ".extentTarget");
+        made.targetParameter = loader.NumberOr(definition, "targetParameter", -1.0);
         made.targets = ReadIdArray(loader, definition, "targets", where);
         feature.definition = std::move(made);
         break;

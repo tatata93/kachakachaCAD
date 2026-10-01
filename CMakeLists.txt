@@ -749,6 +749,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceAnalysis.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctSurfaceExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctExtrudeToFace.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
@@ -1069,6 +1071,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestHoModel.cpp
         src/apps/cad_next/V2ExtrudeHandle.cpp
         src/apps/cad_next/V2ExtrudeInteractive.cpp
+        src/apps/cad_next/V2SurfaceExtrude.cpp
+        src/apps/cad_next/V2ExtrudeReferences.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDock.cpp
         src/apps/cad_next/V2ArrayDock.h

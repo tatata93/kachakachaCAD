@@ -466,6 +466,12 @@ indexは1始まりで、同role内一意。配列順はUI表順。
 
 ## 12. Extrude
 
+2026-10-02 拡張: `secondDistanceMm`（逆側距離、既定0）、`extentTarget`（終端UUID、既定null）、
+`targetParameter`（直線全体=-1、始点=0、終点=1、既定-1）を保存する。
+`profiles` に形状ガイドUUIDを指定した場合は曲面BRepそのものを一定方向へ押し出す。
+詳細は `ui-redesign/EXTRUDE_EXTENSIONS.md`。
+
+
 ```json
 {
   "profiles": [],

@@ -99,6 +99,11 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (id == "part.extrude" && !extrudeShelfShown_) {
+        EndArmedTools();
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        // Continue into the regular pending-input / preview path.
+    }
     if (id == "fabrication.gpt_create") { BeginGptFabrication(); return true; }
     if (id == "surface.gpt_create") {
         BeginGptSurface();

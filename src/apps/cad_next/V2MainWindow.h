@@ -1,6 +1,5 @@
 #pragma once
 
-//! V2本体窓(WP-08)。幾何判断はcore(DOC-002)。AUTOMOCなし、信号はラムダで接続。
 
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
@@ -82,7 +81,6 @@
 
 #include "V2WindowForward.h"
 
-//! 見た目。
 enum class UiTheme {
     Normal,
     Windows95,
@@ -102,17 +100,11 @@ public:
     V2MainWindow();
     ~V2MainWindow() override;
 
-    //! 窓のところで Enter / Esc を受ける。焦点がどこにあっても同じように効く(3D を一度クリックして焦点を戻す必要を無くすため。オーナー指示 §14)。
     bool eventFilter(QObject* target, QEvent* event) override;
-    //! いま Enter / Esc を引き受ける道具が動いているか。試験からも見る。
     [[nodiscard]] bool ToolWantsConfirmKeys() const;
-    //! 合図を道具へ渡す。受け止めたら true。試験は窓を出さずにここを叩く。
     bool HandleToolKey(int key, QObject* target);
-    //! 押し出しの Enter / Esc。
     bool HandleExtrudeToolKey(int key, QObject* target);
-    //! 「面を作る」の Enter / Esc。
     bool HandleSurfaceToolKey(int key);
-    //! 「厚み」の Enter / Esc。
     bool HandleThickenToolKey(int key, QObject* target);
 
     [[nodiscard]] V2Viewport& Viewport() { return *viewport_; }
@@ -121,35 +113,21 @@ public:
     void ApplyTheme(UiTheme theme);
     [[nodiscard]] UiTheme Theme() const noexcept { return theme_; }
 
-    //! 道具を選ぶ。案内文が出る。
     void SelectTool(kachakacha::v2::modeling::DrawingTool tool);
 
-    //! 出す先・開く先を尋ねる手立て(既定は Qt のダイアログ。自己試験は差し替えて止まらないようにする)。
-    //! 空を返したら「やめた」とみなす。
     void SetPathChooser(std::function<QString(bool forSave)> chooser);
 
-    //! ファイルを開く。開けなければ理由を知らせに出して false を返す。
     bool OpenDocumentFile(const QString& path);
-    //! V1 の .kcd を読んで V2 の文書にする。読めないものは名前を挙げて知らせる。
     bool ImportKcdFile(const QString& path);
-    //! いま開いているファイル。まだ保存していなければ空。
     [[nodiscard]] QString DocumentPath() const { return documentPath_; }
 
-    //! いまの画面の状態を集めた診断(DIAGNOSTICS_FEATURE_SPEC.md)。
-    //! 貼り板を使わずに中身を見られるので、自己試験からも読める。
     [[nodiscard]] kachakacha::v2::app::DiagnosticSnapshot DiagnosticSnapshotNow() const;
     [[nodiscard]] QString DiagnosticText() const;
 
-    //! 選んだものから、押し出しが何を意味するかを読み取る(オーナー指示 2026-09-14)。
-    //! 立体と輪郭の順番は問わない。型で役割が決まる。
     [[nodiscard]] kachakacha::v2::app::ExtrudePlan PlanExtrudeFromSelection() const;
-    //! その読み取りを日本語にしたもの。画面と試験が同じ文を見る。
     [[nodiscard]] QString ExtrudePlanTextJa() const;
-    //! 押し出しの下見を始める。矢印ハンドルと破線が出る。
     void BeginExtrudePreview();
-    //! 距離が変わったときに、破線と右の欄を合わせる。
     void UpdateExtrudePreview(double distanceMm);
-    //! 拾う候補の並べ替えを、いま足りないスロットに合わせる(§6)。
     void RefreshExtrudePickSlot();
     //! 一番下の一行を書き直す。道具が動いていなければ空にする。
     void ShowToolFooter(const QString& line);
@@ -1291,6 +1269,17 @@ public:
     [[nodiscard]] PartNumberSelection ReadPartNumbers() const;
     //! 棚の「曲げる部材」に書いた番号。0 起点。
     [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;
+    bool HandleSurfaceExtrude(bool confirm);
+    bool HandleTargetExtrude(bool confirm);
+    kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> BuildToTarget(
+        const kachakacha::v2::app::ExtrudeChoice& choice,
+        const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles,
+        kachakacha::v2::modeling::KernelShapeHandle source = {}) const;
+    std::vector<ExtrudeTargetChoice> ExtrudeStopChoices() const;
+    std::optional<kachakacha::v2::modeling::WorkPlaneFrame> ExtrudeStopPlane(
+        const kachakacha::v2::base::EntityId& id, const kachakacha::v2::geometry::Vector3& direction, double parameter) const;
+    bool RebuildSurfaceExtrude(const kachakacha::v2::domain::ExtrudeDefinition& definition,
+        const kachakacha::v2::base::EntityId& output, std::size_t ordinal);
     //! 押し出す向き。矢印・下見・確定形状はすべてここから取る。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionNow() const;
     //! 反転を掛ける前の押し出しの向き。反転は棚が持つので二重に掛けない。

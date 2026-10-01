@@ -59,6 +59,8 @@ using domain::FeatureType;
     const auto* right = std::get_if<domain::ExtrudeDefinition>(&b.definition);
     return left != nullptr && right != nullptr && left->profiles == right->profiles
         && left->targets == right->targets && left->extentMode == right->extentMode
+        && left->secondDistanceMm == right->secondDistanceMm
+        && left->extentTarget == right->extentTarget && left->targetParameter == right->targetParameter
         && left->booleanMode == right->booleanMode && SameValue(left->distance, right->distance)
         && left->direction.x == right->direction.x && left->direction.y == right->direction.y
         && left->direction.z == right->direction.z;

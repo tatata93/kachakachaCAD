@@ -79,6 +79,23 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
             profilesAreFaces = true;
         }
     }
+    if (facts.surfaces == 1 && selection.entityIds.size() == 1) {
+        kachakacha::v2::app::ExtrudePlan plan;
+        plan.kind = kachakacha::v2::app::ExtrudeInputKind::FaceOnly;
+        plan.profileIsFace = true;
+        plan.readyToPreview = true;
+        for (const auto& id : selection.entityIds) {
+            const auto* entity = document.FindEntity(id);
+            if (entity != nullptr && entity->kind == EntityKind::GuideSurface) plan.profiles.push_back(id);
+        }
+        return plan;
+    }
+    if (facts.surfaces > 0) {
+        kachakacha::v2::app::ExtrudePlan plan;
+        plan.kind = kachakacha::v2::app::ExtrudeInputKind::Unusable;
+        plan.needsJa = "押し出す面を1枚だけ選んでください。方向の線と終端は右ペインの専用欄で選びます。";
+        return plan;
+    }
     return kachakacha::v2::app::PlanExtrude(facts, solids, profiles, profilesAreFaces);
 }
 

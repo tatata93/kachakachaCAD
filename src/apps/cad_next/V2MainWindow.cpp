@@ -1270,7 +1270,8 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
         return false;
     }
     // 判断は core にある。ここで数えると、画面を出さないと確かめられなくなる。
-    const bool ok = kachakacha::v2::app::SelectionSatisfies(command->predicate,
+    const bool ok = id == "part.extrude" ? PlanExtrudeFromSelection().readyToPreview
+        : kachakacha::v2::app::SelectionSatisfies(command->predicate,
         BuildFactsForCommands());
     if (!ok && reasonOut != nullptr) {
         *reasonOut = QString::fromUtf8(

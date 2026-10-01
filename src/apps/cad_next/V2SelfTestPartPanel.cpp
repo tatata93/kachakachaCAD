@@ -16,6 +16,10 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 
 #include <QString>
+#include <QComboBox>
+#include <QPointF>
+#include "kachakacha/app/Selection.h"
+#include "kachakacha/modeling/ToolController.h"
 
 #include <cmath>
 #include <variant>
@@ -140,11 +144,170 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
     return Explain("保存された作り方も左右対称", symmetric);
 }
 
+
+[[nodiscard]] bool CaseExtrudeToolFirstAfterDrawing(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!DrawRectangleByHand(window)) return false;
+    window.Viewport().SelectAt(QPointF(2, 2), Qt::NoModifier);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    window.SetMode(UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!Explain("描画道具から押し出しへ持ち替える", window.Session().CurrentTool()
+            == kachakacha::v2::modeling::DrawingTool::Select)) return false;
+    if (!ClickOnAnyCurve(window, Qt::NoModifier)) return false;
+    if (!Explain("ツールから入って輪郭を拾うと下見になる", window.Viewport().ExtrudeHandleShown())) return false;
+    auto& dock = window.ExtrudeDock();
+    (void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
+    dock.TypeDistanceMm(7.0);
+    dock.SetSecondDistanceMm(3.0);
+    (void)dock.PickExtent(ExtrudeExtentMode::TwoDistances);
+    const auto& loops = window.Viewport().ExtrudeHandlePreview();
+    if (!Explain("非対称の下見は -3 mm と +7 mm", loops.size() >= 2
+            && std::abs(loops[0][0].z + 3.0) < 1.0e-6
+            && std::abs(loops[1][0].z - 7.0) < 1.0e-6)) return false;
+    dock.PressReverse();
+    const auto& reversed = window.Viewport().ExtrudeHandlePreview();
+    if (!Explain("反転は両方の側に作用する", std::abs(reversed[0][0].z - 3.0) < 1.0e-6
+            && std::abs(reversed[1][0].z + 7.0) < 1.0e-6)) return false;
+    dock.PressConfirm();
+    if (!window.SaveAndReopen(QStringLiteral("extrude-two-sides.kcd2"))) return false;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (!shape.surface) return Explain("再読込しても非対称の距離を保持する",
+            std::abs(shape.mesh.minimum.z + 7.0) < 1.0e-5 && std::abs(shape.mesh.maximum.z - 3.0) < 1.0e-5);
+    }
+    return false;
+}
+
+[[nodiscard]] bool RefreshFixture(V2MainWindow& window)
+{
+    const auto selected = window.Viewport().Selection();
+    if (!window.SaveAndReopen(QStringLiteral("extrude-fixture.kcd2"))) return false;
+    window.Viewport().SetSelection(selected);
+    return true;
+}
+
+[[nodiscard]] bool MakeCurvedGuide(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::CurveSegment;
+    window.RunCommand("file.new");
+    for (const double y : {0.0, 8.0}) {
+        const auto curve = CurveSegment::MakeCubicBezier({{0,y,0}, {3,y,5}, {7,y,5}, {10,y,0}});
+        if (!curve.HasValue() || !window.Session().AddWire({curve.Value()}, false, "曲面の断面").committed) return false;
+    }
+    if (!RefreshFixture(window)) return false;
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire));
+    window.CreateGuideSurfaceFromSelection();
+    return Explain("曲がった面の入力を用意できる", CountOfKind(window, kachakacha::v2::domain::EntityKind::GuideSurface) == 1);
+}
+
+[[nodiscard]] bool CaseCurvedFaceExtrudeWithDirectionLine(V2MainWindow& window)
+{
+    if (!MakeCurvedGuide(window)) return false;
+    const auto line = kachakacha::v2::geometry::CurveSegment::MakeLine({20,0,0}, {20,3,4});
+    if (!window.Session().AddWire({line.Value()}, false, "斜め方向").committed) return false;
+    if (!RefreshFixture(window)) return false;
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    window.RunCommand("view.fit_all");
+    window.Viewport().SelectAt(QPointF(2,2), Qt::NoModifier);
+    window.SetMode(UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!ClickOnAnyGuideSurface(window)) return false;
+    if (!Explain("面を後から選んで押し出しを開始できる", window.Viewport().ExtrudeHandleShown())) return false;
+    auto& dock = window.ExtrudeDock();
+    (void)dock.PickDirection(ExtrudeDirectionMode::SelectedVector);
+    auto* reference = window.findChild<QComboBox*>(QStringLiteral("extrudeDirectionReference"));
+    if (reference == nullptr) return false;
+    reference->setCurrentIndex(reference->findText(QStringLiteral("斜め方向")));
+    dock.TypeDistanceMm(5.0);
+    if (!Explain("選んだ線の方向へ下見が向く", std::abs(window.Viewport().ExtrudeHandleDirection().y - 0.6) < 1.0e-6
+            && !window.Viewport().ExtrudePreviewFaces().empty())) return false;
+    dock.PressConfirm();
+    if (!Explain("曲面のまま立体化できる", CountOfKind(window, kachakacha::v2::domain::EntityKind::Part) == 1)) return false;
+    if (!window.SaveAndReopen(QStringLiteral("curved-face-extrude.kcd2"))) return false;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (!shape.surface) return Explain("曲面の押し出しを保存・再生成できる", shape.mesh.closed && shape.mesh.maximum.y > 10.9);
+    }
+    return false;
+}
+
+[[nodiscard]] bool CaseExtrudeToInclinedLine(V2MainWindow& window)
+{
+    if (!ArmExtrude(window)) return false;
+    window.ExtrudeDock().PressCancel();
+    const auto line = kachakacha::v2::geometry::CurveSegment::MakeLine({-200,0,20}, {200,0,40});
+    if (!window.Session().AddWire({line.Value()}, false, "斜め終端").committed) return false;
+    if (!RefreshFixture(window)) return false;
+    window.RunCommand("part.extrude");
+    auto& dock = window.ExtrudeDock();
+    (void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
+    (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);
+    auto* target = window.findChild<QComboBox*>(QStringLiteral("extrudeStopReference"));
+    if (target == nullptr) return false;
+    target->setCurrentIndex(target->findText(QStringLiteral("斜め終端（線の傾きまで）")));
+    if (!Explain("線の斜面までプレビューされる", !window.Viewport().ExtrudePreviewFaces().empty())) return false;
+    dock.PressConfirm();
+    if (!Explain("斜め終端の立体になる", CountOfKind(window, kachakacha::v2::domain::EntityKind::Part) == 1)) return false;
+    if (!window.SaveAndReopen(QStringLiteral("extrude-inclined-stop.kcd2"))) return false;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (shape.surface) continue;
+        bool onCap = false;
+        for (const auto& edge : shape.mesh.edges) for (const auto& point : {edge.front(), edge.back()}) {
+            if (point.z > 1.0) {
+                if (std::abs(point.z - (0.05 * point.x + 30.0)) > 1.0e-4) return false;
+                onCap = true;
+            }
+        }
+        return Explain("再生成した終端も線を含む斜面", onCap);
+    }
+    return false;
+}
+
+
+[[nodiscard]] bool CaseExtrudeStopsAtCurvedFace(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    if (!MakeCurvedGuide(window)) return false;
+    std::vector<geometry::CurveSegment> segments;
+    const std::vector<geometry::Vector3> points{{1,1,-5},{9,1,-5},{9,7,-5},{1,7,-5}};
+    for (std::size_t i = 0; i < points.size(); ++i) segments.push_back(
+        geometry::CurveSegment::MakeLine(points[i], points[(i + 1) % points.size()]).Value());
+    const auto wire = window.Session().AddWire(segments, false, "押す輪郭");
+    if (!wire.committed || !RefreshFixture(window)) return false;
+    app::SelectionSet selection;
+    selection.entityIds = wire.createdEntityIds;
+    window.Viewport().SetSelection(selection);
+    window.SetMode(UiMode::Part);
+    window.RunCommand("part.extrude");
+    auto& dock = window.ExtrudeDock();
+    (void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
+    (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);
+    auto* target = window.findChild<QComboBox*>(QStringLiteral("extrudeStopReference"));
+    if (target == nullptr) return false;
+    for (int i = 0; i < target->count(); ++i) {
+        if (target->itemText(i).contains(QStringLiteral("（面まで）"))) { target->setCurrentIndex(i); break; }
+    }
+    if (!Explain("曲面で止まる実形状の下見", !window.Viewport().ExtrudePreviewFaces().empty())) return false;
+    dock.PressConfirm();
+    if (!Explain("曲面まで閉じた立体になる", CountOfKind(window, domain::EntityKind::Part) == 1)) return false;
+    if (!window.SaveAndReopen(QStringLiteral("extrude-curved-stop.kcd2"))) return false;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (!shape.surface) return Explain("再生成した終端に曲がりが残る", shape.mesh.closed
+            && std::abs(shape.mesh.minimum.z + 5.0) < 1.0e-4 && shape.mesh.maximum.z > 3.5);
+    }
+    return false;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PartPanelCases()
 {
     return {
+        {"HP-PA-06 任意曲面を終端として押し出し、保存・再生成", CaseExtrudeStopsAtCurvedFace},
+        {"HP-PA-03 ツール先行で輪郭を選び、非対称と反転を保存後も維持", CaseExtrudeToolFirstAfterDrawing},
+        {"HP-PA-04 曲面を後から選び、直線方向に押し出して保存・再生成", CaseCurvedFaceExtrudeWithDirectionLine},
+        {"HP-PA-05 斜めの線の面まで押し出して保存・再生成", CaseExtrudeToInclinedLine},
         {"HP-PA-01 押し出しの棚に範囲 5 通り・方向 7 通りが並び、要る欄だけ生えて作る形へ届く",
             CaseExtrudeShelfListsAllExtentsAndDirections},
         {"HP-PA-02 棚で選んだ左右対称が確定した立体に残る", CaseSymmetricExtentFromShelfReachesTheSolid},

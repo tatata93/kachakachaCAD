@@ -282,6 +282,9 @@ template<class Id>
         definition["direction"] = WriteVector(extrude->direction);
         definition["distance"] = WriteExpression(extrude->distance);
         definition["extentMode"] = JsonValue::Number(static_cast<double>(extrude->extentMode));
+        definition["secondDistanceMm"] = JsonValue::Number(extrude->secondDistanceMm);
+        definition["extentTarget"] = WriteOptionalId(extrude->extentTarget);
+        definition["targetParameter"] = JsonValue::Number(extrude->targetParameter);
         definition["booleanMode"] = JsonValue::Number(
             static_cast<double>(extrude->booleanMode));
         definition["targets"] = WriteIdArray(extrude->targets);

@@ -66,6 +66,8 @@ public:
     [[nodiscard]] bool PickExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode);
     //! 向きを反転しているか。
     [[nodiscard]] bool Reversed() const;
+    [[nodiscard]] bool DirectionReady() const;
+    void SetReversed(bool reversed);
     //! 「数値で決める」「選んだ線の向き」のときの向き(x, y, z)。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 CustomDirection() const;
     void SetCustomDirection(const kachakacha::v2::geometry::Vector3& direction);
@@ -74,9 +76,12 @@ public:
     void SetSecondDistanceMm(double value);
     //! 「選んだ面まで」の相手に出せる作業平面。棚を出すときに文書から渡す。
     void SetTargets(const std::vector<ExtrudeTargetChoice>& targets);
+    void SetDirectionReferences(const std::vector<ExtrudeTargetChoice>& references);
+    void BuildDirectionReferenceRow();
     //! いま選んでいる相手。無ければ値を持たない。
     [[nodiscard]] std::optional<kachakacha::v2::base::EntityId> TargetEntityId() const;
     void ChooseTarget(const std::optional<kachakacha::v2::base::EntityId>& id);
+    [[nodiscard]] double TargetParameter() const;
     //! 範囲の欄に並ぶ言葉(試験から)。
     [[nodiscard]] std::vector<QString> ExtentLabels() const;
     [[nodiscard]] std::vector<QString> DirectionLabels() const;
@@ -161,6 +166,8 @@ private:
     QLabel* fromValue_ = nullptr;
     QDoubleSpinBox* taper_ = nullptr;
     QComboBox* direction_ = nullptr;
+    QComboBox* directionReference_ = nullptr;
+    std::vector<ExtrudeTargetChoice> directionReferences_;
     //! 「数値で決める」の向き(x, y, z)。
     QWidget* customRow_ = nullptr;
     QDoubleSpinBox* customX_ = nullptr;

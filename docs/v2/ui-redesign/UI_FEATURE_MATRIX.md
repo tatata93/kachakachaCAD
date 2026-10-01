@@ -232,3 +232,6 @@ Linux/cloudゲートは未実行。詳細は [FABRICATION_GENERATION.md](FABRICA
 共通配置の変更（2026-10-01）: 道具未選択は道具一覧、選択後は必要な設定と固定確定欄。
 第三段階 `3a4982454` はWindows全ゲート合格。GPT固定欄・旧部品棚の分離は`52301238d`でWindows全ゲート合格（画面373/373）。
 詳細と未達は [UNIFIED_TOOL_UI.md](UNIFIED_TOOL_UI.md) を参照。
+
+2026-10-02 P-01/P-02/P-03/P-04拡張は検証中。[EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTENSIONS.md)参照。
+従来のPC_TESTEDは今回の追加経路の検証を意味しない。

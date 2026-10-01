@@ -295,6 +295,7 @@ std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeTargets() const
 //! 押す前に何ができるのか見えないので、初めての人には難しい。
 void V2MainWindow::RunExtrude()
 {
+    if (HandleSurfaceExtrude(viewport_->ExtrudeHandleShown())) return;
     const auto opening = PlanExtrudeFromSelection();
     // 面を押すときは、押す面の縁を **その場限りの輪郭として** 取り出す。
     // 文書はまだ変えない。下見を出しただけで文書が変わってはいけない(R1 B2)。
@@ -357,7 +358,7 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     // ここを作業平面の法線のままにすると、矢印は輪郭の平面へ向いているのに
     // 作る形だけ別の向きへ進む。別の平面に引いた輪郭では
     // 「この向きでは厚みが出ません」(EXT-007)で断られる。
-    if (extrudeShelfShown_ && !facePushPull_) {
+    if (extrudeShelfShown_) {
         // 棚が出ているなら、そこに出ている向きの決め方がそのまま作る形になる。
         // 棚は7通りすべてを名前で出せるので、詳細の窓で選んだ向きも
         // 棚を通って戻ってくる(Codex P1-EXTRUDE-R4 B1、R5 B1、R6 B2)。
@@ -380,8 +381,9 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
         choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
         if (kachakacha::v2::app::ExtentUsesTarget(choice.extent)) {
             choice.targetEntityId = extrudeDock_->TargetEntityId();
+            choice.targetParameter = extrudeDock_->TargetParameter();
         }
-        if (!facePushPull_ && (choice.direction == ExtrudeDirectionMode::CustomXYZ
+        if ((choice.direction == ExtrudeDirectionMode::CustomXYZ
                 || choice.direction == ExtrudeDirectionMode::SelectedVector)) {
             choice.customDirection = extrudeDock_->CustomDirection();
             extrudeChoice_.customDirection = choice.customDirection;
@@ -451,6 +453,7 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
 //! 出ている下見のとおりに作る。
 void V2MainWindow::ConfirmExtrude()
 {
+    if (HandleSurfaceExtrude(true) || HandleTargetExtrude(true)) return;
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
     using kachakacha::v2::modeling::ExtrudeRequest;
 
@@ -497,7 +500,7 @@ void V2MainWindow::ConfirmExtrude()
     }
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
-        targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
+        targetPlane = ExtrudeStopPlane(*choice.targetEntityId, ExtrudeDirectionNow(), choice.targetParameter);
     }
     std::vector<std::vector<CurveSegment>> startLoops = StartLoopsFor(choice, profiles);
     ExtrudeRequest request =
@@ -587,6 +590,10 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     definition.distance.value = choice.distanceMm;
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.extentMode = static_cast<int>(choice.extent);
+    definition.secondDistanceMm = choice.secondDistanceMm;
+    definition.extentTarget = choice.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget
+        ? choice.targetEntityId : std::nullopt;
+    definition.targetParameter = choice.targetParameter;
     definition.booleanMode = static_cast<int>(choice.booleanMode);
     // 足す・引くの相手は「加工する立体」である。開き直したときも同じ相手へ当てる。
     // **ソリッドを作らないなら、足す・引くは起きない**(オーナー指示)。
@@ -595,7 +602,7 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
         && choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
     if (boolean && !plan.targetSolid.IsNil()) {
         definition.targets.push_back(plan.targetSolid);
-    } else if (choice.targetEntityId.has_value()) {
+    } else if (definition.extentTarget.has_value()) {
         // 「ある面まで」の相手(作業平面)。足し引きの相手とは別物である。
         definition.targets.push_back(*choice.targetEntityId);
     }
@@ -613,6 +620,7 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     if (boolean && !plan.targetSolid.IsNil()) {
         inputs.push_back(plan.targetSolid);
     }
+    if (definition.extentTarget.has_value()) inputs.push_back(*definition.extentTarget);
     if (!AdoptExtrudeResult(choice, definition, built, edges, inputs)) {
         return false;   // まとめごと無かったことにする。途中の形を残さない。
     }
@@ -654,7 +662,7 @@ bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoi
     }
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
-        targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
+        targetPlane = ExtrudeStopPlane(*choice.targetEntityId, ExtrudeDirectionNow(), choice.targetParameter);
     }
     std::vector<ExtrudePiece> pieces;
     for (const auto& group : groups) {
@@ -774,6 +782,7 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
         if (perPart.size() == partCount) {
             copy.profiles = perPart[index];
             partInputs = perPart[index];
+            if (definition.extentTarget.has_value()) partInputs.push_back(*definition.extentTarget);
         }
         const std::string label = built.parts.size() > 1
             ? "押し出し " + std::to_string(index + 1)

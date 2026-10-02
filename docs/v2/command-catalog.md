@@ -238,3 +238,7 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 既存の生成命令は対象部材欄が空なら全体、番号指定なら該当部材のみを扱う。生成先は同一文書／別kcd2。
 近似の確定時にもワイヤー／ワイヤー＋近似面の自動生成を選択できる（既定は近似モデルのみ）。
 詳細: [FABRICATION_GENERATION.md](ui-redesign/FABRICATION_GENERATION.md)。新しい命令IDは追加しない。
+
+| `export.selection` | 選択を出力・配置 | 3D／左一覧で選択、形式と配置 | 3DプレビューからSTL/STEP/KCD | HP-OUT-01 |
+| `export.kcd` | 別KCDへ出力 | 任意の選択形状、配置基準 | 現在形状の独立KCD | HP-OUT-02 |
+| `output.copy` | 同一KCDへ出力 | 任意の選択形状、配置基準 | 現在形状の独立コピー | HP-OUT-02 |

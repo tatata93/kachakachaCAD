@@ -118,7 +118,7 @@ void V2ExportDock::BuildBody()
     });
     QObject::connect(overwriteAction_, &QAction::triggered, this,
         [this](bool checked) { SetOverwrite(checked); });
-    QObject::connect(runAction_, &QAction::triggered, this, [this](bool) { RunNow(); });
+    QObject::connect(runAction_, &QAction::triggered, this, [this](bool) { if(!interactive_ || !interactive_(state_))RunNow(); });
 }
 
 void V2ExportDock::SetDiagnosticSink(std::function<void(const QString&)> sink)
@@ -240,11 +240,14 @@ void V2ExportDock::RefreshSummary()
             ? QStringLiteral("出力先: (まだ決めていません)")
             : QStringLiteral("出力先: %1").arg(QString::fromStdString(state_.path)));
     const QString reason = ReasonText();
+    const bool preview=interactive_ && (state_.format==ExportFormat::Stl || state_.format==ExportFormat::Step || state_.target==ExportTarget::SelectedEntities);
     summaryLabel_->setText(reason.isEmpty()
             ? QStringLiteral("%1 出せます。").arg(SummaryText())
             : QStringLiteral("%1 出せません。%2").arg(SummaryText(), reason));
+    if(preview)summaryLabel_->setText(QStringLiteral("対象と配置をプレビューで確認してから出力します。"));
     if (runAction_ != nullptr) {
-        runAction_->setEnabled(reason.isEmpty());
+        runAction_->setText(preview?QStringLiteral("プレビュー・配置…"):QStringLiteral("出す"));
+        runAction_->setEnabled(reason.isEmpty() || preview);
     }
 }
 

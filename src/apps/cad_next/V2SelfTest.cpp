@@ -84,6 +84,7 @@ namespace {
     cases.insert(cases.end(), humanPath.begin(), humanPath.end());
     const std::vector<SelfTestCase> humanPathApprox = HumanPathApproxCases();
     cases.insert(cases.end(), humanPathApprox.begin(), humanPathApprox.end());
+    const auto output=OutputCases();cases.insert(cases.end(),output.begin(),output.end());
     const std::vector<SelfTestCase> humanPathBoolean = HumanPathBooleanCases();
     cases.insert(cases.end(), humanPathBoolean.begin(), humanPathBoolean.end());
     const std::vector<SelfTestCase> humanPathCorner = HumanPathCornerCases();

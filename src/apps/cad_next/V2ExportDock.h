@@ -60,6 +60,7 @@ public:
 
     //! 出す。検査に通ったときだけ中身を作らせる。
     bool RunNow();
+    void SetInteractiveHandler(std::function<bool(const kachakacha::v2::app::ExportPanelState&)> handler) { interactive_ = std::move(handler); }
     //! 直前に出した一文。
     [[nodiscard]] QString LastMessage() const { return lastMessage_; }
 
@@ -89,4 +90,5 @@ private:
     QAction* overwriteAction_ = nullptr;
     QAction* runAction_ = nullptr;
     QString lastMessage_;
+    std::function<bool(const kachakacha::v2::app::ExportPanelState&)> interactive_;
 };

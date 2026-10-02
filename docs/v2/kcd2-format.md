@@ -999,3 +999,8 @@ CreateFabricationModel の `adaptiveSpacing` は bool、省略時 false。従来
 削除先（0なし/1A/2B/3双方）、`contactSide` は0=A/1=B。`fragmentIndex` は結果の連結領域番号。
 旧ファイルの省略値は順に空配列、0、-1。-1は従来の結果全体を保持する。
 詳しくは [CONTACT_OPERATIONS.md](ui-redesign/CONTACT_OPERATIONS.md)。
+
+### 独立形状の固定（選択出力）
+`FreezeDerived.definition.frozenBrep` は独立コピーのOCCT BRep文字列。PartまたはGuideSurfaceの
+形状を保持し、sourcesは空。元のFeatureへ追従せず、表示メッシュを正本にしない。
+旧FreezeDerivedはこのキー無しで従来通り扱う。無効なBRepは再生成時に理由を出す。

@@ -24,6 +24,7 @@ namespace kachakacha::v2::app {
 
 //! 作り直しの種類。文書の FeatureType のうち、実形状を作るものだけ。
 enum class ShapeRebuildKind {
+    FrozenShape,
     Extrude,
     WireCage,
     Boolean,

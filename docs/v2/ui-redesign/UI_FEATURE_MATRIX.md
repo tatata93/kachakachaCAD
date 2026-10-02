@@ -241,3 +241,6 @@ PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTEN
 3D一覧→領域選択→処理。Windows全体検査は初回183/184、説明書識別子を修正して失敗分1/1合格。
 通常版・配布版画面各381/381、HP-CT通常Windows画面4/4、旧自己試験終了0。
 仕様・制約・検証経緯は [CONTACT_OPERATIONS.md](CONTACT_OPERATIONS.md)。Linux/cloud・目視受入は未実施。
+
+2026-10-02 選択出力・共通配置（実装中、PC未検証）。STL/STEP/別KCD/同一KCD、
+3Dプレビュー、基準点と配置面、製作生成の配置を共通化。詳細は [SELECTION_OUTPUT.md](SELECTION_OUTPUT.md)。

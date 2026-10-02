@@ -8,6 +8,7 @@
 //!   2. 選んだものだけを出す。見えているだけのものを勝手に足さない。
 
 #include "V2MainWindow.h"
+#include "V2OutputTool.h"
 
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SceneBuilder.h"
@@ -71,6 +72,16 @@ void V2MainWindow::BuildExportDock()
         [this](const kachakacha::v2::app::ExportRequest& request) {
             return MakeExportContent(request);
         });
+    exportDock_->SetInteractiveHandler([this](const kachakacha::v2::app::ExportPanelState& state) {
+        using namespace kachakacha::v2;
+        if(state.format!=app::ExportFormat::Stl && state.format!=app::ExportFormat::Step && state.target!=app::ExportTarget::SelectedEntities)return false;
+        if(state.target==app::ExportTarget::VisibleParts){app::SelectionSet selection;
+            for(const auto& entity:session_->GetDocument().Snapshot().entities)
+                if(entity.kind==domain::EntityKind::Part && entity.visibility==domain::Visibility::Visible)selection.entityIds.push_back(entity.id);
+            viewport_->SetSelection(selection);
+        }
+        V2OutputTool::Open(*this,state.format==app::ExportFormat::Stl?0:state.format==app::ExportFormat::Step?1:2);return true;
+    });
     RefreshExportCounts();
 }
 

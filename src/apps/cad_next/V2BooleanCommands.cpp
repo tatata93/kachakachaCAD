@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2OutputTool.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
@@ -99,6 +100,7 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (id == "export.selection" || id == "export.kcd" || id == "output.copy" || id == "export.stl" || id == "export.step") { V2OutputTool::Open(*this,id=="export.stl"?0:id=="export.step"?1:id=="output.copy"?3:2); return true; }
     if (id == "part.overlap_inspect") { EndArmedTools(); ShowOverlapBrowser(); return true; }
     if (id == "part.extrude" && !extrudeShelfShown_) {
         EndArmedTools();
@@ -179,8 +181,7 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     }
     // 回転体。面を作るの道具を 作り方 = 回転体 で構える(断面 → 軸 → 下見 → Enter)。
     if (id == "guide.revolve") {
-        ClearPendingCommand();
-        RunRevolveTool();
+        ClearPendingCommand(); RunRevolveTool();
         return true;
     }
     // C面取り / R丸め。線が2本そろっていなければ、面取りの道具を持って拾うのを待つ。

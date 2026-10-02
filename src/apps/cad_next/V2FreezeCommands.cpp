@@ -10,6 +10,8 @@
 //! 消すと、どうやって作ったのかを二度とたどれなくなる。
 
 #include "V2MainWindow.h"
+#include "V2OutputTool.h"
+#include <QComboBox>
 
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
@@ -127,6 +129,8 @@ bool V2MainWindow::IsFreezeCommand(std::string_view id)
 
 void V2MainWindow::RunFreezeCommand(std::string_view id)
 {
+    auto* placement=fabricationDock_->findChild<QComboBox*>(QStringLiteral("generationPlacement"));
+    if(id!="derived.freeze" && placement!=nullptr && placement->currentIndex()==1){V2OutputTool::Generate(*this,id);return;}
     FocusFabricationStageFor(id);   // 生成は製作の棚の 2 段目
     if (id != "derived.freeze" && fabricationDock_->GenerationDestination()==1) { ExportFabricationGeneration(id); return; }
     if (id != "derived.freeze" && !ValidateGenerationParts()) { return; }

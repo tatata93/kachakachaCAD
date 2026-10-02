@@ -97,7 +97,7 @@ void V2MainWindow::BuildMenus()
         "fabrication.freeze_wires", "fabrication.edit_part", "fabrication.set_connection_scope"});
 
     QMenu* output = menuBar()->addMenu(QStringLiteral("書き出し(&X)"));
-    addCommands(output, {"export.validate", "export.stl", "export.step", "export.svg",
+    addCommands(output, {"export.selection", "export.kcd", "output.copy", "export.validate", "export.stl", "export.step", "export.svg",
         "export.dxf", "export.pdf_1to1"});
 
     QMenu* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));

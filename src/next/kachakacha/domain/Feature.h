@@ -160,6 +160,7 @@ struct TransformWireDefinition {
 
 struct FreezeDerivedDefinition {
     std::vector<EntityId> sources;
+    std::string frozenBrep; // independent BRep, never a display mesh
 };
 
 //! 作業平面。作り方と、それに要る入力を持つ。

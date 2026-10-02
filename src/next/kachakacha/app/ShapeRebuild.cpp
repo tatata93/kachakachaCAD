@@ -14,6 +14,7 @@ using domain::FeatureType;
 [[nodiscard]] std::optional<ShapeRebuildKind> KindOf(FeatureType type) noexcept
 {
     switch (type) {
+    case FeatureType::FreezeDerived: return ShapeRebuildKind::FrozenShape;
     case FeatureType::Extrude:
         return ShapeRebuildKind::Extrude;
     case FeatureType::CreatePartFromWireCage:
@@ -88,6 +89,7 @@ using domain::FeatureType;
 std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept
 {
     switch (kind) {
+    case ShapeRebuildKind::FrozenShape: return "固定形状";
     case ShapeRebuildKind::Extrude:      return "押し出し";
     case ShapeRebuildKind::WireCage:     return "かごから部品";
     case ShapeRebuildKind::Boolean:      return "足す・引く";
@@ -114,6 +116,8 @@ std::vector<ShapeRebuildStep> PlanShapeRebuild(const document::DocumentSnapshot&
         if (found == snapshot.features.end() || !found->enabled) {
             continue;
         }
+        const auto* frozen = std::get_if<domain::FreezeDerivedDefinition>(&found->definition);
+        if(frozen != nullptr && frozen->frozenBrep.empty()) continue;
         const auto kind = KindOf(found->type);
         if (!kind.has_value()) {
             continue;

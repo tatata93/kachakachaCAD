@@ -95,6 +95,7 @@ class V2MainWindow final : public QMainWindow {
     friend class V2ShellSplitTool;        // シェル・分割(同じ)
     friend class V2HoverEditTool;         // トリム・延長・分割(線の上に置いて押す)
     friend class V2GptSurfaceTool;
+    friend class V2OutputTool;
     friend class V2GptFabricationTool;
     friend class V2LoopFacesTool;         // 線から面(輪を探して面にする)
 public:

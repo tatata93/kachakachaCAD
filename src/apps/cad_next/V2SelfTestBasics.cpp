@@ -270,7 +270,7 @@ namespace {
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Circle);
     const auto before = window.Session().CurrentTool();
     for (int round = 0; round < 3; ++round) {
-        window.RunCommand("export.step");
+        window.RunCommand("export.svg");
         window.RunCommand("part.from_wire_cage");
     }
     return window.Session().CurrentTool() == before;

@@ -10,6 +10,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
@@ -290,6 +291,17 @@ bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& 
     const auto* feature = &featureRef;
     bool ok = false;
     switch (step.kind) {
+    case kachakacha::v2::app::ShapeRebuildKind::FrozenShape: {
+        const auto* frozen=std::get_if<kachakacha::v2::domain::FreezeDerivedDefinition>(&feature->definition);
+        if(frozen==nullptr)break;
+        const auto shape=kachakacha::v2::kernel::RestoreOutputShape(frozen->frozenBrep);
+        if(!shape.HasValue()){ReportDiagnostics(shape.Diagnostics());break;}
+        const auto* entity=session_->GetDocument().FindEntity(step.outputEntityId);
+        if(entity==nullptr)break;
+        if(entity->kind==kachakacha::v2::domain::EntityKind::Part)partShapes_[step.outputEntityId.ToString()]=shape.Value();
+        else guideShapes_[step.outputEntityId.ToString()]=shape.Value();
+        ok=true;break;
+    }
     case kachakacha::v2::app::ShapeRebuildKind::Extrude:
         ok = RebuildExtrudeShape(*feature, step.outputEntityId, step.outputOrdinal);
         break;

@@ -224,6 +224,7 @@ template<class Id>
             sources.push_back(WriteId(id));
         }
         definition["sources"] = JsonValue::Array(std::move(sources));
+        if(!freeze->frozenBrep.empty()) definition["frozenBrep"] = JsonValue::String(freeze->frozenBrep);
     } else if (const auto* plane =
                    std::get_if<domain::CreateWorkPlaneDefinition>(&feature.definition)) {
         definition["method"] = JsonValue::Number(static_cast<double>(plane->method));

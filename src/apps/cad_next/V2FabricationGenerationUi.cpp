@@ -12,6 +12,15 @@
 #include <QLineEdit>
 #include <QTabWidget>
 namespace {
+QComboBox* GenerationPlacement(QWidget* parent,V2FabricationDock* dock) {
+    auto* box=new QComboBox(parent);box->setObjectName("generationPlacement");
+    box->addItems({QStringLiteral("元の位置を維持"),QStringLiteral("基準点を面へ配置（プレビューで指定）")});
+    const auto peers=dock->findChildren<QComboBox*>("generationPlacement");
+    if(!peers.isEmpty())box->setCurrentIndex(peers.front()->currentIndex());
+    QObject::connect(box,&QComboBox::currentIndexChanged,dock,[dock](int value){
+        for(auto* peer:dock->findChildren<QComboBox*>("generationPlacement"))if(peer->currentIndex()!=value)peer->setCurrentIndex(value);
+    });return box;
+}
 QPushButton* RunButton(QWidget* parent,const QString& text,const char* command,V2FabricationDock* dock)
 {
     auto* button=new QPushButton(text,parent);
@@ -40,6 +49,7 @@ QWidget* V2FabricationDock::BuildFreezeSection(QWidget* body)
     freezeOutputLayout->addWidget(freeze_, 1);
     freezeLayout->addWidget(freezeOutputRow);
     freezeLayout->addWidget(BuildGenerationDestination(freezeButtons));
+    freezeLayout->addWidget(GenerationPlacement(freezeButtons,this));
     freezeLayout->addWidget(new QLabel(QStringLiteral("指定した対象部材を生成します"),freezeButtons));
     freezeLayout->addWidget(new QLabel(QStringLiteral("曲げ状態"), freezeButtons));
     generateCards_.push_back(
@@ -88,7 +98,7 @@ QWidget* V2FabricationDock::BuildGenerationOptions(QWidget* parent)
         automaticGeneration_=value;
         for (auto* box:automaticGenerations_) { if(box->currentIndex()!=value) { box->setCurrentIndex(value); } }
     });
-    layout->addWidget(BuildGenerationDestination(body)); return body;
+    layout->addWidget(BuildGenerationDestination(body));layout->addWidget(GenerationPlacement(body,this)); return body;
 }
 void V2FabricationDock::SetGenerationDestination(int value)
 {

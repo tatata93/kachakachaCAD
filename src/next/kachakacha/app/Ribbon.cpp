@@ -167,7 +167,7 @@ const std::vector<RibbonCategory>& OutputCategories()
 {
     static const std::vector<RibbonCategory> categories{
         {"export", "書き出し",
-            {Tool("出力を検査", "export.validate"), Tool("STL", "export.stl"),
+            {Tool("選択を出力・配置", "export.selection"), Tool("別KCD", "export.kcd"), Tool("同一KCD", "output.copy"), Tool("出力を検査", "export.validate"), Tool("STL", "export.stl"),
                 Tool("STEP", "export.step"), Tool("SVG", "export.svg"), Tool("DXF", "export.dxf"),
                 Tool("PDF 原寸", "export.pdf_1to1")}},
         {"view", "表示", {Tool("表示設定", "view.display_settings")}},

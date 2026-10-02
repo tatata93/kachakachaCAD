@@ -496,6 +496,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
     }
     case FeatureType::FreezeDerived: {
         FreezeDerivedDefinition made;
+        if(definition.Find("frozenBrep") != nullptr) made.frozenBrep = loader.String(definition,"frozenBrep",where);
         const JsonArray* sources = loader.ArrayAt(definition, "sources", where);
         if (sources != nullptr) {
             for (std::size_t index = 0; index < sources->size(); ++index) {

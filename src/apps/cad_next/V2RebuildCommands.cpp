@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include "V2EdgeFinishTool.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
@@ -299,7 +300,15 @@ bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& 
         const auto* entity=session_->GetDocument().FindEntity(step.outputEntityId);
         if(entity==nullptr)break;
         if(entity->kind==kachakacha::v2::domain::EntityKind::Part)partShapes_[step.outputEntityId.ToString()]=shape.Value();
-        else guideShapes_[step.outputEntityId.ToString()]=shape.Value();
+        else {
+            guideShapes_[step.outputEntityId.ToString()]=shape.Value();
+            const auto count=kachakacha::v2::kernel::ShapeFaceCount(shape.Value());
+            if(count.HasValue() && count.Value()==1) {
+                const auto sampled=kachakacha::v2::kernel::FaceSamplesOf(shape.Value(),0);
+                if(sampled.HasValue())guideSamples_[step.outputEntityId.ToString()]=sampled.Value().samples;
+                else ReportDiagnostics(sampled.Diagnostics());
+            }
+        }
         ok=true;break;
     }
     case kachakacha::v2::app::ShapeRebuildKind::Extrude:

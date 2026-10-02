@@ -230,7 +230,8 @@ void DrawCheckMark(QPainter* painter, const QRect& rect, const QColor& color)
 bool KeepsOwnStyleSheet(const QWidget* widget)
 {
     // 表示色ボタンは「色そのもの」が入力値なので、テーマ色で塗りつぶさない。
-    return widget != nullptr && widget->property("displayColor").isValid();
+    return widget != nullptr && (widget->property("displayColor").isValid()
+        || widget->objectName() == QStringLiteral("ribbonCategories"));
 }
 
 QPixmap ClassicStandardPixmap(QStyle::StandardPixmap standardPixmap)

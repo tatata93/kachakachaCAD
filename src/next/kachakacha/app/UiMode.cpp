@@ -37,6 +37,7 @@ const std::vector<std::string_view>& CommonCommandIds()
 {
     // ui-workflows.md §2 の「共通操作」。モードを切り替えても常に出す。
     static const std::vector<std::string_view> ids{
+        "workplane.from_face", "fabrication.from_face", "fabrication.gpt_from_face",
         "export.selection", "export.kcd", "output.copy",
         "file.new", "file.open", "file.save", "file.save_as", "edit.undo", "edit.redo",
         "edit.delete", "selection.activate", "measure.open", "view.fit_all",

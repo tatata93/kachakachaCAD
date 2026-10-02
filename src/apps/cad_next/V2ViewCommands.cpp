@@ -297,8 +297,10 @@ void V2MainWindow::AdoptTreeSelection()
             continue;
         }
         // グループや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
-        for (int child = 0; child < item->childCount(); ++child) {
-            add(idOf(item->child(child)));
+        for (const auto& [row, descendantId] : entityItems_) {
+            for (auto* parent = row->parent(); parent != nullptr; parent = parent->parent()) {
+                if (parent == item) { add(descendantId); break; }
+            }
         }
     }
     syncingSelection_ = true;

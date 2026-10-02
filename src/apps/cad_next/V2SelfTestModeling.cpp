@@ -1077,7 +1077,7 @@ namespace {
     window.RunCommand("workplane.create");
     if (!Explain((std::string("離した平面が作れる(")
                      + window.StatusText().toStdString() + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+            window.StatusText().contains(QStringLiteral("作業面2")))) {
         return false;
     }
     // 本当に原点から離れていること。名前が変わっただけでは意味がない。
@@ -1160,7 +1160,7 @@ namespace {
     window.RunCommand("workplane.create");
     if (!Explain((std::string("離した平面ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+            window.StatusText().contains(QStringLiteral("作業面2")))) {
         return false;
     }
     const auto target = kachakacha::v2::app::SelectAllOfKind(

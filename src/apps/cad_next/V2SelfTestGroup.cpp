@@ -479,17 +479,64 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("半分だけ移った状態にならない", true);
 }
 
+//! 各階層が独自のカテゴリと中身を持ち、親を選べば子孫まで選べる。
+[[nodiscard]] bool CaseNestedGroupCategories(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    std::vector<GroupId> groups;
+    std::vector<EntityId> wires;
+    for (int depth = 0; depth < 5; ++depth) {
+        window.EntityTree()->clearSelection();
+        if (!groups.empty()) ItemOfGroup(window, groups.back())->setSelected(true);
+        window.RunCommand("group.create");
+        GroupId group;
+        if (!LastGroup(window, group)) return false;
+        groups.push_back(group);
+        if (!Explain("子を作っても親のワイヤを移さない",
+                app::EntitiesUnderGroup(window.Session().GetDocument().Snapshot(), group).empty())) return false;
+        if (!window.SetActiveGroup(group)) return false;
+        const auto wire = DrawOneLine(window, depth * 5.0);
+        wires.push_back(wire);
+        const auto* entity = window.Session().GetDocument().FindEntity(wire);
+        auto* row = window.ItemOfEntity(wire);
+        if (!Explain("各階層に直接所属し、ワイヤーカテゴリへ入る", entity && entity->groupId == group
+                && row && row->parent()->text(0) == QStringLiteral("ワイヤー")
+                && row->parent()->parent() == ItemOfGroup(window, group))) return false;
+        if (!Explain("任意の深さで入れ子になる",
+                app::GroupDepth(window.Session().GetDocument().Snapshot(), group) == depth)) return false;
+    }
+    window.EntityTree()->clearSelection();
+    ItemOfGroup(window, groups.front())->setSelected(true);
+    if (!Explain("親の選択は子孫を含む5本", window.Viewport().Selection().entityIds.size() == 5)) return false;
+    window.EntityTree()->clearSelection();
+    window.ItemOfEntity(wires.front())->parent()->setSelected(true);
+    if (!Explain("カテゴリ選択はその階層の中身だけ", window.Viewport().Selection().entityIds.size() == 1
+            && window.Viewport().Selection().entityIds.front() == wires.front())) return false;
+    window.EntityTree()->clearSelection();
+    ItemOfGroup(window,groups[1])->setSelected(true);
+    window.RunCommand("group.create");
+    GroupId sibling;if(!LastGroup(window,sibling))return false;
+    if (!Explain("同じ親にライトと扉のような兄弟を作れる",
+            ItemOfGroup(window,sibling)->parent()==ItemOfGroup(window,groups[2])->parent()
+            && ItemOfGroup(window,sibling)->parent()==ItemOfGroup(window,groups[1])))return false;
+    if (!window.SaveAndReopen(QStringLiteral("kacha_nested_categories.kcd2"))) return false;
+    return Explain("保存後も5階層と各階層の中身を保つ",
+        app::GroupDepth(window.Session().GetDocument().Snapshot(), groups.back()) == 4
+        && app::EntitiesUnderGroup(window.Session().GetDocument().Snapshot(), groups.front()).size() == 5);
+}
+
 std::vector<SelfTestCase> GroupCases()
 {
     return {
-        {"複数選んでグループにできる", CaseGroupFromSelection},
-        {"引きずってグループへ移せる", CaseGroupDragAndDrop},
-        {"グループごと隠しても中身の設定は変わらない", CaseGroupVisibility},
-        {"グループを解いても中身は消えない", CaseGroupDissolveKeepsChildren},
-        {"グループの階層が保存して開き直しても残る", CaseGroupSurvivesSaveAndOpen},
-        {"グループを作るのは1回の取り消しで戻る", CaseGroupCreateIsOneUndoStep},
-        {"一度に引きずった分は1回の取り消しで戻る", CaseGroupDropIsOneUndoStep},
-        {"1つでも断られたら引きずった分は全部戻る",
+        {"GR グループ各階層のカテゴリと子孫選択", CaseNestedGroupCategories},
+        {"GR 複数選んでグループにできる", CaseGroupFromSelection},
+        {"GR 引きずってグループへ移せる", CaseGroupDragAndDrop},
+        {"GR グループごと隠しても中身の設定は変わらない", CaseGroupVisibility},
+        {"GR グループを解いても中身は消えない", CaseGroupDissolveKeepsChildren},
+        {"GR グループの階層が保存して開き直しても残る", CaseGroupSurvivesSaveAndOpen},
+        {"GR グループを作るのは1回の取り消しで戻る", CaseGroupCreateIsOneUndoStep},
+        {"GR 一度に引きずった分は1回の取り消しで戻る", CaseGroupDropIsOneUndoStep},
+        {"GR 1つでも断られたら引きずった分は全部戻る",
             CaseGroupDropRollsBackWhenOneIsRefused},
     };
 }

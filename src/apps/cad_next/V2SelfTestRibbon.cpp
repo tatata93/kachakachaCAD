@@ -1,3 +1,6 @@
+#include <QDir>
+#include <QPixmap>
+#include <QApplication>
 //! 2段の帯(カテゴリ → 道具)の人の道(HP-RB)。正本 3 HTML(2026-09-18)。
 //!
 //! 見えているボタンを実際に押す。押せない道具は押せず、理由が状態行に出る。
@@ -6,6 +9,7 @@
 
 #include "V2MainWindow.h"
 #include "V2Ribbon.h"
+#include "Win95Style.h"
 #include "V2SurfaceDock.h"
 
 #include "kachakacha/app/ShelfLayout.h"
@@ -105,11 +109,21 @@ using kachakacha::v2::modeling::DrawingTool;
         && Explain("近似が見えている", ribbon.ToolEnabled(QStringLiteral("近似")));
 }
 
+[[nodiscard]] bool CaseRibbonCategoryAppearance(V2MainWindow& window)
+{
+    window.ApplyTheme(UiTheme::Windows95);
+    window.resize(1200,800);QApplication::processEvents();
+    const bool saved=window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-category-win95.png"));
+    window.ApplyTheme(UiTheme::Normal);
+    return Explain("HP-RB カテゴリとツールのWin95表示記録",saved);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> RibbonCases()
 {
     return {
+        {"HP-RB-04 カテゴリタブとツールボタンの外観", CaseRibbonCategoryAppearance},
         {"HP-RB-01 帯はカテゴリ → 道具で、押した道具になる", CaseRibbonCategoryThenTool},
         {"HP-RB-02 核に無い道具は押せない形で理由が出る", CaseRibbonBlockedToolSaysWhy},
         {"HP-RB-03 帯はモードで入れ替わり、面作成は作り方つきで構える",

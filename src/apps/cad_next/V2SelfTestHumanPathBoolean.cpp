@@ -33,6 +33,7 @@
 #include "kachakacha/app/BooleanInputState.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/domain/Feature.h"
 
 #include <QPointF>
@@ -503,11 +504,66 @@ using kachakacha::v2::domain::EntityKind;
     return window.SaveAndReopen(QStringLiteral("contact-split.kcd2"))&&VisiblePartCount(window)==2;
 }
 
+//! 実際のマウスイベントでツールからフェイスを拾い、平面と近似入力へ進める。
+[[nodiscard]] bool CaseFaceToolFirst(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto part = MakeBoxByHand(window, 0.25, 0.35, 0.55, 0.65);
+    if (part.IsNil()) return false;
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top); viewport.FitToDocument();
+    geometry::Vector3 center;
+    for (const auto& shape : viewport.ShapeViews()) if (shape.entityId == part)
+        center = (shape.mesh.minimum + shape.mesh.maximum) * 0.5;
+    const auto screen = viewport.Mapping().Project(center);
+    if (!screen) return false;
+    const QPointF point(screen->x,screen->y);
+    const auto click = [&] {
+        QMouseEvent press(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        QApplication::sendEvent(&viewport,&press);
+        QMouseEvent release(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&viewport,&release); QApplication::processEvents();
+    };
+    viewport.SetSelection({}); window.RunCommand("workplane.from_face"); click();
+    const auto* plane = window.Session().GetDocument().FindEntity(window.ActiveWorkPlaneId());
+    if (!Explain("HP-FA フェイスから作業面1を作る", plane && plane->displayName == "作業面1"
+            && CountOfKind(window,EntityKind::WorkPlane) == 4)) return false;
+    window.SelectTool(modeling::DrawingTool::Select);
+    for (const auto command : {"fabrication.from_face", "fabrication.gpt_from_face"}) {
+        const int before = CountOfKind(window,EntityKind::GuideSurface);
+        viewport.SetViewDirection(ViewDirection::Top);viewport.FitToDocument();
+        viewport.SetSelection({});window.RunCommand(command);
+        // 作業面生成後はカメラが変わるので投影位置を取り直す。
+        const auto at = viewport.Mapping().Project(center);if(!at)return false;
+        QMouseEvent press(QEvent::MouseButtonPress,QPointF(at->x,at->y),QPointF(at->x,at->y),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        QApplication::sendEvent(&viewport,&press);QApplication::processEvents();
+        if (!Explain("HP-FA 元ソリッドを残して独立面が増える",CountOfKind(window,EntityKind::Part)==1
+                && CountOfKind(window,EntityKind::GuideSurface)==before+1))return false;
+        if (std::string(command)=="fabrication.from_face") {
+            if (!Explain("HP-FA 従来近似の入力を受け付ける",window.ApproxShelfShown()
+                    && !window.ApproxInput().sources.empty() && !viewport.ToolPreview().empty())) return false;
+        } else {
+            auto* preview=window.findChild<QPushButton*>(QStringLiteral("gptFabricationPreview"));
+            if (!preview || !preview->isEnabled())return false;
+            preview->click();
+            if (!Explain("HP-FA GPT近似の面プレビュー",viewport.ToolPreviewFaceCount()>0))return false;
+        }
+        window.HandleToolKey(Qt::Key_Escape,nullptr);
+    }
+    if(!window.SaveAndReopen(QStringLiteral("face-actions.kcd2")))return false;
+    app::SelectionSet selected;
+    for(const auto& entity:window.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==EntityKind::GuideSurface){selected.entityIds={entity.id};break;}
+    viewport.SetSelection(selected);window.RunCommand("fabrication.create");
+    return Explain("HP-FA 保存後の独立フェイスも近似できる",!viewport.ToolPreview().empty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-FA-01 フェイスから作図と従来GPT近似", CaseFaceToolFirst},
         {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},
         {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},
         {"HP-CT-04 分割領域を選択して生成し保存再生成", CaseContactSplitSelection},

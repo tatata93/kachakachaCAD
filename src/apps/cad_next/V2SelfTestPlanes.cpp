@@ -158,7 +158,7 @@ void UseDock(V2MainWindow& window)
     dock->PressCreate();
     if (!Explain((std::string("離した平面ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+            window.StatusText().contains(QStringLiteral("作業面1")))) {
         return false;
     }
     // 正面 XZ の法線は ±Y。12mm 離れているのは y。

@@ -44,6 +44,7 @@ void V2MainWindow::ShowExplorerMenu(const QPoint& at)
     if (under != nullptr && !under->isSelected() && (under->flags() & Qt::ItemIsSelectable)) {
         entityTree_->setCurrentItem(under);
     }
+    if (under == nullptr) entityTree_->clearSelection();
     QMenu menu(this);
     BuildExplorerMenu(menu);
     if (!menu.isEmpty()) {
@@ -108,7 +109,7 @@ void V2MainWindow::BuildMoveToGroupMenu(QMenu& menu)
             [this, moved, target] { DropTreeItemsOnto(moved, target); });
     }
     if (snapshot.groups.empty()) {
-        QAction* none = into->addAction(QStringLiteral("(グループがありません。先に「グループ化」)"));
+        QAction* none = into->addAction(QStringLiteral("(グループがありません。先に「グループを作る」)"));
         none->setEnabled(false);
     }
     into->addSeparator();

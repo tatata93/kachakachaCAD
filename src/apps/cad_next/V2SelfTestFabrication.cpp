@@ -58,7 +58,7 @@ namespace kachakacha::v2::selftest {
     window.RunCommand("workplane.create");
     if (!Explain((std::string("離した平面が作れる(") + window.StatusText().toStdString()
                      + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+            window.StatusText().contains(QStringLiteral("作業面1")))) {
         return false;
     }
     // 2本目は吸着を止めて引く。上から見ると1本目と同じ場所なので、

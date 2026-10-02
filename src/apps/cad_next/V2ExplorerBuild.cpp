@@ -58,8 +58,8 @@ void MarkIfActiveWorkPlane(QTreeWidgetItem* item, bool active)
     item->setText(0, name);
     item->setText(1, QStringLiteral("節"));
     item->setIcon(0, section == ExplorerSection::Origin ? V2OriginTreeIcon() : V2GroupTreeIcon());
-    item->setFlags((item->flags() | Qt::ItemIsDropEnabled) & ~Qt::ItemIsEditable
-        & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsSelectable);
+    item->setFlags((item->flags() | Qt::ItemIsDropEnabled | Qt::ItemIsSelectable)
+        & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
     QFont font = item->font(0);
     font.setBold(true);
     item->setFont(0, font);
@@ -99,12 +99,20 @@ void V2MainWindow::RefreshEntityList()
         & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsSelectable);
     std::map<ExplorerSection, QTreeWidgetItem*> sections;
     for (const ExplorerSection section : kachakacha::v2::app::ExplorerSections()) {
-        sections[section] = MakeSectionItem(root, section);
+        if (section != ExplorerSection::Groups || !snapshot.groups.empty())
+            sections[section] = MakeSectionItem(root, section);
     }
     BuildOriginRows(sections[ExplorerSection::Origin]);
     // グループは入れ子のまま「グループ」の節の下に(オーナー指示 §9・§10)。
     std::map<std::string, QTreeWidgetItem*> byGroupId;
-    BuildGroupItems(byGroupId, sections[ExplorerSection::Groups]);
+    BuildGroupItems(byGroupId, sections.contains(ExplorerSection::Groups) ? sections[ExplorerSection::Groups] : root);
+    std::map<std::pair<std::string, ExplorerSection>, QTreeWidgetItem*> groupedSections;
+    for (const auto& [key, group] : byGroupId) if (group != nullptr) {
+        for (const auto category : kachakacha::v2::app::ExplorerSections()) {
+            if (category != ExplorerSection::Origin && category != ExplorerSection::Groups)
+                groupedSections[{key, category}] = MakeSectionItem(group, category);
+        }
+    }
     for (const auto& entity : snapshot.entities) {
         const ExplorerSection section = kachakacha::v2::app::SectionForEntity(snapshot, entity);
         if (section == ExplorerSection::Origin) {
@@ -118,7 +126,10 @@ void V2MainWindow::RefreshEntityList()
         if (section == ExplorerSection::Groups && entity.groupId.has_value()) {
             const auto found = byGroupId.find(entity.groupId->ToString());
             if (found != byGroupId.end() && found->second != nullptr) {
-                parent = found->second;
+                auto ungrouped = entity;
+                ungrouped.groupId.reset();
+                const auto category = kachakacha::v2::app::SectionForEntity(snapshot, ungrouped);
+                parent = groupedSections.at({found->first, category});
             }
         }
         AddEntityRow(parent, entity);

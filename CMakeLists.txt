@@ -1086,6 +1086,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
+        src/apps/cad_next/V2FaceActions.cpp
         src/apps/cad_next/V2ContactCommands.cpp
         src/apps/cad_next/V2ContactOptions.cpp
         src/apps/cad_next/V2SelfTestOutput.cpp

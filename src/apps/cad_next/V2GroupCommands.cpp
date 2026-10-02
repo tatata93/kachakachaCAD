@@ -77,7 +77,8 @@ void V2MainWindow::CreateGroupFromSelection()
     const auto id = group.id;
     // グループを作るのと、中身を入れるのは、人から見れば1つの操作である。
     // 別々に入れると、1回の取り消しで中身だけ戻り、空のグループが残る。
-    const auto chosen = viewport_->Selection().entityIds;
+    const auto chosen = group.parentId.has_value() ? std::vector<kachakacha::v2::base::EntityId>{}
+                                                 : viewport_->Selection().entityIds;
     bool ok = true;
     {
         kachakacha::v2::document::Document::Transaction transaction(
@@ -237,6 +238,10 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
 
     // 落ちた先。グループの行でなければ、その行が入っているグループへ入れる。
     std::optional<GroupId> destination = GroupOfItem(groupItems_, onto);
+    for (auto* parent = onto == nullptr ? nullptr : onto->parent();
+         !destination.has_value() && parent != nullptr; parent = parent->parent()) {
+        destination = GroupOfItem(groupItems_, parent);
+    }
     if (!destination.has_value() && onto != nullptr) {
         for (const auto& entry : entityItems_) {
             if (entry.first != onto) {

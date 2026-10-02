@@ -62,6 +62,12 @@ V2Ribbon::V2Ribbon(QWidget* parent)
     toolLayout_->setSpacing(4);
     toolLayout_->addStretch(1);   // 上と同じ
     layout->addWidget(toolRow_);
+    categoryRow_->setStyleSheet(QStringLiteral(
+        "QToolButton#ribbonCategory { border: 1px solid palette(mid); border-bottom: 3px solid palette(mid);"
+        " border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 3px 8px; background: palette(window); }"
+        "QToolButton#ribbonCategory:checked { border-bottom: 3px solid palette(highlight); font-weight: bold;"
+        " background: palette(base); color: palette(text); }"
+        "QToolButton#ribbonCategory:hover { background: palette(light); }"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 

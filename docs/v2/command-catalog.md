@@ -100,7 +100,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `fabrication.merge_parts` | 部材を1つにする | 製作モデル1つ + 棚の「曲げる部材」の番号1つ | **1度目は前と後を見せるだけ(文書を変えない)。2度目で分け方を変える。** Esc か道具替えでやめる | AT-FAB-005 |
 | `fabrication.split_part` | 部材を分ける | 同上 | 同上 | AT-FAB-005 |
 | `fabrication.set_unfold_base` | 展開の基準にする辺 | 製作モデル1つ + 棚の「曲げる部材」の番号 | Fabrication Feature 更新(`unfoldBaseRail`)。展開しても動かさない辺を決める | AT-FAB-011 |
-| `group.create` | グループ化 | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
+| `group.create` | グループを作る | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
 | `group.dissolve` | グループを解く | グループの行 | Groupを消し中身は親へ | AT-UIX-006 |
 | `group.rename` | グループの名前を変える | グループの行 | Group displayName | AT-UIX-006 |
 | `grid.edit` | グリッド | 間隔、副点、原点 | Document settings | AT-UIX-005 |
@@ -242,3 +242,11 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 | `export.selection` | 選択を出力・配置 | 3D／左一覧で選択、形式と配置 | 3DプレビューからSTL/STEP/KCD | AT-EXP-015 |
 | `export.kcd` | 別KCDへ出力 | 任意の選択形状、配置基準 | 現在形状の独立KCD | AT-EXP-016 |
 | `output.copy` | 同一KCDへ出力 | 任意の選択形状、配置基準 | 現在形状の独立コピー | AT-EXP-016 |
+
+| Command | 表示 | 入力 | 出力 | 試験 |
+| --- | --- | --- | --- | --- |
+| `workplane.from_face` | フェイスで作図 | 選択したソリッドのフェイス、または起動後にクリック | 連番作業面を自動生成して作図。曲面では選択位置の接平面 | AT-WPL-001 |
+| `fabrication.from_face` | フェイスを近似 | ソリッドのフェイス | 独立した面を取り出して従来近似を開始 | AT-FAB-011 |
+| `fabrication.gpt_from_face` | フェイスをGPT近似 | ソリッドのフェイス | 独立した面を取り出してGPT近似を開始 | AT-FAB-011 |
+
+フェイス抽出は元ソリッドに追従しない独立コピー。近似を取消した場合も抽出面は残り、Undoで取り消せる。

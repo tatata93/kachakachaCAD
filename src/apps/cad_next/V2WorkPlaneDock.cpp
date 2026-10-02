@@ -77,7 +77,7 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     form_->setSpacing(3);
 
     name_ = new QLineEdit(body_);
-    name_->setPlaceholderText(QStringLiteral("空なら作り方の名前"));
+    name_->setPlaceholderText(QStringLiteral("空なら作業面1、作業面2…"));
     form_->addRow(QStringLiteral("名前"), name_);
 
     method_ = new QComboBox(body_);

@@ -62,12 +62,12 @@ using kachakacha::v2::domain::Visibility;
 [[nodiscard]] bool CaseExplorerSectionsInOrder(V2MainWindow& window)
 {
     window.RunCommand("file.new");
-    const char* expected[8] = {"原点", "作業面", "グループ", "ワイヤー", "面", "立体", "近似", "生成物"};
-    if (!Explain((std::string("節が8つ以上(実際 ") + std::to_string(window.GroupRowCount()) + ")").c_str(),
-            window.GroupRowCount() >= 8)) {
+    const char* expected[7] = {"原点", "作業面", "ワイヤー", "面", "立体", "近似", "生成物"};
+    if (!Explain((std::string("節が7つ(実際 ") + std::to_string(window.GroupRowCount()) + ")").c_str(),
+            window.GroupRowCount() == 7)) {
         return false;
     }
-    for (int row = 0; row < 8; ++row) {
+    for (int row = 0; row < 7; ++row) {
         if (!Explain((std::string("節の並び ") + expected[row] + "(実際 "
                          + window.GroupRowText(row).toStdString() + ")").c_str(),
                 window.GroupRowText(row) == QString::fromUtf8(expected[row]))) {
@@ -75,8 +75,8 @@ using kachakacha::v2::domain::Visibility;
         }
     }
     const auto rows = window.ExplorerRows();
-    if (!Explain("節の見出しは選べない(ものではない)",
-            !(rows[3]->flags() & Qt::ItemIsSelectable))) {
+    if (!Explain("節の見出しから中身を選べる",
+            (rows[3]->flags() & Qt::ItemIsSelectable))) {
         return false;
     }
     return Explain("根は文書の行", window.EntityTree()->topLevelItemCount() == 1
@@ -178,7 +178,7 @@ using kachakacha::v2::domain::Visibility;
     return Explain("線がグループに入る", entity != nullptr && entity->groupId.has_value())
         && Explain("線の行がグループの行の下",
             window.ItemOfEntity(line) != nullptr
-                && window.ItemOfEntity(line)->parent() == window.GroupItems().front().first);
+                && window.ItemOfEntity(line)->parent()->parent() == window.GroupItems().front().first);
 }
 
 } // namespace

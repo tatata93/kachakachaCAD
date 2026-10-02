@@ -1,3 +1,4 @@
+#include "V2FaceActions.h"
 //! 「足す・引く」を道具から始める(引継ぎ 2026-09-17 の 4)。
 //!
 //! 足す/引くを押す → 土台待ち → 3D で部品を押すと土台に入り、自動で相手待ちへ →
@@ -100,6 +101,7 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (V2FaceActions::Run(*this,id)) return true;
     if (id == "export.selection" || id == "export.kcd" || id == "output.copy" || id == "export.stl" || id == "export.step") { V2OutputTool::Open(*this,id=="export.stl"?0:id=="export.step"?1:id=="output.copy"?3:2); return true; }
     if (id == "part.overlap_inspect") { EndArmedTools(); ShowOverlapBrowser(); return true; }
     if (id == "part.extrude" && !extrudeShelfShown_) {
@@ -108,10 +110,7 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         // Continue into the regular pending-input / preview path.
     }
     if (id == "fabrication.gpt_create") { BeginGptFabrication(); return true; }
-    if (id == "surface.gpt_create") {
-        BeginGptSurface();
-        return true;
-    }
+    if (id == "surface.gpt_create") { BeginGptSurface(); return true; }
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand();
         RunGuideCommand(id);

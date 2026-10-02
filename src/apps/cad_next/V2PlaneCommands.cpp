@@ -146,6 +146,17 @@ void V2MainWindow::CreateWorkPlaneFromChoice(const WorkPlaneChoice& choice, bool
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::CreateWorkPlane;
     feature.displayName = kachakacha::v2::app::WorkPlaneDisplayName(choice);
+    if (choice.name.empty()) {
+        const auto& snapshot = session_->GetDocument().Snapshot();
+        int number = 1;
+        const auto taken = [&](const std::string& name) {
+            for (const auto& e : snapshot.entities)
+                if (e.kind == EntityKind::WorkPlane && e.displayName == name) return true;
+            return false;
+        };
+        while (taken("作業面" + std::to_string(number))) ++number;
+        feature.displayName = "作業面" + std::to_string(number);
+    }
     CreateWorkPlaneDefinition definition;
     definition.method = static_cast<int>(choice.method);
     definition.origin = built.Value().origin;

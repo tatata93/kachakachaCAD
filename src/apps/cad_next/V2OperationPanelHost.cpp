@@ -80,6 +80,7 @@ void V2OperationPanelHost::AddPage(kachakacha::v2::app::Shelf shelf, QWidget* pa
 void V2OperationPanelHost::SetShelves(
     const std::vector<kachakacha::v2::app::Shelf>& shelves)
 {
+    ClearTemporaryPage();
     shownShelves_.clear();
     for (const auto shelf : shelves) {
         if (pageByShelf_.contains(shelf)) {
@@ -199,4 +200,27 @@ void V2OperationPanelHost::SetToolMode(kachakacha::v2::app::UiMode mode)
     chooser_ = scroll;
     pages_->addWidget(chooser_);
     if (current_ == kachakacha::v2::app::Shelf::None) pages_->setCurrentWidget(chooser_);
+}
+
+void V2OperationPanelHost::ShowTemporaryPage(QWidget* page, const QString& title)
+{
+    ClearTemporaryPage();
+    temporary_ = page;
+    SetHint({});
+    pages_->addWidget(page);
+    pages_->setCurrentWidget(page);
+    title_->setText(title);
+    pageChoice_->hide();
+    back_->hide();
+    page->show();
+}
+
+void V2OperationPanelHost::ClearTemporaryPage()
+{
+    if (!temporary_) return;
+    auto* page = temporary_.data();
+    temporary_.clear();
+    page->close();
+    pages_->removeWidget(page);
+    page->deleteLater();
 }

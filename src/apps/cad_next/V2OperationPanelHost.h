@@ -3,6 +3,7 @@
 #include "kachakacha/app/ShelfLayout.h"
 
 #include <QString>
+#include <QPointer>
 #include <QWidget>
 
 #include "kachakacha/app/Ribbon.h"
@@ -29,6 +30,8 @@ public:
     void AddPage(kachakacha::v2::app::Shelf shelf, QWidget* page);
     void SetShelves(const std::vector<kachakacha::v2::app::Shelf>& shelves);
     //! 見出しの下の一行(いまの案内)。空なら隠す。文言は窓が core から持ってくる。
+    void ShowTemporaryPage(QWidget* page, const QString& title);
+    void ClearTemporaryPage();
     void SetHint(const QString& hintJa);
     [[nodiscard]] QString HintText() const;
 
@@ -42,6 +45,7 @@ public:
 private:
     void ActivateIndex(int index);
 
+    QPointer<QWidget> temporary_;
     QPushButton* back_ = nullptr;
     QWidget* chooser_ = nullptr;
     std::optional<kachakacha::v2::app::UiMode> chooserMode_;

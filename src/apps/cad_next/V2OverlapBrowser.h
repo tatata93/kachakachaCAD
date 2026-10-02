@@ -6,6 +6,8 @@
 #include <functional>
 #include <vector>
 class QWidget;
+class V2Viewport;
+class V2OperationPanelHost;
 class QPointF;
 struct OverlapSource {
     kachakacha::v2::base::EntityId id;
@@ -15,7 +17,7 @@ struct OverlapSource {
     bool hidden = false;
 };
 using OverlapAction = std::function<void(const OverlapSource&, const OverlapSource&, int,
-    kachakacha::v2::app::BooleanKind)>;
-void OpenOverlapBrowser(QWidget* parent, std::vector<OverlapSource> sources, double tolerance,
+    kachakacha::v2::app::BooleanKind, const std::vector<int>&)>;
+void OpenOverlapBrowser(V2Viewport& viewport, V2OperationPanelHost& host, std::vector<OverlapSource> sources, double tolerance,
     QString missing, OverlapAction action);
 void InstallContactPicker(QWidget& viewport, std::function<bool(const QPointF&)> pick);

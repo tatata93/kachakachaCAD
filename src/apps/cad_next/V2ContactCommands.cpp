@@ -1,4 +1,5 @@
 #include <QPointF>
+#include <QCheckBox>
 #include <QString>
 #include "V2MainWindow.h"
 #include "V2OverlapBrowser.h"
@@ -186,19 +187,24 @@ void V2MainWindow::ShowOverlapBrowser()
             +(entity.visibility==domain::Visibility::Hidden ? QStringLiteral(" [非表示]") : QString()),
             found->second,mesh.Value(),entity.visibility==domain::Visibility::Hidden});
     }
-    OpenOverlapBrowser(this,std::move(sources),session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm,
-        missing,[this](const OverlapSource& a,const OverlapSource& b,int region,app::BooleanKind kind) {
+    EndArmedTools();
+    OpenOverlapBrowser(*viewport_,*operationHost_,std::move(sources),session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm,
+        missing,[this](const OverlapSource& a,const OverlapSource& b,int region,app::BooleanKind kind,const std::vector<int>& masks) {
             const auto first=partShapes_.find(a.id.ToString()),second=partShapes_.find(b.id.ToString());
             if(first==partShapes_.end() || second==partShapes_.end() || first->second.value!=a.handle.value || second->second.value!=b.handle.value) {
                 SetStatus(QStringLiteral("文書が変わったため、めり込み一覧を再検査してください。"));return;
             }
             EndArmedTools();RunBooleanTool(kind);
             booleanInput_.target=a.id;booleanInput_.tools={b.id};booleanInput_.activeSlot.reset();
+            if(auto* option=booleanDock_->findChild<QCheckBox*>(QStringLiteral("contactWireAlso"))) {
+                const bool blocked=option->blockSignals(true);option->setChecked(false);option->blockSignals(blocked);
+            }
             MirrorBooleanToSelection();RefreshBooleanAll();
             if(kind==app::BooleanKind::TrimOverlap && contactBase_.has_value()) {
-                for(std::size_t i=0;i<contactBase_->pieces.size();++i)booleanDock_->SetContactRemoval(static_cast<int>(i),static_cast<int>(i)==region ? 1:0);
+                for(std::size_t i=0;i<contactBase_->pieces.size();++i)booleanDock_->SetContactRemoval(static_cast<int>(i),i<masks.size() ? masks[i]:0);
                 RefreshBooleanAll();
             }
             booleanDock_->SelectContactRegion(region);
+            ConfirmContact();
         });
 }

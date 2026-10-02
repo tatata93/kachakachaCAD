@@ -147,7 +147,7 @@ parameter schemaのdiscriminatorにする。
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |
 | `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド 1 以上(何枚でも)と作業平面 1。面が平面をまたげば断る | Part を面ごとに 1 つ(まとめて 1 回で戻る) | AT-EXT-001 |
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart(閉シェルごとに 1 つ。各部品はそのシェルの線だけを記録。まとめて 1 回で戻る) | AT-GEO-010から013 |
-| `part.overlap_inspect` | めり込み一覧 | KCDの全ソリッド（非表示を含めるか選択） | 3D一覧、領域から処理へ。検査だけでは変更しない | HP-CT-02 |
+| `part.overlap_inspect` | めり込み一覧 | KCDの全ソリッド（非表示を含めるか選択） | 通常3Dビューで領域→残す/削る→側→Enter。右ペインで設定。検査だけでは変更しない | HP-CT-02 |
 | `part.contact_wire` | 交わりにワイヤー | 部品A/B各1、生成境界を選択 | 独立Wire、元の両部品保持 | HP-CT-01,03 |
 | `part.trim_overlap` | めり込みを削る | 部品A/B各1、領域ごとに削る側を指定 | 各連結Part、任意で境界Wire | HP-CT-02 |
 | `part.split_overlap` | 交わりで分割 | 部品A/B各1、残す領域を指定 | 各連結Part、相手保持、任意で境界Wire | HP-CT-04 |

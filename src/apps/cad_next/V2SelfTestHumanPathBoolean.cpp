@@ -1,9 +1,13 @@
 #include <QApplication>
+#include <QMouseEvent>
+#include <QDir>
+#include <QPixmap>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QDialog>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QEvent>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPushButton>
@@ -356,34 +360,40 @@ using kachakacha::v2::domain::EntityKind;
     using namespace kachakacha::v2;
     EntityId a,b;if(!ContactFixture(window,a,b))return false;
     window.Viewport().SetSelection({});window.RunCommand("part.overlap_inspect");
-    auto* browser=window.findChild<QDialog*>(QStringLiteral("overlapBrowser"));
-    if(browser==nullptr)return Explain("3Dめり込み一覧が開く",false);
+    auto* browser=window.findChild<QWidget*>(QStringLiteral("overlapBrowser"));
+    if(browser==nullptr || browser->isWindow())return Explain("右ペインで処理し専用ウインドウを開かない",false);
     auto* list=browser->findChild<QListWidget*>(QStringLiteral("overlapList"));
-    QPushButton* action=nullptr;
-    for(auto* button:browser->findChildren<QPushButton*>())if(button->text()==QStringLiteral("削る側を指定する"))action=button;
-    if(list==nullptr||action==nullptr)return false;
+    auto* wire=browser->findChild<QPushButton*>(QStringLiteral("overlapWire"));
+    auto* first=browser->findChild<QPushButton*>(QStringLiteral("overlapSideA"));
+    auto* second=browser->findChild<QPushButton*>(QStringLiteral("overlapSideB"));
+    auto* confirm=browser->findChild<QPushButton*>(QStringLiteral("overlapConfirm"));
+    if(!list || !wire || !first || !second || !confirm)return false;
     QElapsedTimer timer;timer.start();
     while(timer.elapsed()<30000) {
         QApplication::processEvents(QEventLoop::AllEvents,20);
         if(list->count()>0)list->setCurrentRow(0);
-        if(action->isEnabled())break;
+        if(wire->isEnabled())break;
     }
-    if(!Explain("KCD内の離れた重なりを全部表示",list->count()==2&&action->isEnabled())){browser->close();return false;}
-    action->click();QApplication::processEvents();
-    if(!Explain("一覧から選んだ組が加工対象になる",window.BooleanInput().target==a&&window.BooleanInput().tools==std::vector<EntityId>{b}))return false;
-    auto* regions=window.findChild<QListWidget*>(QStringLiteral("contactRegions"));
-    if(regions==nullptr||regions->count()!=2)return false;
-    auto* first=regions->itemWidget(regions->item(0))->findChild<QComboBox*>();
-    auto* second=regions->itemWidget(regions->item(1))->findChild<QComboBox*>();
-    if(first==nullptr||second==nullptr)return false;
-    first->setCurrentIndex(1);second->setCurrentIndex(2);regions->setCurrentRow(1);
-    auto* wireOption=window.findChild<QCheckBox*>(QStringLiteral("contactWireAlso"));
-    if(wireOption==nullptr)return false;
-    wireOption->setChecked(true);
-    if(!Explain("ワイヤー追加の切替でも領域の削除指定を保持",window.BooleanDock().ContactRemovals()==std::vector<int>{1,2}))return false;
-    wireOption->setChecked(false);
-    if(!Explain("Aから左領域、Bから右領域を削る下見",!window.Viewport().ToolPreview().empty()))return false;
-    if(!window.BooleanDock().ClickConfirm())return false;
+    if(!Explain("通常3Dビューで全領域を表示",list->count()==2 && wire->isEnabled()
+        && window.Viewport().findChild<QWidget*>(QStringLiteral("overlapOverlay"))))return false;
+    if(!Explain("側を選ぶ前には確定できない",!confirm->isEnabled()))return false;
+    window.Viewport().SetViewDirection(ViewDirection::Top);window.Viewport().FitToDocument();
+    const auto click=[&](geometry::Vector3 point) {
+        const auto s=window.Viewport().Mapping().Project(point);if(!s)return false;
+        const QPointF local(s->x,s->y);
+        QMouseEvent event(QEvent::MouseButtonPress,local,local,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        QApplication::sendEvent(&window.Viewport(),&event);return true;
+    };
+    list->setCurrentRow(-1);
+    if(!click({1.5,7,4}) || list->currentRow()!=0)return Explain("3Dでめり込み部分を選択",false);
+    auto* mode=browser->findChild<QComboBox*>(QStringLiteral("overlapDisposition"));
+    if(!mode)return false;mode->setCurrentIndex(1);
+    if(!click({5,7,4}) || !confirm->isEnabled())return Explain("3Dで横棒を残す側に選択",false);
+    list->setCurrentRow(1);mode->setCurrentIndex(0);second->click();
+    QApplication::processEvents();
+    window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-overlap-main-view.png"));
+    if(!confirm->isEnabled())return false;
+    window.SendKeyToViewport(Qt::Key_Return);QApplication::processEvents();
     bool sideA=false,sideB=false;
     for(const auto& f:window.Session().GetDocument().Snapshot().features) {
         const auto* def=std::get_if<domain::BooleanDefinition>(&f.definition);
@@ -402,6 +412,35 @@ using kachakacha::v2::domain::EntityKind;
     int solids=0;
     for(const auto& view:window.Viewport().ShapeViews())if(!view.surface){if(!view.mesh.closed)return false;++solids;}
     return Explain("再生成後も各部品が閉じた立体",solids==visible);
+}
+
+[[nodiscard]] bool CaseContactViewportCancelAndWire(V2MainWindow& window)
+{
+    EntityId a,b;if(!ContactFixture(window,a,b))return false;
+    const int wires=CountOfKind(window,EntityKind::Wire);
+    window.Viewport().SetSelection({});window.RunCommand("part.overlap_inspect");
+    window.SendKeyToViewport(Qt::Key_Escape);QApplication::processEvents();
+    if(!Explain("取消で文書と部品を維持",VisiblePartCount(window)==2
+        && CountOfKind(window,EntityKind::Wire)==wires
+        && !window.Viewport().findChild<QWidget*>(QStringLiteral("overlapOverlay"))))return false;
+    window.RunCommand("part.overlap_inspect");
+    auto* browser=window.findChild<QWidget*>(QStringLiteral("overlapBrowser"));
+    if(!browser)return false;
+    auto* list=browser->findChild<QListWidget*>(QStringLiteral("overlapList"));
+    auto* wire=browser->findChild<QPushButton*>(QStringLiteral("overlapWire"));
+    if(!list || !wire)return false;
+    QElapsedTimer timer;timer.start();
+    while(timer.elapsed()<30000) {
+        QApplication::processEvents(QEventLoop::AllEvents,20);
+        if(list->count()>0)list->setCurrentRow(0);
+        if(wire->isEnabled())break;
+    }
+    if(!Explain("取消後も一覧からワイヤー生成へ進める",wire->isEnabled()))return false;
+    wire->click();QApplication::processEvents();
+    if(!Explain("主画面の操作で交差ワイヤーのみ生成",CountOfKind(window,EntityKind::Wire)>wires
+        && VisiblePartCount(window)==2))return false;
+    window.RunCommand("edit.undo");
+    return Explain("ワイヤー生成も1回で戻る",CountOfKind(window,EntityKind::Wire)==wires);
 }
 
 [[nodiscard]] kachakacha::v2::modeling::KernelShapeHandle ContactPrism(
@@ -469,6 +508,7 @@ using kachakacha::v2::domain::EntityKind;
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},
         {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},
         {"HP-CT-04 分割領域を選択して生成し保存再生成", CaseContactSplitSelection},
         {"HP-CT-01 接触境界ワイヤーのみ生成し元の両部品を保持", CaseContactWireOnly},

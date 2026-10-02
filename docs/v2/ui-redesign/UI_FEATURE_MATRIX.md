@@ -242,5 +242,10 @@ PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTEN
 通常版・配布版画面各381/381、HP-CT通常Windows画面4/4、旧自己試験終了0。
 仕様・制約・検証経緯は [CONTACT_OPERATIONS.md](CONTACT_OPERATIONS.md)。Linux/cloud・目視受入は未実施。
 
-2026-10-02 選択出力・共通配置（実装中、PC未検証）。STL/STEP/別KCD/同一KCD、
+2026-10-02 選択出力・共通配置（PC_TESTED・範囲あり）。STL/STEP/別KCD/同一KCD、
 3Dプレビュー、基準点と配置面、製作生成の配置を共通化。詳細は [SELECTION_OUTPUT.md](SELECTION_OUTPUT.md)。
+
+検証: 通常版・配布版の画面各387/387。Windows全体は受入番号／台帳の不整合を修正し、
+最後の全体183/184＋台帳追記後の失敗分1/1合格。旧自己試験終了0。
+通常Windows画面HP-OUT 6/6、表示修正後HP-OUT-02 1/1。
+詳細と未網羅範囲は [SELECTION_OUTPUT.md](SELECTION_OUTPUT.md)。Linux/cloud未実施。

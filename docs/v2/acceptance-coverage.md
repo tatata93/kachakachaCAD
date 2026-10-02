@@ -119,6 +119,8 @@
 | AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない)+ tests_v2/export_content_tests.cpp(選んだワイヤーを紙へ置くとき、円弧は円弧のまま残り、辺長は実寸のまま変わらない。原点から離れていても紙の左下へ寄せる。同じ入力からは同じバイト列が出る) |
 | AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない)+ tests_v2/export_content_tests.cpp(選んだワイヤーから 1:1 PDF が出て、中身が空にならない) + tests_v2/pattern_view_tests.cpp(型紙を画面へ収める: 縦長は高さ・横長は幅で決まり、縦横は必ず同じ倍率(歪ませない)、紙は真ん中、左上と右下が合う。枠が余白より狭い・寸法が0以下・数値でない値なら倍率1で返して落ちない) + cad_next --self-test(型紙を作ると下見の棚に出る。枚数・紙の大きさ・線の数を言う。端でページが止まる) |
 | AT-EXP-014 | 済 | tests_v2/sub_document_tests.cpp(部品を選ぶと面・線・作業平面が残り無関係な線は入らない。残した依存は名前で知らせる。出来た文書は保存して読み直せる。空と無いものは断る。作り方の中身が指す id を全部拾う)+ cad_next --self-test(選んだものだけを別の文書にでき、開き直すと部品が作り直され、無関係な線は入らない) |
+| AT-EXP-015 | 部分 | cad_next --self-test のHP-OUT-01/04/05/06で3D・左一覧、選択範囲、STL/STEP、指定した近似部材、取消をWindows確認済み。専用の幾何コア単体試験は未追加。 |
+| AT-EXP-016 | 部分 | cad_next --self-test のHP-OUT-02/03/04で配置座標、BRep再読込、Undo/Redo、生成取消をWindows確認済み。面上クリックの全曲面種別を網羅した試験は未追加。 |
 | AT-PER-001 | 済 | tests_v2/evaluation_queue_tests.cpp(100ms を超えたところで取消を出し、心拍が250ms以内なら応答していると見る。5秒かかる評価でも200ms毎に心拍を刻めばずっと応答している。心拍は時刻が戻らない) + robustness_tests.cpp(遅すぎる処理を時間で暴く。ExtendCurveToBoundary を直した) |
 | AT-PER-002 | 済 | tests_v2/evaluation_queue_tests.cpp(長い評価の途中で文書が変わると前の評価に取消の合図が立ち、遅れて返った結果は PER-002 で捨てる。20回続けて差し替えても生きているのは最後の1つだけで、19件を捨てる。番号が合っていても版が違えば捨て、どの版を待っていたかを言う。取消の合図は別スレッドから見える) |
 | AT-PER-003 | 済 | tests_v2/scale_tests.cpp(1000ワイヤーの保存・読込・検証。1万本でも動く)。画面側は WP-08後半 |

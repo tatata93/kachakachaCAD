@@ -415,8 +415,9 @@ Linux/cloud・目視受入は未実施。
 通常Windows画面HP-OUT 6/6、表示修正後HP-OUT-02 1/1。
 詳細と未網羅範囲は [SELECTION_OUTPUT.md](SELECTION_OUTPUT.md)。Linux/cloud未実施。
 
-## 2026-10-03 主3Dビューのめり込み処理（実装済み・全体検証中）
+## 2026-10-03 主3Dビューのめり込み処理（PC_TESTED）
 専用ウインドウを廃止。通常3Dの領域選択→残す/削る→側の選択→Enterへ変更。
 交差ワイヤーのみ生成、取消後の再開、非表示履歴の明示検査を追加。
 Windows通常画面 HP-CT 5/5、構造/マニュアル/コマンド/台帳検査4/4。
-全体ゲートはこれから実行。以前のPC_TESTEDは今回変更の全体合格を意味しない。
+最終修正402d38116。_GO.cmdでWindows全184/184、通常版/配布版各388/388、旧自己試験終了0。
+指定ブランチへpush済み。Linux/cloud・オーナー目視受入は未実施。詳細CONTACT_OPERATIONS.md。

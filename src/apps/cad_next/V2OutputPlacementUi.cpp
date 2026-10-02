@@ -61,11 +61,12 @@ bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
     if(pickRole_<1 || event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
     const auto ray=window_.viewport_->Mapping().RayThrough({mouse->position().x(),mouse->position().y()});if(!ray.has_value())return true;
-    double nearest=std::numeric_limits<double>::max();const V2Viewport::ShapeView* chosen=nullptr;
-    for(const auto& shape:window_.viewport_->ShapeViews())for(const auto& triangle:shape.mesh.triangles){const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle);if(hit.has_value()&&*hit<nearest){nearest=*hit;chosen=&shape;}}
+    double nearest=std::numeric_limits<double>::max();const V2Viewport::ShapeView* chosen=nullptr;std::size_t faceIndex=0;
+    for(const auto& shape:window_.viewport_->ShapeViews())for(const auto& triangle:shape.mesh.triangles){const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle);if(hit.has_value()&&*hit<nearest){nearest=*hit;chosen=&shape;faceIndex=triangle.faceIndex;}}
     if(chosen==nullptr){if(pickRole_==1)return false;status_->setText(QStringLiteral("面に当たりません。作業平面は選択後に専用ボタンで指定できます。"));return true;}
     const auto& shapes=chosen->surface?window_.guideShapes_:window_.partShapes_;const auto found=shapes.find(chosen->entityId.ToString());if(found==shapes.end())return true;
-    const auto frame=kernel::OutputSurfaceFrame(found->second,ray->origin+ray->direction*nearest);
+    const auto face=kernel::OutputFace(found->second,faceIndex);if(!face.HasValue()){status_->setText(QStringLiteral("指定した面を評価できません。"));return true;}
+    const auto frame=kernel::OutputSurfaceFrame(face.Value(),ray->origin+ray->direction*nearest);
     if(!frame.HasValue()){status_->setText(QString::fromStdString(frame.FirstSummaryJa()));return true;}
     if(pickRole_==1)window_.viewport_->CancelPointPick();
     SetPickedFrame(pickRole_,frame.Value());return true;

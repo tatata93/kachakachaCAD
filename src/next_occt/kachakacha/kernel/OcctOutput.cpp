@@ -8,6 +8,9 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include <BRepTools.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -133,6 +136,29 @@ Result<OutputFrame> OutputSurfaceFrame(KernelShapeHandle handle,const Vector3& p
 #else
     (void)handle;(void)point;return Failed<OutputFrame>();
 #endif
+}
+Result<KernelShapeHandle> OutputFace(KernelShapeHandle handle,std::size_t faceIndex) {
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {TopoDS_Shape shape;if(!LookupShape(handle,shape))return Failed<KernelShapeHandle>();
+        std::size_t at=0;for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next(),++at)if(at==faceIndex)return Result<KernelShapeHandle>::Success(StoreShape(e.Current()));
+    }catch(...){}
+#else
+    (void)handle;(void)faceIndex;
+#endif
+    return Failed<KernelShapeHandle>();
+}
+Result<CurveSegment> OutputEdge(KernelShapeHandle handle,const Vector3& point) {
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {TopoDS_Shape shape;if(!LookupShape(handle,shape))return Failed<CurveSegment>();
+        const auto vertex=BRepBuilderAPI_MakeVertex(ToPoint(point)).Vertex();TopoDS_Edge chosen;double nearest=std::numeric_limits<double>::max();
+        for(TopExp_Explorer e(shape,TopAbs_EDGE);e.More();e.Next()){BRepExtrema_DistShapeShape distance(vertex,e.Current());
+            if(distance.IsDone()&&distance.Value()<nearest){nearest=distance.Value();chosen=TopoDS::Edge(e.Current());}}
+        if(!chosen.IsNull())return FromEdge(chosen,1e-7);
+    }catch(...){}
+#else
+    (void)handle;(void)point;
+#endif
+    return Failed<CurveSegment>();
 }
 Result<std::string> OutputStep(const std::vector<KernelShapeHandle>& handles) {
 #ifdef KACHACAD_V2_WITH_OCCT

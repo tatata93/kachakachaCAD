@@ -1,5 +1,6 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
+#include "V2EntityTree.h"
 #include "V2OutputTool.h"
 #include "V2OutputPreview.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -11,6 +12,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QApplication>
+#include <QDir>
+#include <QPixmap>
 #include <algorithm>
 #include <QWidget>
 #include <QTemporaryDir>
@@ -59,7 +62,7 @@ bool CaseOutputPlacement(V2MainWindow& window){
     const auto original=window.Viewport().ShapeViews().front().mesh;auto* output=V2OutputTool::Open(window,2);
     geometry::OutputPlacement placement;placement.keepPosition=false;placement.source.origin={1,2,3};placement.destination={{30,20,10},{0,1,0},{1,0,0}};
     if(!Explain("基準点は配置点に一致",geometry::Distance(placement.Point(placement.source.origin),placement.destination.origin)<1e-9))return false;
-    output->SetPlacement(placement);if(!Explain("配置した別KCDを保存",output->SaveTo(folder.filePath("placed.kcd2"))))return false;
+    output->SetPlacement(placement);QApplication::processEvents();output->grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-selected-output.png"));if(!Explain("配置した別KCDを保存",output->SaveTo(folder.filePath("placed.kcd2"))))return false;
     const auto data=io::ReadWholeFile(folder.filePath("placed.kcd2").toStdString());if(!data.HasValue())return false;
     const auto file=io::LoadDocument(data.Value());if(!Explain("独立した1部品のKCD",file.HasValue()&&file.Value().snapshot.entities.size()==1))return false;
     const auto* frozen=std::get_if<domain::FreezeDerivedDefinition>(&file.Value().snapshot.features.front().definition);
@@ -99,11 +102,23 @@ bool CaseOutputSelectionRecovery(V2MainWindow& window){
     if(wires.entityIds.empty()||!ClickOnCurveOf(window,wires.entityIds.front()))return false;output->TakeSelection();
     const bool ok=Explain("3Dで選び直した線を出せる",output->AssetCount()==1&&output->SaveTo(folder.filePath("wire.step")));output->close();return ok;
 }
+bool CaseOutputSubelements(V2MainWindow& window){
+    if(!OutputBox(window))return false;const auto id=OutputSelection(window,false).entityIds.front();
+    app::SelectionRef ref;ref.entityId=id;ref.kind=app::SelectionElementKind::Face;ref.pickedFaceIndex=0;
+    window.Viewport().SetSelection(app::SelectionSet{{id},{ref}});auto* output=V2OutputTool::Open(window,2);
+    auto* scope=output->findChild<QComboBox*>("outputScope");if(!scope)return false;scope->setCurrentIndex(1);QTemporaryDir folder;
+    if(!output->SaveTo(folder.filePath("face.kcd2")))return false;
+    const auto bytes=io::ReadWholeFile(folder.filePath("face.kcd2").toStdString());if(!bytes.HasValue())return false;const auto file=io::LoadDocument(bytes.Value());
+    if(!Explain("選択面だけを独立した面へ",file.HasValue()&&file.Value().snapshot.entities.size()==1&&file.Value().snapshot.entities.front().kind==domain::EntityKind::GuideSurface))return false;
+    ref.kind=app::SelectionElementKind::Vertex;ref.hitPoint={3,4,5};window.Viewport().SetSelection(app::SelectionSet{{id},{ref}});output->TakeSelection();
+    if(!output->SaveTo(folder.filePath("point.kcd2")))return false;
+    output->ChooseFormat(0);const bool ok=Explain("選択点のSTLは明示的に拒否",!output->SaveTo(folder.filePath("point.stl")));output->close();return ok;
+}
 bool CaseOutputPlacementInvalid(V2MainWindow& window){
     if(!OutputBox(window))return false;window.Viewport().SetSelection(OutputSelection(window,false));auto* output=V2OutputTool::Open(window,3);
     geometry::OutputPlacement placement;placement.keepPosition=false;placement.destination.normal={};output->SetPlacement(placement);
     const auto before=window.Session().GetDocument().Revision();const bool ok=!output->SaveTo(QString())&&before==window.Session().GetDocument().Revision();output->close();return Explain("不正な配置は文書を変更しない",ok);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

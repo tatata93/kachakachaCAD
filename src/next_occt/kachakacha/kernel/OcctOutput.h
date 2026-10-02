@@ -12,6 +12,8 @@ namespace kachakacha::v2::kernel {
 [[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> PlaceOutputCurves(const std::vector<geometry::CurveSegment>& curves,const geometry::OutputPlacement& placement,double tolerance);
 [[nodiscard]] base::Result<modeling::KernelShapeHandle> OutputCurveShape(const std::vector<geometry::CurveSegment>& curves);
 [[nodiscard]] base::Result<geometry::OutputFrame> OutputSurfaceFrame(modeling::KernelShapeHandle shape,const geometry::Vector3& point);
+[[nodiscard]] base::Result<modeling::KernelShapeHandle> OutputFace(modeling::KernelShapeHandle shape,std::size_t faceIndex);
+[[nodiscard]] base::Result<geometry::CurveSegment> OutputEdge(modeling::KernelShapeHandle shape,const geometry::Vector3& point);
 [[nodiscard]] base::Result<std::string> OutputStep(const std::vector<modeling::KernelShapeHandle>& shapes);
 [[nodiscard]] base::Result<std::string> OutputStl(const std::vector<modeling::KernelShapeHandle>& shapes,double deflection);
 }

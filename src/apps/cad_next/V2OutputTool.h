@@ -46,6 +46,7 @@ private:
     void FillTargets();
     bool CaptureModels(const std::vector<kachakacha::v2::base::EntityId>& ids);
     bool Capture(const std::vector<kachakacha::v2::base::EntityId>& ids);
+    bool CaptureElements();
     bool Prepare();
     bool CopyIntoDocument();
     void Run();

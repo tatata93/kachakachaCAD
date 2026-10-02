@@ -30,6 +30,8 @@ V2OutputTool::V2OutputTool(V2MainWindow& window,int format):QDialog(&window),win
 void V2OutputTool::BuildUi(int format) {
     auto* root=new QVBoxLayout(this);auto* row=new QHBoxLayout();auto* settings=new QVBoxLayout();
     auto* take=new QPushButton(QStringLiteral("3D／左ペインの選択を取り込む"),this);take->setObjectName("outputTakeSelection");settings->addWidget(take);
+    auto* scope=new QComboBox(this);scope->setObjectName("outputScope");scope->addItems({QStringLiteral("選択した物体全体"),QStringLiteral("選択した面・辺・点だけ")});settings->addWidget(scope);
+    QObject::connect(scope,&QComboBox::currentIndexChanged,this,[this]{TakeSelection();});
     targets_=new QListWidget(this);targets_->setObjectName("outputTargets");targets_->setMaximumHeight(145);settings->addWidget(targets_);
     format_=new QComboBox(this);format_->setObjectName("outputFormat");format_->addItems({QStringLiteral("STL（面の近似三角形）"),QStringLiteral("STEP（立体・面・線）"),QStringLiteral("別KCD2（現在形状の独立コピー）"),QStringLiteral("同一KCD（現在形状の独立コピー）")});
     format_->setCurrentIndex(format<0?2:format);settings->addWidget(format_);BuildPlacement(settings);
@@ -50,7 +52,7 @@ void V2OutputTool::ChooseFormat(int format){format_->setCurrentIndex(format);}
 void V2OutputTool::SetProblem(const QString& text){status_->setText(text);save_->setEnabled(false);preview_->SetModels({});}
 void V2OutputTool::TakeSelection() {
     generated_=false;
-    if(!Capture(window_.viewport_->Selection().entityIds)){assets_.clear();loading_=true;targets_->clear();loading_=false;return;}
+    if(!Capture(window_.viewport_->Selection().entityIds) || (findChild<QComboBox*>("outputScope")->currentIndex()==1 && !CaptureElements())){assets_.clear();loading_=true;targets_->clear();loading_=false;return;}
     revision_=window_.session_->GetDocument().Revision();documentId_=window_.session_->GetDocument().Snapshot().id;FillTargets();
 }
 void V2OutputTool::FillTargets() {

@@ -12,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -52,12 +53,14 @@ void V2OutputTool::SetPickedFrame(int role,const geometry::OutputFrame& frame) {
     pickRole_=0;SetPlacement(value);show();raise();
 }
 void V2OutputTool::Pick(int role) {
+    if(pickRole_==1)window_.viewport_->CancelPointPick();pickRole_=0;
     if(role==4){for(const auto& id:window_.viewport_->Selection().entityIds){const auto frame=window_.WorkPlaneFrameOf(id);if(frame.has_value()){SetPickedFrame(3,{frame->origin,frame->normal,frame->uAxis});return;}}
         status_->setText(QStringLiteral("左ペインか3Dで配置先の作業平面を選んでください。"));return;}
     pickRole_=role;status_->setText(QStringLiteral("CADの3Dビューで%1をクリックしてください。").arg(role==1?QStringLiteral("基準点"):QStringLiteral("面上の点")));
     if(role==1){QPointer<V2OutputTool> guard(this);window_.viewport_->BeginPointPick([guard](const V2Viewport::PickedPoint& point){if(guard)guard->SetPickedFrame(1,{point.point,{0,0,1},{1,0,0}});},"出力の基準点を指定してください。");}
 }
 bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
+    if(pickRole_>0 && event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape){if(pickRole_==1)window_.viewport_->CancelPointPick();pickRole_=0;RefreshPreview();show();raise();return true;}
     if(pickRole_<1 || event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
     const auto ray=window_.viewport_->Mapping().RayThrough({mouse->position().x(),mouse->position().y()});if(!ray.has_value())return true;

@@ -29,7 +29,7 @@ void V2OutputTool::Generate(V2MainWindow& window,std::string_view command) {
         const auto made=NewVisibleGeometry(before,document.Snapshot());ok=!document.CompoundSpoiled()&&!made.empty()&&dialog->Capture(made);
     }
     window.AdoptCurrentDocument();window.RebuildKernelShapes();window.RefreshShapeViews();window.viewport_->SetSelection(selection);
-    dialog->revision_=document.Revision();dialog->documentId_=document.Snapshot().id;dialog->generated_=true;dialog->FillTargets();
+    dialog->revision_=document.Revision();dialog->documentId_=document.Snapshot().id;dialog->generated_=true;if(!ok)dialog->assets_.clear();dialog->FillTargets();
     if(!ok)dialog->SetProblem(QStringLiteral("指定した部材の形状を生成できません。元の文書は変更していません。"));
     else {geometry::OutputPlacement placement;placement.keepPosition=false;dialog->SetPlacement(placement);}
     dialog->show();

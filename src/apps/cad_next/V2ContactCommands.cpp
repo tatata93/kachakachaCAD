@@ -188,6 +188,7 @@ void V2MainWindow::ShowOverlapBrowser()
             found->second,mesh.Value(),entity.visibility==domain::Visibility::Hidden});
     }
     EndArmedTools();
+    SetStatus(QStringLiteral("めり込み部分を選び、残す／削る側を指定して Enter で確定します。"));
     OpenOverlapBrowser(*viewport_,*operationHost_,std::move(sources),session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm,
         missing,[this](const OverlapSource& a,const OverlapSource& b,int region,app::BooleanKind kind,const std::vector<int>& masks) {
             const auto first=partShapes_.find(a.id.ToString()),second=partShapes_.find(b.id.ToString());

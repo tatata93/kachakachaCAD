@@ -388,7 +388,7 @@ using kachakacha::v2::domain::EntityKind;
     if(!click({1.5,7,4}) || list->currentRow()!=0)return Explain("3Dでめり込み部分を選択",false);
     auto* mode=browser->findChild<QComboBox*>(QStringLiteral("overlapDisposition"));
     if(!mode)return false;mode->setCurrentIndex(1);
-    if(!click({5,7,4}) || !confirm->isEnabled())return Explain("3Dで横棒を残す側に選択",false);
+    if(!click({-0.5,7,4}) || !confirm->isEnabled())return Explain("3Dで横棒を残す側に選択",false);
     list->setCurrentRow(1);mode->setCurrentIndex(0);second->click();
     QApplication::processEvents();
     window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-overlap-main-view.png"));

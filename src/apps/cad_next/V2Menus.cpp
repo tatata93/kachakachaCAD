@@ -69,7 +69,7 @@ void V2MainWindow::BuildMenus()
         "group.rename"});
 
     QMenu* drawing = menuBar()->addMenu(QStringLiteral("作図(&D)"));
-    addCommands(drawing, {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
+    addCommands(drawing, {"image.place", "draw.point", "draw.line", "draw.polyline", "draw.rectangle",
         "draw.circle", "draw.arc", "draw.bezier", "draw.spline"});
     QMenu* datum = drawing->addMenu(QStringLiteral("作図面とグリッド(&P)"));
     addCommands(datum, {"workplane.from_face", "workplane.create", "workplane.set_active", "grid.edit",

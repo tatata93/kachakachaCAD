@@ -10,7 +10,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     using namespace kachakacha::v2;
     view::SurfaceRaster raster(width(), height());
     const auto forward = view::ForwardOf(orientation_);
-    for (const auto& shape : shapeViews_) {
+    if (display_.shapesVisible) for (const auto& shape : shapeViews_) {
         const auto* analysis = AnalysisFor(shape.entityId);
         if (analysis != nullptr && analysis->Painted() && app::AnalysisPaintsSurface(analysis->mode)) { continue; }
         const bool selected = !shape.entityId.IsNil() && app::IsSelected(selection_, shape.entityId);
@@ -20,6 +20,14 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
             raster.Draw(triangle, mapping_, forward, shape.mesh.closed, color);
         }
     }
+    struct Layer { const modeling::ImageTriangle* triangle; const view::RasterImage* image; double depth; };
+    std::vector<Layer> layers;
+    for (const auto& image : imageViews_) for (const auto& triangle : image.triangles) {
+        const auto center=(triangle.mesh.points[0]+triangle.mesh.points[1]+triangle.mesh.points[2])*(1.0/3);
+        layers.push_back({&triangle,&image.image,geometry::Dot(center,forward)});
+    }
+    std::stable_sort(layers.begin(),layers.end(),[](const auto& a,const auto& b){return a.depth>b.depth;});
+    for(const auto& layer:layers)raster.DrawImage(*layer.triangle,mapping_,*layer.image);
     QImage image(width(), height(), QImage::Format_ARGB32);
     if (image.isNull()) { return; }
     for (int y = 0; y < height(); ++y) {

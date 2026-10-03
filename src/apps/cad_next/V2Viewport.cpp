@@ -271,6 +271,8 @@ void V2Viewport::FitToDocument()
     for (const auto& point : scene.points) {
         include(point.position);
     }
+    for (const auto& image : imageViews_) for (const auto& triangle : image.triangles)
+        for (const auto& point : triangle.mesh.points) include(point);
     if (!any) {
         center_ = Vector3{};
         visibleWidthMm_ = 200.0;

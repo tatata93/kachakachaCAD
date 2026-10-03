@@ -26,6 +26,7 @@ enum class EntityKind {
     Part,
     FabricationModel,
     Pattern,
+    Image,
 };
 
 [[nodiscard]] constexpr std::string_view EntityKindName(EntityKind kind) noexcept
@@ -37,6 +38,7 @@ enum class EntityKind {
     case EntityKind::GuideSurface:     return "GuideSurface";
     case EntityKind::Part:             return "Part";
     case EntityKind::FabricationModel: return "FabricationModel";
+    case EntityKind::Image:            return "Image";
     case EntityKind::Pattern:          return "Pattern";
     }
     return "Unknown";
@@ -52,6 +54,7 @@ enum class EntityKind {
     case EntityKind::GuideSurface:     return "形状ガイド";
     case EntityKind::Part:             return "部品";
     case EntityKind::FabricationModel: return "製作モデル";
+    case EntityKind::Image:            return "画像";
     case EntityKind::Pattern:          return "型紙";
     }
     return "不明";

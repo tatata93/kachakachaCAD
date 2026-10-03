@@ -1,3 +1,4 @@
+#include "kachakacha/domain/ImageValidation.h"
 #include "kachakacha/document/Document.h"
 
 #include <algorithm>
@@ -46,6 +47,11 @@ std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
         }
     }
 
+    for(const auto& feature:snapshot.features) {
+        if(const auto* image=std::get_if<domain::CreateImageDefinition>(&feature.definition);
+            image && !domain::ValidImagePlacement(*image))
+            diagnostics.push_back(MakeError("IMG-002","画像の寸法・配置が不正です。","画像と基準点、倍率を確認してください。"));
+    }
     std::unordered_set<std::string> featureIds;
     for (const Feature& feature : snapshot.features) {
         if (feature.id.IsNil()) {

@@ -5,6 +5,7 @@
 
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/domain/ImageDefinition.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/Expression.h"
 
@@ -40,11 +41,13 @@ enum class FeatureType {
     EdgeFinish,
     //! 部品の形状編集(シェル・分割)。P-13。元の部品の形に掛ける。作り方は定義の method。
     ShellSplit,
+    CreateImage,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
 {
     switch (type) {
+    case FeatureType::CreateImage:            return "CreateImage";
     case FeatureType::CreatePoint:            return "CreatePoint";
     case FeatureType::CreateWorkPlane:        return "CreateWorkPlane";
     case FeatureType::CreateWire:             return "CreateWire";
@@ -451,7 +454,7 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
     CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
     EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition, EdgeFinishDefinition,
-    ShellSplitDefinition>;
+    ShellSplitDefinition, CreateImageDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

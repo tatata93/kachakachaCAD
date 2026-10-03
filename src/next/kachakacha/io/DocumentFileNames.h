@@ -51,6 +51,7 @@ inline constexpr NamedEnum<EntityKind> kEntityKinds[]{
     {EntityKind::Part, "part"},
     {EntityKind::FabricationModel, "fabrication_model"},
     {EntityKind::Pattern, "pattern"},
+    {EntityKind::Image, "image"},
 };
 
 inline constexpr NamedEnum<Visibility> kVisibilities[]{
@@ -91,6 +92,7 @@ inline constexpr NamedEnum<FeatureType> kFeatureTypes[]{
     {FeatureType::EdgeFinish, "edge_finish"},
     {FeatureType::ShellSplit, "shell_split"},
     {FeatureType::EditSurface, "edit_surface"},
+    {FeatureType::CreateImage, "create_image"},
 };
 
 inline constexpr NamedEnum<WireTransformMethod> kTransformMethods[]{

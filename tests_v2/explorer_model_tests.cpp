@@ -19,7 +19,7 @@ using kachakacha::v2::test::RequireEqual;
 KACHA_V2_TEST(explorer, 原点が最上段で_節の並びは正本どおり)
 {
     const auto& sections = ExplorerSections();
-    Require(sections.size() == 8 && sections.front() == ExplorerSection::Origin, "原点が先頭");
+    Require(sections.size() == 9 && sections.front() == ExplorerSection::Origin, "原点が先頭");
     Require(ExplorerSectionNameJa(sections[2]) == "グループ", "「まとまり」ではなく「グループ」");
     Require(ExplorerSectionNameJa(sections.back()) == "生成物", "末尾は生成物");
 }

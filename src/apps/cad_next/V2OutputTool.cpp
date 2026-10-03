@@ -67,6 +67,7 @@ bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
     const auto scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);
     for(const auto& id:ids){const auto* entity=window_.session_->GetDocument().FindEntity(id);
         if(entity==nullptr){SetProblem(QStringLiteral("選んだ対象が文書にありません。"));return false;}
+        if(entity->kind==domain::EntityKind::Image){SetProblem(QStringLiteral("画像はSTL/STEPの形状ではありません。画像を含む文書は『名前を付けて保存』でKCD保存してください。"));return false;}
         V2OutputAsset asset;asset.entity=*entity;
         if(entity->kind==domain::EntityKind::Part || entity->kind==domain::EntityKind::GuideSurface){
             const auto& shapes=entity->kind==domain::EntityKind::Part?window_.partShapes_:window_.guideShapes_;

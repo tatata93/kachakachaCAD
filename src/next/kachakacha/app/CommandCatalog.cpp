@@ -48,6 +48,9 @@ const std::vector<CommandDescriptor>& CommandCatalog()
 {
     // 並びは docs/v2/command-catalog.md と同じ順。決定的であること。
     static const std::vector<CommandDescriptor> table = {
+        {"image.place", "画像を貼る / 編集", CommandMode::Tool, "image", "",
+            SelectionPredicate::HasDocument, "文書がありません。",
+            "画像を面に貼ります。画像とCADの2点で長さを合わせられます。選択した画像は同じ道具で編集できます。", true, {"AT-DOC-005"}},
         {"file.new", "新規", CommandMode::Instant, "new", "Ctrl+N",
             SelectionPredicate::HasDocument, "文書がありません。",
             "新しい文書を作ります。保存していない変更があれば先に確かめます。", true,

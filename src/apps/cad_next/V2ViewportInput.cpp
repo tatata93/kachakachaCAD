@@ -959,6 +959,8 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    auto images = ImageCandidatesAt(position);
+    candidates.insert(candidates.end(), images.begin(), images.end());
     auto shapes = CollectShapeCandidatesAt(position);
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));

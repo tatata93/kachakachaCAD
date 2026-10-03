@@ -33,6 +33,7 @@ enum class ExplorerSection {
     Surfaces,
     Solids,
     Approximation,
+    Images,
     Generated,
 };
 

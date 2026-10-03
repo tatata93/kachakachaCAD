@@ -726,10 +726,11 @@ int V2Viewport::ShapeTriangleCount() const noexcept
 //! 形ごとに塗ると、2つの部品が食い込んでいるところで前後が入れ替わる。
 void V2Viewport::DrawShapes(QPainter& painter) const
 {
-    if (shapeViews_.empty() || !display_.shapesVisible) {
+    if (shapeViews_.empty() && imageViews_.empty()) {
         return;
     }
     DrawSmoothShapes(painter);
+    if (!display_.shapesVisible) return;
     for (const ShapeView& shape : shapeViews_) {
         // 解析で塗り替える面は、ふだんの塗りの代わりに解析の色で描く。
         const AnalysisView* analysis = AnalysisFor(shape.entityId);

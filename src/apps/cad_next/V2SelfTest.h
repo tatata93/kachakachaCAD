@@ -63,6 +63,7 @@ void Note(const char* what);
 
 //! 原点の3面・3軸と、作業平面の棚のケース。
 [[nodiscard]] std::vector<SelfTestCase> PlaneCases();
+[[nodiscard]] std::vector<SelfTestCase> ImageCases();
 
 //! 作図の棚(円弧の作り方・補助線・指定点・数値で線を作る)のケース。
 [[nodiscard]] std::vector<SelfTestCase> DrawingCases();

@@ -664,6 +664,8 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/view/ShapeShading.cpp
     src/next/kachakacha/fabrication/GptPanelMesh.cpp
     src/next/kachakacha/fabrication/GptApproximation.cpp
+    src/next/kachakacha/modeling/ImagePlacement.cpp
+    src/next/kachakacha/view/ImageRaster.cpp
     src/next/kachakacha/view/SurfaceRaster.cpp
     src/next/kachakacha/view/ViewOrientation.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
@@ -760,6 +762,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
+    src/next_occt/kachakacha/kernel/OcctImage.cpp
     src/next_occt/kachakacha/kernel/OcctOutput.cpp
     src/next_occt/kachakacha/kernel/OcctContact.cpp
     src/next_occt/kachakacha/kernel/OcctLocalTrim.cpp
@@ -826,6 +829,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(profile_region_tests tests_v2/profile_region_tests.cpp)
     kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)
+    kachakacha_add_v2_test(image_placement_tests tests_v2/image_placement_tests.cpp)
     kachakacha_add_v2_test(work_plane_tests tests_v2/work_plane_tests.cpp)
     kachakacha_add_v2_test(extrude_tests tests_v2/extrude_tests.cpp)
     kachakacha_add_v2_test(wire_cage_tests tests_v2/wire_cage_tests.cpp)
@@ -1086,6 +1090,11 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
+        src/apps/cad_next/V2SelfTestImage.cpp
+        src/apps/cad_next/V2ImageTool.cpp
+        src/apps/cad_next/V2ImageToolUi.cpp
+        src/apps/cad_next/V2ImageToolPick.cpp
+        src/apps/cad_next/V2ImageViews.cpp
         src/apps/cad_next/V2FaceActions.cpp
         src/apps/cad_next/V2ContactCommands.cpp
         src/apps/cad_next/V2ContactOptions.cpp

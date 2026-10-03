@@ -1,4 +1,5 @@
 #pragma once
+#include "V2ImageViews.h"
 
 //! V2の作図画面(WP-08)。
 //!
@@ -184,7 +185,10 @@ public:
         bool surface = false;
     };
     //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
+    std::vector<kachakacha::v2::app::PickCandidate> ImageCandidatesAt(const QPointF&) const;
     void SetShapeViews(std::vector<ShapeView> shapes);
+    void SetImageViews(std::vector<V2ImageView> images) { imageViews_=std::move(images); update(); }
+    const std::vector<V2ImageView>& ImageViews() const { return imageViews_; }
     //! いま出している形。「選択に正対」が、立体の広がりを知るために読む。
     [[nodiscard]] const std::vector<ShapeView>& ShapeViews() const noexcept
     {
@@ -1023,6 +1027,7 @@ private:
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     std::vector<WorkPlaneView> workPlaneViews_;
     std::vector<ShapeView> shapeViews_;
+    std::vector<V2ImageView> imageViews_;
     std::vector<AnalysisView> analysisViews_;
     //! 当たり判定へ渡す網だけを並べたもの。SetShapeViews で作り直す。
     //! カーソルが動くたびに shapeViews_ から作り直すと、三角形を丸ごと写すことになる。

@@ -771,6 +771,29 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::CreateImage: {
+        domain::CreateImageDefinition made;
+        made.pngBase64 = loader.String(definition, "pngBase64", where);
+        made.faceBrep = loader.String(definition, "faceBrep", where);
+        made.mmPerPixel = loader.Number(definition, "mmPerPixel", where);
+        made.rotationRad = loader.Number(definition, "rotationRad", where);
+        made.opacity = loader.Number(definition, "opacity", where);
+        const double width = loader.Number(definition, "pixelWidth", where);
+        const double height = loader.Number(definition, "pixelHeight", where);
+        if (!(width >= 1 && width <= 16384 && height >= 1 && height <= 16384)
+            || std::floor(width) != width || std::floor(height) != height) {
+            loader.Fail("IMG-002", "画像の画素数が正しくありません。", where);
+        } else { made.pixelWidth = static_cast<int>(width); made.pixelHeight = static_cast<int>(height); }
+        made.followSurface = loader.BoolOr(definition, "followSurface", false);
+        made.origin = loader.ReadVector(definition, "origin", where);
+        made.uAxis = loader.ReadVector(definition, "uAxis", where);
+        made.vAxis = loader.ReadVector(definition, "vAxis", where);
+        made.anchorPixel = loader.ReadVector(definition, "anchorPixel", where);
+        made.anchorUv = loader.ReadVector(definition, "anchorUv", where);
+        made.uvMetric = loader.ReadVector(definition, "uvMetric", where);
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

@@ -1,0 +1,80 @@
+#include <QObject>
+#include <QString>
+#include <QWidget>
+#include "V2ImageTool.h"
+#include "V2MainWindow.h"
+#include "V2OperationPanelHost.h"
+#include "V2Viewport.h"
+#include "kachakacha/kernel/OcctImage.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/modeling/MeshPick.h"
+#include <QEvent>
+#include <QKeyEvent>
+#include <QLabel>
+#include <QMouseEvent>
+#include <QPointF>
+#include <limits>
+using namespace kachakacha::v2;
+using namespace geometry;
+void V2ImageTool::UseWorkPlane() {
+    const auto frame=window_.WorkPlaneFrameOf(window_.ActiveWorkPlaneId());
+    if(!frame){status_->setText(QStringLiteral("作業面を選んでください。"));return;}
+    face_={};definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
+    definition_.anchorUv={};definition_.uvMetric={1,1,0};definition_.followSurface=false;UpdateFields();
+}
+bool V2ImageTool::SetTarget(const app::SelectionRef& ref) {
+    if(const auto frame=window_.WorkPlaneFrameOf(ref.entityId);frame){
+        face_={};definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
+        definition_.followSurface=false;UpdateFields();Preview();return true;}
+    auto shape=window_.partShapes_.find(ref.entityId.ToString());modeling::KernelShapeHandle handle;
+    if(shape!=window_.partShapes_.end()){if(!ref.pickedFaceIndex){status_->setText(QStringLiteral("3Dビューで貼付先のフェイスを選んでください。"));Pick(1);return false;}handle=shape->second;}
+    else {auto guide=window_.guideShapes_.find(ref.entityId.ToString());if(guide!=window_.guideShapes_.end())handle=guide->second;}
+    if(!handle.Valid()){status_->setText(QStringLiteral("作業面・面・ソリッドのフェイスを選んでください。"));return false;}
+    const auto face=kernel::OutputFace(handle,ref.pickedFaceIndex.value_or(0));
+    if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return false;}
+    const auto frame=kernel::OutputSurfaceFrame(face.Value(),ref.hitPoint);const auto brep=kernel::CaptureOutputShape(face.Value());
+    if(!frame.HasValue()||!brep.HasValue()){status_->setText(QStringLiteral("貼付先の面を読み取れません。"));return false;}
+    face_=face.Value();definition_.faceBrep=brep.Value();definition_.uAxis=Normalized(frame.Value().xDirection);
+    definition_.vAxis=Normalized(Cross(Normalized(frame.Value().normal),definition_.uAxis));
+    if(!SetAnchor(ref.hitPoint))return false;UpdateFields();Preview();return true;
+}
+bool V2ImageTool::SetAnchor(const Vector3& point) {
+    if(face_.Valid()) {const auto projected=kernel::ImagePointOnSurface(face_,point);
+        if(!projected.HasValue()){status_->setText(QString::fromStdString(projected.FirstSummaryJa()));return false;}
+        definition_.origin=projected.Value().point;definition_.anchorUv=projected.Value().uv;definition_.uvMetric=projected.Value().metric;
+    }else definition_.origin=point;
+    return true;
+}
+bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
+    if(!isVisible())return false;
+    if(event->type()==QEvent::KeyPress){const auto* key=static_cast<QKeyEvent*>(event);auto* widget=qobject_cast<QWidget*>(object);
+        if(!widget||widget->window()!=window())return false;
+        if(key->key()==Qt::Key_Escape){window_.operationHost_->SetShelves({});return true;}
+        if(key->key()==Qt::Key_Return||key->key()==Qt::Key_Enter){Commit();return true;}}
+    if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
+    const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton||mouse->modifiers()!=Qt::NoModifier)return false;
+    if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
+    ClickViewport(mouse->position());return true;
+}
+void V2ImageTool::ClickViewport(const QPointF& pos) {
+    const ScreenPoint screen{pos.x(),pos.y()};const auto ray=window_.viewport_->Mapping().RayThrough(screen);if(!ray)return;
+    double nearest=std::numeric_limits<double>::max();app::SelectionRef chosen;
+    for(const auto& shape:window_.viewport_->ShapeViews())for(const auto& tri:shape.mesh.triangles){
+        const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,tri);
+        if(hit&&*hit<nearest){nearest=*hit;chosen.entityId=shape.entityId;chosen.pickedFaceIndex=tri.faceIndex;}}
+    std::optional<Vector3> point;
+    if(!chosen.entityId.IsNil()){chosen.kind=app::SelectionElementKind::Face;chosen.hitPoint=ray->origin+ray->direction*nearest;point=chosen.hitPoint;}
+    if(role_==1){if(chosen.entityId.IsNil()){status_->setText(QStringLiteral("面の内側をクリックしてください。作業面は『現在の作業面に貼る』で選べます。"));return;}
+        if(SetTarget(chosen))Pick(0);return;}
+    if(role_!=3&&role_!=5){status_->setText(QStringLiteral("先に右ペインで、配置の基準点かCADの2点を選んでください。"));return;}
+    const auto hover=window_.session_->PeekHover(screen);if(hover.snap&&hover.position)point=hover.position;
+    if(!point)point=window_.viewport_->Mapping().UnprojectOntoPlane(screen,definition_.origin,Cross(definition_.uAxis,definition_.vAxis));
+    if(!point){status_->setText(QStringLiteral("位置を読み取れません。貼付面を正面から見てください。"));return;}
+    if(role_==3){if(!SetAnchor(*point))return;role_=0;}
+    else {points_.push_back(*point);if(points_.size()==2){const auto scale=modeling::ImageScaleFromPoints(pixels_[0],pixels_[1],points_[0],points_[1]);
+        if(!scale.HasValue()){points_.clear();status_->setText(QString::fromStdString(scale.FirstSummaryJa()));return;}
+        const double width=scale.Value()*definition_.pixelWidth;
+        if(width<0.00001||width>10000000){points_.clear();status_->setText(QStringLiteral("長さ合わせ後の幅が設定範囲外です（0.00001～10000000mm）。"));return;}
+        definition_.mmPerPixel=scale.Value();role_=0;}}
+    UpdateFields();Preview();if(role_!=0)Pick(role_);
+}

@@ -15,6 +15,7 @@ std::string_view ExplorerSectionNameJa(ExplorerSection section) noexcept
     case ExplorerSection::Surfaces:      return "面";
     case ExplorerSection::Solids:        return "立体";
     case ExplorerSection::Approximation: return "近似";
+    case ExplorerSection::Images: return "画像";
     case ExplorerSection::Generated:     return "生成物";
     }
     return "";
@@ -25,7 +26,7 @@ const std::vector<ExplorerSection>& ExplorerSections()
     static const std::vector<ExplorerSection> sections{ExplorerSection::Origin,
         ExplorerSection::WorkPlanes, ExplorerSection::Groups, ExplorerSection::Wires,
         ExplorerSection::Surfaces, ExplorerSection::Solids, ExplorerSection::Approximation,
-        ExplorerSection::Generated};
+        ExplorerSection::Images, ExplorerSection::Generated};
     return sections;
 }
 
@@ -55,6 +56,7 @@ ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     case domain::EntityKind::Part:             return ExplorerSection::Solids;
     case domain::EntityKind::FabricationModel: return ExplorerSection::Approximation;
     case domain::EntityKind::Pattern:          return ExplorerSection::Generated;
+    case domain::EntityKind::Image: return ExplorerSection::Images;
     }
     return ExplorerSection::Wires;
 }
@@ -86,6 +88,7 @@ std::string_view ExplorerKindNameJa(domain::EntityKind kind) noexcept
     case domain::EntityKind::Part:             return "立体";
     case domain::EntityKind::FabricationModel: return "近似モデル";
     case domain::EntityKind::Pattern:          return "型紙";
+    case domain::EntityKind::Image: return "画像";
     }
     return "不明";
 }

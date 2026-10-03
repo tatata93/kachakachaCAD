@@ -99,6 +99,8 @@ void V2MainWindow::RefreshEntityList()
         & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsSelectable);
     std::map<ExplorerSection, QTreeWidgetItem*> sections;
     for (const ExplorerSection section : kachakacha::v2::app::ExplorerSections()) {
+        if (section == ExplorerSection::Images && std::none_of(snapshot.entities.begin(), snapshot.entities.end(),
+            [](const auto& e){ return e.kind == kachakacha::v2::domain::EntityKind::Image; })) continue;
         if (section != ExplorerSection::Groups || !snapshot.groups.empty())
             sections[section] = MakeSectionItem(root, section);
     }
@@ -109,6 +111,8 @@ void V2MainWindow::RefreshEntityList()
     std::map<std::pair<std::string, ExplorerSection>, QTreeWidgetItem*> groupedSections;
     for (const auto& [key, group] : byGroupId) if (group != nullptr) {
         for (const auto category : kachakacha::v2::app::ExplorerSections()) {
+            if (category == ExplorerSection::Images && std::none_of(snapshot.entities.begin(), snapshot.entities.end(),
+                [&](const auto& e){ return e.kind == kachakacha::v2::domain::EntityKind::Image && e.groupId && e.groupId->ToString() == key; })) continue;
             if (category != ExplorerSection::Origin && category != ExplorerSection::Groups)
                 groupedSections[{key, category}] = MakeSectionItem(group, category);
         }

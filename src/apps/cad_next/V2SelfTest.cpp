@@ -70,6 +70,7 @@ namespace {
     cases.insert(cases.end(), input.begin(), input.end());
     const std::vector<SelfTestCase> modeling = ModelingCases();
     cases.insert(cases.end(), modeling.begin(), modeling.end());
+    const auto images=ImageCases();cases.insert(cases.end(),images.begin(),images.end());
     const std::vector<SelfTestCase> planes = PlaneCases();
     cases.insert(cases.end(), planes.begin(), planes.end());
     const std::vector<SelfTestCase> drawing = DrawingCases();

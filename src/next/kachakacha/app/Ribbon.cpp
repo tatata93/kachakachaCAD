@@ -50,7 +50,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
         {"basic", "基本作図",
             {Tool("線", "draw.line"), Tool("円", "draw.circle"), Tool("円弧", "draw.arc"),
                 Tool("矩形", "draw.rectangle"), Tool("多角形", "draw.polyline"),
-                Tool("点", "draw.point")}},
+                Tool("点", "draw.point"), Tool("画像", "image.place")}},
         {"curve", "曲線",
             {Tool("ベジェ", "draw.bezier"), Tool("スプライン", "draw.spline"),
                 Blocked("楕円", "楕円はまだ作れません(核に楕円の線がありません)")}},

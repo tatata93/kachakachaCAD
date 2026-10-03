@@ -425,6 +425,21 @@ template<class Id>
         definition["planeOrigin"] = WriteVector(edit->planeOrigin);
         definition["planeNormal"] = WriteVector(edit->planeNormal);
         definition["side"] = JsonValue::Number(static_cast<double>(edit->side));
+    } else if (const auto* image = std::get_if<domain::CreateImageDefinition>(&feature.definition)) {
+        definition["pngBase64"] = JsonValue::String(image->pngBase64);
+        definition["pixelWidth"] = JsonValue::Number(image->pixelWidth);
+        definition["pixelHeight"] = JsonValue::Number(image->pixelHeight);
+        definition["mmPerPixel"] = JsonValue::Number(image->mmPerPixel);
+        definition["rotationRad"] = JsonValue::Number(image->rotationRad);
+        definition["opacity"] = JsonValue::Number(image->opacity);
+        definition["followSurface"] = JsonValue::Bool(image->followSurface);
+        definition["faceBrep"] = JsonValue::String(image->faceBrep);
+        definition["origin"] = WriteVector(image->origin);
+        definition["uAxis"] = WriteVector(image->uAxis);
+        definition["vAxis"] = WriteVector(image->vAxis);
+        definition["anchorPixel"] = WriteVector(image->anchorPixel);
+        definition["anchorUv"] = WriteVector(image->anchorUv);
+        definition["uvMetric"] = WriteVector(image->uvMetric);
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

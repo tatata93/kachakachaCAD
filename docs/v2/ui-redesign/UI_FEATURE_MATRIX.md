@@ -256,3 +256,7 @@ PC_TESTED。対応範囲と残る制約は [EXTRUDE_EXTENSIONS.md](EXTRUDE_EXTEN
 部品→面編集の「フェイスで作図」「フェイスを近似」「フェイスをGPT近似」を追加。
 フェイスは独立面として取り出し、曲面上の作図はクリック位置の接平面。
 実装ae6c9feab。Windows全184/184、通常/配布版各391/391。詳細・検証範囲はTASK_LEDGER.md。
+
+### 追加: 画像貼付
+`image.place`: 作図→基本作図→画像。画像を内包し、任意基準点・2点長さ合わせ・回転・透過、
+曲面の投影/UV貼付を選択。仕様IMAGE_PLACEMENT.md、検証はTASK_LEDGER.mdに記録。

@@ -1,6 +1,8 @@
 #include "kachakacha/app/CommandAvailability.h"
 
 #include "kachakacha/app/ProfileRegion.h"
+#include "kachakacha/app/GroupTree.h"
+#include <algorithm>
 #include "kachakacha/geometry/WireChain.h"
 
 #include <vector>
@@ -83,7 +85,8 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.wires >= 1 && facts.guideSurfaces >= 2;
     case SelectionPredicate::OneOrMoreHideable:
         // 線・部品・面のどれでも隠せる。作業平面はグリッドの棚で消す。
-        return facts.wires + facts.parts + facts.guideSurfaces >= 1;
+        return facts.wires + facts.parts + facts.guideSurfaces >= 1
+            || facts.derivedEntities > facts.workPlanes;
     case SelectionPredicate::OneOrMoreDeletable:
         // 作られたもの(createdBy を持つもの)は何でも消す対象。原点の平面は文書が断る。
         return facts.derivedEntities >= 1;
@@ -128,7 +131,10 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.hasDocument = true;
     facts.canUndo = canUndo;
     facts.canRedo = canRedo;
-    facts.hasVisibleGeometry = !scene.curves.empty() || !scene.points.empty();
+    facts.hasVisibleGeometry = !scene.curves.empty() || !scene.points.empty()
+        || std::any_of(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& entity){
+            return entity.kind==domain::EntityKind::Image && EntityEffectivelyVisible(snapshot,entity);
+        });
     facts.fabricationModels = external.fabricationModels;
     facts.fabricationPanels = external.fabricationPanels;
     facts.patterns = external.patterns;

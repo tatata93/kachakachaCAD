@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QEvent>
+#include <QApplication>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
@@ -52,10 +53,45 @@ bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
         if(!widget||widget->window()!=window())return false;
         if(key->key()==Qt::Key_Escape){window_.operationHost_->SetShelves({});return true;}
         if(key->key()==Qt::Key_Return||key->key()==Qt::Key_Enter){Commit();return true;}}
-    if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
+    if(object!=window_.viewport_)return false;
+    if(DragViewport(event))return true;
+    if(event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton||mouse->modifiers()!=Qt::NoModifier)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
+    if(role_==0||role_==2){
+        const int previousRole=role_;role_=2;
+        if(PickImagePoint(mouse->position())){
+            dragging_=true;dragMoved_=false;dragPress_=mouse->position();
+            dragOrigin_=definition_.origin;dragNormal_=Cross(definition_.uAxis,definition_.vAxis);
+        }else role_=previousRole;
+        return true;
+    }
     ClickViewport(mouse->position());return true;
+}
+bool V2ImageTool::DragViewport(QEvent* event) {
+    if(!dragging_)return false;
+    if(event->type()==QEvent::MouseMove){
+        const auto* mouse=static_cast<QMouseEvent*>(event);
+        if(!(mouse->buttons()&Qt::LeftButton)){dragging_=false;return false;}
+        if((mouse->position()-dragPress_).manhattanLength()>=QApplication::startDragDistance())dragMoved_=true;
+        if(dragMoved_)MoveImageDrag(mouse->position());
+        return true;
+    }
+    if(event->type()==QEvent::MouseButtonRelease){
+        const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
+        if(dragMoved_){MoveImageDrag(mouse->position());role_=0;
+            if(previewOk_)status_->setText(QStringLiteral("仮置きしました。再ドラッグで調整、Enterで確定、Escで取消。"));}
+        dragging_=false;return true;
+    }
+    return false;
+}
+void V2ImageTool::MoveImageDrag(const QPointF& pos) {
+    // Keep the drag plane fixed: other geometry and grid snaps must not make the image jump.
+    const auto point=window_.viewport_->Mapping().UnprojectOntoPlane({pos.x(),pos.y()},dragOrigin_,dragNormal_);
+    if(!point){status_->setText(QStringLiteral("この向きでは移動できません。貼付面を正面から見てください。"));return;}
+    if(!SetAnchor(*point))return;
+    UpdateFields();Preview();
+    if(previewOk_)status_->setText(QStringLiteral("画像を移動中。離して仮置き、Enterで確定、Escで取消。"));
 }
 void V2ImageTool::ClickViewport(const QPointF& pos) {
     if(role_==2||role_==4){PickImagePoint(pos);return;}

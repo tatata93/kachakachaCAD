@@ -64,7 +64,7 @@ void V2ImageTool::Preview() {
     definition_.followSurface=mode_->currentIndex()==1;
     auto images=savedViews_;if(!editing_.IsNil())std::erase_if(images,[&](const auto& v){return v.entityId==editing_;});
     V2ImageView view;view.entityId=editing_;QString error;previewOk_=MakeView(definition_,view,error);
-    if(previewOk_){images.push_back(std::move(view));status_->setText(QStringLiteral("プレビュー中。基準点・長さ合わせ・幅・角度を指定し、Enterで確定。"));}
+    if(previewOk_){images.push_back(std::move(view));status_->setText(QStringLiteral("画像をドラッグして位置を調整できます。基準点・長さ合わせ・幅・角度を指定し、Enterで確定。"));}
     else status_->setText(error);
     window_.viewport_->SetImageViews(std::move(images));
     std::vector<V2Viewport::PlacedRoleLabel> labels{{definition_.origin,QStringLiteral("画像 基準点"),QColor(255,220,40),{},true}};

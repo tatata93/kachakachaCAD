@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QImage>
 #include <QString>
+#include <QPointF>
 #include "V2ImageViews.h"
 #include "kachakacha/domain/ImageDefinition.h"
 #include "kachakacha/app/Selection.h"
@@ -33,6 +34,8 @@ private:
     void UseWorkPlane();
     void Pick(int role);
     void ClickViewport(const QPointF&);
+    bool DragViewport(QEvent*);
+    void MoveImageDrag(const QPointF&);
     void UpdateFields();
     V2MainWindow& window_;
     kachakacha::v2::domain::CreateImageDefinition definition_;
@@ -47,6 +50,9 @@ private:
     QComboBox* mode_=nullptr;
     QDoubleSpinBox *width_=nullptr,*rotation_=nullptr,*opacity_=nullptr;
     int role_=0;
+    bool dragging_=false,dragMoved_=false;
+    QPointF dragPress_;
+    kachakacha::v2::geometry::Vector3 dragOrigin_,dragNormal_;
     std::vector<kachakacha::v2::geometry::Vector3> pixels_,points_;
     bool updating_=false,previewOk_=false;
 };

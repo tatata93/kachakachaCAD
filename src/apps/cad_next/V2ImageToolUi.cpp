@@ -38,7 +38,7 @@ void V2ImageTool::BuildUi() {
     button(QStringLiteral("長さ合わせ：CADの2点を選ぶ"),"imageWorldLength",[this]{if(pixels_.size()!=2){status_->setText(QStringLiteral("先に画像の2点を指定してください。"));return;}points_.clear();Pick(5);});
     mirror_=new QCheckBox(QStringLiteral("左右反転（基準点を固定）"),this);mirror_->setObjectName(QStringLiteral("imageMirror"));
     layout->addWidget(mirror_);connect(mirror_,&QCheckBox::toggled,this,[this]{Preview();});
-    auto* help=new QLabel(QStringLiteral("貼付後も画像を選択して「画像」を開くと、位置・大きさ・反転・透明度を変更できます。"),this);
+    auto* help=new QLabel(QStringLiteral("画像をドラッグすると位置が追従します。離して仮置き、Enterで確定、Escで取消。貼付後も画像を選択して「画像」を開くと再編集できます。"),this);
     help->setWordWrap(true);layout->addWidget(help);
     auto* form=new QFormLayout;layout->addLayout(form);
     mode_=new QComboBox(this);mode_->setObjectName(QStringLiteral("imageMapping"));
@@ -66,7 +66,7 @@ void V2ImageTool::UpdateFields() {
     mode_->setCurrentIndex(definition_.followSurface?1:0);updating_=false;
 }
 void V2ImageTool::Pick(int role) {
-    role_=role;
+    role_=role;dragging_=false;
     const QStringList hints{QStringLiteral("Enterで確定できます。"),QStringLiteral("3Dビューで貼付先のフェイスをクリックしてください。"),
         QStringLiteral("3Dビューの画像上で基準点をクリックしてください。"),QStringLiteral("3Dビューで画像の基準点を置く位置をクリックしてください。"),
         QStringLiteral("3Dビューの画像上で長さを測る2点をクリックしてください。"),QStringLiteral("3Dビューで対応する長さの2点をクリックしてください（直線距離）。")};

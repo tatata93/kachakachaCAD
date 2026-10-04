@@ -104,6 +104,47 @@ bool CaseImageSurface(V2MainWindow& window) {
         return Explain("curved face stored independently",d->followSurface&&!d->faceBrep.empty()&&!window.Viewport().ImageViews().empty());
     return false;
 }
+bool CaseImageDrag(V2MainWindow& window) {
+    struct RestoreSize { V2MainWindow& window; QSize size; ~RestoreSize(){window.resize(size);} } restore{window,window.size()};
+    window.resize(1600,1000);QApplication::processEvents();
+    QTemporaryDir folder;const auto path=folder.filePath(QStringLiteral("drag.png"));
+    QImage bitmap(80,40,QImage::Format_ARGB32);bitmap.fill(0xffee6644);if(!bitmap.save(path))return false;
+    auto* tool=V2ImageTool::Open(window);if(!tool->LoadImage(path)||!tool->Commit())return false;
+    QApplication::processEvents();
+    const auto id=window.Viewport().ImageViews().front().entityId;
+    window.Viewport().SetViewDirection(ViewDirection::Top);window.Viewport().SetVisibleWidthMm(300);
+    const auto center=window.Viewport().Mapping().Project({40,20,0});if(!center)return false;
+    window.Viewport().SelectAt(QPointF(center->x,center->y),Qt::NoModifier);
+    tool=V2ImageTool::Open(window);QApplication::processEvents();
+    auto send=[&](QEvent::Type type,const geometry::Vector3& point){
+        const auto p=window.Viewport().Mapping().Project(point);if(!p)return false;
+        const QPointF local(p->x,p->y);
+        QMouseEvent event(type,local,local,type==QEvent::MouseMove?Qt::NoButton:Qt::LeftButton,
+            type==QEvent::MouseButtonRelease?Qt::NoButton:Qt::LeftButton,Qt::NoModifier);
+        QApplication::sendEvent(&window.Viewport(),&event);return true;
+    };
+    auto corner=[&]{return window.Viewport().ImageViews().back().triangles.front().mesh.points[0];};
+    const auto original=corner();const auto revision=window.Session().GetDocument().Revision();
+    if(!send(QEvent::MouseButtonPress,{40,20,0})||!send(QEvent::MouseMove,{53,27,0}))return false;
+    Note(("drag displacement="+std::to_string(corner().x-original.x)+","+std::to_string(corner().y-original.y)+
+        " viewport width="+std::to_string(window.Viewport().width())).c_str());
+    if(!Explain("image follows before mouse release",geometry::Distance(corner(),original+geometry::Vector3{13,7,0})<1e-6))return false;
+    if(!send(QEvent::MouseMove,{62,31,0})||!send(QEvent::MouseButtonRelease,{62,31,0}))return false;
+    if(!Explain("drag is preview only",window.Session().GetDocument().Revision()==revision&&
+        geometry::Distance(corner(),original+geometry::Vector3{22,11,0})<1e-6))return false;
+    tool->findChild<QPushButton*>(QStringLiteral("imageCancel"))->click();QApplication::processEvents();
+    if(!Explain("cancel restores image placement",geometry::Distance(corner(),original)<1e-6))return false;
+    tool=V2ImageTool::Open(window);QApplication::processEvents();
+    if(!send(QEvent::MouseButtonPress,{40,20,0})||!send(QEvent::MouseMove,{53,27,0})||
+        !send(QEvent::MouseButtonRelease,{53,27,0})||!tool->Commit())return false;
+    QApplication::processEvents();
+    if(!Explain("drag updates same image",window.Viewport().ImageViews().size()==1&&
+        window.Viewport().ImageViews().front().entityId==id&&geometry::Distance(corner(),original+geometry::Vector3{13,7,0})<1e-6))return false;
+    window.RunCommand("edit.undo");
+    if(!Explain("undo entire drag",geometry::Distance(corner(),original)<1e-6))return false;
+    window.RunCommand("edit.redo");
+    return Explain("redo entire drag",geometry::Distance(corner(),original+geometry::Vector3{13,7,0})<1e-6);
 }
-std::vector<SelfTestCase> ImageCases(){return {{"HP-IMG-01 image placement persistence cancel and edit",&CaseImagePersistence},{"HP-IMG-02 curved projection and wrapping",&CaseImageSurface}};}
+}
+std::vector<SelfTestCase> ImageCases(){return {{"HP-IMG-01 image placement persistence cancel and edit",&CaseImagePersistence},{"HP-IMG-02 curved projection and wrapping",&CaseImageSurface},{"HP-IMG-03 image drag preview cancel commit undo",&CaseImageDrag}};}
 }

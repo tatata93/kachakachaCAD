@@ -167,7 +167,11 @@ void V2MainWindow::BuildRightShelves()
             operationHost_->AddPage(shelf, source->widget());
         }
     }
-    operationHost_->SetToolHandler([this](const auto& tool) { RunRibbonVariant(tool); });
+    operationHost_->SetActionLookup([this](std::string_view id){return ActionFor(id);});
+    operationHost_->SetToolHandler([this](auto mode,const auto& tool) {
+        if (Mode()!=mode) SetMode(mode);
+        RunRibbonVariant(tool);
+    });
     operationDock_->setWidget(operationHost_);
     addDockWidget(Qt::RightDockWidgetArea, operationDock_);
     RefreshRightShelves();

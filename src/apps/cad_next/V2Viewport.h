@@ -475,7 +475,12 @@ public:
     void SetViewCenter(const kachakacha::v2::geometry::Vector3& center);
 
     //! 文書全体が入るように合わせる。
-    void FitToDocument();
+    void FitToDocument(bool selectedOnly=false);
+    void IsolateSelection();
+    void ClearIsolation();
+    void ApplyVisibilityFilter();
+    bool IsolationActive() const;
+    bool EntityShown(kachakacha::v2::base::EntityId id) const;
 
     //! グリッドの主間隔(mm)。
 
@@ -958,6 +963,10 @@ private:
 
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
+    std::vector<kachakacha::v2::base::EntityId> isolationExcluded_;
+    kachakacha::v2::base::DocumentId isolationDocument_;
+    bool isolationActive_=false;
+    bool isolationPreviousSelectionOnly_=false;
     kachakacha::v2::app::DisplaySettings display_;
     bool gridSuppressedByMode_ = false;
     //! Ctrl で吸着を止めているか。押している間だけ真。

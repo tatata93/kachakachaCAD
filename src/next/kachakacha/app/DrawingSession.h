@@ -129,6 +129,7 @@ public:
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
     //! 次の Hover まで待つと、Hover が無いまま離したときに古い吸着先が残る。
     void SetSnapSettings(SnapSettings settings);
+    void SetSnapEntityFilter(std::function<bool(base::EntityId)> filter) { snapEntityFilter_=std::move(filter);snapHysteresis_.Reset(); }
 
     //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束と、直角スナップ)。
     //!
@@ -215,6 +216,7 @@ private:
     SnapScene scene_;
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
+    std::function<bool(base::EntityId)> snapEntityFilter_;
     modeling::SnapHysteresis snapHysteresis_;
     //! 場面の入れ替わりを聞いている相手。綱が切れたものは呼ばない。
     struct SceneListener {

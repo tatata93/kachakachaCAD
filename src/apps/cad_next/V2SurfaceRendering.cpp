@@ -11,6 +11,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     view::SurfaceRaster raster(width(), height());
     const auto forward = view::ForwardOf(orientation_);
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) {
+        if(!EntityShown(shape.entityId))continue;
         const auto* analysis = AnalysisFor(shape.entityId);
         if (analysis != nullptr && analysis->Painted() && app::AnalysisPaintsSurface(analysis->mode)) { continue; }
         const bool selected = !shape.entityId.IsNil() && app::IsSelected(selection_, shape.entityId);
@@ -22,7 +23,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     }
     struct Layer { const modeling::ImageTriangle* triangle; const view::RasterImage* image; double depth; };
     std::vector<Layer> layers;
-    for (const auto& image : imageViews_) for (const auto& triangle : image.triangles) {
+    for (const auto& image : imageViews_) if(EntityShown(image.entityId)) for (const auto& triangle : image.triangles) {
         const auto center=(triangle.mesh.points[0]+triangle.mesh.points[1]+triangle.mesh.points[2])*(1.0/3);
         layers.push_back({&triangle,&image.image,geometry::Dot(center,forward)});
     }

@@ -312,4 +312,19 @@ KACHA_V2_TEST(shading, raster_depth_is_independent_of_shape_order)
     Require((first.Pixels()[40*80+40] & 255) == 0, "front red surface occludes blue surface");
 }
 
+KACHA_V2_TEST(mesh_pick, triangle_boundary_roundoff_is_tolerated_without_picking_outside)
+{
+    MeshTriangle t{{Vector3{0,0,0},Vector3{10,0,0},Vector3{0,10,0}}, {0,0,1}};
+    Require(RayHitsTriangle({5,5+1e-12,10},{0,0,-1},t).has_value(),"round-off at shared edge remains pickable");
+    Require(!RayHitsTriangle({5,5+1e-4,10},{0,0,-1},t).has_value(),"clearly outside stays unpickable");
+    Require(!RayHitsTriangle({5,5,-10},{0,0,-1},t).has_value(),"behind eye remains excluded");
+    const auto mesh=FlatSquare();
+    for(double width:{12.,23.7,100.,400.}){
+        const auto mapping=kachakacha::v2::geometry::MakeOrthographicMapping({5,5,0},{1,-1,-1},{0,0,1},width,373,546);
+        const auto screen=mapping.Project({5,5,0});Require(screen.has_value(),"project center");
+        const auto ray=mapping.RayThrough(*screen);Require(ray.has_value(),"unproject center");
+        Require(PickMesh({mesh},ray->origin,ray->direction).has_value(),"diagonal survives screen round-trip");
+    }
+}
+
 KACHA_V2_TEST_MAIN("shape_mesh_tests")

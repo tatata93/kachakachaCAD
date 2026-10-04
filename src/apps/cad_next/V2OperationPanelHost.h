@@ -12,6 +12,10 @@
 #include <map>
 #include <vector>
 
+class QAction;
+class QLineEdit;
+class QCheckBox;
+class QGroupBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -25,8 +29,10 @@ class V2OperationPanelHost final : public QWidget {
 public:
     explicit V2OperationPanelHost(QWidget* parent = nullptr);
 
-    void SetToolHandler(std::function<void(const kachakacha::v2::app::RibbonTool&)> handler);
+    void SetToolHandler(std::function<void(kachakacha::v2::app::UiMode,const kachakacha::v2::app::RibbonTool&)> handler);
     void SetToolMode(kachakacha::v2::app::UiMode mode);
+    void FocusToolSearch();
+    void SetActionLookup(std::function<QAction*(std::string_view)> lookup);
     void AddPage(kachakacha::v2::app::Shelf shelf, QWidget* page);
     void SetShelves(const std::vector<kachakacha::v2::app::Shelf>& shelves);
     //! 見出しの下の一行(いまの案内)。空なら隠す。文言は窓が core から持ってくる。
@@ -44,12 +50,19 @@ public:
 
 private:
     void ActivateIndex(int index);
+    void FilterTools();
+    QLineEdit* search_=nullptr;
+    QCheckBox* allModes_=nullptr;
+    QLabel* searchCount_=nullptr;
+    struct SearchEntry { kachakacha::v2::app::UiMode mode; QGroupBox* group; QPushButton* button; QString text; };
+    std::vector<SearchEntry> searchEntries_;
+    std::function<QAction*(std::string_view)> actionLookup_;
 
     QPointer<QWidget> temporary_;
     QPushButton* back_ = nullptr;
     QWidget* chooser_ = nullptr;
     std::optional<kachakacha::v2::app::UiMode> chooserMode_;
-    std::function<void(const kachakacha::v2::app::RibbonTool&)> toolHandler_;
+    std::function<void(kachakacha::v2::app::UiMode,const kachakacha::v2::app::RibbonTool&)> toolHandler_;
     QLabel* title_ = nullptr;
     QLabel* hint_ = nullptr;
     QComboBox* pageChoice_ = nullptr;

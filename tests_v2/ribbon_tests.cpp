@@ -19,19 +19,20 @@ using kachakacha::v2::test::Require;
 KACHA_V2_TEST(ribbon, 正本のカテゴリが正本の順に並ぶ)
 {
     const auto& drawing = RibbonCategoriesFor(UiMode::Drawing);
-    Require(drawing.size() == 8, "作図は8カテゴリ");
+    Require(drawing.size() == 9, "作図は既存8カテゴリと探す・表示");
     Require(drawing[0].labelJa == "基本作図" && drawing[1].labelJa == "曲線"
             && drawing[2].labelJa == "編集" && drawing[3].labelJa == "変形"
             && drawing[4].labelJa == "作業面" && drawing[5].labelJa == "面作成"
             && drawing[6].labelJa == "注記" && drawing[7].labelJa == "測定",
         "作図の並びは正本どおり");
+    for(auto mode:AllUiModes())Require(RibbonCategoriesFor(mode).back().key=="find_view","共通の探す・表示は末尾");
     const auto& part = RibbonCategoriesFor(UiMode::Part);
-    Require(part.size() == 5 && part[0].labelJa == "作成" && part[1].labelJa == "形状編集"
+    Require(part.size() == 6 && part[0].labelJa == "作成" && part[1].labelJa == "形状編集"
             && part[2].labelJa == "面編集" && part[3].labelJa == "ブール演算"
             && part[4].labelJa == "配置",
         "部品の並びは正本どおり");
     const auto& fabrication = RibbonCategoriesFor(UiMode::Fabrication);
-    Require(fabrication.size() == 4 && fabrication[0].labelJa == "近似"
+    Require(fabrication.size() == 5 && fabrication[0].labelJa == "近似"
             && fabrication[1].labelJa == "部材編集" && fabrication[2].labelJa == "曲げ・展開"
             && fabrication[3].labelJa == "生成",
         "製作の並びは正本どおり");

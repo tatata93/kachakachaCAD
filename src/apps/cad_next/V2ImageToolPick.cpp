@@ -61,7 +61,7 @@ void V2ImageTool::ClickViewport(const QPointF& pos) {
     if(role_==2||role_==4){PickImagePoint(pos);return;}
     const ScreenPoint screen{pos.x(),pos.y()};const auto ray=window_.viewport_->Mapping().RayThrough(screen);if(!ray)return;
     double nearest=std::numeric_limits<double>::max();app::SelectionRef chosen;
-    for(const auto& shape:window_.viewport_->ShapeViews())for(const auto& tri:shape.mesh.triangles){
+    for(const auto& shape:window_.viewport_->ShapeViews())if(window_.viewport_->EntityShown(shape.entityId))for(const auto& tri:shape.mesh.triangles){
         const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,tri);
         if(hit&&*hit<nearest){nearest=*hit;chosen.entityId=shape.entityId;chosen.pickedFaceIndex=tri.faceIndex;}}
     std::optional<Vector3> point;

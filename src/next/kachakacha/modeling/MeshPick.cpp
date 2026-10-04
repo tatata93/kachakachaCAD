@@ -19,6 +19,8 @@ namespace {
 constexpr double kParallelEpsilon = 1.0e-12;
 //! 目の後ろは当たりにしない。
 constexpr double kNearEpsilon = 1.0e-9;
+// Dimensionless tolerance: shared triangle edges must survive projection round-off.
+constexpr double kBarycentricEpsilon = 1.0e-10;
 
 } // namespace
 
@@ -39,12 +41,12 @@ std::optional<double> RayHitsTriangle(const Vector3& origin, const Vector3& dire
     const double inverse = 1.0 / determinant;
     const Vector3 toOrigin = origin - triangle.points[0];
     const double u = Dot(toOrigin, across) * inverse;
-    if (u < 0.0 || u > 1.0) {
+    if (u < -kBarycentricEpsilon || u > 1.0 + kBarycentricEpsilon) {
         return std::nullopt;
     }
     const Vector3 sideways = Cross(toOrigin, first);
     const double v = Dot(forward, sideways) * inverse;
-    if (v < 0.0 || u + v > 1.0) {
+    if (v < -kBarycentricEpsilon || u + v > 1.0 + kBarycentricEpsilon) {
         return std::nullopt;
     }
     const double distance = Dot(second, sideways) * inverse;

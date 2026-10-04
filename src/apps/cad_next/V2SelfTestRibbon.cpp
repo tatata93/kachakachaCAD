@@ -35,7 +35,7 @@ using kachakacha::v2::modeling::DrawingTool;
     window.RunCommand("file.new");
     window.SetMode(UiMode::Drawing);
     auto& ribbon = window.Ribbon();
-    if (!Explain("作図は8カテゴリ", ribbon.CategoryCount() == 8)
+    if (!Explain("作図は9カテゴリ", ribbon.CategoryCount() == 9)
         || !Explain("最初は基本作図", ribbon.CategoryLabel(ribbon.CurrentCategory()) == QStringLiteral("基本作図"))
         || !Explain("「円」が見えている", ribbon.ToolEnabled(QStringLiteral("円")))
         || !Explain("「円」を押せる", ribbon.ClickTool(QStringLiteral("円")))
@@ -84,14 +84,14 @@ using kachakacha::v2::modeling::DrawingTool;
     window.RunCommand("file.new");
     window.SetMode(UiMode::Part);
     auto& ribbon = window.Ribbon();
-    if (!Explain("部品は5カテゴリ", ribbon.CategoryCount() == 5)
+    if (!Explain("部品は6カテゴリ", ribbon.CategoryCount() == 6)
         || !Explain("押し出しが見えている", ribbon.ToolEnabled(QStringLiteral("押し出し")))
         || !Explain("ブール演算を押せる", ribbon.ClickCategory(QStringLiteral("ブール演算")))
         || !Explain("交差を押せる(P-17、共通部分)", ribbon.ToolEnabled(QStringLiteral("交差")))) {
         return false;
     }
     window.SetMode(UiMode::Drawing);
-    if (!Explain("作図へ戻ると8カテゴリ", ribbon.CategoryCount() == 8)
+    if (!Explain("作図へ戻ると9カテゴリ", ribbon.CategoryCount() == 9)
         || !Explain("「面作成」を押せる", ribbon.ClickCategory(QStringLiteral("面作成")))
         || !Explain("「ロフト面」を押せる", ribbon.ClickTool(QStringLiteral("ロフト面")))
         || !Explain("面を作るの棚が構える", window.ShelfShown(Shelf::Surface))
@@ -105,7 +105,7 @@ using kachakacha::v2::modeling::DrawingTool;
         return false;
     }
     window.SetMode(UiMode::Fabrication);
-    return Explain("製作は4カテゴリ", ribbon.CategoryCount() == 4)
+    return Explain("製作は5カテゴリ", ribbon.CategoryCount() == 5)
         && Explain("近似が見えている", ribbon.ToolEnabled(QStringLiteral("近似")));
 }
 

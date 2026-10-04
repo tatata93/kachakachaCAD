@@ -180,13 +180,14 @@ const std::vector<RibbonCategory>& OutputCategories()
 
 const std::vector<RibbonCategory>& RibbonCategoriesFor(UiMode mode)
 {
-    switch (mode) {
-    case UiMode::Drawing:     return DrawingCategories();
-    case UiMode::Part:        return PartCategories();
-    case UiMode::Fabrication: return FabricationCategories();
-    case UiMode::Output:      return OutputCategories();
-    }
-    return DrawingCategories();
+    static const auto categories=[] {
+        std::vector<std::vector<RibbonCategory>> all{DrawingCategories(),PartCategories(),FabricationCategories(),OutputCategories()};
+        for(auto& entries:all)entries.push_back({"find_view", "探す・表示", {
+            Tool("道具を検索", "tools.search"),Tool("選択にズーム", "view.fit_selection"),
+            Tool("選択を局所表示", "view.isolate"),Tool("局所表示を解除", "view.restore_isolation")}});
+        return all;
+    }();
+    return categories.at(static_cast<std::size_t>(mode));
 }
 
 const RibbonTool* FindRibbonTool(UiMode mode, std::string_view commandId)

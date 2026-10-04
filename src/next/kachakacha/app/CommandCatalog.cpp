@@ -48,6 +48,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
 {
     // 並びは docs/v2/command-catalog.md と同じ順。決定的であること。
     static const std::vector<CommandDescriptor> table = {
+        {"tools.search", "道具を検索", CommandMode::Instant, "search", "Ctrl+K", SelectionPredicate::Always, "", "名前や用途で道具を探します。対象を選んだまま別モードの道具を開始できます。", false, {"AT-UIX-011"}},
+        {"view.fit_selection", "選択にズーム", CommandMode::Instant, "fit_selection", "", SelectionPredicate::OneOrMoreHideable, "対象を選んでください。", "選択した線・面・立体・画像を画面に収めます。", false, {"AT-UIX-004"}},
+        {"view.isolate", "選択を局所表示", CommandMode::Instant, "isolate", "", SelectionPredicate::OneOrMoreHideable, "対象を選んでください。", "選択した対象だけを一時表示します。選択解除しても表示を保持します。", false, {"AT-UIX-004"}},
+        {"view.restore_isolation", "局所表示を解除", CommandMode::Instant, "restore", "", SelectionPredicate::Always, "", "元の表示に戻します。文書の非表示設定は変更しません。", false, {"AT-UIX-004"}},
         {"image.place", "画像を貼る / 編集", CommandMode::Tool, "image", "",
             SelectionPredicate::HasDocument, "文書がありません。",
             "画像を面に貼ります。画像とCADの2点で長さを合わせられます。選択した画像は同じ道具で編集できます。", true, {"AT-DOC-005"}},

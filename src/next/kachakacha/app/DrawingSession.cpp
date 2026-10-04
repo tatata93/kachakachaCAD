@@ -146,13 +146,18 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
         settings.referencePoint = session_->Points().back();
     }
     const auto& tolerance = document_.Snapshot().settings.tolerance;
+    std::optional<SnapScene> filtered;
+    if(snapEntityFilter_){filtered=scene_;
+        std::erase_if(filtered->curves,[this](const auto& c){return !snapEntityFilter_(c.entityId);});
+        std::erase_if(filtered->points,[this](const auto& p){return !snapEntityFilter_(p.entityId);});}
+    const auto& snapScene=filtered?*filtered:scene_;
     if (keepHold) {
-        result.snap = snapHysteresis_.Resolve(scene_, mapping_, pointer, settings, tolerance);
+        result.snap = snapHysteresis_.Resolve(snapScene, mapping_, pointer, settings, tolerance);
     } else {
         // 持ち越しを読むだけで書き換えない。答えは Hover と同じ規則で出す。
         settings.heldSnap = snapHysteresis_.Held();
         result.snap = modeling::ChooseSnap(
-            modeling::CollectSnapCandidates(scene_, mapping_, pointer, settings, tolerance),
+            modeling::CollectSnapCandidates(snapScene, mapping_, pointer, settings, tolerance),
             settings);
     }
     if (result.snap.has_value()) {

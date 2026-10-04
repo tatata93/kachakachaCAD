@@ -42,7 +42,7 @@ void V2ImageTool::Refresh(V2MainWindow& window) {
 
 std::vector<app::PickCandidate> V2Viewport::ImageCandidatesAt(const QPointF& position) const {
     std::vector<app::PickCandidate> result;const auto ray=mapping_.RayThrough({position.x(),position.y()});if(!ray)return result;
-    for(const auto& image:imageViews_){if(image.entityId.IsNil()||image.image.opacity<=0)continue;
+    for(const auto& image:imageViews_){if(image.entityId.IsNil()||image.image.opacity<=0||!EntityShown(image.entityId))continue;
         for(const auto& triangle:image.triangles){const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle.mesh);if(!hit)continue;
             const auto point=ray->origin+ray->direction*(*hit);const auto& p=triangle.mesh.points;
             const auto a=p[1]-p[0],b=p[2]-p[0],c=point-p[0];

@@ -55,7 +55,7 @@
 
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
-    return id == "view.align_selection" || id == "view.align_selection_back"
+    return id == "tools.search" || id == "view.fit_selection" || id == "view.isolate" || id == "view.restore_isolation" || id == "view.align_selection" || id == "view.align_selection_back"
         || id == "view.display_settings" || id == "view.number_settings"
         || id == "group.set_active" || id == "view.hide_selected"
         || id == "view.show_all" || id == "edit.delete"
@@ -96,6 +96,13 @@ void V2MainWindow::ToggleSnap()
 
 void V2MainWindow::RunViewCommand(std::string_view id)
 {
+    if(id=="tools.search"){RunCommand("selection.activate");operationHost_->FocusToolSearch();return;}
+    if(id=="view.fit_selection"){viewport_->FitToDocument(true);return;}
+    if(id=="view.isolate"){
+        if(viewport_->Selection().entityIds.empty()){SetStatus(QStringLiteral("局所表示する対象を選んでください。"));return;}
+        viewport_->IsolateSelection();SetStatus(QStringLiteral("局所表示中。3Dの「局所表示を解除」で元の表示へ戻せます。"));return;}
+    if(id=="view.restore_isolation"){viewport_->ClearIsolation();SetStatus(QStringLiteral("局所表示を解除しました。"));return;}
+
     if (id == "view.display_settings") {
         // 右の「表示」の棚を前に出す(V1 の表示設定タブ)。段は Ctrl+1/2/3 で直に選ぶ。
         ShowDisplayDock();
@@ -142,6 +149,7 @@ void V2MainWindow::RunViewCommand(std::string_view id)
         return;
     }
     if (id == "view.show_all") {
+        viewport_->ClearIsolation();
         ShowAllEntities();
         return;
     }
@@ -682,6 +690,7 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         "view.align_selection_back",
         "wire.split",
         "wire.join",
+        "view.fit_selection", "view.isolate", "view.restore_isolation",
         "view.hide_selected",
         "view.show_all",
         "edit.delete",

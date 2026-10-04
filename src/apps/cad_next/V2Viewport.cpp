@@ -146,6 +146,7 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
 //! 消しておいて、次にポインタが動いたときに出し直す。
 void V2Viewport::OnSceneReplaced()
 {
+    if(isolationActive_&&!IsolationActive())ClearIsolation();
     // 条件を付けない。場面が替わったら前の場面の一時表示は全部捨てる、という
     // 決めごとにする。「リングが出ているときだけ」にすると、位置や案内文だけが
     // 残る場合に前の場面のものが生き延びる。
@@ -242,9 +243,10 @@ void V2Viewport::RebuildMapping()
     session_->SetMapping(mapping_);
 }
 
-void V2Viewport::FitToDocument()
+void V2Viewport::FitToDocument(bool selectedOnly)
 {
     const auto& scene = session_->Scene();
+    const auto shown=[&](auto id){return EntityShown(id)&&(!selectedOnly||kachakacha::v2::app::IsSelected(selection_,id));};
     bool any = false;
     Vector3 minimum{};
     Vector3 maximum{};
@@ -263,24 +265,32 @@ void V2Viewport::FitToDocument()
         maximum.z = std::max(maximum.z, point.z);
     };
     for (const auto& curve : scene.curves) {
+        if(!shown(curve.entityId))continue;
         for (const Vector3& point :
             kachakacha::v2::geometry::SampleChain({curve.segment}, 0.05)) {
             include(point);
         }
     }
     for (const auto& point : scene.points) {
-        include(point.position);
+        if(shown(point.entityId))include(point.position);
     }
-    for (const auto& image : imageViews_) for (const auto& triangle : image.triangles)
+    for (const auto& image : imageViews_) if(shown(image.entityId)) for (const auto& triangle : image.triangles)
         for (const auto& point : triangle.mesh.points) include(point);
+    for(const auto& shape:shapeViews_) if(shown(shape.entityId)) for(const auto& triangle:shape.mesh.triangles)
+        for(const auto& point:triangle.points) include(point);
+    if(!any&&selectedOnly)return;
     if (!any) {
         center_ = Vector3{};
         visibleWidthMm_ = 200.0;
     } else {
         center_ = (minimum + maximum) * 0.5;
         const Vector3 span = maximum - minimum;
-        const double largest = std::max({span.x, span.y, span.z, 1.0});
-        visibleWidthMm_ = largest * 1.6;
+        const auto extent=[&](const Vector3& axis){return std::abs(axis.x)*span.x
+            +std::abs(axis.y)*span.y+std::abs(axis.z)*span.z;};
+        const double horizontal=extent(kachakacha::v2::view::RightOf(orientation_));
+        const double vertical=extent(kachakacha::v2::view::UpOf(orientation_));
+        const double aspect=static_cast<double>(std::max(1,width()))/std::max(1,height());
+        visibleWidthMm_=std::max({horizontal,vertical*aspect,1.0})*1.2;
     }
     RebuildMapping();
     update();
@@ -430,6 +440,7 @@ void V2Viewport::SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& 
 {
     // 見え方だけを変える。文書には何も書かない。
     display_ = settings;
+    ApplyVisibilityFilter();
     update();
 }
 
@@ -832,6 +843,7 @@ void V2Viewport::SetPendingCommandCallbacks(std::function<void()> confirm,
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
     selection_ = std::move(selection);
+    ApplyVisibilityFilter();
     if (selectionChangedCallback_) {
         selectionChangedCallback_();
     }
@@ -1003,6 +1015,7 @@ void V2Viewport::ClickAt(const QPointF& position)
         picked.curve = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
             ScreenPoint{position.x(), position.y()},
             session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+        if (picked.curve && !EntityShown(picked.curve->entityId)) picked.curve.reset();
         auto handler = pickHandler_;
         pickHandler_ = nullptr;
         handler(picked);

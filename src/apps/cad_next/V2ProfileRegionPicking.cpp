@@ -124,6 +124,8 @@ std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) 
     std::optional<std::size_t> result;
     for (std::size_t index = 0; index < profileRegions_.size(); ++index) {
         const auto& region = profileRegions_[index];
+        const auto ids = ProfileRegionEntityIds(region);
+        if (std::any_of(ids.begin(),ids.end(),[this](auto id){return !EntityShown(id);})) continue;
         const auto point = mapping_.UnprojectOntoPlane(ScreenPoint{position.x(), position.y()},
             region.plane.origin, region.plane.normal);
         if (!point.has_value()) {
@@ -159,10 +161,10 @@ bool V2Viewport::ProfileRegionSelected(std::size_t index) const
 
 bool V2Viewport::WireUnderCursor(const QPointF& position) const
 {
-    return !kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
+    const auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow())
-                .empty();
+        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    return std::any_of(candidates.begin(),candidates.end(),[this](const auto& c){return EntityShown(c.entityId);});
 }
 
 bool V2Viewport::SelectionHasPart() const
@@ -214,6 +216,8 @@ void V2Viewport::DrawProfileRegions(QPainter& painter) const
     }
     painter.save();
     for (std::size_t index = 0; index < profileRegions_.size(); ++index) {
+        const auto ids = ProfileRegionEntityIds(profileRegions_[index]);
+        if (std::any_of(ids.begin(),ids.end(),[this](auto id){return !EntityShown(id);})) continue;
         QPainterPath path;
         path.setFillRule(Qt::OddEvenFill);
         AddBoundary(path, *this, profileRegions_[index].outer);

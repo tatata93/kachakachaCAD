@@ -53,7 +53,7 @@ void V2MainWindow::BuildMenus()
     file->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
 
     QMenu* edit = menuBar()->addMenu(QStringLiteral("編集(&E)"));
-    addCommands(edit, {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
+    addCommands(edit, {"tools.search", "edit.undo", "edit.redo", "edit.delete", "entity.rename",
         "edit.numeric", "selection.activate", "snap.toggle"});
     QMenu* wire = edit->addMenu(QStringLiteral("ワイヤー編集(&W)"));
     addCommands(wire, {"wire.trim", "wire.extend", "wire.split", "wire.join",
@@ -102,7 +102,7 @@ void V2MainWindow::BuildMenus()
 
     QMenu* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
     viewMenu_ = view;
-    addCommands(view, {"view.fit_all", "view.align_selection", "view.align_selection_back",
+    addCommands(view, {"view.fit_selection", "view.isolate", "view.restore_isolation", "view.fit_all", "view.align_selection", "view.align_selection_back",
         "view.align_workplane", "view.hide_selected", "view.show_all", "view.stage_all",
         "view.stage_no_grid", "view.stage_no_construction", "view.stage_selection_only",
         "view.display_settings", "view.number_settings", "view.surface_analysis",

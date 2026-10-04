@@ -760,6 +760,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
         }
         kachakacha::v2::app::PickCandidate candidate;
         candidate.entityId = shapeViews_[hit.shapeIndex].entityId;
+        if (!EntityShown(candidate.entityId)) continue;
         // 面の番号が付いていれば面として拾う。付いていなければ物体のまま。
         candidate.kind = hit.faceIndex == kachakacha::v2::modeling::kNoFaceIndex
             ? kachakacha::v2::app::SelectionElementKind::Object
@@ -921,6 +922,7 @@ bool V2Viewport::ReleaseBoxSelect(const QPointF& position)
     auto shapes = CollectBoxShapeCandidates(request);
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
+    std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
     SetSelection(kachakacha::v2::app::ApplyBoxSelection(base, candidates, mode));
     // 離した場所の候補を集め直す。矩形の前の候補を出したままだと、
     // 次の Tab がどこの候補を送っているのか読めない。
@@ -964,6 +966,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     auto shapes = CollectShapeCandidatesAt(position);
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
+    std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
     return SortCandidatesForSlot(std::move(candidates));
 }
 
@@ -1176,7 +1179,7 @@ void V2Viewport::RefreshForbiddenHover(const QPointF& position)
     const auto loose = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance);
-    hoverOffPlane_ = loose.has_value();
+    hoverOffPlane_ = loose.has_value() && EntityShown(loose->entityId);
 }
 
 void V2Viewport::AdvanceCandidate(bool backward)

@@ -355,7 +355,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         // 実際に動くもの(物体まるごと)と画面が食い違う。
         const bool entitySelected = kachakacha::v2::app::IsSelected(selection_,
             curve.entityId);
-        if (display_.selectionOnly && !entitySelected) {
+        if (!EntityShown(curve.entityId)) {
             continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
         }
         // 意味状態は core が決める(app/SemanticState)。
@@ -409,7 +409,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         }
         const SemanticState state = kachakacha::v2::app::PointSemanticState(selection_,
             point.entityId, hoveredEntityId_);
-        if (display_.selectionOnly && state != SemanticState::Selected) {
+        if (!EntityShown(point.entityId)) {
             continue;
         }
         // 点も状態で描き分ける。選んでも見た目が変わらないと、
@@ -732,6 +732,7 @@ void V2Viewport::DrawShapes(QPainter& painter) const
     DrawSmoothShapes(painter);
     if (!display_.shapesVisible) return;
     for (const ShapeView& shape : shapeViews_) {
+        if(!EntityShown(shape.entityId))continue;
         // 解析で塗り替える面は、ふだんの塗りの代わりに解析の色で描く。
         const AnalysisView* analysis = AnalysisFor(shape.entityId);
         if (analysis != nullptr && analysis->Painted()
@@ -742,7 +743,7 @@ void V2Viewport::DrawShapes(QPainter& painter) const
         DrawOneShape(painter, shape);
     }
     for (const AnalysisView& view : analysisViews_) {
-        if (!view.entityId.IsNil()) {
+        if (!view.entityId.IsNil() && EntityShown(view.entityId)) {
             DrawAnalysisLines(painter, view);
         }
     }

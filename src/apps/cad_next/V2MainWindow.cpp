@@ -66,6 +66,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QVariant>
 
 #include <array>
 #include <initializer_list>
@@ -458,7 +459,9 @@ void V2MainWindow::RefreshCommandVisibility()
             && kachakacha::v2::app::PredicateCanBeSatisfiedBySelection(
                 command->predicate);
         const bool enabled = ready || canSelectTarget;
+        entry.second->setProperty("toolAvailable",enabled);
         entry.second->setEnabled(enabled);
+        entry.second->setToolTip(command ? QString::fromUtf8(std::string(command->operationGuideJa).c_str()) : QString());
         if (!ready && !reason.isEmpty()) {
             // 対象不足なら入口は有効のまま、選ぶ対象をツールチップで示す。
             const QString suffix = canSelectTarget

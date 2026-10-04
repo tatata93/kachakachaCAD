@@ -10,6 +10,45 @@ SurfaceRaster::SurfaceRaster(int width, int height)
       pixels_(static_cast<std::size_t>(width_) * height_, 0),
       depths_(pixels_.size(), std::numeric_limits<double>::infinity()) {}
 
+void SurfaceRaster::DrawEdge(const std::vector<geometry::Vector3>& points,
+    const geometry::ScreenMapping& mapping, std::uint32_t rgb, int radius)
+{
+    if (width_ == 0 || height_ == 0) return;
+    const auto& m = mapping.matrix;
+    const auto depth = [&m](const geometry::Vector3& p) {
+        return (m[8]*p.x+m[9]*p.y+m[10]*p.z+m[11])
+            / (m[12]*p.x+m[13]*p.y+m[14]*p.z+m[15]);
+    };
+    for (std::size_t i = 1; i < points.size(); ++i) {
+        const auto a = mapping.Project(points[i-1]), b = mapping.Project(points[i]);
+        if (!a || !b) continue;
+        const double za = depth(points[i-1]), zb = depth(points[i]);
+        if (!std::isfinite(za+zb)) continue;
+        const double dx = b->x-a->x, dy = b->y-a->y;
+        double low = 0, high = 1;
+        const auto clip = [&](double origin, double delta, double limit) {
+            if (std::abs(delta) < 1e-12) return origin >= 0 && origin < limit;
+            const double t0 = -origin/delta, t1 = (limit-1-origin)/delta;
+            low = std::max(low, std::min(t0,t1));
+            high = std::min(high, std::max(t0,t1));
+            return low <= high;
+        };
+        if (!clip(a->x,dx,width_) || !clip(a->y,dy,height_)) continue;
+        const int steps = std::max(1, static_cast<int>(std::ceil(std::max(std::abs(dx),std::abs(dy))*(high-low))));
+        const double bias = 1e-7 + std::abs(zb-za)/std::max(1.0,std::max(std::abs(dx),std::abs(dy)))*1.5;
+        for (int step = 0; step <= steps; ++step) {
+            const double t = low+(high-low)*step/steps;
+            const int x = static_cast<int>(std::round(a->x+dx*t));
+            const int y = static_cast<int>(std::round(a->y+dy*t));
+            for (int oy = -radius; oy <= radius; ++oy) for (int ox = -radius; ox <= radius; ++ox) {
+                if (x+ox < 0 || x+ox >= width_ || y+oy < 0 || y+oy >= height_) continue;
+                const auto index = static_cast<std::size_t>(y+oy)*width_+x+ox;
+                if (za+(zb-za)*t <= depths_[index]+bias) pixels_[index] = 0xff000000u | rgb;
+            }
+        }
+    }
+}
+
 void SurfaceRaster::Draw(const modeling::MeshTriangle& triangle, const geometry::ScreenMapping& mapping,
     const geometry::Vector3& forward, bool closed, std::uint32_t rgb)
 {

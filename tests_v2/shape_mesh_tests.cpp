@@ -327,4 +327,19 @@ KACHA_V2_TEST(mesh_pick, triangle_boundary_roundoff_is_tolerated_without_picking
     }
 }
 
+KACHA_V2_TEST(shading, edges_obey_surface_depth_and_screen_clipping)
+{
+    const auto mapping = kachakacha::v2::geometry::MakeOrthographicMapping({5,5,0}, {0,0,-1}, {0,1,0}, 12, 120,120);
+    SurfaceRaster raster(120,120);
+    for (const auto& t : FlatSquare(2).triangles) raster.Draw(t,mapping,{0,0,-1},false,0x91bed9);
+    const auto original = raster.Pixels()[60*120+60];
+    raster.DrawEdge({{-1e6,5,0},{1e6,5,0}},mapping,0xff0000);
+    Require(raster.Pixels()[60*120+60] == original, "line behind surface remains hidden");
+    Require(raster.Pixels()[60*120+5] == 0xffff0000u, "outside surface line remains visible");
+    raster.DrawEdge({{0,5,2},{10,5,2}},mapping,0x00ff00);
+    Require(raster.Pixels()[60*120+60] == 0xff00ff00u, "coplanar edge remains visible");
+    raster.DrawEdge({{0,5,3},{10,5,3}},mapping,0x0000ff);
+    Require(raster.Pixels()[60*120+60] == 0xff0000ffu, "foreground edge remains visible");
+}
+
 KACHA_V2_TEST_MAIN("shape_mesh_tests")

@@ -21,6 +21,10 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QString>
+#include <QApplication>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QImage>
 
 #include <cmath>
 #include <cstddef>
@@ -475,9 +479,163 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("選択へ戻ったら途中経過も残らない", !viewport.HasPreview());
 }
 
+[[nodiscard]] bool CaseHiddenExtrudeProfile(V2MainWindow& window)
+{
+    if (!CaseHoExtrudeFromSampleProfile(window)) return false;
+    const auto before = window.Viewport().ShapeViews().size();
+    kachakacha::v2::app::SelectionSet selection;
+    selection.entityIds.push_back(ByName(window, "WindowProfile"));
+    window.Viewport().SetSelection(selection);
+    window.RunCommand("view.hide_selected");
+    if (!window.SaveAndReopen("kacha_hidden_extrude.kcd2")) return false;
+    return Explain("非表示の輪郭でも押し出しを再生成できる",
+        window.RebuildProblems().isEmpty() && window.Viewport().ShapeViews().size() == before);
+}
+
+void HeavyOrbitTiming(V2Viewport& viewport, const char* label)
+{
+    const auto before = viewport.Orientation();
+    QElapsedTimer timer;
+    timer.start();
+    QImage frame(viewport.size(),QImage::Format_ARGB32);
+    for (int i = 0; i < 12; ++i) {
+        viewport.OrbitByPixels(12,3);
+        viewport.render(&frame);
+    }
+    Note((std::string(label) + " 12 frames ms=" + std::to_string(timer.elapsed())).c_str());
+    viewport.SetOrientation(before);
+}
+
+//! 明示した外部モデルだけを重負荷検証する。通常の自己診断には追加しない。
+[[nodiscard]] bool HeavyModelShots(V2MainWindow& window, const QString& out)
+{
+    auto& viewport = window.Viewport();
+    const auto save = [&](const QString& name) {
+        QImage image(viewport.size(), QImage::Format_ARGB32);
+        image.fill(Qt::white);
+        viewport.render(&image);
+        return image.save(out + "/" + name + ".png");
+    };
+    for (const auto direction : {ViewDirection::Isometric, ViewDirection::Front, ViewDirection::Left, ViewDirection::Top, ViewDirection::Bottom}) {
+        viewport.SetViewDirection(direction);
+        viewport.FitToDocument();
+        if (!save("view-" + QString::number(static_cast<int>(direction)))) return false;
+    }
+    viewport.SetOrientation(view::OrientationForZone({-1,-1,1}).Value());
+    viewport.FitToDocument();
+    if (!save("front-quarter")) return false;
+    viewport.SetViewCenter({14,0,26});
+    viewport.SetVisibleWidthMm(75);
+    if (!save("front-detail")) return false;
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    for (const auto& group : snapshot.groups) {
+        if (group.displayName != "前台車" && group.displayName != "客室・運転室") continue;
+        app::SelectionSet selected;
+        for (const auto& id : app::EntitiesUnderGroup(snapshot,group.id)) {
+            const auto* entity = window.Session().GetDocument().FindEntity(id);
+            if (entity && entity->kind == EntityKind::Part) selected.entityIds.push_back(id);
+        }
+        viewport.SetSelection(selected);
+        window.RunCommand("view.isolate");
+        viewport.SetSelection({});
+        viewport.FitToDocument();
+        if (!save(group.displayName == "前台車" ? "bogie" : "interior")) return false;
+        if (group.displayName == "前台車") HeavyOrbitTiming(viewport,"bogie orbit/render");
+        window.RunCommand("view.restore_isolation");
+    }
+    viewport.FitToDocument();
+    HeavyOrbitTiming(viewport,"heavy orbit/render");
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    return true;
+}
+
+[[nodiscard]] bool HeavyRoofManufacturing(V2MainWindow& window, const QString& out)
+{
+    const auto source = ByName(window, "屋根 製作用参照面");
+    if (source.IsNil()) return false;
+    app::SelectionSet selection;
+    selection.entityIds.push_back(source);
+    window.Viewport().SetSelection(selection);
+    auto choice = window.FabricationDock().Choice();
+    choice.equalPartCount = 4;
+    choice.minimumPartWidthMm = 4;
+    choice.maximumPartCount = 12;
+    choice.adaptiveSpacing = true;
+    window.FabricationDock().SetChoice(choice);
+    window.RunCommand("fabrication.create");
+    const auto outcomes = window.ApproxOutcomes();
+    for (const auto& outcome : outcomes) {
+        Note(("roof candidate: available=" + std::to_string(outcome.available)
+            + " parts=" + std::to_string(outcome.partCount)
+            + " max deviation mm=" + std::to_string(outcome.maximumDeviationMm)
+            + " " + outcome.refusalJa).c_str());
+    }
+    if (outcomes.size() < 2 || !outcomes[1].available || !window.FabricationDock().ClickCandidate(1)) return false;
+    window.RunCommand("fabrication.create");
+    if (!Explain("115屋根を部材近似", window.FabricationModelCount() == 1)) return false;
+    for (double percent : {0., 50., 100.}) {
+        window.SetAssemblyChooser([percent](double) { return std::optional<double>(percent); });
+        window.RunCommand("fabrication.set_assembly");
+        Note(window.StatusText().toUtf8().constData());
+    }
+    window.RunCommand("fabrication.create_pattern");
+    window.RefreshExportCounts();
+    auto& dock = window.ExportDock();
+    if (!dock.ChooseTarget(app::ExportTarget::CurrentPattern) || !dock.ChooseFormat(app::ExportFormat::Svg)) return false;
+    dock.ChoosePath(out + "/roof-pattern.svg");
+    dock.SetOverwrite(true);
+    if (!dock.RunNow()) { Note(dock.LastMessage().toUtf8().constData()); return false; }
+    if (!dock.ChooseTarget(app::ExportTarget::Project) || !dock.ChooseFormat(app::ExportFormat::Kcd2)) return false;
+    dock.ChoosePath(out + "/series115-with-roof-approx.kcd2");
+    dock.SetOverwrite(true);
+    if (!dock.RunNow()) { Note(dock.LastMessage().toUtf8().constData()); return false; }
+    if (!window.OpenDocumentFile(out + "/series115-with-roof-approx.kcd2")) { Note(window.StatusText().toUtf8().constData()); return false; }
+    return Explain("近似を含む別KCDも再生成", window.FabricationModelCount() == 1 && window.RebuildProblems().isEmpty());
+}
+
+[[nodiscard]] bool CaseHeavyRailway(V2MainWindow& window)
+{
+    const auto path = qEnvironmentVariable("KACHACAD_HEAVY_MODEL");
+    const auto out = qEnvironmentVariable("KACHACAD_HEAVY_OUTPUT", "_claudeout/115-heavy");
+    QDir().mkpath(out);
+    QElapsedTimer timer;
+    timer.start();
+    if (!window.OpenDocumentFile(path)) return false;
+    Note(("heavy open ms=" + std::to_string(timer.elapsed())).c_str());
+    Note(window.RebuildProblems().toUtf8().constData());
+    const auto shapes = window.Viewport().ShapeViews().size();
+    Note(("heavy shapes=" + std::to_string(shapes)).c_str());
+    Note(("heavy triangles=" + std::to_string(window.Viewport().ShapeTriangleCount())).c_str());
+    window.SetMode(app::UiMode::Part);
+    window.resize(1800, 1000);
+    QApplication::processEvents();
+    if (!HeavyModelShots(window,out)) return false;
+    if (!Explain("重量級モデルを欠落なく再生成", window.RebuildProblems().isEmpty()
+            && shapes >= 1000 && shapes == static_cast<std::size_t>(CountKind(window, EntityKind::Part)))) return false;
+    timer.restart();
+    if (!window.SaveAndReopen("kacha_series115_heavy.kcd2")) return false;
+    Note(("heavy save/reopen ms=" + std::to_string(timer.elapsed())).c_str());
+    if (!Explain("保存後も形状数一致", window.RebuildProblems().isEmpty()
+            && window.Viewport().ShapeViews().size() == shapes)) return false;
+    auto& dock = window.ExportDock();
+    window.RefreshExportCounts();
+    dock.SetInteractiveHandler({});
+    if (!dock.ChooseTarget(kachakacha::v2::app::ExportTarget::VisibleParts)) return false;
+    for (const auto format : {kachakacha::v2::app::ExportFormat::Stl, kachakacha::v2::app::ExportFormat::Step}) {
+        timer.restart();
+        if (!dock.ChooseFormat(format)) return false;
+        dock.ChoosePath(out + "/series115" + QString::fromStdString(std::string(kachakacha::v2::app::ExportFormatExtension(format))));
+        dock.SetOverwrite(true);
+        if (!dock.RunNow()) { Note(dock.LastMessage().toUtf8().constData()); return false; }
+        Note(("heavy export ms=" + std::to_string(timer.elapsed())).c_str());
+    }
+    return HeavyRoofManufacturing(window, out);
+}
+
 std::vector<SelfTestCase> HoModelCases()
 {
-    return {
+    std::vector<SelfTestCase> cases = {
+        {"HP-HEAVY 非表示の押し出し輪郭を開き直す", CaseHiddenExtrudeProfile},
         {"HOの見本が開けて中身がそろう", CaseHoSampleOpens},
         {"HOの見本で作業平面と面へ正対できる", CaseHoFacingWorkPlanesAndSurface},
         {"HOの見本の輪郭を押し出せる", CaseHoExtrudeFromSampleProfile},
@@ -489,6 +647,10 @@ std::vector<SelfTestCase> HoModelCases()
             CaseHoRadiusIsPerPartAndPersisted},
         {"HOの見本の上でも道具替えが綺麗", CaseHoToolSwitchStaysClean},
     };
+    if (!qEnvironmentVariableIsEmpty("KACHACAD_HEAVY_MODEL")) {
+        cases.push_back({"HP-HEAVY 重量級115系モデル", CaseHeavyRailway});
+    }
+    return cases;
 }
 
 } // namespace kachakacha::v2::selftest

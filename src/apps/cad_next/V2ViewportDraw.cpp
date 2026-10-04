@@ -27,6 +27,7 @@
 #include <array>
 #include <cmath>
 #include <string>
+#include <unordered_set>
 
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
@@ -340,7 +341,13 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     // 作図中は、作図面の上にない線を薄くして、自分の線を見やすくする(V1 の #6)。
     const bool dimming = display_.dimOffPlaneLines
         && session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select;
+    std::unordered_set<kachakacha::v2::base::EntityId> meshed;
+    if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);
     for (const auto& curve : scene.curves) {
+        const SemanticState state = CurveStateOf(curve.entityId, curve.segmentId);
+        const bool plain = state == SemanticState::Default;
+        // 派生稜線の二重描画と、描かない曲線の標本化を避ける。
+        if (plain && meshed.count(curve.entityId) != 0) continue;
         QPainterPath path;
         bool started = false;
         AppendCurve(path, curve.segment, started);
@@ -360,8 +367,6 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         }
         // 意味状態は core が決める(app/SemanticState)。
         // 選んだ線分だけが Selected になり、同じワイヤーの残りは通常表示のままになる。
-        const SemanticState state = CurveStateOf(curve.entityId, curve.segmentId);
-        const bool plain = state == SemanticState::Default;
         // 通常表示のときだけデータ種類(補助線)の色と太さを使う。
         // 状態が付いた線は状態の色にする(§3「見た目はデータ種類より状態を優先する」)。
         QColor color = plain && curve.construction ? palette_.construction
@@ -796,19 +801,6 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
     }
     painter.setPen(QPen(edge, selected || hovered ? 2.0 : 1.1, Qt::SolidLine, Qt::RoundCap,
         Qt::RoundJoin));
-    for (const auto& line : shape.mesh.edges) {
-        QPolygonF path;
-        bool ok = true;
-        for (const Vector3& point : line) {
-            const auto screen = ToScreen(point);
-            if (!screen.has_value()) {
-                ok = false;
-                break;
-            }
-            path << *screen;
-        }
-        if (ok && path.size() >= 2) {
-            painter.drawPolyline(path);
-        }
-    }
+    // 稜線は DrawSmoothShapes で面と同じ深度を使って描く。
+
 }

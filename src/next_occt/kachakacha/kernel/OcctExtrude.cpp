@@ -144,7 +144,14 @@ template<class Function>
         if (!hole.HasValue()) {
             return Result<TopoDS_Face>::Failure(hole.Diagnostics());
         }
-        TopoDS_Wire wire = hole.Value();
+        // 入力の回り順は任意。外周と同じ平面で一度外周として向きを揃えてから
+        // 反転する。無条件に元Wireを反転すると、逆向きの穴が埋まってしまう。
+        BRepBuilderAPI_MakeFace holeFace(plane, hole.Value(), Standard_True);
+        if (!holeFace.IsDone()) {
+            return Result<TopoDS_Face>::Failure(MakeError(kExtrudeBuildFailed,
+                "穴の向きを判定できませんでした。", {}));
+        }
+        TopoDS_Wire wire = BRepTools::OuterWire(holeFace.Face());
         wire.Reverse();
         maker.Add(wire);
         if (!maker.IsDone()) {

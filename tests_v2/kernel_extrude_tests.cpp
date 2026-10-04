@@ -683,6 +683,41 @@ KACHA_V2_TEST(kernel_extrude, 原点から遠い場所でも作れる)
     ClearShapeCache();
 }
 
+KACHA_V2_TEST(kernel_extrude, 穴の回り順と平面の向きによらず窓が抜ける)
+{
+    for (int axis = 0; axis < 3; ++axis) for (bool reversed : {false, true}) {
+        auto request = BasicRequest();
+        request.profiles = {Rectangle(0, 0, 40, 20), Rectangle(5, 5, 15, 15)};
+        for (auto& profile : request.profiles) {
+            std::vector<CurveSegment> transformed;
+            auto transform = [axis](Vector3 p) {
+                if (axis == 1) return Vector3{p.x, 18.1, p.y};
+                if (axis == 2) return Vector3{10, p.x, p.y};
+                return p;
+            };
+            for (const auto& segment : profile.segments) {
+                transformed.push_back(Line(transform(segment.StartPoint()), transform(segment.EndPoint())));
+            }
+            profile.segments = std::move(transformed);
+        }
+        if (reversed) {
+            auto& segments = request.profiles[1].segments;
+            std::vector<CurveSegment> back;
+            for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
+                back.push_back(Line(it->EndPoint(), it->StartPoint()));
+            }
+            segments = std::move(back);
+        }
+        request.directionMode = ExtrudeDirectionMode::CustomXYZ;
+        request.customDirection = axis == 0 ? Vector3{0,0,1}
+            : axis == 1 ? Vector3{0,-1,0} : Vector3{1,0,0};
+        const auto built = Build(request);
+        Require(built.HasValue(), "穴を埋めず押し出せる");
+        RequireNear(built.Value().totalVolumeMm3, 21000.0, 1.0e-4, "外周から穴を引いた体積");
+        ClearShapeCache();
+    }
+}
+
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_extrude_tests")

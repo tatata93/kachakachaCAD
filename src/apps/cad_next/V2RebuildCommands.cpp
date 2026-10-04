@@ -117,6 +117,8 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
     // 同じ定義の押し出しが並ぶとき(1 回で N 個できた部品)は、作った順の番号の立体を取る。
     // 先頭だけを取ると、2 個目以降が 1 個目の写しになる。数が合わなければ作り直せない。
     if (!built.HasValue() || ordinal >= built.Value().parts.size()) {
+        if (!built.HasValue()) ReportDiagnostics(built.Diagnostics());
+        else SetStatus(QStringLiteral("押し出しの再生成: 出力の数が保存時と一致しません。"));
         return false;
     }
     const auto& made = built.Value();

@@ -1,6 +1,7 @@
 #include "V2Viewport.h"
 #include "kachakacha/view/SurfaceRaster.h"
 #include <QImage>
+#include <QColor>
 #include <QPainter>
 #include <QRect>
 #include <algorithm>
@@ -29,6 +30,17 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     }
     std::stable_sort(layers.begin(),layers.end(),[](const auto& a,const auto& b){return a.depth>b.depth;});
     for(const auto& layer:layers)raster.DrawImage(*layer.triangle,mapping_,*layer.image);
+    if (display_.shapesVisible) for (const auto& shape : shapeViews_) {
+        if (!EntityShown(shape.entityId)) continue;
+        const bool selected = app::IsSelected(selection_, shape.entityId);
+        const bool hovered = shape.entityId == hoveredEntityId_;
+        QColor edge = palette_.background.red() > 160 ? QColor(0x36,0x52,0x66) : QColor(0xc9,0xdf,0xeb);
+        if (selected) edge = SemanticColor(app::SemanticState::Selected).darker(125);
+        else if (hovered) edge = SemanticColor(app::SemanticState::Hover);
+        for (const auto& line : shape.mesh.edges) {
+            raster.DrawEdge(line, mapping_, edge.rgb() & 0xffffffu, selected || hovered ? 1 : 0);
+        }
+    }
     QImage image(width(), height(), QImage::Format_ARGB32);
     if (image.isNull()) { return; }
     for (int y = 0; y < height(); ++y) {

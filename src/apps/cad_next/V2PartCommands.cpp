@@ -1005,7 +1005,26 @@ std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfi
 {
     // 押し出しと、開き直しの作り直しで、同じ輪郭の作り方を通す。
     // 道を分けると、開いたときだけ違う形が出来る。
-    return ProfilesOfImpl(entityIds, session_->Scene(),
+    auto scene = session_->Scene();
+    // 表示を消した元輪郭も履歴の入力として有効。表示用 Scene だけでは
+    // 保存後に非表示のワイヤから作った押し出しが消えてしまう。
+    const auto& document = session_->GetDocument();
+    for (const auto& id : entityIds) {
+        if (std::any_of(scene.curves.begin(), scene.curves.end(),
+                [&id](const auto& curve) { return curve.entityId == id; })) continue;
+        const auto* entity = document.FindEntity(id);
+        const auto* feature = entity == nullptr ? nullptr : document.FindFeature(entity->createdBy);
+        if (feature == nullptr || !feature->enabled) continue;
+        const auto* wire = std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&feature->definition);
+        if (wire == nullptr) continue;
+        for (std::size_t i = 0; i < wire->segments.size(); ++i) {
+            const auto segmentId = i < wire->segmentIds.size() ? wire->segmentIds[i]
+                : kachakacha::v2::base::SegmentId{};
+            scene.curves.push_back(SnapCurve{id, segmentId, wire->segments[i],
+                wire->construction, entity->datum});
+        }
+    }
+    return ProfilesOfImpl(entityIds, scene,
         session_->GetDocument().Snapshot().settings.tolerance);
 }
 

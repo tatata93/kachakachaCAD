@@ -272,3 +272,18 @@ KACHA_V2_TEST(sampling, 重心が正しい)
 }
 
 KACHA_V2_TEST_MAIN("curve_sampling_tests")
+
+KACHA_V2_TEST(sampling, rotated_sampled_triangles_do_not_self_intersect)
+{
+    for(int i=1;i<=300;++i){
+        const double a=i*0.017;
+        std::vector<Point2> points;
+        const std::vector<Point2> corners{{-23.712,17.325},{41.125,17.325},{8.706,-32.485}};
+        for(int edge=0;edge<3;++edge)for(int j=0;j<4;++j){
+            const auto p=corners[edge],q=corners[(edge+1)%3];const double t=j/4.;
+            const double x=p.u+(q.u-p.u)*t,y=p.v+(q.v-p.v)*t;
+            points.push_back({x*std::cos(a)-y*std::sin(a),x*std::sin(a)+y*std::cos(a)});
+        }
+        Require(!HasSelfIntersection(points,1e-4),"sampled triangle is simple at every rotation");
+    }
+}

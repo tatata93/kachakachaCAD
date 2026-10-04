@@ -177,7 +177,7 @@ void SelectAllWires(V2MainWindow& window)
         || !Explain("作ると道具は構えを解く", !window.LoopFacesTool().Active())
         || !Explain("元の線は残る(本数は変わらない)",
             CountOfKind(window, EntityKind::Wire) == wiresBefore)
-        || !Explain("形状ガイドが1枚増える",
+        || !Explain((std::string("形状ガイドが1枚増える: ")+window.StatusText().toStdString()).c_str(),
             CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)
         || !Explain((std::string("状態行に「作りました」が出る(")
                         + window.StatusText().toStdString() + ")").c_str(),
@@ -237,7 +237,7 @@ void SelectAllWires(V2MainWindow& window)
         || !Explain("作ると道具は構えを解く", !window.LoopFacesTool().Active())
         || !Explain("線の本数は変わらない(寄せても3本のまま)",
             CountOfKind(window, EntityKind::Wire) == wiresBefore)
-        || !Explain("形状ガイドが1枚増える",
+        || !Explain((std::string("形状ガイドが1枚増える: ")+window.StatusText().toStdString()).c_str(),
             CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)
         || !Explain((std::string("状態行に「作りました」が出る(")
                         + window.StatusText().toStdString() + ")").c_str(),

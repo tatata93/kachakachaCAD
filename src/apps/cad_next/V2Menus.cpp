@@ -2,6 +2,7 @@
 //! 並べるのは台帳の命令だけ。台帳の門(command_catalog_tests)が「献立に無い命令」を見張る。
 
 #include "V2MainWindow.h"
+#include "V2ToolIcons.h"
 
 #include "kachakacha/app/CommandCatalog.h"
 
@@ -29,6 +30,7 @@ void V2MainWindow::AddMenuCommands(QMenu* menu, std::initializer_list<std::strin
             continue;
         }
         QAction* action = menu->addAction(QString::fromUtf8(std::string(command->labelJa).c_str()));
+        if(id.starts_with("draw."))action->setIcon(V2ToolIcon(id,command->labelJa));
         action->setToolTip(QString::fromUtf8(std::string(command->operationGuideJa).c_str()));
         if (!command->defaultShortcut.empty()) {
             action->setShortcut(

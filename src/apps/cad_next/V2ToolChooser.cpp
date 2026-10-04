@@ -1,4 +1,6 @@
 #include "V2OperationPanelHost.h"
+#include "V2ToolIcons.h"
+#include <QSize>
 #include "kachakacha/app/CommandCatalog.h"
 #include <QAction>
 #include <QCheckBox>
@@ -43,7 +45,9 @@ void V2OperationPanelHost::SetToolMode(UiMode mode) {
         auto* grid=new QGridLayout(group);grid->setAlignment(Qt::AlignTop);int index=0;
         for(bool extra:{false,true})for(const auto& tool:category.tools){
             if(tool.extra!=extra)continue;
-            auto* button=new QPushButton(Text(tool.labelJa),group);button->setObjectName(QStringLiteral("toolChoice"));button->setMinimumHeight(30);
+            auto* button=new QPushButton(Text(tool.labelJa),group);button->setObjectName(QStringLiteral("toolChoice"));button->setMinimumHeight(36);
+            button->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(-1)));
+            button->setIconSize(QSize(24,24));button->setAccessibleName(Text(tool.labelJa));
             button->setProperty("commandId",Text(tool.commandId));
             const auto* command=FindCommand(tool.commandId);const QString guide=command?Text(command->operationGuideJa):Text(tool.blockedReasonJa);
             auto* action=actionLookup_?actionLookup_(tool.commandId):nullptr;
@@ -71,7 +75,7 @@ void V2OperationPanelHost::SetToolMode(UiMode mode) {
 }
 void V2OperationPanelHost::FilterTools() {
     const auto query=search_->text().trimmed();int count=0;std::map<QGroupBox*,int> positions;
-    for(const auto& entry:searchEntries_)entry.group->hide();
+    for(const auto& entry:searchEntries_){entry.group->hide();entry.group->layout()->removeWidget(entry.button);}
     for(const auto& entry:searchEntries_){
         const bool match=((allModes_->isChecked()&&!entry.group->property("commonTools").toBool())||entry.mode==chooserMode_)&&(query.isEmpty()||entry.text.contains(query,Qt::CaseInsensitive));
         entry.button->setVisible(match);if(match){entry.group->show();const int at=positions[entry.group]++;static_cast<QGridLayout*>(entry.group->layout())->addWidget(entry.button,at/2,at%2);++count;}

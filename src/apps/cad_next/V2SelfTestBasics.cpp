@@ -1452,7 +1452,7 @@ std::vector<SelfTestCase> BasicCases()
         {"数値入力が画面の外へ出ない", &CaseCursorInputStaysOnScreen},
         {"作業中グループが帯と一覧に出る", &CaseActiveGroupShowsAndCollects},
         {"どちらの見た目でも配置が壊れない", &CaseThemeKeepsLayoutUsable},
-        {"狭い画面でも部品がはみ出さない", &CaseSmallWindowStaysUsable},
+        {"HP-ERGO-03 狭い画面でも部品がはみ出さない", &CaseSmallWindowStaysUsable},
         {"道具箱もモードに従う", &CaseToolPaletteFollowsMode},
         {"手順がモードで変わり番号順に並ぶ", &CaseProcessStepsFollowMode},
         {"進めない段には理由が出る", &CaseProcessStepsExplainWhyBlocked},

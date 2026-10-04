@@ -1,4 +1,10 @@
 #include "V2Ribbon.h"
+#include "V2FlowLayout.h"
+#include "V2ToolIcons.h"
+#include "kachakacha/app/CommandCatalog.h"
+#include <QSize>
+#include <QResizeEvent>
+#include <QToolBar>
 
 #include <QAction>
 #include <QHBoxLayout>
@@ -57,10 +63,9 @@ V2Ribbon::V2Ribbon(QWidget* parent)
     layout->addWidget(categoryRow_);
     toolRow_ = new QWidget(this);
     toolRow_->setObjectName(QStringLiteral("ribbonTools"));
-    toolLayout_ = new QHBoxLayout(toolRow_);
+    toolLayout_ = new V2FlowLayout(toolRow_);
     toolLayout_->setContentsMargins(6, 3, 6, 3);
     toolLayout_->setSpacing(4);
-    toolLayout_->addStretch(1);   // 上と同じ
     layout->addWidget(toolRow_);
     categoryRow_->setStyleSheet(QStringLiteral(
         "QToolButton#ribbonCategory { border: 1px solid palette(mid); border-bottom: 3px solid palette(mid);"
@@ -68,7 +73,7 @@ V2Ribbon::V2Ribbon(QWidget* parent)
         "QToolButton#ribbonCategory:checked { border-bottom: 3px solid palette(highlight); font-weight: bold;"
         " background: palette(base); color: palette(text); }"
         "QToolButton#ribbonCategory:hover { background: palette(light); }"));
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 }
 
 void V2Ribbon::SetActionLookup(std::function<QAction*(std::string_view)> lookup)
@@ -102,7 +107,8 @@ void V2Ribbon::ShowMode(UiMode mode)
         button->setText(Text(categories[index].labelJa));
         button->setCheckable(true);
         button->setAutoRaise(false);
-        button->setMinimumHeight(26);
+        button->setMinimumHeight(32);
+        button->setFocusPolicy(Qt::StrongFocus);
         button->setObjectName(QStringLiteral("ribbonCategory"));
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ShowCategory(at); });
@@ -158,8 +164,9 @@ void V2Ribbon::RebuildTools()
             auto* button = new QToolButton(toolRow_);
             button->setObjectName(QStringLiteral("ribbonTool"));
             button->setAutoRaise(false);
-            button->setMinimumHeight(26);
-            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            button->setMinimumHeight(32);
+        button->setFocusPolicy(Qt::StrongFocus);
+            button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
             ToolEntry entry;
             entry.button = button;
             entry.tool = tool;
@@ -184,6 +191,8 @@ void V2Ribbon::RebuildTools()
                     action->setStatusTip(Text(tool.blockedReasonJa));
                 } else {
                     action->setCheckable(true);
+                    if(const auto* command=kachakacha::v2::app::FindCommand(tool.commandId))
+                        action->setToolTip(Text(tool.labelJa)+QStringLiteral(" — ")+Text(command->operationGuideJa));
                     const RibbonTool copy = tool;
                     QObject::connect(action, &QAction::triggered, this, [this, copy] {
                         if (variantHandler_) {
@@ -192,7 +201,10 @@ void V2Ribbon::RebuildTools()
                     });
                 }
             }
+            action->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(-1)));
             button->setDefaultAction(action);
+            button->setIconSize(QSize(24,24));
+            button->setAccessibleName(Text(tool.labelJa));
             button->setText(Text(tool.labelJa));   // 台帳の名前ではなく正本の言葉を出す
             if (tool.Blocked()) {
                 button->setToolTip(Text(tool.blockedReasonJa));
@@ -202,6 +214,7 @@ void V2Ribbon::RebuildTools()
             toolButtons_.push_back(entry);
         }
     }
+    UpdateRowsHeight();
     SetCurrentSurfaceMethod(currentSurfaceMethod_, currentSurfaceMethod_ >= 0);
     SetCurrentMeasureMode(currentMeasureMode_, currentMeasureMode_ >= 0);
 }
@@ -335,4 +348,19 @@ bool V2Ribbon::ToolsFitInWidth() const
         }
     }
     return true;
+}
+
+void V2Ribbon::UpdateRowsHeight()
+{
+    // QToolBar does not propagate height-for-width to its widget actions.
+    const int height=categoryRow_->sizeHint().height()+toolLayout_->heightForWidth(width());
+    if(minimumHeight()!=height)setFixedHeight(height);
+    if(auto* bar=qobject_cast<QToolBar*>(parentWidget())){
+        // The toolbar also caches its own one-row height; reserve space for all rows.
+        if(bar->minimumHeight()!=height+6)bar->setFixedHeight(height+6);
+    }
+}
+void V2Ribbon::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);UpdateRowsHeight();
 }

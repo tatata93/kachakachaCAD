@@ -21,7 +21,9 @@
 
 class QAction;
 class QHBoxLayout;
+class V2FlowLayout;
 class QToolButton;
+class QResizeEvent;
 
 class V2Ribbon final : public QWidget {
 public:
@@ -64,6 +66,8 @@ public:
 
 private:
     void RebuildTools();
+    void resizeEvent(QResizeEvent* event) override;
+    void UpdateRowsHeight();
     [[nodiscard]] QToolButton* ToolButton(const QString& labelJa) const;
 
     kachakacha::v2::app::UiMode mode_ = kachakacha::v2::app::UiMode::Drawing;
@@ -72,7 +76,7 @@ private:
     QWidget* categoryRow_ = nullptr;
     QHBoxLayout* categoryLayout_ = nullptr;
     QWidget* toolRow_ = nullptr;
-    QHBoxLayout* toolLayout_ = nullptr;
+    V2FlowLayout* toolLayout_ = nullptr;
     std::vector<QToolButton*> categoryButtons_;
     struct ToolEntry {
         QToolButton* button = nullptr;

@@ -25,6 +25,7 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QPointF>
+#include <QApplication>
 #include <QString>
 
 #include <algorithm>
@@ -45,12 +46,13 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
 [[nodiscard]] bool DrawLineByClicks(V2MainWindow& window, const Vector3& from, const Vector3& to)
 {
     auto& viewport = window.Viewport();
+    window.SelectTool(DrawingTool::Line);
+    QApplication::processEvents();
     const auto first = viewport.Mapping().Project(from);
     const auto second = viewport.Mapping().Project(to);
     if (!first.has_value() || !second.has_value()) {
         return false;
     }
-    window.SelectTool(DrawingTool::Line);
     viewport.ClickAt(QPointF(first->x, first->y));
     viewport.HoverAt(QPointF(second->x, second->y));
     viewport.ClickAt(QPointF(second->x, second->y));
@@ -58,11 +60,12 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     return true;
 }
 
-//! 3D で、その線の真ん中を素で押す。
-[[nodiscard]] bool ClickMiddleOf(V2MainWindow& window, const Vector3& from, const Vector3& to)
+//! 3D で、その線の内側を素で押す(T字端点が重なる中央を避ける)。
+[[nodiscard]] bool ClickInteriorOf(V2MainWindow& window, const Vector3& from, const Vector3& to)
 {
     auto& viewport = window.Viewport();
-    const auto screen = viewport.Mapping().Project((from + to) * 0.5);
+    QApplication::processEvents();
+    const auto screen = viewport.Mapping().Project(from + (to - from) * 0.37);
     if (!screen.has_value()) {
         return false;
     }
@@ -100,7 +103,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
         return false;
     }
     for (const auto& [from, to] : lines) {
-        if (!Explain("線を 3D で押せる", ClickMiddleOf(window, from, to))) {
+        if (!Explain("線を 3D で押せる", ClickInteriorOf(window, from, to))) {
             return false;
         }
     }
@@ -175,7 +178,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     }
     for (const auto& [from, to] : sections) {
         // 断面は端に近いところを押す(真ん中は内側のガイドとの交点で、どちらを拾うか曖昧)。
-        if (!Explain("断面を 3D で押せる", ClickMiddleOf(window, from, (from + to) * 0.5))) {
+        if (!Explain("断面を 3D で押せる", ClickInteriorOf(window, from, from + (to - from) * 0.37))) {
             return false;
         }
     }
@@ -184,7 +187,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
         return false;
     }
     for (const auto& [from, to] : rails) {
-        if (!Explain("ガイドを 3D で押せる", ClickMiddleOf(window, from, (from + to) * 0.5))) {
+        if (!Explain("ガイドを 3D で押せる", ClickInteriorOf(window, from, from + (to - from) * 0.37))) {
             return false;
         }
     }
@@ -205,7 +208,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     // 一覧から 1 本外すと 2 本になり、3D でもう一度押すと 3 本に戻る(一覧と 3D は同じもの)。
     if (!Explain("一覧から 3 本目を外せる", window.SurfaceDock().ClickRemoveEntry(ChainRole::GuideU, 2))
         || !Explain("ガイドが 2 本になる", in.guides.size() == 2)
-        || !Explain("3D で押し直せる", ClickMiddleOf(window, rails[2].first,
+        || !Explain("3D で押し直せる", ClickInteriorOf(window, rails[2].first,
                                         (rails[2].first + rails[2].second) * 0.5))
         || !Explain("ガイドが 3 本に戻る", in.guides.size() == 3)) {
         return false;
@@ -235,7 +238,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
         return false;
     }
     for (const auto& [from, to] : sides) {
-        if (!Explain("辺を 3D で押せる", ClickMiddleOf(window, from, to))) {
+        if (!Explain("辺を 3D で押せる", ClickInteriorOf(window, from, to))) {
             return false;
         }
     }
@@ -277,12 +280,12 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     }
     // 普通に押す(Ctrl なし)。ガイドは断面の端と重ならない 1/4 の所を押す。
     for (const auto& [from, to] : sections) {
-        if (!Explain("断面を 3D で押せる", ClickMiddleOf(window, from, to))) {
+        if (!Explain("断面を 3D で押せる", ClickInteriorOf(window, from, to))) {
             return false;
         }
     }
     for (const auto& [from, to] : rails) {
-        if (!Explain("ガイドを 3D で押せる", ClickMiddleOf(window, from, (from + to) * 0.5))) {
+        if (!Explain("ガイドを 3D で押せる", ClickInteriorOf(window, from, from + (to - from) * 0.37))) {
             return false;
         }
     }
@@ -307,11 +310,11 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
         return false;
     }
     // もう一度押すと外れ、また押すと戻る。
-    if (!Explain("断面をもう一度押せる", ClickMiddleOf(window, sections[1].first, sections[1].second))
+    if (!Explain("断面をもう一度押せる", ClickInteriorOf(window, sections[1].first, sections[1].second))
         || !Explain("再クリックで外れる(残りの 4 本は輪なので平面になる)",
             kachakacha::v2::app::AllSurfaceEntries(in).size() == 4
                 && in.method == GuideSurfaceMethod::PlanarBoundary)
-        || !Explain("もう一度押して戻せる", ClickMiddleOf(window, sections[1].first, sections[1].second))
+        || !Explain("もう一度押して戻せる", ClickInteriorOf(window, sections[1].first, sections[1].second))
         || !Explain("5 本に戻る", in.sections.size() == 3 && in.guides.size() == 2)) {
         return false;
     }

@@ -1,4 +1,12 @@
 #include "V2SelfTest.h"
+#include "V2Ribbon.h"
+#include "V2ToolIcons.h"
+#include <QToolButton>
+#include <QGroupBox>
+#include <QImage>
+#include <QSize>
+#include <QRect>
+#include <QRegion>
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -68,6 +76,45 @@ bool ShapeFocus(V2MainWindow& w) {
     if(!Explain("selection-only filters shape entity",!v.EntityShown(b)&&v.EntityShown(a)))return false;
     v.SetSelection(app::SelectionSet{{b}});return Explain("selection-only follows new entity",v.EntityShown(b)&&!v.EntityShown(a));
 }
+bool Ergonomics(V2MainWindow& w) {
+    bool ok=true;
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95}){
+        w.ApplyTheme(theme);
+        for(int width:{1000,1280}){
+            w.resize(width,800);QApplication::processEvents();
+            for(auto mode:app::AllUiModes()){
+                w.SetMode(mode);auto& ribbon=w.Ribbon();
+                for(int category=0;category<ribbon.CategoryCount();++category){
+                    ribbon.ShowCategory(category);QApplication::processEvents();
+                    if(width==1000&&mode==app::UiMode::Drawing&&category==2)w.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-ergonomics-wrap-%1.png").arg(theme==UiTheme::Normal?"normal":"win95"));
+                    ok=Explain("ribbon tools wrap inside width",ribbon.ToolsFitInWidth())&&ok;
+                    for(auto* button:ribbon.findChildren<QToolButton*>(QStringLiteral("ribbonTool")))if(button->isVisible())
+                        ok=Explain("illustration and label with usable target",!button->icon().isNull()&&!button->text().isEmpty()&&button->height()>=32&&button->visibleRegion().boundingRect()==button->rect())&&ok;
+                }
+            }
+        }
+        w.SetMode(app::UiMode::Drawing);w.Ribbon().ShowCategory(0);w.SelectTool(modeling::DrawingTool::Circle);QApplication::processEvents();
+        for(auto* button:w.findChildren<QToolButton*>(QStringLiteral("drawingMethodCard")))if(button->isVisible())
+            ok=Explain("drawing method illustrated",!button->icon().isNull()&&button->height()>=52)&&ok;
+        w.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-ergonomics-%1.png").arg(theme==UiTheme::Normal?"normal":"win95"));
+    }
+    w.ApplyTheme(UiTheme::Normal);
+    const auto circle=V2ToolIcon("draw.circle").pixmap(QSize(48,48)).toImage();
+    const auto line=V2ToolIcon("draw.line").pixmap(QSize(48,48)).toImage();
+    return Explain("line and circle have distinct illustrations",circle!=line)&&ok;
 }
-std::vector<SelfTestCase> UsabilityCases(){return {{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
+bool CompactSearch(V2MainWindow& w){
+    w.RunCommand("tools.search");QApplication::processEvents();
+    auto* search=w.findChild<QLineEdit*>(QStringLiteral("toolSearch"));if(!search)return false;
+    search->setText(QStringLiteral("part.extrude"));QApplication::processEvents();
+    int found=0;
+    for(auto* button:w.findChildren<QPushButton*>(QStringLiteral("toolChoice")))if(button->isVisible()){
+        ++found;auto* group=dynamic_cast<QGroupBox*>(button->parentWidget());
+        if(!Explain("single search result has compact category",group&&group->height()<150))return false;
+    }
+    return Explain("precise command search found in its categories",found>=1);
+}
+
+}
+std::vector<SelfTestCase> UsabilityCases(){return {{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
 }

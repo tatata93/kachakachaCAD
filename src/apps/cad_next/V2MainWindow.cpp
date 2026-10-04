@@ -26,6 +26,7 @@
 #include "kachakacha/io/KcdImport.h"
 
 #include "Win95Style.h"
+#include "V2ErgonomicStyle.h"
 
 #include "kachakacha/app/OperationGuide.h"
 #include "kachakacha/base/Version.h"
@@ -1423,7 +1424,7 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
         QApplication::setFont(Win95Style::Win95Font());
         viewport_->SetPalette(ViewportPalette::Win95());
     } else {
-        QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+        QApplication::setStyle(CreateV2NormalStyle());
         QApplication::setPalette(QPalette());
         // Windows 95 風で設定したビットマップ向けフォントを残さない。
         // スタイルだけ戻しても QApplication のフォントは自動では戻らず、

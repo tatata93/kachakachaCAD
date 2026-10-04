@@ -49,6 +49,12 @@ void Subdivide(const CurveSegment& segment, double t0, double t1, double toleran
 [[nodiscard]] bool SegmentsCross(const Point2& a0, const Point2& a1, const Point2& b0,
     const Point2& b1, double toleranceMm)
 {
+    // Reject disjoint extents before solving nearly parallel lines. Roundoff in the
+    // determinant can otherwise report an intersection between samples of one edge.
+    if (std::max(a0.u,a1.u)+toleranceMm < std::min(b0.u,b1.u)
+        || std::max(b0.u,b1.u)+toleranceMm < std::min(a0.u,a1.u)
+        || std::max(a0.v,a1.v)+toleranceMm < std::min(b0.v,b1.v)
+        || std::max(b0.v,b1.v)+toleranceMm < std::min(a0.v,a1.v)) return false;
     const double d1u = a1.u - a0.u;
     const double d1v = a1.v - a0.v;
     const double d2u = b1.u - b0.u;

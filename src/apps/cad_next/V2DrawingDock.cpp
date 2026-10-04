@@ -1,4 +1,6 @@
 #include "V2DrawingDock.h"
+#include "V2ToolIcons.h"
+#include <QSize>
 #include "V2PanelFrame.h"
 
 #include <QAbstractButton>
@@ -345,7 +347,13 @@ void V2DrawingDock::RebuildMethodCards()
         button->setObjectName(QStringLiteral("drawingMethodCard"));
         button->setText(Text(card.labelJa));
         button->setCheckable(true);
-        button->setAutoRaise(true);
+        button->setAutoRaise(false);
+        button->setIcon(V2ToolIcon({},kachakacha::v2::modeling::DrawingToolNameJa(tool_),static_cast<int>(index)));
+        button->setIconSize(QSize(24,24));
+        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        button->setMinimumHeight(52);
+        button->setFocusPolicy(Qt::StrongFocus);
+        button->setAccessibleName(Text(card.labelJa));
         button->setToolTip(Text(card.Blocked() ? card.blockedReasonJa : card.hintJa));
         button->setEnabled(!card.Blocked());
         button->setChecked(static_cast<int>(index) == methodIndex_);

@@ -52,11 +52,13 @@ QHBoxLayout* MakeCancelConfirmRow(QWidget* parent, QPushButton** cancel, QPushBu
 void MarkCancelConfirm(QPushButton* cancel, QPushButton* confirm)
 {
     if (cancel != nullptr) {
+        cancel->setMinimumHeight(32);
         cancel->setObjectName(QStringLiteral("panelCancel"));
         cancel->setText(QStringLiteral("キャンセル Esc"));
         cancel->setToolTip(QStringLiteral("この道具をやめます(Esc と同じ)。"));
     }
     if (confirm != nullptr) {
+        confirm->setMinimumHeight(32);
         confirm->setObjectName(QStringLiteral("panelConfirm"));
         // 字は正本の「確定」に Enter を添える。「製作モデルを作る(確定 Enter)」のように
         // 何を作るかを言っている字はそのまま残す。

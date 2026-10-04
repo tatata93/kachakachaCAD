@@ -1,4 +1,5 @@
 #include "Win95Style.h"
+#include "V2ErgonomicStyle.h"
 
 #include <QAbstractItemView>
 #include <QAbstractScrollArea>
@@ -653,7 +654,7 @@ QSize Win95Style::sizeFromContents(
         // 沈んだ枠2px + 文字16px + 余白。Windows 95 の入力欄は21px前後。
         size.setHeight(std::max(size.height(), 21));
     }
-    return size;
+    return V2ControlSize(type,size);
 }
 
 QPixmap Win95Style::standardPixmap(

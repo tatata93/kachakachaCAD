@@ -34,6 +34,20 @@ struct Bracket {
 void Refine(const CurveSegment& first, const CurveSegment& second, Bracket& bracket,
     double initialStep)
 {
+    if (first.Kind()==CurveKind::Line && second.Kind()==CurveKind::Line) {
+        const auto u=first.EndPoint()-first.StartPoint(),v=second.EndPoint()-second.StartPoint();
+        const auto w=first.StartPoint()-second.StartPoint();
+        const double a=Dot(u,u),b=Dot(u,v),c=Dot(v,v),d=Dot(u,w),e=Dot(v,w);
+        const double determinant=a*c-b*b;
+        // Near-parallel lines retain the robust iterative path below.
+        if(a>0 && c>0 && determinant>1e-12*a*c) {
+            double s=std::clamp((b*e-c*d)/determinant,0.0,1.0);
+            const double t=std::clamp((b*s+e)/c,0.0,1.0);
+            s=std::clamp((b*t-d)/a,0.0,1.0);
+            bracket={s,t,DistanceAt(first,second,s,t)};
+            return;
+        }
+    }
     double step = initialStep;
     for (int iteration = 0; iteration < 60 && step > 1.0e-12; ++iteration) {
         bool improved = false;
@@ -149,10 +163,74 @@ std::vector<CurveIntersection> IntersectCurves(const CurveSegment& first,
     return results;
 }
 
+namespace {
+std::optional<std::array<double,4>> ScreenBounds(const CurveSegment& curve,const ScreenMapping& mapping)
+{
+    std::array<double,4> bounds{std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),-std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity()};
+    const auto add=[&](const Vector3& p){const auto q=mapping.Project(p);if(!q)return false;
+        bounds[0]=std::min(bounds[0],q->x);bounds[1]=std::min(bounds[1],q->y);
+        bounds[2]=std::max(bounds[2],q->x);bounds[3]=std::max(bounds[3],q->y);return true;};
+    if(curve.Kind()==CurveKind::Circle || curve.Kind()==CurveKind::CircularArc) {
+        const auto c=curve.Center();const double r=curve.Radius();
+        if(mapping.matrix[12]==0 && mapping.matrix[13]==0 && mapping.matrix[14]==0) {
+            const auto center=mapping.Project(c),a=mapping.Project(c+curve.ReferenceDirection()*r);
+            const auto b=mapping.Project(c+Cross(curve.Normal(),curve.ReferenceDirection())*r);
+            if(!center||!a||!b)return {};
+            const double rx=std::hypot(a->x-center->x,b->x-center->x);
+            const double ry=std::hypot(a->y-center->y,b->y-center->y);
+            return std::array<double,4>{center->x-rx,center->y-ry,center->x+rx,center->y+ry};
+        }
+        for(int i=0;i<8;++i)if(!add(c+Vector3{i&1?r:-r,i&2?r:-r,i&4?r:-r}))return {};
+    } else {
+        if(curve.ControlPoints().empty())return {};
+        for(const auto& p:curve.ControlPoints())if(!add(p))return {};
+    }
+    return bounds;
+}
+
+std::vector<CurveIntersection> IntersectLinesOnScreen(const CurveSegment& first,
+    const CurveSegment& second,const ScreenMapping& mapping,const GeometryTolerance& tolerance)
+{
+    const auto a=mapping.Project(first.StartPoint()),b=mapping.Project(first.EndPoint());
+    const auto c=mapping.Project(second.StartPoint()),d=mapping.Project(second.EndPoint());
+    if(!a||!b||!c||!d)return {};
+    const double ux=b->x-a->x,uy=b->y-a->y,vx=d->x-c->x,vy=d->y-c->y;
+    const double det=ux*vy-uy*vx;
+    if(std::abs(det)<1e-12)return {};
+    const double dx=c->x-a->x,dy=c->y-a->y;
+    const double s=(dx*vy-dy*vx)/det,t=(dx*uy-dy*ux)/det;
+    if(s<0||s>1||t<0||t>1)return {};
+    const auto parameter=[&](const CurveSegment& line,double fraction){
+        const auto w=[&](const Vector3& p){const auto& m=mapping.matrix;
+            return m[12]*p.x+m[13]*p.y+m[14]*p.z+m[15];};
+        const double wa=w(line.StartPoint()),wb=w(line.EndPoint());
+        return fraction*wa/((1-fraction)*wb+fraction*wa);
+    };
+    const double sa=parameter(first,s),tb=parameter(second,t);
+    Bracket bracket{sa,tb,DistanceAt(first,second,sa,tb)};
+    Refine(first,second,bracket,0.02);
+    CurveIntersection crossing;
+    crossing.firstParameter=bracket.firstParameter;crossing.secondParameter=bracket.secondParameter;
+    crossing.gapMm=bracket.distance;crossing.real=bracket.distance<=tolerance.modelLinearMm;
+    crossing.position=crossing.real?(first.Evaluate(bracket.firstParameter)
+        +second.Evaluate(bracket.secondParameter))*0.5:first.Evaluate(sa);
+    return {crossing};
+}
+}
+
 std::vector<CurveIntersection> IntersectCurvesOnScreen(const CurveSegment& first,
     const CurveSegment& second, const ScreenMapping& mapping, double screenTolerancePx,
     const GeometryTolerance& tolerance)
 {
+    if(first.Kind()==CurveKind::Line && second.Kind()==CurveKind::Line)
+        return IntersectLinesOnScreen(first,second,mapping,tolerance);
+    const auto firstBounds=ScreenBounds(first,mapping),secondBounds=ScreenBounds(second,mapping);
+    if(firstBounds&&secondBounds) {
+        const auto& a=*firstBounds;const auto& b=*secondBounds;
+        if(a[2]+1e-7<b[0]||b[2]+1e-7<a[0]||a[3]+1e-7<b[1]||b[3]+1e-7<a[1])return {};
+    }
     // 画面上での交差は、投影した点列どうしで見る。
     const double sampling = SamplingToleranceMm(first, second, tolerance);
     const std::vector<CurvePoint> firstPoints = SampleCurve(first, sampling);
@@ -287,6 +365,58 @@ struct ScreenSegmentApproach {
     const double ex = point.x - cx;
     const double ey = point.y - cy;
     return {std::sqrt(ex * ex + ey * ey), t};
+}
+
+// Orthographic circles project to ellipses. Solve their closest point directly,
+// including edge-on ellipses, instead of subdividing thousands of hull intervals.
+std::optional<CurveScreenApproach> CircleApproach(const CurveSegment& curve,
+    const ScreenMapping& mapping,const ScreenPoint& pointer)
+{
+    if(curve.Kind()!=CurveKind::Circle || mapping.matrix[12]!=0
+        || mapping.matrix[13]!=0 || mapping.matrix[14]!=0)return {};
+    const auto center=mapping.Project(curve.Center());
+    const auto pa=mapping.Project(curve.Evaluate(0)),pb=mapping.Project(curve.Evaluate(0.25));
+    if(!center||!pa||!pb)return {};
+    const double ax=pa->x-center->x,ay=pa->y-center->y,bx=pb->x-center->x,by=pb->y-center->y;
+    const double aa=ax*ax+ay*ay,bb=bx*bx+by*by,ab=ax*bx+ay*by;
+    const double theta=0.5*std::atan2(2*ab,aa-bb),ct=std::cos(theta),st=std::sin(theta);
+    const double ux=ax*ct+bx*st,uy=ay*ct+by*st,vx=-ax*st+bx*ct,vy=-ay*st+by*ct;
+    const double major=std::hypot(ux,uy),minor=std::hypot(vx,vy);
+    if(!(major>1e-12))return CurveScreenApproach{ScreenDistance(*pa,pointer),0,curve.Evaluate(0)};
+    const double dx=pointer.x-center->x,dy=pointer.y-center->y;
+    const double qx=(dx*ux+dy*uy)/(major*major);
+    const double qy=minor>1e-12?(dx*vx+dy*vy)/(minor*major):0;
+    const double ratio=minor/major,ratio2=ratio*ratio,x=std::abs(qx),y=std::abs(qy);
+    double ex=0,ey=0;
+    if(ratio<1e-10) {
+        ex=std::clamp(qx,-1.0,1.0);ey=std::sqrt(std::max(0.0,1-ex*ex));
+    } else {
+        double px=0,py=0;
+        if(y<1e-14) {
+            px=(1-ratio2)>1e-14?std::min(1.0,x/(1-ratio2)):1;
+            py=ratio*std::sqrt(std::max(0.0,1-px*px));
+        } else {
+            double low=-ratio2,high=std::max(1.0,std::hypot(x,y));
+            for(int i=0;i<100;++i) {
+                const double lambda=(low+high)*0.5;
+                const double first=x/(lambda+1),second=ratio*y/(lambda+ratio2);
+                if(first*first+second*second>1)low=lambda;else high=lambda;
+            }
+            const double lambda=(low+high)*0.5;
+            px=x/(lambda+1);py=ratio2*y/(lambda+ratio2);
+        }
+        ex=qx<0?-px:px;ey=(qy<0?-py:py)/ratio;
+    }
+    const auto parameter=[&](double sine){
+        double angle=std::atan2(st*ex+ct*sine,ct*ex-st*sine);
+        if(angle<0)angle+=2*kPi;
+        return angle/(2*kPi);
+    };
+    double t=parameter(ey);
+    if(ratio<1e-10)t=std::min(t,parameter(-ey));
+    const auto point=curve.Evaluate(t);const auto screen=mapping.Project(point);
+    if(!screen)return {};
+    return CurveScreenApproach{ScreenDistance(*screen,pointer),t,point};
 }
 
 //! クリップ座標の w(視点からの奥行きに比例する)。平行投影では一定。
@@ -464,9 +594,37 @@ constexpr int kHullMaximumSplits = 8192;
 
 } // namespace
 
+bool CurveMayApproachScreen(const CurveSegment& segment, const ScreenMapping& mapping,
+    const ScreenPoint& pointer, double radiusPx)
+{
+    if (segment.Kind() == CurveKind::Line) {
+        const auto a=mapping.Project(segment.StartPoint()), b=mapping.Project(segment.EndPoint());
+        if (a && b) return ApproachToScreenSegment(pointer,*a,*b).distancePx <= radiusPx + 1e-9;
+        return true;
+    }
+    const auto bounds=ScreenBounds(segment,mapping);
+    if(!bounds)return true;
+    return pointer.x>=(*bounds)[0]-radiusPx && pointer.x<=(*bounds)[2]+radiusPx
+        && pointer.y>=(*bounds)[1]-radiusPx && pointer.y<=(*bounds)[3]+radiusPx;
+}
+
 std::optional<CurveScreenApproach> ApproachToCurveOnScreen(const CurveSegment& segment,
     const ScreenMapping& mapping, const ScreenPoint& pointer, double maximumDistancePx)
 {
+    if (!CurveMayApproachScreen(segment, mapping, pointer, maximumDistancePx)) return std::nullopt;
+    if (segment.Kind() == CurveKind::Line) {
+        const auto a=mapping.Project(segment.StartPoint()), b=mapping.Project(segment.EndPoint());
+        if (a && b) {
+            const auto approach=ApproachToScreenSegment(pointer,*a,*b);
+            if (approach.distancePx > maximumDistancePx) return std::nullopt;
+            const double wa=ClipW(mapping,segment.StartPoint()), wb=ClipW(mapping,segment.EndPoint());
+            const double f=approach.fraction;
+            const double t=f*wa/((1-f)*wb+f*wa);
+            return CurveScreenApproach{approach.distancePx,t,segment.Evaluate(t)};
+        }
+    }
+    if(const auto circle=CircleApproach(segment,mapping,pointer))
+        return circle->distancePx<=maximumDistancePx?circle:std::nullopt;
     // 上限側: 実際に曲線上の点を写して測った距離のうち、いちばん近いもの。
     CurveScreenApproach best{std::numeric_limits<double>::infinity(), 0.0, Vector3{}};
     double bestSpanWidth = 1.0;

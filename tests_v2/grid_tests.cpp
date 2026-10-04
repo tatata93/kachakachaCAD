@@ -259,4 +259,18 @@ KACHA_V2_TEST(grid, 見えている範囲のぶんだけ線を引く)
     Require(!GridLineRangeFor(0.0, -1.0, 1.0, -1.0, 1.0).any, "間隔 0 では引かない");
 }
 
+KACHA_V2_TEST(grid, projected_spacing_uses_perpendicular_screen_distance)
+{
+    using namespace kachakacha::v2::geometry;
+    using kachakacha::v2::modeling::GridLineSpacingPx;
+    ScreenMapping mapping;
+    mapping.widthPx = mapping.heightPx = 100;
+    RequireNear(GridLineSpacingPx(mapping, {}, {1,0,0}, {0,1,0}), 50, 1e-9,
+        "front facing grid spacing");
+    RequireNear(GridLineSpacingPx(mapping, {}, {1,0,0}, {1,0,1}), 0, 1e-9,
+        "edge-on parallel lines must not accumulate");
+    RequireNear(GridLineSpacingPx(mapping, {}, {1,0,0}, {100,0.01,0}), 0.5, 1e-9,
+        "along-line displacement is not line separation");
+}
+
 KACHA_V2_TEST_MAIN("grid_tests")

@@ -75,31 +75,35 @@ void V2Viewport::DrawGrid(QPainter& painter) const
             return;
         }
         painter.setPen(QPen(color, 1.0));
+        QPainterPath lines;
+        const bool showU=kachakacha::v2::modeling::GridLineSpacingPx(mapping_,grid.origin,grid.vDirection,grid.uDirection*spacingMm)>=6;
+        const bool showV=kachakacha::v2::modeling::GridLineSpacingPx(mapping_,grid.origin,grid.uDirection,grid.vDirection*spacingMm)>=6;
         // 線は見えている範囲の端から端まで。長さを決め打ちにしない。
         const double spanVMin = static_cast<double>(range.firstV) * spacingMm;
         const double spanVMax = static_cast<double>(range.lastV) * spacingMm;
         const double spanUMin = static_cast<double>(range.firstU) * spacingMm;
         const double spanUMax = static_cast<double>(range.lastU) * spacingMm;
-        for (long long index = range.firstU; index <= range.lastU; ++index) {
+        if (showU) for (long long index = range.firstU; index <= range.lastU; ++index) {
             const double offset = static_cast<double>(index) * spacingMm;
             const auto sa = ToScreen(grid.origin + grid.uDirection * offset
                 + grid.vDirection * spanVMin);
             const auto sb = ToScreen(grid.origin + grid.uDirection * offset
                 + grid.vDirection * spanVMax);
             if (sa && sb) {
-                painter.drawLine(*sa, *sb);
+                lines.moveTo(*sa); lines.lineTo(*sb);
             }
         }
-        for (long long index = range.firstV; index <= range.lastV; ++index) {
+        if (showV) for (long long index = range.firstV; index <= range.lastV; ++index) {
             const double offset = static_cast<double>(index) * spacingMm;
             const auto sc = ToScreen(grid.origin + grid.vDirection * offset
                 + grid.uDirection * spanUMin);
             const auto sd = ToScreen(grid.origin + grid.vDirection * offset
                 + grid.uDirection * spanUMax);
             if (sc && sd) {
-                painter.drawLine(*sc, *sd);
+                lines.moveTo(*sc); lines.lineTo(*sd);
             }
         }
+        painter.drawPath(lines);
     };
     if (majorPx >= 6.0) {
         // 副点: 0 = 主点のみ、2 = 1/2、3 = 1/3、4 = 1/4(V1 と同じ)。
@@ -703,6 +707,7 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 
 void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
 {
+    ++shapeViewRevision_;
     shapeViews_ = std::move(shapes);
     // 当たり判定へ渡す網を作り直す。カーソルが動くたびに三角形を写さないため、
     // ここで1度だけ並べておく。並びは shapeViews_ と同じ(索引で引き当てる)。

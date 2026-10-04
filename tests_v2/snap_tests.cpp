@@ -1327,3 +1327,63 @@ KACHA_V2_TEST(snap, 吸着半径は点や線の拾い半径と別に効く)
 // ---------------------------------------------------------------- ヒステリシス
 
 KACHA_V2_TEST_MAIN("snap_tests")
+
+KACHA_V2_TEST(snap, distant_geometry_does_not_change_local_intersections)
+{
+    SceneBuilder builder;
+    builder.AddLine({20,50,0},{80,50,0});
+    builder.AddLine({50,20,0},{50,80,0});
+    const auto mapping=TopView(); const auto pointer=At(mapping,{50,50,0});
+    const auto before=CollectSnapCandidates(builder.scene,mapping,pointer,{},Tolerance());
+    for(int i=0;i<2000;++i)builder.AddLine({1000.+i,1000,0},{1000.+i,1001,0});
+    const auto after=CollectSnapCandidates(builder.scene,mapping,pointer,{},Tolerance());
+    Require(before.size()==after.size(),"distant geometry preserves every local target");
+    for(const auto& expected:before)Require(std::any_of(after.begin(),after.end(),[&](const auto& actual){
+        return SameSnapTarget(expected,actual) && (expected.position-actual.position).Length()<1e-9;
+    }),"stable identities and exact positions");
+}
+KACHA_V2_TEST(snap, screen_broad_phase_contains_curve_bulges)
+{
+    const std::vector<CurveSegment> curves={Line({0,0,0},{10,20,30}),
+        CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},30).Value(),
+        CurveSegment::MakeCubicBezier({{0,0,0},{0,300,40},{100,-300,-40},{100,0,0}}).Value(),
+        CurveSegment::MakeCubicBSpline({{0,0,0},{0,300,40},{100,-300,-40},{100,0,0},{120,40,20}}).Value()};
+    for(int i=1;i<20;++i) {
+        const auto mapping=MakeOrthographicMapping({50,0,0},{double(i),-3.,-5.},{0,0,1},500,1000,1000);
+        for(const auto& curve:curves)for(int j=0;j<=100;++j) {
+            const auto p=mapping.Project(curve.Evaluate(j/100.));
+            Require(p && kachakacha::v2::geometry::CurveMayApproachScreen(curve,mapping,*p,1e-5),
+                "conservative hull must not miss an actual point");
+        }
+    }
+}
+
+KACHA_V2_TEST(snap, ellipse_closest_point_matches_dense_circle_reference)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto circle=CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},30).Value();
+    for(double tilt:{0.,1e-12,0.01,0.5,1.}) {
+        const auto map=MakeOrthographicMapping({0,0,0},{1,0,-tilt},{0,0,1},100,900,700);
+        for(const ScreenPoint pointer:std::vector<ScreenPoint>{{450,350},{500,350},{460,352},{700,200},{200,500}}) {
+            const auto result=ApproachToCurveOnScreen(circle,map,pointer,1000);
+            Require(result.has_value(),"ellipse approach available");
+            double sampled=10000;
+            for(int i=0;i<20000;++i)sampled=std::min(sampled,ScreenDistance(*map.Project(circle.Evaluate(i/20000.)),pointer));
+            Require(result->distancePx<=sampled+1e-6,"analytic closest is no worse than dense reference");
+            RequireNear((result->point-circle.Center()).Length(),30,1e-9,"point remains on exact circle");
+        }
+    }
+}
+KACHA_V2_TEST(snap, line_closest_point_and_intersection_preserve_perspective)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto map=MakePerspectiveMapping({0,0,100},{0,0,0},{0,1,0},1,1000,800,0.1,1000);
+    const auto line=Line({-10,0,-20},{10,0,20});
+    const auto pointer=*map.Project(line.Evaluate(0.3));
+    const auto near=ApproachToCurveOnScreen(line,map,pointer,1);
+    Require(near.has_value(),"perspective line closest exists");
+    RequireNear(near->parameter,0.3,1e-9,"perspective-correct parameter");
+    const auto cross=IntersectCurvesOnScreen(line,Line({0,-10,0},{0,10,0}),map,12,Tolerance());
+    Require(cross.size()==1&&cross[0].real,"one exact intersection");
+    RequireNear(cross[0].position.Length(),0,1e-9,"intersection at origin");
+}

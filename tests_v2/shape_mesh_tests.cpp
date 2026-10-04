@@ -343,3 +343,21 @@ KACHA_V2_TEST(shading, edges_obey_surface_depth_and_screen_clipping)
 }
 
 KACHA_V2_TEST_MAIN("shape_mesh_tests")
+
+KACHA_V2_TEST(shape_mesh, broad_phase_preserves_face_hits_and_boundary_rays)
+{
+    auto near=FlatSquare(3),far=FlatSquare(-3);
+    for(auto& triangle:near.triangles)triangle.faceIndex=2;
+    for(auto& triangle:far.triangles)triangle.faceIndex=7;
+    for(const auto& origin: {Vector3{5,5,20},Vector3{0,0,20},Vector3{10,10,20},Vector3{20,20,20}}) {
+        const auto accelerated=kachakacha::v2::modeling::CollectFaceHits({near,far},origin,{0,0,-1});
+        auto a=near,b=far;a.minimum=a.maximum={};b.minimum=b.maximum={};
+        const auto reference=kachakacha::v2::modeling::CollectFaceHits({a,b},origin,{0,0,-1});
+        Require(accelerated.size()==reference.size(),"bounded and exhaustive paths have the same hits");
+        for(std::size_t i=0;i<reference.size();++i) {
+            Require(accelerated[i].shapeIndex==reference[i].shapeIndex && accelerated[i].faceIndex==reference[i].faceIndex,
+                "front-to-back face identities preserved");
+            RequireNear(accelerated[i].distanceMm,reference[i].distanceMm,1e-10,"distance preserved");
+        }
+    }
+}

@@ -51,6 +51,8 @@ void V2MainWindow::RefreshShapeViews()
     std::vector<V2Viewport::ShapeView> shapes;
     std::map<std::uint64_t, ShapeMesh> keep;
     const auto& snapshot = session_->GetDocument().Snapshot();
+    std::map<std::string, const kachakacha::v2::domain::Entity*> entities;
+    for (const auto& entity : snapshot.entities) entities.emplace(entity.id.ToString(), &entity);
     // 製作モードの表示で「元の面」を消しているなら、いまの近似モデルの元の面は描かない
     // (F-04。見るだけの切り替えで、文書の表示・非表示は書き換えない)。
     std::vector<kachakacha::v2::base::EntityId> sources;
@@ -70,7 +72,8 @@ void V2MainWindow::RefreshShapeViews()
             if (!entry.second.Valid()) {
                 continue;
             }
-            const auto* entity = FindEntityByIdText(snapshot, entry.first);
+            const auto foundEntity = entities.find(entry.first);
+            const auto* entity = foundEntity == entities.end() ? nullptr : foundEntity->second;
             // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
                 || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)
@@ -95,7 +98,8 @@ void V2MainWindow::RefreshShapeViews()
                 }
                 view.mesh = made.Value();
             }
-            keep.emplace(entry.second.value, view.mesh);
+            if (cached != shapeMeshes_.end()) keep.insert(shapeMeshes_.extract(cached));
+            else keep.emplace(entry.second.value, view.mesh);
             shapes.push_back(std::move(view));
         }
     };

@@ -1136,6 +1136,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2HoverEditTool.cpp
         src/apps/cad_next/V2LoopFacesDock.cpp
         src/apps/cad_next/V2ToolPreviewFaces.cpp
+        src/apps/cad_next/V2GpuRenderer.cpp
         src/apps/cad_next/V2SurfaceRendering.cpp
         src/apps/cad_next/V2GptFabricationTool.cpp
     src/apps/cad_next/V2GptFabricationIntegration.cpp
@@ -1223,6 +1224,17 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             kachakacha_v2_occt
             Qt6::Widgets
     )
+    find_package(Qt6 QUIET COMPONENTS OpenGL)
+    if(TARGET Qt6::OpenGL)
+        target_link_libraries(kachakacha_cad_next PRIVATE Qt6::OpenGL)
+        target_compile_definitions(kachakacha_cad_next PRIVATE KACHACAD_GPU_VIEW=1)
+        if(WIN32)
+            add_custom_command(TARGET kachakacha_cad_next POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:Qt6::OpenGL> $<TARGET_FILE_DIR:kachakacha_cad_next>
+                COMMAND_EXPAND_LISTS)
+        endif()
+    endif()
     # 診断情報に載せる版と枝。分からなければ空のままにする(嘘は書かない)。
     # 組み立てたときの値なので、あとから枝を替えても更新されない。
     # 「これは組み立て時の値である」と分かるよう、診断の側でそう書いてある。

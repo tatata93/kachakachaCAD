@@ -8,6 +8,10 @@
 #include <QRect>
 #include <QRegion>
 #include "V2MainWindow.h"
+#include "V2GpuRenderer.h"
+#include <QPainter>
+#include <QColor>
+#include "kachakacha/view/SurfaceRaster.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
 #include <QApplication>
@@ -115,6 +119,45 @@ bool CompactSearch(V2MainWindow& w){
     return Explain("precise command search found in its categories",found>=1);
 }
 
+bool GpuParity(V2MainWindow&) {
+    V2GpuRenderer renderer;
+    modeling::ShapeMesh mesh;
+    modeling::MeshTriangle t;
+    t.points={geometry::Vector3{-10,-10,0},geometry::Vector3{10,-10,0},geometry::Vector3{0,10,0}};
+    t.normal={0,0,1};mesh.triangles.push_back(t);
+    auto mapping=geometry::MakeOrthographicMapping({0,0,0},{0,0,-1},{0,1,0},40,100,100);
+    std::vector<V2GpuRenderer::Item> items{{&mesh,0x91bed9,0xc9dfeb,true,false}};
+    const auto first=renderer.Render(items,1,mapping,{0,0,-1},100,100);
+    if(first.isNull()) { Note("GPU context unavailable: software path remains active; GPU parity not exercised");return true; }
+    view::SurfaceRaster cpu(100,100);cpu.Draw(t,mapping,{0,0,-1},false,items[0].fill);
+    const auto expected=cpu.Pixels()[50*100+50], actual=first.pixel(50,50);
+    for(int shift:{0,8,16})if(!Explain("GPU normal lighting agrees with CPU",std::abs(int((actual>>shift)&255)-int((expected>>shift)&255))<=2))return false;
+    if(!Explain("same frame cache",first==renderer.Render(items,1,mapping,{0,0,-1},100,100)))return false;
+    items[0].fill=0xff0000;
+    const auto selected=renderer.Render(items,1,mapping,{0,0,-1},100,100);
+    if(!Explain("color change invalidates frame",selected!=first))return false;
+    items[0].visible=false;
+    if(!Explain("visibility change clears surface",renderer.Render(items,1,mapping,{0,0,-1},100,100).pixel(50,50)==0))return false;
+    items[0].visible=true;
+    for(auto& point:mesh.triangles[0].points)point.x+=100;
+    if(!Explain("mesh replacement invalidates GPU buffers",renderer.Render(items,2,mapping,{0,0,-1},100,100).pixel(50,50)==0))return false;
+    mapping=geometry::MakeOrthographicMapping({100,0,0},{0,0,-1},{0,1,0},40,100,100);
+    if(!Explain("camera change restores visible geometry",renderer.Render(items,2,mapping,{0,0,-1},100,100).pixel(50,50)!=0))return false;
+    for(auto& point:mesh.triangles[0].points)point.z=10000;
+    if(!Explain("orthographic zoom does not clip distant surfaces",
+        renderer.Render(items,3,mapping,{0,0,-1},100,100).pixel(50,50)!=0))return false;
+    QImage composed(100,100,QImage::Format_ARGB32);composed.fill(Qt::transparent);
+    QPainter destination(&composed);
+    const bool painted=renderer.PaintFrame(destination,100,100,[&](QPainter& painter){
+        painter.fillRect(0,0,100,100,QColor(10,20,30));
+        painter.beginNativePainting();renderer.Render(items,3,mapping,{0,0,-1},100,100);painter.endNativePainting();
+        painter.fillRect(45,45,10,10,QColor(0,255,0));
+    });
+    destination.end();
+    return Explain("GPU frame preserves background and painter overlays",painted
+        && composed.pixelColor(2,2)==QColor(10,20,30) && composed.pixelColor(50,50)==QColor(0,255,0));
 }
-std::vector<SelfTestCase> UsabilityCases(){return {{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
+
+}
+std::vector<SelfTestCase> UsabilityCases(){return {{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
 }

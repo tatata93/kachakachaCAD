@@ -1,4 +1,5 @@
 #pragma once
+#include "kachakacha/geometry/ScreenMapping.h"
 
 //! グリッド(PRD-064 / 065、AT-UIX-005)。
 //!
@@ -101,5 +102,9 @@ inline constexpr double kMinimumGridSpacingPx = 6.0;
 //! 間隔と細かさを決める。
 [[nodiscard]] base::Result<GridDefinition> SetGridSpacing(const GridDefinition& definition,
     double majorSpacingMm, int subdivision);
+
+//! Perpendicular screen distance between adjacent parallel grid lines.
+[[nodiscard]] double GridLineSpacingPx(const geometry::ScreenMapping& mapping,
+    const Vector3& origin, const Vector3& along, const Vector3& offset);
 
 } // namespace kachakacha::v2::modeling

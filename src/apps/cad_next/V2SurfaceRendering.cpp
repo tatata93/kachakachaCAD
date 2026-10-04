@@ -8,6 +8,7 @@
 
 void V2Viewport::DrawSmoothShapes(QPainter& painter) const
 {
+    if (DrawGpuShapes(painter)) return;
     using namespace kachakacha::v2;
     view::SurfaceRaster raster(width(), height());
     const auto forward = view::ForwardOf(orientation_);
@@ -48,4 +49,28 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
         std::copy_n(start, width(), reinterpret_cast<std::uint32_t*>(image.scanLine(y)));
     }
     painter.drawImage(QRect(0, 0, width(), height()), image);
+}
+
+bool V2Viewport::DrawGpuShapes(QPainter& painter) const
+{
+    // Images/analysis retain their existing compositing path until GPU parity is tested.
+    if (!imageViews_.empty() || !analysisViews_.empty()) return false;
+    std::vector<V2GpuRenderer::Item> items;
+    for(const auto& shape:shapeViews_) {
+        const bool selected=kachakacha::v2::app::IsSelected(selection_,shape.entityId);
+        const bool hovered=shape.entityId==hoveredEntityId_;
+        QColor edge=palette_.background.red()>160?QColor(0x36,0x52,0x66):QColor(0xc9,0xdf,0xeb);
+        if(selected)edge=SemanticColor(kachakacha::v2::app::SemanticState::Selected).darker(125);
+        else if(hovered)edge=SemanticColor(kachakacha::v2::app::SemanticState::Hover);
+        const unsigned fill=shape.surface?(selected?0xb0d2e8:0x91bed9):(selected?0xc8d4df:0xb2bcc7);
+        items.push_back({&shape.mesh,fill,edge.rgb()&0xffffffu,
+            display_.shapesVisible&&EntityShown(shape.entityId),selected||hovered});
+    }
+    const bool native=gpuRenderer_.PaintingFrame();
+    if(native)painter.beginNativePainting();
+    const auto image=gpuRenderer_.Render(items,shapeViewRevision_,mapping_,
+        kachakacha::v2::view::ForwardOf(orientation_),width(),height());
+    if(native){painter.endNativePainting();return true;}
+    if(image.isNull())return false;
+    painter.drawImage(QRect(0,0,width(),height()),image);return true;
 }

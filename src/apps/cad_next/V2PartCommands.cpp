@@ -1005,7 +1005,10 @@ std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfi
 {
     // 押し出しと、開き直しの作り直しで、同じ輪郭の作り方を通す。
     // 道を分けると、開いたときだけ違う形が出来る。
-    auto scene = session_->Scene();
+    kachakacha::v2::modeling::SnapScene scene;
+    for (const auto& curve : session_->Scene().curves)
+        if (std::find(entityIds.begin(),entityIds.end(),curve.entityId) != entityIds.end())
+            scene.curves.push_back(curve);
     // 表示を消した元輪郭も履歴の入力として有効。表示用 Scene だけでは
     // 保存後に非表示のワイヤから作った押し出しが消えてしまう。
     const auto& document = session_->GetDocument();

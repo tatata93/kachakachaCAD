@@ -66,6 +66,10 @@ inline constexpr double kCurveScreenApproachTolerancePx = 1.0e-4;
     const CurveSegment& segment, const ScreenMapping& mapping, const ScreenPoint& pointer,
     double maximumDistancePx);
 
+//! Conservative broad phase; false only when the entire projected control hull is outside.
+[[nodiscard]] bool CurveMayApproachScreen(const CurveSegment& segment,
+    const ScreenMapping& mapping, const ScreenPoint& pointer, double radiusPx);
+
 //! 曲線が平面の中にあるか。どの点も平面から toleranceMm 以内であること。
 //! 選択の「作図面の上か」(app::CurveLiesOnPlane)とスナップが共有する唯一の判定である。
 //! 円・円弧は中心のずれと傾きによるはみ出しの和、Bezier・B-splineは制御点で判定する

@@ -157,4 +157,14 @@ GridLineRange GridLineRangeFor(double spacingMm, double minUmm, double maxUmm,
     return range;
 }
 
+double GridLineSpacingPx(const geometry::ScreenMapping& mapping,
+    const Vector3& origin, const Vector3& along, const Vector3& offset)
+{
+    const auto a=mapping.Project(origin),b=mapping.Project(origin+along),c=mapping.Project(origin+offset);
+    if(!a||!b||!c)return 0;
+    const double dx=b->x-a->x,dy=b->y-a->y;
+    const double length=std::hypot(dx,dy);
+    return length>1e-12?std::abs(dx*(c->y-a->y)-dy*(c->x-a->x))/length:0;
+}
+
 } // namespace kachakacha::v2::modeling

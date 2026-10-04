@@ -1,5 +1,6 @@
 #pragma once
 #include "V2ImageViews.h"
+#include "V2GpuRenderer.h"
 
 //! V2の作図画面(WP-08)。
 //!
@@ -103,6 +104,7 @@ public:
     explicit V2Viewport(kachakacha::v2::app::DrawingSession& session,
         QWidget* parent = nullptr);
 
+    const char* RenderBackend() const { return gpuRenderer_.Backend(); }
     void SetPalette(const ViewportPalette& palette);
     [[nodiscard]] const ViewportPalette& Colors() const noexcept { return palette_; }
 
@@ -782,6 +784,9 @@ protected:
 
 private:
     bool EditCursorFieldForKey(int key);
+    mutable V2GpuRenderer gpuRenderer_;
+    std::uint64_t shapeViewRevision_ = 0;
+    bool DrawGpuShapes(QPainter& painter) const;
     void RebuildMapping();
     void DrawGrid(QPainter& painter) const;
     void DrawAxes(QPainter& painter) const;

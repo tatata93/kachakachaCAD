@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <cmath>
 #include <utility>
+#include <cstdio>
+#include <chrono>
+#include <cstdlib>
 #include <vector>
 
 namespace kachakacha::v2::modeling {
@@ -281,6 +284,7 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
         // 修飾キー中は一切吸着しない。トグルではないので状態も持たない。
         return {};
     }
+    const auto started=std::chrono::steady_clock::now();
     Collector collector(mapping, pointer, settings, tolerance);
 
     // --- 作図点 ---
@@ -288,8 +292,15 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
         collector.Add(SnapKind::DrawingPoint, point.position, From(point.entityId));
     }
 
+    const auto pointerOnPlane = scene.workPlane.active
+        ? mapping.UnprojectOntoPlane(pointer,scene.workPlane.origin,scene.workPlane.normal)
+        : std::optional<Vector3>{};
+    std::vector<const SnapCurve*> nearby;
+    const double radius = tolerance.snapPickPx + std::max(0.0,settings.holdMarginPx) + 1e-6;
     // --- 曲線ごとの候補 ---
     for (const SnapCurve& curve : scene.curves) {
+        const bool closeToPointer=geometry::CurveMayApproachScreen(curve.segment,mapping,pointer,radius);
+        if (closeToPointer) {
         collector.Add(SnapKind::Endpoint, curve.segment.StartPoint(),
             From(curve.entityId, curve.segmentId, 0));
         collector.Add(SnapKind::Endpoint, curve.segment.EndPoint(),
@@ -310,16 +321,14 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
         // 作業平面の中にある曲線では、画面位置を平面へ戻した点の解析的な最近点が
         // それと同じだけ近く写るときに限り、その正確な座標を使う。
         // 斜めや寝た視点では平面上で3Dに近い点が画面では遠く写るので、そのときは使わない。
-        const double closestLimitPx = tolerance.snapPickPx + std::max(0.0, settings.holdMarginPx);
         if (const auto approach = geometry::ApproachToCurveOnScreen(curve.segment, mapping,
-                pointer, closestLimitPx)) {
+                pointer, radius)) {
+            nearby.push_back(&curve);
             Vector3 position = approach->point;
             const auto onWorkPlane = scene.workPlane.active
                     && geometry::CurveLiesInPlane(curve.segment, scene.workPlane.origin,
                         scene.workPlane.normal, tolerance.modelLinearMm)
-                ? mapping.UnprojectOntoPlane(pointer, scene.workPlane.origin,
-                      scene.workPlane.normal)
-                : std::optional<Vector3>{};
+                ? pointerOnPlane : std::optional<Vector3>{};
             if (onWorkPlane.has_value()) {
                 const Vector3 exact = curve.segment.ClosestPoint(*onWorkPlane).point;
                 const auto exactScreen = mapping.Project(exact);
@@ -339,11 +348,9 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
                 }
             }
         }
+        }
         // 延長線上(V1の Extension)。基準点ではなく、画面の位置から決める。
-        if (const auto onPlane = scene.workPlane.active
-                ? mapping.UnprojectOntoPlane(pointer, scene.workPlane.origin,
-                      scene.workPlane.normal)
-                : std::optional<Vector3>{}) {
+        if (const auto onPlane = pointerOnPlane) {
             if (const auto extension = geometry::ExtensionPoint(curve.segment, *onPlane,
                     settings.maximumExtensionMm)) {
                 collector.Add(SnapKind::Extension, *extension,
@@ -351,7 +358,7 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
             }
         }
         // 接点と垂足。直前に置いた点があるときだけ意味がある。
-        if (settings.referencePoint.has_value()) {
+        if (closeToPointer && settings.referencePoint.has_value()) {
             const auto feet = geometry::PerpendicularFeet(curve.segment,
                 *settings.referencePoint, tolerance);
             for (std::size_t index = 0; index < feet.size(); ++index) {
@@ -365,14 +372,18 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
                     From(curve.entityId, curve.segmentId, static_cast<std::int64_t>(index)));
             }
         }
+
     }
 
-    // --- 交点 ---
-    for (std::size_t a = 0; a < scene.curves.size(); ++a) {
-        for (std::size_t b = a + 1; b < scene.curves.size(); ++b) {
+    const auto curvesDone=std::chrono::steady_clock::now();
+    // Intersection candidates must be near the pointer on BOTH curves. Retain a
+    // same radius as Collector, including the held-target margin and roundoff.
+    if(std::getenv("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"snap curves=%zu nearby=%zu\n",scene.curves.size(),nearby.size());
+    for (std::size_t a = 0; a < nearby.size(); ++a) {
+        for (std::size_t b = a + 1; b < nearby.size(); ++b) {
             // 2曲線は ID の小さいほうを先にする。場面の並び順で持ち主や番号が入れ替わらない。
-            const SnapCurve* first = &scene.curves[a];
-            const SnapCurve* second = &scene.curves[b];
+            const SnapCurve* first = nearby[a];
+            const SnapCurve* second = nearby[b];
             if (CurveIdLess(*second, *first)) {
                 std::swap(first, second);
             }
@@ -398,6 +409,8 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
         }
     }
 
+    const auto intersectionsDone=std::chrono::steady_clock::now();
+    if(std::getenv("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"snap stages ms %.3f %.3f\n",std::chrono::duration<double,std::milli>(curvesDone-started).count(),std::chrono::duration<double,std::milli>(intersectionsDone-curvesDone).count());
     // --- 作業平面まわり ---
     if (scene.workPlane.active) {
         const auto onPlane = mapping.UnprojectOntoPlane(pointer, scene.workPlane.origin,

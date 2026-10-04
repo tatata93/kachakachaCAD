@@ -407,6 +407,23 @@ base::Result<SplitResult> CurveSegment::Split(double t) const
 
 ClosestPointResult CurveSegment::ClosestPoint(const Vector3& point) const
 {
+    if (kind_ == CurveKind::Line) {
+        const auto direction=controlPoints_[1]-controlPoints_[0];
+        const double lengthSquared=direction.LengthSquared();
+        const double t=lengthSquared>0?std::clamp(Dot(point-controlPoints_[0],direction)/lengthSquared,0.0,1.0):0;
+        const auto position=Evaluate(t);
+        return {t,position,(position-point).Length()};
+    }
+    if (kind_ == CurveKind::Circle || kind_ == CurveKind::CircularArc) {
+        const auto delta=point-center_;
+        const double angle=std::atan2(Dot(delta,Cross(normal_,reference_)),Dot(delta,reference_));
+        double travel=std::fmod((angle-startAngle_)*(sweepAngle_>=0?1:-1),2*kPi);
+        if(travel<0)travel+=2*kPi;
+        double t=std::abs(sweepAngle_)>0?travel/std::abs(sweepAngle_):0;
+        if(t>1)t=(Evaluate(0)-point).LengthSquared()<=(Evaluate(1)-point).LengthSquared()?0:1;
+        const auto position=Evaluate(t);
+        return {t,position,(position-point).Length()};
+    }
     // 粗い標本で当たりを付けて、その周りを黄金分割で詰める。
     constexpr int kCoarse = 128;
     double bestT = 0.0;

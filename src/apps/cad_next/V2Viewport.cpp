@@ -10,6 +10,8 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QColor>
+#include <QElapsedTimer>
+#include <cstdio>
 #include <QEvent>
 #include <QFocusEvent>
 #include <QKeyEvent>
@@ -736,18 +738,26 @@ void V2Viewport::DrawGuideRows(QPainter& painter) const
 
 void V2Viewport::paintEvent(QPaintEvent* /*event*/)
 {
-    QPainter painter(this);
+    QElapsedTimer paintTimer; paintTimer.start();
+    const bool trace=qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER");
+    const auto draw=[&](QPainter& painter) {
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), palette_.background);
     DrawGrid(painter);
+    const auto gridOnly=paintTimer.nsecsElapsed();
     DrawWorkPlane(painter);
+    const auto planesOnly=paintTimer.nsecsElapsed();
     DrawAxes(painter);
     // 立体と面を先に塗ってから線を描く。逆にすると、線が面の下に隠れる。
     // 線はこの道具の主役なので、必ず上に出す。
+    const auto gridTime=paintTimer.nsecsElapsed();
+    if(trace)std::fprintf(stderr,"underlay ms %.3f %.3f %.3f\n",gridOnly/1e6,(planesOnly-gridOnly)/1e6,(gridTime-planesOnly)/1e6);
     DrawShapes(painter);
+    const auto shapeTime=paintTimer.nsecsElapsed();
     DrawProfileRegions(painter);
     DrawToolPreviewFaces(painter);
     DrawDocument(painter);
+    const auto documentTime=paintTimer.nsecsElapsed();
     DrawGuideRows(painter);
     DrawPreview(painter);
     DrawSnap(painter);
@@ -770,12 +780,18 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawViewCube(painter);
     DrawViewButtonsOnTop(painter);
     DrawCursorInput(painter);
+    if(trace)std::fprintf(stderr,"paint stages ms %.3f %.3f %.3f %.3f\n",gridTime/1e6,(shapeTime-gridTime)/1e6,(documentTime-shapeTime)/1e6,(paintTimer.nsecsElapsed()-documentTime)/1e6);
+    };
+    QPainter destination(this);
+    if(!gpuRenderer_.PaintFrame(destination,width(),height(),draw))draw(destination);
 }
 
 void V2Viewport::HoverAt(const QPointF& position)
 {
+    QElapsedTimer hoverTimer;hoverTimer.start();
     cursorPosition_ = position;
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
+    const auto snapTime=hoverTimer.nsecsElapsed();
     if (cursorPanel_.active) {
         // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
         const auto point = mapping_.UnprojectOntoPlane(
@@ -796,7 +812,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     }
     status_ = hover_.messageJa;
     hoveredProfileRegion_ = ProfileRegionAt(position);
-    if (!SelectionHasPart() && PickShapeAt(position).has_value()) {
+    if (hoveredProfileRegion_.has_value() && !SelectionHasPart() && PickShapeAt(position).has_value()) {
         hoveredProfileRegion_.reset();
     }
     if (hoveredProfileRegion_.has_value()) {
@@ -812,11 +828,13 @@ void V2Viewport::HoverAt(const QPointF& position)
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
     RefreshPickCycle(position);
     SyncHoverWithCandidate();
+    const auto pickTime=hoverTimer.nsecsElapsed();
     // 掴めないものの上に来たら、カーソルでそう言う(§5.1 禁止対象)。
     RefreshForbiddenHover(position);
     RefreshCursorShape();
     update();
     NotifyHoverChanged();
+    if(qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"hover stages ms %.3f %.3f %.3f\n",snapTime/1e6,(pickTime-snapTime)/1e6,(hoverTimer.nsecsElapsed()-pickTime)/1e6);
 }
 
 //! 置いた先が変わったことを窓へ。マウスからでも試験の HoverAt からでも同じ道を通す

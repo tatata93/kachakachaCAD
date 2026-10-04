@@ -25,6 +25,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QPointF>
 
 #include <cmath>
 #include <cstddef>
@@ -498,11 +499,18 @@ void HeavyOrbitTiming(V2Viewport& viewport, const char* label)
     QElapsedTimer timer;
     timer.start();
     QImage frame(viewport.size(),QImage::Format_ARGB32);
-    for (int i = 0; i < 12; ++i) {
+    std::vector<double> frames;
+    const int count=qEnvironmentVariableIsSet("KACHACAD_PERFORMANCE_ONLY")?120:12;
+    for (int i = 0; i < count; ++i) {
+        QElapsedTimer frameTimer; frameTimer.start();
         viewport.OrbitByPixels(12,3);
         viewport.render(&frame);
+        frames.push_back(double(frameTimer.nsecsElapsed())/1e6);
     }
-    Note((std::string(label) + " 12 frames ms=" + std::to_string(timer.elapsed())).c_str());
+    std::sort(frames.begin(),frames.end());
+    Note((std::string(label) + " frames=" + std::to_string(count)+" ms=" + std::to_string(timer.elapsed())
+        + " p95="+std::to_string(frames[frames.size()*95/100])+" max="+std::to_string(frames.back())
+        + " backend="+viewport.RenderBackend()).c_str());
     viewport.SetOrientation(before);
 }
 
@@ -606,6 +614,18 @@ void HeavyOrbitTiming(V2Viewport& viewport, const char* label)
     const auto shapes = window.Viewport().ShapeViews().size();
     Note(("heavy shapes=" + std::to_string(shapes)).c_str());
     Note(("heavy triangles=" + std::to_string(window.Viewport().ShapeTriangleCount())).c_str());
+    if(qEnvironmentVariableIsSet("KACHACAD_PERFORMANCE_ONLY")) {
+        window.resize(1800,1000); window.Viewport().FitToDocument(); QApplication::processEvents();
+        auto& v=window.Viewport();
+        HeavyOrbitTiming(v,"performance orbit/render");
+        QImage frame(v.size(),QImage::Format_ARGB32);
+        for(int i=0;i<10;++i) {
+            timer.restart(); v.HoverAt(QPointF(v.width()*(.3+.04*i),v.height()*.5)); v.render(&frame);
+            Note(("performance hover/render ms="+std::to_string(timer.elapsed())).c_str());
+        }
+        frame.save(out + "/performance-frame.png");
+        return window.RebuildProblems().isEmpty() && shapes>=1000;
+    }
     window.SetMode(app::UiMode::Part);
     window.resize(1800, 1000);
     QApplication::processEvents();

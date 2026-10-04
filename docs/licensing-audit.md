@@ -131,3 +131,9 @@ V2 の追加ターゲット `kachakacha_v2_core` / `kachakacha_v2_occt` / `kacha
 `.kcd2`（ZIP + JSON）の読み書きに必要な JSON と ZIP のライブラリは、WP-05 の着手時に追加する。
 取得方法は ADR 0027 で決めた（`vcpkg.json` は追加せず、単一ヘッダ／単一ソースの同梱を第一候補とする）。
 追加した時点でこの表と配布物の第三者表示を更新すること。
+
+### 2026-10-05 GPU描画
+
+V2の表示境界に既存Qt 6.9.2のOpenGLモジュールを追加。Qtと同じLGPL-3.0の動的リンクで使用し、
+Windows配布ではQt6OpenGL.dllをwindeployqtで同梱する。core・保存・幾何にGPU依存を持たせない。
+OpenGLを利用できない構成では従来のCPU描画へ戻る。追加の第三者ライブラリは無し。

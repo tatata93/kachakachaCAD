@@ -22,6 +22,28 @@ constexpr double kNearEpsilon = 1.0e-9;
 // Dimensionless tolerance: shared triangle edges must survive projection round-off.
 constexpr double kBarycentricEpsilon = 1.0e-10;
 
+// Reject whole shapes before testing their triangles. A default, unmeasured
+// box deliberately falls back to the exact path (small synthetic/test meshes).
+bool RayMayHitMesh(const ShapeMesh& mesh, const Vector3& origin, const Vector3& direction)
+{
+    if(mesh.minimum==Vector3{} && mesh.maximum==Vector3{})return true;
+    const double low[]={mesh.minimum.x,mesh.minimum.y,mesh.minimum.z};
+    const double high[]={mesh.maximum.x,mesh.maximum.y,mesh.maximum.z};
+    const double o[]={origin.x,origin.y,origin.z}, d[]={direction.x,direction.y,direction.z};
+    double enter=0,leave=std::numeric_limits<double>::infinity();
+    for(int axis=0;axis<3;++axis) {
+        const double margin=1e-9+1e-12*std::max(std::abs(low[axis]),std::abs(high[axis]));
+        if(low[axis]>high[axis])return false;
+        if(std::abs(d[axis])<1e-15) {
+            if(o[axis]<low[axis]-margin||o[axis]>high[axis]+margin)return false;
+        } else {
+            const double a=(low[axis]-margin-o[axis])/d[axis],b=(high[axis]+margin-o[axis])/d[axis];
+            enter=std::max(enter,std::min(a,b));leave=std::min(leave,std::max(a,b));
+            if(enter>leave)return false;
+        }
+    }
+    return true;
+}
 } // namespace
 
 std::optional<double> RayHitsTriangle(const Vector3& origin, const Vector3& direction,
@@ -62,6 +84,7 @@ std::vector<MeshHit> CollectMeshHits(const std::vector<ShapeMesh>& shapes,
     std::vector<MeshHit> hits;
     for (std::size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex) {
         const ShapeMesh& mesh = shapes[shapeIndex];
+        if (!RayMayHitMesh(mesh, origin, direction)) continue;
         std::optional<MeshHit> nearest;
         for (std::size_t index = 0; index < mesh.triangles.size(); ++index) {
             const auto distance = RayHitsTriangle(origin, direction, mesh.triangles[index]);
@@ -105,6 +128,7 @@ std::vector<MeshHit> CollectFaceHits(const std::vector<ShapeMesh>& shapes,
     std::vector<MeshHit> hits;
     for (std::size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex) {
         const ShapeMesh& mesh = shapes[shapeIndex];
+        if (!RayMayHitMesh(mesh, origin, direction)) continue;
         std::map<std::size_t, MeshHit> nearestOfFace;
         for (std::size_t index = 0; index < mesh.triangles.size(); ++index) {
             const auto distance = RayHitsTriangle(origin, direction, mesh.triangles[index]);

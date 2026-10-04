@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QPointF>
 #include <limits>
+#include <cmath>
 using namespace kachakacha::v2;
 using namespace geometry;
 void V2ImageTool::UseWorkPlane() {
@@ -57,6 +58,7 @@ bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
     ClickViewport(mouse->position());return true;
 }
 void V2ImageTool::ClickViewport(const QPointF& pos) {
+    if(role_==2||role_==4){PickImagePoint(pos);return;}
     const ScreenPoint screen{pos.x(),pos.y()};const auto ray=window_.viewport_->Mapping().RayThrough(screen);if(!ray)return;
     double nearest=std::numeric_limits<double>::max();app::SelectionRef chosen;
     for(const auto& shape:window_.viewport_->ShapeViews())for(const auto& tri:shape.mesh.triangles){
@@ -77,4 +79,35 @@ void V2ImageTool::ClickViewport(const QPointF& pos) {
         if(width<0.00001||width>10000000){points_.clear();status_->setText(QStringLiteral("長さ合わせ後の幅が設定範囲外です（0.00001～10000000mm）。"));return;}
         definition_.mmPerPixel=scale.Value();role_=0;}}
     UpdateFields();Preview();if(role_!=0)Pick(role_);
+}
+
+bool V2ImageTool::PickImagePoint(const QPointF& pos) {
+    const auto ray=window_.viewport_->Mapping().RayThrough({pos.x(),pos.y()});
+    if(!ray||!previewOk_||window_.viewport_->ImageViews().empty())return false;
+    const auto& image=window_.viewport_->ImageViews().back();
+    double nearest=std::numeric_limits<double>::max();Vector3 pixel,world;
+    for(const auto& triangle:image.triangles){
+        const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle.mesh);if(!hit||*hit>=nearest)continue;
+        const auto point=ray->origin+ray->direction*(*hit);const auto& p=triangle.mesh.points;
+        const auto a=p[1]-p[0],b=p[2]-p[0],c=point-p[0];
+        const double aa=Dot(a,a),ab=Dot(a,b),bb=Dot(b,b),ca=Dot(c,a),cb=Dot(c,b),det=aa*bb-ab*ab;
+        if(std::abs(det)<1e-18)continue;
+        const double u=(bb*ca-ab*cb)/det,v=(aa*cb-ab*ca)/det;
+        const auto q=triangle.pixels[0]*(1-u-v)+triangle.pixels[1]*u+triangle.pixels[2]*v;
+        if(q.x<0||q.y<0||q.x>definition_.pixelWidth||q.y>definition_.pixelHeight)continue;
+        nearest=*hit;pixel=q;world=point;
+    }
+    if(nearest==std::numeric_limits<double>::max()){
+        status_->setText(QStringLiteral("3Dビューに表示された画像の内側をクリックしてください。"));return false;}
+    if(role_==2){
+        // Re-anchor the same mapping; choosing the anchor must not move the image.
+        auto delta=(pixel-definition_.anchorPixel)*definition_.mmPerPixel;
+        if(definition_.mirrorHorizontal)delta.x=-delta.x;
+        const double c=std::cos(definition_.rotationRad),s=std::sin(definition_.rotationRad);
+        definition_.anchorUv.x+=(c*delta.x+s*delta.y)/definition_.uvMetric.x;
+        definition_.anchorUv.y+=(s*delta.x-c*delta.y)/definition_.uvMetric.y;
+        definition_.origin=world;definition_.anchorPixel=pixel;role_=3;
+        imageMarks_.clear();UpdateFields();Preview();Pick(3);
+    }else {imageMarks_.push_back(world);SetImagePoint(pixel);}
+    return true;
 }

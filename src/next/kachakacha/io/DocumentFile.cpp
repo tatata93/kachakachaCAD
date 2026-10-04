@@ -432,6 +432,7 @@ template<class Id>
         definition["mmPerPixel"] = JsonValue::Number(image->mmPerPixel);
         definition["rotationRad"] = JsonValue::Number(image->rotationRad);
         definition["opacity"] = JsonValue::Number(image->opacity);
+        definition["mirrorHorizontal"] = JsonValue::Bool(image->mirrorHorizontal);
         definition["followSurface"] = JsonValue::Bool(image->followSurface);
         definition["faceBrep"] = JsonValue::String(image->faceBrep);
         definition["origin"] = WriteVector(image->origin);

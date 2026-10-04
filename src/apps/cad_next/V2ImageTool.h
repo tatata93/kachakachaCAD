@@ -7,7 +7,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 class V2MainWindow;
-class V2ImageCanvas;
+class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -40,7 +40,9 @@ private:
     kachakacha::v2::modeling::KernelShapeHandle face_;
     std::vector<V2ImageView> savedViews_;
     QImage image_;
-    V2ImageCanvas* canvas_=nullptr;
+    QCheckBox* mirror_=nullptr;
+    bool PickImagePoint(const QPointF&);
+    std::vector<kachakacha::v2::geometry::Vector3> imageMarks_;
     QLabel* status_=nullptr;
     QComboBox* mode_=nullptr;
     QDoubleSpinBox *width_=nullptr,*rotation_=nullptr,*opacity_=nullptr;

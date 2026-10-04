@@ -7,12 +7,12 @@ Vector3 ImagePixelAt(const domain::CreateImageDefinition& d,const Vector3& p,con
     const double x=d.followSurface ? (uv.x-d.anchorUv.x)*d.uvMetric.x : Dot(delta,d.uAxis);
     const double y=d.followSurface ? (uv.y-d.anchorUv.y)*d.uvMetric.y : Dot(delta,d.vAxis);
     const double c=std::cos(d.rotationRad),s=std::sin(d.rotationRad);
-    return {d.anchorPixel.x+(c*x+s*y)/d.mmPerPixel,d.anchorPixel.y-(-s*x+c*y)/d.mmPerPixel,0};
+    return {d.anchorPixel.x+(d.mirrorHorizontal?-1:1)*(c*x+s*y)/d.mmPerPixel,d.anchorPixel.y-(-s*x+c*y)/d.mmPerPixel,0};
 }
 std::vector<ImageTriangle> FlatImageTriangles(const domain::CreateImageDefinition& d) {
     const std::array<Vector3,4> pixels{{{0,0,0},{double(d.pixelWidth),0,0},{double(d.pixelWidth),double(d.pixelHeight),0},{0,double(d.pixelHeight),0}}};
     std::array<Vector3,4> points;const double c=std::cos(d.rotationRad),s=std::sin(d.rotationRad);
-    for(std::size_t i=0;i<4;++i){const auto p=(pixels[i]-d.anchorPixel)*d.mmPerPixel;
+    for(std::size_t i=0;i<4;++i){auto p=(pixels[i]-d.anchorPixel)*d.mmPerPixel;if(d.mirrorHorizontal)p.x=-p.x;
         points[i]=d.origin+d.uAxis*(c*p.x+s*p.y)+d.vAxis*(s*p.x-c*p.y);}
     std::vector<ImageTriangle> result;
     for(const auto indices:{std::array<int,3>{0,1,2},std::array<int,3>{0,2,3}}){ImageTriangle triangle;

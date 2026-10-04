@@ -13,6 +13,7 @@
 #include <QByteArray>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QImageReader>
 #include <QColor>
@@ -58,7 +59,8 @@ void V2ImageTool::Preview() {
     if(updating_)return;
     if(definition_.pngBase64.empty()){previewOk_=false;status_->setText(QStringLiteral("画像ファイルを選んでください。"));return;}
     definition_.mmPerPixel=width_->value()/std::max(1,definition_.pixelWidth);
-    definition_.rotationRad=rotation_->value()*3.141592653589793/180;definition_.opacity=opacity_->value()/100;
+    definition_.rotationRad=rotation_->value()*3.141592653589793/180;definition_.opacity=1-opacity_->value()/100;
+    definition_.mirrorHorizontal=mirror_->isChecked();
     definition_.followSurface=mode_->currentIndex()==1;
     auto images=savedViews_;if(!editing_.IsNil())std::erase_if(images,[&](const auto& v){return v.entityId==editing_;});
     V2ImageView view;view.entityId=editing_;QString error;previewOk_=MakeView(definition_,view,error);
@@ -67,6 +69,7 @@ void V2ImageTool::Preview() {
     window_.viewport_->SetImageViews(std::move(images));
     std::vector<V2Viewport::PlacedRoleLabel> labels{{definition_.origin,QStringLiteral("画像 基準点"),QColor(255,220,40),{},true}};
     for(std::size_t i=0;i<points_.size();++i)labels.push_back({points_[i],QStringLiteral("長さ %1").arg(i+1),QColor(255,220,40),{},true});
+    for(std::size_t i=0;i<imageMarks_.size();++i)labels.push_back({imageMarks_[i],QStringLiteral("画像の点 %1").arg(i+1),QColor(80,230,255),{},true});
     window_.viewport_->ShowToolRoleLabels(std::move(labels));
 }
 bool V2ImageTool::Commit() {

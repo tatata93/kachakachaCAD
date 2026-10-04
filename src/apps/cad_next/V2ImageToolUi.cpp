@@ -5,6 +5,7 @@
 #include "V2MainWindow.h"
 #include "V2OperationPanelHost.h"
 #include <QComboBox>
+#include <QCheckBox>
 #include <QScrollArea>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
@@ -22,30 +23,6 @@
 #include <QVBoxLayout>
 #include <functional>
 using namespace kachakacha::v2;
-class V2ImageCanvas:public QWidget {
-public:
-    explicit V2ImageCanvas(QWidget* parent):QWidget(parent){setMinimumHeight(150);setMaximumHeight(240);}
-    QImage image;
-    std::vector<geometry::Vector3> marks;
-    std::function<void(geometry::Vector3)> clicked;
-protected:
-    QRectF ImageRect() const {
-        if(image.isNull())return {};
-        const double scale=std::min(double(width())/image.width(),double(height())/image.height());
-        return {(width()-image.width()*scale)/2,(height()-image.height()*scale)/2,image.width()*scale,image.height()*scale};
-    }
-    void paintEvent(QPaintEvent*) override {
-        QPainter p(this);p.fillRect(rect(),QColor(45,49,54));if(image.isNull())return;
-        const auto r=ImageRect();p.drawImage(r,image);
-        for(std::size_t i=0;i<marks.size();++i){const QPointF q(r.x()+marks[i].x/image.width()*r.width(),r.y()+marks[i].y/image.height()*r.height());
-            p.setPen(QPen(Qt::black,4));p.drawEllipse(q,6,6);p.setPen(QPen(Qt::yellow,2));p.drawEllipse(q,6,6);
-            p.drawText(q+QPointF(8,-8),i==0?QStringLiteral("基準"):QString::number(i));}
-    }
-    void mousePressEvent(QMouseEvent* event) override {
-        const auto r=ImageRect();if(event->button()!=Qt::LeftButton||!r.contains(event->position())||!clicked)return;
-        clicked({(event->position().x()-r.x())/r.width()*image.width(),(event->position().y()-r.y())/r.height()*image.height(),0});
-    }
-};
 void V2ImageTool::BuildUi() {
     auto* outer=new QVBoxLayout(this);auto* scroll=new QScrollArea(this);scroll->setWidgetResizable(true);
     auto* body=new QWidget(scroll);auto* layout=new QVBoxLayout(body);scroll->setWidget(body);outer->addWidget(scroll,1);
@@ -53,14 +30,16 @@ void V2ImageTool::BuildUi() {
         layout->addWidget(b);connect(b,&QPushButton::clicked,this,action);return b;};
     auto* load=button(QStringLiteral("画像ファイルを選ぶ"),"imageLoad",[this]{const auto path=QFileDialog::getOpenFileName(this,QStringLiteral("貼る画像"),{},QStringLiteral("画像 (*.png *.jpg *.jpeg *.bmp)"));if(!path.isEmpty())LoadImage(path);});
     layout->removeWidget(load);outer->insertWidget(0,load);
-    canvas_=new V2ImageCanvas(this);canvas_->setObjectName(QStringLiteral("imagePointCanvas"));outer->insertWidget(1,canvas_);
-    canvas_->clicked=[this](const geometry::Vector3& p){SetImagePoint(p);};
     button(QStringLiteral("貼付先の面を3Dで選ぶ"),"imageTarget",[this]{Pick(1);});
     button(QStringLiteral("現在の作業面に貼る"),"imageWorkPlane",[this]{UseWorkPlane();Preview();});
-    button(QStringLiteral("画像の基準点を選ぶ ↑"),"imageAnchor",[this]{Pick(2);});
+    button(QStringLiteral("位置を変更：画像の基準点を3Dで選ぶ"),"imageAnchor",[this]{Pick(2);});
     button(QStringLiteral("配置の基準点を3Dで選ぶ"),"imageWorldAnchor",[this]{Pick(3);});
-    button(QStringLiteral("長さ合わせ：画像の2点を選ぶ ↑"),"imagePixelLength",[this]{pixels_.clear();points_.clear();Pick(4);});
+    button(QStringLiteral("長さ合わせ：画像の2点を3Dで選ぶ"),"imagePixelLength",[this]{pixels_.clear();points_.clear();imageMarks_.clear();Pick(4);});
     button(QStringLiteral("長さ合わせ：CADの2点を選ぶ"),"imageWorldLength",[this]{if(pixels_.size()!=2){status_->setText(QStringLiteral("先に画像の2点を指定してください。"));return;}points_.clear();Pick(5);});
+    mirror_=new QCheckBox(QStringLiteral("左右反転（基準点を固定）"),this);mirror_->setObjectName(QStringLiteral("imageMirror"));
+    layout->addWidget(mirror_);connect(mirror_,&QCheckBox::toggled,this,[this]{Preview();});
+    auto* help=new QLabel(QStringLiteral("貼付後も画像を選択して「画像」を開くと、位置・大きさ・反転・透明度を変更できます。"),this);
+    help->setWordWrap(true);layout->addWidget(help);
     auto* form=new QFormLayout;layout->addLayout(form);
     mode_=new QComboBox(this);mode_->setObjectName(QStringLiteral("imageMapping"));
     mode_->addItems({QStringLiteral("方向を指定して投影"),QStringLiteral("面に沿わせる（UV）")});form->addRow(QStringLiteral("曲面への貼り方"),mode_);
@@ -74,7 +53,7 @@ void V2ImageTool::BuildUi() {
         connect(box,&QDoubleSpinBox::valueChanged,this,[this]{Preview();});return box;};
     width_=field(QStringLiteral("画像の幅"),"imageWidth",0.00001,10000000,100,QStringLiteral(" mm"));
     rotation_=field(QStringLiteral("回転"),"imageRotation",-360,360,0,QStringLiteral(" °"));
-    opacity_=field(QStringLiteral("不透明度"),"imageOpacity",0,100,100,QStringLiteral(" %"));
+    opacity_=field(QStringLiteral("透明度"),"imageOpacity",0,100,0,QStringLiteral(" %"));
     status_=new QLabel(QStringLiteral("画像を選んでください。"),this);status_->setWordWrap(true);outer->addWidget(status_);
     connect(mode_,&QComboBox::currentIndexChanged,this,[this]{Preview();});layout->addStretch();layout=outer;
     button(QStringLiteral("確定 Enter"),"imageCommit",[this]{Commit();});
@@ -82,15 +61,15 @@ void V2ImageTool::BuildUi() {
 }
 void V2ImageTool::UpdateFields() {
     updating_=true;width_->setValue(definition_.mmPerPixel*definition_.pixelWidth);
-    rotation_->setValue(definition_.rotationRad*180/3.141592653589793);opacity_->setValue(definition_.opacity*100);
-    mode_->setCurrentIndex(definition_.followSurface?1:0);canvas_->image=image_;canvas_->marks={definition_.anchorPixel};
-    canvas_->marks.insert(canvas_->marks.end(),pixels_.begin(),pixels_.end());canvas_->update();updating_=false;
+    rotation_->setValue(definition_.rotationRad*180/3.141592653589793);opacity_->setValue((1-definition_.opacity)*100);
+    mirror_->setChecked(definition_.mirrorHorizontal);
+    mode_->setCurrentIndex(definition_.followSurface?1:0);updating_=false;
 }
 void V2ImageTool::Pick(int role) {
     role_=role;
     const QStringList hints{QStringLiteral("Enterで確定できます。"),QStringLiteral("3Dビューで貼付先のフェイスをクリックしてください。"),
-        QStringLiteral("上の画像で基準点をクリックしてください。"),QStringLiteral("3Dビューで画像の基準点を置く位置をクリックしてください。"),
-        QStringLiteral("上の画像で長さを測る2点をクリックしてください。"),QStringLiteral("3Dビューで対応する長さの2点をクリックしてください（直線距離）。")};
+        QStringLiteral("3Dビューの画像上で基準点をクリックしてください。"),QStringLiteral("3Dビューで画像の基準点を置く位置をクリックしてください。"),
+        QStringLiteral("3Dビューの画像上で長さを測る2点をクリックしてください。"),QStringLiteral("3Dビューで対応する長さの2点をクリックしてください（直線距離）。")};
     status_->setText(hints[role]);
 }
 void V2ImageTool::SetImagePoint(const geometry::Vector3& p) {

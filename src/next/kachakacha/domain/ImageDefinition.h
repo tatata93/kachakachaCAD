@@ -10,6 +10,7 @@ struct CreateImageDefinition {
     geometry::Vector3 anchorPixel;
     double mmPerPixel = 1, rotationRad = 0, opacity = 1;
     bool followSurface = false;
+    bool mirrorHorizontal = false;
     std::string faceBrep;
     geometry::Vector3 anchorUv, uvMetric{1,1,0};
 };

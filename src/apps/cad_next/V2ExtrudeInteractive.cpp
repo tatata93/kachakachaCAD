@@ -420,6 +420,7 @@ void V2MainWindow::EndExtrudePreview(bool keepTool)
         viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         pendingCommandId_ = "part.extrude";
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
+        ShowExtrudeShelf(PlanExtrudeFromSelection());
     }
     RefreshRightShelves();
 }

@@ -64,7 +64,12 @@ bool Instructions(V2MainWindow& window){
     window.RunCommand("edit.undo");if(!Explain("undo restores placement",mode->Snapshot()==original))return false;window.RunCommand("edit.redo");
     const auto beforeOrbit=mode->Snapshot();Mouse(view,QEvent::MouseButtonPress,{100,100},Qt::RightButton,Qt::RightButton);Mouse(view,QEvent::MouseMove,{140,115},Qt::NoButton,Qt::RightButton);Mouse(view,QEvent::MouseButtonRelease,{140,115},Qt::RightButton,Qt::NoButton);
     if(!Explain("3D orbit changes camera",mode->Snapshot()!=beforeOrbit))return false;
-    window.RunCommand("instructions.arrow");for(const auto at:{QPointF(200,200),QPointF(400,300)}){Mouse(view,QEvent::MouseButtonPress,at,Qt::LeftButton,Qt::LeftButton);Mouse(view,QEvent::MouseButtonRelease,at,Qt::LeftButton,Qt::NoButton);}
+    window.RunCommand("instructions.arrow");
+    const auto beforeArrow=mode->Snapshot();
+    Mouse(view,QEvent::MouseButtonPress,{100,100},Qt::LeftButton,Qt::LeftButton);
+    QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(view,&escape);
+    if(!Explain("Esc cancels pending arrow without editing page",mode->Snapshot()==beforeArrow))return false;
+    for(const auto at:{QPointF(200,200),QPointF(400,300)}){Mouse(view,QEvent::MouseButtonPress,at,Qt::LeftButton,Qt::LeftButton);Mouse(view,QEvent::MouseButtonRelease,at,Qt::LeftButton,Qt::NoButton);}
     window.RunCommand("instructions.text");Mouse(view,QEvent::MouseButtonPress,{180,140},Qt::LeftButton,Qt::LeftButton);Mouse(view,QEvent::MouseButtonRelease,{180,140},Qt::LeftButton,Qt::NoButton);
     if(!Explain("world anchored arrow and text",mode->Snapshot()["pages"].toArray()[0].toObject()["marks"].toArray().size()==2))return false;
     window.RunCommand("tools.search");window.RunCommand("instructions.text");if(!Explain("settings return from search",window.findChild<QLineEdit*>("instructionText")!=nullptr))return false;
@@ -87,3 +92,4 @@ bool Instructions(V2MainWindow& window){
 }
 std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions}};}
 }
+#include <QKeyEvent>

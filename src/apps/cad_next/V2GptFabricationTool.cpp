@@ -100,7 +100,7 @@ void V2GptFabricationTool::Begin()
 void V2GptFabricationTool::End(bool keepTool)
 {
     if (!active_) { return; }
-    active_=keepTool; preview_.reset(); window_.viewport_->HideToolPreview();
+    active_=keepTool; Invalidate(); window_.viewport_->HideToolPreview();
     window_.viewport_->HideToolRoleLabels(); window_.viewport_->SetToolPickActive(keepTool);
     window_.viewport_->SetToolPickToggle(keepTool); window_.ShowToolFooter(QString()); window_.RefreshRightShelves();
 }

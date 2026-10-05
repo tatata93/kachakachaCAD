@@ -246,7 +246,7 @@ void V2MainWindow::WireViewportCallbacks()
     // Enter で確定、Esc でやめる。中身は窓が持っている。
     viewport_->SetExtrudeCallbacks([this] { ConfirmExtrude(); },
         [this] {
-            EndExtrudePreview(true);
+            EndExtrudePreview();
             SetStatus(QStringLiteral("押し出し: やめました。"));
         });
     // 明示的な選択道具への切替。Esc は入力だけを取り消し、道具を維持する。
@@ -1305,6 +1305,11 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
         if (binding.commandId != command.id) {
             continue;
         }
+        const auto selected = viewport_->Selection();
+        ClearPendingCommand();
+        EndArmedTools();
+        if (extrudeShelfShown_ || viewport_->ExtrudeHandleShown()) EndExtrudePreview();
+        viewport_->SetSelection(selected);
         SelectTool(binding.tool);
         if (continuesAfterTool) {
             return false;

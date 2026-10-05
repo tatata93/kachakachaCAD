@@ -476,6 +476,7 @@ void V2MainWindow::EndSurfacePreview(bool keepTool)
         surfaceMirroring_ = false;
     }
     surfaceMirror_.clear();
+    if (keepTool) RefreshSurfaceDock();
     ShowToolFooter(QString());
     RefreshRightShelves();
     if (surfaceAnalysis_ != nullptr) {

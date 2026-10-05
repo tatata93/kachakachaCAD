@@ -32,9 +32,9 @@ void V2MainWindow::BuildEditingShelves()
     // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
     cornerDock_ = new V2CornerDock(this);
     cornerDock_->SetRunHandler([this](const char* command) {
-        if (std::string_view(command) == "wire.fillet" || std::string_view(command) == "wire.chamfer")
-            (void)HandleCornerToolKey(Qt::Key_Return);
-        else RunCommand(command);
+        if (std::string_view(command) == "wire.fillet" || std::string_view(command) == "wire.chamfer") {
+            if (!HandleCornerToolKey(Qt::Key_Return)) RunWireEditCommand(command);
+        } else RunCommand(command);
     });
     cornerDock_->SetChoiceChangedHandler([this] { RefreshCornerPreview(); });
     cornerDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
@@ -111,7 +111,8 @@ void V2MainWindow::BuildRightShelves()
     // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
     workPlaneDock_ = new V2WorkPlaneDock(this);
-    workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
+    workPlaneDock_->SetCreateHandler([this] { HandleWorkPlaneToolKey(Qt::Key_Return, nullptr); });
+    workPlaneDock_->SetCancelHandler([this] { HandleWorkPlaneToolKey(Qt::Key_Escape, nullptr); });
     // 欄が変わるたびに、作る前の平面を3Dへ下見として出す(D-24)。
     workPlaneDock_->SetChangedHandler([this] { RefreshWorkPlanePreview(); });
 

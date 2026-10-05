@@ -596,6 +596,7 @@ public:
     }
     void ClickAt(const QPointF& position);
     void FinishTool();
+    bool StepBackInputPoint();
     void CancelTool();
 
     //! いまの写し方。スナップ半径がpxで効くので、core と同じものを使う。

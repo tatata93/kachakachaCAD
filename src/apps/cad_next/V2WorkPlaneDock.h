@@ -56,6 +56,7 @@ public:
     [[nodiscard]] QString NeedsText() const;
     //! 「平面を作る」を押したのと同じ(試験用)。
     void PressCreate();
+    void SetCancelHandler(std::function<void()> handler) { cancelHandler_ = std::move(handler); }
     //! いま「平面を作る」が押せるか。
     [[nodiscard]] bool CanCreate() const;
 
@@ -99,6 +100,7 @@ private:
     QPushButton* create_ = nullptr;
     std::vector<kachakacha::v2::base::EntityId> planeIds_;
     std::function<void()> createHandler_;
+    std::function<void()> cancelHandler_;
     std::function<void()> changedHandler_;
     void EmitChanged();
     kachakacha::v2::app::WorkPlaneFacts facts_;

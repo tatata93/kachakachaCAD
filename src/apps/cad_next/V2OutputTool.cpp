@@ -18,7 +18,16 @@
 #include <QVBoxLayout>
 using namespace kachakacha::v2;
 V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
-    for(auto* child:window.findChildren<QDialog*>())if(child->objectName()=="selectionOutput")child->close();
+    for (auto* child : window.findChildren<QDialog*>()) {
+        if (auto* active=dynamic_cast<V2OutputTool*>(child); active && active->isVisible()) {
+            if (active->documentId_ != window.session_->GetDocument().Snapshot().id) {
+                active->close(); continue;
+            }
+            active->ChooseFormat(format < 0 ? 2 : format);
+            active->raise(); active->activateWindow();
+            return active;
+        }
+    }
     window.EndArmedTools();window.SelectTool(modeling::DrawingTool::Select);
     auto* dialog=new V2OutputTool(window,format);dialog->TakeSelection();dialog->show();return dialog;
 }

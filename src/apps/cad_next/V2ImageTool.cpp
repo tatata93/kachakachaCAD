@@ -24,6 +24,10 @@
 #include <algorithm>
 using namespace kachakacha::v2;
 V2ImageTool* V2ImageTool::Open(V2MainWindow& window) {
+    if (auto* active=dynamic_cast<V2ImageTool*>(window.operationHost_->TemporaryPage())) {
+        if (active->image_.isNull()) (void)active->EditSelectedImage();
+        return active;
+    }
     const auto selection=window.viewport_->Selection();window.EndArmedTools();window.ClearPendingCommand();
     window.SelectTool(modeling::DrawingTool::Select);
     window.operationHost_->SetShelves({});

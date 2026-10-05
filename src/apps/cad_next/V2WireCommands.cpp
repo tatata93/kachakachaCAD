@@ -453,8 +453,12 @@ void V2MainWindow::RefreshCornerDock()
     cornerDock_->SetSizeMm(CornerSizeMm());
     QString names[2];
     int found = 0;
-    for (const auto& ref : viewport_->Selection().ordered) {
-        const auto* entity = session_->GetDocument().FindEntity(ref.entityId);
+    const auto& selection = viewport_->Selection();
+    std::vector<kachakacha::v2::base::EntityId> pairIds;
+    for (const auto& ref : selection.ordered) pairIds.push_back(ref.entityId);
+    if (pairIds.empty()) pairIds = selection.entityIds;
+    for (const auto& id : pairIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
             continue;
         }

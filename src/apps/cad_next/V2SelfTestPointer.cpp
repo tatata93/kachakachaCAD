@@ -21,6 +21,8 @@
 #include "kachakacha/geometry/Vector3.h"
 
 #include <QApplication>
+#include <QAction>
+#include <QMenu>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QPoint>
@@ -915,11 +917,90 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return Explain("取り消し後のリングがいまの状態と合う", true);
 }
 
+[[nodiscard]] bool CaseContextActionsPreserveInput(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::DrawingTool;
+    window.RunCommand("file.new");
+    window.SelectTool(DrawingTool::Polyline);
+    auto& view = window.Viewport();
+    const QPointF a(view.width() * .4, view.height() * .4);
+    view.ClickAt(a); view.ClickAt(a + QPointF(70, 20));
+    const auto before = window.Session().GetDocument().Snapshot().revision;
+    bool opened = false;
+    view.SetContextMenuCallback([&](const QPoint&, const std::vector<QString>&) {
+        opened = true; return std::optional<int>{};
+    });
+    view.PressRightWithoutMoving(a);
+    if (!Explain("right click opens menu without finishing polyline", opened
+        && window.Session().PlacedPointCount() == 2
+        && window.Session().GetDocument().Snapshot().revision == before)) return false;
+    window.ActivateCommand("draw.polyline");
+    if (!Explain("same tool activation retains two points", window.Session().PlacedPointCount() == 2)) return false;
+    QMenu menu(&window); window.BuildSelectMenu(menu, {});
+    auto* back = menu.findChild<QAction*>(QStringLiteral("toolStepBack"));
+    auto* cancel = menu.findChild<QAction*>(QStringLiteral("toolCancelInput"));
+    auto* finish = menu.findChild<QAction*>(QStringLiteral("toolFinish"));
+    if (!Explain("common context actions available", back && cancel && finish)) return false;
+    back->trigger();
+    if (!Explain("step back retains first point", window.Session().PlacedPointCount() == 1)) return false;
+    cancel->trigger();
+    if (!Explain("cancel retains tool without changing document", window.Session().PlacedPointCount() == 0
+        && window.Session().CurrentTool() == DrawingTool::Polyline
+        && window.Session().GetDocument().Snapshot().revision == before)) return false;
+    finish->trigger();
+    return Explain("explicit finish returns to selection", window.Session().CurrentTool() == DrawingTool::Select);
+}
+
+[[nodiscard]] bool CaseActivationDoesNotConfirm(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!DrawRectangleByHand(window)) return false;
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire));
+    window.ActivateCommand("part.extrude");
+    const auto before = window.Session().GetDocument().Snapshot().revision;
+    window.ActionFor("part.extrude")->trigger();
+    window.ActivateCommand("part.extrude");
+    if (!Explain("menu and toolbar activation preserve extrusion preview", window.Viewport().ExtrudeHandleShown()
+        && before == window.Session().GetDocument().Snapshot().revision)) return false;
+    QMenu menu(&window); window.BuildSelectMenu(menu, {});
+    auto* apply = menu.findChild<QAction*>(QStringLiteral("toolApply"));
+    if (!Explain("context menu offers explicit apply", apply != nullptr)) return false;
+    apply->trigger();
+    return Explain("explicit apply creates a solid", CountOfKind(window,
+        kachakacha::v2::domain::EntityKind::Part) == 1);
+}
+
+[[nodiscard]] bool CaseWorkPlaneUsesCommonKeys(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::DrawingTool;
+    using kachakacha::v2::app::Shelf;
+    window.RunCommand("file.new"); window.SetWorkPlaneChooser({});
+    window.SelectTool(DrawingTool::Line);
+    window.ActivateCommand("workplane.create");
+    if (!Explain("workplane command replaces previous drawing tool", window.Session().CurrentTool() == DrawingTool::Select
+        && window.ShelfShown(Shelf::WorkPlane))) return false;
+    const auto before = CountOfKind(window, kachakacha::v2::domain::EntityKind::WorkPlane);
+    QMenu menu(&window); window.BuildSelectMenu(menu, {});
+    auto* apply = menu.findChild<QAction*>(QStringLiteral("toolApply"));
+    if (!apply) return false;
+    apply->trigger();
+    if (!Explain("workplane context apply creates one plane", CountOfKind(window,
+        kachakacha::v2::domain::EntityKind::WorkPlane) == before + 1)) return false;
+    window.ActivateCommand("workplane.create");
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return Explain("Esc keeps plane settings and cancels only preview", window.ShelfShown(Shelf::WorkPlane)
+        && !window.WorkPlanePreviewShown());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
 {
     return {
+        {"HP-INT-03 workplane tool-first and common keys", CaseWorkPlaneUsesCommonKeys},
+        {"HP-INT-01 context actions preserve unfinished input", CaseContextActionsPreserveInput},
+        {"HP-INT-02 activation and explicit apply across entry points", CaseActivationDoesNotConfirm},
         {"手ぶれでは選んだ物が動かない", CaseTinyMoveDoesNotMoveTheObject},
         {"引きずれば選んだ物が動く", CaseRealDragMovesTheObject},
         {"引きずって戻して離してもクリックにしない", CaseDragBackToStartStaysADrag},

@@ -162,7 +162,7 @@ namespace {
     // これが 1件でも残っていれば、押せるのに何も起きないものがあるということである。
     std::string leftovers;
     for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
-        window.RunCommand(command.id);
+        window.ActivateCommand(command.id);
         if (window.StatusText().contains(QStringLiteral("まだ入っていません"))) {
             leftovers += std::string(command.id) + " ";
         }

@@ -90,6 +90,11 @@ void V2MainWindow::RunWorkPlaneCreate()
         CreateWorkPlaneFromChoice(*answered, true);
         return;
     }
+    const auto selected = viewport_->Selection();
+    ClearPendingCommand();
+    EndArmedTools();
+    SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport_->SetSelection(selected);
     // 本体の道。V1 と同じく右の棚で作り方と数を決め、「平面を作る」で作る。
     if (workPlaneDock_ == nullptr) {
         SetStatus(QStringLiteral("作業平面の棚がありません。"));

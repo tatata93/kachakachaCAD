@@ -1,4 +1,5 @@
 #include "V2WorkPlaneDock.h"
+#include "V2PanelFrame.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -135,13 +136,11 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     });
     layout->addWidget(create_);
     layout->addStretch(1);
-    // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
-    // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(body_);
-    setWidget(scroll);
+    setWidget(body_);
+    auto* cancel = new QPushButton(body_);
+    MarkCancelConfirm(cancel, create_);
+    QObject::connect(cancel, &QPushButton::clicked, this, [this] { if (cancelHandler_) cancelHandler_(); });
+    PinToolActions(this, cancel, create_);
 
     QObject::connect(method_, &QComboBox::currentIndexChanged, this, [this] {
         ApplyVisibility();

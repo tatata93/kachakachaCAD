@@ -387,7 +387,7 @@ using kachakacha::v2::geometry::Vector3;
 std::vector<SelfTestCase> EditCases()
 {
     return {
-        {"面取りの棚で非対称の切戻しと残す側と頂点番号が効く", &CaseCornerDockAsymmetricChamferAndKeepSides},
+        {"HP-CN-06 面取りの棚で非対称の切戻しと残す側と頂点番号が効く", &CaseCornerDockAsymmetricChamferAndKeepSides},
         {"編集の棚で直線の点と長さ・角度を直せる", &CaseEditDockRewritesLinePoints},
         {"戻すと画面の線も消えやり直すと戻る", &CaseUndoRedrawsScene},
         {"編集の棚で円の半径を変えられる", &CaseEditDockChangesCircleRadius},

@@ -38,6 +38,8 @@ public:
     //! 見出しの下の一行(いまの案内)。空なら隠す。文言は窓が core から持ってくる。
     void ShowTemporaryPage(QWidget* page, const QString& title);
     void ClearTemporaryPage();
+    [[nodiscard]] bool HasTemporaryPage() const { return !temporary_.isNull(); }
+    [[nodiscard]] QWidget* TemporaryPage() const { return temporary_.data(); }
     void SetHint(const QString& hintJa);
     [[nodiscard]] QString HintText() const;
 

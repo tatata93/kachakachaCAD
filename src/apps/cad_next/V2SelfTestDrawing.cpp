@@ -754,9 +754,8 @@ using kachakacha::v2::modeling::ToolSettings;
     if (!Explain("3点角度が 90 度", ninety)) {
         return false;
     }
-    // 右クリックで消える(V1 と同じ)。
-    viewport.PressRightWithoutMoving();
-    return Explain("右クリックで測定が消える", viewport.MeasurePicks().empty());
+    dock.PressClear();
+    return Explain("明示的なクリアで測定が消える", viewport.MeasurePicks().empty());
 }
 
 //! HP-ME-02(C-15)。手で矩形を引き、1 辺を押して選び、帯の 測定 → 面積 を押すと、測定の棚が
@@ -845,7 +844,7 @@ using kachakacha::v2::modeling::ToolSettings;
         Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
     QApplication::sendEvent(&view, &press);
     if (!Explain("測定中もCtrlで2本を選べる", view.Selection().entityIds.size() == 2)) return false;
-    view.PressRightWithoutMoving();
+    dock.PressClear();
     dock.SetMode(kachakacha::v2::app::MeasureMode::Element);
     view.ClickAt(center + QPointF(10 * scale, 0));
     if (!Explain("要素測定はクリックで線と位置を拾う", !view.Selection().entityIds.empty()

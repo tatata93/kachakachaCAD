@@ -333,10 +333,9 @@ public:
     [[nodiscard]] bool ShelfShown(kachakacha::v2::app::Shelf shelf) const;
     [[nodiscard]] int DiagnosticRowCount() const;
 
-    //! コマンドを1つ実行する。メニューも道具箱もショートカットも、
-    //! すべてここを通る。入口を分けない(command-catalog.md §1)。
+    //! UI起動はActivateCommandへ、確定済みの内部実行はRunCommandへ集約する。
+    void ActivateCommand(std::string_view id);
     void RunCommand(std::string_view id);
-
     //! そのコマンドがいま使えるか。使えないときの理由も返す。
     [[nodiscard]] bool CommandEnabled(std::string_view id, QString* reasonOut) const;
 
@@ -515,6 +514,9 @@ public:
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
     void ToggleSnap();
+    bool HandleWorkPlaneToolKey(int key, QObject* target);
+    void BuildToolContextActions(QMenu& menu);
+    bool IsEditingCommand(std::string_view id) const;
     void SendKeyToViewport(int key);   //!< 棚のキャンセル・確定 = 3D の Esc・Enter
     [[nodiscard]] bool SnapEnabled() const noexcept { return snapEnabled_; }
     //! 見え方の段を当てる。段の中身は core が決める。

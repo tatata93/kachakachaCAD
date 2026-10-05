@@ -661,6 +661,37 @@ void V2MainWindow::ShowSelectMenu(const QPoint& at)
     (void)ShowSelectMenuWithCandidates(at, {});
 }
 
+void V2MainWindow::BuildToolContextActions(QMenu& menu)
+{
+    using kachakacha::v2::modeling::DrawingTool;
+    const auto tool = session_->CurrentTool();
+    const bool active = tool != DrawingTool::Select || ToolWantsConfirmKeys()
+        || (operationHost_ != nullptr && operationHost_->HasTemporaryPage());
+    if (!active) return;
+    menu.addSection(QStringLiteral("現在のツール"));
+    if (tool == DrawingTool::Measure) {
+        auto* clear = menu.addAction(QStringLiteral("測定をクリア"));
+        clear->setObjectName(QStringLiteral("toolClearMeasure"));
+        connect(clear, &QAction::triggered, this, [this] { measureDock_->PressClear(); });
+    } else {
+        auto* apply = menu.addAction(QStringLiteral("適用（Enter）"));
+        apply->setObjectName(QStringLiteral("toolApply"));
+        connect(apply, &QAction::triggered, this, [this] { SendKeyToViewport(Qt::Key_Return); });
+        if (session_->PlacedPointCount() > 0) {
+            auto* back = menu.addAction(QStringLiteral("直前の点を戻す（Backspace）"));
+            back->setObjectName(QStringLiteral("toolStepBack"));
+            connect(back, &QAction::triggered, this, [this] { viewport_->StepBackInputPoint(); });
+        }
+        auto* cancel = menu.addAction(QStringLiteral("入力を取り消す（Esc・ツールを維持）"));
+        cancel->setObjectName(QStringLiteral("toolCancelInput"));
+        connect(cancel, &QAction::triggered, this, [this] { SendKeyToViewport(Qt::Key_Escape); });
+    }
+    auto* finish = menu.addAction(QStringLiteral("ツールを終了（選択へ）"));
+    finish->setObjectName(QStringLiteral("toolFinish"));
+    connect(finish, &QAction::triggered, this, [this] { RunCommand("selection.activate"); });
+    menu.addSeparator();
+}
+
 std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
     const std::vector<QString>& candidateLabels)
 {
@@ -677,6 +708,7 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         }
         menu.addSeparator();
     }
+    BuildToolContextActions(menu);
     // 選んでいるものに対してできることを、その場に出す。
     // メニューに並べるのは台帳のコマンドだけ。ここで別の入口を作らない。
     // 別に作ると、押せるかどうかの判断も文言も二重になる。

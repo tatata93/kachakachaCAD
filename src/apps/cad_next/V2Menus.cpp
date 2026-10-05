@@ -36,7 +36,7 @@ void V2MainWindow::AddMenuCommands(QMenu* menu, std::initializer_list<std::strin
             action->setShortcut(
                 QKeySequence(QString::fromUtf8(std::string(command->defaultShortcut).c_str())));
         }
-        QObject::connect(action, &QAction::triggered, this, [this, id] { RunCommand(id); });
+        QObject::connect(action, &QAction::triggered, this, [this, id] { ActivateCommand(id); });
         commandActions_.emplace_back(id, action);
     }
 }

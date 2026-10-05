@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2ToolBindings.h"
 #include "V2InstructionMode.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
@@ -126,36 +127,8 @@ constexpr std::array<DrawingTool, 24> kToolOrder{
 
 //! 台帳のコマンドIDと、作図の道具の対応。
 //! 道具の入口も台帳を通す。メニューと道具箱で別の道を作らない。
-struct ToolBinding {
-    std::string_view commandId;
-    DrawingTool tool;
-};
-
-constexpr std::array<ToolBinding, 22> kToolBindings{{
-    {"selection.activate", DrawingTool::Select},
-    {"grid.move_origin", DrawingTool::SetGridOrigin},
-    {"draw.point", DrawingTool::Point},
-    {"draw.line", DrawingTool::Line},
-    {"draw.polyline", DrawingTool::Polyline},
-    {"draw.rectangle", DrawingTool::Rectangle},
-    {"draw.circle", DrawingTool::Circle},
-    {"draw.arc", DrawingTool::Arc},
-    {"draw.bezier", DrawingTool::Bezier},
-    {"draw.spline", DrawingTool::Spline},
-    {"wire.trim", DrawingTool::Trim},
-    {"wire.extend", DrawingTool::Extend},
-    {"wire.move", DrawingTool::Move},
-    {"wire.copy", DrawingTool::Copy},
-    {"wire.mirror", DrawingTool::Mirror},
-    {"wire.rotate", DrawingTool::Rotate},
-    {"wire.scale", DrawingTool::Scale},
-    {"measure.open", DrawingTool::Measure},
-    // 部品の配置(P-18)。線と同じ道具・同じ点の置き方で、選んだ部品を動かす。
-    {"part.move", DrawingTool::Move},
-    {"part.copy", DrawingTool::Copy},
-    {"part.mirror", DrawingTool::Mirror},
-    {"part.rotate", DrawingTool::Rotate},
-}};
+using v2ui::ToolBinding;
+using v2ui::kToolBindings;
 
 [[nodiscard]] QString ToolLabel(DrawingTool tool)
 {
@@ -521,7 +494,10 @@ void V2MainWindow::BuildToolPalette()
         toolActions_.push_back(action);
         actions.emplace(tool, action);
         QObject::connect(action, &QAction::triggered, this,
-            [this, tool] { SelectTool(tool); });
+            [this, tool, action] {
+                if (session_->CurrentTool() != tool || tool == DrawingTool::Select) SelectTool(tool);
+                else action->setChecked(true); // Reselecting the current tool keeps unfinished input.
+            });
     }
 
     // 2段の帯(カテゴリ → 道具)。並びは core の app/Ribbon が決める(正本 3 HTML)。

@@ -8,6 +8,13 @@
 
 #include "V2MeasureDock.h"
 #include "V2Ribbon.h"
+#include "V2ToolBindings.h"
+#include "V2SolidTool.h"
+#include "V2EdgeFinishTool.h"
+#include "V2ShellSplitTool.h"
+#include "V2GptSurfaceTool.h"
+#include "V2GptFabricationTool.h"
+#include "V2Viewport.h"
 
 #include "kachakacha/app/MeasurePanel.h"
 #include "kachakacha/app/Ribbon.h"
@@ -44,10 +51,53 @@ void V2MainWindow::BuildRibbon(const std::map<std::string, QAction*>& byCommand)
     ribbon_->ShowMode(mode_);
 }
 
+void V2MainWindow::ActivateCommand(std::string_view id)
+{
+    RibbonTool tool{};
+    tool.commandId = id;
+    RunRibbonVariant(tool);
+}
+
+bool V2MainWindow::IsEditingCommand(std::string_view id) const
+{
+    for (const auto& binding : v2ui::kToolBindings) {
+        if (id == binding.commandId && binding.tool != DrawingTool::Select
+            && binding.tool == session_->CurrentTool()) return true;
+    }
+    if (!pendingCommandId_.empty() && id == pendingCommandId_) return true;
+    if ((id == "part.extrude" && extrudeShelfShown_)
+        || (id == "workplane.create" && ShelfShown(kachakacha::v2::app::Shelf::WorkPlane))
+        || (id == "surface.create" && surfaceShelfShown_)
+        || (id == "part.thicken" && thickenShelfShown_)
+        || (id == "fabrication.create" && approxShelfShown_)) return true;
+    if (gptSurface_ && gptSurface_->Active() && id == "surface.gpt_create") return true;
+    if (gptFabrication_ && gptFabrication_->Active() && id == "fabrication.gpt_create") return true;
+    if (solidTool_ && solidTool_->Active()) {
+        kachakacha::v2::modeling::SolidMethod method{};
+        if (kachakacha::v2::app::SolidMethodForCommand(id, method)
+            && method == solidTool_->Input().method) return true;
+    }
+    if (edgeFinishTool_ && edgeFinishTool_->Active()) {
+        int kind = 0;
+        if (kachakacha::v2::app::EdgeFinishKindForCommand(id, kind)
+            && kind == edgeFinishTool_->Input().kind) return true;
+    }
+    if (shellSplitTool_ && shellSplitTool_->Active()) {
+        int method = 0;
+        if (kachakacha::v2::app::ShellSplitMethodForCommand(id, method)
+            && method == shellSplitTool_->Input().method) return true;
+    }
+    return false;
+}
+
 void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
 {
     // 選択済みでも道具を押しただけで生成しない。設定を見てから確定する。
     const auto id = tool.commandId;
+    if (!tool.surfaceMethod && !tool.measureMode && IsEditingCommand(id)) {
+        SetStatus(QStringLiteral("入力と下見を維持しています。Enter または右ペインの確定で適用できます。"));
+        return;
+    }
     if (id == "selection.activate") EndArmedTools();
     if (id == "part.surface_jig" || id == "part.from_wire_cage" || id == "derived.freeze") {
         EndArmedTools();

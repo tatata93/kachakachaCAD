@@ -3,7 +3,7 @@
 //! ここに集めたのは、V1にあって V2 に無かったものである。
 //!   - 中ボタン(と右ボタン)のドラッグで画面を移動
 //!   - Shift+中ボタンで軌道回転
-//!   - Esc は、やりかけを1つ取り消してから選択道具へ戻り、選択も解除する
+//!   - Esc は入力と下見を取り消し、現在の道具と設定を維持する
 //!   - 作図中の S で吸着を一時停止、Shift で水平・垂直・正方形へ固定
 //!   - 掴めるかどうかが分かるカーソル
 //!   - 重なった候補を Tab で送り、Alt+クリックで奥を選ぶ(ui-ux-integrated-spec §4.2)
@@ -470,9 +470,23 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     // 次のクリックで選ばれるものが食い違う。
     cycle_.index = index;
     SyncHoverWithCandidate();
-    SetSelection(kachakacha::v2::app::ApplySelection(selection_, CurrentCandidate(),
+    const auto picked = CurrentCandidate();
+    const auto mode = ModeForTogglePick(picked, ModeForToolPick(picked,
         kachakacha::v2::app::SelectionMode::Replace));
+    SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
     ReportSelectionCount();
+    update();
+    return true;
+}
+
+bool V2Viewport::StepBackInputPoint()
+{
+    if (!session_->UndoLastPoint()) return false;
+    DiscardHoverState();
+    SyncCursorInputWithTool(false, false);
+    RefreshHoverInPlace();
+    status_ = "1点戻しました。";
+    if (statusCallback_) statusCallback_(status_);
     update();
     return true;
 }
@@ -485,75 +499,18 @@ void V2Viewport::PressRightWithoutMoving()
 
 void V2Viewport::PressRightWithoutMoving(const QPointF& position)
 {
-    using kachakacha::v2::modeling::DrawingTool;
-    const DrawingTool tool = session_->CurrentTool();
-    if (tool == DrawingTool::Select) {
-        // V1と同じ。選択道具のときだけ、右クリックでメニューを出す。
-        if (!contextMenu_) {
-            return;
-        }
-        // 出す候補は Hover や Tab と同じ一箇所(cycle_)から取る。
-        // 別に拾い直すと、献立に並ぶものと画面に出ているものが食い違う。
-        RefreshPickCycle(position);
-        // 重なっているときだけ一覧を出す。1件以下では選び分ける相手がいない。
-        std::vector<QString> labels;
-        if (cycle_.candidates.size() >= 2) {
-            labels = CandidateLabels();
-        }
-        const std::optional<int> chosen = contextMenu_(mapToGlobal(position.toPoint()),
-            labels);
-        // 候補を選ばなかった(台帳のコマンドを選んだ・閉じた)なら選択は動かさない。
-        // 空白の右クリックで選んでいたものが消えては、次の操作の相手がいなくなる。
-        if (chosen.has_value() && *chosen >= 0) {
-            (void)SelectCandidate(static_cast<std::size_t>(*chosen));
-        }
-        return;
+    if (!contextMenu_) return;
+    // Right-click never commits, cancels or clears inputs by itself.
+    // Every tool uses the same contextual actions and candidate chooser.
+    RefreshPickCycle(position);
+    const bool selecting = session_->CurrentTool()
+        == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_;
+    const auto labels = selecting && cycle_.candidates.size() >= 2
+        ? CandidateLabels() : std::vector<QString>{};
+    const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
+    if (chosen.has_value() && *chosen >= 0) {
+        (void)SelectCandidate(static_cast<std::size_t>(*chosen));
     }
-    if (tool == DrawingTool::Measure) {
-        // V1と同じ。測定の右クリックは「測ったものを消す」。道具は抜けない。
-        // 測る相手は選択と押した点なので、両方を空にする。
-        SetSelection(kachakacha::v2::app::SelectionSet{});
-        ClearMeasurePicks();
-        status_ = "測定を消しました。";
-        if (statusCallback_) {
-            statusCallback_(status_);
-        }
-        update();
-        return;
-    }
-    // ポリラインとスプラインは、右クリックが「ここで確定」である。
-    // 点をいくつ置くか決まっていないので、終わりを伝える手立てが要る。
-    const std::size_t placed = session_->PlacedPointCount();
-    const bool canFinish = (tool == DrawingTool::Polyline && placed >= 2)
-        || (tool == DrawingTool::Spline && placed >= 4);
-    if (canFinish) {
-        FinishTool();
-        return;
-    }
-    if (placed > 0) {
-        // 途中なら取り消す。全部消えるので、Esc と同じ言い方をする。
-        session_->CancelTool();
-        hover_.preview.clear();
-        status_ = "作図をやめました。";
-        if (statusCallback_) {
-            statusCallback_(status_);
-        }
-        update();
-        return;
-    }
-    // 1点も置いていない道具の右クリックは、道具を抜けて選択へ戻す。
-    // V1 は「近くの点から引き始める」に使っていたが、
-    // それは吸着の拾い方が違うので、まだ同じにはできない。
-    // できないことを、できたことにしない。
-    if (backToSelect_) {
-        backToSelect_();
-    }
-    status_ = "選択道具に戻りました。";
-    if (statusCallback_) {
-        statusCallback_(status_);
-    }
-    RefreshCursorShape();
-    update();
 }
 
 bool V2Viewport::BeginBodyDrag(const QPointF& position)

@@ -1200,6 +1200,7 @@ bool V2Viewport::EditCursorFieldForKey(int key)
     if (!cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
         return false;
     }
+    if (key == Qt::Key_Backspace && !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)) return false;
     const std::size_t at = cursorPanel_.focusedIndex;
     if (at < cursorPanel_.states.size()) {
         QString edited = QString::fromStdString(cursorPanel_.states[at].text);
@@ -1287,13 +1288,7 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         }
     }
     if (event->key() == Qt::Key_Backspace) {
-        if (session_->UndoLastPoint()) {
-            status_ = "1点戻しました。";
-            if (statusCallback_) {
-                statusCallback_(status_);
-            }
-            update();
-        }
+        (void)StepBackInputPoint();
         return;
     }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {

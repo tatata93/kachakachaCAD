@@ -61,10 +61,30 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
         || thickenShelfShown_ || cornerPreviewShown_
+        || ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
         || (loopFaces_ != nullptr && loopFaces_->Active())
         || OwnedToolShelf() != kachakacha::v2::app::Shelf::None;
+}
+
+bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
+{
+    if (key == Qt::Key_Escape) {
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        workPlanePreviewShown_ = false;
+        viewport_->HideToolPreview();
+        SetStatus(QStringLiteral("作業面: 入力と下見を取り消しました。作り方と設定は維持します。"));
+        return true;
+    }
+    if (key != Qt::Key_Return && key != Qt::Key_Enter) return false;
+    if (auto* field = dynamic_cast<QAbstractSpinBox*>(target)) field->interpretText();
+    if (!workPlaneDock_->CanCreate()) {
+        SetStatus(workPlaneDock_->NeedsText());
+        return true;
+    }
+    CreateWorkPlaneFromDock();
+    return true;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -72,6 +92,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (viewport_ == nullptr) {
         return false;
     }
+    if (ShelfShown(kachakacha::v2::app::Shelf::WorkPlane) && HandleWorkPlaneToolKey(key, target)) return true;
     if (gptFabrication_ != nullptr && gptFabrication_->HandleKey(key)) { return true; }
     if (gptSurface_ != nullptr && gptSurface_->HandleKey(key)) { return true; }
     if (!pendingCommandId_.empty()) {

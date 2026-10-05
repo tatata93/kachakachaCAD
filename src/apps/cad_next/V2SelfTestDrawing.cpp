@@ -22,7 +22,11 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QColor>
+#include <QApplication>
+#include <QMouseEvent>
+#include <QEvent>
 #include <QPointF>
+#include <QPushButton>
 #include <QString>
 
 #include <cmath>
@@ -83,6 +87,12 @@ using kachakacha::v2::modeling::ToolSettings;
             std::abs(sagitta - expected) < 0.05)) {
         return false;
     }
+    auto* flip = window.findChild<QPushButton*>(QStringLiteral("arcFlipNormal"));
+    if (!Explain("反転ボタンがある", flip != nullptr)) return false;
+    viewport.ClickAt(center);
+    flip->click();
+    if (!Explain("反転しても始点を保持", window.Session().PlacedPointCount() == 1)) return false;
+    if (!Explain("反転が設定に反映", window.DrawingDock().Settings().sweepAngleRad < 0)) return false;
     // 3点へ戻すと、また3点要る。
     settings.arcMode = ArcMode::ThreePoints;
     window.DrawingDock().SetSettings(settings);
@@ -811,12 +821,60 @@ using kachakacha::v2::modeling::ToolSettings;
             && window.StatusText().contains(QStringLiteral("面積は寸法として残せません")));
 }
 
+// Tool-first picking must measure geometry without returning to Select.
+[[nodiscard]] bool CaseMeasureToolFirst(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const double scale = PrepareTopView(window);
+    auto& view = window.Viewport();
+    auto& dock = window.MeasureDock();
+    const QPointF center(view.width() * 0.5, view.height() * 0.5);
+    window.SelectTool(DrawingTool::Line);
+    view.ClickAt(center + QPointF(-30 * scale, 0));
+    view.ClickAt(center + QPointF(30 * scale, 0));
+    view.ClickAt(center + QPointF(-30 * scale, 20 * scale));
+    view.ClickAt(center + QPointF(30 * scale, 20 * scale));
+    view.SetSelection({});
+    window.RunCommand("measure.open");
+    dock.SetMode(kachakacha::v2::app::MeasureMode::Selection);
+    view.ClickAt(center + QPointF(10 * scale, 0));
+    if (!Explain("測定を先に選び線をクリックして測れる", !view.Selection().entityIds.empty()
+        && dock.RowCount() > 5 && view.MeasurePicks().empty())) return false;
+    const QPointF second = center + QPointF(10 * scale, 20 * scale);
+    QMouseEvent press(QEvent::MouseButtonPress, second, second,
+        Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
+    QApplication::sendEvent(&view, &press);
+    if (!Explain("測定中もCtrlで2本を選べる", view.Selection().entityIds.size() == 2)) return false;
+    view.PressRightWithoutMoving();
+    dock.SetMode(kachakacha::v2::app::MeasureMode::Element);
+    view.ClickAt(center + QPointF(10 * scale, 0));
+    if (!Explain("要素測定はクリックで線と位置を拾う", !view.Selection().entityIds.empty()
+        && view.MeasurePicks().size() == 1 && dock.RowCount() > 2)) return false;
+    dock.SetMode(kachakacha::v2::app::MeasureMode::TwoPoints);
+    view.ClickAt(center);
+    view.ClickAt(center + QPointF(10 * scale, 0));
+    view.ClickAt(center + QPointF(20 * scale, 0));
+    if (!Explain("次の測定は新しい1点目から始まる", view.MeasurePicks().size() == 1)) return false;
+    view.SetSelection({});
+    window.SelectTool(DrawingTool::Line);
+    window.RunCommand("edit.numeric");
+    if (!Explain("数値編集は前の作図を終了して対象を待つ", window.Session().CurrentTool() == DrawingTool::Select)) return false;
+    view.SelectAt(center + QPointF(10 * scale, 0), Qt::NoModifier);
+    if (!Explain("数値編集で後から対象が拾える", !view.Selection().entityIds.empty())) return false;
+    view.SetSelection({});
+    window.SelectTool(DrawingTool::Line);
+    window.RunCommand("wire.offset");
+    return Explain("対象待ちの命令が前の作図を残さない", window.Session().CurrentTool() == DrawingTool::Select);
+
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
-        {"測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
+        {"HP-ME-03 測定を先に選んで線と位置を拾う", &CaseMeasureToolFirst},
+        {"HP-ME-01 測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
         {"HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
             &CaseAreaMeasureFromRibbon},
         {"V1 の .kcd を開くと V2 の文書になる", &CaseV1KcdOpensAsDocument},
@@ -828,7 +886,7 @@ std::vector<SelfTestCase> DrawingCases()
         {"右の棚が道具に合わせて変わる", &CaseShelfFollowsTheTool},
         {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},
         {"表示の棚で太さ・様式・色と段が変わる", &CaseDisplayDockStylesAndStages},
-        {"作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},
+        {"HP-ARC-FLIP 作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},
         {"補助線として作図し指定点を残せる", &CaseConstructionAndKeepPointsFromDock},
         {"数値で線を作れる", &CaseDirectWireFromDock},
     };

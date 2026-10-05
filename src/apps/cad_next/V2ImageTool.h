@@ -37,6 +37,8 @@ private:
     bool DragViewport(QEvent*);
     void MoveImageDrag(const QPointF&);
     void UpdateFields();
+    bool FitPickedPoints();
+    bool EditSelectedImage();
     V2MainWindow& window_;
     kachakacha::v2::domain::CreateImageDefinition definition_;
     kachakacha::v2::base::EntityId editing_;
@@ -44,6 +46,7 @@ private:
     std::vector<V2ImageView> savedViews_;
     QImage image_;
     QCheckBox* mirror_=nullptr;
+    QCheckBox* fitRotate_=nullptr;
     bool PickImagePoint(const QPointF&);
     std::vector<kachakacha::v2::geometry::Vector3> imageMarks_;
     QLabel* status_=nullptr;

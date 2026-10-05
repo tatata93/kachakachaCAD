@@ -46,8 +46,9 @@ bool CaseImagePersistence(V2MainWindow& window) {
     }
     if(!Explain("two image points match CAD distance",std::abs(panel->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->value()-160)<1e-5))return false;
     const auto corner=window.Viewport().ImageViews().back().triangles.front().mesh.points[0];
+    if(!Explain("fit translates image as well as scaling",geometry::Distance(corner,{-20,20,0})<1e-6))return false;
     panel->findChild<QPushButton*>(QStringLiteral("imageAnchor"))->click();
-    if(!ImageClick(window,{40,20,0}))return false;
+    if(!ImageClick(window,{20,-10,0}))return false;
     if(!Explain("choosing anchor keeps image still",geometry::Distance(corner,window.Viewport().ImageViews().back().triangles.front().mesh.points[0])<1e-8))return false;
     if(!ImageClick(window,{3,4,0}))return false;
     panel->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->setValue(20);
@@ -62,7 +63,10 @@ bool CaseImagePersistence(V2MainWindow& window) {
     const auto screen=window.Viewport().Mapping().Project({3,4,0});if(!screen)return false;
     window.Viewport().SelectAt(QPointF(screen->x,screen->y),Qt::NoModifier);
     if(!Explain("image is selectable in 3D",app::IsSelected(window.Viewport().Selection(),id)))return false;
-    auto* edit=V2ImageTool::Open(window);auto* width=edit->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"));
+    window.Viewport().SetSelection({});
+    auto* edit=V2ImageTool::Open(window);
+    if(!ImageClick(window,{3,4,0}))return false;
+    auto* width=edit->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"));
     if(!Explain("reopen same width",std::abs(width->value()-20)<1e-6))return false;
     width->setValue(37);edit->findChild<QPushButton*>(QStringLiteral("imageCancel"))->click();QApplication::processEvents();
     auto* again=V2ImageTool::Open(window);if(!Explain("cancel kept old placement",std::abs(again->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->value()-20)<1e-6))return false;

@@ -266,14 +266,15 @@ namespace {
 
 [[nodiscard]] bool CaseSelectionSurvivesFailure(V2MainWindow& window)
 {
-    // 失敗しても、いま選んでいる道具は変わらないこと。
+    // Tool-first commands collect targets instead of leaving Circle to consume clicks.
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Circle);
-    const auto before = window.Session().CurrentTool();
+    const auto revision = window.Session().GetDocument().Revision();
     for (int round = 0; round < 3; ++round) {
         window.RunCommand("export.svg");
         window.RunCommand("part.from_wire_cage");
     }
-    return window.Session().CurrentTool() == before;
+    return window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select
+        && window.Session().GetDocument().Revision() == revision;
 }
 
 [[nodiscard]] bool CaseModesKeepSelection(V2MainWindow& window)
@@ -1436,7 +1437,7 @@ std::vector<SelfTestCase> BasicCases()
         {"対象不足のコマンドは構えて理由を出す", &CaseDisabledCommandsExplain},
         {"案内が6つそろっている", &CaseGuideIsComplete},
         {"失敗しても続き、文書が変わらない", &CaseFailureRecovery},
-        {"失敗しても選んだ道具が変わらない", &CaseSelectionSurvivesFailure},
+        {"HP-TARGET-WAIT 対象待ちは前の作図を終了し文書を変えない", &CaseSelectionSurvivesFailure},
         {"モードを変えると道具だけ選択へ戻る", &CaseModesKeepSelection},
         {"モードで出るコマンドが変わる", &CaseModesChangeVisibleCommands},
         {"ビューキューブが連続に回る", &CaseViewCubeDragIsContinuous},

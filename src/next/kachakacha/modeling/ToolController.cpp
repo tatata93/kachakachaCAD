@@ -312,7 +312,7 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
         }
         if (settings_.arcMode == ArcMode::EndpointsAndRadius) {
             auto made = geometry::ArcFromEndpointsAndRadius(points[0], points[1],
-                settings_.radiusMm, settings_.planeNormal, false, false);
+                settings_.radiusMm, settings_.planeNormal, false, settings_.sweepAngleRad < 0.0);
             if (!made.HasValue()) {
                 return Result<ToolOutput>::Failure(made.Diagnostics());
             }

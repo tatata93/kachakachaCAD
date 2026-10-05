@@ -123,9 +123,9 @@
         <p>作図点、直線、ポリライン、矩形、円、円弧、ベジェ、スプラインを2D作業平面上にも3D空間にも置けます。作図中はカーソルの近くに数値欄が開きます。</p>
         <h3>式を入れる</h3><p>長さ、半径、角度などの数値欄は <code>(180/2)*3</code>、<code>25.4/2</code> のような四則演算と括弧を受け付けます。確定前に単位と結果を確認してください。</p>
         <figure><img src="manual/images/v2-cursor-input.png" alt="カーソル連動の数値入力"><figcaption>Tabで項目を移り、Enterで確定、Escで取り消します。</figcaption></figure>
-        <h3>円弧の三つの作り方</h3>
+        <h3>円弧の作り方</h3>
         <table class="compact"><thead><tr><th>作り方</th><th>入力順</th><th>用途</th></tr></thead><tbody><tr><td>3点</td><td>始点 → 通過点 → 終点</td><td>既存点を通る円弧</td></tr><tr><td>両端と半径</td><td>始点 → 終点 → 半径</td><td>弦とRが決まった輪郭</td></tr><tr><td>始点と接線</td><td>始点 → 接線方向 → 半径 → 中心角</td><td>既存線から滑らかに生やす</td></tr></tbody></table>
-        <div class="warning">始点法線角と円周長を独立欄で指定する円弧は、現V2の画面にはまだありません。接線方向と中心角で指定してください。</div>
+        <div class="warning">始点法線角と円周長を独立欄で指定する円弧は、現V2の画面にはまだありません。接線方向と中心角で指定してください。「曲がる側を反転（法線反転）」で両端・半径方式と始点接線方式の向きを反転できます。</div>
         <h3>スナップ</h3><p>端点、中心、交点、作図点へ近づくと候補の丸が大きく表示されます。通常は弱く吸着し、<kbd>S</kbd>を押している間は吸着しません。<kbd>Shift</kbd>は水平・垂直方向の拘束、<kbd>Ctrl</kbd>は複数選択です。<kbd>F3</kbd>でスナップ全体を切り替えます。</p>
         <div class="gallery"><figure><img src="manual/images/v2-snap.png" alt="スナップ候補"><figcaption>候補を丸で強調。候補名と距離を確認してクリックします。</figcaption></figure><figure><img src="manual/images/v2-draw-line.png" alt="3D直線作図"><figcaption>任意の点から3D空間へ直線を作図。</figcaption></figure><figure><img src="manual/images/v2-curves.png" alt="曲線作図"><figcaption>円弧、ベジェ、スプラインの例。</figcaption></figure><figure><img src="manual/images/v2-curves-win95.png" alt="曲線作図の別テーマ"><figcaption>曲線の制御点と選択表示。</figcaption></figure></div>
         <h3>グリッド</h3><p>主間隔と副点数を設定できます。<b>グリッド原点を移動</b>は、既存の作図点や幾何点を新しい基準にします。</p>
@@ -148,7 +148,7 @@
       </section>
 
       <section id="measure" class="search-section">
-        <h2>7. 3D測定</h2><table><thead><tr><th>モード</th><th>選択</th><th>表示</th></tr></thead><tbody><tr><td>2点</td><td>任意の2点</td><td>3D距離、dX/dY/dZ、XY/YZ/ZX投影距離、軸との角度</td></tr><tr><td>3点角度</td><td>始点、頂点、終点</td><td>三点のなす角</td></tr><tr><td>要素</td><td>曲線+点</td><td>接線、法線、曲率半径、点との関係</td></tr><tr><td>要素</td><td>曲線+曲線</td><td>最短距離、接線角、法線角</td></tr></tbody></table><p>測定値から作図点を残せます。測定線は形状ではないため、出力や部品には入りません。</p>
+        <h2>7. 3D測定</h2><p>測定ツールを先に選び、3D画面または左ツリーから対象を選べます。線を先に選ぶ順も使えます。直線と2点間には現在の作業面の底辺（U）・高さ（V）・面外の高低差を表示します。2点・3点測定は完了後のクリックで次の組を始めます。</p><table><thead><tr><th>モード</th><th>選択</th><th>表示</th></tr></thead><tbody><tr><td>2点</td><td>任意の2点</td><td>3D距離、dX/dY/dZ、XY/YZ/ZX投影距離、軸との角度</td></tr><tr><td>3点角度</td><td>始点、頂点、終点</td><td>三点のなす角</td></tr><tr><td>要素</td><td>曲線+点</td><td>接線、法線、曲率半径、点との関係</td></tr><tr><td>要素</td><td>曲線+曲線</td><td>最短距離、接線角、法線角</td></tr></tbody></table><p>測定値から作図点を残せます。測定線は形状ではないため、出力や部品には入りません。</p>
       </section>
 
       <section id="guide" class="search-section">
@@ -373,7 +373,7 @@
 <tr data-command="fabrication.from_face"><td>フェイスを近似</td><td>フェイスを独立面として取り出し、従来近似の対象にします。</td></tr>
 <tr data-command="fabrication.gpt_from_face"><td>フェイスをGPT近似</td><td>フェイスを独立面として取り出し、GPT版近似の対象にします。</td></tr>
 </tbody></table><p>元ソリッドは変更しません。抽出面は独立コピーで、近似取消後も残ります。不要ならUndoで抽出を取り消せます。上部のタブ形がカテゴリ、下段の押しボタンが実行ツールです。</p></section>
-</main>
+<section><h2>画像フィット</h2><p>画像ツールの「画像フィット」で、画像上の2点→配置先の2点を主3Dビューで指定します。「フィット時に回転する」で2点を一致させます。オフでは画像の向きを維持して長い軸に合わせ、縦横比を維持します。移動・回転を含む下見をEnterで確定します。曲面UV上の長さ合わせは局所尺度による近似です。</p></section></main>
   </div>
   <script>
     (() => {

@@ -34,11 +34,15 @@ void V2ImageTool::BuildUi() {
     button(QStringLiteral("現在の作業面に貼る"),"imageWorkPlane",[this]{UseWorkPlane();Preview();});
     button(QStringLiteral("位置を変更：画像の基準点を3Dで選ぶ"),"imageAnchor",[this]{Pick(2);});
     button(QStringLiteral("配置の基準点を3Dで選ぶ"),"imageWorldAnchor",[this]{Pick(3);});
-    button(QStringLiteral("長さ合わせ：画像の2点を3Dで選ぶ"),"imagePixelLength",[this]{pixels_.clear();points_.clear();imageMarks_.clear();Pick(4);});
+    button(QStringLiteral("画像フィット：画像2点 → 配置先2点"),"imagePixelLength",[this]{pixels_.clear();points_.clear();imageMarks_.clear();Pick(4);});
     button(QStringLiteral("長さ合わせ：CADの2点を選ぶ"),"imageWorldLength",[this]{if(pixels_.size()!=2){status_->setText(QStringLiteral("先に画像の2点を指定してください。"));return;}points_.clear();Pick(5);});
+    fitRotate_=new QCheckBox(QStringLiteral("フィット時に回転する"),this);
+    fitRotate_->setObjectName(QStringLiteral("imageFitRotate"));fitRotate_->setChecked(true);
+    fitRotate_->setToolTip(QStringLiteral("オン：2点を一致させる。オフ：画像の向きを維持し、指定範囲の長い軸に合わせる（縦横比は維持）。"));
+    layout->addWidget(fitRotate_);
     mirror_=new QCheckBox(QStringLiteral("左右反転（基準点を固定）"),this);mirror_->setObjectName(QStringLiteral("imageMirror"));
     layout->addWidget(mirror_);connect(mirror_,&QCheckBox::toggled,this,[this]{Preview();});
-    auto* help=new QLabel(QStringLiteral("画像をドラッグすると位置が追従します。離して仮置き、Enterで確定、Escで取消。貼付後も画像を選択して「画像」を開くと再編集できます。"),this);
+    auto* help=new QLabel(QStringLiteral("画像をドラッグすると位置が追従します。離して仮置き、Enterで確定、Escで取消。貼付後も「画像」を開いて画像を選ぶと再編集できます。曲面UVの長さ合わせは局所尺度による近似です。"),this);
     help->setWordWrap(true);layout->addWidget(help);
     auto* form=new QFormLayout;layout->addLayout(form);
     mode_=new QComboBox(this);mode_->setObjectName(QStringLiteral("imageMapping"));

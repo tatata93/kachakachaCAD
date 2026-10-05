@@ -1384,6 +1384,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         SelectAt(event->position(), event->modifiers());
         return;
     }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
+        ClickForMeasure(event->position(), event->modifiers());
+        return;
+    }
     ClickAt(event->position());
 }
 

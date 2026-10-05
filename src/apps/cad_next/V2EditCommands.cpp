@@ -34,6 +34,8 @@ void V2MainWindow::RunShelfCommand(std::string_view id)
         return;
     }
     if (id == "edit.numeric") {
+        EndArmedTools();
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         // 選んでいるものの数値を欄に出す。何も選んでいなければ、何を選ぶかを言う。
         RefreshEditDock();
         ShowShelf(kachakacha::v2::app::Shelf::Edit);
@@ -46,6 +48,7 @@ void V2MainWindow::RefreshMeasurements()
     if (measureDock_ == nullptr || viewport_ == nullptr) {
         return;
     }
+    viewport_->SetMeasurePointCount(kachakacha::v2::app::MeasurePointCount(measureDock_->Mode()));
     measureDock_->SetRequest(CurrentMeasureRequest());
     measureDock_->SetKeptCount(
         static_cast<int>(session_->GetDocument().Snapshot().referenceDimensions.size()));
@@ -60,6 +63,7 @@ kachakacha::v2::app::MeasureRequest V2MainWindow::CurrentMeasureRequest() const
     request.toleranceMm =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     request.mode = measureDock_->Mode();
+    request.workPlane = viewport_->WorkPlane();
     if (request.mode == kachakacha::v2::app::MeasureMode::Area) {
         // 面積は閉じた輪の性質。1 辺を押しただけでも、その線の全体で測る(C-15)。
         request.curves = kachakacha::v2::app::SelectedWholeCurves(viewport_->Selection(),

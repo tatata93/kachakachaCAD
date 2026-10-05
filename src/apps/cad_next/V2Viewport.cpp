@@ -995,8 +995,14 @@ void V2Viewport::CancelPointPick()
 }
 
 //! 測定は点を集めるだけ。形は作らない。吸着した位置と、吸着した線を覚える。
-void V2Viewport::ClickForMeasure(const QPointF& position)
+void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
+    // Selection/Area pick wires; Element picks both a wire and its measurement position.
+    if (measurePointCount_ <= 1) {
+        SelectAt(position, modifiers);
+        if (measurePointCount_ == 0) return;
+    }
+
     const auto hovered = session_->Hover(ScreenPoint{position.x(), position.y()});
     if (!hovered.position.has_value()) {
         status_ = "その場所では点を取れません。";
@@ -1009,6 +1015,9 @@ void V2Viewport::ClickForMeasure(const QPointF& position)
     pick.point = *hovered.position;
     if (hovered.snap.has_value()) {
         pick.entityId = hovered.snap->entityId;
+    }
+    if (measurePicks_.size() >= static_cast<std::size_t>(measurePointCount_)) {
+        measurePicks_.clear();
     }
     measurePicks_.push_back(pick);
     if (measurePicksChanged_) {

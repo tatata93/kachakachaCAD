@@ -309,6 +309,7 @@ void V2DrawingDock::ApplyToolRows()
     } else {
         toolForm_->setRowVisible(arcRadius_, false);
         toolForm_->setRowVisible(arcSweep_, false);
+        toolForm_->setRowVisible(arcFlip_, false);
     }
     // 倍率はスケールの「倍率」のときだけ(基準の2点のときは点が倍率を決める)。
     toolForm_->setRowVisible(scaleFactor_,
@@ -496,6 +497,12 @@ void V2DrawingDock::BuildArcRows(QFormLayout* form)
     arcSweep_->setSuffix(QStringLiteral(" 度"));
     arcSweep_->setValue(90.0);
     form->addRow(QStringLiteral("中心角"), arcSweep_);
+    arcFlip_ = new QPushButton(QStringLiteral("曲がる側を反転（法線反転）"), body_);
+    arcFlip_->setObjectName(QStringLiteral("arcFlipNormal"));
+    form->addRow(QStringLiteral("向き"), arcFlip_);
+    QObject::connect(arcFlip_, &QPushButton::clicked, this, [this] {
+        arcSweep_->setValue(arcSweep_->value() == 0.0 ? -90.0 : -arcSweep_->value());
+    });
     QObject::connect(arcRadius_, &QDoubleSpinBox::valueChanged, this,
         [this] { EmitSettings(); });
     QObject::connect(arcSweep_, &QDoubleSpinBox::valueChanged, this,
@@ -572,6 +579,7 @@ void V2DrawingDock::ApplyArcVisibility()
     toolForm_->setRowVisible(arcRadius_,
         mode == ArcMode::EndpointsAndRadius || mode == ArcMode::StartTangent);
     toolForm_->setRowVisible(arcSweep_, mode == ArcMode::StartTangent);
+    toolForm_->setRowVisible(arcFlip_, mode == ArcMode::StartTangent || mode == ArcMode::EndpointsAndRadius);
 }
 
 void V2DrawingDock::ApplyDirectWireVisibility()

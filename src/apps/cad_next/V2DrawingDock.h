@@ -140,6 +140,7 @@ private:
     std::function<void(const QString&)> blockedMethodHandler_;
     QDoubleSpinBox* arcRadius_ = nullptr;
     QDoubleSpinBox* arcSweep_ = nullptr;
+    QPushButton* arcFlip_ = nullptr;
     QCheckBox* construction_ = nullptr;
     QCheckBox* keepPoints_ = nullptr;
     QCheckBox* controlPolygon_ = nullptr;

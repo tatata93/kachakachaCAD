@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QEvent>
+#include <QCheckBox>
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLabel>
@@ -58,6 +59,11 @@ bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
     if(event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton||mouse->modifiers()!=Qt::NoModifier)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
+    if(role_==0&&image_.isNull()){
+        window_.viewport_->SelectAt(mouse->position(),Qt::NoModifier);
+        if(!EditSelectedImage())status_->setText(QStringLiteral("貼付済み画像をクリックするか、画像ファイルを選んでください。"));
+        return true;
+    }
     if(role_==0||role_==2){
         const int previousRole=role_;role_=2;
         if(PickImagePoint(mouse->position())){
@@ -109,11 +115,8 @@ void V2ImageTool::ClickViewport(const QPointF& pos) {
     if(!point)point=window_.viewport_->Mapping().UnprojectOntoPlane(screen,definition_.origin,Cross(definition_.uAxis,definition_.vAxis));
     if(!point){status_->setText(QStringLiteral("位置を読み取れません。貼付面を正面から見てください。"));return;}
     if(role_==3){if(!SetAnchor(*point))return;role_=0;}
-    else {points_.push_back(*point);if(points_.size()==2){const auto scale=modeling::ImageScaleFromPoints(pixels_[0],pixels_[1],points_[0],points_[1]);
-        if(!scale.HasValue()){points_.clear();status_->setText(QString::fromStdString(scale.FirstSummaryJa()));return;}
-        const double width=scale.Value()*definition_.pixelWidth;
-        if(width<0.00001||width>10000000){points_.clear();status_->setText(QStringLiteral("長さ合わせ後の幅が設定範囲外です（0.00001～10000000mm）。"));return;}
-        definition_.mmPerPixel=scale.Value();role_=0;}}
+    else {points_.push_back(*point);if(points_.size()==2){
+        if(!FitPickedPoints()){points_.clear();return;}role_=0;}}
     UpdateFields();Preview();if(role_!=0)Pick(role_);
 }
 
@@ -146,4 +149,27 @@ bool V2ImageTool::PickImagePoint(const QPointF& pos) {
         imageMarks_.clear();UpdateFields();Preview();Pick(3);
     }else {imageMarks_.push_back(world);SetImagePoint(pixel);}
     return true;
+}
+
+bool V2ImageTool::FitPickedPoints() {
+    const auto before=definition_;
+    if(!SetAnchor(points_[0]))return false;
+    Vector3 delta;
+    if(definition_.followSurface&&face_.Valid()) {
+        const auto end=kernel::ImagePointOnSurface(face_,points_[1]);
+        if(!end.HasValue()){definition_=before;status_->setText(QString::fromStdString(end.FirstSummaryJa()));return false;}
+        delta={(end.Value().uv.x-definition_.anchorUv.x)*definition_.uvMetric.x,
+               (end.Value().uv.y-definition_.anchorUv.y)*definition_.uvMetric.y,0};
+    } else {
+        const auto difference=points_[1]-points_[0];
+        delta={Dot(difference,definition_.uAxis),Dot(difference,definition_.vAxis),
+               Dot(difference,Normalized(Cross(definition_.uAxis,definition_.vAxis)))};
+    }
+    const auto fit=modeling::FitImagePoints(pixels_[1]-pixels_[0],delta,
+        definition_.mirrorHorizontal,definition_.rotationRad,fitRotate_->isChecked());
+    if(!fit.HasValue()){definition_=before;status_->setText(QString::fromStdString(fit.FirstSummaryJa()+" "+fit.FirstDetailsJa()));return false;}
+    const double width=fit.Value().mmPerPixel*definition_.pixelWidth;
+    if(width<0.00001||width>10000000){definition_=before;status_->setText(QStringLiteral("画像フィット後の幅が設定範囲外です。"));return false;}
+    definition_.mmPerPixel=fit.Value().mmPerPixel;definition_.rotationRad=fit.Value().rotationRad;
+    definition_.anchorPixel=pixels_[0];imageMarks_.clear();return true;
 }

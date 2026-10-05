@@ -71,4 +71,20 @@ KACHA_V2_TEST(image, mirrored_anchor_rotation_roundtrip) {
     RequireNear(a.x+b.x,2*d.anchorPixel.x,1e-10,"UV mirror around anchor");
     RequireNear(a.y,b.y,1e-10,"UV vertical unchanged");
 }
+KACHA_V2_TEST(image, fit_points_rotate_and_dominant_axis) {
+    const auto rotated=modeling::FitImagePoints({20,0,0},{0,40,0},false,0,true);
+    Require(rotated.HasValue(),"rotated fit");
+    auto d=Image();d.mmPerPixel=rotated.Value().mmPerPixel;d.rotationRad=rotated.Value().rotationRad;
+    d.anchorPixel={10,5,0};d.origin={4,7,0};
+    RequireNear(geometry::Distance(modeling::ImagePixelAt(d,{4,47,0}),{30,5,0}),0,1e-8,"second point matches");
+    const auto fixed=modeling::FitImagePoints({20,-5,0},{60,40,0},false,0,false);
+    Require(fixed.HasValue(),"dominant X fit");RequireNear(fixed.Value().mmPerPixel,3,1e-9,"fit larger axis");
+    const auto vertical=modeling::FitImagePoints({5,-20,0},{40,60,0},false,0,false);
+    Require(vertical.HasValue(),"dominant Y fit");RequireNear(vertical.Value().mmPerPixel,3,1e-9,"fit larger axis");
+    Require(!modeling::FitImagePoints({20,0,0},{0,40,0},false,0,false).HasValue(),"cannot fit zero X without rotation");
+    Require(!modeling::FitImagePoints({20,0,0},{40,0,1},false,0,true).HasValue(),"out of plane rejected");
+    const auto mirrored=modeling::FitImagePoints({20,0,0},{0,40,0},true,0,true);
+    Require(mirrored.HasValue(),"mirrored fit");d.mirrorHorizontal=true;d.rotationRad=mirrored.Value().rotationRad;
+    RequireNear(geometry::Distance(modeling::ImagePixelAt(d,{4,47,0}),{30,5,0}),0,1e-8,"mirrored second point");
+}
 KACHA_V2_TEST_MAIN("image_placement_tests")

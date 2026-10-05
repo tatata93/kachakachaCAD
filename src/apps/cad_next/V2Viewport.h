@@ -717,6 +717,7 @@ public:
         return measurePicks_;
     }
     void ClearMeasurePicks();
+    void SetMeasurePointCount(int count) { measurePointCount_ = count; }
     //! 測定の点が増えた・消えたときに呼ぶもの。
     void SetMeasurePicksChangedCallback(std::function<void()> callback);
     //! いまの欄へ文字を入れる。
@@ -767,7 +768,7 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void DrawEditPreview(QPainter& painter) const;
     void NotifyHoverChanged();
-    void ClickForMeasure(const QPointF& position);
+    void ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -1035,6 +1036,7 @@ private:
     QPointF cursorPosition_;
     //! 入力列の基準(直前に置いた点)から見たポインタの位置。作業平面の u, v(mm)。
     kachakacha::v2::geometry::Vector3 cursorDelta_{};
+    int measurePointCount_ = 0;
     std::vector<MeasurePick> measurePicks_;
     std::function<void()> measurePicksChanged_;
     std::string viewMessage_;

@@ -28,13 +28,7 @@ V2ImageTool* V2ImageTool::Open(V2MainWindow& window) {
     window.SelectTool(modeling::DrawingTool::Select);
     window.operationHost_->SetShelves({});
     auto* tool=new V2ImageTool(window);window.operationHost_->ShowTemporaryPage(tool,QStringLiteral("画像を貼る / 編集"));
-    if(selection.entityIds.size()==1){const auto* e=window.session_->GetDocument().FindEntity(selection.entityIds.front());
-        const auto* f=e?window.session_->GetDocument().FindFeature(e->createdBy):nullptr;
-        if(f)if(const auto* d=std::get_if<domain::CreateImageDefinition>(&f->definition)){
-            tool->definition_=*d;tool->editing_=e->id;
-            tool->image_=QImage::fromData(QByteArray::fromBase64(QByteArray::fromStdString(d->pngBase64)),"PNG");
-            if(!d->faceBrep.empty()){const auto shape=kernel::RestoreOutputShape(d->faceBrep);if(shape.HasValue())tool->face_=shape.Value();}
-            tool->UpdateFields();tool->Preview();return tool;}}
+    if(tool->EditSelectedImage())return tool;
     if(selection.ordered.size()==1)tool->SetTarget(selection.ordered.front());
     return tool;
 }
@@ -85,4 +79,18 @@ bool V2ImageTool::Commit() {
         f.outputs.push_back({"image",e.id,e.kind});const auto result=doc.Run(document::AddFeatureCommand(f,{e},"画像を貼る"));
         if(!result.committed){window.ReportDiagnostics(result.diagnostics);return false;}}
     window.operationHost_->SetShelves({});window.AdoptCurrentDocument();Refresh(window);return true;
+}
+
+bool V2ImageTool::EditSelectedImage() {
+    const auto& selection=window_.viewport_->Selection();
+    if(selection.entityIds.size()!=1)return false;
+    const auto* entity=window_.session_->GetDocument().FindEntity(selection.entityIds.front());
+    const auto* feature=entity?window_.session_->GetDocument().FindFeature(entity->createdBy):nullptr;
+    const auto* image=feature?std::get_if<domain::CreateImageDefinition>(&feature->definition):nullptr;
+    if(!image)return false;
+    definition_=*image;editing_=entity->id;
+    image_=QImage::fromData(QByteArray::fromBase64(QByteArray::fromStdString(image->pngBase64)),"PNG");
+    face_={};
+    if(!image->faceBrep.empty()){const auto shape=kernel::RestoreOutputShape(image->faceBrep);if(shape.HasValue())face_=shape.Value();}
+    UpdateFields();Preview();return true;
 }

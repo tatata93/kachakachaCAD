@@ -1089,7 +1089,7 @@ void V2MainWindow::ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,
 void V2MainWindow::ApplyToolSettings(const kachakacha::v2::modeling::ToolSettings& settings)
 {
     // 円弧の作り方・補助線・指定点を残す。作業平面の向きは置くときに場面から渡される。
-    // 道具の途中の点は捨てる(V1 と同じ。作り方を変えたら最初から)。
+    // 作り方を変えると最初から。同じ2点円弧の向き・半径の変更は始点を保つ。
     session_->SetToolSettings(settings);
     viewport_->OnToolChanged();
     RefreshGuide();

@@ -564,3 +564,21 @@ KACHA_V2_TEST(tool, 指定した点を作図点として残せる)
 }
 
 KACHA_V2_TEST_MAIN("tool_tests")
+
+KACHA_V2_TEST(tool, 円弧の曲がる側を反転しても始点と半径を保つ)
+{
+    for (auto mode : {ArcMode::EndpointsAndRadius, ArcMode::StartTangent}) {
+        ToolSettings setting;setting.arcMode=mode;setting.radiusMm=10;setting.sweepAngleRad=kPi/2;
+        ToolSession first(DrawingTool::Arc,setting,Tolerance());
+        const auto a=PlaceAll(first,{{0,0,0},{10,0,0}});
+        setting.sweepAngleRad=-setting.sweepAngleRad;
+        ToolSession second(DrawingTool::Arc,setting,Tolerance());
+        const auto b=PlaceAll(second,{{0,0,0},{10,0,0}});
+        Require(a.has_value()&&b.has_value(),"両側を作れる");
+        const auto& ca=a->segments.front();const auto& cb=b->segments.front();
+        RequireNear(Distance(ca.StartPoint(),cb.StartPoint()),0,1e-8,"始点保持");
+        RequireNear(ca.Radius(),cb.Radius(),1e-8,"半径保持");
+        Require(ca.Evaluate(.5).y*cb.Evaluate(.5).y<0,"反対側へ曲がる");
+        if(mode==ArcMode::EndpointsAndRadius)RequireNear(Distance(ca.EndPoint(),cb.EndPoint()),0,1e-8,"終点保持");
+    }
+}

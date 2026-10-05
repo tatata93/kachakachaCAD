@@ -2,13 +2,9 @@
 
 //! 測る棚(PRD-070〜072、V1同等性)。
 //!
-//! V1 では、測るたびにどのモードで測るかを人が選ばされた。
-//! 「2点距離」を選んでから点を2つ拾う、という順である。
-//! 選び間違えると、拾い直しになった。
-//!
-//! V2 では逆にする。**選んだものから、測れることを全部出す。**
-//! 1本選べば長さ・半径・両端、2本選べばそれに加えて最短距離と接線の角度。
-//! 人が測り方を選ぶ必要はない。選ぶ手間が減るぶん、間違えようがない。
+//! ツール先行・対象先行の両方を受け付ける。
+//! 選択測定は選んだ線の性質、点指定測定は指定した2点/3点から結果を出す。
+//! 底辺・高さは現在の作業面のU/V軸を基準とし、XYZ成分と区別する。
 //!
 //! ここは画面を知らない。行(見出しと値)を作るだけである。
 //! そうしておくと、画面を出さずに「何が出るか」を確かめられる。
@@ -17,6 +13,7 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/geometry/CurveSegment.h"
+#include "kachakacha/modeling/WorkPlane.h"
 
 #include <optional>
 #include <string>
@@ -58,6 +55,7 @@ struct MeasureRequest {
     std::vector<geometry::Vector3> pickedPoints;
     //! 測った相手の id(選んだ線と、押した点が吸着した線)。寸法を残すときの相手。
     std::vector<base::EntityId> targetIds;
+    modeling::WorkPlaneFrame workPlane;
 };
 
 //! 数を mm の文字列にする。桁は3桁で揃える。

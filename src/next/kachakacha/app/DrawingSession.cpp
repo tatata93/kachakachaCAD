@@ -67,9 +67,17 @@ void DrawingSession::SelectTool(DrawingTool tool)
 
 void DrawingSession::SetToolSettings(ToolSettings settings)
 {
+    // Changing the side/radius of the same two-point arc must keep its start.
+    const bool keepArcStart = tool_ == DrawingTool::Arc && toolSettings_.arcMode == settings.arcMode
+        && (settings.arcMode == modeling::ArcMode::StartTangent
+            || settings.arcMode == modeling::ArcMode::EndpointsAndRadius)
+        && session_->Points().size() == 1;
+    const auto start = keepArcStart ? std::optional<geometry::Vector3>(session_->Points().front())
+                                   : std::nullopt;
     toolSettings_ = std::move(settings);
     session_ = std::make_unique<ToolSession>(tool_, toolSettings_,
         document_.Snapshot().settings.tolerance);
+    if (start) (void)session_->AddPoint(*start); // One previously validated point cannot finish an arc.
     snapHysteresis_.Reset();
 }
 

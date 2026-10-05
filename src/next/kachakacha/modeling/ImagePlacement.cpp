@@ -26,4 +26,31 @@ base::Result<double> ImageScaleFromPoints(const Vector3& a,const Vector3& b,cons
         return base::Result<double>::Failure(base::MakeError("IMG-001","長さ合わせの2点が重なっています。","画像とCADの両方で離れた2点を選んでください。"));
     return base::Result<double>::Success(mm/pixels);
 }
+base::Result<ImageFit> FitImagePoints(const Vector3& pixels, const Vector3& target,
+    bool mirror, double rotation, bool rotate)
+{
+    using Result = base::Result<ImageFit>;
+    const Vector3 source{mirror ? -pixels.x : pixels.x, -pixels.y, 0};
+    if (!pixels.IsFinite() || !target.IsFinite() || !std::isfinite(rotation)
+        || source.Length() < 1e-6 || target.Length() < 1e-9 || std::abs(target.z) > 1e-6) {
+        return Result::Failure(base::MakeError("IMG-002", "画像フィットの2点が不正です。",
+            "同じ貼付平面上で、離れた2点を指定してください。"));
+    }
+    double scale;
+    if (rotate) {
+        scale = std::hypot(target.x, target.y) / source.Length();
+        rotation = std::atan2(target.y, target.x) - std::atan2(source.y, source.x);
+    } else {
+        const double c = std::cos(rotation), s = std::sin(rotation);
+        const Vector3 direction{c*source.x-s*source.y, s*source.x+c*source.y, 0};
+        scale = std::abs(direction.x) >= std::abs(direction.y)
+            ? target.x / direction.x : target.y / direction.y;
+    }
+    if (!std::isfinite(scale) || scale <= 1e-9) {
+        return Result::Failure(base::MakeError("IMG-003", "指定方向では画像を合わせられません。",
+            "配置先の2点の順を変えるか「回転する」を有効にしてください。"));
+    }
+    return Result::Success({scale, rotation});
+}
+
 }

@@ -97,6 +97,19 @@ namespace {
           "右クリックで消します。";
 }
 
+//! Absolute components are lengths; signed XYZ rows continue to describe direction.
+void AddPlaneComponents(std::vector<MeasureRow>& rows, const geometry::Vector3& delta,
+    const modeling::WorkPlaneFrame& plane, const std::string& prefix = {})
+{
+    const double u = geometry::Dot(delta, plane.uAxis);
+    const double v = geometry::Dot(delta, plane.vAxis);
+    const double n = geometry::Dot(delta, plane.normal);
+    rows.push_back({prefix + "底辺（作業面U）", FormatMillimetersJa(std::abs(u))});
+    rows.push_back({prefix + "高さ（作業面V）", FormatMillimetersJa(std::abs(v))});
+    rows.push_back({prefix + "作業面からの高低差", FormatMillimetersJa(std::abs(n))});
+    rows.push_back({prefix + "作業面への投影長", FormatMillimetersJa(std::hypot(u, v))});
+}
+
 //! 2点間。距離と成分、座標面への投影、軸との角度。
 [[nodiscard]] std::vector<MeasureRow> TwoPointRows(const MeasureRequest& request)
 {
@@ -122,6 +135,7 @@ namespace {
     rows.push_back(MeasureRow{"YZ面への投影", FormatMillimetersJa(m.projectedOnYZMm)});
     rows.push_back(MeasureRow{"ZX面への投影", FormatMillimetersJa(m.projectedOnZXMm)});
     const geometry::Vector3 delta = m.secondPoint - m.firstPoint;
+    AddPlaneComponents(rows, delta, request.workPlane);
     const char* axes[3] = {"X軸との角度", "Y軸との角度", "Z軸との角度"};
     const geometry::Vector3 units[3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
     for (int axis = 0; axis < 3; ++axis) {
@@ -437,7 +451,7 @@ std::vector<MeasureRow> BuildMeasureRows(const MeasureRequest& request)
     }
     if (request.curves.empty()) {
         // 空の表は、壊れているのか選び忘れなのかが分からない。何をすればよいかを言う。
-        rows.push_back(MeasureRow{"測るもの", "道具箱の「選択」で線を選んでください。"});
+        rows.push_back(MeasureRow{"測るもの", "測定する線を3D画面または左の一覧で選んでください。"});
         return rows;
     }
 
@@ -458,6 +472,9 @@ std::vector<MeasureRow> BuildMeasureRows(const MeasureRequest& request)
         }
         rows.push_back(MeasureRow{prefix + "始点", FormatPointJa(curve.StartPoint())});
         rows.push_back(MeasureRow{prefix + "終点", FormatPointJa(curve.EndPoint())});
+        if (curve.Kind() == geometry::CurveKind::Line) {
+            AddPlaneComponents(rows, curve.EndPoint() - curve.StartPoint(), request.workPlane, prefix);
+        }
         // 両端の距離。長さと違うのは、曲がっているぶんである。
         const auto span = geometry::MeasureTwoPoints(curve.StartPoint(), curve.EndPoint());
         if (span.HasValue()) {

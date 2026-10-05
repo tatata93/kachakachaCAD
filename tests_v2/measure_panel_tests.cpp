@@ -327,3 +327,21 @@ KACHA_V2_TEST(measure, 面積は閉じていない線と平面に載らない線
 }
 
 KACHA_V2_TEST_MAIN("measure_panel_tests")
+
+KACHA_V2_TEST(measure, 作業面を基準に底辺高さと面外成分を測る)
+{
+    MeasureRequest request;
+    request.workPlane = {{10,20,30}, {0,1,0}, {0,0,1}, {1,0,0}};
+    request.curves = {Line({0,0,0}, {12,-3,4})};
+    const auto rows = BuildMeasureRows(request);
+    RequireEqual(ValueOf(rows, "底辺（作業面U）"), std::string("3.000 mm"), "底辺");
+    RequireEqual(ValueOf(rows, "高さ（作業面V）"), std::string("4.000 mm"), "高さ");
+    RequireEqual(ValueOf(rows, "作業面からの高低差"), std::string("12.000 mm"), "面外");
+    RequireEqual(ValueOf(rows, "作業面への投影長"), std::string("5.000 mm"), "投影");
+    RequireEqual(ValueOf(rows, "長さ"), std::string("13.000 mm"), "3Dの長さを維持");
+    request.mode = kachakacha::v2::app::MeasureMode::TwoPoints;
+    request.pickedPoints = {{12,-3,4}, {0,0,0}};
+    const auto points = BuildMeasureRows(request);
+    RequireEqual(ValueOf(points, "底辺（作業面U）"), std::string("3.000 mm"), "逆向きも長さ");
+    RequireEqual(ValueOf(points, "高さ（作業面V）"), std::string("4.000 mm"), "2点でも高さ");
+}

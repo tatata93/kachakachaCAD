@@ -42,6 +42,11 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         SetStatus(reason);
         return true;
     }
+    // A shelf command must stop the old drawing tool before collecting its targets.
+    if (command->mode != kachakacha::v2::app::CommandMode::Tool
+        && session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    }
     // 選べば満たせる。構えて待つ。
     pendingCommandId_ = std::string(id);
     if (IsFabricationCommand(id) || IsFreezeCommand(id)) FocusFabricationStageFor(id);

@@ -187,7 +187,7 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     }
     // C面取り / R丸め。線が2本そろっていなければ、面取りの道具を持って拾うのを待つ。
     // そろっていれば従来どおり作る(下見の Enter もここへ来る)。
-    if ((id == "wire.chamfer" || id == "wire.fillet") && !CornerPairSelected(nullptr)) {
+    if (id == "wire.chamfer" || id == "wire.fillet") {
         ClearPendingCommand();
         if (cornerDock_ != nullptr) {
             cornerDock_->SetFillet(id == "wire.fillet");

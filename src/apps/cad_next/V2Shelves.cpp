@@ -31,7 +31,11 @@ void V2MainWindow::BuildEditingShelves()
     editDock_->hide();
     // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
     cornerDock_ = new V2CornerDock(this);
-    cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
+    cornerDock_->SetRunHandler([this](const char* command) {
+        if (std::string_view(command) == "wire.fillet" || std::string_view(command) == "wire.chamfer")
+            (void)HandleCornerToolKey(Qt::Key_Return);
+        else RunCommand(command);
+    });
     cornerDock_->SetChoiceChangedHandler([this] { RefreshCornerPreview(); });
     cornerDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。

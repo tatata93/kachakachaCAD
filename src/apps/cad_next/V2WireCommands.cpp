@@ -26,6 +26,7 @@
 
 #include <QString>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <utility>
@@ -77,6 +78,52 @@ constexpr WireEditBinding kWireEdits[] = {
         }
     }
     return nullptr;
+}
+
+// Only selected wire segments can be consumed. Unpicked siblings remain in the result.
+std::vector<kachakacha::v2::base::EntityId> EditedWireIds(
+    const kachakacha::v2::app::SelectionSet& selection,
+    const kachakacha::v2::modeling::SnapScene& scene)
+{
+    std::vector<kachakacha::v2::base::EntityId> ids;
+    for (const auto& id : selection.entityIds) {
+        for (const auto& curve : scene.curves) {
+            if (curve.entityId == id && kachakacha::v2::app::IsCurveSelected(
+                    selection, id, curve.segmentId)) {
+                ids.push_back(id);
+                break;
+            }
+        }
+    }
+    return ids;
+}
+
+void KeepUneditedSegments(std::vector<kachakacha::v2::geometry::CurveSegment>& result,
+    const kachakacha::v2::app::SelectionSet& selection,
+    const kachakacha::v2::modeling::SnapScene& scene,
+    const std::vector<kachakacha::v2::base::EntityId>& consumed, bool firstOnly)
+{
+    std::optional<kachakacha::v2::base::SegmentId> firstSegment;
+    if (firstOnly && !selection.ordered.empty()) {
+        const auto& ref = selection.ordered.front();
+        for (const auto& curve : scene.curves) {
+            if (curve.entityId == ref.entityId && (!ref.segmentId || curve.segmentId == *ref.segmentId)) {
+                firstSegment = curve.segmentId;
+                break;
+            }
+        }
+    }
+    bool firstUsed = false;
+    for (const auto& id : consumed) {
+        for (const auto& curve : scene.curves) {
+            if (curve.entityId != id) continue;
+            const bool selected = kachakacha::v2::app::IsCurveSelected(selection, id, curve.segmentId);
+            const bool used = selected && (!firstOnly || (firstSegment
+                ? curve.segmentId == *firstSegment : !firstUsed));
+            if (used) firstUsed = true;
+            else result.push_back(curve.segment);
+        }
+    }
 }
 
 } // namespace
@@ -406,8 +453,8 @@ void V2MainWindow::RefreshCornerDock()
     cornerDock_->SetSizeMm(CornerSizeMm());
     QString names[2];
     int found = 0;
-    for (const auto& id : viewport_->Selection().entityIds) {
-        const auto* entity = session_->GetDocument().FindEntity(id);
+    for (const auto& ref : viewport_->Selection().ordered) {
+        const auto* entity = session_->GetDocument().FindEntity(ref.entityId);
         if (entity == nullptr || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
             continue;
         }
@@ -589,7 +636,11 @@ void V2MainWindow::RunWireTransform(
         RunWireTransformEach(definition, labelJa, consumesInputs);
         return;
     }
-    const auto& selection = viewport_->Selection();
+    const auto selection = viewport_->Selection();
+    auto consumed = EditedWireIds(selection, session_->Scene());
+    const auto inputIds = consumed;
+    if (consumesFirstOnly && !consumed.empty()) consumed.resize(1);
+    if (!consumesInputs) consumed.clear();
     const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     if (inputs.empty()) {
         SetStatus(QStringLiteral("%1: 先に線を選んでください。").arg(labelJa));
@@ -606,10 +657,11 @@ void V2MainWindow::RunWireTransform(
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::TransformWire;
     feature.displayName = labelJa.toStdString();
-    feature.inputEntityIds = selection.entityIds;
+    feature.inputEntityIds = inputIds;
     // 計算した形をそのまま持たせる。持たせないと、開き直したときに形が出ない。
     kachakacha::v2::domain::CreateWireDefinition wire;
     wire.segments = computed.Value();
+    KeepUneditedSegments(wire.segments, selection, session_->Scene(), consumed, consumesFirstOnly);
     for (std::size_t index = 0; index < wire.segments.size(); ++index) {
         wire.segmentIds.push_back(
             ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
@@ -620,6 +672,11 @@ void V2MainWindow::RunWireTransform(
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
     entity.kind = EntityKind::Wire;
     entity.displayName = labelJa.toStdString();
+    if (!inputIds.empty()) {
+        const auto* source = session_->GetDocument().FindEntity(inputIds.front());
+        if (source) { entity.groupId = source->groupId; entity.datum = source->datum;
+            entity.construction = source->construction; }
+    }
     entity.createdBy = feature.id;
     feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
 
@@ -632,14 +689,6 @@ void V2MainWindow::RunWireTransform(
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
         return;   // Transaction が捨てる
-    }
-    std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
-    if (consumesFirstOnly && !consumed.empty()) {
-        // 分割やトリムは1本目を直すだけ。刃や境界にした線は残す。
-        consumed.resize(1);
-    }
-    if (!consumesInputs) {
-        consumed.clear();   // オフセットは元の線を残す。
     }
     RemoveConsumedWires(consumed);
     if (!transaction.Commit()) {
@@ -685,6 +734,8 @@ void V2MainWindow::RunWireTransformEach(
             const auto* source = document.FindEntity(id);
             kachakacha::v2::app::SelectionSet one;
             one.entityIds.push_back(id);
+            for (const auto& ref : viewport_->Selection().ordered)
+                if (ref.entityId == id) one.ordered.push_back(ref);
             const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
             if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
                 continue;   // 線でないもの(点など)は直す相手にしない
@@ -704,6 +755,7 @@ void V2MainWindow::RunWireTransformEach(
             feature.inputEntityIds = one.entityIds;
             kachakacha::v2::domain::CreateWireDefinition wire;
             wire.segments = computed.Value();
+            if (consumesInputs) KeepUneditedSegments(wire.segments, one, session_->Scene(), {id}, false);
             for (std::size_t index = 0; index < wire.segments.size(); ++index) {
                 wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
             }
@@ -754,7 +806,13 @@ void V2MainWindow::RemoveConsumedWires(
     // 断られたら残す。黙って消さない。
     for (const auto& id : entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity == nullptr) {
+        if (entity == nullptr || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
+            continue;
+        }
+        const auto* feature = session_->GetDocument().FindFeature(entity->createdBy);
+        if (feature && feature->outputs.size() > 1) {
+            (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
+                {id}, kachakacha::v2::domain::Visibility::Hidden));
             continue;
         }
         const auto removed = session_->GetDocument().Run(RemoveFeatureCommand(

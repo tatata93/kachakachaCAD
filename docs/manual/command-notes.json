@@ -54,7 +54,7 @@
   "wire.tangent": "G1で滑らかに接続。",
   "wire.curvature": "曲率まで連続して接続。",
   "wire.chamfer": "二線の角を直線で落とす。",
-  "wire.fillet": "二線の角を指定Rで丸める。",
+  "wire.fillet": "2辺を選んで指定Rで丸め、Enterで適用。半径を保持して次の角を選べる。同じワイヤー内の辺も指定でき、未選択の辺や背景画像は残る。",
   "wire.offset": "作業平面内で平行複製。",
   "wire.meet_lines": "二直線を交点まで調整。",
   "wire.intersection_points": "全交点へ作図点。",

@@ -4,7 +4,7 @@
 //! どう落ちるのか・どう丸まるのかは作ってからしか分からなかった。
 //! ここでは面取りの道具を持って線を2本拾うと、**実際に計算した結果** を下見に出し、
 //! A / B の札を 3D に、一番下の一行に量と共に出す。Enter で確定(従来の wire.chamfer /
-//! wire.fillet と同じ道)、Esc で選択道具へ戻る。文書へは確定まで書かない。
+//! wire.fillet と同じ道)、Esc で入力を取り消して道具を維持する。文書へは確定まで書かない。
 //!
 //! 下見と確定は同じ `EvaluateWireTransform` と同じ定義を使う。画面で別に計算しない。
 
@@ -64,17 +64,10 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
 //! 線が2本(A・B)選ばれているか。道具は問わない(選んでから押す道も残す)。
 bool V2MainWindow::CornerPairSelected(std::vector<EntityId>* wires) const
 {
-    std::vector<EntityId> found;
-    for (const EntityId& id : viewport_->Selection().entityIds) {
-        const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity != nullptr && entity->kind == EntityKind::Wire) {
-            found.push_back(id);
-        }
-    }
-    if (wires != nullptr) {
-        *wires = found;
-    }
-    return found.size() == 2;
+    const auto& selection = viewport_->Selection();
+    const auto curves = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    if (wires != nullptr) *wires = selection.entityIds;
+    return curves.size() == 2;
 }
 
 //! 下見を出し直す。道具を持っていなければ、自分が出したものだけ片づける。
@@ -104,7 +97,7 @@ void V2MainWindow::RefreshCornerPreview()
         : QStringLiteral("C面取り");
     cornerPreviewShown_ = true;
     ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
-        kachakacha::v2::app::ToolRoleLabel{wires[1], "B"}});
+        kachakacha::v2::app::ToolRoleLabel{wires.back(), "B"}});
     QString footer = QStringLiteral("%1: A=%2 / B=%3 / SIZE=%4 mm")
                          .arg(label, cornerDock_->FirstText(), cornerDock_->SecondText())
                          .arg(CornerSizeMm(), 0, 'f', 3);
@@ -141,13 +134,13 @@ bool V2MainWindow::HandleCornerToolKey(int key)
     }
     // 確定は従来の命令そのもの。下見と同じ定義(CornerDefinitionFromDock)で作る。
     const auto revision = session_->GetDocument().Revision();
-    RunCommand(cornerDock_->Choice().fillet ? "wire.fillet" : "wire.chamfer");
+    RunWireEditCommand(cornerDock_->Choice().fillet ? "wire.fillet" : "wire.chamfer");
     if (session_->GetDocument().Revision() != revision) {
-        // 作れたら道具を置く。A・B は縮んだ線としてまだ選ばれているので、
-        // 持ったままだと縮んだ2本を相手に下見が出直す(PC 自己試験 HP-CN-01 2026-09-18)。
         const QString done = StatusText();
-        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-        SetStatus(done);   // 「作りました」の一言は残す
+        viewport_->CancelTool();
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        RefreshCornerDock();
+        SetStatus(done + QStringLiteral(" 続けて次の角の2辺を選んでください。半径・量は維持します。"));
     }
     return true;
 }

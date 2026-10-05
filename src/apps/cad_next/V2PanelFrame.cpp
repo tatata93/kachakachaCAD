@@ -55,7 +55,7 @@ void MarkCancelConfirm(QPushButton* cancel, QPushButton* confirm)
         cancel->setMinimumHeight(32);
         cancel->setObjectName(QStringLiteral("panelCancel"));
         cancel->setText(QStringLiteral("キャンセル Esc"));
-        cancel->setToolTip(QStringLiteral("この道具をやめます(Esc と同じ)。"));
+        cancel->setToolTip(QStringLiteral("途中の入力・下見を取り消します。道具と設定は維持します(Esc と同じ)。"));
     }
     if (confirm != nullptr) {
         confirm->setMinimumHeight(32);

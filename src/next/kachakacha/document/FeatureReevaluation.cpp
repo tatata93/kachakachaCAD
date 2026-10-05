@@ -172,6 +172,16 @@ namespace {
             "この編集は、この場では計算し直せません。",
             "相手の線が要る編集です。2本以上を選んでください。"));
     }
+    const bool pairOnly = definition.method == WireTransformMethod::Chamfer
+        || definition.method == WireTransformMethod::Fillet
+        || definition.method == WireTransformMethod::Coincident
+        || definition.method == WireTransformMethod::Tangent
+        || definition.method == WireTransformMethod::Curvature
+        || definition.method == WireTransformMethod::MeetLines;
+    if (pairOnly && inputs.size() != 2) {
+        return Out::Failure(MakeError("DOC-C007", "2辺を選んでください。",
+            "選択した辺が多すぎます。加工する2辺だけを選んでください。何も変更していません。"));
+    }
     const CurveSegment& first = inputs[0];
     const CurveSegment& second = inputs[1];
     const std::vector<CurveSegment> others(inputs.begin() + 1, inputs.end());

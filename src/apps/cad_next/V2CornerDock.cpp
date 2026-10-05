@@ -67,8 +67,8 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     kind_->addItem(QStringLiteral("R丸め"));
     layout->addWidget(kind_);
     auto* hint = new QLabel(QStringLiteral(
-        "線を 2 本、直す順に選んでから作ります(1 本目が A、2 本目が B)。"
-        "離れた線は交点まで自動で延ばします。"), body);
+        "加工する2辺を順に選びます(1辺目がA、2辺目がB)。同じワイヤー内の辺も選べます。"
+        "離れた線は交点まで自動で延ばします。Enterで適用後、同じ設定で次の角を選べます。"), body);
     hint->setWordWrap(true);
     layout->addWidget(hint);
 

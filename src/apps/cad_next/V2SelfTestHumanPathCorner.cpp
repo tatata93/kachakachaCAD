@@ -8,6 +8,7 @@
 #include "V2SelfTest.h"
 
 #include "V2CornerDock.h"
+#include "V2ImageTool.h"
 #include "V2MainWindow.h"
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
@@ -19,6 +20,9 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/ToolController.h"
 
+#include <QWidget>
+#include <QImage>
+#include <QTemporaryDir>
 #include <QPointF>
 #include <QString>
 
@@ -362,11 +366,67 @@ using kachakacha::v2::modeling::DrawingTool;
     return Explain("1回の取り消しで消える", CountOfKind(window, EntityKind::GuideSurface) == 0);
 }
 
+// Reproduce the reported U outline: second corner shares the first result's wire.
+bool CaseRepeatedCorners(V2MainWindow& window, bool polyline)
+{
+    window.RunCommand("file.new");
+    QTemporaryDir folder;
+    QImage bitmap(40,40,QImage::Format_ARGB32); bitmap.fill(0xff8899aa);
+    const auto path=folder.filePath(QStringLiteral("background.png"));
+    if (!bitmap.save(path)) return false;
+    window.RunCommand("image.place");
+    auto* image=dynamic_cast<V2ImageTool*>(window.findChild<QWidget*>(QStringLiteral("imagePlacementPanel")));
+    if (!image || !image->LoadImage(path) || !image->Commit()) return false;
+    auto& view=window.Viewport(); view.SetViewDirection(ViewDirection::Top);
+    view.SetVisibleWidthMm(120); view.SetSnapSuppressed(true);
+    const auto click=[&](double x,double y) {
+        const auto p=view.Mapping().Project({x,y,0});
+        if (!p) return false;
+        view.ClickAt(QPointF(p->x,p->y)); return true;
+    };
+    if (polyline) {
+        window.SelectTool(DrawingTool::Polyline);
+        click(-30,-20); click(-30,20); click(30,20); click(30,-20); view.FinishTool();
+    } else {
+        for (const auto ends : {std::pair{-30.0,-30.0},std::pair{-30.0,30.0},std::pair{30.0,30.0}}) {
+            window.SelectTool(DrawingTool::Line);
+            click(ends.first,ends.first==ends.second ? -20:20); click(ends.second,20);
+        }
+    }
+    window.SelectTool(DrawingTool::Select); view.SetSelection({});
+    window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,QStringLiteral("4"));
+    window.RunCommand("wire.fillet");
+    click(-30,0); click(0,20);
+    if (!Explain("first corner previews",window.CornerPreviewShown())
+        || !window.HandleToolKey(Qt::Key_Return,nullptr)) return false;
+    if (!Explain("first corner retains tool and all 4 curves",window.Session().Scene().curves.size()==4
+            && window.Session().CurrentTool()==DrawingTool::ChamferOrFilletPair)) return false;
+    click(0,20); click(30,0);
+    if (!Explain("second corner previews without selecting tool again",!view.ToolPreview().empty())
+        || !window.HandleToolKey(Qt::Key_Return,nullptr)) return false;
+    int arcs=0;
+    for (const auto& c:window.Session().Scene().curves)
+        arcs+=c.segment.Kind()==kachakacha::v2::geometry::CurveKind::CircularArc;
+    if (!Explain("two corners leave 3 lines and 2 arcs",arcs==2&&window.Session().Scene().curves.size()==5)
+        || !Explain("background remains visible",view.ImageViews().size()==1
+            && CountOfKind(window,EntityKind::Image)==1)) return false;
+    window.RunCommand("edit.undo");
+    if (!Explain("one undo restores first corner only",window.Session().Scene().curves.size()==4
+            && view.ImageViews().size()==1)) return false;
+    window.RunCommand("edit.redo");
+    return Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
+        && view.ImageViews().size()==1);
+}
+bool CaseRepeatedSeparateCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false); }
+bool CaseRepeatedPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,true); }
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCornerCases()
 {
     return {
+        {"HP-CN-04 repeat corners preserves unpicked lines and image", CaseRepeatedSeparateCorners},
+        {"HP-CN-05 two corners of one polyline", CaseRepeatedPolylineCorners},
         {"HP-SF-08 回転体は道具 → 断面 → 軸(自動遷移)→ 下見 → Enter",
             CaseHumanPathRevolveSectionThenAxis},
         {"HP-CN-01 面取りは道具 → A → B → 下見 → Enter、押し直すと外れる",

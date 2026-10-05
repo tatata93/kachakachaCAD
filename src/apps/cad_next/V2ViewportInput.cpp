@@ -966,6 +966,12 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
+        std::erase_if(candidates, [](const auto& c) {
+            return c.kind != kachakacha::v2::app::SelectionElementKind::Edge;
+        });
+        return candidates;
+    }
     auto images = ImageCandidatesAt(position);
     candidates.insert(candidates.end(), images.begin(), images.end());
     auto shapes = CollectShapeCandidatesAt(position);
@@ -1084,6 +1090,8 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
         || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
         return mode;
     }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair)
+        return SelectionMode::Toggle;
     return kachakacha::v2::app::IsSelected(selection_, picked->entityId)
         ? SelectionMode::Subtract
         : SelectionMode::Add;

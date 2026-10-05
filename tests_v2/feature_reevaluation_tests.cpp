@@ -452,4 +452,18 @@ KACHA_V2_TEST(reeval, 何度編集してもIDは動かない)
     RequireEqual(std::to_string(plan.Value().order.size()), "3", "3段のまま");
 }
 
+KACHA_V2_TEST(reeval, pair_edits_reject_extra_segments_without_discarding_them)
+{
+    const auto inputs = Rectangle(30, 20);
+    for (const auto method : {WireTransformMethod::Fillet, WireTransformMethod::Chamfer,
+             WireTransformMethod::Coincident, WireTransformMethod::Tangent,
+             WireTransformMethod::Curvature, WireTransformMethod::MeetLines}) {
+        TransformWireDefinition definition;
+        definition.method = method;
+        definition.scalarArgument.value = 2;
+        const auto result = kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+        Require(!result.HasValue(), "extra inputs must not be silently discarded");
+    }
+}
+
 KACHA_V2_TEST_MAIN("feature_reevaluation_tests")

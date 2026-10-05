@@ -271,3 +271,18 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 `edit.numeric` は作図ツールから切り替えて後から対象を選べる。
 `draw.arc` の両端半径・始点接線に反転ボタン、`image.place` に回転有無付き4点フィットを追加。
 詳細とV1/Jw_cadとの差は [操作点検](ui-redesign/INTERACTION_AUDIT_2026-10-05.md)。
+
+## 組み立て説明書（2026-10-05追加）
+
+| ID | 操作 | 対象・結果 |
+| --- | --- | --- |
+| `instructions.new_page` | 手順ページを追加 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.duplicate` | 手順を複製 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.capture` | 現在視点の部品・面を説明図へ取込 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.move` | 説明図の選択・移動 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.arrow` | 2点で矢印を配置 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.text` | 番号・文章を配置 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.remove` | 説明図の選択物を除去 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.save` | 専用kciに保存 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.open` | 専用kciを開く | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.pdf` | 全手順をA4横PDF出力 | 説明書だけを編集・保存。元モデルは変更しない |

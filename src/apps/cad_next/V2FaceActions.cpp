@@ -22,6 +22,12 @@ using namespace kachakacha::v2;
 
 bool V2FaceActions::Run(V2MainWindow& window,std::string_view command)
 {
+    if(command=="fabrication.create"||command=="fabrication.gpt_create"){
+        const auto& selected=window.viewport_->Selection().ordered;
+        if(selected.size()!=1||selected.front().kind!=app::SelectionElementKind::Face||
+            !selected.front().pickedFaceIndex||!window.partShapes_.contains(selected.front().entityId.ToString()))return false;
+        command=command=="fabrication.create"?"fabrication.from_face":"fabrication.gpt_from_face";
+    }
     if(command!="workplane.from_face" && command!="fabrication.from_face" && command!="fabrication.gpt_from_face")return false;
     const auto selection=window.viewport_->Selection();
     window.EndArmedTools();window.ClearPendingCommand();
@@ -57,7 +63,7 @@ bool V2FaceActions::eventFilter(QObject* object,QEvent* event)
     const auto ray=window_.viewport_->Mapping().RayThrough({mouse->position().x(),mouse->position().y()});if(!ray)return true;
     double nearest=std::numeric_limits<double>::max();app::SelectionRef chosen;
     for(const auto& shape:window_.viewport_->ShapeViews()) {
-        if(shape.surface)continue;
+        if(shape.surface||!window_.viewport_->EntityShown(shape.entityId))continue;
         for(const auto& triangle:shape.mesh.triangles) {
             const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle);
             if(hit && *hit<nearest){nearest=*hit;chosen.entityId=shape.entityId;chosen.pickedFaceIndex=triangle.faceIndex;}

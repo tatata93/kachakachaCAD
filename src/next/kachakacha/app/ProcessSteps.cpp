@@ -138,6 +138,13 @@ std::vector<ProcessStep> BuildProcessSteps(UiMode mode, const ProcessContext& co
     case UiMode::Part:        return PartSteps(context);
     case UiMode::Fabrication: return FabricationSteps(context);
     case UiMode::Output:      return OutputSteps(context);
+    case UiMode::Instructions: {
+        StepBuilder builder;
+        builder.Add("instructions.page","手順ページに部品・面を取り込む",true,true,{}, {"instructions.capture"});
+        builder.Add("instructions.edit","配置・矢印・説明文",true,true,{}, {"instructions.move","instructions.arrow","instructions.text"});
+        builder.Add("instructions.output","説明書を保存・PDF出力",true,true,{}, {"instructions.save","instructions.pdf"});
+        return builder.steps;
+    }
     }
     return {};
 }

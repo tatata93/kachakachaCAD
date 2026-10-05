@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2InstructionMode.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
@@ -380,6 +381,7 @@ void V2MainWindow::SetMode(UiMode mode)
     RefreshProcessSteps();
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
             .arg(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str())));
+    V2InstructionMode::Sync(*this);
 }
 
 //! 3D で対象を拾う道具を全部解く(面を作る・近似・足す引く・厚み・面の編集・持ち主のある道具)。
@@ -867,6 +869,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
 void V2MainWindow::SetPathChooser(std::function<QString(bool forSave)> chooser)
 {
     pathChooser_ = std::move(chooser);
+    V2InstructionMode::SetPathChooser(*this,pathChooser_);
 }
 
 QString V2MainWindow::AskForPath(bool forSave)
@@ -1327,7 +1330,7 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (gptSurface_ != nullptr && gptSurface_->Active() && id != "surface.gpt_create"
         && id.substr(0, 5) != "view.") { gptSurface_->End(); }
     // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。
-    if (EnterToolFor(*command)) {
+    if (V2InstructionMode::Run(*this,id) || EnterToolFor(*command)) {
         return;
     }
     // 面を作る・近似・足す引くは、棚を構えてから 3D で相手を選ぶ(構えて待つ道は通らない)。

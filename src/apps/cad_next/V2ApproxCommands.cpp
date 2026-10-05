@@ -14,6 +14,7 @@
 #include "V2MainWindow.h"
 
 #include "V2FabricationDock.h"
+#include "V2FaceActions.h"
 #include "V2ParameterDock.h"
 #include "V2Viewport.h"
 
@@ -240,6 +241,7 @@ void V2MainWindow::RefreshApproxForSelectionChange()
     if (!approxShelfShown_ || approxMirroring_ || viewport_ == nullptr) {
         return;
     }
+    if(V2FaceActions::Run(*this,"fabrication.create"))return;
     const auto& now = viewport_->Selection().entityIds;
     const auto added = Missing(now, approxMirror_);
     const auto removed = Missing(approxMirror_, now);

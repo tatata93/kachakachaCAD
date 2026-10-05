@@ -550,6 +550,13 @@ using kachakacha::v2::domain::EntityKind;
         }
         window.HandleToolKey(Qt::Key_Escape,nullptr);
     }
+    for(const auto command:{"fabrication.create","fabrication.gpt_create"}){
+        const int before=CountOfKind(window,EntityKind::GuideSurface);
+        app::SelectionRef face;face.entityId=part;face.kind=app::SelectionElementKind::Face;face.pickedFaceIndex=0;
+        app::SelectionSet source;source.entityIds={part};source.ordered={face};viewport.SetSelection(source);window.RunCommand(command);
+        if(!Explain("HP-FA usual approximation honors selected solid face",CountOfKind(window,EntityKind::GuideSurface)==before+1))return false;
+        window.HandleToolKey(Qt::Key_Escape,nullptr);
+    }
     if(!window.SaveAndReopen(QStringLiteral("face-actions.kcd2")))return false;
     app::SelectionSet selected;
     for(const auto& entity:window.Session().GetDocument().Snapshot().entities)

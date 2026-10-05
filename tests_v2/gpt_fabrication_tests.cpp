@@ -103,6 +103,7 @@ KACHA_V2_TEST(gpt_fabrication, brep_non_rectangular_boundary_and_pattern)
     const auto made=kernel::BuildGptFabrication(definition,{{{},surface.Value().handle}});
     Require(made.HasValue(),made.FirstMessageJa());
     Require(made.Value().panels.size()==1 && made.Value().reachedTolerance,"flat non-rectangular face accepted");
+    Require(made.Value().summaryJa.find("分割不要")!=std::string::npos,"one panel reports no split needed");
     double twiceArea=0; const auto& loop=made.Value().panels.front().outline;
     for (std::size_t i=0;i<loop.size();++i) { const auto a=loop[i],b=loop[(i+1)%loop.size()]; twiceArea+=a.u*b.v-a.v*b.u; }
     RequireNear(std::abs(twiceArea)*.5,480.,.01,"trapezoid outline not changed into a bounding rectangle");

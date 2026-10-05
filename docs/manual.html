@@ -373,7 +373,7 @@
 <tr data-command="fabrication.from_face"><td>フェイスを近似</td><td>フェイスを独立面として取り出し、従来近似の対象にします。</td></tr>
 <tr data-command="fabrication.gpt_from_face"><td>フェイスをGPT近似</td><td>フェイスを独立面として取り出し、GPT版近似の対象にします。</td></tr>
 </tbody></table><p>元ソリッドは変更しません。抽出面は独立コピーで、近似取消後も残ります。不要ならUndoで抽出を取り消せます。上部のタブ形がカテゴリ、下段の押しボタンが実行ツールです。</p></section>
-<section><h2>画像フィット</h2><p>画像ツールの「画像フィット」で、画像上の2点→配置先の2点を主3Dビューで指定します。画像の1点目からカーソルへ補助線が追従し、2点目を決めると配置先の指定が終わるまで2点間の直線が残ります。「フィット時に回転する」で2点を一致させます。オフでは画像の向きを維持して長い軸に合わせ、縦横比を維持します。移動・回転を含む下見をEnterで確定します。曲面UV上の長さ合わせは局所尺度による近似です。</p></section></main>
+<section><h2>画像フィット</h2><p>画像ツールの「画像フィット」で、画像上の2点→配置先の2点を主3Dビューで指定します。画像の1点目からカーソルへ補助線が追従し、2点目を決めると配置先の指定が終わるまで2点間の直線が残ります。「フィット時に回転する」で2点を一致させます。オフでは画像の向きを維持して長い軸に合わせ、縦横比を維持します。移動・回転を含む下見をEnterで確定します。曲面UV上の長さ合わせは局所尺度による近似です。</p></section><section><h2>組み立て説明書</h2><p>「説明書」モードで手順ページを作ります。「部品・面を取込」で現在の視点の説明図を取り込み、各部品をドラッグして分解図を配置します。矢印は始点・終点の2点指定。番号・文章を置き、右ペインで文字を更新できます。手順を複製して次の工程を作れます。説明書はCADと別の .kci ファイルに保存し、全ページをPDFへ出力します。元モデルは変わりません。取り込んだ図は静止画像で、3Dアニメーションやモデル変更への自動追従ではありません。</p><span data-command="instructions.new_page">新しい手順。</span><span data-command="instructions.duplicate">手順を複製。</span><span data-command="instructions.capture">部品・面を取込。</span><span data-command="instructions.move">選択・移動。</span><span data-command="instructions.arrow">矢印。</span><span data-command="instructions.text">番号・文章。</span><span data-command="instructions.remove">図から除去。</span><span data-command="instructions.save">説明書を保存。</span><span data-command="instructions.open">説明書を開く。</span><span data-command="instructions.pdf">PDF。</span></section></main>
   </div>
   <script>
     (() => {

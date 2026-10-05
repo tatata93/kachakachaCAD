@@ -27,6 +27,12 @@ void Arrow(QPainter& p,double x,double y,double a,double b){
     Line(p,a,b,a-4*std::cos(t-.5),b-4*std::sin(t-.5));Line(p,a,b,a-4*std::cos(t+.5),b-4*std::sin(t+.5));
 }
 std::string Kind(std::string_view id,std::string_view label){
+    if(id=="instructions.arrow")return "arrow";
+    if(id=="instructions.text")return "text";
+    if(id=="instructions.capture")return "image";
+    if(id=="instructions.duplicate")return "copy";
+    if(id=="instructions.remove")return "trim";
+    if(id.starts_with("instructions.")&&id!="instructions.move")return "export";
     if(label=="ベジェ")return "bezier";
     if(label=="ポリライン")return "polyline";
     if(label=="作図点")return "point";
@@ -62,7 +68,8 @@ void Curve(QPainter& p,bool spline){
 }
 void Cube(QPainter& p){p.drawPolygon(QPolygonF{P(4,8),P(13,3),P(21,7),P(12,12)});p.drawPolyline(QPolygonF{P(4,8),P(4,18),P(12,23),P(21,18),P(21,7)});Line(p,12,12,12,23);}
 bool Basic(QPainter& p,const std::string& k,int variant){
-    if(k=="line"){Line(p,4,20,20,4);Dot(p,4,20);Dot(p,20,4);}
+    if(k=="arrow")Arrow(p,4,20,20,4);
+    else if(k=="line"){Line(p,4,20,20,4);Dot(p,4,20);Dot(p,20,4);}
     else if(k=="point"){Line(p,12,3,12,21);Line(p,3,12,21,12);Dot(p,12,12);}
     else if(k=="circle"){p.drawEllipse(QRectF(4,4,16,16));if(variant==2){Dot(p,4,12);Dot(p,12,4);Dot(p,20,12);}else if(variant==1){Arrow(p,4,12,20,12);}else{Dot(p,12,12);Line(p,12,12,19,7);}}
     else if(k=="arc"){p.drawArc(QRectF(3,4,18,18),10*16,155*16);Dot(p,3.3,10.7);Dot(p,20.8,11.4);if(variant==0)Dot(p,12,4);if(variant==2){Dot(p,12,13);Line(p,12,13,12,4);}if(variant==3)Arrow(p,3,16,3,5);}

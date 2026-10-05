@@ -23,6 +23,16 @@ using kachakacha::v2::app::WithApproxSourcesToggled;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::test::Require;
 
+KACHA_V2_TEST(approx_input, 分割不要は許容内の一枚候補だけに表示){
+    ApproxCandidateOutcome result;result.evaluated=true;result.available=true;result.partCount=1;result.reachedTolerance=true;
+    const auto& spec=ApproxCandidateSpecs().front();
+    Require(ApproxCandidateLineJa(spec,result).find("分割不要")!=std::string::npos,"1枚で許容内");
+    result.reachedTolerance=false;
+    Require(ApproxCandidateLineJa(spec,result).find("分割不要")==std::string::npos,"1枚でも許容超過なら不要と言わない");
+    result.reachedTolerance=true;result.partCount=2;
+    Require(ApproxCandidateLineJa(spec,result).find("分割不要")==std::string::npos,"2枚では不要と言わない");
+}
+
 namespace {
 
 [[nodiscard]] EntityId Id(std::uint8_t value)

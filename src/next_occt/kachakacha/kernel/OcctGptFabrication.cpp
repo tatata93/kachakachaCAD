@@ -99,7 +99,7 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         app::FabricationEvaluation result; result.method=app::FabricationMethod::GptApproximation;
-        double squared=0; std::size_t samples=0;
+        double squared=0; std::size_t samples=0;std::size_t unsplit=0,totalFaces=0;
         for (const auto& input:inputs) {
             TopoDS_Shape shape;
             if (!LookupShape(input.handle,shape)) { return Out::Failure(base::MakeError("GPT-F007","元の面が見つかりません。","面を作り直して選択してください。")); }
@@ -111,6 +111,7 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
                     definition.minimumPartWidthMm,definition.maximumPartCount-static_cast<int>(result.panels.size()),definition.splitAxis,definition.adaptiveSpacing};
                 const auto made=fabrication::ApproximateGpt(source.Value(),options);
                 if (!made.HasValue()) { return Out::Failure(made.Diagnostics()); }
+                ++totalFaces;if(made.Value().reached&&made.Value().panels.size()==1)++unsplit;
                 result.reachedTolerance=result.reachedTolerance && made.Value().reached;
                 result.maximumSeamGapMm=std::max(result.maximumSeamGapMm,made.Value().seamGapMm);
                 for (auto panel:made.Value().panels) {
@@ -128,6 +129,8 @@ base::Result<app::FabricationEvaluation> BuildGptFabrication(
         note<<"GPT近似 "<<result.panels.size()<<" 部材 / 標本最大 "<<result.maximumDeviationMm
             <<" mm / RMS "<<result.rmsDeviationMm<<" mm / 部材間の隙間 "<<result.maximumSeamGapMm<<" mm。";
         if (!result.reachedTolerance) { note<<"許容未達。部材数を増やすか最小幅・許容を変更してください。"; }
+        if(unsplit==totalFaces&&totalFaces>0)note<<" 分割不要：各面を1部材で許すずれ以内に近似できます（標本での判定）。";
+        else if(unsplit>0)note<<" "<<unsplit<<"面は分割不要です（各1部材・標本で許すずれ以内）。";
         result.summaryJa=note.str(); return Out::Success(std::move(result));
     } catch (const Standard_Failure&) {
         return Out::Failure(base::MakeError("GPT-F008","面の近似計算を完了できません。","元の面を確認してください。"));

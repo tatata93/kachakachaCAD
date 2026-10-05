@@ -19,6 +19,7 @@
 #include <vector>
 
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> InstructionCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -72,6 +73,7 @@ namespace {
     cases.insert(cases.end(), modeling.begin(), modeling.end());
     const auto usability=UsabilityCases();cases.insert(cases.end(),usability.begin(),usability.end());
     const auto images=ImageCases();cases.insert(cases.end(),images.begin(),images.end());
+    const auto instructions=InstructionCases();cases.insert(cases.end(),instructions.begin(),instructions.end());
     const std::vector<SelfTestCase> planes = PlaneCases();
     cases.insert(cases.end(), planes.begin(), planes.end());
     const std::vector<SelfTestCase> drawing = DrawingCases();

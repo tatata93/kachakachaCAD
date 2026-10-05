@@ -20,9 +20,9 @@ using kachakacha::v2::app::UiModeNameJa;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
 
-KACHA_V2_TEST(ui_mode, モードは4つだけ)
+KACHA_V2_TEST(ui_mode, 説明書を含む5モード)
 {
-    RequireEqual(std::to_string(AllUiModes().size()), "4", "モードの数");
+    RequireEqual(std::to_string(AllUiModes().size()), "5", "モードの数");
 }
 
 KACHA_V2_TEST(ui_mode, 面や板材というモードが無い)

@@ -48,6 +48,16 @@ const std::vector<CommandDescriptor>& CommandCatalog()
 {
     // 並びは docs/v2/command-catalog.md と同じ順。決定的であること。
     static const std::vector<CommandDescriptor> table = {
+        {"instructions.new_page","新しい手順",CommandMode::Instant,"new","",SelectionPredicate::HasDocument,"文書がありません。","説明書に手順ページを追加します。",false,{"AT-UIX-001"}},
+        {"instructions.duplicate","手順を複製",CommandMode::Instant,"copy","",SelectionPredicate::HasDocument,"文書がありません。","現在の手順を複製します。",false,{"AT-UIX-001"}},
+        {"instructions.capture","部品・面を取込",CommandMode::Instant,"image","",SelectionPredicate::HasDocument,"文書がありません。","現在の視点から説明図へ部品・面を取り込みます。元モデルは変更しません。",false,{"AT-UIX-001"}},
+        {"instructions.move","選択・移動",CommandMode::Tool,"move","",SelectionPredicate::HasDocument,"文書がありません。","説明図の部品や矢印を選択・移動します。",false,{"AT-UIX-001"}},
+        {"instructions.arrow","矢印",CommandMode::Tool,"line","",SelectionPredicate::HasDocument,"文書がありません。","手順ページ上の2点で矢印を配置します。",false,{"AT-UIX-001"}},
+        {"instructions.text","番号・文章",CommandMode::Tool,"text","",SelectionPredicate::HasDocument,"文書がありません。","手順ページに番号や説明文を配置します。",false,{"AT-UIX-001"}},
+        {"instructions.remove","図から除去",CommandMode::Instant,"delete","",SelectionPredicate::HasDocument,"文書がありません。","選択物を説明図から除去します。元モデルは残ります。",false,{"AT-UIX-001"}},
+        {"instructions.save","説明書を保存",CommandMode::Dialog,"save","",SelectionPredicate::HasDocument,"文書がありません。","説明書を専用kciファイルに保存します。",false,{"AT-DOC-005"}},
+        {"instructions.open","説明書を開く",CommandMode::Dialog,"open","",SelectionPredicate::HasDocument,"文書がありません。","保存した説明書を開きます。",false,{"AT-DOC-005"}},
+        {"instructions.pdf","説明書PDF",CommandMode::Dialog,"pdf","",SelectionPredicate::HasDocument,"文書がありません。","全手順をA4横のPDFに出力します。",false,{"AT-EXP-001"}},
         {"tools.search", "道具を検索", CommandMode::Instant, "search", "Ctrl+K", SelectionPredicate::Always, "", "名前や用途で道具を探します。対象を選んだまま別モードの道具を開始できます。", false, {"AT-UIX-011"}},
         {"view.fit_selection", "選択にズーム", CommandMode::Instant, "fit_selection", "", SelectionPredicate::OneOrMoreHideable, "対象を選んでください。", "選択した線・面・立体・画像を画面に収めます。", false, {"AT-UIX-004"}},
         {"view.isolate", "選択を局所表示", CommandMode::Instant, "isolate", "", SelectionPredicate::OneOrMoreHideable, "対象を選んでください。", "選択した対象だけを一時表示します。選択解除しても表示を保持します。", false, {"AT-UIX-004"}},

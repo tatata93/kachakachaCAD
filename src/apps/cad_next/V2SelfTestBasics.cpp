@@ -151,6 +151,7 @@ namespace {
         // 押す場所を待っている状態で次へ進むと、次のコマンドがその場所を
         // 拾ってしまう。1つずつ確かめるので、ここで戻す。
         window.Viewport().CancelPointPick();
+        if(command.id.starts_with("instructions."))window.SetMode(kachakacha::v2::app::UiMode::Drawing);
     }
     return true;
 }
@@ -166,6 +167,7 @@ namespace {
             leftovers += std::string(command.id) + " ";
         }
         window.Viewport().CancelPointPick();
+        if(command.id.starts_with("instructions."))window.SetMode(kachakacha::v2::app::UiMode::Drawing);
     }
     return Explain((std::string("繋がっていないコマンドが無い(") + leftovers
                        + ")").c_str(), leftovers.empty());
@@ -236,6 +238,7 @@ namespace {
         if (status.isEmpty()) {
             return false;
         }
+        if(command.id.starts_with("instructions."))window.SetMode(kachakacha::v2::app::UiMode::Drawing);
     }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
     const QString line = window.StatusText();
@@ -1431,11 +1434,11 @@ std::vector<SelfTestCase> BasicCases()
         {"元に戻せる", &CaseUndo},
         {"視点を切り替えられる", &CaseViewDirections},
         {"途中でやめられる", &CaseCancel},
-        {"台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
-        {"未接続のコマンドが1つも無い", &CaseNoCommandSaysNotImplemented},
+        {"HP-COMMAND 台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
+        {"HP-COMMAND 未接続のコマンドが1つも無い", &CaseNoCommandSaysNotImplemented},
         {"メニューが台帳から出来ている", &CaseMenusComeFromCatalog},
         {"対象不足のコマンドは構えて理由を出す", &CaseDisabledCommandsExplain},
-        {"案内が6つそろっている", &CaseGuideIsComplete},
+        {"HP-COMMAND 案内が6つそろっている", &CaseGuideIsComplete},
         {"失敗しても続き、文書が変わらない", &CaseFailureRecovery},
         {"HP-TARGET-WAIT 対象待ちは前の作図を終了し文書を変えない", &CaseSelectionSurvivesFailure},
         {"モードを変えると道具だけ選択へ戻る", &CaseModesKeepSelection},

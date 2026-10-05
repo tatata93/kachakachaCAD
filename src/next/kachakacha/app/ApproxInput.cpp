@@ -78,6 +78,7 @@ std::string ApproxCandidateLineJa(const ApproxCandidateSpec& spec,
     if (!outcome.reachedTolerance) {
         line += "(許すずれを超えています)";
     }
+    else if(outcome.partCount==1)line += " / 分割不要：この条件では1枚で許すずれ以内です";
     return line;
 }
 
@@ -192,6 +193,9 @@ std::vector<std::string> ApproxStatusLinesJa(const ApproxInputState& state,
         return lines;
     }
     lines.push_back("✓ 対象 " + std::to_string(state.sources.size()) + "つ");
+    if(state.sources.size()==1&&std::any_of(outcomes.begin(),outcomes.end(),[](const auto& result){
+        return result.available&&result.reachedTolerance&&result.partCount==1;}))
+        lines.push_back("分割は不要です。1部材で許すずれ以内になる候補を選べます（近似）。");
     const auto& specs = ApproxCandidateSpecs();
     for (std::size_t index = 0; index < specs.size(); ++index) {
         const ApproxCandidateOutcome outcome =

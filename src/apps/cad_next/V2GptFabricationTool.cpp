@@ -1,5 +1,6 @@
 #include "V2GptFabricationTool.h"
 #include "V2MainWindow.h"
+#include "V2FaceActions.h"
 #include "V2Viewport.h"
 #include "V2PanelFrame.h"
 #include "V2FabricationDock.h"
@@ -77,6 +78,7 @@ void V2GptFabricationTool::Actions(QVBoxLayout* layout)
     };
     button("gptFabricationAdd",QStringLiteral("選択した面を追加"),0,0,[this]{Add(window_.viewport_->Selection().entityIds);});
     button("gptFabricationClear",QStringLiteral("対象を空にする"),0,1,[this]{definition_.parts.clear();Invalidate();sources_->setText(QStringLiteral("対象なし"));});
+    button("gptFabricationFace",QStringLiteral("ソリッドのフェイスを選ぶ"),3,0,[this]{window_.RunCommand("fabrication.gpt_from_face");});
     button("gptFabricationPreview",QStringLiteral("近似をプレビュー"),1,0,[this]{Preview();});
     button("gptFabricationCancel",QStringLiteral("取消"),1,1,[this]{End();});
     confirm_=button("gptFabricationConfirm",QStringLiteral("この近似を確定"),2,0,[this]{Confirm(pattern_->isChecked());});
@@ -124,6 +126,7 @@ void V2GptFabricationTool::HandleSelectionChanged()
 {
     if (!active_) { return; }
     const auto picked=window_.viewport_->TakeLastToolPick();
+    if(picked&&V2FaceActions::Run(window_,"fabrication.gpt_create"))return;
     if (picked.has_value()) { Add({*picked}); }
 }
 void V2GptFabricationTool::Invalidate()

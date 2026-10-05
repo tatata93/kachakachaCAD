@@ -226,6 +226,7 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     });
     row->addWidget(clearSources_);
     layout->addLayout(row);
+    layout->addWidget(MakeRun(box,QStringLiteral("ソリッドのフェイスを選ぶ"),"fabrication.from_face",this));
     // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
     // 共通UI: 対象を先に示し、その下に方法と条件を置く。
     layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("作り方")));

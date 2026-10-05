@@ -11,6 +11,7 @@ std::string_view UiModeNameJa(UiMode value) noexcept
     case UiMode::Part:        return "部品";
     case UiMode::Fabrication: return "製作";
     case UiMode::Output:      return "出力";
+    case UiMode::Instructions:return "説明書";
     }
     return "不明";
 }
@@ -22,6 +23,7 @@ std::string_view UiModeName(UiMode value) noexcept
     case UiMode::Part:        return "part";
     case UiMode::Fabrication: return "fabrication";
     case UiMode::Output:      return "output";
+    case UiMode::Instructions:return "instructions";
     }
     return "unknown";
 }
@@ -29,7 +31,7 @@ std::string_view UiModeName(UiMode value) noexcept
 const std::vector<UiMode>& AllUiModes()
 {
     static const std::vector<UiMode> modes{UiMode::Drawing, UiMode::Part,
-        UiMode::Fabrication, UiMode::Output};
+        UiMode::Fabrication, UiMode::Output, UiMode::Instructions};
     return modes;
 }
 
@@ -57,6 +59,10 @@ const std::vector<std::string_view>& CommonCommandIds()
 
 const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 {
+    static const std::vector<std::string_view> instructions{
+        "instructions.new_page","instructions.duplicate","instructions.capture","instructions.move",
+        "instructions.arrow","instructions.text","instructions.remove","instructions.save","instructions.open","instructions.pdf"};
+    if(mode==UiMode::Instructions)return instructions;
     static const std::vector<std::string_view> drawing{
         "draw.point", "draw.line", "draw.polyline", "draw.rectangle", "draw.circle",
         "draw.arc", "draw.bezier", "draw.spline", "wire.trim", "wire.extend",
@@ -117,6 +123,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 
 const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
 {
+    if(mode==UiMode::Instructions)return CommandIdsForMode(mode);
     // 上の帯に残すのは「そこから始める」ものだけ。
     // 表の行を動かす・板厚を当てる、といったものはその欄の隣(右の棚)にある。
     static const std::vector<std::string_view> drawing{

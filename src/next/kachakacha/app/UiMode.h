@@ -2,7 +2,7 @@
 
 //! 上位モード(ui-workflows.md §2、AT-UIX-001)。
 //!
-//! モードは4つだけにする。V1 の「面 / 板材」のような、
+//! 形状編集の4モードと説明書。V1 の「面 / 板材」のような、
 //! 内部の作りがそのまま出た区分は置かない(PRD §3)。
 //!
 //! 決まりが3つある(UIX-001 / 003)。
@@ -22,12 +22,13 @@ enum class UiMode {
     Part,         //!< 部品
     Fabrication,  //!< 製作
     Output,       //!< 出力
+    Instructions, //!< 組み立て説明書（2026-10-05 オーナー追加）
 };
 
 [[nodiscard]] std::string_view UiModeNameJa(UiMode value) noexcept;
 [[nodiscard]] std::string_view UiModeName(UiMode value) noexcept;
 
-//! 4つのモード。並びは仕様の順。
+//! モードの一覧。並びは仕様の順。
 [[nodiscard]] const std::vector<UiMode>& AllUiModes();
 
 //! どのモードでも常に出す共通操作(ui-workflows.md §2)。

@@ -1098,6 +1098,10 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ViewFocus.cpp
         src/apps/cad_next/V2SelfTestUsability.cpp
         src/apps/cad_next/V2ImageTool.cpp
+        src/apps/cad_next/V2InstructionMode.cpp
+        src/apps/cad_next/V2InstructionCapture.cpp
+        src/apps/cad_next/V2InstructionFile.cpp
+        src/apps/cad_next/V2SelfTestInstructions.cpp
         src/apps/cad_next/V2ImageToolUi.cpp
         src/apps/cad_next/V2ImageToolPick.cpp
         src/apps/cad_next/V2ImageViews.cpp

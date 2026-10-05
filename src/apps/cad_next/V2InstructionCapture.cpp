@@ -1,51 +1,65 @@
+#include <QSet>
+#include <QUuid>
+#include <QWidget>
 #include "V2InstructionMode.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
-#include <QGraphicsScene>
-#include <QGraphicsPixmapItem>
-#include <QPainter>
-#include <QPainterPath>
-#include <QPolygonF>
+#include "V2OperationPanelHost.h"
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QLabel>
-#include <QImage>
-#include <algorithm>
-#include <QColor>
-#include <QGraphicsItem>
-#include <QPen>
-#include <QPixmap>
-#include <QPointF>
-#include <QRectF>
+#include <QPushButton>
 #include <QString>
-void V2InstructionMode::Capture(){
-    struct Part {QString name;std::vector<QPolygonF> faces,edges;QRectF bounds;};
-    std::vector<Part> parts;QRectF all;
-    const auto& selected=window_.Viewport().Selection().entityIds;
-    for(const auto& shape:window_.Viewport().ShapeViews()){
-        if(!window_.Viewport().EntityShown(shape.entityId))continue;
-        if(!selected.empty()&&std::find(selected.begin(),selected.end(),shape.entityId)==selected.end())continue;
-        Part part;const auto* entity=window_.Session().GetDocument().FindEntity(shape.entityId);
-        part.name=entity?QString::fromStdString(entity->displayName):QStringLiteral("部品");
-        const auto project=[&](const auto& points){QPolygonF polygon;for(const auto& point:points){
-            const auto screen=window_.Viewport().Mapping().Project(point);if(!screen)return QPolygonF{};polygon<<QPointF(screen->x,screen->y);}return polygon;};
-        for(const auto& triangle:shape.mesh.triangles){auto polygon=project(triangle.points);if(polygon.size()!=3)continue;
-            part.bounds=part.bounds.united(polygon.boundingRect());part.faces.push_back(std::move(polygon));}
-        for(const auto& edge:shape.mesh.edges)part.edges.push_back(project(edge));
-        if(!part.faces.empty()){all=all.united(part.bounds);parts.push_back(std::move(part));}
+#include <QVariant>
+#include <algorithm>
+bool V2InstructionMode::Collect(V2MainWindow& model){
+    InstructionPage candidate;candidate.title=QStringLiteral("使用部品を選択");std::size_t count=0;
+    for(const auto& shape:model.Viewport().ShapeViews()){
+        if(!model.Viewport().EntityShown(shape.entityId)||shape.mesh.triangles.empty())continue;
+        count+=shape.mesh.triangles.size();if(count>500000||candidate.parts.size()>=128){
+            if(hint_)hint_->setText(QStringLiteral("このモデルは説明書の読込上限（128部品・表示三角形50万）を超えます。必要部分を別KCDへ出力してください。"));return false;}
+        auto asset=std::make_shared<InstructionAsset>();asset->mesh=shape.mesh;
+        const auto* entity=model.Session().GetDocument().FindEntity(shape.entityId);asset->name=entity?QString::fromStdString(entity->displayName):QStringLiteral("部品");
+        candidate.parts.push_back({QUuid::createUuid(),asset});
     }
-    if(parts.empty()||parts.size()>128){if(hint_)hint_->setText(QStringLiteral("取り込む部品・面を1～128個選んでください。選択なしでは表示中の部品・面を使います。"));return;}
-    if(!selected.empty()&&parts.size()!=selected.size()){
-        if(hint_)hint_->setText(QStringLiteral("選択に取り込めないものがあります。表示中の部品・面だけを選んでください。"));return;}
-    CancelArrow();arrowTool_=false;before_=Snapshot();const double scale=std::min(960/std::max(1.0,all.width()),600/std::max(1.0,all.height()));
-    for(const auto& part:parts){
-        const QRectF bounds=part.bounds.adjusted(-3,-3,3,3);
-        const double resolution=2*scale;QImage image(std::max(1,int(std::ceil(bounds.width()*resolution))),
-            std::max(1,int(std::ceil(bounds.height()*resolution))),QImage::Format_ARGB32_Premultiplied);image.fill(Qt::transparent);
-        QPainter painter(&image);painter.setRenderHint(QPainter::Antialiasing);painter.scale(resolution,resolution);painter.translate(-bounds.topLeft());
-        painter.setPen(Qt::NoPen);painter.setBrush(QColor(220,230,239));for(const auto& polygon:part.faces)painter.drawPolygon(polygon);
-        painter.setPen(QPen(QColor(40,50,65),1.1/scale));painter.setBrush(Qt::NoBrush);for(const auto& edge:part.edges)painter.drawPolyline(edge);painter.end();
-        auto* item=scenes_[current_]->addPixmap(QPixmap::fromImage(image));item->setScale(.5);
-        item->setPos(80+(bounds.left()-all.left())*scale,100+(bounds.top()-all.top())*scale);
-        item->setFlags(QGraphicsItem::ItemIsMovable|QGraphicsItem::ItemIsSelectable);item->setData(0,"part");item->setData(2,part.name);item->setToolTip(part.name);
-    }
-    Remember();if(hint_)hint_->setText(QStringLiteral("%1個を取り込みました。各部品をドラッグして分解図を配置できます。元モデルは変更しません。").arg(parts.size()));
+    if(candidate.parts.empty()){if(hint_)hint_->setText(QStringLiteral("モデルに表示可能な部品・面がありません。"));return false;}
+    source_=std::move(candidate);choosing_=true;view_->SetPage(&source_);view_->SetTool("pick");view_->Fit();ShowModelPicker();return true;
+}
+void V2InstructionMode::Capture(){Collect(window_);}
+bool V2InstructionMode::ReadModel(const QString& path){
+    V2MainWindow model;model.SetPathChooser([](bool){return QString();});
+    if(!model.OpenDocumentFile(path)){if(hint_)hint_->setText(QStringLiteral("モデルを読み込めません。対応するKCD/KCD2ファイルを選んでください。"));return false;}
+    return Collect(model);
+}
+void V2InstructionMode::ShowModelPicker(){
+    auto* panel=new QWidget;settings_=panel;auto* layout=new QVBoxLayout(panel);
+    hint_=new QLabel(QStringLiteral("使用する部品にチェックを入れ、3Dで確認して「このコマに配置」。一覧の行を押すと対応部品を強調します。"),panel);hint_->setWordWrap(true);layout->addWidget(hint_);
+    auto* list=new QListWidget(panel);partList_=list;list->setObjectName("instructionModelParts");layout->addWidget(list,1);
+    for(const auto& part:source_.parts){auto* item=new QListWidgetItem(part.asset->name,list);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Checked);}
+    connect(list,&QListWidget::currentRowChanged,this,[this](int row){view_->SetSelected(row);});
+    view_->selectedChanged=[this](int i){if(choosing_&&partList_)partList_->setCurrentRow(i);};
+    auto* row=new QHBoxLayout;layout->addLayout(row);
+    for(const bool checked:{true,false}){auto* button=new QPushButton(checked?QStringLiteral("全て使う"):QStringLiteral("全て外す"),panel);row->addWidget(button);
+        connect(button,&QPushButton::clicked,this,[list,checked]{for(int i=0;i<list->count();++i)list->item(i)->setCheckState(checked?Qt::Checked:Qt::Unchecked);});}
+    auto* preview=new QPushButton(QStringLiteral("チェックした部品だけを3D表示"),panel);layout->addWidget(preview);
+    connect(preview,&QPushButton::clicked,this,[this,list]{for(int i=0;i<list->count();++i)source_.parts[i].visible=list->item(i)->checkState()==Qt::Checked;view_->Refresh();});
+    auto* all=new QPushButton(QStringLiteral("モデル全体を3D表示"),panel);layout->addWidget(all);
+    connect(all,&QPushButton::clicked,this,[this]{for(auto& p:source_.parts)p.visible=true;view_->Refresh();});
+    auto* accept=new QPushButton(QStringLiteral("このコマに配置"),panel);accept->setObjectName("instructionAcceptParts");layout->addWidget(accept);connect(accept,&QPushButton::clicked,this,[this]{AcceptParts();});
+    auto* cancel=new QPushButton(QStringLiteral("取消"),panel);layout->addWidget(cancel);connect(cancel,&QPushButton::clicked,this,[this]{ShowPage(current_);});
+    window_.OperationHost().ShowTemporaryPage(panel,QStringLiteral("説明書 — 使用する部品を選択"));
+}
+void V2InstructionMode::AcceptParts(){
+    if(!choosing_||!partList_)return;std::vector<InstructionPart> chosen;
+    for(int i=0;i<partList_->count();++i)if(partList_->item(i)->checkState()==Qt::Checked){auto part=source_.parts[i];part.visible=true;part.id=QUuid::createUuid();chosen.push_back(std::move(part));}
+    if(chosen.empty()){hint_->setText(QStringLiteral("使用する部品を1つ以上選んでください。"));return;}
+    if(scenes_[current_].parts.size()+chosen.size()>128){hint_->setText(QStringLiteral("1コマに配置できる部品は128個までです。"));return;}
+    QSet<QUuid> seen;std::size_t triangles=0;
+    const auto count=[&](const InstructionPart& p){if(!seen.contains(p.asset->id)){seen.insert(p.asset->id);triangles+=p.asset->mesh.triangles.size();}};
+    for(const auto& page:scenes_)for(const auto& p:page.parts)count(p);for(const auto& p:chosen)count(p);
+    if(triangles>500000){hint_->setText(QStringLiteral("説明書全体の表示形状が50万三角形を超えます。説明書を分けてください。"));return;}
+    before_=Snapshot();auto& page=scenes_[current_];page.parts.insert(page.parts.end(),chosen.begin(),chosen.end());
+    ShowPage(current_);view_->SetSelected(int(page.parts.size()-chosen.size()));ShowSettings();view_->Fit();Remember();
 }

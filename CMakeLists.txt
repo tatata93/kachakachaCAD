@@ -1101,6 +1101,9 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2InstructionMode.cpp
         src/apps/cad_next/V2InstructionCapture.cpp
         src/apps/cad_next/V2InstructionFile.cpp
+        src/apps/cad_next/V2InstructionScene.cpp
+        src/apps/cad_next/V2InstructionRender.cpp
+        src/apps/cad_next/V2InstructionLegacy.cpp
         src/apps/cad_next/V2SelfTestInstructions.cpp
         src/apps/cad_next/V2ImageToolUi.cpp
         src/apps/cad_next/V2ImageToolPick.cpp
@@ -1238,6 +1241,18 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
                     $<TARGET_FILE:Qt6::OpenGL> $<TARGET_FILE_DIR:kachakacha_cad_next>
                 COMMAND_EXPAND_LISTS)
         endif()
+    endif()
+    if(WIN32)
+        # Keep the developer executable's image formats consistent with windeployqt packages.
+        foreach(KACHACAD_IMAGE_PLUGIN QJpegPlugin QGifPlugin QICNSPlugin QICOPlugin QTgaPlugin QTiffPlugin QWbmpPlugin QWebpPlugin)
+            if(TARGET Qt6::${KACHACAD_IMAGE_PLUGIN})
+                add_custom_command(TARGET kachakacha_cad_next POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:kachakacha_cad_next>/imageformats
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:Qt6::${KACHACAD_IMAGE_PLUGIN}>
+                        $<TARGET_FILE_DIR:kachakacha_cad_next>/imageformats
+                    VERBATIM)
+            endif()
+        endforeach()
     endif()
     # 診断情報に載せる版と枝。分からなければ空のままにする(嘘は書かない)。
     # 組み立てたときの値なので、あとから枝を替えても更新されない。

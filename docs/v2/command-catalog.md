@@ -278,7 +278,7 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 | --- | --- | --- |
 | `instructions.new_page` | 手順ページを追加 | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.duplicate` | 手順を複製 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.capture` | 現在視点の部品・面を説明図へ取込 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.capture` | 現在モデルから使用部品を選択して3D配置 | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.move` | 説明図の選択・移動 | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.arrow` | 2点で矢印を配置 | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.text` | 番号・文章を配置 | 説明書だけを編集・保存。元モデルは変更しない |
@@ -286,3 +286,6 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 | `instructions.save` | 専用kciに保存 | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.open` | 専用kciを開く | 説明書だけを編集・保存。元モデルは変更しない |
 | `instructions.pdf` | 全手順をA4横PDF出力 | 説明書だけを編集・保存。元モデルは変更しない |
+
+| `instructions.model_file` | 別KCDモデルから使用部品を選択 | 元モデルを変更せず3D説明図へ配置 |
+| `instructions.image` | 現在のコマを画像出力 | 幅・高さ、Qt対応画像形式を選ぶ。選択強調は出力しない |

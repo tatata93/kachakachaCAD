@@ -61,7 +61,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 {
     static const std::vector<std::string_view> instructions{
         "instructions.new_page","instructions.duplicate","instructions.capture","instructions.move",
-        "instructions.arrow","instructions.text","instructions.remove","instructions.save","instructions.open","instructions.pdf"};
+        "instructions.arrow","instructions.text","instructions.remove","instructions.save","instructions.open","instructions.pdf","instructions.model_file","instructions.image"};
     if(mode==UiMode::Instructions)return instructions;
     static const std::vector<std::string_view> drawing{
         "draw.point", "draw.line", "draw.polyline", "draw.rectangle", "draw.circle",
@@ -123,7 +123,10 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 
 const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
 {
-    if(mode==UiMode::Instructions)return CommandIdsForMode(mode);
+    static const std::vector<std::string_view> instructions{
+        "instructions.new_page","instructions.duplicate","instructions.capture","instructions.model_file",
+        "instructions.move","instructions.arrow","instructions.text","instructions.save","instructions.image"};
+    if(mode==UiMode::Instructions)return instructions;
     // 上の帯に残すのは「そこから始める」ものだけ。
     // 表の行を動かす・板厚を当てる、といったものはその欄の隣(右の棚)にある。
     static const std::vector<std::string_view> drawing{

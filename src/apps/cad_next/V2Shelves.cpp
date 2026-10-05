@@ -86,8 +86,7 @@ void V2MainWindow::BuildEditingShelves()
     arrayDock_ = new V2ArrayDock(this);
     arrayDock_->SetActionHandlers([this] { ConfirmArray(); },
         [this] {
-            EndArray();
-            SetStatus(QStringLiteral("配列: やめました。"));
+            HandleToolKey(Qt::Key_Escape, nullptr);
         });
 }
 
@@ -210,7 +209,7 @@ void V2MainWindow::BuildOutputShelves()
     booleanDock_->SetContactHandlers([this] { RefreshBooleanAll(); }, [this] { SwapContactInputs(); });
     booleanDock_->SetActionHandlers([this] { ConfirmBoolean(); },
         [this] {
-            EndBoolean();
+            EndBoolean(true);
             SetStatus(QStringLiteral("足す・引く: やめました。"));
         });
 
@@ -239,7 +238,7 @@ void V2MainWindow::BuildOutputShelves()
     extrudeDock_->SetOptionHandler([this] { RefreshExtrudeFromDock(); });
     extrudeDock_->SetActionHandlers([this] { ConfirmExtrude(); },
         [this] {
-            EndExtrudePreview();
+            EndExtrudePreview(true);
             SetStatus(QStringLiteral("押し出し: やめました。"));
         },
         [this] { EditExtrudeWithDialog(); });
@@ -294,7 +293,7 @@ void V2MainWindow::BuildThickenDock()
     thickenDock_->SetThicknessHandler([this](double value) { ApplyThickenThicknessMm(value); });
     thickenDock_->SetActionHandlers([this] { ConfirmThicken(); },
         [this] {
-            EndThicken();
+            EndThicken(true);
             SetStatus(QStringLiteral("厚み: やめました。"));
         });
 }
@@ -387,7 +386,7 @@ void V2MainWindow::BuildSurfaceDock()
         });
     surfaceDock_->SetActionHandlers([this] { ConfirmSurface(); },
         [this] {
-            EndSurfacePreview();
+            EndSurfacePreview(true);
             SetStatus(QStringLiteral("面を作る: やめました。"));
         },
         [this] { ResetSurfaceInput(); });

@@ -497,7 +497,7 @@ bool V2LoopFacesTool::HandleKey(int key)
         return false;
     }
     if (key == Qt::Key_Escape) {
-        Clear();
+        Clear(true);
         window_.SetStatus(QStringLiteral("面にする: やめました。何も変えていません。"));
         return true;
     }
@@ -644,8 +644,14 @@ bool V2LoopFacesTool::ReopenRecent()
     return true;
 }
 
-void V2LoopFacesTool::Clear()
+void V2LoopFacesTool::Clear(bool keepTool)
 {
+    waitingAfterCancel_ = keepTool;
+    if (keepTool) {
+        window_.pendingCommandId_ = "surface.from_lines";
+        window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        dock_->ShowView({});
+    }
     if (!plan_.has_value()) {
         return;
     }

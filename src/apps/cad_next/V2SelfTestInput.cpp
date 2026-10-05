@@ -84,7 +84,7 @@ namespace {
         window.Session().GetDocument().Revision() == revision);
 }
 
-[[nodiscard]] bool CaseEscapeGoesBackToSelect(V2MainWindow& window)
+[[nodiscard]] bool CaseEscapeKeepsTool(V2MainWindow& window)
 {
     // V1と同じ。やりかけを1つ取り消してから、選択道具へ戻り、選択も解除する。
     auto& viewport = window.Viewport();
@@ -109,16 +109,22 @@ namespace {
     if (!Explain("選択が解除される", viewport.Selection().entityIds.empty())) {
         return false;
     }
-    if (!Explain("選択道具へ戻る",
+    if (!Explain("直線ツールを維持する",
             window.Session().CurrentTool()
-                == kachakacha::v2::modeling::DrawingTool::Select)) {
+                == kachakacha::v2::modeling::DrawingTool::Line)) {
         return false;
     }
     if (!Explain("何をしたかを言う", !steps.empty() && !window.StatusText().isEmpty())) {
         return false;
     }
     // 2回目のEsc: もうすることが無い。何も起きないし、何も言わない。
-    return Explain("2回目は何も起きない", viewport.PressEscape().empty());
+    if (!Explain("2回目は何も起きない", viewport.PressEscape().empty())) return false;
+    const auto revision = window.Session().GetDocument().Revision();
+    viewport.ClickAt(QPointF(viewport.width() * 0.25, viewport.height() * 0.25));
+    viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.45));
+    return Explain("道具を押し直さず次の直線を作れる",
+        window.Session().GetDocument().Revision() > revision
+        && window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Line);
 }
 
 [[nodiscard]] bool CaseShiftConstrainsAndSSuppressesSnap(V2MainWindow& window)
@@ -768,7 +774,7 @@ std::vector<SelfTestCase> InputCases()
         {"作図中に入力列が出て数で線が決まる", &CaseCursorInputOpensWhileDrawingAndPlacesByNumber},
         {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},
-        {"Escで選択へ戻り選択も解ける", &CaseEscapeGoesBackToSelect},
+        {"Escで入力を取り消し道具を維持する", &CaseEscapeKeepsTool},
         {"Shiftで水平になりSで吸着が止まる", &CaseShiftConstrainsAndSSuppressesSnap},
         {"吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる",
             &CaseSnapRadiusHoldAndSKeyThroughViewport},

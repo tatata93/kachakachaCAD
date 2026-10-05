@@ -394,7 +394,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
     if (!HandleSurfaceExtrude(false)) (void)HandleTargetExtrude(false);
 }
 
-void V2MainWindow::EndExtrudePreview()
+void V2MainWindow::EndExtrudePreview(bool keepTool)
 {
     extrudeOutline_.clear();
     extrudeOutlines_.clear();
@@ -402,8 +402,8 @@ void V2MainWindow::EndExtrudePreview()
     extrudeSnapshot_.reset();
     // 拾い方もふだんへ戻す。道具が終われば、特別な並べ替えはしない。
     viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
-    viewport_->SetToolPickActive(false);
-    viewport_->SetProfileRegionPicking(false);
+    viewport_->SetToolPickActive(keepTool);
+    viewport_->SetProfileRegionPicking(keepTool);
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
@@ -415,7 +415,12 @@ void V2MainWindow::EndExtrudePreview()
     viewport_->SetExtrudePreviewFaces({});
     ShowToolFooter(QString());
     // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
-    extrudeShelfShown_ = false;
+    extrudeShelfShown_ = keepTool;
+    if (keepTool) {
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        pendingCommandId_ = "part.extrude";
+        viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
+    }
     RefreshRightShelves();
 }
 

@@ -77,8 +77,9 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (!pendingCommandId_.empty()) {
         if (key == Qt::Key_Escape) {
             const QString label = PendingCommandLabel();
-            ClearPendingCommand();
-            SetStatus(label + QStringLiteral(": やめました。"));
+            viewport_->CancelTool();
+            viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+            SetStatus(label + QStringLiteral(": 入力を取り消しました。対象を選んで続けられます。"));
             return true;
         }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {
@@ -95,7 +96,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (approxShelfShown_) {
         // 近似も同じ。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。
         if (key == Qt::Key_Escape) {
-            EndApprox();
+            EndApprox(true);
             SetStatus(QStringLiteral("近似: やめました。何も作っていません。"));
             return true;
         }
@@ -114,7 +115,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (booleanShelfShown_) {
         if (key == Qt::Key_Escape) {
-            EndBoolean();
+            EndBoolean(true);
             SetStatus(QStringLiteral("足す・引く: やめました。何も作っていません。"));
             return true;
         }
@@ -142,8 +143,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (ShelfShown(kachakacha::v2::app::Shelf::Array)) {
         // 配列の棚(D-23)。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。
         if (key == Qt::Key_Escape) {
-            EndArray();
-            SetStatus(QStringLiteral("配列: やめました。"));
+            SetStatus(QStringLiteral("配列: 道具はそのままです。対象や条件を選び直せます。"));
             return true;
         }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {
@@ -165,7 +165,7 @@ bool V2MainWindow::HandleThickenToolKey(int key, QObject* target)
         if (kachakacha::v2::app::ActionForCancelKey(context) != ToolKeyAction::Cancel) {
             return false;
         }
-        EndThicken();
+        EndThicken(true);
         SetStatus(QStringLiteral("厚み: やめました。何も作っていません。"));
         return true;
     }
@@ -198,7 +198,7 @@ bool V2MainWindow::HandleThickenToolKey(int key, QObject* target)
 bool V2MainWindow::HandleSurfaceToolKey(int key)
 {
     if (key == Qt::Key_Escape) {
-        EndSurfacePreview();
+        EndSurfacePreview(true);
         SetStatus(QStringLiteral("面を作る: やめました。何も作っていません。"));
         return true;
     }
@@ -218,7 +218,7 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
         if (kachakacha::v2::app::ActionForCancelKey(context) != ToolKeyAction::Cancel) {
             return false;
         }
-        EndExtrudePreview();
+        EndExtrudePreview(true);
         SetStatus(QStringLiteral("押し出し: やめました。"));
         return true;
     }

@@ -60,7 +60,7 @@ std::vector<std::string> HudLines(const StatusLineParts& parts)
         lines.push_back(parts.hintJa);
     }
     if (!parts.resumeToolJa.empty()) {
-        lines.push_back("測定中(Esc で「" + parts.resumeToolJa + "」へ戻る)");
+        lines.push_back("測定中(Esc で測定入力を取消 / 前の道具:「" + parts.resumeToolJa + "」)");
     }
     return lines;
 }

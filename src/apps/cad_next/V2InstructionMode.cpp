@@ -129,7 +129,7 @@ bool V2InstructionMode::eventFilter(QObject* object,QEvent* event){
     if(object==&window_&&event->type()==QEvent::Close&&!CheckSaved()){static_cast<QCloseEvent*>(event)->ignore();return true;}
     if(!isVisible()||event->type()!=QEvent::KeyPress)return false;auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window()||qobject_cast<QLineEdit*>(object))return false;
     const auto* key=static_cast<QKeyEvent*>(event);if((key->modifiers()&Qt::ControlModifier)&&(key->key()==Qt::Key_Z||key->key()==Qt::Key_Y)){Undo(key->key()==Qt::Key_Y||(key->modifiers()&Qt::ShiftModifier));return true;}
-    if(key->key()==Qt::Key_Escape){if(choosing_)ShowPage(current_);else view_->SetTool("move");return true;}
+    if(key->key()==Qt::Key_Escape){if(choosing_)ShowPage(current_);else view_->CancelInput();return true;}
     if(key->key()==Qt::Key_Delete){Command("instructions.remove");return true;}return false;
 }
 bool V2InstructionMode::CheckSaved(){

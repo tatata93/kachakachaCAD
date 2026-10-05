@@ -80,7 +80,7 @@ void V2GptFabricationTool::Actions(QVBoxLayout* layout)
     button("gptFabricationClear",QStringLiteral("対象を空にする"),0,1,[this]{definition_.parts.clear();Invalidate();sources_->setText(QStringLiteral("対象なし"));});
     button("gptFabricationFace",QStringLiteral("ソリッドのフェイスを選ぶ"),3,0,[this]{window_.RunCommand("fabrication.gpt_from_face");});
     button("gptFabricationPreview",QStringLiteral("近似をプレビュー"),1,0,[this]{Preview();});
-    button("gptFabricationCancel",QStringLiteral("取消"),1,1,[this]{End();});
+    button("gptFabricationCancel",QStringLiteral("取消"),1,1,[this]{End(true);});
     confirm_=button("gptFabricationConfirm",QStringLiteral("この近似を確定"),2,0,[this]{Confirm(pattern_->isChecked());});
     pattern_=button("gptFabricationPattern",QStringLiteral("確定後に型紙を作る"),2,1,[]{});
     pattern_->setCheckable(true);
@@ -97,12 +97,12 @@ void V2GptFabricationTool::Begin()
     Invalidate(); Add(selected);
     window_.ShowToolFooter(QStringLiteral("製作近似 GPT版 / 面を選ぶ → 下見 → 確定 / Escで取消"));
 }
-void V2GptFabricationTool::End()
+void V2GptFabricationTool::End(bool keepTool)
 {
     if (!active_) { return; }
-    active_=false; preview_.reset(); window_.viewport_->HideToolPreview();
-    window_.viewport_->HideToolRoleLabels(); window_.viewport_->SetToolPickActive(false);
-    window_.viewport_->SetToolPickToggle(false); window_.ShowToolFooter(QString()); window_.RefreshRightShelves();
+    active_=keepTool; preview_.reset(); window_.viewport_->HideToolPreview();
+    window_.viewport_->HideToolRoleLabels(); window_.viewport_->SetToolPickActive(keepTool);
+    window_.viewport_->SetToolPickToggle(keepTool); window_.ShowToolFooter(QString()); window_.RefreshRightShelves();
 }
 void V2GptFabricationTool::Add(const std::vector<base::EntityId>& ids)
 {
@@ -227,7 +227,7 @@ bool V2GptFabricationTool::Rebuild(const domain::Feature& feature,base::EntityId
 bool V2GptFabricationTool::HandleKey(int key)
 {
     if (!active_) { return false; }
-    if (key==Qt::Key_Escape) { End(); return true; }
+    if (key==Qt::Key_Escape) { End(true); return true; }
     if (key==Qt::Key_Return || key==Qt::Key_Enter) { Confirm(pattern_->isChecked()); return true; }
     return false;
 }

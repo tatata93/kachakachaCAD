@@ -224,8 +224,8 @@ using kachakacha::v2::modeling::DrawingTool;
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
         return false;
     }
-    return Explain("やめると選択道具へ戻る",
-               window.Session().CurrentTool() == DrawingTool::Select)
+    return Explain("取消後も丸めの道具を維持する",
+               window.Session().CurrentTool() == DrawingTool::ChamferOrFilletPair)
         && Explain("下見も札も一行も消える",
             !window.CornerPreviewShown() && window.Viewport().ToolRoleLabels().empty()
                 && window.ToolFooterTextJa().isEmpty())

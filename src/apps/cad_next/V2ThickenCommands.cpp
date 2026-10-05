@@ -280,9 +280,10 @@ void V2MainWindow::ApplyThickenThicknessMm(double value)
 }
 
 //! やめる。文書は始める前とまったく同じ。
-void V2MainWindow::EndThicken()
+void V2MainWindow::EndThicken(bool keepTool)
 {
-    thickenShelfShown_ = false;
+    thickenShelfShown_ = keepTool;
+    if (keepTool) { thickenInput_.surfaces.clear(); thickenInput_.targetPlane = {}; }
     thickenBuilt_.clear();
     thickenBuiltEdges_.clear();
     thickenBuiltThickness_.clear();
@@ -291,14 +292,15 @@ void V2MainWindow::EndThicken()
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
-        viewport_->SetToolPickActive(false);
-        viewport_->SetToolPickToggle(false);
+        viewport_->SetToolPickActive(keepTool);
+        viewport_->SetToolPickToggle(keepTool);
         // 欄の印を選択に残さない。残すと、次に構えたときに勝手に欄へ入る(HP-TH-02)。
         thickenMirroring_ = true;
         viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         thickenMirroring_ = false;
     }
     ShowToolFooter(QString());
+    if (keepTool) RefreshThickenDock();
     RefreshRightShelves();
 }
 

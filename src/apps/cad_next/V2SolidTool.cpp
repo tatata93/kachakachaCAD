@@ -114,7 +114,7 @@ V2SolidTool::V2SolidTool(V2MainWindow& window)
     dock_->SetActionHandlers([this] { Confirm(); },
         [this] {
             const std::string label = MethodLabel(input_.method);
-            End();
+            End(true);
             window_.SetStatus(Text(label + ": やめました。何も作っていません。"));
         });
 }
@@ -175,22 +175,24 @@ void V2SolidTool::ChooseRevolveMode(RevolveMode mode)
         + (mode == RevolveMode::Full ? "(360°)" : "(角度は「3. 設定」で打てます)")));
 }
 
-void V2SolidTool::End()
+void V2SolidTool::End(bool keepTool)
 {
-    active_ = false;
+    active_ = keepTool;
+    if (keepTool) { input_.profiles.clear(); input_.axis = {}; input_.path.clear(); input_.target = {}; input_.activeSlot.reset(); }
     built_.reset();
     outcome_ = kachakacha::v2::app::SolidPreviewOutcome{};
     mirror_.clear();
     if (window_.viewport_ != nullptr) {
         window_.viewport_->HideToolPreview();
         window_.viewport_->HideToolRoleLabels();
-        window_.viewport_->SetToolPickActive(false);
-        window_.viewport_->SetToolPickToggle(false);
+        window_.viewport_->SetToolPickActive(keepTool);
+        window_.viewport_->SetToolPickToggle(keepTool);
         // 欄の印を選択に残さない。残すと、次に構えたときに勝手に欄へ入る。
         mirroring_ = true;
         window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         mirroring_ = false;
     }
+    if (keepTool) RefreshDock();
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
 }
@@ -202,7 +204,7 @@ bool V2SolidTool::HandleKey(int key)
     }
     if (key == Qt::Key_Escape) {
         const std::string label = MethodLabel(input_.method);
-        End();
+        End(true);
         window_.SetStatus(Text(label + ": やめました。何も作っていません。"));
         return true;
     }

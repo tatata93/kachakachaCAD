@@ -130,7 +130,8 @@ bool V2MainWindow::HandleCornerToolKey(int key)
         return false;
     }
     if (key == Qt::Key_Escape) {
-        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        viewport_->CancelTool();
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         RefreshCornerPreview();
         SetStatus(QStringLiteral("面取り: やめました。何も変えていません。"));
         return true;

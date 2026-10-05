@@ -15,6 +15,7 @@
 #include <QPointF>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QKeyEvent>
 #include <QPixmap>
 #include <QDir>
 #include <QWidget>
@@ -90,8 +91,10 @@ bool CaseImagePersistence(V2MainWindow& window) {
     if(!ImageClick(window,{3,4,0}))return false;
     auto* width=edit->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"));
     if(!Explain("reopen same width",std::abs(width->value()-20)<1e-6))return false;
-    width->setValue(37);edit->findChild<QPushButton*>(QStringLiteral("imageCancel"))->click();QApplication::processEvents();
-    auto* again=V2ImageTool::Open(window);if(!Explain("cancel kept old placement",std::abs(again->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->value()-20)<1e-6))return false;
+    width->setValue(37);QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);
+    QApplication::sendEvent(&window.Viewport(),&escape);QApplication::processEvents();
+    if(!Explain("Esc keeps image pane and can select same image again",edit->isVisible()&&ImageClick(window,{3,4,0})))return false;
+    auto* again=edit;if(!Explain("cancel kept old placement",std::abs(again->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->value()-20)<1e-6))return false;
     again->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->setValue(25);
     again->findChild<QCheckBox*>(QStringLiteral("imageMirror"))->setChecked(true);
     again->findChild<QDoubleSpinBox*>(QStringLiteral("imageOpacity"))->setValue(65);

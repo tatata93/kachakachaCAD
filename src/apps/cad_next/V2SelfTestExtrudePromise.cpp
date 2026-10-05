@@ -93,6 +93,7 @@ namespace {
     // やめ方は3通り。どれでも文書は始める前とまったく同じでなければならない。
     const char* const kWays[] = {"Esc", "棚のキャンセル", "道具替え"};
     for (int way = 0; way < 3; ++way) {
+        window.RunCommand("selection.activate");
         viewport.SetSelection(faceSelection);
         const std::uint64_t revision = window.Session().GetDocument().Revision();
         const std::size_t entities =

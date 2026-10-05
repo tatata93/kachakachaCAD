@@ -115,7 +115,7 @@ void V2GptSurfaceTool::BuildActions(QVBoxLayout* layout)
     button("gptSurfaceReset", QStringLiteral("入力を空にする"), 3, 0, [this] {
         definition_.chains.clear(); definition_.roles.clear(); Invalidate(); RefreshList();
     }, 2);
-    button("gptSurfaceCancel", QStringLiteral("取消"), 3, 2, [this] { End(); });
+    button("gptSurfaceCancel", QStringLiteral("取消"), 3, 2, [this] { End(true); });
     button("gptSurfacePreview", QStringLiteral("プレビュー"), 4, 0, [this] { Preview(); });
     confirm_ = button("gptSurfaceConfirm", QStringLiteral("この面を確定"), 4, 1, [this] { Confirm(); }, 2);
     confirm_->setEnabled(false);
@@ -141,15 +141,15 @@ void V2GptSurfaceTool::Begin()
     window_.ShowToolFooter(QStringLiteral("面生成 GPT版 / 線を追加してプレビュー / Escで取消"));
 }
 
-void V2GptSurfaceTool::End()
+void V2GptSurfaceTool::End(bool keepTool)
 {
     if (!active_) { return; }
-    active_ = false;
+    active_ = keepTool;
     Invalidate();
     window_.viewport_->HideToolRoleLabels();
     window_.viewport_->SetRoleColors({});
-    window_.viewport_->SetToolPickActive(false);
-    window_.viewport_->SetToolPickToggle(false);
+    window_.viewport_->SetToolPickActive(keepTool);
+    window_.viewport_->SetToolPickToggle(keepTool);
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
 }
@@ -388,7 +388,7 @@ void V2GptSurfaceTool::Confirm()
 bool V2GptSurfaceTool::HandleKey(int key)
 {
     if (!active_) { return false; }
-    if (key == Qt::Key_Escape) { End(); return true; }
+    if (key == Qt::Key_Escape) { End(true); return true; }
     if (key == Qt::Key_Return || key == Qt::Key_Enter) { Confirm(); return true; }
     return false;
 }

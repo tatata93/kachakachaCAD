@@ -72,7 +72,7 @@ QWidget* V2FabricationDock::BuildFreezeSection(QWidget* body)
     generationFooter_->hide();
     confirm->setText(QStringLiteral("形状を作成"));
     confirm->setObjectName(QStringLiteral("generationConfirm"));
-    QObject::connect(cancel, &QPushButton::clicked, this, [this] { PressRun("selection.activate"); });
+    QObject::connect(cancel, &QPushButton::clicked, this, [this] { HandleKey(Qt::Key_Escape); });
     QObject::connect(confirm, &QPushButton::clicked, this, [this] { const auto command = generationCommand_; PressRun(command.c_str()); });
     return freezeButtons;
 }
@@ -204,7 +204,7 @@ bool V2FabricationDock::HandleKey(int key)
 {
     if (!ToolActive()) return false;
     if (key == Qt::Key_Escape) {
-        EndTool(); PressRun("selection.activate"); return true;
+        SetMessage(QStringLiteral("道具はそのままです。対象や条件を選び直せます。")); return true;
     }
     if (key != Qt::Key_Return && key != Qt::Key_Enter) return false;
     if (activeCommand_.find("fabrication.freeze_") == 0) {

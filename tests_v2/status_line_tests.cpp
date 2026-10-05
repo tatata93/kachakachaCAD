@@ -85,7 +85,7 @@ KACHA_V2_TEST(status_line, 測定は元の道具を覚えて戻る)
         "測定以外へ持ち替えるときは作らない");
 }
 
-KACHA_V2_TEST(status_line, 測定を重ねているときのEscは元の道具へ戻る)
+KACHA_V2_TEST(status_line, 測定を重ねているときもEscは測定を維持する)
 {
     EscapeContext context;
     context.measuringOverRunningTool = true;
@@ -97,9 +97,9 @@ KACHA_V2_TEST(status_line, 測定を重ねているときのEscは元の道具�
         resume = resume || step == EscapeStep::ResumeToolAfterMeasure;
         backToSelect = backToSelect || step == EscapeStep::BackToSelectTool;
     }
-    Require(resume, "元の道具へ戻る手順がある");
+    Require(!resume, "測定ツールを維持する");
     Require(!backToSelect, "選択道具へは落とさない");
-    Require(std::string(EscapeMessageJa(steps)).find("元の道具") != std::string::npos,
+    Require(std::string(EscapeMessageJa(steps)).find("選択を解除") != std::string::npos,
         "一言に「元の道具」");
     // 重ねていなければ、ふだんどおり選択へ。
     context.measuringOverRunningTool = false;
@@ -107,7 +107,7 @@ KACHA_V2_TEST(status_line, 測定を重ねているときのEscは元の道具�
     for (const EscapeStep step : PlanEscape(context)) {
         plain = plain || step == EscapeStep::BackToSelectTool;
     }
-    Require(plain, "重ねていなければ選択道具へ");
+    Require(!plain, "単独の測定も維持する");
 }
 
 KACHA_V2_TEST_MAIN("status_line_tests")

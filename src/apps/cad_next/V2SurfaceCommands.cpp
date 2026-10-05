@@ -447,9 +447,9 @@ void V2MainWindow::ResetSurfaceInput()
     SetStatus(QStringLiteral("面を作る: 入力を空にしました。作り方はそのままです。"));
 }
 
-void V2MainWindow::EndSurfacePreview()
+void V2MainWindow::EndSurfacePreview(bool keepTool)
 {
-    surfaceShelfShown_ = false;
+    surfaceShelfShown_ = keepTool;
     surfaceSnapshot_.reset();
     // 欄の中身(断面・ガイド・境界の線)は次の面へ持ち越さない。持ち越すと、次に
     // 「面を作る」を押したとき前の面の線が黙って混ざる(別の文書なら消えた id を指す。
@@ -466,9 +466,9 @@ void V2MainWindow::EndSurfacePreview()
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
         viewport_->SetRoleColors({});
-        viewport_->SetToolPickActive(false);
-        viewport_->SetToolPickToggle(false);
-        viewport_->SetProfileRegionPicking(false);
+        viewport_->SetToolPickActive(keepTool);
+        viewport_->SetToolPickToggle(keepTool);
+        viewport_->SetProfileRegionPicking(keepTool);
         // 欄の印(断面/ガイド/境界の線)を 3D の選択に残さない(HP-SF-06)。
         // 残すと、やめたあとも線が光ったままで「まだ面を作っている」ように見える。
         surfaceMirroring_ = true;

@@ -34,11 +34,11 @@ public:
 
     //! 命令 surface.from_lines(面にする)。いま選んでいる線から輪を探し、下見と棚を出す。
     void Start();
-    [[nodiscard]] bool Active() const noexcept { return plan_.has_value(); }
+    [[nodiscard]] bool Active() const noexcept { return plan_.has_value() || waitingAfterCancel_; }
     //! Enter / Esc。引き受けたら真。
     [[nodiscard]] bool HandleKey(int key);
     //! 下見を片づけて構えを解く。
-    void Clear();
+    void Clear(bool keepTool = false);
     //! 別の道具を持った: 構えも「直前の操作」も片づける。
     void End();
     //! 直前の操作(作ったあと)。棚に「直前: 面にする(n 枚)[開いて直す]」を出している間だけ真。
@@ -89,6 +89,7 @@ private:
         std::vector<kachakacha::v2::base::EntityId>& supports) const;
 
     V2MainWindow& window_;
+    bool waitingAfterCancel_ = false;
     V2LoopFacesDock* dock_ = nullptr;
     std::vector<kachakacha::v2::modeling::GuideTableSelection> selections_;
     std::optional<kachakacha::v2::app::LoopFacePlan> plan_;

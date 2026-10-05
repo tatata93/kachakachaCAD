@@ -140,7 +140,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
         return false;
     }
-    return Explain("やめると棚の構えが解ける", !window.ApproxShelfShown())
+    return Explain("取消後も近似を維持する", window.ApproxShelfShown())
         && Explain("文書には面が1枚あるだけ",
             CountOfKind(window, EntityKind::GuideSurface) == 1
                 && window.FabricationModelCount() == 0)

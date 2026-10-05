@@ -137,7 +137,7 @@ public:
     //! 一番下の一行に、いま出ている言葉。試験から読む。
     [[nodiscard]] QString ToolFooterTextJa() const;
     //! 下見をやめる。確定・取消・道具替えのとき。
-    void EndExtrudePreview();
+    void EndExtrudePreview(bool keepTool = false);
     //! 出ている下見のとおりに作る。Enter から呼ぶ。
     void ConfirmExtrude();
     //! 輪郭が違う平面にあれば、平面ごとに別の押し出しにする(1 回の元に戻すで全部消える)。1 平面なら偽。
@@ -186,7 +186,7 @@ public:
     //! なぜ作れないかを言う。断り方を1か所にまとめる。
     void ReportSurfaceNotReady();
     //! 棚を片付ける。
-    void EndSurfacePreview();
+    void EndSurfacePreview(bool keepTool = false);
     //! 棚へいまの入力を映す。
     void RefreshSurfaceDock();
     //! いまの入力で出来上がる面を、**文書へ書かずに**線で出す(§12)。
@@ -861,7 +861,7 @@ private:
     void ActivateBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
     void ClearBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
     void ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind);
-    void EndBoolean();
+    void EndBoolean(bool keepTool = false);
     void ConfirmBoolean();
     bool RefreshContactPreview();
     bool ConfirmContact();
@@ -883,7 +883,7 @@ private:
     void ChooseThickenToPlane();
     void ChooseThickenTarget(const kachakacha::v2::base::EntityId& planeId);
     void ApplyThickenThicknessMm(double value);
-    void EndThicken();
+    void EndThicken(bool keepTool = false);
     void ConfirmThicken();
     // ---- 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。V2ApproxCommands.cpp が持つ。
     [[nodiscard]] kachakacha::v2::domain::CreateFabricationModelDefinition
@@ -898,7 +898,7 @@ private:
     //! 作り方のカード(標準/少部品優先/精度優先/手動条件)。既定の候補を替える。
     void ChooseApproxPolicy(int policy);
     void ClearApproxSources();
-    void EndApprox();
+    void EndApprox(bool keepTool = false);
     void ConfirmApprox();
     void RunCreatePattern();
     //! 選んだ線を開口/折り線に(reliefCut=false)、または切れ目に(true)する。

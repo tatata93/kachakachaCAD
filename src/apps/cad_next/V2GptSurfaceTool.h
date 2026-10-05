@@ -19,7 +19,7 @@ public:
     explicit V2GptSurfaceTool(V2MainWindow& window);
     ~V2GptSurfaceTool();
     void Begin();
-    void End();
+    void End(bool keepTool = false);
     bool Active() const { return active_; }
     QDockWidget* Dock() const { return dock_; }
     void HandleSelectionChanged();

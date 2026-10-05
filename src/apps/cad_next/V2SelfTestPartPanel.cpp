@@ -111,7 +111,8 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
     dock.ChooseDirection(ExtrudeDirectionMode::ProfileNormal);
     window.RefreshExtrudeFromDock();
     return Explain("Esc でやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))
-        && Explain("棚が引っ込む", !window.ShelfShown(Shelf::Extrude));
+        && Explain("押し出しの棚を維持する", window.ShelfShown(Shelf::Extrude))
+        && Explain("下見だけ取り消す", !window.Viewport().ExtrudeHandleShown());
 }
 
 //! HP-PA-02。左右対称を棚で選んで Enter すると、対称で作られる(下見と確定が同じ値)。
@@ -236,6 +237,8 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
 {
     if (!ArmExtrude(window)) return false;
     window.ExtrudeDock().PressCancel();
+    window.RunCommand("selection.activate");
+    if (!ClickOnAnyCurve(window, Qt::NoModifier)) return false;
     const auto line = kachakacha::v2::geometry::CurveSegment::MakeLine({-200,0,20}, {200,0,40});
     if (!window.Session().AddWire({line.Value()}, false, "斜め終端").committed) return false;
     if (!RefreshFixture(window)) return false;
@@ -301,9 +304,34 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
 
 } // namespace
 
+static bool CaseEscapeRetainsExtrudeSettings(V2MainWindow& window)
+{
+    if (!ArmExtrude(window)) return false;
+    auto& dock = window.ExtrudeDock();
+    if (!dock.PickExtent(ExtrudeExtentMode::TwoDistances)) return false;
+    dock.SetSecondDistanceMm(7.0);
+    window.RefreshExtrudeFromDock();
+    const auto revision = window.Session().GetDocument().Revision();
+    for (int i = 0; i < 2; ++i) {
+        if (!window.HandleToolKey(Qt::Key_Escape, nullptr)) return false;
+    }
+    if (!Explain("Esc twice keeps extrude and settings, discards preview without editing document",
+        window.ShelfShown(Shelf::Extrude) && !window.Viewport().ExtrudeHandleShown()
+        && window.Session().GetDocument().Revision() == revision
+        && dock.ExtentMode() == ExtrudeExtentMode::TwoDistances
+        && std::abs(window.ExtrudeChoice().secondDistanceMm - 7.0) < 1e-9)) return false;
+    if (!ClickOnAnyCurve(window, Qt::NoModifier)) return false;
+    if (!Explain("pick next profile without selecting extrude again",
+        window.Viewport().ExtrudeHandleShown())) return false;
+    if (!window.HandleToolKey(Qt::Key_Return, nullptr)) return false;
+    return Explain("resumed extrusion creates exactly one solid",
+        CountOfKind(window, kachakacha::v2::domain::EntityKind::Part) == 1);
+}
+
 std::vector<SelfTestCase> PartPanelCases()
 {
     return {
+        {"HP-PA-07 Esc retains extrude settings and next profile can commit", CaseEscapeRetainsExtrudeSettings},
         {"HP-PA-06 任意曲面を終端として押し出し、保存・再生成", CaseExtrudeStopsAtCurvedFace},
         {"HP-PA-03 ツール先行で輪郭を選び、非対称と反転を保存後も維持", CaseExtrudeToolFirstAfterDrawing},
         {"HP-PA-04 曲面を後から選び、直線方向に押し出して保存・再生成", CaseCurvedFaceExtrudeWithDirectionLine},

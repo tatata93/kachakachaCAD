@@ -29,23 +29,10 @@ std::vector<EscapeStep> PlanEscape(const EscapeContext& context)
         steps.push_back(EscapeStep::CancelDrawing);
     }
 
-    // そのうえで、必ず「選択道具・何も選んでいない」で終わる。
-    // すでにそうなっているものは足さない。足すと、帯に「解除しました」と
-    // 出るのに何も変わらない、ということになる。
-    // 測定を重ねているだけなら、測ったものを片づけて元の道具へ戻る(C-16)。
-    // 選択道具まで落とすと、線を引く手を測定のたびに失う。
-    if (context.measuringOverRunningTool) {
-        if (context.hasSelection) {
-            steps.push_back(EscapeStep::ClearSelection);
-        }
-        steps.push_back(EscapeStep::ResumeToolAfterMeasure);
-        return steps;
-    }
+    // Esc は入力と選択を取り消す。道具を置く操作は V / 選択へ分離する。
+    // 測定も同じ道具を維持し、次の対象を測れるようにする。
     if (context.hasSelection) {
         steps.push_back(EscapeStep::ClearSelection);
-    }
-    if (!context.toolIsSelect) {
-        steps.push_back(EscapeStep::BackToSelectTool);
     }
     return steps;
 }
@@ -65,7 +52,7 @@ std::string_view EscapeMessageJa(const std::vector<EscapeStep>& steps)
         return "測定を終えて、元の道具へ戻りました。";
     }
     if (Has(steps, EscapeStep::CancelDrawing) || Has(steps, EscapeStep::CloseCursorInput)) {
-        return "作図をやめました。選択に戻ります。";
+        return "途中の入力を取り消しました。道具はそのまま続けられます。";
     }
     if (Has(steps, EscapeStep::ClearSelection) && Has(steps, EscapeStep::BackToSelectTool)) {
         return "選択を解除し、選択道具に戻りました。";

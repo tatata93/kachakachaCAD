@@ -433,19 +433,19 @@ void V2MainWindow::ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind)
 }
 
 //! やめる。文書は始める前とまったく同じ。
-void V2MainWindow::EndBoolean()
+void V2MainWindow::EndBoolean(bool keepTool)
 {
     contactBase_.reset();
     contactBuilt_.reset();
-    booleanShelfShown_ = false;
+    booleanShelfShown_ = keepTool;
     booleanBuilt_.reset();
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
     booleanMirror_.clear();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
-        viewport_->SetToolPickActive(false);
-        viewport_->SetToolPickToggle(false);
+        viewport_->SetToolPickActive(keepTool);
+        viewport_->SetToolPickToggle(keepTool);
     }
     ShowToolFooter(QString());
     RefreshRightShelves();

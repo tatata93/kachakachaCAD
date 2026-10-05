@@ -47,7 +47,7 @@ V2FaceActions::V2FaceActions(V2MainWindow& window,std::string command)
         : QStringLiteral("近似するソリッドのフェイスをクリックしてください。独立した面を取り出し、その面で近似を始めます。元ソリッドは変更しません。"),this);
     status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();
     auto* cancel=new QPushButton(QStringLiteral("取消 Esc"),this);layout->addWidget(cancel);
-    QObject::connect(cancel,&QPushButton::clicked,this,[this]{window_.operationHost_->SetShelves({});});
+    QObject::connect(cancel,&QPushButton::clicked,this,[this]{status_->setText(QStringLiteral("フェイスを選んで続けられます。"));});
     qApp->installEventFilter(this);
 }
 bool V2FaceActions::eventFilter(QObject* object,QEvent* event)
@@ -55,7 +55,7 @@ bool V2FaceActions::eventFilter(QObject* object,QEvent* event)
     if(!isVisible())return false;
     if(event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget || widget->window()!=window())return false;
-        window_.operationHost_->SetShelves({});return true;
+        status_->setText(QStringLiteral("フェイスを選んで続けられます。"));return true;
     }
     if(object!=window_.viewport_ || event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton || mouse->modifiers()!=Qt::NoModifier)return false;

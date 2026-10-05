@@ -15,7 +15,7 @@ class V2GptFabricationTool final {
 public:
     explicit V2GptFabricationTool(V2MainWindow& window);
     void Begin();
-    void End();
+    void End(bool keepTool = false);
     bool Active() const { return active_; }
     QDockWidget* Dock() const { return dock_; }
     void HandleSelectionChanged();

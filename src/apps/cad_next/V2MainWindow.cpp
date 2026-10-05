@@ -246,11 +246,10 @@ void V2MainWindow::WireViewportCallbacks()
     // Enter で確定、Esc でやめる。中身は窓が持っている。
     viewport_->SetExtrudeCallbacks([this] { ConfirmExtrude(); },
         [this] {
-            EndExtrudePreview();
+            EndExtrudePreview(true);
             SetStatus(QStringLiteral("押し出し: やめました。"));
         });
-    // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
-    // 測定を重ねていたなら元の道具へ(C-16)。そうでなければ選択道具へ。
+    // 明示的な選択道具への切替。Esc は入力だけを取り消し、道具を維持する。
     viewport_->SetBackToSelectCallback([this] { BackToSelectOrResume(); });
     viewport_->SetMeasureResumeAvailable([this] { return toolBeforeMeasure_.has_value(); });
     // カーソルが動いたら状態行の座標を書き直す。
@@ -354,6 +353,7 @@ void V2MainWindow::SetMode(UiMode mode)
 {
     // モードを変えても、選んでいるものも、作った形も、一切触らない。
     // 変わるのは「どのコマンドが出ているか」だけである(UIX-001 / 003)。
+    const auto selected = viewport_->Selection();
     mode_ = mode;
     for (auto& entry : modeActions_) {
         entry.second->setChecked(entry.first == mode);
@@ -369,6 +369,7 @@ void V2MainWindow::SetMode(UiMode mode)
     // 3D で対象を拾う道具(面を作る・近似・足す引く・厚み…)も解く。残すと、作図モードへ
     // 移ったのに画面の押下が道具に取られて線が選べず、消せもしない(オーナー報告 2026-09-27)。
     EndArmedTools();
+    viewport_->SetSelection(selected);
     RefreshCommandVisibility();
     if (ribbon_ != nullptr) {
         ribbon_->ShowMode(mode);   // 帯のカテゴリと道具はモードで入れ替わる

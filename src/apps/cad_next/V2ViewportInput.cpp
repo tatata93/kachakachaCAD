@@ -203,6 +203,9 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
         session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
         && measureResumeAvailable_ && measureResumeAvailable_();
     const auto steps = kachakacha::v2::app::PlanEscape(context);
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
+        ClearMeasurePicks();
+    }
     for (const kachakacha::v2::app::EscapeStep step : steps) {
         switch (step) {
         case kachakacha::v2::app::EscapeStep::CancelGadgetDrag:
@@ -217,6 +220,8 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
             break;
         case kachakacha::v2::app::EscapeStep::CloseCursorInput:
             CloseCursorInput();
+            session_->CancelTool();
+            hover_.preview.clear();
             break;
         case kachakacha::v2::app::EscapeStep::CancelDrawing:
             session_->CancelTool();
@@ -1463,4 +1468,3 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
     }
     QWidget::mouseReleaseEvent(event);
 }
-

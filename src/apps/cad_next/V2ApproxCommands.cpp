@@ -288,7 +288,8 @@ void V2MainWindow::RefreshApproxForSelectionChange()
 void V2MainWindow::RunFabricationCreate()
 {
     if (approxShelfShown_) {
-        ConfirmApprox();
+        if (approxEvaluations_.empty()) RefreshApproxAll();
+        else ConfirmApprox();
         return;
     }
     if (!AdoptFabricationChoice()) { return; }
@@ -360,9 +361,9 @@ void V2MainWindow::ClearApproxSources()
 }
 
 //! やめる。文書は始める前とまったく同じ。
-void V2MainWindow::EndApprox()
+void V2MainWindow::EndApprox(bool keepTool)
 {
-    approxShelfShown_ = false;
+    approxShelfShown_ = keepTool;
     approxOutcomes_.clear();
     approxEvaluations_.clear();
     approxDefinitions_.clear();
@@ -370,8 +371,8 @@ void V2MainWindow::EndApprox()
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
-        viewport_->SetToolPickActive(false);
-        viewport_->SetToolPickToggle(false);
+        viewport_->SetToolPickActive(keepTool);
+        viewport_->SetToolPickToggle(keepTool);
     }
     if (fabricationDock_ != nullptr) {
         fabricationDock_->ShowApproxInput(QString(), {}, -1, false, false);

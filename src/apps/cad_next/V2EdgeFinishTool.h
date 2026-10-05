@@ -34,7 +34,7 @@ public:
     [[nodiscard]] static bool Handles(std::string_view commandId);
     //! 命令で始める。構えていれば、同じ種類なら確定、違えば種類だけ替える。
     void Begin(std::string_view commandId);
-    void End();
+    void End(bool keepTool = false);
     void Confirm();
     void HandleSelectionChanged();
     [[nodiscard]] bool HandleKey(int key);

@@ -108,7 +108,7 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
         return false;
     }
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))
-        || !Explain("やめると構えが解ける", !window.ThickenShelfShown())
+        || !Explain("厚みの道具を維持する", window.ThickenShelfShown())
         || !Explain("何も作っていない", CountOfKind(window, EntityKind::Part) == 0)) {
         return false;
     }

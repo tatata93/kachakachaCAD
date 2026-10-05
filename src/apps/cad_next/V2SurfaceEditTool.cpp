@@ -69,7 +69,7 @@ V2SurfaceEditTool::V2SurfaceEditTool(V2MainWindow& window)
     });
     dock_->SetActionHandlers([this] { Confirm(); },
         [this] {
-            End();
+            End(true);
             window_.SetStatus(QStringLiteral("面の編集: やめました。何も作っていません。"));
         });
 }
@@ -136,22 +136,24 @@ void V2SurfaceEditTool::Choose(SurfaceEditOperation operation)
     Refresh();
 }
 
-void V2SurfaceEditTool::End()
+void V2SurfaceEditTool::End(bool keepTool)
 {
-    active_ = false;
+    active_ = keepTool;
+    if (keepTool) { input_.surfaces.clear(); input_.wires.clear(); input_.edges.clear(); }
     surfaces_.clear();
     wires_.clear();
     outcome_ = kachakacha::v2::app::SurfaceEditOutcome{};
     if (window_.viewport_ != nullptr) {
         window_.viewport_->HideToolPreview();
         window_.viewport_->HideToolRoleLabels();
-        window_.viewport_->SetToolPickActive(false);
-        window_.viewport_->SetToolPickToggle(false);
+        window_.viewport_->SetToolPickActive(keepTool);
+        window_.viewport_->SetToolPickToggle(keepTool);
         // 欄の印を選択に残さない。残すと、次に構えたときに勝手に欄へ入る。
         mirroring_ = true;
         window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         mirroring_ = false;
     }
+    if (keepTool) RefreshDock();
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
     if (window_.surfaceAnalysis_ != nullptr) {
@@ -256,7 +258,7 @@ bool V2SurfaceEditTool::HandleKey(int key)
         return false;
     }
     if (key == Qt::Key_Escape) {
-        End();
+        End(true);
         window_.SetStatus(QStringLiteral("面の編集: やめました。何も作っていません。"));
         return true;
     }

@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QEvent>
+#include <QImage>
 #include <QCheckBox>
 #include <QApplication>
 #include <QKeyEvent>
@@ -48,11 +49,18 @@ bool V2ImageTool::SetAnchor(const Vector3& point) {
     }else definition_.origin=point;
     return true;
 }
+void V2ImageTool::CancelInput() {
+    dragging_=false;role_=0;pixels_.clear();points_.clear();imageMarks_.clear();imageHover_.reset();
+    window_.viewport_->CancelPointPick();window_.viewport_->SetImageViews(savedViews_);
+    window_.viewport_->HideToolRoleLabels();window_.viewport_->HideToolPreview();
+    image_=QImage();definition_.pngBase64.clear();previewOk_=false;editing_={};
+    status_->setText(QStringLiteral("変更を取り消しました。画像ツールはそのままです。画像を選んでください。"));
+}
 bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
     if(!isVisible())return false;
     if(event->type()==QEvent::KeyPress){const auto* key=static_cast<QKeyEvent*>(event);auto* widget=qobject_cast<QWidget*>(object);
         if(!widget||widget->window()!=window())return false;
-        if(key->key()==Qt::Key_Escape){window_.operationHost_->SetShelves({});return true;}
+        if(key->key()==Qt::Key_Escape){CancelInput();return true;}
         if(key->key()==Qt::Key_Return||key->key()==Qt::Key_Enter){Commit();return true;}}
     if(object!=window_.viewport_)return false;
     if(DragViewport(event))return true;

@@ -79,7 +79,7 @@ void DrawOneLine(V2MainWindow& window)
             after == before + 2)) {
         return false;
     }
-    if (!Explain("棚が引っ込む", !window.ShelfShown(Shelf::Array))) {
+    if (!Explain("確定後は棚が片付く", !window.ShelfShown(Shelf::Array))) {
         return false;
     }
     window.RunCommand("edit.undo");
@@ -103,7 +103,7 @@ void DrawOneLine(V2MainWindow& window)
     if (!Explain("Esc を受け取る", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
         return false;
     }
-    if (!Explain("棚が引っ込む", !window.ShelfShown(Shelf::Array))) {
+    if (!Explain("配列の棚が残る", window.ShelfShown(Shelf::Array))) {
         return false;
     }
     return Explain((std::string("本数は変わらない(実際 ")

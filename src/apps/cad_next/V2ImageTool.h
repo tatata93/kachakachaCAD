@@ -32,6 +32,7 @@ protected:
 private:
     explicit V2ImageTool(V2MainWindow&);
     void BuildUi();
+    void CancelInput();
     void UseWorkPlane();
     void Pick(int role);
     void ClickViewport(const QPointF&);

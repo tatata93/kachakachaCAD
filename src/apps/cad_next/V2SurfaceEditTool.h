@@ -37,7 +37,7 @@ public:
     [[nodiscard]] bool Handles(std::string_view commandId) const;
     //! 命令で始める(構えていれば作り方だけ替える)。
     void Begin(std::string_view commandId);
-    void End();
+    void End(bool keepTool = false);
     void Confirm();
     //! 3D の選択が変わった(窓の HandleSelectionChanged から)。
     void HandleSelectionChanged();

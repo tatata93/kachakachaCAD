@@ -61,7 +61,7 @@ void V2ImageTool::BuildUi() {
     status_=new QLabel(QStringLiteral("画像を選んでください。"),this);status_->setWordWrap(true);outer->addWidget(status_);
     connect(mode_,&QComboBox::currentIndexChanged,this,[this]{Preview();});layout->addStretch();layout=outer;
     button(QStringLiteral("確定 Enter"),"imageCommit",[this]{Commit();});
-    button(QStringLiteral("取消 Esc"),"imageCancel",[this]{window_.operationHost_->SetShelves({});});
+    button(QStringLiteral("取消 Esc"),"imageCancel",[this]{CancelInput();});
 }
 void V2ImageTool::UpdateFields() {
     updating_=true;width_->setValue(definition_.mmPerPixel*definition_.pixelWidth);

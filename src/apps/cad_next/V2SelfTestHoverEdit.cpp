@@ -171,7 +171,7 @@ using kachakacha::v2::modeling::DrawingTool;
         return false;
     }
     (void)window.Viewport().PressEscape();
-    return Explain("Esc で選択道具へ戻る", window.Session().CurrentTool() == DrawingTool::Select);
+    return Explain("Esc でトリムを維持する", window.Session().CurrentTool() == DrawingTool::Trim);
 }
 
 //! HP-TR-02。縦 2 本と横 1 本。横の真ん中を押すと 2 本に分かれ、残った左の線(交点が無い)を

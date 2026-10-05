@@ -885,8 +885,8 @@ namespace {
     }
     // 道具だけの Esc は窓の取り合い(HandleToolKey)を通らず、3D の Esc(PressEscape)が受ける。
     (void)window.Viewport().PressEscape();
-    return Explain("Esc でやめられる",
-        window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("Esc でトリムを維持する",
+        window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Trim);
 }
 
 [[nodiscard]] bool CaseTrimNeedsTwoWires(V2MainWindow& window)

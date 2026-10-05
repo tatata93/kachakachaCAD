@@ -70,7 +70,7 @@ V2EdgeFinishTool::V2EdgeFinishTool(V2MainWindow& window)
     dock_->SetActionHandlers([this] { Confirm(); },
         [this] {
             const std::string label = LabelOf(input_.kind);
-            End();
+            End(true);
             window_.SetStatus(Text(label + ": やめました。何も作っていません。"));
         });
 }
@@ -129,20 +129,22 @@ void V2EdgeFinishTool::Begin(std::string_view commandId)
           "大きさは右の棚で決めます。Enter で確定、Esc でやめます。"));
 }
 
-void V2EdgeFinishTool::End()
+void V2EdgeFinishTool::End(bool keepTool)
 {
-    active_ = false;
+    active_ = keepTool;
+    if (keepTool) { input_.part = {}; input_.edges.clear(); }
     built_.reset();
     outcome_ = kachakacha::v2::app::EdgeFinishOutcome{};
     if (window_.viewport_ != nullptr) {
         window_.viewport_->HideToolPreview();
         window_.viewport_->HideToolRoleLabels();
-        window_.viewport_->SetToolPickActive(false);
-        window_.viewport_->SetToolPickToggle(false);
+        window_.viewport_->SetToolPickActive(keepTool);
+        window_.viewport_->SetToolPickToggle(keepTool);
         mirroring_ = true;
         window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         mirroring_ = false;
     }
+    if (keepTool) RefreshDock();
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
 }
@@ -154,7 +156,7 @@ bool V2EdgeFinishTool::HandleKey(int key)
     }
     if (key == Qt::Key_Escape) {
         const std::string label = LabelOf(input_.kind);
-        End();
+        End(true);
         window_.SetStatus(Text(label + ": やめました。何も作っていません。"));
         return true;
     }

@@ -91,7 +91,7 @@ V2PartDock::V2PartDock(QWidget* parent)
     auto* footerLayout = new QVBoxLayout(footer);
     QPushButton* cancel = nullptr;
     footerLayout->addLayout(MakeCancelConfirmRow(footer, &cancel, &confirm_));
-    QObject::connect(cancel, &QPushButton::clicked, this, [this] { PressRun("selection.activate"); });
+    QObject::connect(cancel, &QPushButton::clicked, this, [this] { HandleKey(Qt::Key_Escape); });
     QObject::connect(confirm_, &QPushButton::clicked, this, [this] {
         const auto command = command_;
         if (!command.empty()) PressRun(command.c_str());
@@ -224,7 +224,7 @@ void V2PartDock::FocusCommand(std::string_view command)
 bool V2PartDock::HandleKey(int key)
 {
     if (!ToolActive()) return false;
-    if (key == Qt::Key_Escape) { PressRun("selection.activate"); return true; }
+    if (key == Qt::Key_Escape) { return true; }
     if (key == Qt::Key_Return || key == Qt::Key_Enter) { confirm_->click(); return true; }
     return false;
 }

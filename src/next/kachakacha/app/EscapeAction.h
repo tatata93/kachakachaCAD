@@ -1,18 +1,8 @@
 #pragma once
 
-//! Esc を押したとき何が起きるか(V1同等)。
-//!
-//! V1 の Esc は **必ず「選択道具・何も選んでいない」で終わる。**
-//! ただし、いきなりそこへ飛ぶのではない。
-//! **やりかけを1つだけ取り消してから** 選択へ戻る。
-//!
-//! なぜ1つだけか。1回のEscで全部消すと、線を1本引きかけただけのつもりが
-//! 選択もモードも消えて、どこまで戻ったのか分からなくなる。
-//! 逆に「取り消すだけ」で選択へ戻らないと、Escを押したのに
-//! まだ道具を持ったままで、次のクリックで意図しない線が出る。
-//! V2 はこの後者だった。
-//!
-//! 判断をここへ置いたのは、画面を出さずに確かめるためである。
+//! Esc は未確定入力と選択を取り消し、現在の道具は維持する。
+//! 2026-10-06 のオーナー指定。道具を置く場合は V / 選択や別の道具を使う。
+//! 判断をここへ置き、画面を出さずに状態の組合せを検査する。
 
 #include <string_view>
 #include <vector>
@@ -35,7 +25,7 @@ struct EscapeContext {
     bool hasSelection = false;
     //! いま選択道具である。
     bool toolIsSelect = false;
-    //! 測定を重ねていて、戻り先の道具がある(C-16)。Esc は選択ではなく元の道具へ戻る。
+    //! 測定を重ねていて、戻り先の道具がある(C-16)。Esc は測定を維持する。
     bool measuringOverRunningTool = false;
 };
 
@@ -44,7 +34,7 @@ enum class EscapeStep {
     CancelGadgetDrag,   //!< 視点の引きずりを中断する(姿勢は押す前へ戻さない)
     CancelCubeDrag,     //!< キューブの引きずりを中断する
     CancelPick,         //!< 押す場所を待つのをやめる
-    CloseCursorInput,   //!< 数値入力を閉じる
+    CloseCursorInput,   //!< 数値入力とその未確定作図を取り消す
     CancelDrawing,      //!< 作図の途中を捨てる
     ClearSelection,     //!< 選択を空にする
     BackToSelectTool,   //!< 選択道具へ戻る
@@ -54,7 +44,7 @@ enum class EscapeStep {
 //! いまの状況から、Esc がすることを組み立てる。
 //!
 //! **やりかけの取り消しは、上から1つだけ。**
-//! そのあとに、選択を空にして選択道具へ戻る手順が必ず付く。
+//! 選択があれば空にする。道具を切り替える手順は生成しない。
 [[nodiscard]] std::vector<EscapeStep> PlanEscape(const EscapeContext& context);
 
 //! 帯に出す一言。何を取り消したのかを言う。

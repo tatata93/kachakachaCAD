@@ -43,13 +43,31 @@ namespace {
 
 } // namespace
 
-KACHA_V2_TEST(escape, 何もしていなくても選択道具へ戻る)
+KACHA_V2_TEST(escape, 何もしていなければ使用中の道具を維持する)
 {
     // V1 の Esc は必ず「選択道具・何も選んでいない」で終わる。
     EscapeContext context;
     context.toolIsSelect = false;
     const auto steps = PlanEscape(context);
-    Require(Has(steps, EscapeStep::BackToSelectTool), "選択道具へ戻る");
+    Require(!Has(steps, EscapeStep::BackToSelectTool), "使用中の道具を維持する");
+}
+
+KACHA_V2_TEST(escape, すべての入力状態で道具を解除しない)
+{
+    for (unsigned flags = 0; flags < 256; ++flags) {
+        EscapeContext context;
+        context.draggingGadget = (flags & 1) != 0;
+        context.draggingCube = (flags & 2) != 0;
+        context.waitingForPick = (flags & 4) != 0;
+        context.cursorInputOpen = (flags & 8) != 0;
+        context.toolHasPoints = (flags & 16) != 0;
+        context.hasSelection = (flags & 32) != 0;
+        context.toolIsSelect = (flags & 64) != 0;
+        context.measuringOverRunningTool = (flags & 128) != 0;
+        const auto steps = PlanEscape(context);
+        Require(!Has(steps, EscapeStep::BackToSelectTool), "選択ツールへ変更しない");
+        Require(!Has(steps, EscapeStep::ResumeToolAfterMeasure), "測定を終了しない");
+    }
 }
 
 KACHA_V2_TEST(escape, すでに選択道具で何も選んでいなければ何もしない)
@@ -72,7 +90,7 @@ KACHA_V2_TEST(escape, 選択は解除される)
     Require(!Has(steps, EscapeStep::BackToSelectTool), "すでに選択道具なので戻らない");
 }
 
-KACHA_V2_TEST(escape, 作図の途中なら作図だけを取り消してから戻る)
+KACHA_V2_TEST(escape, 作図の途中なら入力を取り消して道具を維持する)
 {
     EscapeContext context;
     context.toolHasPoints = true;
@@ -80,7 +98,7 @@ KACHA_V2_TEST(escape, 作図の途中なら作図だけを取り消してから�
     const auto steps = PlanEscape(context);
     Require(Has(steps, EscapeStep::CancelDrawing), "作図を取り消す");
     Require(Has(steps, EscapeStep::ClearSelection), "選択も解除する");
-    Require(Has(steps, EscapeStep::BackToSelectTool), "選択道具へ戻る");
+    Require(!Has(steps, EscapeStep::BackToSelectTool), "使用中の道具を維持する");
     // 取り消しは1つだけ。
     Require(!Has(steps, EscapeStep::CancelPick), "拾いは待っていない");
 }

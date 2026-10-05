@@ -181,7 +181,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
         return false;
     }
-    return Explain("やめると構えが解ける", !window.BooleanShelfShown())
+    return Explain("取消後も道具を維持する", window.BooleanShelfShown())
         && Explain("部品は2つのまま", CountOfKind(window, EntityKind::Part) == 2)
         && Explain("札も一行も消える",
             window.Viewport().ToolRoleLabels().empty() && window.ToolFooterTextJa().isEmpty());
@@ -423,8 +423,7 @@ using kachakacha::v2::domain::EntityKind;
     window.SendKeyToViewport(Qt::Key_Escape);QApplication::processEvents();
     if(!Explain("取消で文書と部品を維持",VisiblePartCount(window)==2
         && CountOfKind(window,EntityKind::Wire)==wires
-        && !window.Viewport().findChild<QWidget*>(QStringLiteral("overlapOverlay"))))return false;
-    window.RunCommand("part.overlap_inspect");
+        && window.Viewport().findChild<QWidget*>(QStringLiteral("overlapOverlay"))))return false;
     auto* browser=window.findChild<QWidget*>(QStringLiteral("overlapBrowser"));
     if(!browser)return false;
     auto* list=browser->findChild<QListWidget*>(QStringLiteral("overlapList"));

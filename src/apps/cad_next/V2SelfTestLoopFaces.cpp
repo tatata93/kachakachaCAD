@@ -274,7 +274,7 @@ void SelectAllWires(V2MainWindow& window)
     }
     const std::uint64_t revision = window.Session().GetDocument().Revision();
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))
-        || !Explain("道具の構えが解ける", !window.LoopFacesTool().Active())
+        || !Explain("面の道具を維持する", window.LoopFacesTool().Active())
         || !Explain("文書の版は変わらない", window.Session().GetDocument().Revision() == revision)
         || !Explain((std::string("状態行に「やめました」が出る(")
                         + window.StatusText().toStdString() + ")").c_str(),
@@ -391,7 +391,7 @@ void SelectAllWires(V2MainWindow& window)
     }
     const std::uint64_t revision = window.Session().GetDocument().Revision();
     return Explain("Enter しても寄せず、輪が無いので面は作らない", window.HandleToolKey(Qt::Key_Return, nullptr))
-        && Explain("道具の構えが解ける", !window.LoopFacesTool().Active())
+        && Explain("確定後は道具を解く", !window.LoopFacesTool().Active())
         && Explain("文書の版は変わらない(寄せていない)",
             window.Session().GetDocument().Revision() == revision)
         && Explain((std::string("状態行に「作りません」が出る(") + window.StatusText().toStdString()

@@ -88,7 +88,9 @@ using kachakacha::v2::modeling::DrawingTool;
     auto* back = host.findChild<QPushButton*>(QStringLiteral("operationBack"));
     if (!Explain("固定した取消と重複する戻る操作は出さない", back != nullptr && !back->isVisible())) return false;
     if (!Explain("下端の取消で道具を終了できる", window.DrawingDock().ClickCancel())) return false;
-    if (!Explain("一覧へ戻ると設定を閉じる", host.CurrentShelf() == Shelf::None)) return false;
+    if (!Explain("取消後も円の設定を維持する", host.CurrentShelf() == Shelf::Drawing)) return false;
+    window.RunCommand("selection.activate");
+    if (!Explain("明示的な選択ツールで一覧に戻る", host.CurrentShelf() == Shelf::None)) return false;
     // 部品モードへ移る。作図の棚が残ったままではいけない。
     window.SetMode(UiMode::Part);
     if (!Explain("部品モードでも未選択は道具一覧", host.CurrentShelf() == Shelf::None)) {
@@ -278,7 +280,7 @@ bool CaseJigToolUsesOnlyItsOwnSettings(V2MainWindow& window)
     if (!window.PartDock().HandleKey(Qt::Key_Return)) return false;
     if (!Explain("確定で治具ができる", CountOfKind(window, EntityKind::Part) == before + 1)) return false;
     window.PartDock().HandleKey(Qt::Key_Escape);
-    return Explain("取消で道具を終了する", !window.PartDock().ToolActive());
+    return Explain("取消後も道具を維持する", window.PartDock().ToolActive());
 }
 
 std::vector<SelfTestCase> RegressionCases()

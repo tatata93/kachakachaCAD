@@ -109,9 +109,8 @@ using kachakacha::v2::modeling::DrawingTool;
                      + std::string(kachakacha::v2::modeling::DrawingToolNameJa(
                          window.Session().CurrentTool()))
                      + ")").c_str(),
-            window.Session().CurrentTool() == DrawingTool::Line)
-        || !Explain("戻り先は忘れる", !window.ToolBeforeMeasure().has_value())
-        || !Explain("戻ったと言う", window.StatusText().contains(QStringLiteral("戻りました")))) {
+            window.Session().CurrentTool() == DrawingTool::Measure)
+        || !Explain("測定を選んだまま", window.ToolBeforeMeasure().has_value())) {
         return false;
     }
     // 選択道具から測定へ入ったときは、Esc でふだんどおり選択へ。
@@ -121,7 +120,7 @@ using kachakacha::v2::modeling::DrawingTool;
         return false;
     }
     (void)window.Viewport().PressEscape();
-    return Explain("Esc で選択へ", window.Session().CurrentTool() == DrawingTool::Select);
+    return Explain("Esc で測定を維持", window.Session().CurrentTool() == DrawingTool::Measure);
 }
 
 //! HP-ST-03。測定の途中で別の道具を自分で選んだら、戻り先は捨てる(勝手に戻らない)。
@@ -139,7 +138,7 @@ using kachakacha::v2::modeling::DrawingTool;
         return false;
     }
     (void)window.Viewport().PressEscape();
-    return Explain("Esc は選択へ", window.Session().CurrentTool() == DrawingTool::Select);
+    return Explain("Esc は矩形を維持", window.Session().CurrentTool() == DrawingTool::Rectangle);
 }
 
 
@@ -162,8 +161,8 @@ using kachakacha::v2::modeling::DrawingTool;
     }
     window.HandleToolKey(Qt::Key_Escape, nullptr);
     const QString after = window.StatusLeftText();
-    return Explain((std::string("やめると道具名が戻る(実際 ") + after.toStdString() + ")").c_str(),
-        !after.contains(QStringLiteral("押し出し")));
+    return Explain((std::string("取消後も道具名を維持する(実際 ") + after.toStdString() + ")").c_str(),
+        after.contains(QStringLiteral("押し出し")));
 }
 
 } // namespace

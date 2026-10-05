@@ -105,7 +105,7 @@ public:
         confirm_=new QPushButton(QStringLiteral("確定 Enter"),this);confirm_->setObjectName("overlapConfirm");root->addWidget(confirm_);
         wire_=new QPushButton(QStringLiteral("この組の交差ワイヤーだけ作る"),this);wire_->setObjectName("overlapWire");root->addWidget(wire_);
         auto* cancel=new QPushButton(QStringLiteral("取消 Esc"),this);root->addWidget(cancel);
-        QObject::connect(cancel,&QPushButton::clicked,this,[this]{host_.SetShelves({});});
+        QObject::connect(cancel,&QPushButton::clicked,this,[this]{Restart();});
         QObject::connect(confirm_,&QPushButton::clicked,this,[this]{Apply(false);});
         QObject::connect(wire_,&QPushButton::clicked,this,[this]{Apply(true);});
         QObject::connect(hidden_,&QCheckBox::toggled,this,[this]{Restart();});
@@ -140,7 +140,7 @@ private:
             auto* target=qobject_cast<QWidget*>(object);
             if(!target || target->window()!=window())return false;
             auto* key=static_cast<QKeyEvent*>(event);
-            if(key->key()==Qt::Key_Escape){host_.SetShelves({});return true;}
+            if(key->key()==Qt::Key_Escape){Restart();return true;}
             if(key->key()==Qt::Key_Return || key->key()==Qt::Key_Enter){Apply(false);return true;}
         }
         return false;

@@ -45,6 +45,7 @@ public:
     void Refresh();
     void Fit();
     void SetTool(const QString&,const QString& text={});
+    void CancelInput() { arrowPending_=false; dragging_=false; Refresh(); }
     void SetSelected(int);
     int Selected() const{return selected_;}
     int SelectedMark() const{return selectedMark_;}

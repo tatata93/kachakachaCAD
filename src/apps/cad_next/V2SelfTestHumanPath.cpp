@@ -708,7 +708,7 @@ struct OutputCounts {
             CountOfKind(window, EntityKind::GuideSurface) == 1)) {
         return false;
     }
-    if (!Explain("棚が片付く", !window.ShelfShown(Shelf::Surface))) {
+    if (!Explain("確定後は棚が片付く", !window.ShelfShown(Shelf::Surface))) {
         return false;
     }
     return Explain("下見の線と札が消える",
@@ -733,7 +733,7 @@ struct OutputCounts {
     if (!Explain("Esc を窓が受け取る", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
         return false;
     }
-    if (!Explain("棚が片付く", !window.ShelfShown(Shelf::Surface))) {
+    if (!Explain("面の棚を維持する", window.ShelfShown(Shelf::Surface))) {
         return false;
     }
     return Explain((std::string("何も作られていない(帯は ")
@@ -1322,7 +1322,7 @@ namespace {
     window.HandleToolKey(Qt::Key_Escape, nullptr);
     return Explain("やめると 3D の印も消える",
         window.Viewport().Selection().entityIds.empty()
-            && !window.ShelfShown(Shelf::Surface));
+            && window.ShelfShown(Shelf::Surface));
 }
 
 //! 保存される作り方に「断面順の手動固定」が残っているか。

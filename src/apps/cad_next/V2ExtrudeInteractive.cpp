@@ -421,6 +421,8 @@ void V2MainWindow::EndExtrudePreview(bool keepTool)
         pendingCommandId_ = "part.extrude";
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
         ShowExtrudeShelf(PlanExtrudeFromSelection());
+        viewport_->HideToolRoleLabels();
+        ShowToolFooter(QString());
     }
     RefreshRightShelves();
 }

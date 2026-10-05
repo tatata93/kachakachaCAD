@@ -1,4 +1,5 @@
 #include <QComboBox>
+#include <QKeyEvent>
 #include <QUuid>
 #include <QJsonObject>
 #include <QString>
@@ -92,4 +93,3 @@ bool Instructions(V2MainWindow& window){
 }
 std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions}};}
 }
-#include <QKeyEvent>

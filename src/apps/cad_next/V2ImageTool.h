@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QString>
 #include <QPointF>
+#include <optional>
 #include "V2ImageViews.h"
 #include "kachakacha/domain/ImageDefinition.h"
 #include "kachakacha/app/Selection.h"
@@ -48,6 +49,9 @@ private:
     QCheckBox* mirror_=nullptr;
     QCheckBox* fitRotate_=nullptr;
     bool PickImagePoint(const QPointF&);
+    bool ImagePointAt(const QPointF&,kachakacha::v2::geometry::Vector3&,kachakacha::v2::geometry::Vector3&) const;
+    void RefreshFitLine();
+    std::optional<kachakacha::v2::geometry::Vector3> imageHover_;
     std::vector<kachakacha::v2::geometry::Vector3> imageMarks_;
     QLabel* status_=nullptr;
     QComboBox* mode_=nullptr;

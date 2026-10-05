@@ -28,6 +28,24 @@ bool ImageClick(V2MainWindow& window,const geometry::Vector3& point) {
     const QPointF local(p->x,p->y);QMouseEvent event(QEvent::MouseButtonPress,local,local,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
     QApplication::sendEvent(&window.Viewport(),&event);return true;
 }
+bool CheckImageFitLine(V2MainWindow& window) {
+    auto move=[&](const geometry::Vector3& point){
+        const auto p=window.Viewport().Mapping().Project(point);if(!p)return false;
+        const QPointF local(p->x,p->y);
+        QMouseEvent event(QEvent::MouseMove,local,local,Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&window.Viewport(),&event);return true;
+    };
+    const geometry::Vector3 first{12.5,37.5,0},second{37.5,37.5,0};
+    const auto revision=window.Session().GetDocument().Revision();
+    auto matches=[&]{const auto& lines=window.Viewport().ToolPreview();
+        return lines.size()==1&&lines[0].size()==2&&geometry::Distance(lines[0][0],first)<1e-6&&
+            geometry::Distance(lines[0][1],second)<1e-6;};
+    if(!ImageClick(window,first)||!move(second)||!Explain("image fit rubber band follows cursor",matches()))return false;
+    QApplication::processEvents();window.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-image-fit-line.png"));
+    if(!move({-20,-20,0})||!Explain("outside image hides rubber band",window.Viewport().ToolPreview().empty()))return false;
+    if(!ImageClick(window,second)||!move({0,0,0})||!Explain("source line remains during target picking",matches()))return false;
+    return Explain("fit line is transient",window.Session().GetDocument().Revision()==revision);
+}
 bool CaseImagePersistence(V2MainWindow& window) {
     struct RestoreSize { V2MainWindow& window; QSize size; ~RestoreSize(){window.resize(size);} } restore{window,window.size()};
     window.resize(1600,1000);QApplication::processEvents();
@@ -41,9 +59,13 @@ bool CaseImagePersistence(V2MainWindow& window) {
     if(!Explain("preview does not mutate document",window.Session().GetDocument().Revision()==before))return false;
     panel->findChild<QPushButton*>(QStringLiteral("imagePixelLength"))->click();
     window.Viewport().SetViewDirection(ViewDirection::Top);window.Viewport().SetVisibleWidthMm(200);
-    for(const auto point:{geometry::Vector3{12.5,37.5,0},geometry::Vector3{37.5,37.5,0},geometry::Vector3{0,0,0},geometry::Vector3{40,0,0}}){
+    if(!CheckImageFitLine(window))return false;
+    panel->findChild<QPushButton*>(QStringLiteral("imagePixelLength"))->click();
+    if(!Explain("restarting fit clears line",window.Viewport().ToolPreview().empty())||!CheckImageFitLine(window))return false;
+    for(const auto point:{geometry::Vector3{0,0,0},geometry::Vector3{40,0,0}}){
         if(!ImageClick(window,point))return false;
     }
+    if(!Explain("completed fit clears line",window.Viewport().ToolPreview().empty()))return false;
     if(!Explain("two image points match CAD distance",std::abs(panel->findChild<QDoubleSpinBox*>(QStringLiteral("imageWidth"))->value()-160)<1e-5))return false;
     const auto corner=window.Viewport().ImageViews().back().triangles.front().mesh.points[0];
     if(!Explain("fit translates image as well as scaling",geometry::Distance(corner,{-20,20,0})<1e-6))return false;

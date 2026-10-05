@@ -70,7 +70,7 @@ void V2ImageTool::UpdateFields() {
     mode_->setCurrentIndex(definition_.followSurface?1:0);updating_=false;
 }
 void V2ImageTool::Pick(int role) {
-    role_=role;dragging_=false;
+    role_=role;dragging_=false;imageHover_.reset();RefreshFitLine();
     const QStringList hints{QStringLiteral("Enterで確定できます。"),QStringLiteral("3Dビューで貼付先のフェイスをクリックしてください。"),
         QStringLiteral("3Dビューの画像上で基準点をクリックしてください。"),QStringLiteral("3Dビューで画像の基準点を置く位置をクリックしてください。"),
         QStringLiteral("3Dビューの画像上で長さを測る2点をクリックしてください。"),QStringLiteral("3Dビューで対応する長さの2点をクリックしてください（直線距離）。")};

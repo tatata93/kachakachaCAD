@@ -36,7 +36,8 @@ V2ImageTool::V2ImageTool(V2MainWindow& window):QWidget(&window),window_(window),
     setObjectName(QStringLiteral("imagePlacementPanel"));BuildUi();UseWorkPlane();qApp->installEventFilter(this);
 }
 void V2ImageTool::closeEvent(QCloseEvent* event) {
-    window_.viewport_->SetImageViews(savedViews_);window_.viewport_->HideToolRoleLabels();QWidget::closeEvent(event);
+    window_.viewport_->SetImageViews(savedViews_);window_.viewport_->HideToolRoleLabels();
+    window_.viewport_->HideToolPreview();QWidget::closeEvent(event);
 }
 bool V2ImageTool::LoadImage(const QString& path) {
     QImageReader reader(path);reader.setAutoTransform(true);const auto size=reader.size();
@@ -47,6 +48,7 @@ bool V2ImageTool::LoadImage(const QString& path) {
     if(!image.save(&buffer,"PNG")){status_->setText(QStringLiteral("画像をPNGで保存できません。"));return false;}
     image_=image;definition_.pngBase64=png.toBase64().toStdString();definition_.pixelWidth=image.width();definition_.pixelHeight=image.height();
     definition_.anchorPixel={0,double(image.height()),0};definition_.mmPerPixel=100.0/image.width();pixels_.clear();points_.clear();
+    imageMarks_.clear();imageHover_.reset();role_=0;
     UpdateFields();Preview();return previewOk_;
 }
 void V2ImageTool::Preview() {
@@ -65,6 +67,14 @@ void V2ImageTool::Preview() {
     for(std::size_t i=0;i<points_.size();++i)labels.push_back({points_[i],QStringLiteral("長さ %1").arg(i+1),QColor(255,220,40),{},true});
     for(std::size_t i=0;i<imageMarks_.size();++i)labels.push_back({imageMarks_[i],QStringLiteral("画像の点 %1").arg(i+1),QColor(80,230,255),{},true});
     window_.viewport_->ShowToolRoleLabels(std::move(labels));
+    RefreshFitLine();
+}
+void V2ImageTool::RefreshFitLine() {
+    if(previewOk_&&(role_==4||role_==5)&&imageMarks_.size()==2)
+        window_.viewport_->ShowToolPreview({{imageMarks_[0],imageMarks_[1]}});
+    else if(previewOk_&&role_==4&&imageMarks_.size()==1&&imageHover_)
+        window_.viewport_->ShowToolPreview({{imageMarks_[0],*imageHover_}});
+    else window_.viewport_->HideToolPreview();
 }
 bool V2ImageTool::Commit() {
     Preview();if(!previewOk_)return false;auto& window=window_;auto& doc=window.session_->GetDocument();

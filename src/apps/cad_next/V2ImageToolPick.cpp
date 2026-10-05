@@ -56,6 +56,14 @@ bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
         if(key->key()==Qt::Key_Return||key->key()==Qt::Key_Enter){Commit();return true;}}
     if(object!=window_.viewport_)return false;
     if(DragViewport(event))return true;
+    if(role_==4&&imageMarks_.size()==1){
+        if(event->type()==QEvent::MouseMove){
+            const auto* mouse=static_cast<QMouseEvent*>(event);Vector3 pixel,world;
+            imageHover_.reset();
+            if(mouse->buttons()==Qt::NoButton&&ImagePointAt(mouse->position(),pixel,world))imageHover_=world;
+            RefreshFitLine();
+        }else if(event->type()==QEvent::Leave){imageHover_.reset();RefreshFitLine();}
+    }
     if(event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton||mouse->modifiers()!=Qt::NoModifier)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
@@ -120,11 +128,11 @@ void V2ImageTool::ClickViewport(const QPointF& pos) {
     UpdateFields();Preview();if(role_!=0)Pick(role_);
 }
 
-bool V2ImageTool::PickImagePoint(const QPointF& pos) {
+bool V2ImageTool::ImagePointAt(const QPointF& pos,Vector3& pixel,Vector3& world) const {
     const auto ray=window_.viewport_->Mapping().RayThrough({pos.x(),pos.y()});
     if(!ray||!previewOk_||window_.viewport_->ImageViews().empty())return false;
     const auto& image=window_.viewport_->ImageViews().back();
-    double nearest=std::numeric_limits<double>::max();Vector3 pixel,world;
+    double nearest=std::numeric_limits<double>::max();
     for(const auto& triangle:image.triangles){
         const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle.mesh);if(!hit||*hit>=nearest)continue;
         const auto point=ray->origin+ray->direction*(*hit);const auto& p=triangle.mesh.points;
@@ -136,7 +144,11 @@ bool V2ImageTool::PickImagePoint(const QPointF& pos) {
         if(q.x<0||q.y<0||q.x>definition_.pixelWidth||q.y>definition_.pixelHeight)continue;
         nearest=*hit;pixel=q;world=point;
     }
-    if(nearest==std::numeric_limits<double>::max()){
+    return nearest!=std::numeric_limits<double>::max();
+}
+bool V2ImageTool::PickImagePoint(const QPointF& pos) {
+    Vector3 pixel,world;
+    if(!ImagePointAt(pos,pixel,world)){
         status_->setText(QStringLiteral("3Dビューに表示された画像の内側をクリックしてください。"));return false;}
     if(role_==2){
         // Re-anchor the same mapping; choosing the anchor must not move the image.

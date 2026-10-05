@@ -1,3 +1,5 @@
+> 最新の全機能版は [画像付きHTMLマニュアル](../manual.html) です。以下は補助資料です。
+
 # kachakachaCAD 取扱説明書(V2)
 
 プラ板と紙で鉄道模型を作るための CAD です。
@@ -23,7 +25,7 @@
 
 1. [はじめに](#1-はじめに)
 2. [画面の見かた](#2-画面の見かた)
-3. [4つのモード](#3-4つのモード)
+3. [5つのモード](#3-5つのモード)
 4. [作図](#4-作図)
 5. [吸着とグリッド](#5-吸着とグリッド)
 6. [数値で入れる](#6-数値で入れる)
@@ -114,7 +116,7 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 
 ---
 
-## 3. 4つのモード
+## 3. 5つのモード
 
 上の帯で切り替えます。**モードを変えても、選んでいるものと文書は変わりません。**
 変わるのは「出てくる道具」だけです。
@@ -479,3 +481,44 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 画面の大きさを決めるには `--size 1366x768` を足します。
 
 画面を出さずに一通り触って確かめるには `--self-test` と打ちます。
+
+## 2026-10-05 追加の図
+
+説明書モードを含む5モードの図。SVGは操作説明の模式図です。
+
+
+
+![v2-instructions-3d](images/v2-instructions-3d.png)
+
+![v2-ui-approx-candidates](images/v2-ui-approx-candidates.png)
+
+![v2-ui-boolean-preview](images/v2-ui-boolean-preview.png)
+
+![v2-ui-explorer-groups](images/v2-ui-explorer-groups.png)
+
+![v2-ui-extrude-profile-only](images/v2-ui-extrude-profile-only.png)
+
+![v2-ui-fab-generate](images/v2-ui-fab-generate.png)
+
+![v2-ui-guided-loft-preview](images/v2-ui-guided-loft-preview.png)
+
+![v2-ui-measure-overlay](images/v2-ui-measure-overlay.png)
+
+![v2-ui-surface-preview](images/v2-ui-surface-preview.png)
+
+![v2-ui-tool-area](images/v2-ui-tool-area.png)
+
+![v2-ui-tool-fillet](images/v2-ui-tool-fillet.png)
+
+![v2-ui-tool-revolve](images/v2-ui-tool-revolve.png)
+
+![v2-ui-tool-shell](images/v2-ui-tool-shell.png)
+
+![v2-ui-tool-split](images/v2-ui-tool-split.png)
+
+
+追加の撮影状態: `ui-approx-candidates`, `ui-boolean-preview`, `ui-explorer-groups`, `ui-extrude-profile-only`, `ui-fab-generate`, `ui-guided-loft-preview`, `ui-measure-overlay`, `ui-surface-preview`, `ui-tool-area`, `ui-tool-fillet`, `ui-tool-revolve`, `ui-tool-shell`, `ui-tool-split`。
+
+`instructions-3d` は HP-INSTRUCTIONS 自己試験で保存したWindows実画面です。manual-state の引数ではありません。
+
+模式図: [画像フィット](diagrams/image-fit.svg)、[自動分割](diagrams/adaptive.svg)。

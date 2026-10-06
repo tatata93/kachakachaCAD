@@ -1,10 +1,10 @@
 #include "kachakacha/kernel/OcctCurvedEmboss.h"
 #include <cmath>
-#include <TopoDS_Edge.hxx>
-#include <TopoDS_Shape.hxx>
 #include <stdexcept>
 #include <algorithm>
 #ifdef KACHACAD_V2_WITH_OCCT
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Shape.hxx>
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include <BRepBuilderAPI_MakeEdge.hxx>

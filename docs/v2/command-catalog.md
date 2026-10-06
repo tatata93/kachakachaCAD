@@ -81,8 +81,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.curvature` | 曲率接続 | 2曲線端、動かす側 | TransformWire | AT-WIR-006 |
-| `wire.chamfer` | C面取り | 2辺(選んだ順に A・B)、A の切戻し(数の棚の面取り量)、面取りの棚の B の切戻し(0 なら対称)・A/B の残す側 | TransformWire(secondScalarMm / firstKeepSide / secondKeepSide) | AT-WIR-006 |
-| `wire.fillet` | R丸め | 2辺、半径、面取りの棚の A/B の残す側 | TransformWire | AT-WIR-006 |
+| `wire.chamfer` | C面取り | 連続選択した複数辺（一括は残す側自動・B=0）。2辺では選択順に A・B、A の切戻し(数の棚の面取り量)、面取りの棚の B の切戻し(0 なら対称)・A/B の残す側 | TransformWire(secondScalarMm / firstKeepSide / secondKeepSide) | AT-WIR-006 |
+| `wire.fillet` | R丸め | 連続選択した複数辺、半径（一括は残す側自動）。2辺では A/B の残す側も指定可 | TransformWire | AT-WIR-006 |
 | `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)を線ごとに 1 つ(まとめて 1 回で戻る)。元は残す | AT-WIR-006 |
 | `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |

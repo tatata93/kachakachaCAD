@@ -29,7 +29,6 @@ void V2ImageTool::Refresh(V2MainWindow& window) {
     std::vector<V2ImageView> images;const auto& doc=window.session_->GetDocument();
     const auto key=QString::fromStdString(doc.Snapshot().id.ToString())+QString::number(doc.Revision());
     if(window.viewport_->property("imageDocumentRevision").toString()==key)return;
-    window.viewport_->setProperty("imageDocumentRevision",key);
     for(const auto& entity:doc.Snapshot().entities){
         if(entity.kind!=domain::EntityKind::Image||!app::EntityEffectivelyVisible(doc.Snapshot(),entity))continue;
         const auto* feature=doc.FindFeature(entity.createdBy);if(!feature||!feature->enabled)continue;
@@ -38,6 +37,7 @@ void V2ImageTool::Refresh(V2MainWindow& window) {
         if(MakeView(*d,image,error))images.push_back(std::move(image));else window.SetStatus(error);
     }
     window.viewport_->SetImageViews(std::move(images));
+    window.viewport_->setProperty("imageDocumentRevision",key);
 }
 
 std::vector<app::PickCandidate> V2Viewport::ImageCandidatesAt(const QPointF& position) const {

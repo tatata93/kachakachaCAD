@@ -2,6 +2,10 @@
 
 #include "kachakacha/geometry/WireEdit.h"
 
+#include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/CornerCurves.h"
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <string>
 
@@ -99,6 +103,68 @@ Result<std::vector<CurveSegment>> ProcessPolylineCorners(
                                   + " の角は直線どうしではないか、辺が離れています。"
                             : std::string("つながった直線どうしの角が1つもありません。")));
     }
+    return Out::Success(std::move(made));
+}
+
+Result<std::vector<CurveSegment>> ProcessSelectedCorners(
+    const std::vector<CurveSegment>& segments, CornerStyle style, double sizeMm, double toleranceMm)
+{
+    using Out=Result<std::vector<CurveSegment>>;
+    if(segments.size()<2)return Out::Failure(MakeError(kNoCorner,"加工する辺が不足しています。","各角の両側の辺を選んでください。"));
+    std::vector<std::vector<CurveSegment>> groups;
+    std::vector<bool> used(segments.size());
+    for(std::size_t seed=0;seed<segments.size();++seed){
+        if(used[seed])continue;
+        std::vector<std::size_t> members{seed};used[seed]=true;
+        for(std::size_t k=0;k<members.size();++k)for(std::size_t j=0;j<segments.size();++j){
+            if(used[j])continue;
+            const auto& a=segments[members[k]];const auto& b=segments[j];
+            if((a.StartPoint()-b.StartPoint()).Length()<=toleranceMm||(a.StartPoint()-b.EndPoint()).Length()<=toleranceMm
+                ||(a.EndPoint()-b.StartPoint()).Length()<=toleranceMm||(a.EndPoint()-b.EndPoint()).Length()<=toleranceMm){used[j]=true;members.push_back(j);}
+        }
+        groups.emplace_back();for(auto i:members)groups.back().push_back(segments[i]);
+    }
+    if(groups.size()>1){
+        std::vector<CurveSegment> result;
+        for(const auto& group:groups){
+            if(group.size()<2)return Out::Failure(MakeError(kNoCorner,"単独の辺が含まれています。","一括加工する各角の両側の辺を選んでください。"));
+            const auto made=ProcessSelectedCorners(group,style,sizeMm,toleranceMm);
+            if(!made.HasValue())return Out::Failure(made.Diagnostics());
+            result.insert(result.end(),made.Value().begin(),made.Value().end());
+        }
+        return Out::Success(std::move(result));
+    }
+    std::vector<ChainInput> inputs;
+    for(std::size_t i=0;i<segments.size();++i){
+        std::array<std::uint8_t,16> bytes{};
+        for(int b=0;b<8;++b)bytes[15-b]=static_cast<std::uint8_t>((i+1)>>(b*8));
+        inputs.push_back({{},base::SegmentId(base::Uuid(bytes)),segments[i]});
+    }
+    GeometryTolerance tolerance;tolerance.interactiveJoinMm=toleranceMm;
+    const auto chain=AnalyzeChain(inputs,tolerance);
+    if(!chain.HasValue())return Out::Failure(chain.Diagnostics());
+    std::vector<CurveSegment> work;
+    for(const auto& ref:chain.Value().order.segments){
+        const auto found=std::find_if(inputs.begin(),inputs.end(),[&](const auto& v){return v.segmentId==ref.segmentId;});
+        if(ref.reversed){const auto reversed=ReverseCurve(found->segment);if(!reversed.HasValue())return Out::Failure(reversed.Diagnostics());work.push_back(reversed.Value());}
+        else work.push_back(found->segment);
+    }
+    std::vector<CurveSegment> made;int processed=0;
+    const bool closed=chain.Value().order.closed;
+    const std::size_t corners=closed?work.size():work.size()-1;
+    for(std::size_t i=0;i<corners;++i){
+        auto& first=work[i];auto& second=work[(i+1)%work.size()];
+        const auto a=first.FirstDerivative(1),b=second.FirstDerivative(0);
+        if(a.Length()>0&&b.Length()>0&&Dot(a,b)/(a.Length()*b.Length())>1-1e-8){made.push_back(first);continue;}
+        CornerOptions options;options.firstKeepSide=1;options.secondKeepSide=2;
+        options.firstHint=first.Evaluate(0.9);options.secondHint=second.Evaluate(0.1);
+        const auto corner=CornerBetweenCurves(first,second,style==CornerStyle::Fillet?CornerKind::Fillet:CornerKind::Chamfer,sizeMm,options,toleranceMm);
+        if(!corner.HasValue())return Out::Failure(corner.Diagnostics());
+        first=corner.Value().first;second=corner.Value().second;
+        made.push_back(first);made.push_back(corner.Value().corner);++processed;
+    }
+    if(!closed)made.push_back(work.back());else if(!made.empty())made.front()=work.front();
+    if(!processed)return Out::Failure(MakeError(kNoCorner,"加工する角がありません。","滑らかにつながる辺はそのまま残します。"));
     return Out::Success(std::move(made));
 }
 

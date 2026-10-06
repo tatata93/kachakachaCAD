@@ -467,6 +467,8 @@ void V2MainWindow::RefreshCornerDock()
         }
         ++found;
     }
+    const auto count=kachakacha::v2::app::SelectedCurves(selection,session_->Scene()).size();
+    if(count>2)names[1]=QStringLiteral("合計 %1 辺を一括加工").arg(count);
     cornerDock_->SetPairText(names[0], names[1]);
     // 相手がそろっていれば下見。道具を持っていなければ片づける。
     RefreshCornerPreview();

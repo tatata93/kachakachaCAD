@@ -61,13 +61,13 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
     return definition;
 }
 
-//! 線が2本(A・B)選ばれているか。道具は問わない(選んでから押す道も残す)。
+//! 線が2本以上選ばれているか。道具は問わない(選んでから押す道も残す)。
 bool V2MainWindow::CornerPairSelected(std::vector<EntityId>* wires) const
 {
     const auto& selection = viewport_->Selection();
     const auto curves = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     if (wires != nullptr) *wires = selection.entityIds;
-    return curves.size() == 2;
+    return curves.size() >= 2;
 }
 
 //! 下見を出し直す。道具を持っていなければ、自分が出したものだけ片づける。
@@ -96,11 +96,13 @@ void V2MainWindow::RefreshCornerPreview()
         ? QStringLiteral("R丸め")
         : QStringLiteral("C面取り");
     cornerPreviewShown_ = true;
-    ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
+    if(inputs.size()<=2) ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
         kachakacha::v2::app::ToolRoleLabel{wires.back(), "B"}});
+    else viewport_->HideToolRoleLabels();
     QString footer = QStringLiteral("%1: A=%2 / B=%3 / SIZE=%4 mm")
                          .arg(label, cornerDock_->FirstText(), cornerDock_->SecondText())
                          .arg(CornerSizeMm(), 0, 'f', 3);
+    if(inputs.size()>2)footer=QStringLiteral("%1: %2辺の角を一括加工 / SIZE=%3 mm").arg(label).arg(inputs.size()).arg(CornerSizeMm());
     if (!computed.HasValue()) {
         viewport_->HideToolPreview();
         ShowToolFooter(footer + QStringLiteral(" / no preview"));
@@ -140,7 +142,7 @@ bool V2MainWindow::HandleCornerToolKey(int key)
         viewport_->CancelTool();
         viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         RefreshCornerDock();
-        SetStatus(done + QStringLiteral(" 続けて次の角の2辺を選んでください。半径・量は維持します。"));
+        SetStatus(done + QStringLiteral(" 続けて加工する辺を選んでください。半径・量は維持します。"));
     }
     return true;
 }

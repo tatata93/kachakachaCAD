@@ -40,7 +40,7 @@ V2ImageTool::V2ImageTool(V2MainWindow& window):QWidget(&window),window_(window),
     setObjectName(QStringLiteral("imagePlacementPanel"));BuildUi();UseWorkPlane();qApp->installEventFilter(this);
 }
 void V2ImageTool::closeEvent(QCloseEvent* event) {
-    window_.viewport_->SetImageViews(savedViews_);window_.viewport_->HideToolRoleLabels();
+    window_.viewport_->SetImageViews({});Refresh(window_);window_.viewport_->HideToolRoleLabels();
     window_.viewport_->HideToolPreview();QWidget::closeEvent(event);
 }
 bool V2ImageTool::LoadImage(const QString& path) {

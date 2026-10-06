@@ -172,6 +172,12 @@ namespace {
             "この編集は、この場では計算し直せません。",
             "相手の線が要る編集です。2本以上を選んでください。"));
     }
+    if(inputs.size()>2&&(definition.method==WireTransformMethod::Fillet||definition.method==WireTransformMethod::Chamfer)){
+        if(definition.firstKeepSide!=0||definition.secondKeepSide!=0||(definition.method==WireTransformMethod::Chamfer&&definition.secondScalarMm!=0))
+            return Out::Failure(MakeError("DOC-C007","一括加工では残す側を自動、Bの切戻しを0にしてください。","個別の側指定は2辺ずつの加工で使用してください。"));
+        return geometry::ProcessSelectedCorners(inputs,definition.method==WireTransformMethod::Fillet
+            ?geometry::CornerStyle::Fillet:geometry::CornerStyle::Chamfer,definition.scalarArgument.value,tolerance);
+    }
     const bool pairOnly = definition.method == WireTransformMethod::Chamfer
         || definition.method == WireTransformMethod::Fillet
         || definition.method == WireTransformMethod::Coincident

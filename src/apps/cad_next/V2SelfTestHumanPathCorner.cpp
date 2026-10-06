@@ -367,7 +367,7 @@ using kachakacha::v2::modeling::DrawingTool;
 }
 
 // Reproduce the reported U outline: second corner shares the first result's wire.
-bool CaseRepeatedCorners(V2MainWindow& window, bool polyline)
+bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
 {
     window.RunCommand("file.new");
     QTemporaryDir folder;
@@ -377,7 +377,10 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline)
     window.RunCommand("image.place");
     auto* image=dynamic_cast<V2ImageTool*>(window.findChild<QWidget*>(QStringLiteral("imagePlacementPanel")));
     if (!image || !image->LoadImage(path) || !image->Commit()) return false;
-    auto& view=window.Viewport(); view.SetViewDirection(ViewDirection::Top);
+    auto& view=window.Viewport();
+    view.SetImageViews({});V2ImageTool::Refresh(window);
+    if(!Explain("image cache recovers after transient view replacement",view.ImageViews().size()==1))return false;
+    view.SetViewDirection(ViewDirection::Top);
     view.SetVisibleWidthMm(120); view.SetSnapSuppressed(true);
     const auto click=[&](double x,double y) {
         const auto p=view.Mapping().Project({x,y,0});
@@ -397,6 +400,14 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline)
     window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,QStringLiteral("4"));
     window.RunCommand("wire.fillet");
     click(-30,0); click(0,20);
+    if(batch){
+        click(30,0);
+        if(!Explain("three edges preview as one batch",window.CornerPreviewShown()&&!view.ToolPreview().empty())
+            ||!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        if(!Explain("batch keeps three sides and creates two arcs",window.Session().Scene().curves.size()==5&&view.ImageViews().size()==1))return false;
+        window.RunCommand("edit.undo");
+        return Explain("one undo removes both fillets and keeps image",window.Session().Scene().curves.size()==3&&view.ImageViews().size()==1);
+    }
     if (!Explain("first corner previews",window.CornerPreviewShown())
         || !window.HandleToolKey(Qt::Key_Return,nullptr)) return false;
     if (!Explain("first corner retains tool and all 4 curves",window.Session().Scene().curves.size()==4
@@ -417,6 +428,8 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline)
     return Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
         && view.ImageViews().size()==1);
 }
+bool CaseBatchCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false,true); }
+bool CaseBatchPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,true,true); }
 bool CaseRepeatedSeparateCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false); }
 bool CaseRepeatedPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,true); }
 
@@ -425,6 +438,8 @@ bool CaseRepeatedPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w
 std::vector<SelfTestCase> HumanPathCornerCases()
 {
     return {
+        {"HP-CN-07 batch corners and image cache", CaseBatchCorners},
+        {"HP-CN-08 polyline batch corners", CaseBatchPolylineCorners},
         {"HP-CN-04 repeat corners preserves unpicked lines and image", CaseRepeatedSeparateCorners},
         {"HP-CN-05 two corners of one polyline", CaseRepeatedPolylineCorners},
         {"HP-SF-08 回転体は道具 → 断面 → 軸(自動遷移)→ 下見 → Enter",

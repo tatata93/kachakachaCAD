@@ -32,4 +32,8 @@ enum class CornerStyle {
     const std::vector<geometry::CurveSegment>& segments, CornerStyle style, double sizeMm,
     double toleranceMm, int vertexIndex = -1);
 
+//! 選択順によらず接続する鎖ごとに並べ、滑らかな接続を保ち、全ての角を一括加工する。
+[[nodiscard]] base::Result<std::vector<CurveSegment>> ProcessSelectedCorners(
+    const std::vector<CurveSegment>& segments, CornerStyle style, double sizeMm, double toleranceMm);
+
 } // namespace kachakacha::v2::geometry

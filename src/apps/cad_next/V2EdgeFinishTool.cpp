@@ -347,7 +347,7 @@ void V2EdgeFinishTool::Confirm()
         return;
     }
     const bool wiresOnly = dock_->OutputMode() == 1;
-    End();
+    End(true);
     window_.AdoptCurrentDocument();
     if (wiresOnly) { window_.SetStatus(Text(label + ": 境界ワイヤーを生成しました。元の立体は変更していません。")); return; }
     window_.SetStatus(QStringLiteral("%1: 辺を %2 本 %3、体積が %4 mm3 から %5 mm3 になりました。")

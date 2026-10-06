@@ -455,14 +455,42 @@ KACHA_V2_TEST(reeval, 何度編集してもIDは動かない)
 KACHA_V2_TEST(reeval, pair_edits_reject_extra_segments_without_discarding_them)
 {
     const auto inputs = Rectangle(30, 20);
-    for (const auto method : {WireTransformMethod::Fillet, WireTransformMethod::Chamfer,
-             WireTransformMethod::Coincident, WireTransformMethod::Tangent,
+    for (const auto method : {WireTransformMethod::Coincident, WireTransformMethod::Tangent,
              WireTransformMethod::Curvature, WireTransformMethod::MeetLines}) {
         TransformWireDefinition definition;
         definition.method = method;
         definition.scalarArgument.value = 2;
         const auto result = kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
         Require(!result.HasValue(), "extra inputs must not be silently discarded");
+    }
+}
+
+KACHA_V2_TEST(reeval, batch_corners_keep_all_selected_segments) {
+    auto inputs=Rectangle(30,20);std::swap(inputs[1],inputs[3]);
+    for(const auto method:{WireTransformMethod::Fillet,WireTransformMethod::Chamfer}){
+        TransformWireDefinition definition;definition.method=method;definition.scalarArgument.value=2;
+        const auto result=kachakacha::v2::document::EvaluateWireTransform(definition,inputs);
+        Require(result.HasValue(),result.FirstSummaryJa());
+        RequireEqual(std::to_string(result.Value().size()),"8","four retained edges and four corners");
+        for(std::size_t i=0;i<result.Value().size();++i)
+            Require((result.Value()[i].EndPoint()-result.Value()[(i+1)%result.Value().size()].StartPoint()).Length()<0.01,"closed boundary");
+        definition.scalarArgument.value=100;
+        Require(!kachakacha::v2::document::EvaluateWireTransform(definition,inputs).HasValue(),"oversized batch rejects all");
+    }
+}
+
+KACHA_V2_TEST(reeval, disconnected_batch_corners_reject_unmatched_edges) {
+    std::vector<CurveSegment> inputs{Line({0,0,0},{20,0,0}),Line({20,0,0},{20,20,0}),
+        Line({40,0,0},{60,0,0}),Line({60,0,0},{60,20,0})};
+    for(const auto method:{WireTransformMethod::Fillet,WireTransformMethod::Chamfer}){
+        TransformWireDefinition definition;definition.method=method;definition.scalarArgument.value=2;
+        const auto result=kachakacha::v2::document::EvaluateWireTransform(definition,inputs);
+        Require(result.HasValue(),result.FirstSummaryJa());
+        Require(result.Value().size()==6,"both separate corners retained");
+        auto invalid=inputs;invalid.push_back(Line({80,0,0},{90,0,0}));
+        Require(!kachakacha::v2::document::EvaluateWireTransform(definition,invalid).HasValue(),"unmatched edge rejects batch");
+        invalid=inputs;invalid.push_back(Line({20,0,0},{30,-10,0}));
+        Require(!kachakacha::v2::document::EvaluateWireTransform(definition,invalid).HasValue(),"branch rejects batch");
     }
 }
 

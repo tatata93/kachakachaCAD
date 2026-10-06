@@ -51,7 +51,7 @@ bool V2ImageTool::SetAnchor(const Vector3& point) {
 }
 void V2ImageTool::CancelInput() {
     dragging_=false;role_=0;pixels_.clear();points_.clear();imageMarks_.clear();imageHover_.reset();
-    window_.viewport_->CancelPointPick();window_.viewport_->SetImageViews(savedViews_);
+    window_.viewport_->CancelPointPick();window_.viewport_->SetImageViews({});Refresh(window_);
     window_.viewport_->HideToolRoleLabels();window_.viewport_->HideToolPreview();
     image_=QImage();definition_.pngBase64.clear();previewOk_=false;editing_={};
     status_->setText(QStringLiteral("変更を取り消しました。画像ツールはそのままです。画像を選んでください。"));

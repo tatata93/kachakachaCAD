@@ -150,9 +150,12 @@ struct Box3 {
     const auto visible = VisibleParts(window);
     if (!Explain("丸めた部品だけが見える(元は隠れる)", visible.size() == 1 && !(visible.front() == source)
                 && CountOfKind(window, EntityKind::Part) == 2)
-        || !Explain("確定すると構えが解ける", !tool.Active())) {
+        || !Explain("確定後も同じ道具で次の辺を待つ", tool.Active() && tool.Input().edges.empty())) {
         return false;
     }
+    if (!Explain("再起動なしに次の辺を選べる", PressTopFace(window,centerX,box.maximum.y-3.0,box.maximum.z)
+            && tool.Input().edges.size()==1 && tool.Outcome().available)) return false;
+    window.HandleToolKey(Qt::Key_Escape,nullptr);
     window.RunCommand("edit.undo");
     const auto undone = VisibleParts(window);
     if (!Explain("1 回の取り消しで元の箱に戻る", undone.size() == 1 && undone.front() == source)) {
@@ -226,7 +229,7 @@ bool CaseOutputKinds(V2MainWindow& window)
             (box.minimum.x + box.maximum.x) * 0.5, box.minimum.y + 3.0, box.maximum.z)) return false;
         if (!Explain("edge output preview", tool.Outcome().available
             && (window.Viewport().ToolPreviewFaceCount() > 0) == (mode == 0))) return false;
-        if (!dock.ClickConfirm()) return false;
+        if (!dock.ClickConfirm()||!Explain("edge tool retained after apply",tool.Active())) return false;
         if (!Explain("wire output added once", CountOfKind(window, EntityKind::Wire) == before + 1)) return false;
         if (!Explain("wire only preserves source solid", CountOfKind(window, EntityKind::Part) == (mode == 1 ? 1 : 2)
             && window.Session().GetDocument().FindEntity(source)->visibility

@@ -792,24 +792,6 @@ void V2Viewport::HoverAt(const QPointF& position)
     cursorPosition_ = position;
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     const auto snapTime=hoverTimer.nsecsElapsed();
-    if (cursorPanel_.active) {
-        // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
-        const auto point = mapping_.UnprojectOntoPlane(
-            ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
-        if (point.has_value()) {
-            // 欄に出すのは「直前に置いた点から見た」ずれ。絶対位置ではない。
-            const Vector3 anchor = session_->ConstraintAnchor();
-            cursorDelta_ = cursorPanel_.onWorkPlane
-                ? Vector3{workPlane_.CoordinateU(*point) - workPlane_.CoordinateU(anchor),
-                      workPlane_.CoordinateV(*point) - workPlane_.CoordinateV(anchor), 0.0}
-                : *point - anchor;
-            const auto moved = kachakacha::v2::app::UpdateFromPointer(cursorPanel_,
-                cursorDelta_);
-            if (moved.HasValue()) {
-                cursorPanel_ = moved.Value();
-            }
-        }
-    }
     status_ = hover_.messageJa;
     hoveredProfileRegion_ = ProfileRegionAt(position);
     if (hoveredProfileRegion_.has_value() && !SelectionHasPart() && PickShapeAt(position).has_value()) {
@@ -828,6 +810,23 @@ void V2Viewport::HoverAt(const QPointF& position)
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
     RefreshPickCycle(position);
     SyncHoverWithCandidate();
+    if (cursorPanel_.active) {
+        // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
+        const auto point = hover_.position; // Use the same snapped/constrained point as the preview.
+        if (point.has_value()) {
+            // 欄に出すのは「直前に置いた点から見た」ずれ。絶対位置ではない。
+            const Vector3 anchor = session_->ConstraintAnchor();
+            cursorDelta_ = cursorPanel_.onWorkPlane
+                ? Vector3{workPlane_.CoordinateU(*point) - workPlane_.CoordinateU(anchor),
+                      workPlane_.CoordinateV(*point) - workPlane_.CoordinateV(anchor), 0.0}
+                : *point - anchor;
+            const auto moved = kachakacha::v2::app::UpdateFromPointer(cursorPanel_,
+                cursorDelta_);
+            if (moved.HasValue()) {
+                cursorPanel_ = moved.Value();
+            }
+        }
+    }
     const auto pickTime=hoverTimer.nsecsElapsed();
     // 掴めないものの上に来たら、カーソルでそう言う(§5.1 禁止対象)。
     RefreshForbiddenHover(position);

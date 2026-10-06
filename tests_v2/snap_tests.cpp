@@ -1025,7 +1025,7 @@ KACHA_V2_TEST(snap, 主グリッド点に吸着する)
     builder.EnableGrid(10.0, 0);
     const ScreenMapping mapping = TopView();
     const auto candidates = CollectSnapCandidates(builder.scene, mapping,
-        At(mapping, {50.4, 60.3, 0.0}), {}, Tolerance());
+        At(mapping, {50.2, 60.1, 0.0}), {}, Tolerance());
     const auto chosen = ChooseSnap(candidates, {});
     Require(chosen.has_value(), "吸着すること");
     Require(chosen->kind == SnapKind::GridMajor, "主点であること");
@@ -1325,6 +1325,19 @@ KACHA_V2_TEST(snap, 吸着半径は点や線の拾い半径と別に効く)
 }
 
 // ---------------------------------------------------------------- ヒステリシス
+
+KACHA_V2_TEST(snap, grid_is_local_releases_quickly_and_leaves_gaps_when_dense)
+{
+    SceneBuilder builder;builder.EnablePlane();builder.EnableGrid(10,0);
+    const auto map=TopView();SnapHysteresis hold;
+    auto chosen=hold.Resolve(builder.scene,map,At(map,{50.2,60,0}),{},Tolerance());
+    Require(chosen&&chosen->kind==SnapKind::GridMajor,"within 2px snaps");
+    chosen=hold.Resolve(builder.scene,map,At(map,{50.6,60,0}),{},Tolerance());
+    Require(chosen&&chosen->kind==SnapKind::FreeOnPlane,"6px away releases grid");
+    builder.EnableGrid(0.6,0); // 6px spacing: leave free space between grid points.
+    const auto free=ChooseSnap(CollectSnapCandidates(builder.scene,map,At(map,{50.1,60,0}),{},Tolerance()),{});
+    Require(free&&free->kind==SnapKind::FreeOnPlane,"midway between dense grid points stays free");
+}
 
 KACHA_V2_TEST_MAIN("snap_tests")
 

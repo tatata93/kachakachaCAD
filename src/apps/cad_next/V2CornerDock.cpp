@@ -88,6 +88,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     secondSetback_->setToolTip(QStringLiteral("0 なら A と同じ(対称)。"));
     form_->addRow(QStringLiteral("B の切戻し"), secondSetback_);
     radius_ = MakeMm(formWidget, 0.0);
+    radius_->setObjectName(QStringLiteral("cornerRadius"));
     radius_->setToolTip(QStringLiteral("数の棚の「面取り量 / 丸め半径」と同じ値です。"));
     form_->addRow(QStringLiteral("半径"), radius_);
     layout->addWidget(formWidget);

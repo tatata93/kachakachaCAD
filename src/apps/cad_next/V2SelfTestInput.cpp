@@ -23,6 +23,9 @@
 #include <string>
 
 #include <QEvent>
+#include <QChar>
+#include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QCoreApplication>
 #include <QFocusEvent>
 #include <QKeyEvent>
@@ -766,11 +769,78 @@ namespace {
             && window.Session().GetDocument().Revision() == revision);
 }
 
+bool CaseNumericKeepsSnappedDirection(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    for(int mode=0;mode<3;++mode){
+        window.RunCommand("file.new");auto& view=window.Viewport();
+        view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(100);view.SetSnapSuppressed(mode==0);
+        window.SelectTool(modeling::DrawingTool::Line);
+        const auto start=view.Mapping().Project({0,0,0});if(!start)return false;
+        view.ClickAt(QPointF(start->x,start->y));
+        const auto target=view.Mapping().Project(mode==0?geometry::Vector3{20,3,0}:mode==1?geometry::Vector3{0.1,20,0}:geometry::Vector3{20,0.05,0});
+        if(!target)return false;view.HoverAt(QPointF(target->x,target->y));
+        if(mode==0)view.SetAxisConstraintByKey(true); // no further mouse movement
+        const auto preview=view.HoverPosition();if(!preview)return false;
+        const auto direction=geometry::Normalized(*preview);
+        if(!Explain("preview is horizontal/vertical",std::min(std::abs(direction.x),std::abs(direction.y))<1e-8))return false;
+        if(!view.TypeIntoCursorField(QStringLiteral("0.25"))||!view.PressEnterInCursorInput())return false;
+        const auto& curves=window.Session().Scene().curves;if(curves.empty())return false;
+        const auto delta=curves.back().segment.EndPoint()-curves.back().segment.StartPoint();
+        if(!Explain("numeric length retains preview direction",std::abs(delta.Length()-0.25)<1e-8&&(geometry::Normalized(delta)-direction).Length()<1e-8))return false;
+        view.SetAxisConstraintByKey(false);
+    }
+    return true;
+}
+
+bool CaseDecimalEntry(V2MainWindow& window)
+{
+    window.RunCommand("file.new");window.RunCommand("wire.fillet");
+    QCoreApplication::processEvents();
+    auto* radius=window.findChild<QDoubleSpinBox*>(QStringLiteral("cornerRadius"));
+    if(!Explain("visible radius field exists",radius!=nullptr))return false;
+    radius->setValue(10);radius->setFocus();
+    QFocusEvent focus(QEvent::FocusIn);QCoreApplication::sendEvent(radius,&focus);
+    radius->selectAll();
+    for(const auto c:QStringLiteral("0.25")){
+        QKeyEvent press(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));
+        QCoreApplication::sendEvent(radius,&press);
+    }
+    if(!Explain("typing 0.25 is not reset or applied mid-entry",radius->text().startsWith(QStringLiteral("0.25"))&&radius->value()==10))return false;
+    QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QCoreApplication::sendEvent(radius,&enter);
+    if(!Explain("Enter applies decimal radius",std::abs(window.CornerDock().Choice().sizeMm-0.25)<1e-9))return false;
+    QDoubleSpinBox dimension(&window);dimension.setDecimals(3);dimension.setRange(0.001,100);dimension.setValue(1);
+    QCoreApplication::sendEvent(&dimension,&focus);dimension.selectAll();
+    for(const auto c:QStringLiteral("0.025")){
+        QKeyEvent press(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));
+        QCoreApplication::sendEvent(&dimension,&press);
+    }
+    QCoreApplication::sendEvent(&dimension,&enter);
+    if(!Explain("positive-only dimension accepts leading zero",std::abs(dimension.value()-0.025)<1e-9))return false;
+    dimension.setRange(-100,100);dimension.selectAll();
+    for(const auto c:QStringLiteral("-0.125")){
+        QKeyEvent press(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:c==QChar('-')?Qt::Key_Minus:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));
+        QCoreApplication::sendEvent(&dimension,&press);
+    }
+    QFocusEvent leave(QEvent::FocusOut);QCoreApplication::sendEvent(&dimension,&leave);
+    return Explain("leaving a field applies signed decimal",std::abs(dimension.value()+0.125)<1e-9);
+}
+
+bool CaseDecimalThemes(V2MainWindow& window) {
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95}){
+        window.ApplyTheme(theme);
+        if(!CaseDecimalEntry(window)){window.ApplyTheme(UiTheme::Normal);return false;}
+    }
+    window.ApplyTheme(UiTheme::Normal);return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
 {
     return {
+        {"HP-NUM direction follows snap", &CaseNumericKeepsSnappedDirection},
+        {"HP-NUM decimal dimensions", &CaseDecimalThemes},
         {"作図中に入力列が出て数で線が決まる", &CaseCursorInputOpensWhileDrawingAndPlacesByNumber},
         {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},

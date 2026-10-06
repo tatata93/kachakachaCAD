@@ -150,7 +150,7 @@ void V2Viewport::SetAxisConstraintByKey(bool constrained)
         return;
     }
     axisConstrainedByKey_ = constrained;
-    update();
+    HoverAt(cursorPosition_); // Also update the numeric direction without requiring a mouse move.
 }
 
 //! 吸着のあとに点を寄せる(Shift の拘束と、直角スナップ)。当て方は core が決める。

@@ -33,6 +33,10 @@
 #include "kachakacha/app/ToolKeys.h"
 
 #include <QAbstractSpinBox>
+#include <QDoubleSpinBox>
+#include <QPointer>
+#include <QPoint>
+#include <QToolTip>
 #include <QApplication>
 #include <QEvent>
 #include <QKeyEvent>
@@ -49,6 +53,28 @@ namespace {
 {
     return dynamic_cast<QAbstractSpinBox*>(target) != nullptr
         || dynamic_cast<QLineEdit*>(target) != nullptr;
+}
+
+// Delay valueChanged until a complete number is committed, including child line edits.
+QDoubleSpinBox* NumericField(QObject* target)
+{
+    if(auto* spin=dynamic_cast<QDoubleSpinBox*>(target))return spin;
+    return target ? dynamic_cast<QDoubleSpinBox*>(target->parent()) : nullptr;
+}
+bool CommitNumericEntry(QObject* target,int key)
+{
+    auto* field=NumericField(target);
+    if(!field || (key!=Qt::Key_Return&&key!=Qt::Key_Enter))return false;
+    if(!field->hasAcceptableInput()){
+        QToolTip::showText(field->mapToGlobal(QPoint(0,field->height())),QStringLiteral("入力を完成させてください。範囲：%1 ～ %2").arg(field->minimum()).arg(field->maximum()),field);
+        return true;
+    }
+    const double before=field->value();QPointer<QDoubleSpinBox> alive(field);
+    field->interpretText();
+    if(!alive)return true;
+    if(field->value()==before)return false;
+    field->editingFinished();
+    return true; // First Enter applies the value and previews; the next confirms the tool.
 }
 
 } // namespace
@@ -92,6 +118,7 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    if (CommitNumericEntry(target,key)) return true;
     if (V2OffsetTool::Key(*this,key)) return true;
     if (viewport_ == nullptr) {
         return false;
@@ -272,6 +299,8 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
 
 bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
+    if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn))
+        if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if (event != nullptr && event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
         if (HandleToolKey(key->key(), target)) {

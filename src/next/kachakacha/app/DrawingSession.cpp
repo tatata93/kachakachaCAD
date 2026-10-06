@@ -176,7 +176,8 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
     }
     if (result.position.has_value() && adjustPoint_) {
         // 吸着したあとに寄せる。先に寄せると、寄せた先へまた吸着して元へ戻る。
-        result.position = adjustPoint_(*result.position, result.snap.has_value());
+        result.position = adjustPoint_(*result.position, result.snap.has_value()
+            && result.snap->kind != modeling::SnapKind::FreeOnPlane);
     }
     if (result.position.has_value()) {
         if (scene_.workPlane.active) {

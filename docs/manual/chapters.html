@@ -41,7 +41,8 @@
         <h3>円弧の作り方</h3>
         <table class="compact"><thead><tr><th>作り方</th><th>入力順</th><th>用途</th></tr></thead><tbody><tr><td>3点</td><td>始点 → 通過点 → 終点</td><td>既存点を通る円弧</td></tr><tr><td>両端と半径</td><td>始点 → 終点 → 半径</td><td>弦とRが決まった輪郭</td></tr><tr><td>始点と接線</td><td>始点 → 接線方向 → 半径 → 中心角</td><td>既存線から滑らかに生やす</td></tr></tbody></table>
         <div class="warning">始点法線角と円周長を独立欄で指定する円弧は、現V2の画面にはまだありません。接線方向と中心角で指定してください。「曲がる側を反転（法線反転）」で両端・半径方式と始点接線方式の向きを反転できます。</div>
-        <h3>スナップ</h3><p>端点、中心、交点、作図点へ近づくと候補の丸が大きく表示されます。通常は弱く吸着し、<kbd>S</kbd>を押している間は吸着しません。<kbd>Shift</kbd>は水平・垂直方向の拘束、<kbd>Ctrl</kbd>は複数選択です。<kbd>F3</kbd>でスナップ全体を切り替えます。</p>
+        <p>寸法欄は <b>0.25</b> や <b>-0.125</b> を途中で書き換えずに入力できます。Enter・Tab・欄を離れる操作で適用します。数値を変更した直後のEnterはプレビュー更新、次のEnterでツールを確定します。作図中に長さだけ指定した場合は、表示中のスナップ・水平垂直の方向を保ちます。</p>
+        <h3>スナップ</h3><p>端点、中心、交点、作図点へ近づくと候補の丸が大きく表示されます。格子はカーソルの近く（最大4 px、細かい格子ではさらに狭い範囲）だけに吸着します。端点・交点の吸着範囲は維持しています。<kbd>S</kbd>を押している間は吸着しません。<kbd>Shift</kbd>は水平・垂直方向の拘束、<kbd>Ctrl</kbd>は複数選択です。<kbd>F3</kbd>でスナップ全体を切り替えます。</p>
         <div class="gallery"><figure><img src="manual/images/v2-snap.png" alt="スナップ候補"><figcaption>候補を丸で強調。候補名と距離を確認してクリックします。</figcaption></figure><figure><img src="manual/images/v2-draw-line.png" alt="3D直線作図"><figcaption>任意の点から3D空間へ直線を作図。</figcaption></figure><figure><img src="manual/images/v2-curves.png" alt="曲線作図"><figcaption>円弧、ベジェ、スプラインの例。</figcaption></figure><figure><img src="manual/images/v2-curves-win95.png" alt="曲線作図の別テーマ"><figcaption>曲線の制御点と選択表示。</figcaption></figure></div>
         <h3>グリッド</h3><p>主間隔と副点数を設定できます。<b>グリッド原点を移動</b>は、既存の作図点や幾何点を新しい基準にします。</p>
         <figure><img src="manual/images/v2-grid.png" alt="グリッド設定"><figcaption>グリッドは作図補助であり、部品や出力形状には含まれません。</figcaption></figure>

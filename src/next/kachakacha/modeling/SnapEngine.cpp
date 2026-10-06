@@ -17,6 +17,10 @@ using geometry::CurveKind;
 
 namespace {
 
+bool IsGridSnap(SnapKind kind) {
+    return kind==SnapKind::GridMajor || kind==SnapKind::GridMinor || kind==SnapKind::GridOnCurve;
+}
+
 //! 吸着先の出どころだけを入れた候補。種類・位置・距離は Collector::Add が入れる。
 [[nodiscard]] SnapCandidate From(const EntityId& entityId = {}, const SegmentId& segmentId = {},
     std::int64_t featureIndex = 0)
@@ -41,8 +45,8 @@ namespace {
 class Collector {
 public:
     Collector(const ScreenMapping& mapping, const ScreenPoint& pointer,
-        const SnapSettings& settings, const GeometryTolerance& tolerance)
-        : mapping_(mapping), pointer_(pointer), settings_(settings), tolerance_(tolerance)
+        const SnapSettings& settings, const GeometryTolerance& tolerance, double gridRadius)
+        : mapping_(mapping), pointer_(pointer), settings_(settings), tolerance_(tolerance), gridRadius_(gridRadius)
     {
     }
 
@@ -58,8 +62,10 @@ public:
         candidate.held = settings_.heldSnap.has_value()
             && SameSnapTarget(candidate, *settings_.heldSnap);
         // 半径は画面px。持ち越している吸着先だけ、手放すまでの余裕を足す。
-        const double limit = tolerance_.snapPickPx
-            + (candidate.held ? std::max(0.0, settings_.holdMarginPx) : 0.0);
+        const bool grid=IsGridSnap(kind);
+        const double radius=grid ? std::min(tolerance_.snapPickPx,gridRadius_) : tolerance_.snapPickPx;
+        const double margin=grid ? std::min({1.0,radius*0.25,std::max(0.0,settings_.holdMarginPx)}) : std::max(0.0,settings_.holdMarginPx);
+        const double limit=radius+(candidate.held?margin:0);
         if (candidate.screenDistancePx > limit) {
             return;
         }
@@ -80,6 +86,7 @@ private:
     ScreenPoint pointer_;
     const SnapSettings& settings_;
     const GeometryTolerance& tolerance_;
+    double gridRadius_=4.0;
     std::vector<SnapCandidate> candidates_;
 };
 
@@ -104,6 +111,19 @@ struct GridStep {
     step.spacing = showMinor ? minorSpacing : scene.grid.majorSpacingMm;
     step.perStep = showMinor ? 1 : steps;
     return step;
+}
+
+double GridPickRadius(const SnapScene& scene,const ScreenMapping& mapping,
+    const ScreenPoint& pointer,const SnapSettings& settings)
+{
+    const auto at=mapping.UnprojectOntoPlane(pointer,scene.workPlane.origin,scene.workPlane.normal);
+    if(!at)return 0;
+    const auto step=CurrentGridStep(scene,mapping,*at,settings);if(!step)return 0;
+    const auto origin=mapping.Project(*at);
+    const auto u=mapping.Project(*at+scene.grid.uDirection*step->spacing);
+    const auto v=mapping.Project(*at+scene.grid.vDirection*step->spacing);
+    if(!origin||!u||!v)return 0;
+    return std::min(4.0,0.3*std::min(geometry::ScreenDistance(*origin,*u),geometry::ScreenDistance(*origin,*v)));
 }
 
 //! 線上の格子(GridOnCurve)。nearPoint(線上の、ポインタにいちばん近い点)のまわりで、
@@ -285,7 +305,7 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
         return {};
     }
     const auto started=std::chrono::steady_clock::now();
-    Collector collector(mapping, pointer, settings, tolerance);
+    Collector collector(mapping, pointer, settings, tolerance, GridPickRadius(scene,mapping,pointer,settings));
 
     // --- 作図点 ---
     for (const SnapDrawingPoint& point : scene.points) {
@@ -519,7 +539,7 @@ std::optional<SnapCandidate> ChooseSnap(const std::vector<SnapCandidate>& candid
     }
     // 同じ順位では、揺れの幅より明らかに近いときだけ乗り換える。
     // 境目を行き来するたびに入れ替わると、リングが点滅して狙いが定まらない。
-    if (best->screenDistancePx + std::max(0.0, settings.holdMarginPx)
+    if (best->screenDistancePx + (IsGridSnap(held->kind)?std::min(1.0,std::max(0.0,settings.holdMarginPx)):std::max(0.0, settings.holdMarginPx))
         < held->screenDistancePx) {
         return *best;
     }

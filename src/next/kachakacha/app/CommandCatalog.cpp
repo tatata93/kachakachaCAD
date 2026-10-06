@@ -301,7 +301,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             {"AT-WIR-006"}},
         {"wire.offset", "オフセット", CommandMode::Instant, "offset", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
-            "選んだ線を作業平面の中で「オフセット距離」ぶん平行に写します。元の線は残ります。", true,
+            "選んだ線から加工平面を自動判定し、距離と下見を確認して写します。加工平面は右ペインで変更でき、作図面と元の線は変えません。", true,
             {"AT-WIR-006"}},
         {"wire.meet_lines", "2線を交点まで", CommandMode::Instant, "meet_lines", "",
             SelectionPredicate::TwoWireChains, "鎖を2つ選んでください。",

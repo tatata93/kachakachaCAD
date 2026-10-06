@@ -1,3 +1,5 @@
+#include "V2OperationPanelHost.h"
+#include "V2OffsetTool.h"
 //! 道具の Enter / Esc を、窓のところで受ける(オーナー指示 2026-09-15 §14)。
 //!
 //! これまで Enter と Esc は `V2Viewport::keyPressEvent` にしか無かった。
@@ -58,7 +60,8 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     if (viewport_ == nullptr) {
         return false;
     }
-    return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
+    return (operationHost_ && dynamic_cast<V2OffsetTool*>(operationHost_->TemporaryPage()))
+        || !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
         || thickenShelfShown_ || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)
@@ -89,6 +92,7 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    if (V2OffsetTool::Key(*this,key)) return true;
     if (viewport_ == nullptr) {
         return false;
     }

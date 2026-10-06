@@ -1122,6 +1122,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2OutputPreview.cpp
         src/apps/cad_next/V2OverlapBrowser.cpp
         src/apps/cad_next/V2ThickenCommands.cpp
+        src/apps/cad_next/V2OffsetTool.cpp
         src/apps/cad_next/V2CornerPreview.cpp
         src/apps/cad_next/V2WorkPlanePreview.cpp
         src/apps/cad_next/V2Ribbon.cpp

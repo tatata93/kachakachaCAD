@@ -1,3 +1,4 @@
+#include "V2OffsetTool.h"
 #include "V2MainWindow.h"
 #include "V2ToolBindings.h"
 #include "V2InstructionMode.h"
@@ -308,6 +309,7 @@ void V2MainWindow::HandleSelectionChanged()
     RefreshMeasurements();
     RefreshEditDock();
     RefreshCornerDock();
+    V2OffsetTool::Refresh(*this);
     RefreshFabricationDock();
     RefreshPartDock();
     // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。

@@ -103,4 +103,30 @@ KACHA_V2_TEST(plane_focus, 印を外せば作図中でも掴める)
     Require(PickableOffPlaneCurve(true, false, false), "印を外せば掴める");
 }
 
+KACHA_V2_TEST(plane_focus, editing_never_filters_by_drawing_plane) {
+    using kachakacha::v2::modeling::DrawingTool;
+    using kachakacha::v2::app::UsesDrawingPlaneFocus;
+    for(auto tool:{DrawingTool::Move,DrawingTool::Copy,DrawingTool::Rotate,DrawingTool::Mirror,
+        DrawingTool::Scale,DrawingTool::Measure,DrawingTool::Trim,DrawingTool::Extend,
+        DrawingTool::Split,DrawingTool::ChamferOrFilletPair,DrawingTool::JoinEndpoints,
+        DrawingTool::TangentJoin,DrawingTool::CurvatureJoin,DrawingTool::ConnectTwoPoints})
+        Require(!UsesDrawingPlaneFocus(tool),"editing can pick off-plane geometry");
+    Require(UsesDrawingPlaneFocus(DrawingTool::Rectangle),"new drawing keeps explicit focus");
+}
+
+KACHA_V2_TEST(plane_focus, editing_plane_is_local_and_never_projects) {
+    using kachakacha::v2::app::EditingPlane;
+    const auto xy=StandardPlane(StandardPlaneKind::XY);
+    std::vector<CurveSegment> curves{Line({4,0,0},{4,20,0}),Line({4,20,0},{4,20,10})};
+    const auto plane=EditingPlane(curves,xy);
+    Require(plane.HasValue(),"YZ input inferred with XY drawing plane");
+    Require(std::abs(plane.Value().normal.x)>0.99,"YZ normal");
+    Require(!EditingPlane(curves,xy,false).HasValue(),"wrong explicit plane refused");
+    curves.push_back(Line({4,20,10},{8,20,10}));
+    Require(!EditingPlane(curves,xy).HasValue(),"nonplanar input not projected");
+    Require(EditingPlane({Line({0,0,7},{20,0,7})},xy).HasValue(),"straight line uses compatible current orientation at its own depth");
+    Require(!EditingPlane({Line({0,0,0},{0,0,20})},xy).HasValue(),"ambiguous vertical line requests a plane");
+    Require(EditingPlane({Line({0,0,0},{0,0,20})},StandardPlane(StandardPlaneKind::YZ),false).HasValue(),"explicit candidate resolves ambiguity");
+}
+
 KACHA_V2_TEST_MAIN("plane_focus_tests")

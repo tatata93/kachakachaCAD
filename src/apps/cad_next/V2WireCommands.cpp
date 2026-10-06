@@ -1,3 +1,5 @@
+#include "kachakacha/app/PlaneFocus.h"
+#include "V2OffsetTool.h"
 //! 線の編集コマンド(V2MainWindow の一部)。
 //!
 //! 分割・結合・端点一致・接線接続・曲率接続・面取り・丸め・オフセットを、
@@ -426,8 +428,9 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
     if (binding->method == WireTransformMethod::Offset) {
-        // 作業平面の中で平行に写す。面の法線は、いま作業中の平面から取る。
-        definition.vectorArgument = viewport_->WorkPlane().normal;
+        const auto plane=V2OffsetTool::PlaneFor(*this,inputs);
+        if(!plane.HasValue()){ReportDiagnostics(plane.Diagnostics());return;}
+        definition.vectorArgument = plane.Value().normal;
     }
     if (binding->method == WireTransformMethod::Chamfer
         || binding->method == WireTransformMethod::Fillet) {

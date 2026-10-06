@@ -81,7 +81,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     allModes_ = new QCheckBox(QStringLiteral("作図モード以外でも表示"), body);
     allModes_->setChecked(true);
     form->addRow(allModes_);
-    dimOffPlane_ = new QCheckBox(QStringLiteral("作図面以外の線を常に薄く"), body);
+    dimOffPlane_ = new QCheckBox(QStringLiteral("新規作図中だけ作図面以外の線を薄く"), body);
     dimOffPlane_->setChecked(true);
     form->addRow(dimOffPlane_);
     workPlaneVisible_ = new QCheckBox(QStringLiteral("作図面を出す"), body);

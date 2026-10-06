@@ -915,6 +915,12 @@ struct BoxSelectFixture {
     if (!Explain("側面 YZ へ移せる", moved)) {
         return false;
     }
+    for(auto tool:{kachakacha::v2::modeling::DrawingTool::Move,kachakacha::v2::modeling::DrawingTool::Rotate,
+        kachakacha::v2::modeling::DrawingTool::Measure,kachakacha::v2::modeling::DrawingTool::Trim,
+        kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair}){
+        window.SelectTool(tool);viewport.HoverAt(QPointF(middle->x,middle->y));
+        if(!Explain("編集は別の作図面の線を拾える",viewport.HoveredEntityId()==wire))return false;
+    }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
     viewport.HoverAt(QPointF(middle->x, middle->y));
     if (!Explain("作図中は別の面の線を掴まない", viewport.HoveredEntityId().IsNil())) {

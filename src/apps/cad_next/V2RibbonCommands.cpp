@@ -1,3 +1,4 @@
+#include "V2OffsetTool.h"
 //! 2段の帯を窓へ繋ぐ(正本 3 HTML 2026-09-18、指示書 common_ui_contract)。
 //!
 //! 帯は core(app/Ribbon)が決めた並びを出すだけ。押した道具は台帳の命令へ、
@@ -94,6 +95,7 @@ void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
 {
     // 選択済みでも道具を押しただけで生成しない。設定を見てから確定する。
     const auto id = tool.commandId;
+    if(id=="wire.offset"){V2OffsetTool::Open(*this);return;}
     if (!tool.surfaceMethod && !tool.measureMode && IsEditingCommand(id)) {
         SetStatus(QStringLiteral("入力と下見を維持しています。Enter または右ペインの確定で適用できます。"));
         return;

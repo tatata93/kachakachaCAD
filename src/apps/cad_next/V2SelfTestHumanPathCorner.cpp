@@ -1,3 +1,4 @@
+#include <QComboBox>
 //! C面取り / R丸めの人の道(HP-CN)。引継ぎ 2026-09-17 の 6。
 //!
 //! 面取りを押す → 面取りの道具になる → 3D で線を押すと A、次に押すと B → 実際に計算した
@@ -396,6 +397,7 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
             click(ends.first,ends.first==ends.second ? -20:20); click(ends.second,20);
         }
     }
+    if(batch)view.SetWorkPlane(kachakacha::v2::modeling::StandardPlane(kachakacha::v2::modeling::StandardPlaneKind::ZX));
     window.SelectTool(DrawingTool::Select); view.SetSelection({});
     window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,QStringLiteral("4"));
     window.RunCommand("wire.fillet");
@@ -404,7 +406,8 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
         click(30,0);
         if(!Explain("three edges preview as one batch",window.CornerPreviewShown()&&!view.ToolPreview().empty())
             ||!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
-        if(!Explain("batch keeps three sides and creates two arcs",window.Session().Scene().curves.size()==5&&view.ImageViews().size()==1))return false;
+        if(!Explain("batch keeps three sides and creates two arcs",window.Session().Scene().curves.size()==5&&view.ImageViews().size()==1
+            && std::abs(view.WorkPlane().normal.y)>0.99))return false;
         window.RunCommand("edit.undo");
         return Explain("one undo removes both fillets and keeps image",window.Session().Scene().curves.size()==3&&view.ImageViews().size()==1);
     }
@@ -428,6 +431,27 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
     return Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
         && view.ImageViews().size()==1);
 }
+bool CaseAutomaticOffset(V2MainWindow& w) {
+    using kachakacha::v2::modeling::StandardPlane;
+    using kachakacha::v2::modeling::StandardPlaneKind;
+    w.RunCommand("file.new");
+    const auto wire=DrawRectangleAtByHand(w,0.4,0.4,0.6,0.6);
+    if(wire.IsNil()||!ClickOnCurveOf(w,wire))return false;
+    auto& view=w.Viewport();kachakacha::v2::app::SelectionSet selected;selected.entityIds={wire};view.SetSelection(selected);
+    view.SetWorkPlane(StandardPlane(StandardPlaneKind::ZX));
+    w.ActivateCommand("wire.offset");
+    if(!Explain("offset automatically previews in target plane",!view.ToolPreview().empty()))return false;
+    auto* choice=w.findChild<QComboBox*>(QStringLiteral("offsetPlaneChoice"));if(!choice)return false;
+    choice->setCurrentIndex(1);
+    if(!Explain("incompatible manual plane has no misleading preview",view.ToolPreview().empty()))return false;
+    choice->setCurrentIndex(0);
+    if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    if(!Explain("offset creates output without changing drawing plane",w.Session().Scene().curves.size()>4&&std::abs(view.WorkPlane().normal.y)>0.99))return false;
+    w.HandleToolKey(Qt::Key_Escape,nullptr);
+    if(!Explain("Esc preserves drawing plane",std::abs(view.WorkPlane().normal.y)>0.99))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    return Explain("undo restores input and retains plane",w.Session().Scene().curves.size()==4&&std::abs(view.WorkPlane().normal.y)>0.99);
+}
 bool CaseBatchCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false,true); }
 bool CaseBatchPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,true,true); }
 bool CaseRepeatedSeparateCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false); }
@@ -438,6 +462,7 @@ bool CaseRepeatedPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w
 std::vector<SelfTestCase> HumanPathCornerCases()
 {
     return {
+        {"HP-WP-AUTO automatic edit plane", CaseAutomaticOffset},
         {"HP-CN-07 batch corners and image cache", CaseBatchCorners},
         {"HP-CN-08 polyline batch corners", CaseBatchPolylineCorners},
         {"HP-CN-04 repeat corners preserves unpicked lines and image", CaseRepeatedSeparateCorners},

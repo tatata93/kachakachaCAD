@@ -1,3 +1,4 @@
+#include "kachakacha/app/PlaneFocus.h"
 //! カーソル横の数値入力列(ui-workflows §7)。出す・移す・打つ・確定する・描く。
 //!
 //! V2Viewport.cpp が 1500 行の上限に届いたので、入力列まわりだけをここへ移した。
@@ -149,7 +150,7 @@ bool V2Viewport::focusNextPrevChild(bool /*next*/)
 kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
 {
     kachakacha::v2::app::PickFocus focus;
-    focus.drawing = session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select;
+    focus.drawing = kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
     focus.dimOffPlane = display_.dimOffPlaneLines;
     focus.plane = workPlane_;
     return focus;

@@ -14,8 +14,17 @@
 
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/WorkPlane.h"
+#include "kachakacha/modeling/ToolController.h"
 
 namespace kachakacha::v2::app {
+
+//! 編集・測定は作図面で候補を制限しない。
+[[nodiscard]] bool UsesDrawingPlaneFocus(modeling::DrawingTool tool) noexcept;
+
+//! 形状から加工平面を決める。一直線の場合だけ候補の向きを使う。形状は投影しない。
+[[nodiscard]] base::Result<modeling::WorkPlaneFrame> EditingPlane(
+    const std::vector<geometry::CurveSegment>& curves, const modeling::WorkPlaneFrame& preferred,
+    bool automatic = true, double toleranceMm = 1.0e-3);
 
 //! 面に載っているとみなす厚み(mm)。V1 と同じ 1/1000 mm。
 inline constexpr double kOnPlaneToleranceMm = 1.0e-3;

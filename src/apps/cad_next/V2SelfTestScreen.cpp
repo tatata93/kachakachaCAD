@@ -890,7 +890,7 @@ struct BoxSelectFixture {
         return false;
     }
     auto& viewport = window.Viewport();
-    const auto middle = viewport.Mapping().Project(
+    auto middle = viewport.Mapping().Project(
         kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
     if (!Explain("線の真ん中が画面に出る", middle.has_value())) {
         return false;
@@ -918,10 +918,12 @@ struct BoxSelectFixture {
     for(auto tool:{kachakacha::v2::modeling::DrawingTool::Move,kachakacha::v2::modeling::DrawingTool::Rotate,
         kachakacha::v2::modeling::DrawingTool::Measure,kachakacha::v2::modeling::DrawingTool::Trim,
         kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair}){
-        window.SelectTool(tool);viewport.HoverAt(QPointF(middle->x,middle->y));
-        if(!Explain("編集は別の作図面の線を拾える",viewport.HoveredEntityId()==wire))return false;
+        window.SelectTool(tool);middle=viewport.Mapping().Project(kachakacha::v2::geometry::Vector3{20,0,0});
+        if(!middle)return false;viewport.HoverAt(QPointF(middle->x,middle->y));
+        if(!Explain(("off-plane edit tool "+std::to_string(static_cast<int>(tool))).c_str(),viewport.HoveredEntityId()==wire))return false;
     }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    middle=viewport.Mapping().Project(kachakacha::v2::geometry::Vector3{20,0,0});if(!middle)return false;
     viewport.HoverAt(QPointF(middle->x, middle->y));
     if (!Explain("作図中は別の面の線を掴まない", viewport.HoveredEntityId().IsNil())) {
         return false;
@@ -1395,7 +1397,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"選択に正対すると、その面が画面の真ん中に来る", &CaseFacingSelectionBringsItIntoView},
         {"右の棚がいま使っている道具に付いてくる", &CaseRightShelfFollowsTheTool},
         {"一覧を名前・種類で絞り込める", &CaseTreeFilterNarrowsTheList},
-        {"作図中は作業平面の外の線を掴まない", &CaseDrawingDoesNotGrabOffPlaneWires},
+        {"HP-WP-PICK 作図中は作業平面の外の線を掴まない", &CaseDrawingDoesNotGrabOffPlaneWires},
         {"押し出した部品が3D画面に出る", &CaseExtrudedPartAppearsOnScreen},
         {"塗った形を画面で掴める", &CaseShapeCanBePickedOnScreen},
         {"隠した形は画面からも消える", &CaseHiddenShapeLeavesTheScreen},

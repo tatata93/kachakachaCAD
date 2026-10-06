@@ -135,6 +135,7 @@ parameter schemaのdiscriminatorにする。
 | `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(面の上の曲線。形が無いときだけ折れ線) | AT-FAB-013, AT-SRF-010 |
 | `part.extrude` | 押し出し | 道具→閉輪郭/形状ガイド面。方向の直線、反転、距離/両側、面/線の斜面/端点/点の終端（[仕様](ui-redesign/EXTRUDE_EXTENSIONS.md)） | Part/GuideSurface/Wire/Part+Wire | AT-EXT-001から008, AT-UIX-013 |
+| `part.curved_emboss` | 曲面押し出し（近似） | 支持面1面→閉輪郭→高さ・抜き勾配/斜めの独立ボタン→下見→Enter | 固定Part/Wire/Part+Wire | AT-EXT-001 |
 | `part.fillet` | フィレット(立体の辺) | 道具から始める。部品 1(3Dで辺の近くを押す)、辺 1以上(何本でも。押し直すと外れる)、半径 | 丸めた Part(EdgeFinish。辺は真ん中の点で持ち、開き直したら同じ辺を丸め直す。元の部品は隠す)。大きすぎれば KER-R001、辺が無ければ KER-R002 | AT-FIN-001 |
 | `part.chamfer` | 面取り(立体の辺) | 道具から始める。部品 1、辺 1以上、距離(両側に同じ) | 落とした Part(EdgeFinish)。同上 | AT-FIN-001 |
 | `part.shell` | シェル(面を抜いて肉厚を残す) | 道具から始める。部品 1(3Dで開けたい面を押す)、抜く面 1以上(何枚でも。押し直すと外れる)、肉厚 | 内側へ肉厚を残した Part(ShellSplit method=0。面は面の上の点で持ち、開き直したら同じ面を抜き直す。元の部品は隠す)。作れなければ KER-H001、面が無ければ KER-H002 | AT-FIN-002 |

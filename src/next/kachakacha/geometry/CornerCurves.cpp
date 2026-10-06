@@ -194,22 +194,25 @@ struct Side {
 }
 
 //! 残る線: 角から切った点 cut までを捨て、cut から残す端まで。toward = 真なら cut で終わる向き。
-[[nodiscard]] Result<CurveSegment> KeptPiece(const Reach& reach, const Side& side, double cut,
+[[nodiscard]] Result<std::optional<CurveSegment>> KeptPiece(const Reach& reach, const Side& side, double cut,
     bool endAtCut)
 {
-    using Out = Result<CurveSegment>;
+    using Out = Result<std::optional<CurveSegment>>;
+    if (SubLength(reach.curve, cut, side.keptEnd)<=1e-8) return Out::Success(std::nullopt);
     const double a = std::min(cut, side.keptEnd);
     const double b = std::max(cut, side.keptEnd);
     const auto piece = SubCurve(reach.curve, a, b);
     if (!piece.HasValue()) {
-        return piece;
+        return Out::Failure(piece.Diagnostics());
     }
     // 向き: side.sign > 0 なら piece は cut → 残す端。cut で終わらせたいなら反転。
     const bool endsAtCut = side.sign < 0.0;
     if (endsAtCut == endAtCut) {
         return Out::Success(piece.Value());
     }
-    return ReverseCurve(piece.Value());
+    const auto reversed=ReverseCurve(piece.Value());
+    if(!reversed.HasValue())return Out::Failure(reversed.Diagnostics());
+    return Out::Success(reversed.Value());
 }
 
 //! 角から線に沿って距離 d の位置(残す側)。届かなければ値なし。
@@ -218,6 +221,7 @@ struct Side {
 {
     double low = side.corner;
     double high = side.keptEnd;
+    if (std::abs(SubLength(reach.curve, low, high)-distanceMm)<=1e-9) return high;
     if (SubLength(reach.curve, low, high) < distanceMm) {
         return std::nullopt;
     }
@@ -358,6 +362,7 @@ struct Corner {
             }
             root = (low + high) * 0.5;
         }
+        if (!root && step==kSteps && std::abs(value)<=1e-9) root=u;
         previousU = u;
         previousGap = value;
     }

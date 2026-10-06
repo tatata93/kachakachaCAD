@@ -234,8 +234,7 @@ namespace {
         if (!corner.HasValue()) {
             return Out::Failure(corner.Diagnostics());
         }
-        return Out::Success(
-            {corner.Value().first, corner.Value().corner, corner.Value().second});
+        return Out::Success(corner.Value().Segments());
     }
     case WireTransformMethod::Trim: {
         const auto trimmed = geometry::TrimCurve(first, second,

@@ -51,9 +51,16 @@ struct EditIntersection {
 // ---- 角の加工 ----
 
 struct CornerResult {
-    CurveSegment first;   //!< 加工後の1本目(短くなる)
+    std::optional<CurveSegment> first; //!< 使い切った辺は値なし
     CurveSegment corner;  //!< 面取りの線、または丸めの円弧
-    CurveSegment second;  //!< 加工後の2本目
+    std::optional<CurveSegment> second; //!< 使い切った辺は値なし
+    [[nodiscard]] std::vector<CurveSegment> Segments() const {
+        std::vector<CurveSegment> result;
+        if (first) result.push_back(*first);
+        result.push_back(corner);
+        if (second) result.push_back(*second);
+        return result;
+    }
 };
 
 //! 角の加工の欄(V1 の「面取り」欄と同じ)。

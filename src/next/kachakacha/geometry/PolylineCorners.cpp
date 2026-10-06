@@ -41,6 +41,56 @@ constexpr const char* kNoCorner = "GEO-E021";
     return vertexIndex - 1;
 }
 
+// Compute each corner from the original edges, then combine both end cuts.
+// This permits exactly meeting cuts without ever constructing a zero-length curve.
+Result<std::vector<CurveSegment>> ProcessOrderedCorners(
+    const std::vector<CurveSegment>& work, CornerStyle style, double sizeMm,
+    double toleranceMm, bool closed, int only, bool linesOnly)
+{
+    using Out=Result<std::vector<CurveSegment>>;
+    const auto count=work.size();
+    std::vector<double> start(count,0),end(count,1);
+    std::vector<std::optional<CurveSegment>> bridges(count);
+    int processed=0;
+    for(std::size_t i=0;i<(closed?count:count-1);++i){
+        const auto j=(i+1)%count;const auto& first=work[i];const auto& second=work[j];
+        if((only>=0&&static_cast<int>(i)!=only)||!Touches(first,second,toleranceMm))continue;
+        if(linesOnly&&(first.Kind()!=CurveKind::Line||second.Kind()!=CurveKind::Line))continue;
+        const auto a=first.FirstDerivative(1),b=second.FirstDerivative(0);
+        if(a.Length()>0&&b.Length()>0&&Dot(a,b)/(a.Length()*b.Length())>1-1e-8)continue;
+        CornerOptions options;options.firstKeepSide=1;options.secondKeepSide=2;
+        const auto cut=style==CornerStyle::Fillet
+            ? FilletLines(first,second,sizeMm,options,toleranceMm)
+            : ChamferLines(first,second,sizeMm,options,toleranceMm);
+        if(!cut.HasValue())return Out::Failure(cut.Diagnostics());
+        const auto& c=cut.Value();
+        end[i]=c.first ? first.ClosestPoint(c.corner.StartPoint()).parameter : 0;
+        start[j]=c.second ? second.ClosestPoint(c.corner.EndPoint()).parameter : 1;
+        bridges[i]=c.corner;++processed;
+    }
+    if(!processed)return Out::Failure(MakeError(kNoCorner,"加工する角がありません。","滑らかな接続や指定外の辺はそのまま残します。"));
+    std::vector<CurveSegment> result;
+    for(std::size_t i=0;i<count;++i){
+        const auto& curve=work[i];const double a=start[i],b=end[i];
+        const double removedOverlap=curve.ArcLength(std::min(a,b),std::max(a,b),1e-9);
+        if(a>b&&removedOverlap>1e-8)return Out::Failure(MakeError("GEO-E004","隣り合う角の加工範囲が重なります。","半径・切戻し量を小さくしてください。"));
+        if(b>a&&removedOverlap>1e-8){
+            CurveSegment piece=curve;
+            if(b<1){
+                const auto split=piece.Split(b);if(!split.HasValue())return Out::Failure(split.Diagnostics());
+                piece=*split.Value().first;
+            }
+            if(a>0){
+                const auto split=piece.Split(a/b);if(!split.HasValue())return Out::Failure(split.Diagnostics());
+                piece=*split.Value().second;
+            }
+            result.push_back(piece);
+        }
+        if(bridges[i])result.push_back(*bridges[i]);
+    }
+    return Out::Success(std::move(result));
+}
+
 } // namespace
 
 Result<std::vector<CurveSegment>> ProcessPolylineCorners(
@@ -48,62 +98,11 @@ Result<std::vector<CurveSegment>> ProcessPolylineCorners(
     double toleranceMm, int vertexIndex)
 {
     using Out = Result<std::vector<CurveSegment>>;
-    if (segments.size() < 2) {
-        return Out::Failure(MakeError(kNoCorner, "落とせる角がありません。",
-            "角の加工には、つながった直線が2本以上要ります。"));
-    }
-    std::vector<CurveSegment> work = segments;
-    std::vector<CurveSegment> made;
-    int processed = 0;
-    const bool closed = Touches(work.back(), work.front(), toleranceMm)
-        && work.size() >= 3;
-    const std::size_t corners = closed ? work.size() : work.size() - 1;
-    const int onlyCorner = vertexIndex >= 0 ? CornerOfVertex(vertexIndex, work.size(), closed)
-                                            : -2;
-    if (onlyCorner == -1) {
-        return Out::Failure(MakeError(kNoCorner, "落とせる角がありません。",
-            "頂点 " + std::to_string(vertexIndex) + " は角ではありません("
-                + (closed ? "閉じた並びの頂点は 0〜" + std::to_string(work.size() - 1)
-                          : "開いた並びの角は頂点 1〜" + std::to_string(work.size() - 1))
-                + ")。"));
-    }
-    for (std::size_t index = 0; index < corners; ++index) {
-        CurveSegment& first = work[index];
-        CurveSegment& second = work[(index + 1) % work.size()];
-        const bool lines = first.Kind() == CurveKind::Line && second.Kind() == CurveKind::Line;
-        const bool wanted = onlyCorner == -2 || static_cast<int>(index) == onlyCorner;
-        if (!wanted || !lines || !Touches(first, second, toleranceMm)) {
-            made.push_back(first);
-            continue;   // 指定外の角、直線どうしでない角、離れた辺は触らない。
-        }
-        const auto corner = style == CornerStyle::Chamfer
-            ? geometry::ChamferLines(first, second, sizeMm, toleranceMm)
-            : geometry::FilletLines(first, second, sizeMm, toleranceMm);
-        if (!corner.HasValue()) {
-            return Out::Failure(corner.Diagnostics());
-        }
-        // 短くなった1本目も書き戻す。閉じた並びでは、最初の辺が最後の角でも短くなるので、
-        // 両端の変更を1本に持たせるためである。
-        first = corner.Value().first;
-        made.push_back(first);
-        made.push_back(corner.Value().corner);
-        // 短くなった2本目を次の角へ渡す。渡さないと、次の角が元の長さで計算される。
-        second = corner.Value().second;
-        ++processed;
-    }
-    if (!closed) {
-        made.push_back(work.back());
-    } else if (processed > 0) {
-        // 閉じた並びでは最初の辺も最後の角で短くなっている。先頭を差し替える。
-        made.front() = work.front();
-    }
-    if (processed == 0) {
-        return Out::Failure(MakeError(kNoCorner, "落とせる角がありません。",
-            onlyCorner >= 0 ? "頂点 " + std::to_string(vertexIndex)
-                                  + " の角は直線どうしではないか、辺が離れています。"
-                            : std::string("つながった直線どうしの角が1つもありません。")));
-    }
-    return Out::Success(std::move(made));
+    if (segments.size()<2) return Out::Failure(MakeError(kNoCorner,"落とせる角がありません。",{}));
+    const bool closed=segments.size()>=3 && Touches(segments.back(),segments.front(),toleranceMm);
+    const int only=vertexIndex>=0 ? CornerOfVertex(vertexIndex,segments.size(),closed) : -2;
+    if(only==-1)return Out::Failure(MakeError(kNoCorner,"指定した頂点は角ではありません。",{}));
+    return ProcessOrderedCorners(segments,style,sizeMm,toleranceMm,closed,only,true);
 }
 
 Result<std::vector<CurveSegment>> ProcessSelectedCorners(
@@ -149,23 +148,7 @@ Result<std::vector<CurveSegment>> ProcessSelectedCorners(
         if(ref.reversed){const auto reversed=ReverseCurve(found->segment);if(!reversed.HasValue())return Out::Failure(reversed.Diagnostics());work.push_back(reversed.Value());}
         else work.push_back(found->segment);
     }
-    std::vector<CurveSegment> made;int processed=0;
-    const bool closed=chain.Value().order.closed;
-    const std::size_t corners=closed?work.size():work.size()-1;
-    for(std::size_t i=0;i<corners;++i){
-        auto& first=work[i];auto& second=work[(i+1)%work.size()];
-        const auto a=first.FirstDerivative(1),b=second.FirstDerivative(0);
-        if(a.Length()>0&&b.Length()>0&&Dot(a,b)/(a.Length()*b.Length())>1-1e-8){made.push_back(first);continue;}
-        CornerOptions options;options.firstKeepSide=1;options.secondKeepSide=2;
-        options.firstHint=first.Evaluate(0.9);options.secondHint=second.Evaluate(0.1);
-        const auto corner=CornerBetweenCurves(first,second,style==CornerStyle::Fillet?CornerKind::Fillet:CornerKind::Chamfer,sizeMm,options,toleranceMm);
-        if(!corner.HasValue())return Out::Failure(corner.Diagnostics());
-        first=corner.Value().first;second=corner.Value().second;
-        made.push_back(first);made.push_back(corner.Value().corner);++processed;
-    }
-    if(!closed)made.push_back(work.back());else if(!made.empty())made.front()=work.front();
-    if(!processed)return Out::Failure(MakeError(kNoCorner,"加工する角がありません。","滑らかにつながる辺はそのまま残します。"));
-    return Out::Success(std::move(made));
+    return ProcessOrderedCorners(work,style,sizeMm,toleranceMm,chain.Value().order.closed,-2,false);
 }
 
 } // namespace kachakacha::v2::geometry

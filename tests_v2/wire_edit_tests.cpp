@@ -161,9 +161,9 @@ KACHA_V2_TEST(edit, a_chamfer_cuts_a_right_angle)
     Require(result.Value().corner.Kind() == CurveKind::Line, "the chamfer is a straight line");
     RequireNear(result.Value().corner.TotalLength(1.0e-9), 2.0 * std::sqrt(2.0), 1.0e-9,
         "a 2mm setback on a right angle gives a 2*sqrt(2) chamfer");
-    RequireNear(result.Value().first.TotalLength(1.0e-9), 8.0, 1.0e-9,
+    RequireNear(result.Value().first.value().TotalLength(1.0e-9), 8.0, 1.0e-9,
         "the first line is shortened by the setback");
-    RequireNear(result.Value().second.TotalLength(1.0e-9), 8.0, 1.0e-9,
+    RequireNear(result.Value().second.value().TotalLength(1.0e-9), 8.0, 1.0e-9,
         "the second line is shortened by the setback");
 }
 
@@ -175,8 +175,8 @@ KACHA_V2_TEST(edit, 非対称の切戻しと残す側を指定できる)
     const auto result = ChamferLines(L({0, 10, 0}, {0, 0, 0}), L({0, 0, 0}, {10, 0, 0}), 2.0,
         options, 1.0e-6);
     Require(result.HasValue(), "非対称でも作れる");
-    RequireNear(result.Value().first.TotalLength(1.0e-9), 8.0, 1.0e-9, "A は 2 縮む");
-    RequireNear(result.Value().second.TotalLength(1.0e-9), 5.0, 1.0e-9, "B は 5 縮む");
+    RequireNear(result.Value().first.value().TotalLength(1.0e-9), 8.0, 1.0e-9, "A は 2 縮む");
+    RequireNear(result.Value().second.value().TotalLength(1.0e-9), 5.0, 1.0e-9, "B は 5 縮む");
     RequireNear(result.Value().corner.TotalLength(1.0e-9), std::sqrt(29.0), 1.0e-9,
         "面取りの線は sqrt(2^2+5^2)");
 
@@ -188,10 +188,10 @@ KACHA_V2_TEST(edit, 非対称の切戻しと残す側を指定できる)
     const auto sided = ChamferLines(L({-10, 0, 0}, {10, 0, 0}), L({0, -10, 0}, {0, 10, 0}), 3.0,
         keep, 1.0e-6);
     Require(sided.HasValue(), "残す側を指定して作れる");
-    RequireNear(sided.Value().first.StartPoint().x, -10.0, 1.0e-9, "A は始点側が残る");
-    RequireNear(sided.Value().first.EndPoint().x, -3.0, 1.0e-9, "A は角から 3 で切れる");
-    RequireNear(sided.Value().second.EndPoint().y, 10.0, 1.0e-9, "B は終点側が残る");
-    RequireNear(sided.Value().second.StartPoint().y, 3.0, 1.0e-9, "B は角から 3 で切れる");
+    RequireNear(sided.Value().first.value().StartPoint().x, -10.0, 1.0e-9, "A は始点側が残る");
+    RequireNear(sided.Value().first.value().EndPoint().x, -3.0, 1.0e-9, "A は角から 3 で切れる");
+    RequireNear(sided.Value().second.value().EndPoint().y, 10.0, 1.0e-9, "B は終点側が残る");
+    RequireNear(sided.Value().second.value().StartPoint().y, 3.0, 1.0e-9, "B は角から 3 で切れる");
     // 残す側が角の近くの端(長さ 0)なら断る。
     keep.firstKeepSide = 2;
     const auto bad = ChamferLines(L({-10, 0, 0}, {0, 0, 0}), L({0, -10, 0}, {0, 10, 0}), 3.0,
@@ -204,11 +204,11 @@ KACHA_V2_TEST(edit, a_chamfer_joins_end_to_end)
     const auto result = ChamferLines(L({0, 10, 0}, {0, 0, 0}), L({0, 0, 0}, {10, 0, 0}), 3.0,
         1.0e-6);
     Require(result.HasValue(), "the chamfer is made");
-    RequireNear(Distance(result.Value().first.EndPoint(),
+    RequireNear(Distance(result.Value().first.value().EndPoint(),
                     result.Value().corner.StartPoint()),
         0.0, 1.0e-9, "the first line meets the chamfer");
     RequireNear(Distance(result.Value().corner.EndPoint(),
-                    result.Value().second.StartPoint()),
+                    result.Value().second.value().StartPoint()),
         0.0, 1.0e-9, "the chamfer meets the second line");
 }
 
@@ -231,15 +231,15 @@ KACHA_V2_TEST(edit, a_fillet_rounds_a_right_angle)
         "the rounded corner is an arc, not a polyline");
     RequireNear(result.Value().corner.Radius(), 3.0, 1.0e-9, "the radius is as asked");
     // 直角なら接点までの距離は半径と同じ。
-    RequireNear(result.Value().first.TotalLength(1.0e-9), 7.0, 1.0e-9,
+    RequireNear(result.Value().first.value().TotalLength(1.0e-9), 7.0, 1.0e-9,
         "the first line is shortened by the radius");
     RequireNear(std::abs(result.Value().corner.SweepAngleRad()), kPi / 2.0, 1.0e-9,
         "a right angle is rounded by a quarter turn");
-    RequireNear(Distance(result.Value().first.EndPoint(),
+    RequireNear(Distance(result.Value().first.value().EndPoint(),
                     result.Value().corner.StartPoint()),
         0.0, 1.0e-9, "the line meets the arc exactly");
     RequireNear(Distance(result.Value().corner.EndPoint(),
-                    result.Value().second.StartPoint()),
+                    result.Value().second.value().StartPoint()),
         0.0, 1.0e-9, "the arc meets the second line exactly");
 }
 
@@ -249,7 +249,7 @@ KACHA_V2_TEST(edit, a_fillet_is_tangent_to_both_lines)
         1.0e-6);
     Require(result.HasValue(), "the fillet is made");
     const Vector3 lineTangent =
-        Normalized(result.Value().first.EndPoint() - result.Value().first.StartPoint());
+        Normalized(result.Value().first.value().EndPoint() - result.Value().first.value().StartPoint());
     const Vector3 arcTangent = Normalized(result.Value().corner.FirstDerivative(0.0));
     RequireNear(std::abs(Dot(lineTangent, arcTangent)), 1.0, 1.0e-8,
         "the arc leaves along the line direction (G1)");
@@ -279,6 +279,27 @@ KACHA_V2_TEST(edit, corner_operations_accept_curves_now)
     Require(filleted.HasValue(), "fillet now accepts a line and an arc");
     Require(filleted.Value().corner.Kind() == CurveKind::CircularArc,
         "the fillet corner is a circular arc");
+}
+
+KACHA_V2_TEST(edit, exact_length_corner_consumes_edges_without_degenerate_output)
+{
+    for(bool fillet : {false,true})for(bool swap : {false,true}){
+        const auto shortEdge=L({0,0,0},{0,1,0});
+        const auto longEdge=L({0,1,0},{3,1,0});
+        const auto a=swap?longEdge:shortEdge,b=swap?shortEdge:longEdge;
+        const auto made=fillet?FilletLines(a,b,1,1e-6):ChamferLines(a,b,1,1e-6);
+        Require(made.HasValue(),"1mm edge accepts R1/C1 in either selection order");
+        Require(made.Value().Segments().size()==2,"consumed line omitted, not stored as zero length");
+        Require(swap?!made.Value().second:!made.Value().first,"correct source edge consumed");
+        if(fillet)RequireNear(made.Value().corner.Radius(),1,1e-12,"radius never reduced");
+        const auto tooBig=fillet?FilletLines(a,b,1.001,1e-6):ChamferLines(a,b,1.001,1e-6);
+        Require(!tooBig.HasValue(),"genuinely oversized cut refused");
+        const auto both=fillet?FilletLines(L({0,0,0},{0,0,1}),L({0,0,1},{1,0,1}),1,1e-6)
+            :ChamferLines(L({0,0,0},{0,0,1}),L({0,0,1},{1,0,1}),1,1e-6);
+        Require(both.HasValue()&&both.Value().Segments().size()==1,"both edges can be consumed in 3D");
+        const auto smaller=fillet?FilletLines(a,b,0.999,1e-6):ChamferLines(a,b,0.999,1e-6);
+        Require(smaller.HasValue()&&smaller.Value().Segments().size()==3,"real short remaining edges preserved");
+    }
 }
 
 KACHA_V2_TEST(edit, meet_lines_pulls_both_to_the_intersection)

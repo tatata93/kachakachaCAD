@@ -60,13 +60,13 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_arc_that_already_meet)
     RequireNear(corner.Radius(), 2.0, 1.0e-6, "the requested radius is used");
     RequireNear(Distance(corner.Center(), Vector3{12, -1.7082, 0}), 0.0, 1.0e-3,
         "the fillet centre matches the verified fixture");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{10, -5, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{10, -5, 0}), 0.0, 1.0e-3,
         "the first piece keeps its far end");
-    RequireNear(Distance(result.Value().first.EndPoint(), Vector3{10, -1.7082, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), Vector3{10, -1.7082, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(result.Value().second.StartPoint(), Vector3{11.4286, 0.2084, 0}), 0.0,
+    RequireNear(Distance(result.Value().second.value().StartPoint(), Vector3{11.4286, 0.2084, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on the arc");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{15, 5, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{15, 5, 0}), 0.0, 1.0e-3,
         "the second piece keeps the arc's far end");
     // 接する: 中心から線・円弧までの距離が、どちらも半径と一致する。
     RequireNear(line.ClosestPoint(corner.Center()).distance, 2.0, 1.0e-6,
@@ -74,9 +74,9 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_arc_that_already_meet)
     RequireNear(arc.ClosestPoint(corner.Center()).distance, 2.0, 1.0e-6,
         "the centre is exactly radius away from the arc");
     // つながり: first→corner→second が端点で一致する。
-    RequireNear(Distance(result.Value().first.EndPoint(), corner.StartPoint()), 0.0, 1.0e-6,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), corner.StartPoint()), 0.0, 1.0e-6,
         "the first piece meets the fillet");
-    RequireNear(Distance(corner.EndPoint(), result.Value().second.StartPoint()), 0.0, 1.0e-6,
+    RequireNear(Distance(corner.EndPoint(), result.Value().second.value().StartPoint()), 0.0, 1.0e-6,
         "the fillet meets the second piece");
 }
 
@@ -97,15 +97,15 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_full_circle_with_hints)
     RequireNear(corner.Radius(), 1.0, 1.0e-6, "the requested radius is used");
     RequireNear(Distance(corner.Center(), Vector3{0, 0, 0}), 6.0, 1.0e-6,
         "the centre sits 6mm from the circle's own centre (5mm radius + 1mm fillet)");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{10, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{10, 0, 0}), 0.0, 1.0e-3,
         "the first piece keeps the hinted-away end");
-    RequireNear(Distance(result.Value().first.EndPoint(), Vector3{5.9161, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), Vector3{5.9161, 0, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(result.Value().second.StartPoint(), Vector3{4.9301, 0.8333, 0}), 0.0,
+    RequireNear(Distance(result.Value().second.value().StartPoint(), Vector3{4.9301, 0.8333, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on the circle");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
         "the second piece runs to the far side of the circle");
-    Require(result.Value().second.Kind() == CurveKind::CircularArc,
+    Require(result.Value().second.value().Kind() == CurveKind::CircularArc,
         "the closed circle became an open arc once it was cut at the corner");
 }
 
@@ -128,13 +128,13 @@ KACHA_V2_TEST(corner_curves, fillet_and_chamfer_between_two_crossing_arcs)
         "the centre is 6mm from a3's centre (5mm radius + 1mm fillet)");
     RequireNear(Distance(corner.Center(), Vector3{6, 0, 0}), 6.0, 1.0e-6,
         "the centre is 6mm from a4's centre too");
-    RequireNear(Distance(filleted.Value().first.StartPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(filleted.Value().first.value().StartPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
         "the first piece keeps a3's hinted-away end");
-    RequireNear(Distance(filleted.Value().first.EndPoint(), Vector3{2.5, 4.3301, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(filleted.Value().first.value().EndPoint(), Vector3{2.5, 4.3301, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point on a3");
-    RequireNear(Distance(filleted.Value().second.StartPoint(), Vector3{3.5, 4.3301, 0}), 0.0,
+    RequireNear(Distance(filleted.Value().second.value().StartPoint(), Vector3{3.5, 4.3301, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on a4");
-    RequireNear(Distance(filleted.Value().second.EndPoint(), Vector3{11, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(filleted.Value().second.value().EndPoint(), Vector3{11, 0, 0}), 0.0, 1.0e-3,
         "the second piece keeps a4's hinted-away end");
 
     const auto chamfered = ChamferLines(a3, a4, 1.0, options, 1.0e-6);
@@ -148,7 +148,7 @@ KACHA_V2_TEST(corner_curves, fillet_and_chamfer_between_two_crossing_arcs)
         "the chamfer's first end sits on a3's circle");
     RequireNear(Distance(chamfered.Value().corner.EndPoint(), Vector3{6, 0, 0}), 5.0, 1.0e-6,
         "the chamfer's second end sits on a4's circle");
-    RequireNear(Distance(chamfered.Value().first.EndPoint(), Vector3{2.1455, 4.5163, 0}), 0.0,
+    RequireNear(Distance(chamfered.Value().first.value().EndPoint(), Vector3{2.1455, 4.5163, 0}), 0.0,
         1.0e-3, "the first piece is cut back to the chamfer");
 }
 
@@ -167,13 +167,13 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_arc_has_a_maximum_radius)
     RequireNear(Distance(small.Value().corner.Center(), Vector3{2.8284, 3.5, 0}), 0.0, 1.0e-3,
         "the fillet centre matches the verified fixture");
     RequireNear(small.Value().corner.Radius(), 0.5, 1.0e-6, "the requested radius is used");
-    RequireNear(Distance(small.Value().first.StartPoint(), Vector3{-2, 3, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(small.Value().first.value().StartPoint(), Vector3{-2, 3, 0}), 0.0, 1.0e-3,
         "the first piece keeps its far end");
-    RequireNear(Distance(small.Value().first.EndPoint(), Vector3{2.8284, 3, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(small.Value().first.value().EndPoint(), Vector3{2.8284, 3, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(small.Value().second.StartPoint(), Vector3{3.1427, 3.8889, 0}), 0.0,
+    RequireNear(Distance(small.Value().second.value().StartPoint(), Vector3{3.1427, 3.8889, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on the arc");
-    RequireNear(Distance(small.Value().second.EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(small.Value().second.value().EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
         "the second piece keeps the arc's far end");
 
     // 1.0mm はちょうど収まる限界(重根)で、実装はこれを断る。
@@ -196,9 +196,9 @@ KACHA_V2_TEST(corner_curves, chamfer_line_and_arc_with_asymmetric_setback)
         "the chamfer starts at the 1mm setback on the line");
     RequireNear(Distance(result.Value().corner.EndPoint(), Vector3{2.5160, 4.3209, 0}), 0.0,
         1.0e-3, "the chamfer ends at the 2mm (arc-length) setback on the arc");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{0, 3, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{0, 3, 0}), 0.0, 1.0e-3,
         "the first piece keeps its far end");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{-5, 0, 0}), 0.0, 1.0e-3,
         "the second piece keeps the arc's far end");
     RequireNear(Distance(result.Value().corner.EndPoint(), Vector3{0, 0, 0}), 5.0, 1.0e-6,
         "the chamfer's arc-side end sits on the circle");
@@ -219,13 +219,13 @@ KACHA_V2_TEST(corner_curves, fillet_extends_an_arc_to_find_the_corner)
     Require(result.HasValue(), "the fillet is made even though the arc must be extended");
     RequireNear(Distance(result.Value().corner.Center(), Vector3{5.9161, 1, 0}), 0.0, 1.0e-3,
         "the fillet centre matches the verified fixture");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{10, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{10, 0, 0}), 0.0, 1.0e-3,
         "the first piece keeps its far end");
-    RequireNear(Distance(result.Value().first.EndPoint(), Vector3{5.9161, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), Vector3{5.9161, 0, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(result.Value().second.StartPoint(), Vector3{4.9301, 0.8333, 0}), 0.0,
+    RequireNear(Distance(result.Value().second.value().StartPoint(), Vector3{4.9301, 0.8333, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on the extended arc");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{1.3375, 4.8178, 0}), 0.0,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{1.3375, 4.8178, 0}), 0.0,
         1.0e-3, "the second piece keeps the arc's own (unextended) far end");
 }
 
@@ -245,13 +245,13 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_bezier)
     RequireNear(Distance(corner.Center(), Vector3{4, 1.9320, 0}), 0.0, 1.0e-3,
         "the fillet centre matches the verified fixture");
     RequireNear(corner.Radius(), 1.0, 1.0e-6, "the requested radius is used");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{5, -5, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{5, -5, 0}), 0.0, 1.0e-3,
         "the first piece keeps its far end");
-    RequireNear(Distance(result.Value().first.EndPoint(), Vector3{5, 1.9320, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), Vector3{5, 1.9320, 0}), 0.0, 1.0e-3,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(result.Value().second.StartPoint(), Vector3{3.7850, 2.9086, 0}), 0.0,
+    RequireNear(Distance(result.Value().second.value().StartPoint(), Vector3{3.7850, 2.9086, 0}), 0.0,
         1.0e-3, "the second piece starts at the tangent point on the bezier");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{0, 0, 0}), 0.0, 1.0e-3,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{0, 0, 0}), 0.0, 1.0e-3,
         "the second piece keeps the bezier's far end");
     RequireNear(bezier.ClosestPoint(corner.Center()).distance, 1.0, 1.0e-6,
         "the centre is exactly radius away from the bezier");
@@ -300,13 +300,13 @@ KACHA_V2_TEST(corner_curves, fillet_line_and_line_with_hints_still_uses_the_anal
     Require(result.HasValue(), "two lines with hints still fillet");
     RequireNear(Distance(result.Value().corner.Center(), Vector3{1, 1, 0}), 0.0, 1.0e-6,
         "the fillet centre matches the verified fixture");
-    RequireNear(Distance(result.Value().first.StartPoint(), Vector3{5, 0, 0}), 0.0, 1.0e-6,
+    RequireNear(Distance(result.Value().first.value().StartPoint(), Vector3{5, 0, 0}), 0.0, 1.0e-6,
         "the first piece keeps the hinted-away end");
-    RequireNear(Distance(result.Value().first.EndPoint(), Vector3{1, 0, 0}), 0.0, 1.0e-6,
+    RequireNear(Distance(result.Value().first.value().EndPoint(), Vector3{1, 0, 0}), 0.0, 1.0e-6,
         "the first piece is cut back to the tangent point");
-    RequireNear(Distance(result.Value().second.StartPoint(), Vector3{0, 1, 0}), 0.0, 1.0e-6,
+    RequireNear(Distance(result.Value().second.value().StartPoint(), Vector3{0, 1, 0}), 0.0, 1.0e-6,
         "the second piece starts at the tangent point");
-    RequireNear(Distance(result.Value().second.EndPoint(), Vector3{0, 5, 0}), 0.0, 1.0e-6,
+    RequireNear(Distance(result.Value().second.value().EndPoint(), Vector3{0, 5, 0}), 0.0, 1.0e-6,
         "the second piece keeps the hinted-away end");
 
     // 欄無し(押した点が無い)でも、既定の「遠い端を残す」で作れる(退行がないことの確認)。
@@ -323,6 +323,18 @@ KACHA_V2_TEST(corner_curves, a_non_positive_size_is_refused)
     Require(!result.HasValue(), "a zero radius is refused");
     RequireEqual(result.Diagnostics().front().code, "GEO-E004",
         "the refusal names the degenerate size");
+}
+
+KACHA_V2_TEST(corner_curves, numerical_corner_endpoint_can_consume_a_side)
+{
+    const auto a=L({0,0,0},{0,1,0}),b=L({0,1,0},{3,1,0});
+    for(auto kind:{CornerKind::Fillet,CornerKind::Chamfer}){
+        const auto made=CornerBetweenCurves(a,b,kind,1,CornerOptions{},1e-6);
+        Require(made.HasValue(),"endpoint solution exists in numerical path");
+        Require(!made.Value().first&&made.Value().second.has_value(),"only exhausted side omitted");
+        RequireNear(Distance(made.Value().corner.StartPoint(),Vector3{0,0,0}),0,1e-8,"corner reaches original endpoint");
+        RequireNear(Distance(made.Value().corner.EndPoint(),Vector3{1,1,0}),0,1e-8,"other tangent/setback endpoint");
+    }
 }
 
 KACHA_V2_TEST_MAIN("corner_curves_tests")

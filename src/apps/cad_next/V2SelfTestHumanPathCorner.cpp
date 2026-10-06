@@ -431,6 +431,34 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
     return Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
         && view.ImageViews().size()==1);
 }
+bool CaseFullLengthCorner(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");
+    QTemporaryDir folder;QImage bitmap(20,20,QImage::Format_ARGB32);bitmap.fill(0xff8899aa);
+    const auto path=folder.filePath(QStringLiteral("corner-background.png"));if(!bitmap.save(path))return false;
+    w.RunCommand("image.place");
+    auto* image=dynamic_cast<V2ImageTool*>(w.findChild<QWidget*>(QStringLiteral("imagePlacementPanel")));
+    if(!image||!image->LoadImage(path)||!image->Commit())return false;
+    auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(6);view.SetSnapSuppressed(true);
+    const auto click=[&](double x,double y){const auto p=view.Mapping().Project({x,y,0});if(!p)return false;view.ClickAt(QPointF(p->x,p->y));return true;};
+    for(int edge=0;edge<3;++edge){
+        w.SelectTool(DrawingTool::Line);
+        if(edge==0){click(0,0);click(0,1);}
+        if(edge==1){click(0,1);click(2,1);}
+        if(edge==2){click(0,0);click(2,0);}
+    }
+    w.SelectTool(DrawingTool::Select);view.SetSelection({});
+    w.ParameterDock().Apply(app::ParameterId::CornerSize,QStringLiteral("1"));w.RunCommand("wire.fillet");
+    click(0,0.5);click(1.5,1);
+    if(!Explain("R1 on 1mm edge previews",w.CornerPreviewShown()&&!view.ToolPreview().empty())||!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    int arcs=0;for(const auto& c:w.Session().Scene().curves)if(c.segment.Kind()==geometry::CurveKind::CircularArc){
+        ++arcs;if(std::abs(c.segment.Radius()-1)>1e-9)return false;
+    }
+    if(!Explain("consumed edge omitted, other line and image retained",arcs==1&&w.Session().Scene().curves.size()==3&&view.ImageViews().size()==1))return false;
+    w.RunCommand("edit.undo");
+    for(const auto& c:w.Session().Scene().curves)if(c.segment.Kind()!=geometry::CurveKind::Line)return false;
+    return Explain("undo restores all original edges and image",w.Session().Scene().curves.size()==3&&view.ImageViews().size()==1);
+}
 bool CaseAutomaticOffset(V2MainWindow& w) {
     using kachakacha::v2::modeling::StandardPlane;
     using kachakacha::v2::modeling::StandardPlaneKind;
@@ -462,6 +490,7 @@ bool CaseRepeatedPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w
 std::vector<SelfTestCase> HumanPathCornerCases()
 {
     return {
+        {"HP-CN-09 full-length R1 corner", CaseFullLengthCorner},
         {"HP-WP-AUTO automatic edit plane", CaseAutomaticOffset},
         {"HP-CN-07 batch corners and image cache", CaseBatchCorners},
         {"HP-CN-08 polyline batch corners", CaseBatchPolylineCorners},

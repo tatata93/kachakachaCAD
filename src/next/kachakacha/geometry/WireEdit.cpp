@@ -389,8 +389,8 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
     }
     const Vector3 firstDirection = Normalized(firstAway - corner);
     const Vector3 secondDirection = Normalized(secondAway - corner);
-    if (Distance(firstAway, corner) < setbackMm
-        || Distance(secondAway, corner) < secondSetbackMm) {
+    if (Distance(firstAway, corner) + 1e-9 < setbackMm
+        || Distance(secondAway, corner) + 1e-9 < secondSetbackMm) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "切戻し量が線の長さより大きいです。",
             "もっと小さい値にするか、線を長くしてください。残す側が角の近くの端になっていないかも見てください。"));
@@ -401,12 +401,14 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
     const auto shortenedFirst = CurveSegment::MakeLine(firstAway, firstPoint);
     const auto chamfer = CurveSegment::MakeLine(firstPoint, secondPoint);
     const auto shortenedSecond = CurveSegment::MakeLine(secondPoint, secondAway);
-    if (!shortenedFirst.HasValue() || !chamfer.HasValue() || !shortenedSecond.HasValue()) {
+    if (!chamfer.HasValue() || (!shortenedFirst.HasValue() && Distance(firstAway, firstPoint)>1e-9)
+        || (!shortenedSecond.HasValue() && Distance(secondPoint, secondAway)>1e-9)) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "面取りの結果が長さ0になります。", {}));
     }
     return Result<CornerResult>::Success(
-        CornerResult{shortenedFirst.Value(), chamfer.Value(), shortenedSecond.Value()});
+        CornerResult{Distance(firstAway, firstPoint)<=1e-9 ? std::nullopt : std::optional{shortenedFirst.Value()},
+            chamfer.Value(), Distance(secondPoint, secondAway)<=1e-9 ? std::nullopt : std::optional{shortenedSecond.Value()}});
 }
 
 Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& second,
@@ -443,7 +445,7 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
     }
     // 接点までの距離 = 半径 / tan(角度/2)
     const double setback = radiusMm / std::tan(angle * 0.5);
-    if (Distance(firstAway, corner) < setback || Distance(secondAway, corner) < setback) {
+    if (Distance(firstAway, corner) + 1e-9 < setback || Distance(secondAway, corner) + 1e-9 < setback) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "半径が大きすぎて線に収まりません。",
             "必要な長さは " + std::to_string(setback) + " mm です。"));
@@ -468,12 +470,14 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
         0.0, sweep);
     const auto shortenedFirst = CurveSegment::MakeLine(firstAway, firstPoint);
     const auto shortenedSecond = CurveSegment::MakeLine(secondPoint, secondAway);
-    if (!arc.HasValue() || !shortenedFirst.HasValue() || !shortenedSecond.HasValue()) {
+    if (!arc.HasValue() || (!shortenedFirst.HasValue() && Distance(firstAway, firstPoint)>1e-9)
+        || (!shortenedSecond.HasValue() && Distance(secondPoint, secondAway)>1e-9)) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "丸めの結果が作れません。", {}));
     }
     return Result<CornerResult>::Success(
-        CornerResult{shortenedFirst.Value(), arc.Value(), shortenedSecond.Value()});
+        CornerResult{Distance(firstAway, firstPoint)<=1e-9 ? std::nullopt : std::optional{shortenedFirst.Value()},
+            arc.Value(), Distance(secondPoint, secondAway)<=1e-9 ? std::nullopt : std::optional{shortenedSecond.Value()}});
 }
 
 Result<std::pair<CurveSegment, CurveSegment>> MeetLines(const CurveSegment& first,

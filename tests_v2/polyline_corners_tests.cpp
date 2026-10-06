@@ -125,4 +125,23 @@ KACHA_V2_TEST(polyline_corners, 頂点番号で1つの角だけ加工でき端�
         "丸めは円弧");
 }
 
+KACHA_V2_TEST(polyline_corners, meeting_cuts_consume_shared_edges_and_keep_closed_chain)
+{
+    using kachakacha::v2::geometry::ProcessSelectedCorners;
+    const std::vector<CurveSegment> square={Line({0,0,0},{2,0,0}),Line({2,0,0},{2,2,0}),
+        Line({2,2,0},{0,2,0}),Line({0,2,0},{0,0,0})};
+    for(auto style:{CornerStyle::Fillet,CornerStyle::Chamfer})for(bool selected:{false,true}){
+        const auto made=selected?ProcessSelectedCorners(square,style,1,1e-6):ProcessPolylineCorners(square,style,1,1e-6);
+        Require(made.HasValue()&&made.Value().size()==4,"four cuts remain, no zero-length square edges");
+        for(std::size_t i=0;i<4;++i){
+            RequireNear((made.Value()[i].EndPoint()-made.Value()[(i+1)%4].StartPoint()).Length(),0,1e-8,"loop stays closed");
+            Require(made.Value()[i].TotalLength(1e-8)>1,"no degenerate output");
+        }
+        const auto bad=selected?ProcessSelectedCorners(square,style,1.01,1e-6):ProcessPolylineCorners(square,style,1.01,1e-6);
+        Require(!bad.HasValue(),"overlapping corner cuts refused as a whole");
+    }
+    const auto one=ProcessPolylineCorners({Line({0,0,0},{0,1,0}),Line({0,1,0},{3,1,0}),Line({3,1,0},{3,0,0})},CornerStyle::Fillet,1,1e-6,1);
+    Require(one.HasValue()&&one.Value().size()==3,"one chosen corner consumes just its short edge");
+}
+
 KACHA_V2_TEST_MAIN("polyline_corners")

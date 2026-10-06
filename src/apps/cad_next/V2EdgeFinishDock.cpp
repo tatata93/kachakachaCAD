@@ -2,6 +2,7 @@
 #include "V2PanelFrame.h"
 
 #include <QDockWidget>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -96,6 +97,15 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
         }
     });
 
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("生成するもの")));
+    output_ = new QComboBox(body);
+    output_->setObjectName(QStringLiteral("edgeFinishOutput"));
+    output_->addItems({QStringLiteral("面＋ワイヤー（立体）"), QStringLiteral("ワイヤーのみ"), QStringLiteral("立体のみ")});
+    output_->setCurrentIndex(2);
+    layout->addWidget(output_);
+    QObject::connect(output_, &QComboBox::currentIndexChanged, this, [this] {
+        if (!loading_ && outputHandler_) outputHandler_();
+    });
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setWordWrap(true);
@@ -214,3 +224,6 @@ int V2EdgeFinishDock::KindShown() const
 {
     return kinds_[1]->isChecked() ? 1 : 0;
 }
+
+int V2EdgeFinishDock::OutputMode() const { return output_->currentIndex(); }
+void V2EdgeFinishDock::SetOutputMode(int mode) { if (mode >= 0 && mode <= 2) output_->setCurrentIndex(mode); }

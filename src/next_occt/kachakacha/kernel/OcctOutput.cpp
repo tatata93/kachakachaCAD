@@ -20,6 +20,8 @@
 #include <STEPControl_Writer.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Face.hxx>
@@ -35,6 +37,30 @@ namespace kachakacha::v2::kernel {
 using namespace geometry;
 using modeling::KernelShapeHandle;
 using base::Result;
+Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle, double tolerance) {
+    using Out = Result<std::vector<CurveSegment>>;
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {
+        TopoDS_Shape shape;
+        if (!LookupShape(handle, shape) || shape.IsNull())
+            return Out::Failure(base::MakeError("EXP-P001", "出力する実形状がありません。", {}));
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(shape, TopAbs_EDGE, edges);
+        std::vector<CurveSegment> curves;
+        for (int i = 1; i <= edges.Extent(); ++i) {
+            const auto edge = TopoDS::Edge(edges(i));
+            if (BRep_Tool::Degenerated(edge)) continue;
+            const auto curve = FromEdge(edge, tolerance);
+            if (!curve.HasValue()) return Out::Failure(curve.Diagnostics());
+            curves.push_back(curve.Value());
+        }
+        if (!curves.empty()) return Out::Success(std::move(curves));
+    } catch (...) {}
+#else
+    (void)handle; (void)tolerance;
+#endif
+    return Out::Failure(base::MakeError("EXP-P001", "全ての辺をワイヤーに変換できません。", {}));
+}
 namespace {
 template<class T> Result<T> Failed() {return Result<T>::Failure(base::MakeError("EXP-P001","出力形状を作れません。","入力形状または配置基準を確認してください。"));}
 #ifdef KACHACAD_V2_WITH_OCCT

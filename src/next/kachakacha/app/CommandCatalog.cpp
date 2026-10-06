@@ -48,6 +48,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
 {
     // 並びは docs/v2/command-catalog.md と同じ順。決定的であること。
     static const std::vector<CommandDescriptor> table = {
+        {"part.curved_emboss", "曲面押し出し", CommandMode::Tool, "extrude", "", SelectionPredicate::HasDocument, "文書がありません。", "曲面上の閉じたワイヤーから法線方向へ立体を生成します。抜き勾配と斜め押し出しを個別指定し、面＋ワイヤーかワイヤーのみを選べます。輪郭は近似、確定形状は独立コピーです。", false, {"AT-EXT-001"}},
         {"instructions.new_page","新しい手順",CommandMode::Instant,"new","",SelectionPredicate::HasDocument,"文書がありません。","説明書に手順ページを追加します。",false,{"AT-UIX-001"}},
         {"instructions.duplicate","手順を複製",CommandMode::Instant,"copy","",SelectionPredicate::HasDocument,"文書がありません。","現在の手順を複製します。",false,{"AT-UIX-001"}},
         {"instructions.capture","現在のモデルを選ぶ",CommandMode::Instant,"image","",SelectionPredicate::HasDocument,"文書がありません。","現在のモデルから使う部品を選び、説明書の3Dビューへ配置します。",false,{"AT-UIX-001"}},

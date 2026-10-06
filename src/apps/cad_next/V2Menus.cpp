@@ -85,7 +85,7 @@ void V2MainWindow::BuildMenus()
         "surface.refit", "surface.mirror", "surface.iso_curves", "guide.revolve",
         "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",
-        "guide.clear", "part.extrude", "part.revolve", "part.loft_solid", "part.sweep",
+        "guide.clear", "part.extrude", "part.curved_emboss", "part.revolve", "part.loft_solid", "part.sweep",
         "part.fillet", "part.chamfer", "part.shell", "part.split",
         "part.thicken", "part.thickness_placement",
         "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",

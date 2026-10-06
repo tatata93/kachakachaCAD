@@ -211,11 +211,39 @@ struct Box3 {
             && CountOfKind(window, EntityKind::Part) == 2);
 }
 
+bool CaseOutputKinds(V2MainWindow& window)
+{
+    for (const int mode : {0, 1}) {
+        Box3 box;
+        const auto source = MakeBox(window, box);
+        if (source.IsNil()) return false;
+        const auto before = CountOfKind(window, EntityKind::Wire);
+        window.ActivateCommand("part.fillet");
+        auto& tool = window.EdgeFinishTool();
+        auto& dock = *tool.Dock();
+        dock.SetOutputMode(mode);
+        if (!dock.TypeSize(1.0) || !PressTopFace(window,
+            (box.minimum.x + box.maximum.x) * 0.5, box.minimum.y + 3.0, box.maximum.z)) return false;
+        if (!Explain("edge output preview", tool.Outcome().available
+            && (window.Viewport().ToolPreviewFaceCount() > 0) == (mode == 0))) return false;
+        if (!dock.ClickConfirm()) return false;
+        if (!Explain("wire output added once", CountOfKind(window, EntityKind::Wire) == before + 1)) return false;
+        if (!Explain("wire only preserves source solid", CountOfKind(window, EntityKind::Part) == (mode == 1 ? 1 : 2)
+            && window.Session().GetDocument().FindEntity(source)->visibility
+                == (mode == 1 ? kachakacha::v2::domain::Visibility::Visible : kachakacha::v2::domain::Visibility::Hidden))) return false;
+        window.RunCommand("edit.undo");
+        if (!Explain("both outputs undo together", CountOfKind(window, EntityKind::Wire) == before
+            && CountOfKind(window, EntityKind::Part) == 1)) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> EdgeFinishCases()
 {
     return {
+        {"HP-FL-03 edge output choices and atomic undo", CaseOutputKinds},
         {"HP-FL-01 フィレットは辺の近くを押して半径で丸め体積が式どおり減り1回で戻り開き直しても同じ",
             CaseFilletOneEdge},
         {"HP-FL-02 面取りは辺を何本でも押して選び押し直すと外れ距離で落とす", CaseChamferTwoEdgesWithToggle},

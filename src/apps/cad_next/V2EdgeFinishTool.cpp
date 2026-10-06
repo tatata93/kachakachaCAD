@@ -9,6 +9,7 @@
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/kernel/OcctEdgeFinish.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -49,6 +50,7 @@ V2EdgeFinishTool::V2EdgeFinishTool(V2MainWindow& window)
     : window_(window)
 {
     dock_ = new V2EdgeFinishDock(&window);
+    dock_->SetOutputHandler([this] { Refresh(); });
     dock_->SetKindHandler([this](int kind) {
         input_.kind = kind;
         Refresh();
@@ -273,6 +275,11 @@ void V2EdgeFinishTool::RefreshPreview()
     const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(made.Value().handle);
     if (mesh.HasValue()) {
         window_.viewport_->ShowToolPreview(mesh.Value().edges);
+        if (dock_->OutputMode() != 1) {
+            std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces;
+            for (const auto& t : mesh.Value().triangles) faces.push_back({t.points[0], t.points[1], t.points[2]});
+            window_.viewport_->SetToolPreviewFaces(std::move(faces), &mesh.Value());
+        }
     }
 }
 
@@ -322,23 +329,27 @@ void V2EdgeFinishTool::Confirm()
     const EntityId source = input_.part;
     auto& document = window_.session_->GetDocument();
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
-    const auto madeId = window_.AddPartFeature(kachakacha::v2::domain::FeatureType::EdgeFinish,
-        definition, handle, {}, label.c_str(), {source});
-    if (madeId.IsNil()) {
-        return;
+    if (dock_->OutputMode() != 2) {
+        const auto edges = kachakacha::v2::kernel::OutputEdges(handle,
+            document.Snapshot().settings.tolerance.modelLinearMm);
+        if (!edges.HasValue()) { window_.ReportDiagnostics(edges.Diagnostics()); return; }
+        if (window_.AddPlainWire(edges.Value(), (label + " / 境界ワイヤー").c_str()).IsNil()) return;
     }
-    // 元の部品は隠す(消すと作り方をたどれない)。
-    const auto hidden = document.Run(kachakacha::v2::document::SetVisibilityCommand(
-        {source}, kachakacha::v2::domain::Visibility::Hidden));
-    if (!hidden.committed) {
-        window_.ReportDiagnostics(hidden.diagnostics);
-        return;
+    if (dock_->OutputMode() != 1) {
+        const auto madeId = window_.AddPartFeature(kachakacha::v2::domain::FeatureType::EdgeFinish,
+            definition, handle, {}, label.c_str(), {source});
+        if (madeId.IsNil()) return;
+        const auto hidden = document.Run(kachakacha::v2::document::SetVisibilityCommand(
+            {source}, kachakacha::v2::domain::Visibility::Hidden));
+        if (!hidden.committed) { window_.ReportDiagnostics(hidden.diagnostics); return; }
     }
     if (!transaction.Commit()) {
         return;
     }
+    const bool wiresOnly = dock_->OutputMode() == 1;
     End();
     window_.AdoptCurrentDocument();
+    if (wiresOnly) { window_.SetStatus(Text(label + ": 境界ワイヤーを生成しました。元の立体は変更していません。")); return; }
     window_.SetStatus(QStringLiteral("%1: 辺を %2 本 %3、体積が %4 mm3 から %5 mm3 になりました。")
             .arg(Text(label))
             .arg(static_cast<int>(definition.edgeMidpoints.size()))

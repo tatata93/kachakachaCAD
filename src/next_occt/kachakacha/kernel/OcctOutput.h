@@ -14,6 +14,9 @@ namespace kachakacha::v2::kernel {
 [[nodiscard]] base::Result<geometry::OutputFrame> OutputSurfaceFrame(modeling::KernelShapeHandle shape,const geometry::Vector3& point);
 [[nodiscard]] base::Result<modeling::KernelShapeHandle> OutputFace(modeling::KernelShapeHandle shape,std::size_t faceIndex);
 [[nodiscard]] base::Result<geometry::CurveSegment> OutputEdge(modeling::KernelShapeHandle shape,const geometry::Vector3& point);
+// Extract each topological edge once; fail rather than silently dropping an edge.
+[[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> OutputEdges(
+    modeling::KernelShapeHandle shape, double tolerance);
 [[nodiscard]] base::Result<std::string> OutputStep(const std::vector<modeling::KernelShapeHandle>& shapes);
 [[nodiscard]] base::Result<std::string> OutputStl(const std::vector<modeling::KernelShapeHandle>& shapes,double deflection);
 }

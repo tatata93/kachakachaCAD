@@ -19,6 +19,7 @@
 #include <functional>
 #include <vector>
 
+class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
@@ -50,6 +51,9 @@ public:
     [[nodiscard]] QString StatusTextJa() const;
     [[nodiscard]] bool ConfirmEnabled() const;
     [[nodiscard]] int KindShown() const;
+    int OutputMode() const;
+    void SetOutputMode(int mode);
+    void SetOutputHandler(std::function<void()> handler) { outputHandler_ = std::move(handler); }
 
 private:
     std::array<QPushButton*, 2> kinds_{};
@@ -63,6 +67,8 @@ private:
     QPushButton* cancel_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;
+    QComboBox* output_ = nullptr;
+    std::function<void()> outputHandler_;
 
     std::function<void(int)> kindHandler_;
     std::function<void(double)> sizeHandler_;

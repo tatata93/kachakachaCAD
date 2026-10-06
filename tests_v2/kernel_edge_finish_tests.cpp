@@ -6,6 +6,11 @@
 #include "kachakacha/kernel/OcctEdgeFinish.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#endif
 #include <cmath>
 #include <string>
 #include <vector>
@@ -130,6 +135,19 @@ KACHA_V2_TEST(kernel_edge_finish, 無い辺と大きすぎる丸めは断る)
     Require(!huge.HasValue(), "箱より大きい半径は作れたことにしない: " + huge.FirstSummaryJa());
     const auto none = FinishSolidEdges(box, EdgeFinishKind::Chamfer, 1.0, {}, Tolerance());
     Require(!none.HasValue() && FirstCode(none.Diagnostics()) == "KER-R002", "辺が無ければ断る");
+}
+
+KACHA_V2_TEST(kernel_edge_finish, curved_edges_multiple_outputs) {
+    const auto cylinder=kachakacha::v2::kernel::StoreShape(BRepPrimAPI_MakeCylinder(10,20).Shape());
+    for (auto kind:{EdgeFinishKind::Fillet,EdgeFinishKind::Chamfer}) {
+        const auto result=FinishSolidEdges(cylinder,kind,1.0,{{-10,0,0},{-10,0,20}},Tolerance());
+        Require(result.HasValue(),result.FirstSummaryJa());
+        Require(result.Value().volumeMm3<result.Value().previousVolumeMm3,"curved edges remove material");
+        const auto edges=kachakacha::v2::kernel::OutputEdges(result.Value().handle,0.001);
+        Require(edges.HasValue()&&!edges.Value().empty(),"finished curved boundary export");
+        const auto brep=kachakacha::v2::kernel::CaptureOutputShape(result.Value().handle);
+        Require(brep.HasValue()&&kachakacha::v2::kernel::RestoreOutputShape(brep.Value()).HasValue(),"curved solid survives serialization");
+    }
 }
 
 #endif

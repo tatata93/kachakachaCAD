@@ -100,3 +100,14 @@ Inventorに対応する操作は公式手順に合わせる。製作近似・画
 参考: [Inventorプロパティパネル](https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-3E5505B9-9F60-43A0-BF32-97D183B91A70.htm)、
 [Inventor右クリックメニュー](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-4B081B74-45EA-451E-84BE-9FFE0E2ACAE3.htm)。
 放射状のマーキングジェスチャー、個別ツールの未達操作は別途検証し、この変更だけで全機能一致とはしない。
+
+### 曲面上の輪郭を盛り上げる・辺を加工する（2026-10-06）
+- 部品→作成→曲面押し出し。支持面→閉じたワイヤーを選び、高さを入力。高さ反転は1ボタン。
+- 抜き勾配と斜め押し出しは独立ボタン。両方有効にできる。斜め方向は作業面基準の方位を指定。
+- プレビューを更新してEnter。取消は設定を残して対象入力を消す。確定後も次の支持面を選べる。
+- フィレット/面取りでは辺を複数追加、再クリックで解除。半径/距離を変更し下見後確定。
+- どちらも面＋ワイヤー、ワイヤーのみ、立体のみの生成を選ぶ。ワイヤーのみは元の立体を変更しない。
+- 曲面押し出しの補間は近似。独立固定形状であり、Inventorの履歴パラメータ編集とは異なる。
+- 1支持面・1閉輪郭。穴/複数面/鋭角の抜き勾配、可変半径フィレット/非対称面取りは未対応。
+参考: [Inventor Emboss](https://help.autodesk.com/cloudhelp/2024/ENU/Inventor-Help/files/GUID-E6848555-B274-4858-8401-84E260771E84.htm)、
+[Inventor Fillet](https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-590A8760-FFBB-41C8-8169-6B7002207884.htm)。

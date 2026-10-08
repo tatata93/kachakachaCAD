@@ -1,3 +1,4 @@
+#include <QComboBox>
 //! 「面にする」(線から面)の人の道(HP-LF、オーナー要望 2026-09-22、UI 設計 2026-09-23)。
 //!
 //! 線を選んで「面にする」を押すだけで、端点のつながりから閉じた輪を全部見つけて
@@ -664,6 +665,9 @@ void SelectAllWires(V2MainWindow& window)
 [[nodiscard]] bool PlaceAtamaWires(V2MainWindow& window)
 {
     window.RunCommand("file.new");
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!scope) return false;
+    scope->setCurrentIndex(1); // These fixture lines intentionally leave the current workplane.
     using kachakacha::v2::app::DirectWireKind;
     kachakacha::v2::modeling::WorkPlaneFrame top;   // 上面 XY(裾の円弧 3 本)
     window.Viewport().SetWorkPlane(top);

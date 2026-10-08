@@ -113,6 +113,50 @@ bool SameGeometry(const CurveSegment& a, const CurveSegment& b, double eps)
 
 struct HalfEdge { std::size_t piece, from, to; bool forward; double angle; };
 
+std::vector<std::vector<std::size_t>> SimpleCycles(const std::vector<std::size_t>& walk,
+    const std::vector<HalfEdge>& edges)
+{
+    std::vector<std::vector<std::size_t>> cycles;
+    std::vector<std::size_t> path;
+    for (auto edge : walk) {
+        path.push_back(edge);
+        const auto start = std::find_if(path.begin(), path.end(), [&](auto previous) {
+            return edges[previous].from == edges[edge].to;
+        });
+        if (start != path.end()) {
+            cycles.emplace_back(start, path.end());
+            path.erase(start, path.end());
+        }
+    }
+    return cycles;
+}
+
+void AppendCycles(std::vector<ProfileBoundary>& result, const std::vector<std::size_t>& walk,
+    const std::vector<HalfEdge>& edges, const std::vector<SnapCurve>& curves,
+    const geometry::PlanarFrame& frame, double eps)
+{
+    for (const auto& cycle : SimpleCycles(walk, edges)) {
+        ProfileBoundary boundary;
+        for (auto e : cycle) {
+            const auto& source = curves[edges[e].piece];
+            auto curve = source.segment;
+            if (!edges[e].forward) {
+                const auto reversed = geometry::ReverseCurve(curve);
+                if (!reversed.HasValue()) { boundary.segments.clear(); break; }
+                curve = reversed.Value();
+            }
+            boundary.entityIds.push_back(source.entityId);
+            boundary.segmentIds.push_back(source.segmentId);
+            boundary.segments.push_back(std::move(curve));
+        }
+        if (boundary.segments.empty()) continue;
+        boundary.sampled = geometry::SampleChain(boundary.segments, 1e-4);
+        geometry::RemoveClosingDuplicate(boundary.sampled, eps);
+        const auto flat = geometry::ProjectToFrame(boundary.sampled, frame);
+        if (geometry::SignedArea(flat) > eps * eps) result.push_back(std::move(boundary));
+    }
+}
+
 std::vector<HalfEdge> PlaneEdges(const std::vector<SnapCurve>& curves,
     const std::vector<LoopEdge>& edges, const geometry::PlaneFit& plane, double eps)
 {
@@ -171,26 +215,7 @@ std::vector<ProfileBoundary> WalkPlane(const std::vector<SnapCurve>& curves,
             at = around[(pos + around.size() - 1) % around.size()];
         } while (at != start);
         if (at != start) continue;
-        ProfileBoundary boundary;
-        // Bridges appear in both directions on the same face. They bound no area.
-        for (auto e : cycle) {
-            if (std::find(cycle.begin(), cycle.end(), e ^ 1) != cycle.end()) continue;
-            const auto& source = curves[edges[e].piece];
-            auto curve = source.segment;
-            if (!edges[e].forward) {
-                const auto reversed = geometry::ReverseCurve(curve);
-                if (!reversed.HasValue()) { boundary.segments.clear(); break; }
-                curve = reversed.Value();
-            }
-            boundary.entityIds.push_back(source.entityId);
-            boundary.segmentIds.push_back(source.segmentId);
-            boundary.segments.push_back(std::move(curve));
-        }
-        if (boundary.segments.empty()) continue;
-        boundary.sampled = geometry::SampleChain(boundary.segments, 1e-4);
-        geometry::RemoveClosingDuplicate(boundary.sampled, eps);
-        const auto flat = geometry::ProjectToFrame(boundary.sampled, frame);
-        if (geometry::SignedArea(flat) > eps * eps) result.push_back(std::move(boundary));
+        AppendCycles(result, cycle, edges, curves, frame, eps);
     }
     return result;
 }

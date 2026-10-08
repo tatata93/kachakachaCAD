@@ -316,12 +316,14 @@ void V2MainWindow::RefreshSurfacePreview()
     if (!surfaceShelfShown_ || !kachakacha::v2::app::SurfaceReadyToBuild(surfaceInput_)) {
         return;
     }
+    if (surfaceInput_.autoRoles && !surfaceRoles_.recommendedFeasible) return;
     // 一括(離した面の元の面が複数、回転体の断面が複数)は 1 つずつに分けて全部作る。
     // **どれか 1 つでも作れなければ、下見を出さない**(半分だけ作れたことにしない)。
     std::optional<SurfaceSnapshot> snapshot;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
     auto tables = surfaceInput_.autoRoles ? surfaceRoles_.networkTables
         : std::vector<kachakacha::v2::modeling::GuideTable>{};
+    for (auto& table : tables) table = WithReversedRows(std::move(table), surfaceInput_);
     if (tables.empty()) {
         for (const auto& part : kachakacha::v2::app::SurfaceBatchStates(surfaceInput_)) {
             const auto table = SurfaceTableFromInput(part);
@@ -699,6 +701,13 @@ void V2MainWindow::ConfirmSurface()
 //! なぜ作れないかを言う。断り方は1か所にまとめる。
 void V2MainWindow::ReportSurfaceNotReady()
 {
+    if (surfaceInput_.autoRoles && !surfaceRoles_.recommendedFeasible) {
+        QString reason;
+        for (const auto& problem : surfaceRoles_.problemsJa)
+            reason += QString::fromUtf8(problem.c_str()) + QStringLiteral("\n");
+        SetStatus(QStringLiteral("面を作る: 入力全体では面が成立しません。\n") + reason);
+        return;
+    }
     if (!kachakacha::v2::app::SurfaceReadyToBuild(surfaceInput_)) {
         SetStatus(QStringLiteral("面を作る: まだ作れません。右の棚の「4. 状態」を"
                                  "見てください。"));

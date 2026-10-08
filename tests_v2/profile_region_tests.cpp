@@ -266,6 +266,23 @@ KACHA_V2_TEST(profile_region, bezier_t_junction_and_tilted_plane)
             "ベジェを折れ線へ置換しない");
 }
 
+KACHA_V2_TEST(profile_region, bridge_to_hole_does_not_create_a_disconnected_boundary)
+{
+    Bench bench;
+    bench.Rectangle(0, 0, 10, 10);
+    bench.Rectangle(3, 3, 7, 7);
+    bench.Line({0, 0, 0}, {3, 3, 0});
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 1 && regions[0].holes.size() == 1,
+        "穴へつながる枝があっても外周と穴を別の閉輪にする");
+    Require(std::abs(regions[0].areaMm2 - 84) < 1e-6, "枝を面積へ混ぜない");
+    const auto& segments = regions[0].outer.segments;
+    for (std::size_t i = 0; i < segments.size(); ++i)
+        Require(geometry::Distance(segments[i].EndPoint(),
+            segments[(i + 1) % segments.size()].StartPoint()) < 1e-6,
+            "外周の途中で穴へ飛ばない");
+}
+
 int main()
 {
     return test::Registry::Instance().RunAll("profile_region_tests");

@@ -161,12 +161,28 @@ geometry::Point2 ProjectPoint(const Vector3& point, const geometry::PlanarFrame&
     return {Dot(local, frame.uDirection), Dot(local, frame.vDirection)};
 }
 
+bool CoincidentWire(const std::vector<SnapCurve>& component,
+    const std::vector<SnapCurve>& curves, base::EntityId id, double eps)
+{
+    for (const auto& other : curves) {
+        if (other.entityId != id) continue;
+        const bool contained = std::any_of(component.begin(), component.end(), [&](const auto& c) {
+            for (double t : {0.0, 0.25, 0.5, 0.75, 1.0})
+                if (c.segment.ClosestPoint(other.segment.Evaluate(t)).distance > eps) return false;
+            return true;
+        });
+        if (!contained) return false;
+    }
+    return true;
+}
+
 bool InteractsWithOtherWires(const std::vector<SnapCurve>& component,
     const std::vector<SnapCurve>& curves, const geometry::GeometryTolerance& tolerance)
 {
     for (const auto& own : component) {
         for (const auto& other : curves) {
             if (own.entityId == other.entityId) continue;
+            if (CoincidentWire(component, curves, other.entityId, tolerance.modelLinearMm)) continue;
             // Coincident copies remain independently selectable, as before.
             const bool same = std::any_of(component.begin(), component.end(), [&](const auto& c) {
                 for (double t : {0.0, 0.25, 0.5, 0.75, 1.0})

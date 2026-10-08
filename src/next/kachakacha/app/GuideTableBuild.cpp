@@ -116,6 +116,7 @@ namespace {
         auto next = table;
         modeling::GuideTableRow restored;
         restored.role = role;
+        restored.reversed = chain.rowReversed;
         restored.segments = selected.Value().segments;
         next.rows.push_back(std::move(restored));
         auto& row = next.rows.back();

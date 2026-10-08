@@ -283,6 +283,17 @@ KACHA_V2_TEST(profile_region, bridge_to_hole_does_not_create_a_disconnected_boun
             "外周の途中で穴へ飛ばない");
 }
 
+KACHA_V2_TEST(profile_region, coincident_multi_segment_wires_remain_separate)
+{
+    Bench bench;
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "重なった閉ポリラインを別々に選べる");
+    Require(app::ProfileRegionEntityIds(regions[0]) != app::ProfileRegionEntityIds(regions[1]),
+        "輪郭の出所を混ぜない");
+}
+
 int main()
 {
     return test::Registry::Instance().RunAll("profile_region_tests");

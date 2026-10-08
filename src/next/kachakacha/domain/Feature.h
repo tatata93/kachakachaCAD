@@ -123,6 +123,7 @@ struct SubshapeRef {
 struct WireChainRef {
     std::vector<SegmentRef> segments;
     std::vector<bool> reversed;
+    bool rowReversed = false; // UI orientation; exact segments already include their direction.
 };
 
 // ---- Feature定義 ----

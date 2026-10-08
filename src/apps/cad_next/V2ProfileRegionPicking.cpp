@@ -99,7 +99,12 @@ void V2Viewport::RebuildProfileRegions()
     if (!profileRegionPicking_ || session_ == nullptr) {
         return;
     }
-    profileRegions_ = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
+    auto wires = session_->Scene();
+    wires.curves.erase(std::remove_if(wires.curves.begin(), wires.curves.end(), [&](const auto& c) {
+        const auto* entity = session_->GetDocument().FindEntity(c.entityId);
+        return !entity || entity->kind != kachakacha::v2::domain::EntityKind::Wire;
+    }), wires.curves.end());
+    profileRegions_ = kachakacha::v2::app::DetectProfileRegions(wires,
         session_->GetDocument().Snapshot().settings.tolerance);
 }
 

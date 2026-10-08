@@ -382,6 +382,7 @@ private:
     const std::string& where)
 {
     domain::WireChainRef chain;
+    chain.rowReversed = loader.BoolOr(value, "rowReversed", false);
     const JsonArray* segments = loader.ArrayAt(value, "segments", where);
     if (segments != nullptr) {
         for (std::size_t index = 0; index < segments->size(); ++index) {

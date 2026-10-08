@@ -460,7 +460,6 @@ void V2MainWindow::ConfirmExtrude()
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
     using kachakacha::v2::modeling::ExtrudeRequest;
 
-    const auto& selection = viewport_->Selection();
     // **下見を出した瞬間の写しから作る。選択を読み直さない**(オーナー指示 §9)。
     //
     // これまではここで `PlanExtrudeFromSelection()` を呼んでいた。

@@ -28,6 +28,7 @@
 #include "kachakacha/modeling/SurfaceCardinality.h"
 
 #include <QString>
+#include <algorithm>
 
 #include <string>
 #include <utility>
@@ -268,8 +269,22 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
     feature.inputEntityIds = inputs;
     // 元ワイヤーと役割と向きを覚える。空のまま保存していたので、
     // 開き直しても面を作り直せなかった。写し方は core に1つだけ置く。
+    auto sourceScene = kachakacha::v2::app::BuildSceneFromDocument(
+        session_->GetDocument().Snapshot(), *ids_);
+    // Hidden construction profiles still have stable segment IDs in the document.
+    for (const auto& row : table.rows) for (const auto& id : row.sourceWireIds) {
+        if (std::any_of(sourceScene.curves.begin(), sourceScene.curves.end(),
+                [&](const auto& c) { return c.entityId == id; })) continue;
+        const auto* source = session_->GetDocument().FindEntity(id);
+        const auto* owner = source ? session_->GetDocument().FindFeature(source->createdBy) : nullptr;
+        const auto* wire = owner
+            ? std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&owner->definition) : nullptr;
+        if (!wire) continue;
+        for (std::size_t i = 0; i < wire->segments.size() && i < wire->segmentIds.size(); ++i)
+            sourceScene.curves.push_back({id, wire->segmentIds[i], wire->segments[i]});
+    }
     const auto definition = kachakacha::v2::app::DefinitionFromGuideTable(table,
-        session_->Scene(), session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+        sourceScene, session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
     if (!definition.HasValue()) { ReportDiagnostics(definition.Diagnostics()); return {}; }
     feature.definition = definition.Value();
 

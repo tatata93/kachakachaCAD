@@ -87,12 +87,14 @@ KACHA_V2_TEST(guide_table_build, split_interval_and_reverse_survive_saved_defini
     row.sourceWireIds = {id};
     row.segments = {CurveSegment::MakeLine({8, 0, 0}, {3, 0, 0}).Value()};
     table.rows.push_back(row);
+    table.rows.front().reversed = true;
     const auto definition = DefinitionFromGuideTable(table, scene, 1e-6);
     Require(definition.HasValue(), "境界区間の参照を保存できる");
     Require(std::abs(definition.Value().chains[0].segments[0].startParameter - 0.3) < 1e-8,
         "元の線の途中を記録");
     const auto restored = GuideTableFromDefinition(fixture.document, {}, definition.Value());
     Require(restored.HasValue(), "元のワイヤーが非表示でも再評価できる");
+    Require(restored.Value().rows[0].reversed, "行の反転表示も復元");
     const auto& curve = restored.Value().rows[0].segments[0];
     Require(geometry::Distance(curve.StartPoint(), {8, 0, 0}) < 1e-8
         && geometry::Distance(curve.EndPoint(), {3, 0, 0}) < 1e-8,

@@ -81,6 +81,7 @@ base::Result<domain::CreateGuideSurfaceDefinition> DefinitionFromGuideTable(
         const auto& row = table.rows[i];
         if (row.role == modeling::ChainRole::SourceSurface) continue;
         domain::WireChainRef chain;
+        chain.rowReversed = row.reversed;
         for (const auto& segment : row.segments) {
             bool found = false;
             for (const auto& source : scene.curves) {

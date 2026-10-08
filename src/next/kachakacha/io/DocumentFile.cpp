@@ -162,6 +162,7 @@ template<class Id>
         reversed.push_back(JsonValue::Bool(flipped));
     }
     object["reversed"] = JsonValue::Array(std::move(reversed));
+    object["rowReversed"] = JsonValue::Bool(chain.rowReversed);
     return JsonValue::Object(std::move(object));
 }
 

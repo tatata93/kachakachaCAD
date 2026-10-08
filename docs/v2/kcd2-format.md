@@ -1007,3 +1007,5 @@ CreateFabricationModel の `adaptiveSpacing` は bool、省略時 false。従来
 
 ### 閉区画の参照（2026-10-09）
 Extrudeの `profileSeeds` は明示的に選択した区画の内点XYZ配列。省略・空配列は従来の全輪郭選択。CreateGuideSurfaceの `chains.segments` はSegment UUIDとstartParameter/endParameter（0〜1の昇順）、各区間のreversedを保存する。segmentIdがnilの旧形式はワイヤー全体と行の反転として復元する。区間参照が解決できなければ再生成を断り、ワイヤー全体で代用しない。
+
+境界の `WireChainRef.rowReversed` は役割表の反転表示を保存する任意の真偽値（既定false）。各区間の幾何方向は `reversed` に既に含まれるため、復元時に二重反転しない。

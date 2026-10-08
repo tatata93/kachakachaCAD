@@ -52,6 +52,12 @@ public:
 
     void Add(SnapKind kind, const Vector3& position, SnapCandidate candidate = {})
     {
+        if (settings_.limitPlane) {
+            const auto& plane = *settings_.limitPlane;
+            const double n = plane.normal.Length();
+            if (!plane.active || n <= 0.0 || std::abs(Dot(position - plane.origin,
+                    plane.normal)) > tolerance_.modelLinearMm * n) return;
+        }
         const auto projected = mapping_.Project(position);
         if (!projected.has_value()) {
             return;

@@ -9,8 +9,8 @@
 //! そこで、**作図の道具を持っている間は、作業平面の上の線しか掴まない** 。
 //! 選択道具のときは全部掴める。掴めないと、別の面のものを直せなくなる。
 //!
-//! 薄くするかどうかと、掴めるかどうかは、同じ判断から出す。
-//! 別々に持つと、「薄いのに掴める」「濃いのに掴めない」が起きる。
+//! 表示の薄さと作図範囲は別の設定。平面内作図では表示設定に関係なく面外候補を制限する。
+//! 3D作図と編集・測定では別平面の形も選べる。
 
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/WorkPlane.h"
@@ -41,8 +41,7 @@ inline constexpr double kOnPlaneToleranceMm = 1.0e-3;
 [[nodiscard]] bool DimsOffPlaneCurve(bool drawing, bool enabled, bool selected,
     bool onPlane) noexcept;
 
-//! いまその線を掴んでよいか。薄くする判断と同じところから出す。
-//! 薄くしているものは掴まない。薄いのに掴めると、見た目と手が食い違う。
+//! いまその線を掴んでよいか。enabledには平面内作図の指定を渡す。
 [[nodiscard]] bool PickableOffPlaneCurve(bool drawing, bool enabled, bool onPlane) noexcept;
 
 } // namespace kachakacha::v2::app

@@ -23,6 +23,7 @@
 #include <string>
 
 #include <QEvent>
+#include <QComboBox>
 #include <QChar>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
@@ -826,6 +827,36 @@ bool CaseDecimalEntry(V2MainWindow& window)
     return Explain("leaving a field applies signed decimal",std::abs(dimension.value()+0.125)<1e-9);
 }
 
+bool CaseDrawingScope(V2MainWindow& window)
+{
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!Explain("scope switch present and defaults planar", scope && scope->currentIndex() == 0
+            && window.Session().DrawingPlaneOnly())) return false;
+    window.RunCommand("draw.line");
+    const auto plane = window.Viewport().WorkPlane();
+    const auto outside = plane.origin + plane.normal * 7.0 + plane.uAxis * 10.0;
+    auto scene = window.Session().Scene();
+    scene.points.push_back({kachakacha::v2::base::EntityId{}, outside});
+    window.Session().SetScene(scene);
+    window.Viewport().SetViewDirection(ViewDirection::Top);
+    const auto pixel = window.Viewport().Mapping().Project(outside);
+    if (!pixel) return false;
+    window.Viewport().HoverAt(QPointF(pixel->x, pixel->y));
+    const auto flat = window.Viewport().Hover().position;
+    if (!Explain("viewport ignores another depth", flat && std::abs(
+            kachakacha::v2::geometry::Dot(*flat-plane.origin,plane.normal)) < 1e-8)) return false;
+    if (!Explain("planar rejects off-plane point", !window.Session().PlacePoint(outside).placedPoint)) return false;
+    scope->setCurrentIndex(1);
+    window.Viewport().HoverAt(QPointF(pixel->x, pixel->y));
+    const auto spatial = window.Viewport().Hover().position;
+    if (!Explain("viewport follows depth in 3D", spatial && (*spatial-outside).Length() < 1e-8)) return false;
+    if (!Explain("spatial accepts off-plane point", window.Session().PlacePoint(outside).placedPoint)) return false;
+    if (!window.Viewport().OpenCursorInput() || window.Viewport().CursorPanel().onWorkPlane) return false;
+    scope->setCurrentIndex(0);
+    return Explain("switch resets unfinished input but keeps tool", !window.Session().HasPlacedPoints()
+        && window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Line && window.Session().DrawingPlaneOnly());
+}
+
 bool CaseDecimalThemes(V2MainWindow& window) {
     for(auto theme:{UiTheme::Normal,UiTheme::Windows95}){
         window.ApplyTheme(theme);
@@ -839,6 +870,7 @@ bool CaseDecimalThemes(V2MainWindow& window) {
 std::vector<SelfTestCase> InputCases()
 {
     return {
+        {"HP-SCOPE planar and spatial", &CaseDrawingScope},
         {"HP-NUM direction follows snap", &CaseNumericKeepsSnappedDirection},
         {"HP-NUM decimal dimensions", &CaseDecimalThemes},
         {"作図中に入力列が出て数で線が決まる", &CaseCursorInputOpensWhileDrawingAndPlacesByNumber},

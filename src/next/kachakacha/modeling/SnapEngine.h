@@ -179,6 +179,8 @@ struct SnapSettings {
     std::optional<SnapCandidate> heldSnap;
     //! 持ち越しの余裕(logical px)。手の震えで境目を行き来しても入れ替わらない幅。
     double holdMarginPx = 4.0;
+    //! Restrict candidate positions, independently of display preferences.
+    std::optional<SnapWorkPlane> limitPlane;
 };
 
 //! 候補をすべて集める。並びは決定的(順位 → 画面距離 → SnapTargetKey)で、場面の並び順に依らない。

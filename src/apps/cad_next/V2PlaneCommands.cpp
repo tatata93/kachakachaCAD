@@ -269,10 +269,15 @@ bool V2MainWindow::ActivateWorkPlaneById(const kachakacha::v2::base::EntityId& i
     if (!frame.has_value() || entity == nullptr) {
         return false;
     }
+    const bool restart = session_->DrawingPlaneLimited() && session_->HasPlacedPoints()
+        && id != activeWorkPlaneId_;
+    if (restart) session_->CancelTool();
     ApplyWorkPlane(*frame, id);
+    if (restart) viewport_->OnToolChanged();
     RefreshWorkPlaneDock();
     SetStatus(QStringLiteral("%1 を作業中の平面にしました。")
-            .arg(QString::fromStdString(entity->displayName)));
+            .arg(QString::fromStdString(entity->displayName))
+            + (restart ? QStringLiteral("入力途中の点を取り消しました。") : QString()));
     return true;
 }
 

@@ -1,6 +1,8 @@
 #include "kachakacha/app/DrawingSession.h"
 
 #include <algorithm>
+#include <cmath>
+#include "kachakacha/app/PlaneFocus.h"
 
 namespace kachakacha::v2::app {
 
@@ -135,6 +137,18 @@ void DrawingSession::SetSnapSettings(SnapSettings settings)
     snapSettings_ = std::move(settings);
 }
 
+void DrawingSession::SetDrawingPlaneOnly(bool enabled)
+{
+    if (drawingPlaneOnly_ == enabled) return;
+    drawingPlaneOnly_ = enabled;
+    CancelTool();
+}
+
+bool DrawingSession::DrawingPlaneLimited() const noexcept
+{
+    return drawingPlaneOnly_ && UsesDrawingPlaneFocus(tool_);
+}
+
 HoverResult DrawingSession::Hover(const ScreenPoint& pointer)
 {
     return Evaluate(pointer, true);
@@ -149,6 +163,7 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
 {
     HoverResult result;
     SnapSettings settings = snapSettings_;
+    if (DrawingPlaneLimited()) settings.limitPlane = scene_.workPlane;
     // 直前に置いた点があれば、接点と垂足の基準にする。
     if (!session_->Points().empty()) {
         settings.referencePoint = session_->Points().back();
@@ -214,6 +229,14 @@ ClickResult DrawingSession::PlacePoint(const geometry::Vector3& world)
     if (session_ == nullptr) {
         result.diagnostics.push_back(base::MakeError("UI-S001",
             "その場所では点を置けません。", "道具が選ばれていません。"));
+        return result;
+    }
+    if (DrawingPlaneLimited() && (!scene_.workPlane.active
+            || std::abs(geometry::Dot(world - scene_.workPlane.origin, scene_.workPlane.normal))
+                > document_.Snapshot().settings.tolerance.modelLinearMm
+                    * scene_.workPlane.normal.Length())) {
+        result.diagnostics.push_back(base::MakeError("UI-S002", "作図面の外には点を置けません。",
+            "作図面上の座標を指定するか、上部の「3D作図」へ切り替えてください。"));
         return result;
     }
     // 置く前に、いまの作業平面の向きを道具へ渡す。矩形の辺・円の面はこれで決まる。

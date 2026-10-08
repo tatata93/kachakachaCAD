@@ -792,6 +792,7 @@ private:
     void BuildMenus();   // V2Menus.cpp
     void AddMenuCommands(QMenu* menu, std::initializer_list<std::string_view> ids);
     void BuildModeBar();
+    void BuildDrawingScopeSwitch();
     void BuildToolPalette();
     //! 2段の帯(V2RibbonCommands.cpp)。道具の QAction は tool ごとに渡す。
     void BuildRibbon(const std::map<std::string, QAction*>& toolActionsByCommand);

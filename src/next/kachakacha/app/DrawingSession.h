@@ -143,6 +143,10 @@ public:
         adjustPoint_ = std::move(adjust);
     }
 
+    void SetDrawingPlaneOnly(bool enabled);
+    [[nodiscard]] bool DrawingPlaneOnly() const noexcept { return drawingPlaneOnly_; }
+    [[nodiscard]] bool DrawingPlaneLimited() const noexcept;
+
     //! ポインタを動かした。
     //! 直前に選んだ吸着先を持ち越す(modeling::SnapHysteresis)。小さな揺れで入れ替わらない。
     //! 持ち越しは、ツールの切替・設定の変更・取消・S の間に捨てる。
@@ -216,6 +220,7 @@ private:
     SnapScene scene_;
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
+    bool drawingPlaneOnly_ = false;
     std::function<bool(base::EntityId)> snapEntityFilter_;
     modeling::SnapHysteresis snapHysteresis_;
     //! 場面の入れ替わりを聞いている相手。綱が切れたものは呼ばない。

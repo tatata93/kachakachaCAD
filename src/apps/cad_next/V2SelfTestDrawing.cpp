@@ -1,3 +1,4 @@
+#include <QComboBox>
 //! 作図の棚(V1 の「作図」タブ)のケース。
 //!
 //! 円弧の作り方、補助線として作図、指定した点を作図点として残す、数値で線を作る。
@@ -196,6 +197,12 @@ using kachakacha::v2::modeling::ToolSettings;
     request.points = {kachakacha::v2::geometry::Vector3{0.0, 0.0, 5.0},
         kachakacha::v2::geometry::Vector3{0.0, 0.0, 45.0}};
     window.DrawingDock().SetDirectWire(request, QStringLiteral("柱"));
+    window.DrawingDock().PressCreateWire();
+    if (!Explain("平面内では面外座標を拒否", CountOfKind(window, EntityKind::Wire) == before + 1
+        && window.StatusText().contains(QStringLiteral("3D作図")))) return false;
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!scope) return false;
+    scope->setCurrentIndex(1);
     window.DrawingDock().PressCreateWire();
     const auto& made = window.Session().Scene().curves.back().segment;
     return Explain("3D 直線は z へ伸びる",

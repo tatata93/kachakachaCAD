@@ -1177,6 +1177,17 @@ void V2MainWindow::CreateWireFromDock()
             made.FirstSummaryJa() + " " + made.FirstDetailsJa()));
         return;
     }
+    if (session_->DrawingPlaneOnly()) {
+        for (const auto& curve : made.Value()) {
+            if (!kachakacha::v2::app::CurveLiesOnPlane(curve, viewport_->WorkPlane(),
+                    session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm)) {
+                const QString reason = QStringLiteral("作図面の外の座標です。作図面上の座標を指定するか、上部の「3D作図」へ切り替えてください。");
+                drawingDock_->ShowMessage(reason);
+                SetStatus(reason);
+                return;
+            }
+        }
+    }
     const QString name = drawingDock_->DirectWireName();
     const auto added = session_->AddWire(made.Value(), request.construction,
         name.isEmpty() ? std::string("数値の線") : name.toStdString());

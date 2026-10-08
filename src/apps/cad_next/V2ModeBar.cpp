@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QObject>
 #include <QSizePolicy>
+#include "V2Viewport.h"
 #include <QString>
 #include <QToolBar>
 
@@ -52,6 +53,7 @@ void V2MainWindow::BuildModeBar()
     planeCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     planeCombo_->setMaximumWidth(170);
     modeBar_->addWidget(planeCombo_);
+    BuildDrawingScopeSwitch();
     QObject::connect(planeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         if (refreshingPlaneCombo_ || index < 0
             || index >= static_cast<int>(planeComboIds_.size())) {
@@ -136,4 +138,24 @@ void V2MainWindow::SelectGroupCombo(int index)
     if (groupCombo_ != nullptr) {
         groupCombo_->setCurrentIndex(index);
     }
+}
+
+void V2MainWindow::BuildDrawingScopeSwitch()
+{
+    auto* scope = new QComboBox(modeBar_);
+    scope->setObjectName(QStringLiteral("drawingScope"));
+    scope->addItems({QStringLiteral("平面内"), QStringLiteral("3D作図")});
+    scope->setToolTip(QStringLiteral("平面内: 作図面上だけに作図。3D作図: 奥行きのある点にも吸着。"
+                                    "切替時は入力途中の点を取り消します。"));
+    session_->SetDrawingPlaneOnly(true);
+    modeBar_->addWidget(scope);
+    QObject::connect(scope, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const bool hadInput = session_->HasPlacedPoints();
+        session_->SetDrawingPlaneOnly(index == 0);
+        viewport_->OnToolChanged();
+        RefreshGuide();
+        SetStatus((index == 0 ? QStringLiteral("平面内: 選択中の作図面上に描きます。")
+                             : QStringLiteral("3D作図: 奥行きのある点にも描けます。"))
+            + (hadInput ? QStringLiteral("入力途中の点を取り消しました。") : QString()));
+    });
 }

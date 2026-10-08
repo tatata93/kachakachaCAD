@@ -181,6 +181,7 @@ kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
     if (snapped || snapSuppressedBySetting_ || snapSuppressedByKey_) {
         return point;
     }
+    if (!session_->DrawingPlaneOnly()) return point;
     // 自由な点のときだけ、ほぼ直角の向きを直角へ寄せる。
     // 真下へ引いたつもりの -89.95 度が、黙って文書へ入るのを防ぐ。
     const auto squared = kachakacha::v2::modeling::SnapDirectionToRightAngle(

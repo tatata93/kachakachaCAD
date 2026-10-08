@@ -33,8 +33,11 @@ constexpr double kCursorPanelPaddingPx = 6.0;
 
 bool V2Viewport::OpenCursorInput()
 {
-    const auto begun = kachakacha::v2::app::BeginCursorInput(session_->CurrentTool(),
-        workPlane_.normal.LengthSquared() > 0.0);
+    const auto tool = session_->CurrentTool();
+    const bool spatial = !session_->DrawingPlaneOnly()
+        && (tool == kachakacha::v2::modeling::DrawingTool::Line
+            || tool == kachakacha::v2::modeling::DrawingTool::Polyline);
+    const auto begun = kachakacha::v2::app::BeginCursorInput(tool, !spatial);
     if (!begun.HasValue()) {
         viewMessage_ = begun.FirstSummaryJa();
         return false;
@@ -151,7 +154,7 @@ kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
 {
     kachakacha::v2::app::PickFocus focus;
     focus.drawing = kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
-    focus.dimOffPlane = display_.dimOffPlaneLines;
+    focus.dimOffPlane = session_->DrawingPlaneOnly();
     focus.plane = workPlane_;
     return focus;
 }

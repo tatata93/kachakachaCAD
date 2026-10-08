@@ -1,3 +1,4 @@
+#include <QComboBox>
 //! 画面の読みやすさのケース(オーナー指摘 2026-09-11)。
 //!
 //! ここで見るのは形ではなく **手がかり** である。どこに描いているのか、
@@ -928,12 +929,17 @@ struct BoxSelectFixture {
     if (!Explain("作図中は別の面の線を掴まない", viewport.HoveredEntityId().IsNil())) {
         return false;
     }
-    // 印を外せば掴める。要るときに切れないと、かえって使えない。
+    // 表示設定では作図範囲を変えない。3D作図へ切り替えると面外も掴める。
     auto display = viewport.DisplaySettingsNow();
     display.dimOffPlaneLines = false;
     window.ApplyDisplaySettings(display);
     viewport.HoverAt(QPointF(middle->x, middle->y));
-    return Explain("「常に薄く」を外せば掴める", viewport.HoveredEntityId() == wire);
+    if (!Explain("薄さを外しても平面内を維持", viewport.HoveredEntityId().IsNil())) return false;
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!scope) return false;
+    scope->setCurrentIndex(1);
+    viewport.HoverAt(QPointF(middle->x, middle->y));
+    return Explain("3D作図なら面外を掴める", viewport.HoveredEntityId() == wire);
 }
 
 //! 閉じた矩形を1つ引く。押し出しの相手になる。

@@ -343,7 +343,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
 {
     const auto& scene = session_->Scene();
     // 作図中は、作図面の上にない線を薄くして、自分の線を見やすくする(V1 の #6)。
-    const bool dimming = display_.dimOffPlaneLines
+    const bool dimming = session_->DrawingPlaneOnly() && display_.dimOffPlaneLines
         && kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
     std::unordered_set<kachakacha::v2::base::EntityId> meshed;
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);

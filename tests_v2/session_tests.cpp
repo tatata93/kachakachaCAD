@@ -617,3 +617,52 @@ KACHA_V2_TEST(session, 綱は写せないが移せる)
 }
 
 KACHA_V2_TEST_MAIN("session_tests")
+
+KACHA_V2_TEST(session, DrawingScopeRejectsOffPlaneAndPreservesSpatialInput)
+{
+    Fixture f;
+    auto scene = PlaneScene();
+    scene.workPlane.origin = {0, 0, 5};
+    scene.points.push_back({kachakacha::v2::base::EntityId{}, {10, 10, 12}});
+    f.session.SetScene(scene);
+    f.session.SetDrawingPlaneOnly(true);
+    const auto flat = f.session.Hover(f.At({10, 10, 12}));
+    Require(flat.position.has_value(), "plane fallback exists");
+    RequireNear(flat.position->z, 5.0, 1e-9, "off-plane snap rejected before choosing candidate");
+    Require(!f.session.PlacePoint({10, 10, 12}).placedPoint, "numeric off-plane input rejected");
+    Require(f.session.PlacePoint({10, 10, 5}).placedPoint, "point on plane accepted");
+    f.session.SetDrawingPlaneOnly(false);
+    Require(!f.session.HasPlacedPoints(), "scope change clears unfinished points");
+    const auto spatial = f.session.Hover(f.At({10, 10, 12}));
+    Require(spatial.position.has_value(), "spatial snap exists");
+    RequireNear(spatial.position->z, 12.0, 1e-9, "3D keeps depth");
+    Require(f.session.PlacePoint({10, 10, 12}).placedPoint, "3D numeric accepted");
+    f.session.CancelTool();
+    f.session.SetDrawingPlaneOnly(true);
+    f.session.SelectTool(DrawingTool::Move);
+    Require(!f.session.DrawingPlaneLimited(), "editing not restricted");
+    Require(f.session.PlacePoint({10, 10, 12}).placedPoint, "editing point can be off plane");
+}
+
+KACHA_V2_TEST(session, DrawingScopeOnTiltedPlaneWithSnappingDisabled)
+{
+    Fixture f;
+    auto scene = PlaneScene();
+    scene.workPlane.origin = {2, 3, 4};
+    scene.workPlane.normal = {0, 0.6, 0.8};
+    scene.points.push_back({kachakacha::v2::base::EntityId{}, {12, 13, 24}});
+    f.session.SetScene(scene);
+    f.session.SetDrawingPlaneOnly(false);
+    (void)f.session.Hover(f.At({12, 13, 24}));
+    f.session.SetDrawingPlaneOnly(true);
+    for (bool suppressed : {false, true}) {
+        SnapSettings settings; settings.suppressed = suppressed;
+        f.session.SetSnapSettings(settings);
+        auto hovered = f.session.Hover(f.At({12, 13, 24}));
+        Require(hovered.position.has_value(), "ray meets tilted plane");
+        RequireNear(kachakacha::v2::geometry::Dot(*hovered.position-scene.workPlane.origin,
+            scene.workPlane.normal), 0.0, 1e-9, "plane restriction independent of snapping");
+        Require(f.session.Click(f.At({12, 13, 24})).placedPoint, "plane point accepted");
+        f.session.CancelTool();
+    }
+}

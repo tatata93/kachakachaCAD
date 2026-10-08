@@ -56,8 +56,11 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
     }
     // 線の物体単位ではなく、端点接続で閉じた領域を読む。曲線の混在、5本以上、
     // 穴、複数領域を同じ規則で扱い、開いた余分な線は輪郭へ混ぜない。
-    const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(), wireIds,
+    auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(), wireIds,
         document.Snapshot().settings.tolerance);
+    kachakacha::v2::app::FilterProfileRegions(regions,
+        kachakacha::v2::app::SelectedProfileSeeds(selection),
+        document.Snapshot().settings.tolerance.modelLinearMm);
     for (const auto& region : regions) {
         auto ids = kachakacha::v2::app::ProfileRegionEntityIds(region);
         for (const auto& id : ids) {

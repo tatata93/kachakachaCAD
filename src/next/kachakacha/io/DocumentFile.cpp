@@ -280,6 +280,9 @@ template<class Id>
     } else if (const auto* extrude =
                    std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
         definition["profiles"] = WriteIdArray(extrude->profiles);
+        JsonArray seeds;
+        for (const auto& point : extrude->profileSeeds) seeds.push_back(WriteVector(point));
+        definition["profileSeeds"] = JsonValue::Array(std::move(seeds));
         definition["direction"] = WriteVector(extrude->direction);
         definition["distance"] = WriteExpression(extrude->distance);
         definition["extentMode"] = JsonValue::Number(static_cast<double>(extrude->extentMode));

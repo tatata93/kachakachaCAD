@@ -689,8 +689,8 @@ public:
     WorkPlaneFrameOf(const kachakacha::v2::base::EntityId& entityId) const;
     //! 押し出しの輪郭にまとめる。押し出しと作り直しで同じ道を通す。
     [[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile>
-    ExtrudeProfilesFor(
-        const std::vector<kachakacha::v2::base::EntityId>& entityIds) const;
+    ExtrudeProfilesFor(const std::vector<kachakacha::v2::base::EntityId>& entityIds,
+        const std::vector<kachakacha::v2::geometry::Vector3>& seeds = {}) const;
     //! 開き直したときに、立体と面を作り方から作り直す。V2RebuildCommands.cpp が持つ。
     void RebuildKernelShapes();
     [[nodiscard]] bool RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& step,

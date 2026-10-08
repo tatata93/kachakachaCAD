@@ -6,9 +6,11 @@
 // 候補の作り方は幾何の検査に実際に通してから言う。選んだ順を変えても答えは同じ。
 // 人が決めた役割はそのまま使う。
 #include "kachakacha/app/SurfaceRoleAssist.h"
+#include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <algorithm>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -298,6 +300,25 @@ KACHA_V2_TEST(role_assist, 役割の色は見分けられる)
     Require(guide.b > guide.r && section.r > section.b && boundary.r > boundary.g
             && boundary.b > boundary.g && through.g > through.r,
         "ガイド = 青、断面 = 橙、境界 = 紫、通る線 = 緑");
+}
+
+KACHA_V2_TEST(role_assist, spatial_curved_network_with_disconnected_wire_is_partitioned)
+{
+    DeterministicIdGenerator ids{911};
+    RoleWire front{ids.NextTyped<IdKind::Entity>(), {CurveSegment::MakeCircularArc(
+        {0, 0, 0}, {0, -1, 0}, {1, 0, 0}, 10, 0, std::numbers::pi).Value()}};
+    RoleWire back{ids.NextTyped<IdKind::Entity>(), {CurveSegment::MakeCircularArc(
+        {0, 10, 0}, {0, -1, 0}, {1, 0, 0}, 10, 0, std::numbers::pi).Value()}};
+    auto sides = Wire(ids, {{10, 0, 0}, {10, 10, 0}});
+    sides.segments.push_back(CurveSegment::MakeLine({-10, 0, 0}, {-10, 10, 0}).Value());
+    const auto ridge = Wire(ids, {{0, 0, 10}, {0, 10, 10}});
+    const std::vector<RoleWire> wires{front, back, sides, ridge};
+    const auto tables = kachakacha::v2::app::SurfaceNetworkTables(wires, Tolerance());
+    Require(tables.size() == 2, "円弧途中のT接続と離れた2辺から2つの空間区画: "
+        + std::to_string(tables.size()));
+    const auto analysis = AnalyzeSurfaceRoles(wires, {}, Tolerance());
+    Require(analysis.recommendedFeasible && analysis.networkTables.size() == 2,
+        "架空の直線で結ばず接続区画へ自動切替: " + Joined(analysis));
 }
 
 KACHA_V2_TEST_MAIN("surface_role_assist_tests")

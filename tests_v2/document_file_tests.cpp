@@ -1215,4 +1215,20 @@ KACHA_V2_TEST(documentFile, 評価順を読み込み時に作り直す)
         "固定は回転より後");
 }
 
+KACHA_V2_TEST(document_file, extrusion_region_seeds_round_trip)
+{
+    auto file = MakeSampleDocument();
+    auto& feature = file.snapshot.features[3];
+    kachakacha::v2::domain::ExtrudeDefinition definition;
+    definition.profiles = {file.snapshot.entities[2].id};
+    definition.profileSeeds = {{1.25, 2.5, 0}, {3, 4, 5}};
+    feature.definition = definition;
+    const auto read = ReadDocumentJson(WriteDocumentJson(file));
+    Require(read.HasValue(), "選んだ押し出し区画を保存して読める");
+    const auto* restored = std::get_if<kachakacha::v2::domain::ExtrudeDefinition>(
+        &read.Value().snapshot.features[3].definition);
+    Require(restored && restored->profileSeeds == definition.profileSeeds,
+        "区画の内点を保持する");
+}
+
 KACHA_V2_TEST_MAIN("document_file_tests")

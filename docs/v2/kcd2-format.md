@@ -1004,3 +1004,6 @@ CreateFabricationModel の `adaptiveSpacing` は bool、省略時 false。従来
 `FreezeDerived.definition.frozenBrep` は独立コピーのOCCT BRep文字列。PartまたはGuideSurfaceの
 形状を保持し、sourcesは空。元のFeatureへ追従せず、表示メッシュを正本にしない。
 旧FreezeDerivedはこのキー無しで従来通り扱う。無効なBRepは再生成時に理由を出す。
+
+### 閉区画の参照（2026-10-09）
+Extrudeの `profileSeeds` は明示的に選択した区画の内点XYZ配列。省略・空配列は従来の全輪郭選択。CreateGuideSurfaceの `chains.segments` はSegment UUIDとstartParameter/endParameter（0〜1の昇順）、各区間のreversedを保存する。segmentIdがnilの旧形式はワイヤー全体と行の反転として復元する。区間参照が解決できなければ再生成を断り、ワイヤー全体で代用しない。

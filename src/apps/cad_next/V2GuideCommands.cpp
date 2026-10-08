@@ -268,7 +268,10 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
     feature.inputEntityIds = inputs;
     // 元ワイヤーと役割と向きを覚える。空のまま保存していたので、
     // 開き直しても面を作り直せなかった。写し方は core に1つだけ置く。
-    feature.definition = kachakacha::v2::app::DefinitionFromGuideTable(table);
+    const auto definition = kachakacha::v2::app::DefinitionFromGuideTable(table,
+        session_->Scene(), session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+    if (!definition.HasValue()) { ReportDiagnostics(definition.Diagnostics()); return {}; }
+    feature.definition = definition.Value();
 
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();

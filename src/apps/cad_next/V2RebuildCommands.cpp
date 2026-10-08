@@ -57,7 +57,7 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     ExtrudeRequest request;
-    request.profiles = ExtrudeProfilesFor(definition->profiles);
+    request.profiles = ExtrudeProfilesFor(definition->profiles, definition->profileSeeds);
     if (request.profiles.empty()) {
         return false;
     }

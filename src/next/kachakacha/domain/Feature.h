@@ -240,6 +240,7 @@ struct EditSurfaceDefinition {
 //! 押し出し。
 struct ExtrudeDefinition {
     std::vector<EntityId> profiles;
+    std::vector<geometry::Vector3> profileSeeds; //!< 明示選択した区画の内点。空なら全輪郭。
     geometry::Vector3 direction{0.0, 0.0, 1.0};
     geometry::EvaluatedValue distance;
     //! modeling::ExtrudeExtentMode / ExtrudeBooleanMode と同じ並び。

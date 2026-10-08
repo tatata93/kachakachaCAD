@@ -27,6 +27,10 @@ constexpr std::size_t kMaximumProbePoints = 600;
     probe.id = wire.id;
     probe.order = order;
     probe.wire = &wire;
+    for (std::size_t i = 1; i < wire.segments.size(); ++i) {
+        if (geometry::Distance(wire.segments[i - 1].EndPoint(), wire.segments[i].StartPoint())
+            > joinMm) return probe;
+    }
     double chord = sampleMm;
     probe.points = geometry::SampleChain(wire.segments, chord);
     while (probe.points.size() > kMaximumProbePoints && chord < 1.0) {

@@ -6,6 +6,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/app/SurfaceNetwork.h"
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -924,6 +925,29 @@ KACHA_V2_TEST(kernel_robust, 何度作っても表を空にできる)
         Require(ReleaseShape(built.Value().handle), "毎回捨てられる");
     }
     RequireEqual(std::to_string(CachedShapeCount()), "0", "溜まっていない");
+}
+
+KACHA_V2_TEST(kernel_surface, branched_curved_network_builds_every_patch)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids{914};
+    std::vector<app::RoleWire> wires;
+    for (double y : {0.0, 10.0})
+        wires.push_back({ids.NextTyped<base::IdKind::Entity>(), {CurveSegment::MakeCircularArc(
+            {0, y, 0}, {0, -1, 0}, {1, 0, 0}, 10, 0, kPi).Value()}});
+    wires.push_back({ids.NextTyped<base::IdKind::Entity>(),
+        {Line({10, 0, 0}, {10, 10, 0}), Line({-10, 0, 0}, {-10, 10, 0})}});
+    wires.push_back({ids.NextTyped<base::IdKind::Entity>(), {Line({0, 0, 10}, {0, 10, 10})}});
+    const auto tables = app::SurfaceNetworkTables(wires, Tolerance());
+    Require(tables.size() == 2, "曲線のT字で2区画");
+    for (const auto& table : tables) {
+        const auto request = modeling::ToGuideSurfaceRequest(table, Tolerance());
+        Require(request.HasValue(), "区画の面要求ができる");
+        const auto built = Build(request.Value());
+        Require(built.HasValue(), "各区画をOCCTで面生成できる");
+        Require(HasShape(built.Value().handle), "形状を保持");
+        ReleaseShape(built.Value().handle);
+    }
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

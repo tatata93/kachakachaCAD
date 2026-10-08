@@ -102,7 +102,7 @@ void V2MainWindow::BeginExtrudePreview()
     ExtrudeSnapshot snapshot;
     snapshot.plan = plan;
     snapshot.facePushPull = facePushPull_;
-    snapshot.profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
+    snapshot.profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles, kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()));
     if (snapshot.profiles.empty()) {
         SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
                                  "閉じた輪郭か、立体の平らな面を選んでください。"));
@@ -715,7 +715,7 @@ void V2MainWindow::EditExtrudeWithDialog()
         return;
     }
     const auto plan = PlanExtrudeFromSelection();
-    auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
+    auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles, kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()));
     const auto facts = BuildExtrudeFacts(profiles);
     V2ExtrudeDialog dialog(extrudeChoice_, facts, ExtrudeTargets(), this);
     if (dialog.exec() != QDialog::Accepted) {

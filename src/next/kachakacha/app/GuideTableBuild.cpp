@@ -110,6 +110,26 @@ namespace {
         return modeling::AddSourceSurfaceRow(table, entity->id, entity->displayName);
     }
     const auto& tolerance = document.Snapshot().settings.tolerance;
+    if (!chain.segments.front().segmentId.IsNil()) {
+        const auto selected = ResolveGuideSegmentChain(document, scene, chain);
+        if (!selected.HasValue()) return Result<GuideTable>::Failure(selected.Diagnostics());
+        auto next = table;
+        modeling::GuideTableRow restored;
+        restored.role = role;
+        restored.segments = selected.Value().segments;
+        next.rows.push_back(std::move(restored));
+        auto& row = next.rows.back();
+        row.sourceWireIds.clear();
+        for (const auto& ref : chain.segments) {
+            if (std::find(row.sourceWireIds.begin(), row.sourceWireIds.end(), ref.entityId)
+                == row.sourceWireIds.end()) {
+                row.sourceWireIds.push_back(ref.entityId);
+                const auto* entity = document.FindEntity(ref.entityId);
+                row.sourceLabels.push_back(entity ? entity->displayName : "境界");
+            }
+        }
+        return Result<GuideTable>::Success(std::move(next));
+    }
     bool first = true;
     for (const auto& ref : chain.segments) {
         const auto chosen = GuideSelectionOf(document, scene, ref.entityId);

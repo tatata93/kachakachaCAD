@@ -583,6 +583,13 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
     case FeatureType::Extrude: {
         domain::ExtrudeDefinition made;
         made.profiles = ReadIdArray(loader, definition, "profiles", where);
+        if (definition.Find("profileSeeds") != nullptr) {
+            if (const auto* seeds = loader.ArrayAt(definition, "profileSeeds", where)) {
+                for (const auto& point : *seeds) made.profileSeeds.push_back({
+                    loader.Number(point, "x", where), loader.Number(point, "y", where),
+                    loader.Number(point, "z", where)});
+            }
+        }
         made.direction = loader.ReadVector(definition, "direction", where);
         made.distance = loader.ReadExpression(definition, "distance", where);
         made.extentMode = static_cast<int>(loader.NumberOr(definition, "extentMode", 0.0));

@@ -30,8 +30,14 @@ struct ProfileRegion {
     double areaMm2 = 0.0;
 };
 
+//! 境界や穴を避けた決定的な内点。領域のクリック選択に使う。
+[[nodiscard]] geometry::Vector3 ProfileRegionInterior(const ProfileRegion& region);
+//! 明示した内点を含む区画だけを保持。空なら全区画（従来の物体選択）。
+void FilterProfileRegions(std::vector<ProfileRegion>& regions,
+    const std::vector<geometry::Vector3>& seeds, double toleranceMm);
+
 //! 場面にある非補助線を端点接続で組み立て、閉じた平面領域を列挙する。
-//! 分岐や開いた鎖は領域にせず、別の正当な閉領域まで巻き添えにしない。
+//! T/X分岐を一時的に区切り、平面ごとに閉領域を列挙する。空間交差は投影しない。
 [[nodiscard]] std::vector<ProfileRegion> DetectProfileRegions(
     const modeling::SnapScene& scene, const geometry::GeometryTolerance& tolerance);
 

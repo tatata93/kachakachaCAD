@@ -1,4 +1,5 @@
 #include "kachakacha/app/SurfaceRoleAssist.h"
+#include "kachakacha/app/SurfaceNetwork.h"
 
 #include "kachakacha/app/SurfaceRoleTopology.h"
 
@@ -773,6 +774,29 @@ SurfaceRoleAnalysis AnalyzeSurfaceRoles(const std::vector<RoleWire>& wires,
     out.factsJa.push_back("選んだ" + Count(wires.size())
         + "を調べました(つながり・交わり・閉じ方・同じ平面・順番から決めています)");
     Evaluate(topology, scenario, fixed, tolerance, out);
+    if (std::any_of(topology.probes.begin(), topology.probes.end(),
+            [](const auto& probe) { return !probe.valid; })) {
+        out.recommendedFeasible = false;
+        for (auto& candidate : out.alternatives) {
+            candidate.feasible = false;
+            candidate.reasonJa = "離れた区間を含むワイヤーがあります。連続した境界として選び直してください。";
+        }
+    }
+    if (!out.recommendedFeasible && overrides.empty()) {
+        out.networkTables = SurfaceNetworkTables(wires, tolerance);
+        if (!out.networkTables.empty()) {
+            out.recommended = GuideSurfaceMethod::BoundaryFill;
+            out.recommendedFeasible = true;
+            out.recommendedReasonJa = "線の実際の接続から閉じた区画を検出。区画ごとに面を作ります（曲面は近似）。";
+            out.problemsJa.clear();
+            out.alternatives.clear();
+            out.wires.clear();
+            for (const auto& wire : wires)
+                out.wires.push_back({wire.id, WireRoleChoice::Boundary, false, "閉じた区画の境界"});
+            out.factsJa.push_back("接続区画: " + std::to_string(out.networkTables.size()));
+            return out;
+        }
+    }
     // 役割ごとの本数(薦めた作り方の役割で)。はしご形の事実は場面が足す。
     const std::vector<std::pair<WireRoleChoice, std::string>> roleNames{
         {WireRoleChoice::Boundary, "境界候補: "}, {WireRoleChoice::PassThrough, "通る線候補: "}};

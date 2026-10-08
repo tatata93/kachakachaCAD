@@ -21,7 +21,7 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
 [[nodiscard]] bool SameTarget(const SelectionRef& first, const SelectionRef& second)
 {
     if (first.entityId != second.entityId || first.kind != second.kind
-        || first.segmentId != second.segmentId) {
+        || first.segmentId != second.segmentId || first.profileSeed != second.profileSeed) {
         return false;
     }
     if (first.subshapeKey.has_value() != second.subshapeKey.has_value()) {
@@ -90,6 +90,7 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
     ref.curveParameter = candidate.curveParameter;
     ref.hitPoint = candidate.hitPoint;
     ref.screenDistancePx = candidate.distancePx;
+    ref.profileSeed = candidate.profileSeed;
     return ref;
 }
 
@@ -404,7 +405,8 @@ SelectionSet ApplySelection(const SelectionSet& current,
     if (found == refs.end() && (mode == SelectionMode::Subtract || mode == SelectionMode::Toggle)) {
         found = std::find_if(refs.begin(), refs.end(), [&](const auto& ref) {
             return ref.entityId == target.entityId && ref.kind == SelectionElementKind::Object
-                && !ref.segmentId.has_value() && !ref.subshapeKey.has_value();
+                  && !ref.segmentId.has_value() && !ref.subshapeKey.has_value()
+                  && !ref.profileSeed.has_value();
         });
     }
     switch (mode) {
@@ -594,6 +596,16 @@ std::vector<geometry::CurveSegment> SelectedWholeCurves(const SelectionSet& sele
         }
     }
     return curves;
+}
+
+std::vector<Vector3> SelectedProfileSeeds(const SelectionSet& selection)
+{
+    std::vector<Vector3> result;
+    for (const auto& ref : selection.ordered) {
+        if (ref.profileSeed && std::find(result.begin(), result.end(), *ref.profileSeed) == result.end())
+            result.push_back(*ref.profileSeed);
+    }
+    return result;
 }
 
 } // namespace kachakacha::v2::app

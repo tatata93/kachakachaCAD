@@ -64,11 +64,11 @@ kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddRegionBoun
         selection.label += entity != nullptr && !entity->displayName.empty()
             ? entity->displayName : std::string("名前のない線");
     }
-    auto added = kachakacha::v2::modeling::AddSelectionAsNewRow(table, role, selection);
-    if (!added.HasValue()) {
-        return added;
-    }
-    auto next = added.Value();
+    auto next = table;
+    kachakacha::v2::modeling::GuideTableRow row;
+    row.role = role;
+    row.segments = selection.segments;
+    next.rows.push_back(std::move(row));
     next.rows.back().sourceWireIds = uniqueEntityIds;
     next.rows.back().sourceLabels.clear();
     for (const auto& id : uniqueEntityIds) {
@@ -77,6 +77,25 @@ kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddRegionBoun
                 ? std::string("名前のない線") : entity->displayName);
     }
     return Out::Success(std::move(next));
+}
+
+kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddPlanarRegions(
+    kachakacha::v2::modeling::GuideTable table,
+    const std::vector<kachakacha::v2::app::ProfileRegion>& regions,
+    const kachakacha::v2::document::Document& document)
+{
+    using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>;
+    for (const auto& region : regions) {
+        auto added = AddRegionBoundary(std::move(table), region.outer, ChainRole::OuterBoundary, document);
+        if (!added.HasValue()) return added;
+        table = added.Value();
+        for (const auto& hole : region.holes) {
+            added = AddRegionBoundary(std::move(table), hole, ChainRole::HoleBoundary, document);
+            if (!added.HasValue()) return added;
+            table = added.Value();
+        }
+    }
+    return Out::Success(std::move(table));
 }
 
 //! 人が「向き反転」を押した線は、表の行を逆向きにする(ReverseRow は向きの印も持つ)。
@@ -301,14 +320,19 @@ void V2MainWindow::RefreshSurfacePreview()
     // **どれか 1 つでも作れなければ、下見を出さない**(半分だけ作れたことにしない)。
     std::optional<SurfaceSnapshot> snapshot;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
-    for (const auto& part : kachakacha::v2::app::SurfaceBatchStates(surfaceInput_)) {
-        const auto table = SurfaceTableFromInput(part);
-        if (!table.HasValue()) {
-            return;   // まだ足りない。棚の「4. 状態」が理由を出している。
+    auto tables = surfaceInput_.autoRoles ? surfaceRoles_.networkTables
+        : std::vector<kachakacha::v2::modeling::GuideTable>{};
+    if (tables.empty()) {
+        for (const auto& part : kachakacha::v2::app::SurfaceBatchStates(surfaceInput_)) {
+            const auto table = SurfaceTableFromInput(part);
+            if (!table.HasValue()) return;
+            tables.push_back(table.Value());
         }
+    }
+    for (const auto& table : tables) {
         // ここでは断りを出さない。入れている途中はまだ作れなくて当たり前で、
         // そのたびに赤い字を出すと、何が本当の失敗か分からなくなる。
-        const auto built = BuildSurfaceFromTable(table.Value(), false);
+        const auto built = BuildSurfaceFromTable(table, false);
         if (!built.has_value()) {
             return;
         }
@@ -316,9 +340,9 @@ void V2MainWindow::RefreshSurfacePreview()
             built->boundary);
         lines.insert(lines.end(), preview.begin(), preview.end());
         if (!snapshot.has_value()) {
-            snapshot = SurfaceSnapshot{table.Value(), *built, {}};
+            snapshot = SurfaceSnapshot{table, *built, {}};
         } else {
-            snapshot->batch.emplace_back(table.Value(), *built);
+            snapshot->batch.emplace_back(table, *built);
         }
     }
     surfaceSnapshot_ = snapshot;
@@ -506,27 +530,14 @@ V2MainWindow::SurfaceTableFromInput(
     table.lockSectionOrder = input.ordering == SurfaceOrdering::ManualLock;
     table.fourEdgeStyle = input.fourEdgeStyle;
     if (input.method == GuideSurfaceMethod::PlanarBoundary) {
-        const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
+        auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
             input.boundaries,
             session_->GetDocument().Snapshot().settings.tolerance);
+        kachakacha::v2::app::FilterProfileRegions(regions,
+            kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()),
+            session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
         if (!regions.empty()) {
-            for (const auto& region : regions) {
-                auto added = AddRegionBoundary(std::move(table), region.outer,
-                    ChainRole::OuterBoundary, session_->GetDocument());
-                if (!added.HasValue()) {
-                    return Out::Failure(added.Diagnostics());
-                }
-                table = added.Value();
-                for (const auto& hole : region.holes) {
-                    added = AddRegionBoundary(std::move(table), hole,
-                        ChainRole::HoleBoundary, session_->GetDocument());
-                    if (!added.HasValue()) {
-                        return Out::Failure(added.Diagnostics());
-                    }
-                    table = added.Value();
-                }
-            }
-            return Out::Success(std::move(table));
+            return AddPlanarRegions(std::move(table), regions, session_->GetDocument());
         }
     }
     const auto addRows = [&](ChainRole role,

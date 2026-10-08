@@ -1,4 +1,5 @@
 #include "kachakacha/app/ProfileRegion.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/base/TestHarness.h"
 
@@ -151,6 +152,118 @@ KACHA_V2_TEST(profile_region, regions_are_grouped_by_the_plane_they_lie_on)
     const auto flatGroups = app::GroupProfileRegionsByPlane(
         app::DetectProfileRegions(flat.scene, GeometryTolerance::Default()), 1.0e-5);
     Require(flatGroups.size() == 1 && flatGroups.front().size() == 2, "同じ平面の 2 つは 1 組");
+}
+
+KACHA_V2_TEST(profile_region, t_and_x_junctions_form_individual_regions)
+{
+    Bench bench;
+    bench.Rectangle(0, 0, 10, 10);
+    bench.Line({5, -2, 0}, {5, 12, 0});
+    bench.Line({-2, 5, 0}, {12, 5, 0});
+    auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 4, "実交点を分けて4区画: " + std::to_string(regions.size()));
+    for (const auto& region : regions) Require(std::abs(region.areaMm2 - 25) < 1e-5,
+        "飛び出した線は区画に含めない");
+    std::reverse(bench.scene.curves.begin(), bench.scene.curves.end());
+    regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 4, "選択順に依存しない");
+}
+
+KACHA_V2_TEST(profile_region, spatial_branch_does_not_destroy_planar_faces)
+{
+    Bench bench;
+    bench.Rectangle(0, 0, 10, 10);
+    bench.Line({0, 0, 0}, {0, 0, 10});
+    bench.Line({0, 0, 10}, {10, 0, 10});
+    bench.Line({10, 0, 10}, {10, 0, 0});
+    bench.Line({5, 0, 0}, {5, 5, 7});
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "3Dの共有辺と空間分岐でも平面を2枚検出: "
+        + std::to_string(regions.size()));
+}
+
+KACHA_V2_TEST(profile_region, closed_polyline_can_be_partitioned)
+{
+    Bench bench;
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    bench.Line({3, 0, 0}, {3, 10, 0});
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "1本の閉ポリラインでも途中で2区画: "
+        + std::to_string(regions.size()));
+    Require(std::abs(regions[0].areaMm2 - 30) < 1e-5
+        && std::abs(regions[1].areaMm2 - 70) < 1e-5, "隣の区画を穴と誤認しない");
+}
+
+KACHA_V2_TEST(profile_region, curved_t_junction_keeps_exact_arc)
+{
+    Bench bench;
+    const auto arc = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1}, {1, 0, 0},
+        10, 0, std::numbers::pi).Value();
+    bench.scene.curves.push_back({bench.ids.NextTyped<IdKind::Entity>(),
+        bench.ids.NextTyped<IdKind::Segment>(), arc});
+    bench.Line({-10, 0, 0}, {10, 0, 0});
+    bench.Line({0, 0, 0}, {0, 10, 0});
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "円弧の途中への接続で2区画: " + std::to_string(regions.size()));
+    for (const auto& region : regions) {
+        Require(std::any_of(region.outer.segments.begin(), region.outer.segments.end(),
+            [](const auto& c) { return c.Kind() == geometry::CurveKind::CircularArc
+                && std::abs(c.Radius() - 10) < 1e-10; }), "円弧の種類と半径を保持");
+    }
+}
+
+KACHA_V2_TEST(profile_region, projected_crossing_and_nonplanar_loop_are_not_flattened)
+{
+    Bench bench;
+    bench.Rectangle(0, 0, 10, 10);
+    bench.Line({5, -2, 2}, {5, 12, 2});
+    bench.Line({20, 0, 0}, {30, 0, 0});
+    bench.Line({30, 0, 0}, {30, 10, 3});
+    bench.Line({30, 10, 3}, {20, 10, 0});
+    bench.Line({20, 10, 0}, {20, 0, 0});
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 1 && std::abs(regions.front().areaMm2 - 100) < 1e-5,
+        "画面だけの交差と非平面輪郭を平面へ投影しない");
+}
+
+KACHA_V2_TEST(profile_region, corner_diagonal_and_selected_cell)
+{
+    Bench bench;
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    bench.Line({0, 0, 0}, {10, 10, 0});
+    auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "角同士を結ぶ対角線でも区画を分ける");
+    const auto a = app::ProfileRegionInterior(regions[0]);
+    const auto b = app::ProfileRegionInterior(regions[1]);
+    app::SelectionSet selected;
+    app::PickCandidate first, second;
+    first.entityId = second.entityId = bench.scene.curves.front().entityId;
+    first.profileSeed = a;
+    second.profileSeed = b;
+    selected = app::ApplySelection(selected, first, app::SelectionMode::Add);
+    selected = app::ApplySelection(selected, second, app::SelectionMode::Add);
+    Require(app::SelectedProfileSeeds(selected).size() == 2, "同じワイヤーの隣接区画を別々に選択");
+    selected = app::ApplySelection(selected, first, app::SelectionMode::Subtract);
+    app::FilterProfileRegions(regions, app::SelectedProfileSeeds(selected), 1e-6);
+    Require(regions.size() == 1 && app::ProfileRegionContains(regions[0], b, 1e-6),
+        "片方を外しても隣の区画は維持");
+}
+
+KACHA_V2_TEST(profile_region, bezier_t_junction_and_tilted_plane)
+{
+    Bench bench;
+    const auto curve = CurveSegment::MakeCubicBezier(
+        {{0, 0, 0}, {0, 4, 4}, {10, 4, 4}, {10, 0, 0}}).Value();
+    bench.scene.curves.push_back({bench.ids.NextTyped<IdKind::Entity>(),
+        bench.ids.NextTyped<IdKind::Segment>(), curve});
+    bench.Line({0, 0, 0}, {10, 0, 0});
+    bench.Line({5, 0, 0}, curve.Evaluate(0.5));
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "斜めの平面内でベジェ途中へのT接続を検出");
+    for (const auto& region : regions)
+        Require(std::any_of(region.outer.segments.begin(), region.outer.segments.end(),
+            [](const auto& c) { return c.Kind() == geometry::CurveKind::CubicBezier; }),
+            "ベジェを折れ線へ置換しない");
 }
 
 int main()

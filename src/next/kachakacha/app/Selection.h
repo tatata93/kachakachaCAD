@@ -66,6 +66,7 @@ struct SelectionRef {
     //! ここに置くのは、押した面の縁をその場で取り出すためだけである。
     //! 覚える必要があるものは、必ず `subshapeKey`(意味的キー)にする。
     std::optional<std::size_t> pickedFaceIndex;
+    std::optional<geometry::Vector3> profileSeed; //!< 閉区画の内点（操作中だけ）
 };
 
 //! 選んでいるもの。ordered が正本で、押した順と部分要素を保つ。
@@ -89,7 +90,10 @@ struct PickCandidate {
     double distancePx = 0.0;
     //! 拾った面の、いまの網の中での番号(EX-02)。保存してはならない。
     std::optional<std::size_t> pickedFaceIndex;
+    std::optional<geometry::Vector3> profileSeed;
 };
+
+[[nodiscard]] std::vector<geometry::Vector3> SelectedProfileSeeds(const SelectionSet& selection);
 
 //! 拾う相手を絞る印。作図中は作業平面の上の線だけを相手にする(app/PlaneFocus)。
 struct PickFocus {

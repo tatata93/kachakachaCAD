@@ -571,6 +571,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/GrabToMove.cpp
     src/next/kachakacha/app/PointerGesture.cpp
     src/next/kachakacha/app/ProfileRegion.cpp
+    src/next/kachakacha/app/ProfileNetwork.cpp
     src/next/kachakacha/app/DrawingShelfRows.cpp
     src/next/kachakacha/app/DiagnosticReport.cpp
     src/next/kachakacha/app/ExtrudePlan.cpp
@@ -585,6 +586,8 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ControlPointPick.cpp
     src/next/kachakacha/app/ShapeRebuild.cpp
     src/next/kachakacha/app/GuideTableBuild.cpp
+    src/next/kachakacha/app/GuideSegmentReferences.cpp
+    src/next/kachakacha/app/SurfaceNetwork.cpp
     src/next/kachakacha/app/OriginPlanes.cpp
     src/next/kachakacha/app/SubDocument.cpp
     src/next/kachakacha/app/FabricationOpenings.cpp

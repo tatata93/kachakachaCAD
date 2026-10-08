@@ -30,6 +30,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <cstddef>
 #include <string>
@@ -65,6 +66,8 @@ struct SurfaceMethodCandidate {
 };
 
 struct SurfaceRoleAnalysis {
+    //! 接続で区切った空間線網の実際の生成表。空なら従来の役割表を使う。
+    std::vector<modeling::GuideTable> networkTables;
     //! 選んだ順。
     std::vector<ClassifiedWire> wires;
     modeling::GuideSurfaceMethod recommended = modeling::GuideSurfaceMethod::LoftSections;

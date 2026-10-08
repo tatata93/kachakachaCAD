@@ -48,10 +48,13 @@ using kachakacha::v2::modeling::SnapCurve;
 [[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile> ProfilesOfImpl(
     const std::vector<EntityId>& entityIds,
     const kachakacha::v2::modeling::SnapScene& scene,
-    const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance,
+    const std::vector<kachakacha::v2::geometry::Vector3>& seeds)
 {
-    const auto regions = kachakacha::v2::app::DetectProfileRegions(
+    auto regions = kachakacha::v2::app::DetectProfileRegions(
         scene, entityIds, tolerance);
+    kachakacha::v2::app::FilterProfileRegions(regions, seeds, tolerance.modelLinearMm);
+    if (!seeds.empty() && regions.empty()) return {};
     if (!regions.empty()) {
         std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
         const auto append = [&profiles](const kachakacha::v2::app::ProfileBoundary& boundary) {
@@ -584,6 +587,7 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     // 読み直すと、足す・引くの相手の立体まで輪郭として記録され、
     // 開き直したときに違うものを押そうとする。
     definition.profiles = facePushPull_ ? faceWires : plan.profiles;
+    if (!facePushPull_) definition.profileSeeds = kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection());
     // 向きは実際に押した向きを持つ。作業平面の法線を書き写すと、
     // 別の向きで押したときに、開き直すと違う向きへ押されてしまう。
     definition.direction = analysis.direction;
@@ -648,8 +652,10 @@ bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoi
 {
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     const double limit = std::max(tolerance.modelLinearMm * 10.0, 1.0e-5);   // EXT-001 と同じ幅
-    const auto regions =
+    auto regions =
         kachakacha::v2::app::DetectProfileRegions(session_->Scene(), plan.profiles, tolerance);
+    kachakacha::v2::app::FilterProfileRegions(regions,
+        kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()), limit);
     const auto groups = kachakacha::v2::app::GroupProfileRegionsByPlane(regions, limit);
     if (facePushPull_ || groups.size() < 2) {
         return false;
@@ -676,7 +682,7 @@ bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoi
             piece.choice.customDirection =
                 ExtrudeDirectionForMode(choice.direction, choice.customDirection, &outline);
         }
-        auto profiles = ExtrudeProfilesFor(piece.ids);
+        auto profiles = ExtrudeProfilesFor(piece.ids, kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()));
         piece.startLoops = StartLoopsFor(piece.choice, profiles);
         const auto request = RequestForChoice(piece.choice, std::move(profiles),
             viewport_->WorkPlane(), targetPlane);
@@ -1001,7 +1007,8 @@ void V2MainWindow::RefreshPartEdges()
 }
 
 std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfilesFor(
-    const std::vector<kachakacha::v2::base::EntityId>& entityIds) const
+    const std::vector<kachakacha::v2::base::EntityId>& entityIds,
+    const std::vector<kachakacha::v2::geometry::Vector3>& seeds) const
 {
     // 押し出しと、開き直しの作り直しで、同じ輪郭の作り方を通す。
     // 道を分けると、開いたときだけ違う形が出来る。
@@ -1028,7 +1035,7 @@ std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfi
         }
     }
     return ProfilesOfImpl(entityIds, scene,
-        session_->GetDocument().Snapshot().settings.tolerance);
+        session_->GetDocument().Snapshot().settings.tolerance, seeds);
 }
 
 void V2MainWindow::SetExtrudeChooser(

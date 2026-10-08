@@ -58,6 +58,14 @@ void V2MainWindow::MirrorSurfaceEntriesToSelection()
     kachakacha::v2::app::SelectionSet mirrored;
     mirrored.entityIds = surfaceMirror_;
     for (const EntityId& id : surfaceMirror_) {
+        bool hasRegion = false;
+        for (const auto& selected : viewport_->Selection().ordered) {
+            if (selected.entityId == id && selected.profileSeed.has_value()) {
+                mirrored.ordered.push_back(selected);
+                hasRegion = true;
+            }
+        }
+        if (hasRegion) continue;
         kachakacha::v2::app::SelectionRef ref;
         ref.entityId = id;
         mirrored.ordered.push_back(ref);

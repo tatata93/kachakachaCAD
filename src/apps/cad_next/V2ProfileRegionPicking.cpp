@@ -154,6 +154,12 @@ bool V2Viewport::ProfileRegionSelected(std::size_t index) const
         return false;
     }
     const auto ids = ProfileRegionEntityIds(profileRegions_[index]);
+    const auto seeds = kachakacha::v2::app::SelectedProfileSeeds(selection_);
+    if (!seeds.empty()) {
+        return std::any_of(seeds.begin(), seeds.end(), [&](const auto& seed) {
+            return kachakacha::v2::app::ProfileRegionContains(profileRegions_[index], seed, 1e-6);
+        });
+    }
     return !ids.empty() && std::all_of(ids.begin(), ids.end(), [this](const auto& id) {
         return IsSelected(selection_, id);
     });
@@ -195,6 +201,7 @@ bool V2Viewport::ToggleProfileRegionAt(const QPointF& position)
         PickCandidate candidate;
         candidate.entityId = id;
         candidate.kind = SelectionElementKind::Object;
+        candidate.profileSeed = kachakacha::v2::app::ProfileRegionInterior(profileRegions_[*index]);
         next = ApplySelection(next, candidate,
             remove ? SelectionMode::Subtract : SelectionMode::Add);
     }

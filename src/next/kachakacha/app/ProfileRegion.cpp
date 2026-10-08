@@ -1,7 +1,9 @@
 #include "kachakacha/app/ProfileRegion.h"
+#include "kachakacha/app/ProfileNetwork.h"
 
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -159,6 +161,37 @@ geometry::Point2 ProjectPoint(const Vector3& point, const geometry::PlanarFrame&
     return {Dot(local, frame.uDirection), Dot(local, frame.vDirection)};
 }
 
+bool InteractsWithOtherWires(const std::vector<SnapCurve>& component,
+    const std::vector<SnapCurve>& curves, const geometry::GeometryTolerance& tolerance)
+{
+    for (const auto& own : component) {
+        for (const auto& other : curves) {
+            if (own.entityId == other.entityId) continue;
+            // Coincident copies remain independently selectable, as before.
+            const bool same = std::any_of(component.begin(), component.end(), [&](const auto& c) {
+                for (double t : {0.0, 0.25, 0.5, 0.75, 1.0})
+                    if (c.segment.ClosestPoint(other.segment.Evaluate(t)).distance
+                        > tolerance.modelLinearMm) return false;
+                return true;
+            });
+            if (same) continue;
+            if (EndpointsTouch(own, other, tolerance.interactiveJoinMm)) return true;
+            const auto hits = geometry::IntersectCurves(own.segment, other.segment, tolerance);
+            // A single endpoint contact doesn't divide a closed wire.
+            for (const auto& hit : hits) {
+                if (hit.firstParameter > 1e-8 && hit.firstParameter < 1.0 - 1e-8)
+                    return true;
+            }
+            for (auto point : {other.segment.StartPoint(), other.segment.EndPoint()}) {
+                const auto closest = own.segment.ClosestPoint(point);
+                if (closest.distance <= tolerance.interactiveJoinMm
+                    && closest.parameter > 1e-8 && closest.parameter < 1.0 - 1e-8) return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
     const std::vector<base::EntityId>* entityIds,
     const geometry::GeometryTolerance& tolerance)
@@ -191,7 +224,7 @@ std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
         for (auto& component : ConnectedComponents(std::move(owned),
                  tolerance.interactiveJoinMm)) {
             auto boundary = MakeBoundary(component, tolerance);
-            if (boundary.has_value()) {
+            if (boundary.has_value() && !InteractsWithOtherWires(component, curves, tolerance)) {
                 auto loop = FlattenBoundary(std::move(*boundary), tolerance);
                 if (loop.has_value()) {
                     loops.push_back(std::move(*loop));
@@ -201,14 +234,9 @@ std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
             remaining.insert(remaining.end(), component.begin(), component.end());
         }
     }
-    // 各Wireだけでは開いていた鎖を、Wireをまたいでつなぐ。
-    for (const auto& component : ConnectedComponents(std::move(remaining),
-             tolerance.interactiveJoinMm)) {
-        auto boundary = MakeBoundary(component, tolerance);
-        if (!boundary.has_value()) {
-            continue;
-        }
-        auto loop = FlattenBoundary(std::move(*boundary), tolerance);
+    // T/X接続を一時的に区切り、各平面の最小区画をたどる。
+    for (auto& boundary : detail::ProfileNetworkBoundaries(remaining, tolerance)) {
+        auto loop = FlattenBoundary(std::move(boundary), tolerance);
         if (loop.has_value()) {
             loops.push_back(std::move(*loop));
         }
@@ -227,9 +255,12 @@ void ResolveNesting(std::vector<FlatLoop>& loops,
                     tolerance.modelAngularRad * 10.0)) {
                 continue;
             }
-            const geometry::Point2 probe = ProjectPoint(loops[child].boundary.sampled.front(),
-                loops[outer].frame);
-            if (geometry::ContainsPoint(loops[outer].boundary.planar, probe)
+            const bool inside = std::all_of(loops[child].boundary.sampled.begin(),
+                loops[child].boundary.sampled.end(), [&](const auto& point) {
+                    return geometry::ContainsPoint(loops[outer].boundary.planar,
+                        ProjectPoint(point, loops[outer].frame));
+                });
+            if (inside
                 && loops[outer].area < parentArea) {
                 loops[child].parent = outer;
                 parentArea = loops[outer].area;
@@ -355,6 +386,32 @@ std::vector<std::vector<std::size_t>> GroupProfileRegionsByPlane(
         }
     }
     return groups;
+}
+
+Vector3 ProfileRegionInterior(const ProfileRegion& region)
+{
+    const auto& ring = region.outer.sampled;
+    const double sign = geometry::SignedArea(region.outer.planar) >= 0 ? 1.0 : -1.0;
+    for (std::size_t i = 0; i < ring.size(); ++i) {
+        const auto a = ring[i], b = ring[(i + 1) % ring.size()];
+        const auto inward = geometry::Normalized(geometry::Cross(region.plane.normal, b - a)) * sign;
+        for (double fraction : {0.01, 0.001, 0.0001}) {
+            const auto point = (a + b) * 0.5 + inward * (geometry::Distance(a, b) * fraction);
+            if (ProfileRegionContains(region, point, 1e-6)) return point;
+        }
+    }
+    return geometry::Centroid(ring);
+}
+
+void FilterProfileRegions(std::vector<ProfileRegion>& regions,
+    const std::vector<Vector3>& seeds, double toleranceMm)
+{
+    if (seeds.empty()) return;
+    regions.erase(std::remove_if(regions.begin(), regions.end(), [&](const auto& region) {
+        return std::none_of(seeds.begin(), seeds.end(), [&](const auto& point) {
+            return ProfileRegionContains(region, point, toleranceMm);
+        });
+    }), regions.end());
 }
 
 } // namespace kachakacha::v2::app

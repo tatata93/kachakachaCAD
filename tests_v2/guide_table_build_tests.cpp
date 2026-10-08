@@ -9,6 +9,7 @@
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include <cmath>
 #include <string>
@@ -72,6 +73,31 @@ struct Fixture {
 };
 
 } // namespace
+
+KACHA_V2_TEST(guide_table_build, split_interval_and_reverse_survive_saved_definition)
+{
+    using namespace kachakacha::v2;
+    Fixture fixture;
+    const auto id = fixture.AddLine({0, 0, 0}, {10, 0, 0}, "boundary");
+    const auto scene = fixture.Scene();
+    GuideTable table;
+    table.method = GuideSurfaceMethod::BoundaryFill;
+    modeling::GuideTableRow row;
+    row.role = ChainRole::BoundarySide;
+    row.sourceWireIds = {id};
+    row.segments = {CurveSegment::MakeLine({8, 0, 0}, {3, 0, 0}).Value()};
+    table.rows.push_back(row);
+    const auto definition = DefinitionFromGuideTable(table, scene, 1e-6);
+    Require(definition.HasValue(), "境界区間の参照を保存できる");
+    Require(std::abs(definition.Value().chains[0].segments[0].startParameter - 0.3) < 1e-8,
+        "元の線の途中を記録");
+    const auto restored = GuideTableFromDefinition(fixture.document, {}, definition.Value());
+    Require(restored.HasValue(), "元のワイヤーが非表示でも再評価できる");
+    const auto& curve = restored.Value().rows[0].segments[0];
+    Require(geometry::Distance(curve.StartPoint(), {8, 0, 0}) < 1e-8
+        && geometry::Distance(curve.EndPoint(), {3, 0, 0}) < 1e-8,
+        "区間と向きが同じに戻る");
+}
 
 KACHA_V2_TEST(guide_table_build, おまかせは2本でルールド3本でロフト)
 {
@@ -353,4 +379,3 @@ KACHA_V2_TEST(outer_loop, 境界面の表は外周の辺ごとの行と通る線
     }
     Require(filled.Value().rows[4].role == ChainRole::GuideU, "最後は通る線");
 }
-

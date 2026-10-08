@@ -51,6 +51,13 @@ struct GuideTableDraft {
 [[nodiscard]] domain::CreateGuideSurfaceDefinition DefinitionFromGuideTable(
     const modeling::GuideTable& table);
 
+//! 区切った境界を元セグメントの区間・向きとして保存する。
+[[nodiscard]] base::Result<domain::CreateGuideSurfaceDefinition> DefinitionFromGuideTable(
+    const modeling::GuideTable& table, const modeling::SnapScene& scene, double toleranceMm);
+[[nodiscard]] base::Result<modeling::GuideTableSelection> ResolveGuideSegmentChain(
+    const document::Document& document, const modeling::SnapScene& scene,
+    const domain::WireChainRef& chain);
+
 //! 表に入っている元の id を、行の順に並べる(Feature の入力に使う)。
 [[nodiscard]] std::vector<base::EntityId> GuideTableInputIds(
     const modeling::GuideTable& table);

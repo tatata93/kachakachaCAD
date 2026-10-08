@@ -774,6 +774,17 @@ SurfaceRoleAnalysis AnalyzeSurfaceRoles(const std::vector<RoleWire>& wires,
     out.factsJa.push_back("選んだ" + Count(wires.size())
         + "を調べました(つながり・交わり・閉じ方・同じ平面・順番から決めています)");
     Evaluate(topology, scenario, fixed, tolerance, out);
+    for (std::size_t i = 0; i < wires.size(); ++i) {
+        if (std::none_of(out.wires.begin(), out.wires.end(), [&](const auto& item) {
+                return item.id == wires[i].id;
+            })) {
+            const auto role = fixed[i] == WireRoleChoice::Auto ? WireRoleChoice::Section : fixed[i];
+            out.wires.push_back({wires[i].id, role, fixed[i] != WireRoleChoice::Auto,
+                "この線の接続を解決できていません"});
+            out.recommendedFeasible = false;
+            out.problemsJa.push_back("入力に使えない線があります。欄に残しているので接続を確認してください。");
+        }
+    }
     if (std::any_of(topology.probes.begin(), topology.probes.end(),
             [](const auto& probe) { return !probe.valid; })) {
         out.recommendedFeasible = false;

@@ -321,4 +321,19 @@ KACHA_V2_TEST(role_assist, spatial_curved_network_with_disconnected_wire_is_part
         "架空の直線で結ばず接続区画へ自動切替: " + Joined(analysis));
 }
 
+KACHA_V2_TEST(role_assist, unresolved_wire_is_kept_in_input_slots)
+{
+    DeterministicIdGenerator ids{915};
+    auto broken = Wire(ids, {{50,0,0},{60,0,0}});
+    broken.segments.push_back(CurveSegment::MakeLine({90,0,0},{100,0,0}).Value());
+    const std::vector<RoleWire> wires{Wire(ids, {{0,0,0},{10,0,0}}),
+        Wire(ids, {{0,10,0},{10,10,0}}), broken};
+    const auto analysis = AnalyzeSurfaceRoles(wires, {}, Tolerance());
+    Require(!analysis.recommendedFeasible, "離れた区間の入力を無視して成功扱いにしない");
+    Require(analysis.wires.size() == wires.size(), "未解決の線も入力から消さない");
+    const auto state = WithClassifiedRoles(SurfaceInputState{}, analysis);
+    Require(kachakacha::v2::app::AllSurfaceEntries(state).size() == wires.size(),
+        "右ペインへ書き戻しても全入力が残る");
+}
+
 KACHA_V2_TEST_MAIN("surface_role_assist_tests")

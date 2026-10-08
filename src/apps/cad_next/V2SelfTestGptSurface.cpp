@@ -199,6 +199,9 @@ bool SmoothHeadShell(V2MainWindow& window)
     using geometry::Vector3;
     window.resize(1440,900);
     QApplication::processEvents();
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!scope) return false;
+    scope->setCurrentIndex(1); // The head-shell fixture contains spatial coordinate lines.
     const auto wire = [&](DirectWireKind kind, std::vector<Vector3> points) {
         app::DirectWireRequest request;
         request.kind=kind; request.points=std::move(points);

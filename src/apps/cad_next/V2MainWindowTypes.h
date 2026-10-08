@@ -35,6 +35,7 @@ struct V2PreparedExtrudeChoice {
 struct V2ExtrudeSnapshot {
     kachakacha::v2::app::ExtrudePlan plan;
     std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
+    std::vector<kachakacha::v2::geometry::Vector3> profileSeeds;
     //! 面を押しているか。面の縁は `faceProfileLoops_` が持つ。
     bool facePushPull = false;
 };

@@ -100,6 +100,7 @@ void V2MainWindow::BeginExtrudePreview()
     // **下見を出すときに、入力をそのまま留め置く**(オーナー指示 §9)。
     // 確定はこの写しから作る。選択を読み直さない。
     ExtrudeSnapshot snapshot;
+    snapshot.profileSeeds = kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection());
     snapshot.plan = plan;
     snapshot.facePushPull = facePushPull_;
     snapshot.profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles, kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()));
@@ -528,6 +529,7 @@ void V2MainWindow::RefreshExtrudeForSelectionChange()
         return;
     }
     if (extrudeSnapshot_.has_value() && extrudeSnapshot_->plan.profiles == plan.profiles
+        && extrudeSnapshot_->profileSeeds == kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection())
         && extrudeSnapshot_->plan.targetSolid == plan.targetSolid) {
         RefreshExtrudeFromDock();
         return;   // 入力は同じでも、現在の条件の可否を維持する。

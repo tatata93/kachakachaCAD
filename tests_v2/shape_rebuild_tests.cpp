@@ -185,4 +185,20 @@ KACHA_V2_TEST(shape_rebuild, 全種類に名前がある)
     }
 }
 
+KACHA_V2_TEST(shape_rebuild, different_cells_of_same_wire_are_different_extrusions)
+{
+    DocumentSnapshot snapshot;
+    DeterministicIdGenerator ids;
+    kachakacha::v2::domain::ExtrudeDefinition definition;
+    definition.profiles = {ids.NextTyped<IdKind::Entity>()};
+    for (double x : {1.0, 2.0}) {
+        Add(snapshot, ids, FeatureType::Extrude, EntityKind::Part, "cell");
+        definition.profileSeeds = {{x, 1, 0}};
+        snapshot.features.back().definition = definition;
+    }
+    const auto steps = PlanShapeRebuild(snapshot);
+    Require(steps.size() == 2 && steps[0].outputOrdinal == 0 && steps[1].outputOrdinal == 0,
+        "同じWireの別区画を同じ押し出しの複数出力と誤認しない");
+}
+
 KACHA_V2_TEST_MAIN("shape_rebuild_tests")

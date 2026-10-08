@@ -215,6 +215,51 @@ namespace {
     return parts;
 }
 
+[[nodiscard]] bool CaseExtrudeSwitchesNetworkCell(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    window.RunCommand("file.new");
+    const std::vector<geometry::Vector3> points{{0,0,0},{10,0,0},{10,10,0},{0,10,0}};
+    std::vector<geometry::CurveSegment> curves;
+    for (std::size_t i = 0; i < points.size(); ++i)
+        curves.push_back(geometry::CurveSegment::MakeLine(points[i], points[(i+1)%4]).Value());
+    const auto outer = window.Session().AddWire(curves, false, "outer");
+    const auto split = window.Session().AddWire(
+        {geometry::CurveSegment::MakeLine({3,0,0},{3,10,0}).Value()}, false, "divider");
+    if (!outer.committed || !split.committed
+        || !window.SaveAndReopen(QStringLiteral("network-cells-source.kcd2"))) return false;
+    auto select = [&](double x) {
+        app::SelectionSet selection;
+        for (const auto id : {outer.createdEntityIds.front(), split.createdEntityIds.front()}) {
+            app::PickCandidate pick;
+            pick.entityId = id;
+            pick.profileSeed = geometry::Vector3{x,5,0};
+            selection = app::ApplySelection(selection, pick, app::SelectionMode::Add);
+        }
+        window.Viewport().SetSelection(selection);
+    };
+    window.SetMode(app::UiMode::Part);
+    select(1);
+    window.RunCommand("part.extrude");
+    window.UpdateExtrudePreview(2);
+    if (!Explain("左の区画を下見できる", !window.Viewport().ExtrudePreviewFaces().empty())) return false;
+    select(8);
+    window.UpdateExtrudePreview(2);
+    const auto& preview = window.Viewport().ExtrudePreviewFaces();
+    if (!Explain("右の区画へ下見を更新", !preview.empty())) return false;
+    for (const auto& face : preview)
+        for (const auto& point : face)
+            if (!Explain("古い左区画を残さない", point.x >= 3 - 1e-5)) return false;
+    window.ExtrudeDock().PressConfirm();
+    if (!Explain("部品は選んだ区画だけ", CountParts(window) == 1)) return false;
+    if (!window.SaveAndReopen(QStringLiteral("network-cells-result.kcd2"))) return false;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (!shape.surface) return Explain("保存後も右区画の立体",
+            std::abs(shape.mesh.minimum.x - 3) < 1e-5 && std::abs(shape.mesh.maximum.x - 10) < 1e-5);
+    }
+    return false;
+}
+
 [[nodiscard]] bool CaseExtrudeMakesAPart(V2MainWindow& window)
 {
     // 閉じた矩形を押し出すと部品が1つできる。
@@ -1373,6 +1418,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
         {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},
         {"押し出しで部品ができる", &CaseExtrudeMakesAPart},
+        {"押し出しの隣接区画を切り替えて保存できる", &CaseExtrudeSwitchesNetworkCell},
         {"立体の面をつまんで押せる", &CaseFacePushPullGrowsTheSolid},
         {"部品のコマンドは選択が要る", &CasePartCommandsNeedSelection},
         {"押し出した部品が保存して開き直しても残る", &CaseExtrudedPartSurvivesSaveAndOpen},

@@ -316,7 +316,8 @@ void V2MainWindow::RefreshSurfacePreview()
     if (!surfaceShelfShown_ || !kachakacha::v2::app::SurfaceReadyToBuild(surfaceInput_)) {
         return;
     }
-    if (surfaceInput_.autoRoles && !surfaceRoles_.recommendedFeasible) return;
+    if (surfaceInput_.autoRoles && !surfaceRoles_.wires.empty()
+        && !surfaceRoles_.recommendedFeasible) return;
     // 一括(離した面の元の面が複数、回転体の断面が複数)は 1 つずつに分けて全部作る。
     // **どれか 1 つでも作れなければ、下見を出さない**(半分だけ作れたことにしない)。
     std::optional<SurfaceSnapshot> snapshot;
@@ -701,7 +702,8 @@ void V2MainWindow::ConfirmSurface()
 //! なぜ作れないかを言う。断り方は1か所にまとめる。
 void V2MainWindow::ReportSurfaceNotReady()
 {
-    if (surfaceInput_.autoRoles && !surfaceRoles_.recommendedFeasible) {
+    if (surfaceInput_.autoRoles && !surfaceRoles_.wires.empty()
+        && !surfaceRoles_.recommendedFeasible) {
         QString reason;
         for (const auto& problem : surfaceRoles_.problemsJa)
             reason += QString::fromUtf8(problem.c_str()) + QStringLiteral("\n");

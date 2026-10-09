@@ -61,6 +61,10 @@ struct ReferenceDimension {
     //! 3D に寸法として描く位置(測った点を押した順)。2 点以上あれば線と値を描く。
     //! 古い文書には無い(描かないだけで、寸法そのものは読める)。
     std::vector<geometry::Vector3> anchors;
+    std::vector<domain::SegmentRef> segments; //!< 寸法ツールの永続参照
+    bool driving = false;
+    geometry::Vector3 dimensionU{1,0,0}, dimensionV{0,1,0};
+    std::optional<geometry::Vector3> labelPosition;
 };
 
 struct DocumentSettings {

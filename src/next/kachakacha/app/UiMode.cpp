@@ -42,7 +42,7 @@ const std::vector<std::string_view>& CommonCommandIds()
         "image.place", "workplane.from_face", "fabrication.from_face", "fabrication.gpt_from_face",
         "export.selection", "export.kcd", "output.copy",
         "file.new", "file.open", "file.save", "file.save_as", "edit.undo", "edit.redo",
-        "edit.delete", "selection.activate", "measure.open", "view.fit_all",
+        "edit.delete", "selection.activate", "measure.open", "dimension.open", "view.fit_all",
         "tools.search", "view.fit_selection", "view.isolate", "view.restore_isolation",
         "view.align_selection", "view.align_selection_back", "view.align_workplane", "view.hide_selected", "view.show_all",
         "view.stage_all", "view.stage_no_grid", "view.stage_no_construction",

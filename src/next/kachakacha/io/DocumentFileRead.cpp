@@ -331,6 +331,19 @@ private:
     return reference;
 }
 
+void ReadDimensionExtras(Loader& loader, const JsonValue& item, const std::string& where, ReferenceDimension& dim)
+{
+    if(item.Find("segments")) {
+        if(const auto* refs=loader.ArrayAt(item,"segments",where))
+            for(std::size_t index=0;index<refs->size();++index)
+                dim.segments.push_back(ReadSegmentRef(loader,(*refs)[index],where+".segments["+std::to_string(index)+"]"));
+        dim.driving=loader.Bool(item,"driving",where,false);
+        dim.dimensionU=loader.ReadVector(item,"dimensionU",where);
+        dim.dimensionV=loader.ReadVector(item,"dimensionV",where);
+        if(item.Find("labelPosition"))dim.labelPosition=loader.ReadVector(item,"labelPosition",where);
+    }
+}
+
 //! IDの並びを読む。新しい定義がどれもこの形なので、1か所にまとめる。
 //! 無くてもよい数の並び。無ければ空。数でないものが混ざっていれば断る。
 [[nodiscard]] std::vector<double> ReadNumberArray(Loader& loader, const JsonValue& parent,
@@ -1095,6 +1108,7 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                 dimension.recordedValue = loader.Number(item, "recordedValue", where);
                 dimension.unit = loader.String(item, "unit", where);
                 dimension.noteJa = loader.String(item, "note", where);
+                ReadDimensionExtras(loader,item,where,dimension);
                 if (const JsonArray* targets = loader.ArrayAt(item, "targets", where)) {
                     for (std::size_t at = 0; at < targets->size(); ++at) {
                         const JsonValue& target = (*targets)[at];

@@ -1,5 +1,6 @@
 #include "kachakacha/app/PlaneFocus.h"
 #include "V2OffsetTool.h"
+#include "kachakacha/document/Dimension.h"
 //! 線の編集コマンド(V2MainWindow の一部)。
 //!
 //! 分割・結合・端点一致・接線接続・曲率接続・面取り・丸め・オフセットを、
@@ -854,14 +855,22 @@ void V2MainWindow::AdoptCurrentDocument()
         if (dimension.anchors.size() < 2) {
             continue;
         }
+        auto anchors=dimension.anchors;
+        double measured=dimension.recordedValue;
+        if(!dimension.segments.empty()) {
+            const auto current=kachakacha::v2::document::EvaluateDimension(session_->GetDocument().Snapshot(),dimension);
+            if(current.HasValue()){anchors=current.Value().anchors;measured=current.Value().value;}
+        }
         const bool angle = dimension.unit == "rad";
-        const double value = angle ? dimension.recordedValue * 180.0 / 3.14159265358979323846
-                                   : dimension.recordedValue;
-        dimensions.push_back({dimension.anchors,
+        const double value = angle ? measured * 180.0 / 3.14159265358979323846
+                                   : measured;
+        dimensions.push_back({anchors,
             QStringLiteral("%1 %2%3")
-                .arg(QString::fromStdString(dimension.label))
+                .arg(QString::fromStdString(dimension.label + (dimension.driving ? "" : " (参照)") + (dimension.kind=="dim_radius" ? " R" : dimension.kind=="dim_diameter" ? " Ø" : "")))
                 .arg(value, 0, 'f', angle ? 1 : 2)
-                .arg(angle ? QStringLiteral("°") : QStringLiteral(" mm"))});
+                .arg(angle ? QStringLiteral("°") : QStringLiteral(" mm")), dimension.labelPosition, dimension.id,
+            dimension.kind=="dim_horizontal" ? std::optional<kachakacha::v2::geometry::Vector3>{dimension.dimensionU}
+            : dimension.kind=="dim_vertical" ? std::optional<kachakacha::v2::geometry::Vector3>{dimension.dimensionV} : std::nullopt});
     }
     viewport_->SetKeptDimensions(std::move(dimensions));
     viewport_->update();

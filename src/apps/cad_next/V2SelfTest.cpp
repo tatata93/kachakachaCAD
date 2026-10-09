@@ -78,6 +78,7 @@ namespace {
     const auto instructions=InstructionCases();cases.insert(cases.end(),instructions.begin(),instructions.end());
     const std::vector<SelfTestCase> planes = PlaneCases();
     cases.insert(cases.end(), planes.begin(), planes.end());
+    const auto dimensions=DimensionCases();cases.insert(cases.end(),dimensions.begin(),dimensions.end());
     const std::vector<SelfTestCase> drawing = DrawingCases();
     cases.insert(cases.end(), drawing.begin(), drawing.end());
     const std::vector<SelfTestCase> edit = EditCases();

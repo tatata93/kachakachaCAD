@@ -180,6 +180,7 @@ void V2Viewport::OnToolChanged()
     // 途中経過だけでなく、吸着・位置・候補送りも前の道具のものである。一緒に捨てる。
     const std::string beforeJa = hover_.messageJa;
     DiscardHoverState();
+    measureOverlay_ = {};
     ClearMeasurePicks();
     // 押し出しの下見も残さない。前の道具の手つきが画面に残ると、
     // いま何をしているのか読めなくなる(オーナー指示 2026-09-14 §4)。

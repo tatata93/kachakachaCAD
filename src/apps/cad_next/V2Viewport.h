@@ -1,5 +1,6 @@
 #pragma once
 #include "V2ImageViews.h"
+#include "kachakacha/app/MeasurePanel.h"
 #include <QVariant>
 #include "V2GpuRenderer.h"
 
@@ -669,7 +670,15 @@ public:
     struct KeptDimensionView {
         std::vector<kachakacha::v2::geometry::Vector3> anchors;
         QString text;
+        std::optional<kachakacha::v2::geometry::Vector3> labelPosition;
+        kachakacha::v2::base::DimensionId id;
+        std::optional<kachakacha::v2::geometry::Vector3> measureDirection;
     };
+    void SetDimensionPreview(std::optional<KeptDimensionView> dimension);
+    std::optional<kachakacha::v2::base::DimensionId> DimensionAt(const QPointF& point) const;
+    void DrawDimensionView(QPainter& painter, const KeptDimensionView& dimension) const;
+    void SetMeasureOverlay(kachakacha::v2::app::MeasureOverlay overlay);
+    const kachakacha::v2::app::MeasureOverlay& LiveMeasureOverlay() const { return measureOverlay_; }
     void SetKeptDimensions(std::vector<KeptDimensionView> dimensions);
     [[nodiscard]] int KeptDimensionCount() const noexcept
     {
@@ -815,6 +824,7 @@ private:
     void DrawFoldPreview(QPainter& painter) const;
     void DrawFoldBands(QPainter& painter, int level) const;
     //! 残した寸法。測った点を結ぶ細い線と、両端の短い印、名前と値。
+    void DrawMeasureOverlay(QPainter& painter) const;
     void DrawKeptDimensions(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawExtrudeHandle(QPainter& painter) const;
@@ -1118,6 +1128,8 @@ private:
     std::vector<int> foldEmphasis_;   //!< 帯ごとの強調(SetFoldPreview)
     std::optional<QPointF> lastSelectPoint_;   //!< 最後に押した画面の位置(SelectAt)
     std::vector<KeptDimensionView> keptDimensions_;
+    std::optional<KeptDimensionView> dimensionPreview_;
+    kachakacha::v2::app::MeasureOverlay measureOverlay_;
     //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
     struct BodyDrag {
         bool active = false;

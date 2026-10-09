@@ -58,6 +58,14 @@ struct MeasureRequest {
     modeling::WorkPlaneFrame workPlane;
 };
 
+//! 測定中の表示。計算は選択変更時だけ行い、描画中に再計算しない。
+struct MeasureOverlay {
+    std::vector<MeasureRow> rows;
+    std::vector<std::vector<geometry::Vector3>> lines;
+    std::vector<geometry::Vector3> points;
+};
+[[nodiscard]] MeasureOverlay BuildMeasureOverlay(const MeasureRequest& request);
+
 //! 数を mm の文字列にする。桁は3桁で揃える。
 //! 揃えないと、表が読みにくく、変わった桁に気づけない。
 [[nodiscard]] std::string FormatMillimetersJa(double value);

@@ -715,7 +715,9 @@ using kachakacha::v2::modeling::ToolSettings;
     viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
     viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
     if (!Explain((std::string("2点で測れる(行 ") + std::to_string(dock.RowCount()) + ")").c_str(),
-            viewport.MeasurePicks().size() == 2 && dock.RowCount() > 3)) {
+            viewport.MeasurePicks().size() == 2 && dock.RowCount() > 3
+                && viewport.LiveMeasureOverlay().lines.size() == 1
+                && viewport.LiveMeasureOverlay().rows.size() == static_cast<std::size_t>(dock.RowCount()))) {
         return false;
     }
     bool distance = false;
@@ -744,7 +746,9 @@ using kachakacha::v2::modeling::ToolSettings;
     // 測定を消去 → 押した点が消えて、また点を押せと言う。
     dock.PressClear();
     if (!Explain("消去で点が消える", viewport.MeasurePicks().empty()
-            && dock.RowValue(0).contains(QStringLiteral("あと 2")))) {
+            && dock.RowValue(0).contains(QStringLiteral("あと 2"))
+            && viewport.LiveMeasureOverlay().lines.empty()
+            && viewport.LiveMeasureOverlay().points.empty())) {
         return false;
     }
     // 3点角度: 頂点を真ん中にして 90 度。
@@ -762,7 +766,9 @@ using kachakacha::v2::modeling::ToolSettings;
         return false;
     }
     dock.PressClear();
-    return Explain("明示的なクリアで測定が消える", viewport.MeasurePicks().empty());
+    window.SelectTool(DrawingTool::Line);
+    return Explain("測定終了で一時表示も消える", viewport.MeasurePicks().empty()
+        && viewport.LiveMeasureOverlay().rows.empty());
 }
 
 //! HP-ME-02(C-15)。手で矩形を引き、1 辺を押して選び、帯の 測定 → 面積 を押すと、測定の棚が

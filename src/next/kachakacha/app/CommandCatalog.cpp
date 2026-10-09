@@ -108,6 +108,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "選ぶ道具に戻ります。", false,
             {"AT-UIX-001"}},
+        {"dimension.open", "寸法", CommandMode::Modeless, "measure", "",
+            SelectionPredicate::Always, "", "長さ・半径・直径・角度の寸法を配置し、形状を変更する寸法と参照寸法を切り替えます。", false, {"AT-MEA-001"}},
         {"measure.open", "測定", CommandMode::Modeless, "measure", "M",
             SelectionPredicate::Always, "",
             "距離や角度を測ります。測った場所から作図点を作れます。", false,

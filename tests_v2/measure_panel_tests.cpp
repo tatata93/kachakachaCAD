@@ -345,3 +345,23 @@ KACHA_V2_TEST(measure, 作業面を基準に底辺高さと面外成分を測る
     RequireEqual(ValueOf(points, "底辺（作業面U）"), std::string("3.000 mm"), "逆向きも長さ");
     RequireEqual(ValueOf(points, "高さ（作業面V）"), std::string("4.000 mm"), "2点でも高さ");
 }
+
+KACHA_V2_TEST(measure, live_overlay_follows_measurement_and_clear)
+{
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::TwoPoints;
+    request.pickedPoints = {{0,0,0}, {3,4,12}};
+    auto overlay = kachakacha::v2::app::BuildMeasureOverlay(request);
+    RequireEqual(ValueOf(overlay.rows, "距離"), std::string("13.000 mm"), "same measurement value");
+    Require(overlay.lines.size() == 1 && overlay.lines[0].size() == 2, "two anchors joined");
+    request.pickedPoints.clear();
+    overlay = kachakacha::v2::app::BuildMeasureOverlay(request);
+    Require(overlay.lines.empty() && overlay.points.empty(), "clear removes stale geometry");
+    request.mode = kachakacha::v2::app::MeasureMode::Element;
+    request.curves = {Line({0,0,0}, {10,0,0}), Line({0,3,4}, {10,3,4})};
+    overlay = kachakacha::v2::app::BuildMeasureOverlay(request);
+    Require(overlay.lines.size() == 3 && overlay.points.size() == 2, "separate curves and closest connector");
+    request.curves = {Circle(10.0)};
+    overlay = kachakacha::v2::app::BuildMeasureOverlay(request);
+    Require(overlay.lines.size() == 2 && overlay.points.size() == 1, "circle radius and center shown");
+}

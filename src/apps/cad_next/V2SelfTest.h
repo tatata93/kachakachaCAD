@@ -68,6 +68,7 @@ void Note(const char* what);
 
 //! 作図の棚(円弧の作り方・補助線・指定点・数値で線を作る)のケース。
 [[nodiscard]] std::vector<SelfTestCase> DrawingCases();
+std::vector<SelfTestCase> DimensionCases();
 
 //! 編集の棚(選んだものの数値編集)のケース。
 [[nodiscard]] std::vector<SelfTestCase> EditCases();

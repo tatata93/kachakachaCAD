@@ -4,6 +4,7 @@
 // 欄と定義の往復は core(app/MeasurePanel, app/EntityEdit)が持ち、ここは
 // 選んでいるものを core へ渡し、返った定義を文書へ入れるだけ。
 #include "V2MainWindow.h"
+#include "V2DimensionTool.h"
 
 #include "kachakacha/app/EntityEdit.h"
 #include "kachakacha/app/GuideTableBuild.h"
@@ -21,11 +22,12 @@
 
 bool V2MainWindow::IsShelfCommand(std::string_view id)
 {
-    return id == "measure.open" || id == "edit.numeric";
+    return id == "measure.open" || id == "dimension.open" || id == "edit.numeric";
 }
 
 void V2MainWindow::RunShelfCommand(std::string_view id)
 {
+    if(id=="dimension.open"){V2DimensionTool::Open(*this);return;}
     if (id == "measure.open") {
         // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
         RefreshMeasurements();
@@ -49,7 +51,11 @@ void V2MainWindow::RefreshMeasurements()
         return;
     }
     viewport_->SetMeasurePointCount(kachakacha::v2::app::MeasurePointCount(measureDock_->Mode()));
-    measureDock_->SetRequest(CurrentMeasureRequest());
+    const auto request = CurrentMeasureRequest();
+    measureDock_->SetRequest(request);
+    viewport_->SetMeasureOverlay(session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
+        ? kachakacha::v2::app::BuildMeasureOverlay(request)
+        : kachakacha::v2::app::MeasureOverlay{});
     measureDock_->SetKeptCount(
         static_cast<int>(session_->GetDocument().Snapshot().referenceDimensions.size()));
 }

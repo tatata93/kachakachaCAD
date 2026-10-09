@@ -94,7 +94,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 // 面の解析(プロンプト surface_analysis)。作りながら見るので面作成に並べる。
                 Extra("面の解析", "view.surface_analysis"), Extra("ゼブラ", "view.analysis_zebra")}},
         {"note", "注記",
-            {Tool("寸法", "measure.open"),
+            {Tool("寸法", "dimension.open"),
                 Blocked("テキスト", "テキストの注記はまだありません(文書に文字の要素がありません)")}},
         {"measure", "測定",
             {Measure("距離", kMeasureTwoPoints), Measure("角度", kMeasureAngle),

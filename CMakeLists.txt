@@ -595,6 +595,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/WorkPlaneOptions.cpp
     src/next/kachakacha/app/FabricationEvaluate.cpp
     src/next/kachakacha/app/EntityNaming.cpp
+    src/next/kachakacha/app/MeasureOverlay.cpp
     src/next/kachakacha/app/MeasurePanel.cpp
     src/next/kachakacha/app/ExportService.cpp
     src/next/kachakacha/app/PointSources.cpp
@@ -622,6 +623,8 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Version.cpp
     src/next/kachakacha/document/BrokenReference.cpp
     src/next/kachakacha/document/Commands.cpp
+    src/next/kachakacha/document/Dimension.cpp
+    src/next/kachakacha/document/DimensionSolver.cpp
     src/next/kachakacha/document/Document.cpp
     src/next/kachakacha/document/FeatureReevaluation.cpp
     src/next/kachakacha/modeling/GridModel.cpp
@@ -942,6 +945,7 @@ kachakacha_add_v2_test(kcd_import_tests tests_v2/kcd_import_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
+    kachakacha_add_v2_test(dimension_tests tests_v2/dimension_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
     kachakacha_add_v2_test(manual_tests tests_v2/manual_tests.cpp)
     kachakacha_add_v2_test(sample_document_tests tests_v2/sample_document_tests.cpp)
@@ -1181,6 +1185,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2PartPlaceCommands.cpp
         src/apps/cad_next/V2PanelFrame.h
         src/apps/cad_next/V2MainWindowTypes.h
+        src/apps/cad_next/V2SelfTestDimension.cpp
         src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2SelfTestEdit.cpp
         src/apps/cad_next/V2ExportCommands.cpp
@@ -1205,6 +1210,10 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ChoiceDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp
         src/apps/cad_next/V2ParameterDock.h
+        src/apps/cad_next/V2DimensionTool.cpp
+        src/apps/cad_next/V2DimensionUi.cpp
+        src/apps/cad_next/V2DimensionDraw.cpp
+        src/apps/cad_next/V2MeasureOverlay.cpp
         src/apps/cad_next/V2MeasureDock.cpp
         src/apps/cad_next/V2MeasureDock.h
         src/apps/cad_next/V2EditDock.cpp

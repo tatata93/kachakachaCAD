@@ -54,7 +54,7 @@ std::string Kind(std::string_view id,std::string_view label){
     if(id.starts_with("export.")||id.starts_with("output."))return "export";
     if(id.find("boolean")!=id.npos||id.starts_with("part."))return "solid";
     if(id.starts_with("workplane.")||id.starts_with("grid."))return "plane";
-    if(id.starts_with("measure."))return "measure";
+    if(id.starts_with("measure.")||id.starts_with("dimension."))return "measure";
     if(id.starts_with("image."))return "image";
     if(id=="tools.search"||id.find("fit_")!=id.npos)return "search";
     if(id.starts_with("view."))return "view";

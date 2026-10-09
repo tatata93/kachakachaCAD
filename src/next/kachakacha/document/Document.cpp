@@ -1,5 +1,6 @@
 #include "kachakacha/domain/ImageValidation.h"
 #include "kachakacha/document/Document.h"
+#include "kachakacha/document/Dimension.h"
 
 #include <algorithm>
 #include <set>
@@ -32,7 +33,7 @@ Document::Document(DocumentId id, DocumentSettings settings)
 
 std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
 {
-    std::vector<Diagnostic> diagnostics;
+    std::vector<Diagnostic> diagnostics = ValidateDrivingDimensions(snapshot);
 
     std::unordered_set<std::string> entityIds;
     for (const Entity& entity : snapshot.entities) {

@@ -129,6 +129,18 @@ template<class Id>
     return JsonValue::Object(std::move(object));
 }
 
+void WriteDimensionExtras(JsonObject& object, const ReferenceDimension& dim)
+{
+    if(dim.segments.empty())return;
+    JsonArray refs;
+    for(const auto& ref:dim.segments)refs.push_back(WriteSegmentRef(ref));
+    object["segments"]=JsonValue::Array(std::move(refs));
+    object["driving"]=JsonValue::Bool(dim.driving);
+    object["dimensionU"]=WriteVector(dim.dimensionU);
+    object["dimensionV"]=WriteVector(dim.dimensionV);
+    if(dim.labelPosition)object["labelPosition"]=WriteVector(*dim.labelPosition);
+}
+
 //! IDの並びを書く。新しい定義がどれもこの形なので、1か所にまとめる。
 [[nodiscard]] JsonValue WriteNumberArray(const std::vector<double>& values)
 {
@@ -634,6 +646,7 @@ std::string WriteDocumentJson(const DocumentFile& file)
                 JsonValue::Number(anchor.y), JsonValue::Number(anchor.z)}));
         }
         object["anchors"] = JsonValue::Array(std::move(anchors));
+        WriteDimensionExtras(object, dimension);
         dimensions.push_back(JsonValue::Object(std::move(object)));
     }
     root["referenceDimensions"] = JsonValue::Array(std::move(dimensions));

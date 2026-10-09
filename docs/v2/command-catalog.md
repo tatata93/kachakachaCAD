@@ -38,6 +38,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `view.show_all` | すべて表示 | 有効Document | 隠したものを全部出す | AT-UIX-010 |
 | `selection.activate` | 選択 | 常時 | 選択toolへ戻る | AT-UIX-001 |
 | `measure.open` | 測定 | 常時 | 非モーダル測定窓 | AT-MEA-001から005 |
+| `dimension.open` | 寸法 | 常時 | 駆動寸法と参照寸法の作成・編集 | HP-DIM-01/02 |
 | `view.fit_all` | 全体表示 | 可視幾何あり | cameraだけ変更 | AT-UIX-008 |
 | `view.align_selection` | 選択に正対 | 作業平面/立体の面/面/線のどれか。複数可 | camera(向き・注視点・倍率)だけ変更。**向きは、向きを持つ相手のうち最初の1つが決める。収まりは選んだもの全部が決める。** 向きの違うものが混じっていたら帯でそう言う | AT-UIX-008 |
 | `view.align_selection_back` | 反対側から正対 | 同上 | camera だけ変更(裏側から) | AT-UIX-008 |

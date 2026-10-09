@@ -322,7 +322,13 @@ void V2MainWindow::HandleSelectionChanged()
     RefreshCommandVisibility();
 }
 
-V2MainWindow::~V2MainWindow() = default;
+V2MainWindow::~V2MainWindow()
+{
+    // QWidgetの破棄より先にsession_や編集ツールが解放される。
+    // focusOutによる拘束解除・Hover更新は、それらが生きている間に済ませる。
+    if (viewport_ != nullptr) viewport_->clearFocus();
+    hide();
+}
 
 void V2MainWindow::SetMode(UiMode mode)
 {

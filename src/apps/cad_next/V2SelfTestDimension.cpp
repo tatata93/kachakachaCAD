@@ -62,9 +62,21 @@ bool DimensionFlow(V2MainWindow& window)
 }
 bool DimensionNormal(V2MainWindow& window){window.ApplyTheme(UiTheme::Normal);return DimensionFlow(window);}
 bool DimensionWin95(V2MainWindow& window){window.ApplyTheme(UiTheme::Windows95);return DimensionFlow(window);}
+bool CloseFocusedViewport(V2MainWindow&)
+{
+    for(int iteration=0;iteration<5;++iteration) {
+        auto child=std::make_unique<V2MainWindow>();child->show();QApplication::processEvents();
+        child->Viewport().setFocus();QApplication::processEvents();
+        child->Viewport().SetAxisConstraintByKey(true);
+        child->Viewport().SetSnapSuppressedByKey(true);
+        child.reset();QApplication::processEvents();
+    }
+    return true;
+}
 }
 std::vector<SelfTestCase> DimensionCases()
 {
-    return {{"HP-DIM-01 寸法作成と編集を続ける",&DimensionNormal},{"HP-DIM-02 Win95寸法操作",&DimensionWin95}};
+    return {{"HP-DIM-01 寸法作成と編集を続ける",&DimensionNormal},{"HP-DIM-02 Win95寸法操作",&DimensionWin95},
+        {"HP-LIFE-01 拘束中のビューを持つウインドウを終了できる",&CloseFocusedViewport}};
 }
 }

@@ -88,6 +88,7 @@ void V2DimensionTool::RefreshPreview()
     if(!current.HasValue()){window_.viewport_->SetDimensionPreview({});return;}
     dimension_.anchors=current.Value().anchors;
     const double shown=driving_->isChecked() ? value_->value() : current.Value().value*(dimension_.unit=="rad" ? 180/3.141592653589793 : 1);
+    if(!driving_->isChecked()){const QSignalBlocker block(value_);value_->setValue(shown);}
     const QString prefix=dimension_.kind=="dim_radius" ? QStringLiteral("R ") : dimension_.kind=="dim_diameter" ? QStringLiteral("Ø ") : QString();
     const QString text=QStringLiteral("%1%2%3").arg((driving_->isChecked() ? QString() : QStringLiteral("参照 "))+prefix)
         .arg(shown,0,'f',3).arg(dimension_.unit=="rad" ? QStringLiteral("°") : QStringLiteral(" mm"));

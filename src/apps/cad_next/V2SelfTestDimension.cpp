@@ -41,12 +41,20 @@ bool DimensionFlow(V2MainWindow& window)
     auto dim=window.Session().GetDocument().Snapshot().referenceDimensions.back();
     if(!Explain("線の長さが寸法値へ変わる",std::abs(document::EvaluateDimension(window.Session().GetDocument().Snapshot(),dim).Value().value-20)<1e-5))return false;
     if(!Explain("連続作成のパネルが残る",tool->isVisible()))return false;
-    auto* driving=tool->findChild<QCheckBox*>(QStringLiteral("dimensionDriving"));driving->setChecked(false);
-    if(!tool->AddTarget(ref)||!tool->Commit())return false;
+    auto* driving=tool->findChild<QCheckBox*>(QStringLiteral("dimensionDriving"));
+    if(!tool->AddTarget(ref))return false;
+    value->setValue(99);driving->setChecked(false);
+    if(!Explain("参照へ切替で右ペインの値も現在の形に戻る",std::abs(value->value()-20)<1e-5))return false;
+    if(!tool->Commit())return false;
     if(!Explain("参照寸法も作れる",window.Session().GetDocument().Snapshot().referenceDimensions.size()==2))return false;
     tool->Load(dim.id);value->setValue(30);
     if(!tool->Commit())return false;
     if(!Explain("保存済み寸法を編集できる",std::abs(document::EvaluateDimension(window.Session().GetDocument().Snapshot(),dim).Value().value-30)<1e-5))return false;
+    tool->Load(dim.id);
+    tool->findChild<QComboBox*>(QStringLiteral("dimensionKind"))->setCurrentIndex(1);value->setValue(35);
+    if(!tool->Commit())return false;
+    if(!Explain("種類の変更でも同じ寸法を編集する",window.Session().GetDocument().Snapshot().referenceDimensions.size()==2
+        && std::abs(document::EvaluateDimension(window.Session().GetDocument().Snapshot(),dim).Value().value-35)<1e-5))return false;
     if(qEnvironmentVariableIsSet("KACHACAD_DIMENSION_SCREENSHOT"))
         viewport.grab().save(window.Theme()==UiTheme::Normal ? QStringLiteral("_claudeout/dimension-normal.png") : QStringLiteral("_claudeout/dimension-win95.png"));
     QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(&viewport,&escape);

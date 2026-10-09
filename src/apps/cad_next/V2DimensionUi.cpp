@@ -19,6 +19,7 @@
 #include <QObject>
 #include <QString>
 #include <QWidget>
+#include <QSignalBlocker>
 using namespace kachakacha::v2;
 void V2DimensionTool::BuildUi()
 {
@@ -30,7 +31,10 @@ void V2DimensionTool::BuildUi()
         QStringLiteral("半径 R"),QStringLiteral("直径 Ø"),QStringLiteral("2直線の角度"),QStringLiteral("2点間（端点を選択）"),QStringLiteral("2点間の水平（U）"),QStringLiteral("2点間の垂直（V）")});layout->addWidget(kind_);
     auto button=[&](const QString& text,auto action){auto* b=new QPushButton(text,this);layout->addWidget(b);connect(b,&QPushButton::clicked,this,action);};
     button(QStringLiteral("左ペインの選択を取り込む"),[this]{TakeSelection();});
-    button(QStringLiteral("対象を選び直す"),[this]{Reset();});
+    button(QStringLiteral("対象を選び直す"),[this]{
+        dimension_.segments.clear();dimension_.targets.clear();dimension_.anchors.clear();placing_=false;
+        window_.viewport_->SetDimensionPreview({});status_->setText(QStringLiteral("新しい対象を選んでください。確定するまで保存済みの寸法は変わりません。"));
+    });
     layout->addWidget(MakePanelSectionTitle(this,QStringLiteral("寸法値")));
     driving_=new QCheckBox(QStringLiteral("寸法値で形状を変更する（外すと参照寸法）"),this);
     driving_->setObjectName(QStringLiteral("dimensionDriving"));driving_->setChecked(true);layout->addWidget(driving_);
@@ -48,7 +52,20 @@ void V2DimensionTool::BuildUi()
     auto* confirm=new QPushButton(QStringLiteral("確定 Enter"),this);MarkCancelConfirm(cancel,confirm);
     auto* footer=new QHBoxLayout;footer->addWidget(cancel);footer->addWidget(confirm);layout->addLayout(footer);
     connect(cancel,&QPushButton::clicked,this,[this]{Reset();});connect(confirm,&QPushButton::clicked,this,[this]{Commit();});
-    connect(kind_,&QComboBox::currentIndexChanged,this,[this]{if(!loading_)Reset();});
+    connect(kind_,&QComboBox::currentIndexChanged,this,[this]{
+        if(loading_)return;
+        if(dimension_.id.IsNil()){Reset();return;}
+        UpdateKind();
+        const auto current=document::EvaluateDimension(window_.session_->GetDocument().Snapshot(),dimension_);
+        if(current.HasValue()) {
+            const QSignalBlocker block(value_);
+            value_->setValue(current.Value().value*(dimension_.unit=="rad" ? 180/3.141592653589793 : 1));
+            placing_=true;RefreshPreview();
+        }else{
+            dimension_.segments.clear();dimension_.targets.clear();dimension_.anchors.clear();placing_=false;
+            window_.viewport_->SetDimensionPreview({});status_->setText(QString::fromStdString(current.FirstSummaryJa()));
+        }
+    });
     connect(driving_,&QCheckBox::toggled,this,[this](bool on){value_->setEnabled(on);RefreshPreview();});
     connect(value_,&QDoubleSpinBox::valueChanged,this,[this]{RefreshPreview();});
     connect(saved_,&QComboBox::currentIndexChanged,this,[this](int index){

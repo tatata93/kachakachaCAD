@@ -39,7 +39,7 @@ void V2DimensionTool::BuildUi()
     name_=new QLineEdit(this);name_->setPlaceholderText(QStringLiteral("寸法の名前（任意）"));layout->addWidget(name_);
     button(QStringLiteral("3Dビューで配置位置を指定"),[this]{placing_=true;RefreshPreview();});
     button(QStringLiteral("選択した保存寸法を削除"),[this]{
-        if(dimension_.id.IsNil())return;
+        if(dimension_.id.IsNil()){status_->setText(QStringLiteral("削除する保存済み寸法を一覧か3Dの文字から選んでください。"));return;}
         const auto result=window_.session_->GetDocument().Run(document::RemoveReferenceDimensionCommand(dimension_.id));
         if(result.committed){window_.AdoptCurrentDocument();Reset();RefreshList();}
     });

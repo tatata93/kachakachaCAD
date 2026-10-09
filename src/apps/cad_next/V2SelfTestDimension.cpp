@@ -19,6 +19,7 @@ namespace kachakacha::v2::selftest {
 namespace {
 bool DimensionFlow(V2MainWindow& window)
 {
+    window.resize(1500,900);QApplication::processEvents();
     auto& viewport=window.Viewport();viewport.SetViewDirection(ViewDirection::Top);viewport.SetVisibleWidthMm(200);
     const double scale=viewport.width()/200.0;const QPointF center(viewport.width()*0.5,viewport.height()*0.5);
     window.SelectTool(modeling::DrawingTool::Line);
@@ -28,8 +29,13 @@ bool DimensionFlow(V2MainWindow& window)
     if(!Explain("寸法コマンドで右ペインの道具を開く",tool!=nullptr))return false;
     const auto& curve=window.Session().Scene().curves.back();
     app::SelectionRef ref;ref.entityId=curve.entityId;ref.segmentId=curve.segmentId;
-    if(!Explain("道具の後から線を選べる",tool->AddTarget(ref)))return false;
+    tool->Reset();
+    const auto screen=viewport.Mapping().Project((curve.segment.StartPoint()+curve.segment.EndPoint())*0.5);
+    if(!screen)return false;
+    QMouseEvent pick(QEvent::MouseButtonPress,QPointF(screen->x,screen->y),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QApplication::sendEvent(&viewport,&pick);
     auto* value=tool->findChild<QDoubleSpinBox*>(QStringLiteral("dimensionValue"));
+    if(!Explain("道具を先に選び3Dクリックで対象を拾う",std::abs(value->value()-(curve.segment.EndPoint()-curve.segment.StartPoint()).Length())<1e-4))return false;
     value->setValue(20);
     if(!Explain("数値指定で寸法を作れる",tool->Commit()))return false;
     auto dim=window.Session().GetDocument().Snapshot().referenceDimensions.back();

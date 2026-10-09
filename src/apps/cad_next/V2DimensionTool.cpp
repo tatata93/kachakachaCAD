@@ -101,6 +101,15 @@ bool V2DimensionTool::Commit()
     if(window_.session_->GetDocument().Snapshot().id!=documentId_){status_->setText(QStringLiteral("文書が変わりました。寸法ツールを開き直してください。"));return false;}
     dimension_.driving=driving_->isChecked();dimension_.label=name_->text().toStdString();
     dimension_.recordedValue=value_->value()*(dimension_.unit=="rad" ? 3.141592653589793/180 : 1);
+    if(!dimension_.labelPosition && dimension_.anchors.size()>=2) {
+        const auto middle=(dimension_.anchors.front()+dimension_.anchors.back())*0.5;
+        const auto mapping=window_.viewport_->Mapping();
+        if(const auto screen=mapping.Project(middle)) {
+            const auto ray=mapping.RayThrough(*screen);
+            const double offset=24+20*(window_.session_->GetDocument().Snapshot().referenceDimensions.size()%5);
+            if(ray)dimension_.labelPosition=mapping.UnprojectOntoPlane({screen->x+8,screen->y-offset},middle,ray->direction);
+        }
+    }
     if(dimension_.id.IsNil())dimension_.id=window_.ids_->NextTyped<base::IdKind::Dimension>();
     const auto result=window_.session_->GetDocument().Run(document::SetDimensionCommand(dimension_));
     if(!result.committed) {

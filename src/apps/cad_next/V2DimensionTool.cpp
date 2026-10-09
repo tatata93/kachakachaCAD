@@ -124,7 +124,7 @@ void V2DimensionTool::RefreshList()
 {
     const QSignalBlocker block(saved_);saved_->clear();saved_->addItem(QStringLiteral("新しい寸法"));
     for(const auto& dim:window_.session_->GetDocument().Snapshot().referenceDimensions)if(!dim.segments.empty())
-        saved_->addItem(QString::fromStdString(dim.label.empty() ? dim.kind : dim.label),QString::fromStdString(dim.id.ToString()));
+        saved_->addItem(dim.label.empty() ? QString::fromUtf8("寸法%1").arg(saved_->count()+1) : QString::fromStdString(dim.label),QString::fromStdString(dim.id.ToString()));
 }
 void V2DimensionTool::Load(base::DimensionId id)
 {

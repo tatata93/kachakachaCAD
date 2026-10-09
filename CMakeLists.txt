@@ -1289,7 +1289,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     endif()
     target_compile_definitions(kachakacha_cad_next PRIVATE
-        KACHACAD_APP_VERSION="${PROJECT_VERSION}"
+        KACHACAD_APP_VERSION="${PROJECT_VERSION}")
+    set_property(SOURCE src/apps/cad_next/V2DiagnosticsCommand.cpp APPEND PROPERTY COMPILE_DEFINITIONS
         KACHACAD_GIT_COMMIT="${KACHACAD_GIT_COMMIT}"
         KACHACAD_GIT_BRANCH="${KACHACAD_GIT_BRANCH}")
     target_compile_features(kachakacha_cad_next PRIVATE cxx_std_20)

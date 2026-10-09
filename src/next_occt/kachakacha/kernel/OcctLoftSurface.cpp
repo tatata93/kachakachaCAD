@@ -448,7 +448,7 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
         if (index >= request.chains.size() || request.chains[index].segments.empty()) {
             return {};
         }
-        auto curve = SideCurve(request.chains[index].segments, false, tolerance, false);
+        auto curve = SideCurve(request.chains[index].segments, false, tolerance, true);
         if (!curve.HasValue() || curve.Value().IsNull()) {
             return {};
         }

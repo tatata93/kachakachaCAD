@@ -18,6 +18,7 @@
 #include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
 #include "V2LoopFacesTool.h"
+#include "V2Ribbon.h"
 #include "V2ShellSplitTool.h"
 #include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
@@ -132,25 +133,25 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         ClearPendingCommand(); RunBooleanTool(BooleanKindForCommand(id));
         return true;
     }
-    // 厚みも道具から始める(指示書 matrix P-10)。何も選んでいなくても棚が出て、
-    // 3D で形状ガイドの面を押せる。選んでから押した道もそのまま通す(欄が先に埋まるだけ)。
+    // 厚みも未選択から構え、選択済みなら欄へ取り込む。
     if (id == "part.thicken") {
         ClearPendingCommand();
         RunThickenTool();
         return true;
     }
     const auto endOwnedToolsBut = [this](const void* keep) { EndOwnedToolsBut(keep); };
-    // 線から面。線が選ばれていれば、輪を探して下見 → Enter で作る(V2LoopFacesTool)。
-    // 選んでいなければ、構えて待つ道(ArmCommand)へ通す。
-    QString reason;
-    if (id == "surface.from_lines" && CommandEnabled(id, &reason)) {
+    // 空の選択でも専用の棚を構え、選択の追加・解除ごとに輪を読み直す。
+    if (id == "surface.from_lines") {
         ClearPendingCommand();
         endOwnedToolsBut(loopFaces_.get());
+        const auto selection = viewport_->Selection();
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        viewport_->SetSelection(selection);
         loopFaces_->Start();
+        if (ribbon_ != nullptr) ribbon_->RevealCommand(id);
         return true;
     }
-    // 立体を作る(回転体・ロフト立体・スイープ)も道具から始める。何も選んでいなくても棚が出て、
-    // 3D で線を押すと種類で欄に入る(P-08/P-09)。構えている間の2度目は確定。
+    // 立体も未選択から構え、3Dで選んだ線を入力へ追加する。
     if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {
         ClearPendingCommand();
         endOwnedToolsBut(solidTool_.get());

@@ -271,6 +271,7 @@ void V2MainWindow::HandleSelectionChanged()
     HighlightTreeForSelection();
     if (gptFabrication_ != nullptr) { gptFabrication_->HandleSelectionChanged(); }
     if (gptSurface_ != nullptr) { gptSurface_->HandleSelectionChanged(); }
+    if (loopFaces_ != nullptr) { loopFaces_->HandleSelectionChanged(); }
     // 構えている命令があれば、そろったかを見る。
     RefreshPendingCommand(false);
     // 面作成中の素のクリックは、**いまの欄**へ入る(もう一度押すと外れる)。

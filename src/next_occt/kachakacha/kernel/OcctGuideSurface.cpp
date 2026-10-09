@@ -270,6 +270,10 @@ constexpr int kNetworkPointsPerChain = 9;
             if (useInitialSurface) {
                 const TopoDS_Face initial = detail::CoonsFromRing(request, ring, tolerance);
                 if (!initial.IsNull()) {
+                    // G0 の外周だけなら、外周を補間する Coons 面をそのまま使う。
+                    // 再度 plate fitting すると、既に合っている面まで大きく折れ返ることがある。
+                    // 内部ガイドがある場合は省略せず、従来どおり拘束を加えて張る。
+                    if (IndicesWithRole(request, ChainRole::GuideU).empty()) return Out::Success(initial);
                     filler.LoadInitSurface(initial);
                 }
             }

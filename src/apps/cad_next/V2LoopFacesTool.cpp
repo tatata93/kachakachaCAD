@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <QString>
+#include <QScopedValueRollback>
 #include <Qt>
 
 #include <algorithm>
@@ -101,8 +102,8 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
     dock_->SetReopenHandler([this] { (void)ReopenRecent(); });
     dock_->SetActionHandlers([this] { (void)Confirm(); },
         [this] {
-            Clear();
-            window_.SetStatus(QStringLiteral("面にする: やめました。何も変えていません。"));
+            Clear(true);
+            window_.SetStatus(QStringLiteral("面にする: 入力を取り消しました。次の線を選べます。"));
         });
 }
 
@@ -117,6 +118,17 @@ void V2LoopFacesTool::Start()
     make_.clear();
     continuity_.clear();
     leaveGap_.clear();
+    waitingAfterCancel_ = true;
+    window_.viewport_->SetToolPickActive(true);
+    window_.viewport_->SetToolPickToggle(true);
+    HandleSelectionChanged();
+    window_.RefreshRightShelves();
+}
+
+void V2LoopFacesTool::HandleSelectionChanged()
+{
+    if (!Active() || updating_) return;
+    selections_.clear();
     for (const EntityId& id : window_.viewport_->Selection().entityIds) {
         const auto chosen = kachakacha::v2::app::GuideSelectionOf(
             window_.session_->GetDocument(), window_.session_->Scene(), id);
@@ -125,7 +137,13 @@ void V2LoopFacesTool::Start()
         }
     }
     if (selections_.empty()) {
-        window_.SetStatus(QStringLiteral("面にする: 先に線を選んでください。"));
+        plan_.reset();
+        window_.viewport_->HideToolPreview();
+        window_.viewport_->HideEditPreview();
+        window_.viewport_->HideToolRoleLabels();
+        V2LoopFacesView view; view.summaryJa = QStringLiteral("ワイヤーをクリックして追加・解除します。閉じた輪ができたらEnterで面を作ります。");
+        dock_->ShowView(view);
+        window_.SetStatus(QStringLiteral("面にする: ワイヤーを選んでください。選び足すたびに輪の下見を更新します。"));
         return;
     }
     if (!Replan()) {
@@ -146,9 +164,16 @@ kachakacha::v2::geometry::GeometryTolerance V2LoopFacesTool::ToleranceNow() cons
 
 bool V2LoopFacesTool::Replan()
 {
+    networkTables_.clear();
+    if (TryNetworkPlan()) return true;
     auto planned = kachakacha::v2::app::PlanLoopFaces(selections_, ToleranceNow(), Neighbors());
     if (!planned.HasValue()) {
         plan_.reset();
+        window_.viewport_->HideToolPreview();
+        window_.viewport_->HideEditPreview();
+        window_.viewport_->HideToolRoleLabels();
+        V2LoopFacesView view; view.summaryJa = QString::fromStdString(planned.FirstSummaryJa());
+        dock_->ShowView(view);
         window_.ReportDiagnostics(planned.Diagnostics());
         return false;
     }
@@ -425,8 +450,9 @@ void V2LoopFacesTool::ShowDock()
         const LoopFace& face = plan_->faces[at];
         V2LoopFaceRow row;
         row.number = static_cast<int>(at + 1);
-        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(face.sideCount,
-            face.method == LoopFaceMethod::Planar, face.method == LoopFaceMethod::Loft);
+        const auto choices = networkTables_.empty() ? kachakacha::v2::app::LoopFaceMethodChoices(face.sideCount,
+            face.method == LoopFaceMethod::Planar, face.method == LoopFaceMethod::Loft)
+            : std::vector<LoopFaceMethod>{face.method};
         const LoopFaceMethod current = MethodOf(at);
         for (std::size_t index = 0; index < choices.size(); ++index) {
             row.methodChoicesJa.push_back(Text(kachakacha::v2::app::LoopFaceMethodLabelJa(choices[index])));
@@ -493,7 +519,7 @@ void V2LoopFacesTool::ShowDock()
 
 bool V2LoopFacesTool::HandleKey(int key)
 {
-    if (!plan_.has_value()) {
+    if (!Active()) {
         return false;
     }
     if (key == Qt::Key_Escape) {
@@ -507,6 +533,7 @@ bool V2LoopFacesTool::HandleKey(int key)
     if (key != Qt::Key_Return && key != Qt::Key_Enter) {
         return false;
     }
+    if (!plan_.has_value()) { HandleSelectionChanged(); return true; }
     return Confirm();
 }
 
@@ -516,41 +543,35 @@ bool V2LoopFacesTool::Confirm()
     if (!plan_.has_value()) {
         return false;
     }
+    const QScopedValueRollback<bool> updateGuard(updating_, true);
     auto& document = window_.session_->GetDocument();
-    kachakacha::v2::document::Document::Transaction transaction(document, kLabelJa);
-    // T 字で分ける → 計画し直す → 寄せる → 計画し直す → 作る。
-    if (ApplySplits() && !Replan()) {
-        Clear();
+    const auto originalSelections = selections_;
+    int made = 0;
+    // AbortCompound を先に終えてから場面を戻す。失敗時も入力とツールを保持する。
+    const bool committed = [&]() {
+        kachakacha::v2::document::Document::Transaction transaction(document, kLabelJa);
+        if (ApplySplits() && !Replan()) return false;
+        if (CloseGaps() && !Replan()) return false;
+        if (plan_->faces.empty()) {
+            window_.SetStatus(QStringLiteral("面にする: 閉じた輪が無いので、面は作りません。線を追加・解除してください。"));
+            return false;
+        }
+        made = BuildFaces();
+        return made > 0 && transaction.Commit();
+    }();
+    if (!committed) {
+        const QString problem = window_.StatusText();
+        selections_ = originalSelections;
         window_.AdoptCurrentDocument();
-        return true;
-    }
-    if (CloseGaps() && !Replan()) {
-        Clear();
-        window_.AdoptCurrentDocument();
-        return true;
-    }
-    if (plan_->faces.empty()) {
-        window_.SetStatus(QStringLiteral("面にする: 閉じた輪が無いので、面は作りません。"));
-        Clear();
-        window_.AdoptCurrentDocument();
-        return true;
-    }
-    const int made = BuildFaces();
-    if (made == 0) {
-        Clear();
-        window_.AdoptCurrentDocument();
+        window_.RebuildKernelShapes();
+        if (Replan()) ShowPreview();
+        window_.SetStatus(problem);
         return true;
     }
     const QString summary = Text(plan_->summaryJa);
     QString unused;
     for (const std::size_t index : plan_->unused) {
         unused += (unused.isEmpty() ? QStringLiteral("") : QStringLiteral("、")) + Text(selections_[index].label);
-    }
-    if (!transaction.Commit()) {
-        window_.SetStatus(QStringLiteral("面にする: 途中で失敗したので、何も変えていません。"));
-        Clear();
-        window_.AdoptCurrentDocument();
-        return true;
     }
     Recent recent;
     for (const auto& selection : selections_) {
@@ -646,13 +667,17 @@ bool V2LoopFacesTool::ReopenRecent()
 
 void V2LoopFacesTool::Clear(bool keepTool)
 {
+    updating_ = true;
     waitingAfterCancel_ = keepTool;
+    window_.viewport_->SetToolPickActive(keepTool);
+    window_.viewport_->SetToolPickToggle(keepTool);
     if (keepTool) {
-        window_.pendingCommandId_ = "surface.from_lines";
         window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         dock_->ShowView({});
     }
     if (!plan_.has_value()) {
+        updating_ = false;
+        window_.RefreshRightShelves();
         return;
     }
     plan_.reset();
@@ -663,6 +688,7 @@ void V2LoopFacesTool::Clear(bool keepTool)
     }
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
+    updating_ = false;
 }
 
 //! 1 本の線を片(1 本以上)に置き換える。元の線は入力にしない(形をそのまま持つので消してよい。
@@ -882,8 +908,8 @@ int V2LoopFacesTool::BuildFaces()
         std::vector<SurfaceContinuity> continuity;
         std::vector<EntityId> supports;
         EdgeSupports(at, builtIds, continuity, supports);
-        const auto table = kachakacha::v2::app::LoopFaceTable(selections_, face, tolerance,
-            continuity, supports);
+        const auto table = networkTables_.empty() ? kachakacha::v2::app::LoopFaceTable(selections_, face, tolerance,
+            continuity, supports) : kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>::Success(networkTables_[at]);
         if (!table.HasValue()) {
             window_.ReportDiagnostics(table.Diagnostics());
             return 0;
@@ -894,9 +920,8 @@ int V2LoopFacesTool::BuildFaces()
             return 0;
         }
         std::vector<EntityId> inputs;
-        for (const std::size_t selection : face.selections) {
-            inputs.push_back(selections_[selection].sourceWireId);
-        }
+        for (const auto& row : table.Value().rows) for (const auto id : row.sourceWireIds)
+            if (std::find(inputs.begin(), inputs.end(), id) == inputs.end()) inputs.push_back(id);
         bool smooth = false;
         for (const auto& row : table.Value().rows) {
             smooth = smooth || row.continuity != SurfaceContinuity::G0;

@@ -1163,6 +1163,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     src/apps/cad_next/V2GptSurfaceTool.cpp
         src/apps/cad_next/V2GptSurfaceAssist.cpp
         src/apps/cad_next/V2LoopFacesTool.cpp
+        src/apps/cad_next/V2LoopFacesNetwork.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp
         src/apps/cad_next/V2SurfaceDockRoles.cpp

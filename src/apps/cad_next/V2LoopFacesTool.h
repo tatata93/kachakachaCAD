@@ -34,6 +34,7 @@ public:
 
     //! 命令 surface.from_lines(面にする)。いま選んでいる線から輪を探し、下見と棚を出す。
     void Start();
+    void HandleSelectionChanged();
     [[nodiscard]] bool Active() const noexcept { return plan_.has_value() || waitingAfterCancel_; }
     //! Enter / Esc。引き受けたら真。
     [[nodiscard]] bool HandleKey(int key);
@@ -62,6 +63,7 @@ public:
 
 private:
     [[nodiscard]] bool Replan();
+    [[nodiscard]] bool TryNetworkPlan();
     void ShowPreview();
     void ShowDock();
     [[nodiscard]] kachakacha::v2::geometry::GeometryTolerance ToleranceNow() const;
@@ -90,9 +92,11 @@ private:
 
     V2MainWindow& window_;
     bool waitingAfterCancel_ = false;
+    bool updating_ = false;
     V2LoopFacesDock* dock_ = nullptr;
     std::vector<kachakacha::v2::modeling::GuideTableSelection> selections_;
     std::optional<kachakacha::v2::app::LoopFacePlan> plan_;
+    std::vector<kachakacha::v2::modeling::GuideTable> networkTables_;
     //! 輪ごとの上書き(作り方・作るか)。計画し直すと輪の数に合わせて作り直す。
     std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methodOverride_;
     std::vector<bool> make_;

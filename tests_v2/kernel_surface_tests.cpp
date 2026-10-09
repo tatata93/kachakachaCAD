@@ -5,6 +5,7 @@
 // 断り方まで試験するのは、V1が「無いのに有るふり」をして落ちたためである。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/app/SurfaceNetwork.h"
 
@@ -948,6 +949,37 @@ KACHA_V2_TEST(kernel_surface, branched_curved_network_builds_every_patch)
         Require(HasShape(built.Value().handle), "形状を保持");
         ReleaseShape(built.Value().handle);
     }
+}
+
+// 曲がった外周を多数の区間に分けても、補間済みの面を再 fitting して折り返さない。
+KACHA_V2_TEST(kernel_fill, segmented_roof_stays_inside_its_boundary_envelope)
+{
+    using kachakacha::v2::geometry::ArcThroughThreePoints;
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    const std::vector<CurveSegment> segments{
+        ArcThroughThreePoints({0,0,6},{8,0,5.7},{14,0,5}).Value(),
+        ArcThroughThreePoints({14,0,5},{17,0,3},{18,0,0}).Value(),
+        Line({18,0,0},{18,-23,0}),
+        ArcThroughThreePoints({18,-23,0},{17,-26,0},{15,-27,0}).Value(),
+        Line({15,-27,0},{6,-27,0}), Line({6,-27,0},{5,-27,0}),
+        Line({5,-27,0},{0,-27,0}),
+        CurveSegment::MakeCubicBezier({{0,-27,0},{0,-23,0},{0,-19,6},{0,-10,6}}).Value(),
+        Line({0,-10,6},{0,0,6})};
+    for (std::size_t i=0;i<segments.size();++i) {
+        GuideChain chain;chain.role=ChainRole::BoundarySide;chain.index=static_cast<int>(i+1);
+        chain.segments={segments[i]};request.chains.push_back(chain);
+    }
+    const auto built=Build(request);
+    Require(built.HasValue(), "分割された曲線外周から面を作る");
+    Require(built.Value().maximumDeviationMm<=0.01, "すべての外周を許容内で通る");
+    const auto mesh=kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle,0.01);
+    Require(mesh.HasValue(), "実際の表示用形状を検査");
+    const auto& m=mesh.Value();
+    Require(m.minimum.x>=-0.1 && m.maximum.x<=18.1, "横へ飛び出さない");
+    Require(m.minimum.y>=-27.1 && m.maximum.y<=0.1, "前後へ折り返さない");
+    Require(m.minimum.z>=-0.1 && m.maximum.z<=6.1, "底より下へ垂れたり上へ尖ったりしない");
+    ReleaseShape(built.Value().handle);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

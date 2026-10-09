@@ -386,7 +386,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             true, {"AT-GPT-S001", "AT-GPT-S002"}},
         {"surface.from_lines", "面にする", CommandMode::Tool, "surface", "Shift+F",
             SelectionPredicate::OneOrMoreWires, "線を1つ以上選んでください。",
-            "選んだ線の端点のつながりから閉じた輪を全部見つけ、平面 / 四辺面 / 境界面(輪が無ければロフト)で面にします。"
+            "道具を選び、線をクリックして追加・解除し、Enterで面にします。線を先に選んでも使えます。"
+            "閉じた輪を見つけ、平面 / 四辺面 / 境界面(曲面は近似、輪が無ければロフト)で面にします。"
             "線の端が別の線の途中に乗っていれば(T 字)そこで分けます。端が離れていれば、どこが何 mm かを言い、"
             "寄せるか そのままかを選べます。輪ごとに作り方を変えられます。元の線は残ります。",
             true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-008"}},

@@ -129,11 +129,12 @@ struct GuideChain {
     std::uint64_t supportShapeHandle = 0;
 };
 
-//! 四辺面の張り方(OCCT GeomFill_BSplineCurves の 3 方式)。
+//! 四辺面・境界面の張り方。既存保存値0〜2は変更しない。
 enum class FourEdgeStyle {
     Coons,      //!< 4 辺を線形に混ぜる標準の張り方
     Stretch,    //!< 平坦優先(張りを強く、ふくらみを抑える)
     Curved,     //!< 丸み優先(辺の曲がりを内側へ多めに伝える)
+    Dome,       //!< 断面の丸みを広く伝える非線形混合(近似)
 };
 
 [[nodiscard]] constexpr std::string_view FourEdgeStyleLabelJa(FourEdgeStyle style) noexcept
@@ -142,6 +143,7 @@ enum class FourEdgeStyle {
     case FourEdgeStyle::Coons:   return "標準(Coons)";
     case FourEdgeStyle::Stretch: return "平坦優先";
     case FourEdgeStyle::Curved:  return "丸み優先";
+    case FourEdgeStyle::Dome:    return "滑らかなドーム（近似）";
     }
     return "";
 }

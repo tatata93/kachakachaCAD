@@ -174,7 +174,7 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
     table.revolveAngleRad = definition.revolveAngleRad;
     table.lockSectionOrder = definition.lockSectionOrder;
     table.fourEdgeStyle = static_cast<modeling::FourEdgeStyle>(
-        std::clamp(definition.fourEdgeStyle, 0, 2));
+        std::clamp(definition.fourEdgeStyle, 0, 3));
     for (std::size_t index = 0; index < definition.chains.size(); ++index) {
         const auto role = static_cast<ChainRole>(definition.roles[index]);
         auto added = AddDefinitionRow(document, scene, std::move(table), role,

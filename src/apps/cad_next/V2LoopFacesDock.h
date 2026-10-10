@@ -38,7 +38,7 @@ struct V2LoopEdgeCell {
 struct V2LoopFaceRow {
     int number = 1;                       //!< ① から
     std::vector<QString> methodChoicesJa; //!< 作り方の選択肢(表示名)
-    int styleIndex = -1;                   //!< -1: 張り方の選択なし、0..2: Coons/Stretch/Curved
+    int styleIndex = -1;                   //!< -1: 張り方の選択なし、0..3: Coons/Stretch/Curved/Dome
     int methodIndex = 0;                  //!< いま選ばれている選択肢
     int edgeCount = 0;                    //!< 辺(側)の数(ロフトなら断面の数)
     int lineCount = 0;                    //!< 線の本数(辺の数と違えば「辺 4(線 5)」と出す)

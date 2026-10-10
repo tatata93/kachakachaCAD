@@ -232,17 +232,17 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
     });
     QObject::connect(slots_[3].list, &QTreeWidget::itemSelectionChanged, this,
         [this] { RefreshContinuityRow(); });
-    // 四辺面の張り方。四辺面のときだけ出す。
+    // 四辺面・境界面の張り方。
     auto* style = new QHBoxLayout();
     fourEdgeStyleTitle_ = new QLabel(QStringLiteral("張り方"), widget());
     style->addWidget(fourEdgeStyleTitle_);
     fourEdgeStyle_ = new QComboBox(widget());
     for (const FourEdgeStyle item : {FourEdgeStyle::Coons, FourEdgeStyle::Stretch,
-             FourEdgeStyle::Curved}) {
+             FourEdgeStyle::Curved, FourEdgeStyle::Dome}) {
         fourEdgeStyle_->addItem(Text(kachakacha::v2::modeling::FourEdgeStyleLabelJa(item)));
     }
     QObject::connect(fourEdgeStyle_, &QComboBox::currentIndexChanged, this, [this](int index) {
-        if (!loading_ && fourEdgeStyleHandler_ && index >= 0 && index <= 2) {
+        if (!loading_ && fourEdgeStyleHandler_ && index >= 0 && index <= 3) {
             fourEdgeStyleHandler_(static_cast<FourEdgeStyle>(index));
         }
     });
@@ -485,7 +485,8 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
         RefreshEntryRole(static_cast<int>(index));
     }
     RefreshContinuityRow();
-    const bool fourEdge = state.method == GuideSurfaceMethod::FourEdgePatch;
+    const bool fourEdge = state.method == GuideSurfaceMethod::FourEdgePatch
+        || state.method == GuideSurfaceMethod::BoundaryFill;
     fourEdgeStyleTitle_->setVisible(fourEdge);
     fourEdgeStyle_->setVisible(fourEdge);
     fourEdgeStyle_->setCurrentIndex(static_cast<int>(state.fourEdgeStyle));

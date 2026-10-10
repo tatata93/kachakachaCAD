@@ -204,8 +204,9 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
         widgets.style->addItem(QStringLiteral("標準"));
         widgets.style->addItem(QStringLiteral("平坦優先"));
         widgets.style->addItem(QStringLiteral("丸み優先"));
+        widgets.style->addItem(QStringLiteral("滑らかなドーム（近似）"));
         widgets.style->setCurrentIndex(face.styleIndex);
-        widgets.style->setToolTip(QStringLiteral("同じ境界を保って張り方を比較します。切替後の面の下見を確認してください。"));
+        widgets.style->setToolTip(QStringLiteral("同じ境界を保って比較します。滑らかなドームは断面の丸みを広げる近似です。内部ガイド・支持面G1/G2は標準などを選んでください。不要な区画は「作る」を外します。"));
         styleLine->addWidget(widgets.style,1);
         widgets.column->addLayout(styleLine);
     }

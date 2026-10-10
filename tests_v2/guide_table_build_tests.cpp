@@ -82,6 +82,7 @@ KACHA_V2_TEST(guide_table_build, split_interval_and_reverse_survive_saved_defini
     const auto scene = fixture.Scene();
     GuideTable table;
     table.method = GuideSurfaceMethod::BoundaryFill;
+    table.fourEdgeStyle = modeling::FourEdgeStyle::Dome;
     modeling::GuideTableRow row;
     row.role = ChainRole::BoundarySide;
     row.sourceWireIds = {id};
@@ -94,6 +95,9 @@ KACHA_V2_TEST(guide_table_build, split_interval_and_reverse_survive_saved_defini
         "元の線の途中を記録");
     const auto restored = GuideTableFromDefinition(fixture.document, {}, definition.Value());
     Require(restored.HasValue(), "元のワイヤーが非表示でも再評価できる");
+    Require(definition.Value().fourEdgeStyle == 3
+        && restored.Value().fourEdgeStyle == modeling::FourEdgeStyle::Dome,
+        "新しいドームの張り方を保存値3で復元");
     Require(restored.Value().rows[0].reversed, "行の反転表示も復元");
     const auto& curve = restored.Value().rows[0].segments[0];
     Require(geometry::Distance(curve.StartPoint(), {8, 0, 0}) < 1e-8

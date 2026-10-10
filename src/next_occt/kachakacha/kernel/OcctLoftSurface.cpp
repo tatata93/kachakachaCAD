@@ -1,4 +1,5 @@
 #include "kachakacha/kernel/OcctLoftSurface.h"
+#include "kachakacha/kernel/OcctDomePatch.h"
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
@@ -419,6 +420,7 @@ template<class Function>
     case modeling::FourEdgeStyle::Coons:   return GeomFill_CoonsStyle;
     case modeling::FourEdgeStyle::Stretch: return GeomFill_StretchStyle;
     case modeling::FourEdgeStyle::Curved:  return GeomFill_CurvedStyle;
+    case modeling::FourEdgeStyle::Dome:    return GeomFill_CoonsStyle;
     }
     return GeomFill_CoonsStyle;
 }
@@ -725,7 +727,7 @@ struct SampleContinuity {
 
 } // namespace
 
-TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<std::size_t>& ring,
+Result<TopoDS_Face> CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<std::size_t>& ring,
     const GeometryTolerance& tolerance)
 {
     const auto made = Guarded([&]() -> Result<TopoDS_Face> {
@@ -754,14 +756,19 @@ TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<
         }
         SnapCorners(curves);
         GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], StyleOf(request.fourEdgeStyle));
-        const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
+        occ::handle<Geom_BSplineSurface> surface = patch.Surface();
         if (surface.IsNull()) {
             return Out::Success(TopoDS_Face());
+        }
+        if (request.fourEdgeStyle == modeling::FourEdgeStyle::Dome) {
+            const auto dome = DomePatch(surface);
+            if (!dome.HasValue()) return Out::Failure(dome.Diagnostics());
+            surface = dome.Value();
         }
         BRepBuilderAPI_MakeFace face(occ::handle<Geom_Surface>(surface), Precision::Confusion());
         return Out::Success(face.IsDone() ? face.Face() : TopoDS_Face());
     }, "境界面の初期面");
-    return made.HasValue() ? made.Value() : TopoDS_Face();
+    return made;
 }
 
 Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
@@ -880,6 +887,11 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
     using Out = Result<TopoDS_Shape>;
     return Guarded([&]() -> Out {
         const auto& plan = analysis.fourEdge;
+        if (request.fourEdgeStyle == modeling::FourEdgeStyle::Dome && plan.refill) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
+                "滑らかなドーム（近似）は内部ガイド・支持面G1/G2には対応していません。",
+                "入力は保持します。標準など別の張り方を選んでください。"));
+        }
         if (plan.sides.size() != 4 || plan.reversed.size() != 4) {
             return Out::Failure(MakeError(kSurfaceBuildFailed, "四辺面の辺が 4 本ではありません。", {}));
         }
@@ -900,10 +912,15 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
         SnapCorners(curves);
         GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3],
             StyleOf(request.fourEdgeStyle));
-        const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
+        occ::handle<Geom_BSplineSurface> surface = patch.Surface();
         if (surface.IsNull()) {
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "4 辺から面を張れませんでした。", "辺の向きとつながりを確かめてください。"));
+        }
+        if (request.fourEdgeStyle == modeling::FourEdgeStyle::Dome) {
+            const auto dome = DomePatch(surface);
+            if (!dome.HasValue()) return Out::Failure(dome.Diagnostics());
+            surface = dome.Value();
         }
         BRepBuilderAPI_MakeFace face(occ::handle<Geom_Surface>(surface), Precision::Confusion());
         if (!face.IsDone()) {

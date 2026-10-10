@@ -394,7 +394,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "道具を選び、線をクリックして追加・解除し、Enterで面にします。線を先に選んでも使えます。"
             "閉じた輪を見つけ、平面 / 四辺面 / 境界面(曲面は近似、輪が無ければロフト)で面にします。"
             "線の端が別の線の途中に乗っていれば(T 字)そこで分けます。端が離れていれば、どこが何 mm かを言い、"
-            "寄せるか そのままかを選べます。輪ごとに作り方を変えられます。元の線は残ります。",
+            "寄せるか そのままかを選べます。輪ごとに作り方を変えられます。"
+            "張り方の滑らかなドーム（近似）で断面の丸みを広げ、不要な輪は作るを外します。元の線は残ります。",
             true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-008"}},
         {"surface.create", "面を作る", CommandMode::Dialog, "surface", "G",
             SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,

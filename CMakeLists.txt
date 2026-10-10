@@ -752,6 +752,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctLoftSurface.cpp
+    src/next_occt/kachakacha/kernel/OcctDomePatch.cpp
+    src/next_occt/kachakacha/kernel/OcctDomeProfile.cpp
     src/next_occt/kachakacha/kernel/OcctGptFabrication.cpp
     src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
@@ -1013,6 +1015,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(gpt_surface_tests tests_v2/gpt_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(gpt_fabrication_tests tests_v2/gpt_fabrication_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_dome_tests tests_v2/kernel_dome_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_edit_tests tests_v2/kernel_surface_edit_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_analysis_tests tests_v2/kernel_surface_analysis_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
@@ -1054,6 +1057,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestShellSplit.cpp
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
+        src/apps/cad_next/V2SelfTestDome.cpp
         src/apps/cad_next/V2SelfTestGeneration.cpp
         src/apps/cad_next/V2SelfTestGptFabrication.cpp
     src/apps/cad_next/V2SelfTestGptSurface.cpp

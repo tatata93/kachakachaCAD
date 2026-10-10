@@ -72,7 +72,7 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
         }
     });
     dock_->SetStyleHandler([this](int face,int style) {
-        if (face<0||static_cast<std::size_t>(face)>=styles_.size()||style<0||style>2) return;
+        if (face<0||static_cast<std::size_t>(face)>=styles_.size()||style<0||style>3) return;
         styles_[static_cast<std::size_t>(face)]=static_cast<kachakacha::v2::modeling::FourEdgeStyle>(style);
         ShowPreview();
     });

@@ -273,7 +273,13 @@ constexpr int kNetworkPointsPerChain = 9;
             }
             // 初期面: 外周から Coons を作れれば渡す(膜が平面へ垂れない)。作れなければこれまでどおり。
             if (useInitialSurface) {
-                const TopoDS_Face initial = detail::CoonsFromRing(request, ring, tolerance);
+                const auto made = detail::CoonsFromRing(request, ring, tolerance);
+                if (!made.HasValue()) return Out::Failure(made.Diagnostics());
+                const TopoDS_Face initial = made.Value();
+                if (initial.IsNull() && request.fourEdgeStyle == modeling::FourEdgeStyle::Dome)
+                    return Out::Failure(MakeError(kSurfaceBuildFailed,
+                        "滑らかなドーム（近似）には4側にまとめられる境界が必要です。",
+                        "標準など別の張り方を選んでください。"));
                 if (!initial.IsNull()) {
                     // G0 の外周だけなら、外周を補間する Coons 面をそのまま使う。
                     // 再度 plate fitting すると、既に合っている面まで大きく折れ返ることがある。
@@ -414,8 +420,16 @@ constexpr int kNetworkPointsPerChain = 9;
     const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
     bool boundaryFill, detail::ContinuityMeasure& measure)
 {
+    if (boundaryFill && request.fourEdgeStyle == modeling::FourEdgeStyle::Dome) {
+        for (const auto& chain : request.chains) {
+            if (chain.role != ChainRole::BoundarySide || chain.continuity != modeling::SurfaceContinuity::G0)
+                return Result<TopoDS_Shape>::Failure(MakeError(kSurfaceBuildFailed,
+                    "滑らかなドーム（近似）は内部ガイド・支持面G1/G2には対応していません。",
+                    "入力は保持します。標準など別の張り方を選んでください。"));
+        }
+    }
     auto built = BuildFillingOnce(request, analysis, tolerance, boundaryFill, boundaryFill, measure);
-    if (!built.HasValue() && boundaryFill) {
+    if (!built.HasValue() && boundaryFill && request.fourEdgeStyle != modeling::FourEdgeStyle::Dome) {
         built = BuildFillingOnce(request, analysis, tolerance, boundaryFill, false, measure);
     }
     return built;

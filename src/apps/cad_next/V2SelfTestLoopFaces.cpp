@@ -1295,6 +1295,7 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseGuideRowsOnlyWithShelf},
     };
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE")) {
+        cases.push_back({"HP-LF-115-DOME 右だけの滑らかなドームを下見確定し再生成",CaseOwnerDome});
         cases.push_back({"HP-LF-115-R 下部右の丸めと枝を含む輪",[](V2MainWindow& w){
             return CaseLoopFacesOwnerRegion(w,"lower-right",{"070","249","280","327","1e0","1a2","1d6"},4);}});
         cases.push_back({"HP-LF-115-L 下部左の丸めと枝を含む輪",[](V2MainWindow& w){

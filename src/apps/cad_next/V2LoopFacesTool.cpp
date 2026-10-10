@@ -603,6 +603,7 @@ bool V2LoopFacesTool::Confirm()
     }
     recent.methods = methodOverride_;
     recent.make = make_;
+    recent.styles = styles_;
     recent.continuity = continuity_;
     recent.leaveGap = leaveGap_;
     recent.joinMm = joinMm_;
@@ -672,16 +673,15 @@ bool V2LoopFacesTool::ReopenRecent()
         return false;
     }
     joinMm_ = recent.joinMm;
+    if (joinMm_.has_value() && !Replan()) return false;
     if (recent.methods.size() == methodOverride_.size()) {
         methodOverride_ = recent.methods;
         make_ = recent.make;
         continuity_ = recent.continuity;
     }
+    if (recent.styles.size() == styles_.size()) styles_ = recent.styles;
     if (recent.leaveGap.size() == leaveGap_.size()) {
         leaveGap_ = recent.leaveGap;
-    }
-    if (joinMm_.has_value() && !Replan()) {
-        return false;
     }
     ShowPreview();
     window_.SetStatus(QStringLiteral("面にする: 直前の操作を開きました(作ったものは戻しました)。"

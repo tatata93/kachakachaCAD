@@ -533,14 +533,16 @@ void SelectAllWires(V2MainWindow& window)
 {
     window.RunCommand("file.new");
     const EntityId first = DrawLineAtByHand(window, 0.30, 0.30, 0.70, 0.30);
-    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.50, 0.70);
-    const EntityId third = DrawLineAtByHand(window, 0.50, 0.70, 0.30, 0.30);
-    if (!Explain("三角形を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil())) {
+    const EntityId second = DrawLineAtByHand(window, 0.70, 0.30, 0.70, 0.70);
+    const EntityId third = DrawLineAtByHand(window, 0.70, 0.70, 0.30, 0.70);
+    const EntityId fourth = DrawLineAtByHand(window, 0.30, 0.70, 0.30, 0.30);
+    if (!Explain("四角形を手で引ける", !first.IsNil() && !second.IsNil() && !third.IsNil() && !fourth.IsNil())) {
         return false;
     }
     SelectAllWires(window);
     window.RunCommand("surface.from_lines");
     auto& tool = window.LoopFacesTool();
+    if (!tool.Dock()->ChooseMethod(0,1) || !tool.Dock()->ChooseStyle(0,1)) return false;
     const int surfacesBefore = CountOfKind(window, EntityKind::GuideSurface);
     if (!Explain("Enter で作れる", tool.Active() && window.HandleToolKey(Qt::Key_Return, nullptr)
             && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)
@@ -554,8 +556,9 @@ void SelectAllWires(V2MainWindow& window)
     if (!Explain("[開いて直す] が押せる", tool.Dock()->ClickReopen())
         || !Explain("作ったものは戻る(形状ガイドが元の数)", CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore)
         || !Explain("同じ線で構え直す(輪 1 つ)", tool.Active() && tool.Plan().has_value() && tool.Plan()->faces.size() == 1)
-        || !Explain("作り方を境界面に変えて Enter で作り直せる", tool.Dock()->ChooseMethod(0, 1)
-            && tool.MethodOf(0) == LoopFaceMethod::BoundaryFill
+        || !Explain("開き直しても張り方を保持する", tool.Dock()->FaceRowTextJa(0).contains(QStringLiteral("平坦優先")))
+        || !Explain("作り方を平面に変えて Enter で作り直せる", tool.Dock()->ChooseMethod(0, 0)
+            && tool.MethodOf(0) == LoopFaceMethod::Planar
             && window.HandleToolKey(Qt::Key_Return, nullptr)
             && CountOfKind(window, EntityKind::GuideSurface) == surfacesBefore + 1)) {
         return false;

@@ -126,6 +126,7 @@ private:
         std::vector<kachakacha::v2::base::EntityId> wireIds;
         std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methods;
         std::vector<bool> make;
+        std::vector<kachakacha::v2::modeling::FourEdgeStyle> styles;
         std::vector<std::vector<kachakacha::v2::modeling::SurfaceContinuity>> continuity;
         std::vector<bool> leaveGap;
         std::optional<double> joinMm;

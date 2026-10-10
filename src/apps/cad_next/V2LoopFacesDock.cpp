@@ -516,6 +516,7 @@ QString V2LoopFacesDock::FaceRowTextJa(int face) const
     if (!widgets.status->text().isEmpty()) {
         text += QStringLiteral("  ") + widgets.status->text();
     }
+    if (widgets.style) text += QStringLiteral("  ") + widgets.style->currentText();
     return text;
 }
 

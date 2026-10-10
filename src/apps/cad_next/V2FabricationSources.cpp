@@ -19,7 +19,15 @@ void AppendNativeFabricationSources(kachakacha::v2::modeling::KernelShapeHandle 
         else {
             source.samples=sampled.Value().samples;
             const auto native=kernel::FabricationEvaluatorOf(handle,face);
-            if(native.HasValue())source.evaluate=native.Value();
+            if(native.HasValue()) {
+                source.evaluate=native.Value();
+                auto& grid=*source.samples;
+                for(std::size_t row=0;row<grid.rowCount;++row)
+                    for(std::size_t column=0;column<grid.columnCount;++column)
+                        grid.points[row*grid.columnCount+column]=source.evaluate(
+                            static_cast<double>(column)/(grid.columnCount-1),
+                            static_cast<double>(row)/(grid.rowCount-1));
+            }
             else {
                 // Planar trims have a true polygon boundary; keep that and its holes.
                 const auto boundary=kernel::FaceBoundaryOf(handle,face,geometry::GeometryTolerance{});

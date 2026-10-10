@@ -97,6 +97,7 @@ bool SmallAdaptivePreview(V2MainWindow& window)
     if (!checkbox) { return false; } checkbox->setChecked(true);
     window.RunCommand("fabrication.create");
     const auto& outcomes=window.ApproxOutcomes();
+    Note(dock.MessageText().toUtf8().constData());
     if (!Explain("small head with 9 parts and 4 mm minimum remains available",
         outcomes.size()==3 && outcomes[1].available && outcomes[1].partCount==9
         && outcomes[2].available && outcomes[2].partCount==1)) { return false; }

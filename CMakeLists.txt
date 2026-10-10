@@ -767,6 +767,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctFabricationSampling.cpp
+    src/next_occt/kachakacha/kernel/OcctFabricationTrim.cpp
     src/next_occt/kachakacha/kernel/OcctMatchedRuled.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp

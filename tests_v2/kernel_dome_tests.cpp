@@ -16,7 +16,12 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Tool.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Face.hxx>
 #include <TopExp_Explorer.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <GCE2d_MakeSegment.hxx>
 #include <algorithm>
 #include <cmath>
 
@@ -126,6 +131,28 @@ KACHA_V2_TEST(fabrication_surface, trimmed_face_does_not_silently_become_uv_rect
     const auto boundary=kernel::FaceBoundaryOf(made.Value().handle,0,geometry::GeometryTolerance{});
     Require(boundary.HasValue() && boundary.Value().holeLoops.size()==1,"planar fallback retains actual hole and perimeter");
     kernel::ReleaseShape(made.Value().handle);
+}
+
+KACHA_V2_TEST(fabrication_surface, curved_trim_follows_actual_outer_boundary)
+{
+    const auto surface=Patch();
+    const std::vector<gp_Pnt2d> points{{0,0},{1,0},{1,.7},{.8,1},{.2,1},{0,.7}};
+    BRepBuilderAPI_MakeWire wire;
+    for(std::size_t i=0;i<points.size();++i)
+        wire.Add(BRepBuilderAPI_MakeEdge(GCE2d_MakeSegment(points[i],points[(i+1)%points.size()]).Value(),surface).Edge());
+    const auto face=BRepBuilderAPI_MakeFace(surface,wire.Wire(),true).Face();
+    const auto handle=kernel::StoreShape(face);
+    const auto value=kernel::FabricationEvaluatorOf(handle);
+    Require(value.HasValue(),value.FirstMessageJa());
+    kernel::ReleaseShape(handle); // The evaluator must own its curves and survive cache removal.
+    for(int i=0;i<=100;++i)for(int j=0;j<=20;++j) {
+        const double x=i/100.0,across=j/20.0;
+        const double top=x<.2 ? .7+1.5*x : x>.8 ? .7+1.5*(1-x) : 1;
+        const auto expected=surface->Value(x,top*across);
+        const auto actual=value.Value()(across,x);
+        RequireNear(geometry::Distance(actual,{expected.X(),expected.Y(),expected.Z()}),0,1e-7,
+            "native curved trim covers its perimeter and interior without a UV rectangle");
+    }
 }
 
 KACHA_V2_TEST(dome, 非一様ノットと次数上げでも同じ内部形状)

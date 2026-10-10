@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctFabricationTrim.h"
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
 #include <BRepClass_FaceClassifier.hxx>
@@ -42,9 +43,7 @@ base::Result<fabrication::SurfaceEvaluator> FabricationEvaluatorOf(
         for(int row=0;row<=32;++row)for(int column=0;column<=32;++column) {
             const gp_Pnt2d point(u0+(u1-u0)*row/32.0,v0+(v1-v0)*column/32.0);
             BRepClass_FaceClassifier classified(face,point,1e-7);
-            if(classified.State()==TopAbs_OUT)return Out::Failure(base::MakeError("FAB-B006",
-                "この面のトリム・開口は矩形の帯へ置き換えられません。",
-                "外形を横切る近似は作りません。四辺の区画へ分けるか、開口を別の境界として指定してください。"));
+            if(classified.State()==TopAbs_OUT)return detail::TrimmedFabricationEvaluator(face);
         }
         fabrication::SurfaceEvaluator evaluate=[surface,u0,u1,v0,v1](double u,double v) {
             const auto point=surface->Value(u0+(u1-u0)*v,v0+(v1-v0)*u);

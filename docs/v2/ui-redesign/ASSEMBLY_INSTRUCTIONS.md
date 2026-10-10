@@ -53,10 +53,18 @@
 - 1場面128部品、説明書全体の共有表示形状50万三角形の上限は継続。
   用紙の場面描画キャッシュは最大16件かつ32 MiBで、場面・視点・書式変更時は更新する。
 
-2026-10-10時点: 実装・自動試験を進行中。最終ソースのWindows全検証ゲート、配布版、
-オーナー受入、全DPI/フォント/画像形式、重量級モデルの60fpsは未検証。
-新しい実画面は `docs/manual/images/v2-instructions-scene-editor.png` と
-`docs/manual/images/v2-instructions-layout.png` へ記録する。
+2026-10-10 検証対象 `704a54002`（実装 `77c5e3470` を含む）。PC_TESTED。
+Windows `_GO.cmd` → `scripts/check.ps1 -Preset windows-msvc` 全187/187、
+本体・配布版GUI各428/428、旧CAD自己診断終了0。指定ブランチへpush済み。
+Windows通常画面の説明書・矢印・コマンド重点試験も8/8。複数場面の3D参照、場面編集の用紙への反映、
+画像元データ・書式の保存、Undo/Redo、途中ドラッグの取消・切替・保存、Shift拡縮、
+極端な画像比率と負座標からのサイズ変更、用紙ごとの縦横・PDF・PNG/JPEG/BMP出力、旧版読込を検査。
+用紙へ戻る際のフォントのキャッシュ書き出しによるアクセス違反と、補助マニュアルの画像参照漏れを修正して再検証した。
+アーキテクチャとUIモードは各16/16。Qt宣言stubを使ったMSVC構文検査13cppもエラー0。
+実画面 `docs/manual/images/v2-instructions-scene-editor.png` と `docs/manual/images/v2-instructions-layout.png`
+を確認済み。全体ゲートはoffscreen、重点試験の撮影はWindows通常画面の自動操作。
+オーナー受入・手動操作・全DPI/フォント/画像形式・Linux/cloud・重量級モデルの60fpsは未検証。
+PC_VERIFIEDや厳密なBRep隠線除去とはしない。
 
 ## 2026-10-05 改訂: モデル選択・3D配置・白黒輪郭・コマ画像出力
 

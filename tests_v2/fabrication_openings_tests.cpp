@@ -138,11 +138,11 @@ KACHA_V2_TEST(fabrication_openings, またぐ窓は両方の帯に開き切り�
     RequireEqual(std::to_string(made.panels[1].openings.size()), std::string("1"), "帯2に取り分");
     // 切り口は境目(レール1)に沿う。取り分の点のうち、境目の上に載る点が
     // 交点2つだけでなく、その間のレールの点も含む(直線1本の弦にしない)。
-    // 型紙では確かめられないので、同じ切り出しを 3D で数える。
+    // それぞれの個別型紙の境界で確かめる。共有表示の座標は型紙ではない。
     const auto& developedLower = made.panels[0].openings.front();
     const auto& developedUpper = made.panels[1].openings.front();
-    const auto onRail1 = [&made](const std::vector<kachakacha::v2::geometry::Point2>& piece) {
-        const auto& rail = made.mesh.developed[1];
+    const auto onRail1 = [](const std::vector<kachakacha::v2::geometry::Point2>& piece,
+        const std::vector<kachakacha::v2::geometry::Point2>& rail) {
         int count = 0;
         for (const auto& point : piece) {
             double best = 1.0e300;
@@ -162,18 +162,17 @@ KACHA_V2_TEST(fabrication_openings, またぐ窓は両方の帯に開き切り�
         return count;
     };
     // 境目の上に載る点が、交点2つだけではなく、間のレールの点も含む(弦にしない)。
-    Require(onRail1(developedLower) >= 3,
-        "帯1の切り口は境目に沿う: " + std::to_string(onRail1(developedLower)) + " 点");
-    Require(onRail1(developedUpper) >= 3,
-        "帯2の切り口は境目に沿う: " + std::to_string(onRail1(developedUpper)) + " 点");
+    const auto& lower = made.mesh.developedBands[0];
+    const auto& upper = made.mesh.developedBands[1];
+    Require(onRail1(developedLower,lower[1]) >= 3,
+        "帯1の切り口は境目に沿う: " + std::to_string(onRail1(developedLower,lower[1])) + " 点");
+    Require(onRail1(developedUpper,upper[0]) >= 3,
+        "帯2の切り口は境目に沿う: " + std::to_string(onRail1(developedUpper,upper[0])) + " 点");
     // 取り分の点が、その帯の展開範囲の中にある(隣の帯へはみ出さない)。
-    const auto& rail0 = made.mesh.developed[0];
-    const auto& rail1 = made.mesh.developed[1];
-    const auto& rail2 = made.mesh.developed[2];
-    const double lowMin = std::min(rail0.front().v, rail1.front().v) - 1.0e-6;
-    const double lowMax = std::max(rail0.front().v, rail1.front().v) + 1.0e-6;
-    const double highMin = std::min(rail1.front().v, rail2.front().v) - 1.0e-6;
-    const double highMax = std::max(rail1.front().v, rail2.front().v) + 1.0e-6;
+    const double lowMin = std::min(lower[0].front().v, lower[1].front().v) - 1.0e-6;
+    const double lowMax = std::max(lower[0].front().v, lower[1].front().v) + 1.0e-6;
+    const double highMin = std::min(upper[0].front().v, upper[1].front().v) - 1.0e-6;
+    const double highMax = std::max(upper[0].front().v, upper[1].front().v) + 1.0e-6;
     for (const auto& point : developedLower) {
         Require(point.v >= lowMin && point.v <= lowMax, "帯1の範囲の中");
     }

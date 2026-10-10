@@ -293,6 +293,17 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 
 ![形状ガイドの役割テーブル](images/v2-guide-table.png)
 
+「面作成 → 面にする」で線を選び、区画ごとに作成対象と張り方を決めます。
+中央断面と外周から丸い屋根を作る場合は「滑らかなドーム（近似）」を選びます。
+不要な区画の「作る」を外し、下見を確認してEnterで確定します。
+標準・平坦優先・丸み優先にも切り替えられます。内部ガイドや支持面G1/G2には標準などを使います。
+
+![右区画だけの滑らかなドームの下見](images/v2-dome-preview.png)
+
+![右区画だけのドームを確定した結果](images/v2-dome-result.png)
+
+115モデルのWindows自動試験の実画面です。左区画と元の線は変更しません。
+
 - 表の行の色は、画面の中の線の色と同じです。
   どの線がどの役割なのかを、表と画面の両方で同時に見られます。
 - 役割が足りないときは、**どの役割が足りないか**を書いて断ります。
@@ -481,6 +492,10 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 画面の大きさを決めるには `--size 1366x768` を足します。
 
 画面を出さずに一通り触って確かめるには `--self-test` と打ちます。
+
+`dome-preview` と `dome-result` は `HP-LF-115-DOME` 自己試験で保存したWindows実画面です。
+入力は `KACHACAD_SURFACE_TEST_FILE`、保存先の接頭辞は `KACHACAD_SURFACE_TEST_OUTPUT` で指定します。
+`--manual-state` の引数ではありません。元モデルは上書きしません。
 
 ## 2026-10-05 追加の図
 

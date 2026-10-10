@@ -372,4 +372,4 @@ R1/C1を1 mm辺に適用する等、端点まで使い切る加工を許可。�
 
 検証対象 `1771fc793`。Windows全187/187、本体・配布版GUI各423/423、旧CAD自己テスト終了0。配布版で実データHP-LF-115も成功。画像確認あり、手動操作・Linux/cloud未実施。PC_VERIFIEDではない。
 
-面にするの実形状下見（2026-10-10）: 計算中/成功/失敗理由、複数候補の作成対象・方式・張り方選択、未使用区間の明示。連続/非連続複合Wire、平面の穴/島、入力方向を回帰検査。詳細PROFILE_NETWORK_REPAIR.mdとSURFACE_PATTERN_TESTS.md。全体検証中、PC_VERIFIEDではない。
+面にするの実形状下見（2026-10-10）: 計算中/成功/失敗理由、複数候補の作成対象・方式・張り方選択、未使用区間の明示。連続/非連続複合Wire、平面の穴/島、入力方向を回帰検査。詳細PROFILE_NETWORK_REPAIR.mdとSURFACE_PATTERN_TESTS.md。検証対象790f18f7c、Windows全187/187、本体・配布版GUI各424/424。offscreen自動検査、PC_VERIFIEDではない。

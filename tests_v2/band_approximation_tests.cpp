@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <limits>
 
 using kachakacha::v2::fabrication::ApproximateBands;
 using kachakacha::v2::fabrication::BandApproximationOptions;
@@ -468,12 +469,104 @@ KACHA_V2_TEST(band_approximation, 枚数で割ると実幅がそろい細すぎ�
     Require(widest - narrowest < widest * 0.1, "幅がそろう(" + std::to_string(narrowest) + "〜" + std::to_string(widest) + ")");
     Require(!made.Value().narrowerThanMinimum, "球の帽子の 5 枚は 4 mm より広い");
     options.equalPartCount = 60;
+    options.maximumPartCount = 60;
     const auto thin = ApproximateBands(source, options);
     Require(thin.HasValue() && thin.Value().bands.size() == 60, "60 枚でも作る");
     Require(thin.Value().narrowerThanMinimum, "細すぎることを結果で言う");
 }
 
 KACHA_V2_TEST_MAIN("band_approximation_tests")
+
+KACHA_V2_TEST(band_approximation, rail_sampling_refines_a_sharp_curve_with_nonuniform_parameters)
+{
+    using namespace kachakacha::v2::fabrication;
+    const auto value=[](double u,double v){return Vector3{20*u,30*v,5*std::sqrt(v)};};
+    const SampledSurface source(Grid(5,5,value),value);
+    const auto parameters=AdaptiveRailParameters(source,BandSplitAxis::U,{0,.5,1},.001);
+    Require(parameters.HasValue(),parameters.FirstMessageJa());
+    Require(parameters.Value().size()>97,"sharp endpoint needs more than uniform baseline samples");
+    Require(parameters.Value()[1]<1.0/96,"shorter intervals at the sharp curve");
+    Require(RailSamplingDeviation(source,BandSplitAxis::U,{0,.5,1},parameters.Value())<=.001,
+        "longitudinal approximation does not silently exceed the allocated error");
+    const auto mesh=DevelopBandMesh(source,BandSplitAxis::U,{0,.5,1},96,parameters.Value());
+    Require(mesh.HasValue() && mesh.Value().longitudinalParameters==parameters.Value(),"keep actual sampling parameters");
+    for(std::size_t i=0;i<parameters.Value().size();++i)
+        Require((mesh.Value().world[1][i]-value(.5,parameters.Value()[i])).Length()<1e-10,"rails stay on original curve");
+}
+
+KACHA_V2_TEST(band_approximation, reject_degenerate_nonfinite_and_conflicting_count_without_fake_success)
+{
+    BandApproximationOptions options;
+    const auto collapsed=Grid(3,3,[](double,double){return Vector3{};});
+    Require(!ApproximateBands(SampledSurface(collapsed),options).HasValue(),"zero width is not a manufactured panel");
+    auto invalid=FlatSheet();invalid.points[4].x=std::numeric_limits<double>::quiet_NaN();
+    Require(!ApproximateBands(SampledSurface(invalid),options).HasValue(),"nonfinite input is rejected");
+    const SampledSurface corner(Grid(9,33,[](double u,double v){
+        return Vector3{60*u,40*v,v*std::max(0.0,u-.5)*60};
+    }));
+    options.splitAxis=BandSplitAxis::U;options.splitAtCorners=true;options.equalPartCount=1;
+    for(bool adaptive:{false,true}) {
+        options.adaptiveSpacing=adaptive;
+        Require(!ApproximateBands(corner,options).HasValue(),"mandatory corner cannot silently increase specified count");
+        options.equalPartCount=13;options.maximumPartCount=12;
+        Require(!ApproximateBands(corner,options).HasValue(),"global maximum is respected");options.equalPartCount=1;
+    }
+    options={};options.automaticBoundaries=false;options.maximumPartCount=2;
+    options.manualBoundaries={.2,.4,.6};
+    Require(!ApproximateBands(SampledSurface(FlatSheet()),options).HasValue(),
+        "manual boundaries are not silently removed to satisfy the cap");
+}
+
+KACHA_V2_TEST(band_approximation, exact_evaluator_preserves_outline_across_shapes_and_uv)
+{
+    using Eval=kachakacha::v2::fabrication::SurfaceEvaluator;
+    const std::vector<Eval> shapes{
+        [](double u,double v){return Vector3{40*u,30*v,3};},
+        [](double u,double v){return Vector3{40*u,20*std::cos(v*kPi/2),20*std::sin(v*kPi/2)};},
+        [](double u,double v){const double r=10+15*u;return Vector3{40*u,r*std::cos(v*kPi/2),r*std::sin(v*kPi/2)};},
+        [](double u,double v){return Vector3{40*u,30*v,8*std::sin(u*kPi/2)*std::sin(v*kPi/2)};},
+        [](double u,double v){return Vector3{40*u,30*v,12*(u-.5)*(v-.5)};},
+        [](double u,double v){return Vector3{40*u,30*v,5*std::atan(30*(v-.72))};}
+    };
+    for(const auto& shape:shapes)for(int transform=0;transform<3;++transform) {
+        Eval value=[shape,transform](double u,double v){
+            return transform==0 ? shape(u,v) : transform==1 ? shape(1-u,v) : shape(v,u);
+        };
+        const SampledSurface source(Grid(5,5,value),value);
+        for(auto axis:{BandSplitAxis::U,BandSplitAxis::V})for(bool adaptive:{false,true}) {
+            BandApproximationOptions options;options.equalPartCount=8;options.maximumPartCount=8;
+            options.minimumPartWidthMm=.01;options.splitAxis=axis;options.adaptiveSpacing=adaptive;
+            const auto bands=ApproximateBands(source,options);
+            Require(bands.HasValue(),bands.FirstMessageJa());Require(bands.Value().bands.size()==8,"specified count");
+            const auto mesh=DevelopBandMesh(source,axis,bands.Value().railParameters,96);
+            Require(mesh.HasValue(),mesh.FirstMessageJa());
+            for(int row=0;row<mesh.Value().rows;++row)for(int col=0;col<mesh.Value().columns;++col) {
+                const double s=static_cast<double>(col)/(mesh.Value().columns-1);
+                const auto expected=source.EvaluateSplit(axis,bands.Value().railParameters[row],s);
+                Require(kachakacha::v2::geometry::Distance(mesh.Value().world[row][col],expected)<1e-9,
+                    "every rail including perimeter must lie on the exact source");
+            }
+            const auto folded=BuildBandFoldRails(mesh.Value(),std::vector<double>(7,1),std::vector<double>(8,1),0);
+            Require(folded.HasValue(),folded.FirstMessageJa());
+            for(int b=0;b<8;++b)for(int side=0;side<2;++side)for(int c=0;c<96;++c)
+                Require(kachakacha::v2::geometry::Distance(folded.Value()[2*b+side][c],mesh.Value().world[b+side][c])<1e-7,
+                    "completed band must not be relocated");
+        }
+    }
+}
+
+KACHA_V2_TEST(band_approximation, native_sampling_does_not_hide_curvature_between_display_samples)
+{
+    const auto value=[](double u,double v){return Vector3{40*u,30*v,3*std::sin(4*kPi*v)};};
+    const auto samples=Grid(5,5,value);
+    const SampledSurface display(samples),native(samples,value);
+    Require(MeasureAxisDeviation(display,BandSplitAxis::V)<1e-8,"coarse grid misses all humps");
+    Require(MeasureAxisDeviation(native,BandSplitAxis::V)>2.9,"native evaluation detects true curvature");
+    BandApproximationOptions options;options.splitAxis=BandSplitAxis::V;options.adaptiveSpacing=true;
+    options.maximumDeviationMm=.1;options.minimumPartWidthMm=.01;options.maximumPartCount=24;
+    const auto result=ApproximateBands(native,options);
+    Require(result.HasValue() && result.Value().bands.size()>1,"automatic spacing refines exact curvature");
+}
 
 KACHA_V2_TEST(band_approximation, adaptive_spacing_concentrates_on_local_curvature)
 {

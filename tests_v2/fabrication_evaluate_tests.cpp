@@ -350,3 +350,22 @@ KACHA_V2_TEST(fabrication_evaluate, 3Dで押した物体から部材番号が引
 }
 
 KACHA_V2_TEST_MAIN("fabrication_evaluate_tests")
+
+KACHA_V2_TEST(fabrication_evaluate, planar_trim_keeps_native_openings_in_both_methods)
+{
+    const auto loop=[](const std::vector<Vector3>& points){
+        std::vector<CurveSegment> lines;
+        for(std::size_t i=0;i<points.size();++i)
+            lines.push_back(CurveSegment::MakeLine(points[i],points[(i+1)%points.size()]).Value());
+        return lines;
+    };
+    FabricationSource source;source.name="台形と穴";
+    source.flatBoundary=loop({{0,0,0},{10,0,0},{8,8,0},{2,8,0}});
+    source.flatOpenings={loop({{4,2,0},{4,4,0},{6,4,0},{6,2,0}})};
+    for(int method:{0,1}) {
+        const auto result=EvaluateFabrication(Definition(method),{source},{},.01);
+        Require(result.HasValue(),result.FirstMessageJa());
+        Require(result.Value().panels.size()==1 && result.Value().panels.front().openings.size()==1,
+            "unnecessary splits and filled holes are avoided");
+    }
+}

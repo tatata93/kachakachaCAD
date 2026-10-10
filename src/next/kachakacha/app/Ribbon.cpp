@@ -122,7 +122,7 @@ const std::vector<RibbonCategory>& PartCategories()
                 Tool("結合", "part.boolean_add")}},
         {"face", "面編集",
             {Tool("フェイスで作図", "workplane.from_face"), Tool("フェイスを近似", "fabrication.from_face"),
-                Tool("フェイスをGPT近似", "fabrication.gpt_from_face"), Tool("押し引き", "part.extrude"),
+                Tool("押し引き", "part.extrude"),
                 Blocked("面オフセット", "面オフセットはまだできません(核に面を動かす道がありません)"),
                 Blocked("面削除", "面削除はまだできません"),
                 Blocked("面置換", "面置換はまだできません")}},
@@ -142,7 +142,7 @@ const std::vector<RibbonCategory>& PartCategories()
 const std::vector<RibbonCategory>& FabricationCategories()
 {
     static const std::vector<RibbonCategory> categories{
-        {"approx", "近似", {Tool("GPT版", "fabrication.gpt_create"), Tool("近似", "fabrication.create")}},
+        {"approx", "近似", {Tool("近似", "fabrication.create")}},
         {"edit", "部材編集",
             {Tool("近似部品編集", "fabrication.edit_part"), Tool("分割", "fabrication.split_part"),
                 Tool("結合", "fabrication.merge_parts"), Tool("切れ目", "fabrication.assign_relief_cut"),

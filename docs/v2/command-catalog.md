@@ -171,7 +171,6 @@ parameter schemaのdiscriminatorにする。
 
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
-| `fabrication.gpt_create` | GPT版近似 | 面を選択→許容偏差・部材数・最小幅・方向→近似下見→確定/型紙。既存近似とは独立した柱面近似。標本最大/RMSを表示し許容未達は確定不可 | FabricationModel | AT-GPT-F001, AT-GPT-F002 |
 | `fabrication.create` | 製作モデルを作る | Part か GuideSurface 1 以上(何個でも 1 つのモデルへ)、strategy、settings | FabricationModel | AT-FAB-001から005 |
 | `fabrication.assign_role` | 境界の役割 | WireChain、role | Fabrication Feature更新 | AT-FAB-006 |
 | `fabrication.assign_relief_cut` | 切れ目にする | 開いたワイヤー1以上 | Fabrication Feature更新(reliefCutWires)。平らな部材の型紙に切れ目(RELIEF 層)。閉じた線は FAB-M005、部材に載っていなければ FAB-M003 | AT-FAB-006 |
@@ -235,7 +234,7 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 8. UIだけ存在しserviceを呼ばないcontrollerがない。
 
 ### 近似の分割間隔（既存命令の設定）
-`fabrication.create` の帯近似と `fabrication.gpt_create` に「間隔を自動調整」を追加。偏差の大きい区間から細分化し、最小幅と部材数上限を守る。新命令や別リボン項目は増やさない。従来版の枚数指定は不等間隔への配分に使う。
+`fabrication.create` の帯近似に「間隔を自動調整」を追加。偏差の大きい区間から細分化し、最小幅と部材数上限を守る。新命令や別リボン項目は増やさない。従来版の枚数指定は不等間隔への配分に使う。
 
 既存の生成命令は対象部材欄が空なら全体、番号指定なら該当部材のみを扱う。生成先は同一文書／別kcd2。
 近似の確定時にもワイヤー／ワイヤー＋近似面の自動生成を選択できる（既定は近似モデルのみ）。
@@ -249,7 +248,6 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 | --- | --- | --- | --- | --- |
 | `workplane.from_face` | フェイスで作図 | 選択したソリッドのフェイス、または起動後にクリック | 連番作業面を自動生成して作図。曲面では選択位置の接平面 | AT-WPL-001 |
 | `fabrication.from_face` | フェイスを近似 | ソリッドのフェイス | 独立した面を取り出して従来近似を開始 | AT-FAB-011 |
-| `fabrication.gpt_from_face` | フェイスをGPT近似 | ソリッドのフェイス | 独立した面を取り出してGPT近似を開始 | AT-FAB-011 |
 
 フェイス抽出は元ソリッドに追従しない独立コピー。近似を取消した場合も抽出面は残り、Undoで取り消せる。
 
@@ -316,3 +314,5 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 
 ### dimension.open — 寸法
 作図→注記→寸法（メニュー: 寸法）。線を選択→寸法種別・駆動/参照・数値→3D配置→Enter。作図線の長さ・水平/垂直・半径/直径・2直線角度・2端点間距離。連続作成、既存寸法の文字/一覧から編集、Undo/Redo、kcd2保存に対応。詳細と対応範囲はui-redesign/DIMENSION_TOOL.md。
+
+2026-10-11: 製作のGPT近似の新規入口を廃止（既存method=2の読込・生成は保持）。面作製のGPT版は継続する。近似の通常欄は枚数・許容誤差・方向・自動間隔、方式と候補比較は折り畳む。元曲面を直接評価し、生成帯は下見と同じレール対応を保持する。ADR 0030、HP-AP-QUICK / HP-AP-OUTLINE-115。

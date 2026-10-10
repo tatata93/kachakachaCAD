@@ -84,10 +84,15 @@ base::Result<domain::CreateGuideSurfaceDefinition> DefinitionFromGuideTable(
         chain.rowReversed = row.reversed;
         for (const auto& segment : row.segments) {
             bool found = false;
-            for (const auto& source : scene.curves) {
-                if (source.segmentId.IsNil() || std::find(row.sourceWireIds.begin(),
-                        row.sourceWireIds.end(), source.entityId) == row.sourceWireIds.end()) continue;
-                if (ReferenceCurve(segment, source, chain, toleranceMm)) { found = true; break; }
+            // Dense generated rails can have adjacent segments shorter than the
+            // interactive tolerance. Prefer the exact source before a nearby one.
+            for (double eps : {std::min(toleranceMm,1e-9),toleranceMm}) {
+                for (const auto& source : scene.curves) {
+                    if (source.segmentId.IsNil() || std::find(row.sourceWireIds.begin(),
+                            row.sourceWireIds.end(), source.entityId) == row.sourceWireIds.end()) continue;
+                    if (ReferenceCurve(segment, source, chain, eps)) { found = true; break; }
+                }
+                if(found)break;
             }
             if (!found) return Out::Failure(base::MakeError("GEO-R002",
                 "面の境界区間を元の線へ対応付けられません。線を選び直してください。"));

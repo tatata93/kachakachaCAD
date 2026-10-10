@@ -69,6 +69,11 @@ struct FaceSamples {
 [[nodiscard]] base::Result<FaceSamples> FaceSamplesOf(modeling::KernelShapeHandle handle,
     std::size_t faceIndex, std::size_t rowCount = 17, std::size_t columnCount = 17);
 
+//! Evaluate the actual surface, retaining the GuideSurface sample convention (row=U).
+//! Non-rectangular trims are rejected rather than silently approximating the UV box.
+[[nodiscard]] base::Result<fabrication::SurfaceEvaluator> FabricationEvaluatorOf(
+    modeling::KernelShapeHandle handle, std::size_t faceIndex = 0);
+
 //! 面の上の1点と、そこでの向き。「選択に正対」が要る(Q1)。
 struct FacePose {
     //! 面の上の点。押した場所をいちばん近い面上の点へ寄せたもの。

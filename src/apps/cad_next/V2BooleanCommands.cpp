@@ -114,7 +114,6 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         // Continue into the regular pending-input / preview path.
     }
-    if (id == "fabrication.gpt_create") { BeginGptFabrication(); return true; }
     if (id == "surface.gpt_create") { BeginGptSurface(); return true; }
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand();

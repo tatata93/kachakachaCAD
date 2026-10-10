@@ -2,6 +2,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctDomePatch.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <NCollection_Array2.hxx>
@@ -77,6 +78,54 @@ KACHA_V2_TEST(dome, 断面から離れても丸みを広く伝え境界を保つ
         RequireNear(result.Value()->Value(u,0.5).Z(),4.5*(1-u*u),1e-10,"非線形に丸みを伝える");
         Require(result.Value()->Value(u,0.5).Z()>base->Value(u,0.5).Z(),"直線的に弱めない");
     }
+}
+
+KACHA_V2_TEST(fabrication_surface, matched_polyline_rails_keep_every_corresponding_vertex)
+{
+    const std::vector<geometry::Vector3> a{{0,0,0},{1,0,3},{2,0,4},{10,0,2},{20,0,0}};
+    const std::vector<geometry::Vector3> b{{0,5,0},{.1,5,2},{1,5,3},{15,5,1},{20,5,0}};
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;
+    request.keepSectionOrder=true;
+    for(const auto* rail:{&a,&b}) {
+        modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=static_cast<int>(request.chains.size()+1);
+        for(std::size_t i=1;i<rail->size();++i)chain.segments.push_back(geometry::CurveSegment::MakeLine((*rail)[i-1],(*rail)[i]).Value());
+        request.chains.push_back(chain);
+    }
+    const auto made=Build(request);Require(made.HasValue(),made.FirstMessageJa());
+    const auto count=kernel::ShapeFaceCount(made.Value().handle);
+    Require(count.HasValue() && count.Value()==1,"single editable source surface rather than first loft facet");
+    const auto value=kernel::FabricationEvaluatorOf(made.Value().handle);Require(value.HasValue(),value.FirstMessageJa());
+    for(std::size_t segment=0;segment+1<a.size();++segment)for(double f:{0.0,.25,.5,.75,1.0})for(double side:{0.0,.5,1.0}) {
+        const auto p=a[segment]*(1-f)+a[segment+1]*f,q=b[segment]*(1-f)+b[segment+1]*f;
+        const auto expected=p*(1-side)+q*side;
+        RequireNear(geometry::Distance(value.Value()(side,(segment+f)/(a.size()-1)),expected),0,1e-9,
+            "native surface, long rails and short ends share the same correspondence");
+    }
+    const auto sampled=kernel::FaceSamplesOf(made.Value().handle,0,9,13);
+    Require(sampled.HasValue(),sampled.FirstMessageJa());
+    for(int row=0;row<9;++row)for(int col=0;col<13;++col)
+        RequireNear(geometry::Distance(sampled.Value().samples.At(row,col),value.Value()(col/12.0,row/8.0)),0,1e-9,
+            "native evaluator and display samples use the same UV convention");
+    kernel::ReleaseShape(made.Value().handle);
+}
+
+KACHA_V2_TEST(fabrication_surface, trimmed_face_does_not_silently_become_uv_rectangle)
+{
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;
+    for(const auto& points:std::vector<std::vector<geometry::Vector3>>{
+        {{0,0,0},{10,0,0},{8,8,0},{2,8,0},{0,0,0}},
+        {{4,2,0},{4,4,0},{6,4,0},{6,2,0},{4,2,0}}}) {
+        modeling::GuideChain chain;chain.index=1;chain.closed=true;
+        chain.role=request.chains.empty() ? modeling::ChainRole::OuterBoundary : modeling::ChainRole::HoleBoundary;
+        for(std::size_t i=1;i<points.size();++i)chain.segments.push_back(geometry::CurveSegment::MakeLine(points[i-1],points[i]).Value());
+        request.chains.push_back(chain);
+    }
+    const auto made=Build(request);Require(made.HasValue(),made.FirstMessageJa());
+    const auto value=kernel::FabricationEvaluatorOf(made.Value().handle);
+    Require(!value.HasValue() && value.FirstCode()=="FAB-B006","UV rectangle must not fill a hole or cross the outline");
+    const auto boundary=kernel::FaceBoundaryOf(made.Value().handle,0,geometry::GeometryTolerance{});
+    Require(boundary.HasValue() && boundary.Value().holeLoops.size()==1,"planar fallback retains actual hole and perimeter");
+    kernel::ReleaseShape(made.Value().handle);
 }
 
 KACHA_V2_TEST(dome, 非一様ノットと次数上げでも同じ内部形状)

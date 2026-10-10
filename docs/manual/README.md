@@ -326,6 +326,8 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 
 立体を、板から作れる部材へ割ります。
 
+近似の通常欄は枚数・許容ずれ・方向・間隔の自動調整です。方式、候補比較、手動境界や最小幅は折り畳みます。元の実曲面を評価し、出力面も下見と同じレール対応を使います。製作GPT近似の新規入口は廃止しました。既存ファイルの読込・生成とGPT版面作製は維持します。
+
 - 二重に曲がっているところには、切れ目(relief)を入れます。
   向きは、曲がりの強い方向から決めます。
 - 組み立ての進み具合(0% / 30% / 100%)を変えられます。
@@ -569,3 +571,17 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 `instructions-scene-editor` と `instructions-layout` は `HP-INSTRUCTIONS-SHEETS` 自己試験で保存したWindows実画面です。
 `--manual-state` の引数ではありません。図の3Dデータは表示形状のスナップショットであり、元CAD正本への自動追従ではありません。
 詳細は [画像付きHTMLマニュアルの組み立て説明書](../manual.html#assembly-guide) を参照してください。
+
+## 元の面に沿う近似の実画面（2026-10-11）
+
+通常近似の枚数・許容ずれ・分割方向・間隔自動調整を表示し、詳細を折り畳んだ下見。
+
+![自動間隔12枚の近似下見](images/v2-approx-outline-preview.png)
+
+ワイヤー48本と近似面12枚を現在状態100%で生成した結果。元ファイルを上書きせず別名保存と再読込を検査しました。
+
+![外周に沿う近似面を生成した実画面](images/v2-approx-outline-result.png)
+
+HP-AP-OUTLINE-115 のWindows自動試験画像です。等間隔/自動間隔と5方向を検査。選択面・12枚・縦方向・自動間隔では独立標本の最大偏差0.094534 mm、RMS0.031028 mm（全域保証ではありません）。
+
+`approx-outline-preview` と `approx-outline-result` はこの自己試験で撮影しています。`--manual-state` の引数ではありません。

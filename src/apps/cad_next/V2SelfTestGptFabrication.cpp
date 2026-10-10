@@ -227,15 +227,12 @@ bool HeadFabrication(V2MainWindow& window)
 }
 std::vector<SelfTestCase> GptFabricationCases()
 {
-    return {{"HP-GPT-F01 GPT近似・取消・確定・Undo・保存再読込・型紙",Fabrication},
-        {"HP-GPT-F02 前頭部のGPT近似・番号表示・型紙",HeadFabrication},
-        {"HP-GPT-F03 自動間隔・両方の棚・保存・型紙",AdaptiveControls},
+    return {
         {"HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",ClassicAdaptive},
         {"HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",SmallAdaptivePreview},
         {"HP-GPT-F06 取消と設定変更から近似をやり直す",RestartAdaptivePreview},
         {"HP-GEN-01 自動生成・選択部材・短辺・近似面・保存",GenerationSelectedSurface},
         {"HP-GEN-02 選択部材の別文書生成・保存取消",GenerationSeparateDocument},
-        {"HP-GEN-03 GPT近似確定時のワイヤーと面生成",GenerationGptAutomatic},
         {"HP-GEN-04 選択部材の0・37・100%生成形状",GenerationBendStates}};
 }
 }

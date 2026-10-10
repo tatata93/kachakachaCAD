@@ -331,8 +331,10 @@ kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
     const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label)
 {
     // 固定など、選択ではなく id で指した線から面を作る。作り方は「おまかせ」(CreateGuideSurfaceFromSelection)と同じ。
-    const GuideTableDraft made =
+    GuideTableDraft made =
         AutoSectionTable(session_->GetDocument(), session_->Scene(), wireIds);
+    // Explicitly retain generated rail correspondence through save/rebuild.
+    made.table.lockSectionOrder = true;
     if (!made.diagnostics.empty()) {
         ReportDiagnostics(made.diagnostics);
         return kachakacha::v2::base::EntityId{};

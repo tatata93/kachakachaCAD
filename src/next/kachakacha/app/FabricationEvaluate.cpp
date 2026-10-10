@@ -167,6 +167,7 @@ using fabrication::PatternPanel;
             fabrication::PlanarPanelRequest request;
             request.panelId = source.name;
             request.boundary = *source.flatBoundary;
+            request.openings = source.flatOpenings;
             planar.push_back(std::move(request));
             planarOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
         }
@@ -203,21 +204,27 @@ struct BandedSource {
     const FabricationSource& source, std::vector<PatternPanel>& panels)
 {
     using Out = Result<BandedSource>;
-    const fabrication::SampledSurface surface(*source.samples);
+    const fabrication::SampledSurface surface(*source.samples, source.evaluate);
     fabrication::BandApproximationOptions options = BandOptionsOf(definition);
     // 自動 / 縦 / 横 は面ごとに実際の軸へ決める(縦横は世界の上下、自動は曲がりで)。
     options.splitAxis = fabrication::ResolveSplitAxis(surface, SplitDirectionOf(definition));
-    const auto bands = fabrication::ApproximateBands(surface, options);
+    auto bands = fabrication::ApproximateBands(surface, options);
     if (!bands.HasValue()) {
         return Out::Failure(bands.Diagnostics());
     }
+    const auto parameters=fabrication::AdaptiveRailParameters(surface,options.splitAxis,
+        bands.Value().railParameters,definition.targetMaxDeviation.value*.01);
+    if(!parameters.HasValue())return Out::Failure(parameters.Diagnostics());
     const auto mesh = fabrication::DevelopBandMesh(surface, options.splitAxis,
-        bands.Value().railParameters, 96);
+        bands.Value().railParameters,96,parameters.Value());
     if (!mesh.HasValue()) {
         return Out::Failure(mesh.Diagnostics());
     }
     BandedSource made;
     made.bands = bands.Value();
+    made.bands.maximumDeviationMm+=fabrication::RailSamplingDeviation(surface,options.splitAxis,
+        made.bands.railParameters,parameters.Value());
+    made.bands.reachedRequestedTolerance=made.bands.maximumDeviationMm<=options.maximumDeviationMm+1e-9;
     made.mesh = mesh.Value();
     made.firstPanelIndex = panels.size();
     const auto angles = fabrication::MeasureCreaseAngles(made.mesh);
@@ -304,6 +311,7 @@ struct BandedSource {
             fabrication::PlanarPanelRequest request;
             request.panelId = source.name;
             request.boundary = *source.flatBoundary;
+            request.openings = source.flatOpenings;
             planar.push_back(std::move(request));
             planarOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
         }
@@ -449,6 +457,9 @@ Result<FabricationEvaluation> EvaluateFabrication(
     // 面の範囲(V1 の板材の「範囲」)。曲がった面の標本を範囲の中だけにしてから近似する。
     // 平らな部品(輪郭)には範囲は無い。
     std::vector<FabricationSource> cropped = sources;
+    for (const auto& source : sources) {
+        if (!source.samplingDiagnostics.empty()) { return Out::Failure(source.samplingDiagnostics); }
+    }
     for (FabricationSource& source : cropped) {
         if (!source.samples.has_value()) {
             continue;
@@ -459,6 +470,14 @@ Result<FabricationEvaluation> EvaluateFabrication(
             return Out::Failure(part.Diagnostics());
         }
         source.samples = std::move(part.Value());
+        if (source.evaluate) {
+            const auto evaluate = source.evaluate;
+            const double u0=definition.rangeUMin, du=definition.rangeUMax-u0;
+            const double v0=definition.rangeVMin, dv=definition.rangeVMax-v0;
+            source.evaluate = [evaluate,u0,du,v0,dv](double u,double v) {
+                return evaluate(u0+du*u,v0+dv*v);
+            };
+        }
     }
     return FabricationMethodOf(definition) == FabricationMethod::BandApproximation
         ? EvaluateByBands(definition, cropped, markings, toleranceMm)

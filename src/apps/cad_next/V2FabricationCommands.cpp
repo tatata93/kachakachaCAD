@@ -9,6 +9,7 @@
 //! 扱えるふりをしない。
 
 #include "V2MainWindow.h"
+#include "V2FabricationSources.h"
 #include "V2GptFabricationTool.h"
 
 #include "kachakacha/app/FabricationOptions.h"
@@ -201,6 +202,11 @@ std::vector<kachakacha::v2::app::FabricationSource> V2MainWindow::FabricationSou
         source.entityId = id;
         source.name = entity->displayName.empty() ? std::string("面") : entity->displayName;
         if (entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
+            const auto nativeShape=guideShapes_.find(id.ToString());
+            if(nativeShape!=guideShapes_.end()) {
+                AppendNativeFabricationSources(nativeShape->second,id,source.name,sources);
+                continue;
+            }
             const auto found = guideSamples_.find(id.ToString());
             if (found != guideSamples_.end()) {
                 source.samples = found->second;
@@ -877,23 +883,7 @@ void V2MainWindow::AppendSolidFaceSources(const kachakacha::v2::base::EntityId& 
     if (found == partShapes_.end()) {
         return;
     }
-    const auto count = kachakacha::v2::kernel::ShapeFaceCount(found->second);
-    if (!count.HasValue()) {
-        return;
-    }
-    for (std::size_t face = 0; face < count.Value(); ++face) {
-        const auto sampled = kachakacha::v2::kernel::FaceSamplesOf(found->second, face);
-        if (!sampled.HasValue()) {
-            continue;   // 取れない面は飛ばす。飛ばしたことは断りの文で分かる。
-        }
-        kachakacha::v2::app::FabricationSource source;
-        source.entityId = partId;
-        source.name = partName + " 面" + std::to_string(face + 1);
-        source.samples = sampled.Value().samples;
-        // 3D で押した面(EX-02 と同じ番号)を、あとで部材番号へ変えるために覚える。
-        source.faceIndex = face;
-        sources.push_back(std::move(source));
-    }
+    AppendNativeFabricationSources(found->second,partId,partName,sources);
 }
 
 //! 断ったときに「何枚に分ければ作れるか」まで言う(製作近似 §5)。

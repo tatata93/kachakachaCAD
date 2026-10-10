@@ -16,6 +16,7 @@
 
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctLoftSurface.h"
+#include "kachakacha/kernel/OcctMatchedRuled.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -206,6 +207,10 @@ template<class Function>
             "断面が2つ以上必要です。", {}));
     }
     return Guarded([&]() -> Out {
+        if (ruled) {
+            const auto matched=detail::BuildMatchedRuled(request,order,tolerance);
+            if(matched)return *matched;
+        }
         BRepOffsetAPI_ThruSections generator(Standard_False,
             ruled ? Standard_True : Standard_False,
             std::max(tolerance.modelLinearMm, Precision::Confusion()));

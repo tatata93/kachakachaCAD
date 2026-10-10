@@ -9,7 +9,7 @@
 //! 二重曲面(球のような面)を板材の曲げで作るには、こちらが要る。
 //!
 //! 入力は `SurfacePatchSamples`(UV の格子)。V1 の `PartSource::Evaluate(u,v)` と
-//! 同じ役目を、格子の双一次補間で果たす。格子そのものの標本化誤差は
+//! 同じ役目を、元の面の評価関数があればそれで、なければ格子の双一次補間で果たす。格子そのものの標本化誤差は
 //! `FabricationSurfacePatch::samplingDeviationMm` が別に持つ。
 //!
 //! ここは近似と展開まで。曲げ具合(0〜1)で形を動かすのは BandFold.h にある。
@@ -81,8 +81,8 @@ struct BandApproximationOptions {
 //! 格子の標本を、連続なパラメータ面として読む。V1 の PartSource に当たる。
 class SampledSurface {
 public:
-    explicit SampledSurface(const SurfacePatchSamples& samples);
-    //! u は列方向(0..1)、v は行方向(0..1)。格子の中は双一次で補間する。
+    explicit SampledSurface(const SurfacePatchSamples& samples, SurfaceEvaluator evaluate = {});
+    //! u は列方向(0..1)、v は行方向(0..1)。評価関数を優先し、ない場合は双一次補間する。
     [[nodiscard]] Vector3 Evaluate(double u, double v) const;
     //! 分割軸のパラメータ t と、直交方向 s で読む。
     [[nodiscard]] Vector3 EvaluateSplit(BandSplitAxis axis, double t, double s) const;
@@ -90,6 +90,7 @@ public:
 
 private:
     SurfacePatchSamples samples_;
+    SurfaceEvaluator evaluate_;
 };
 
 //! 縦/横/自動/U/V の指定を、この面の実際の軸に決める。
@@ -159,6 +160,8 @@ struct BandMesh {
     std::vector<std::vector<Point2>> developed;
     //! 内部レール(折り線)の山谷。サイズ rows-2。+1=山、-1=谷、0=ほぼ平ら。
     std::vector<int> creaseDirections;
+    //! 直交方向の実パラメータ。曲線に沿う標本を不等間隔にしても対応を保持する。
+    std::vector<double> longitudinalParameters;
 
     [[nodiscard]] int BandCount() const noexcept { return rows > 0 ? rows - 1 : 0; }
     [[nodiscard]] int CreaseCount() const noexcept { return rows > 1 ? rows - 2 : 0; }
@@ -166,7 +169,14 @@ struct BandMesh {
 
 //! レールの並びで区切ってメッシュ展開する。V1 の DevelopPartMesh。
 [[nodiscard]] base::Result<BandMesh> DevelopBandMesh(const SampledSurface& source,
-    BandSplitAxis axis, const std::vector<double>& railParameters, int columns = 96);
+    BandSplitAxis axis, const std::vector<double>& railParameters, int columns = 96,
+    const std::vector<double>& longitudinalParameters = {});
+
+//! 全レールで共通のパラメータを細分化し、曲線側の標本誤差も検査する。
+[[nodiscard]] base::Result<std::vector<double>> AdaptiveRailParameters(const SampledSurface& source,
+    BandSplitAxis axis, const std::vector<double>& railParameters, double toleranceMm);
+[[nodiscard]] double RailSamplingDeviation(const SampledSurface& source,BandSplitAxis axis,
+    const std::vector<double>& rails,const std::vector<double>& parameters);
 
 //! 閉じた輪郭(開口の窓など)を、帯ごとに切り出す。V1 の ClipClosedLoopIntoBands。
 //!

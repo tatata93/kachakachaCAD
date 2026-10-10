@@ -16,6 +16,8 @@
 
 #include <optional>
 #include <vector>
+#include <functional>
+#include <algorithm>
 
 namespace kachakacha::v2::fabrication {
 
@@ -43,6 +45,8 @@ struct AnalyticSurfaceInfo {
 
 //! 面を格子状に標本化したもの。行が母線方向、列がもう一方。
 //! points[row * columnCount + column]。
+using SurfaceEvaluator = std::function<Vector3(double, double)>;
+
 struct SurfacePatchSamples {
     std::vector<Vector3> points;
     std::size_t rowCount = 0;
@@ -55,7 +59,8 @@ struct SurfacePatchSamples {
     [[nodiscard]] bool Valid() const
     {
         return rowCount >= 2 && columnCount >= 2
-            && points.size() == rowCount * columnCount;
+            && points.size() == rowCount * columnCount
+            && std::all_of(points.begin(),points.end(),[](const auto& point){return point.IsFinite();});
     }
 };
 

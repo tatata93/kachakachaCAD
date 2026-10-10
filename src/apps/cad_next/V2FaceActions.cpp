@@ -22,13 +22,13 @@ using namespace kachakacha::v2;
 
 bool V2FaceActions::Run(V2MainWindow& window,std::string_view command)
 {
-    if(command=="fabrication.create"||command=="fabrication.gpt_create"){
+    if(command=="fabrication.create"){
         const auto& selected=window.viewport_->Selection().ordered;
         if(selected.size()!=1||selected.front().kind!=app::SelectionElementKind::Face||
             !selected.front().pickedFaceIndex||!window.partShapes_.contains(selected.front().entityId.ToString()))return false;
-        command=command=="fabrication.create"?"fabrication.from_face":"fabrication.gpt_from_face";
+        command="fabrication.from_face";
     }
-    if(command!="workplane.from_face" && command!="fabrication.from_face" && command!="fabrication.gpt_from_face")return false;
+    if(command!="workplane.from_face" && command!="fabrication.from_face")return false;
     const auto selection=window.viewport_->Selection();
     window.EndArmedTools();window.ClearPendingCommand();
     window.SelectTool(modeling::DrawingTool::Select);
@@ -77,7 +77,7 @@ void V2FaceActions::Apply(const app::SelectionRef& ref)
     auto& window=window_;const auto command=command_;
     const auto found=window.partShapes_.find(ref.entityId.ToString());
     if(found==window.partShapes_.end() || !ref.pickedFaceIndex){status_->setText(QStringLiteral("ソリッドのフェイスを選び直してください。"));return;}
-    if(command!="workplane.from_face") {if(!Extract(ref))return;window.RunCommand(command=="fabrication.from_face" ? "fabrication.create":"fabrication.gpt_create");return;}
+    if(command!="workplane.from_face") {if(!Extract(ref))return;window.RunCommand("fabrication.create");return;}
     const auto face=kernel::OutputFace(found->second,*ref.pickedFaceIndex);
     if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return;}
     const auto frame=kernel::OutputSurfaceFrame(face.Value(),ref.hitPoint);

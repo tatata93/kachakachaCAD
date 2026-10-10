@@ -205,6 +205,8 @@ private:
     QWidget* BuildApproxInput(QWidget* body);
     QWidget* BuildDisplayRow(QWidget* page);
     QWidget* BuildOptionsForm(QWidget* body);
+    QWidget* ArrangeQuickOptions(QWidget* details);
+    void QuickOptionsChanged();
     QWidget* BuildRangeAndMaterial(QWidget* body);
     QWidget* BuildTargetSection(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
@@ -228,6 +230,8 @@ private:
     QTabWidget* stages_ = nullptr;
     QComboBox* method_ = nullptr;
     QFormLayout* form_ = nullptr;
+    QWidget* advancedWidget_ = nullptr;
+    QPushButton* compareToggle_ = nullptr;
     QComboBox* splitAxis_ = nullptr;
     QCheckBox* adaptive_ = nullptr;
     QCheckBox* splitAtCorners_ = nullptr;

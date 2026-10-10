@@ -215,15 +215,20 @@ void DensifyLoop(std::vector<Vector3>& points, std::vector<double>& parameters)
 } // namespace
 
 Result<BandMesh> DevelopBandMesh(const SampledSurface& source, BandSplitAxis axis,
-    const std::vector<double>& railParameters, int columns)
+    const std::vector<double>& railParameters, int columns,
+    const std::vector<double>& longitudinalParameters)
 {
     using Out = Result<BandMesh>;
+    if(!source.Valid())return Out::Failure(MakeError(kBandBadSamples,"面の標本が壊れています。",{}));
     if (railParameters.size() < 2) {
         return Out::Failure(MakeError(kBandBadBoundary, "展開にはレールが2本以上要ります。", {}));
     }
     if (columns < 2) {
         return Out::Failure(MakeError(kBandBadOptions, "展開の列数は2以上で指定してください。", {}));
     }
+    for(double parameter:railParameters)
+        if(!std::isfinite(parameter) || parameter<0 || parameter>1)
+            return Out::Failure(MakeError(kBandBadBoundary,"レールの範囲は0〜1に指定してください。",{}));
     for (std::size_t index = 1; index < railParameters.size(); ++index) {
         if (railParameters[index] <= railParameters[index - 1] + 1.0e-12) {
             return Out::Failure(MakeError(kBandBadBoundary,
@@ -232,14 +237,26 @@ Result<BandMesh> DevelopBandMesh(const SampledSurface& source, BandSplitAxis axi
     }
     BandMesh mesh;
     mesh.rows = static_cast<int>(railParameters.size());
-    mesh.columns = columns + 1;
+    mesh.longitudinalParameters=longitudinalParameters;
+    if(mesh.longitudinalParameters.empty())
+        for(int column=0;column<=columns;++column)
+            mesh.longitudinalParameters.push_back(static_cast<double>(column)/columns);
+    if(mesh.longitudinalParameters.size()<2 || !std::isfinite(mesh.longitudinalParameters.front())
+        || std::abs(mesh.longitudinalParameters.front())>1e-12
+        || std::abs(mesh.longitudinalParameters.back()-1)>1e-12)
+        return Out::Failure(MakeError(kBandBadBoundary,"曲線の標本範囲が正しくありません。",{}));
+    for(std::size_t i=1;i<mesh.longitudinalParameters.size();++i)
+        if(!std::isfinite(mesh.longitudinalParameters[i])
+            || mesh.longitudinalParameters[i]<=mesh.longitudinalParameters[i-1])
+            return Out::Failure(MakeError(kBandBadBoundary,"曲線の標本は昇順に指定してください。",{}));
+    mesh.columns=static_cast<int>(mesh.longitudinalParameters.size());
     // 近似の実形状: 各レールは実面上の曲線、レール間は直線(ルールド)。
     mesh.world.resize(static_cast<std::size_t>(mesh.rows));
     for (int row = 0; row < mesh.rows; ++row) {
         auto& points = mesh.world[static_cast<std::size_t>(row)];
         points.reserve(static_cast<std::size_t>(mesh.columns));
         for (int column = 0; column < mesh.columns; ++column) {
-            const double s = static_cast<double>(column) / columns;
+            const double s = mesh.longitudinalParameters[static_cast<std::size_t>(column)];
             points.push_back(source.EvaluateSplit(axis,
                 railParameters[static_cast<std::size_t>(row)], s));
         }

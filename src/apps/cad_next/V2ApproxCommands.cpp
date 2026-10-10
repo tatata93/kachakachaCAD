@@ -12,6 +12,7 @@
 //! backend を画面のために複製しない。
 
 #include "V2MainWindow.h"
+#include "V2ApproxPreview.h"
 
 #include "V2FabricationDock.h"
 #include "V2FaceActions.h"
@@ -149,6 +150,7 @@ void V2MainWindow::ShowApproxPreview()
             }
         }
     }
+    if(evaluation.bandMesh)ShowBandApproxPreview(*viewport_,lines);
     viewport_->ShowToolPreview(std::move(lines));
 }
 
@@ -183,16 +185,14 @@ void V2MainWindow::RefreshApproxDock()
     fabricationDock_->ShowApproxInput(sources, lines,
         approxInput_.sources.empty() ? -1 : approxInput_.selectedCandidate, canConfirm);
     fabricationDock_->ShowPolicy(static_cast<int>(approxInput_.policy));
-    QString status;
-    for (const std::string& line : kachakacha::v2::app::ApproxStatusLinesJa(approxInput_,
-             approxOutcomes_, canConfirm)) {
-        if (!status.isEmpty()) {
-            status += QStringLiteral("\n");
-        }
-        status += QString::fromStdString(line);
-    }
+    QString status=approxInput_.sources.empty()
+        ? QStringLiteral("3Dで面や立体を選び、枚数・誤差・方向を設定してください。")
+        : QStringLiteral("対象 %1つ。もう一度押すと対象から外れます。").arg(approxInput_.sources.size());
     if (canConfirm) {
         status += QStringLiteral("\n") + QString::fromStdString(approxEvaluations_[chosen]->summaryJa);
+        status += QStringLiteral("\n下見を表示中。Enterで確定します。");
+    } else if(chosen<approxOutcomes_.size() && approxOutcomes_[chosen].evaluated) {
+        status += QStringLiteral("\n")+QString::fromStdString(approxOutcomes_[chosen].refusalJa);
     }
     fabricationDock_->SetMessage(status);
     ShowToolFooter(approxShelfShown_

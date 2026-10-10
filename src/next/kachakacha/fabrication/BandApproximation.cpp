@@ -12,7 +12,7 @@ using base::MakeError;
 using base::Result;
 
 constexpr int kAxisSamples = 96;  //!< 分割軸方向の刻み
-constexpr int kCrossSamples = 17; //!< 直交方向の刻み
+constexpr int kCrossSamples = 33; //!< 直交方向の刻み
 
 //! 帯 [t0,t1] の「1軸曲げ近似からのずれ」を弦偏差で見積もる。
 //! 1軸曲げの帯は、帯を横切る素線(分割軸方向の曲線)が直線になる。
@@ -21,9 +21,13 @@ constexpr int kCrossSamples = 17; //!< 直交方向の刻み
     BandSplitAxis axis, double t0, double t1)
 {
     double worst = 0.0;
-    const int innerSamples = 9;
-    for (int crossIndex = 0; crossIndex < kCrossSamples; ++crossIndex) {
-        const double s = static_cast<double>(crossIndex) / (kCrossSamples - 1);
+    const int innerSamples = 33;
+    const double span=t1-t0;
+    const double scale=(source.EvaluateSplit(axis,t1,.5)-source.EvaluateSplit(axis,t0,.5)).Length();
+    const auto positions=AdaptiveRailParameters(source,axis,
+        {t0,t0+span*.25,t0+span*.5,t0+span*.75,t1},std::clamp(scale*1e-4,1e-6,.001));
+    if(!positions.HasValue())return std::numeric_limits<double>::infinity();
+    for (const double s : positions.Value()) {
         const Vector3 start = source.EvaluateSplit(axis, t0, s);
         const Vector3 end = source.EvaluateSplit(axis, t1, s);
         const Vector3 chord = end - start;
@@ -33,7 +37,7 @@ constexpr int kCrossSamples = 17; //!< 直交方向の刻み
             const Vector3 point = source.EvaluateSplit(axis, t0 + (t1 - t0) * f, s);
             Vector3 offset = point - start;
             if (chordLengthSquared > 1.0e-18) {
-                offset = offset - chord * (Dot(offset, chord) / chordLengthSquared);
+                offset = offset - chord * (std::clamp(Dot(offset, chord) / chordLengthSquared, 0.0, 1.0));
             }
             worst = std::max(worst, offset.Length());
         }
@@ -226,18 +230,21 @@ std::string_view BandSplitAxisNameJa(BandSplitAxis axis) noexcept
     return axis == BandSplitAxis::U ? "u 方向で切る" : "v 方向で切る";
 }
 
-SampledSurface::SampledSurface(const SurfacePatchSamples& samples)
-    : samples_(samples)
+SampledSurface::SampledSurface(const SurfacePatchSamples& samples, SurfaceEvaluator evaluate)
+    : samples_(samples), evaluate_(std::move(evaluate))
 {
+    // Validate finite samples once, not at each of the millions of evaluations.
+    if(!samples_.Valid())samples_.rowCount=0;
 }
 
 Vector3 SampledSurface::Evaluate(double u, double v) const
 {
-    if (!samples_.Valid()) {
+    if (samples_.rowCount<2 || samples_.columnCount<2) {
         return Vector3{};
     }
     const double clampedU = std::clamp(u, 0.0, 1.0);
     const double clampedV = std::clamp(v, 0.0, 1.0);
+    if (evaluate_) { return evaluate_(clampedU, clampedV); }
     const double columnPosition = clampedU * static_cast<double>(samples_.columnCount - 1);
     const double rowPosition = clampedV * static_cast<double>(samples_.rowCount - 1);
     const std::size_t column0 = static_cast<std::size_t>(std::floor(columnPosition));
@@ -309,36 +316,70 @@ Result<std::vector<double>> AdaptiveBoundaries(const SampledSurface& source,
 }
 }
 
-Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
-    const BandApproximationOptions& options)
+namespace {
+Result<bool> ValidateBandOptions(const SampledSurface& source, const BandApproximationOptions& options)
 {
-    using Out = Result<BandApproximationResult>;
     if (!source.Valid()) {
-        return Out::Failure(MakeError(kBandBadSamples, "面の標本が足りません。",
+        return Result<bool>::Failure(MakeError(kBandBadSamples, "面の標本が足りません。",
             "行と列がそれぞれ2つ以上要ります。"));
     }
     if (!std::isfinite(options.maximumDeviationMm) || options.maximumDeviationMm <= 0.0) {
-        return Out::Failure(MakeError(kBandBadOptions,
+        return Result<bool>::Failure(MakeError(kBandBadOptions,
             "帯近似の許容偏差は正の値で指定してください。", {}));
     }
     if (options.maximumPartCount < 1) {
-        return Out::Failure(MakeError(kBandBadOptions,
+        return Result<bool>::Failure(MakeError(kBandBadOptions,
             "部材数の上限は 1 以上で指定してください。", {}));
     }
+    if(options.equalPartCount<0 || options.equalPartCount>options.maximumPartCount)
+        return Result<bool>::Failure(MakeError(kBandBadOptions,"指定枚数と枚数上限が両立しません。",
+            "枚数上限を増やすか、指定枚数を減らしてください。"));
+    if(MeasureWidth(source,options.splitAxis,0,1)<1e-9)
+        return Result<bool>::Failure(MakeError(kBandBadSamples,"分割方向の幅がありません。",
+            "別の方向を選ぶか、元の面の退化を確認してください。"));
     if (!std::isfinite(options.minimumPartWidthMm) || options.minimumPartWidthMm < 0.0) {
-        return Out::Failure(MakeError(kBandBadOptions,
+        return Result<bool>::Failure(MakeError(kBandBadOptions,
             "最小部材幅は 0 以上で指定してください。", {}));
     }
     if (!std::isfinite(options.cornerAngleDeg) || options.cornerAngleDeg <= 0.0
         || options.cornerAngleDeg >= 180.0) {
-        return Out::Failure(MakeError(kBandBadOptions,
+        return Result<bool>::Failure(MakeError(kBandBadOptions,
             "角とみなす折れの角度は 0 より大きく 180 未満で指定してください。", {}));
     }
+    return Result<bool>::Success(true);
+}
+void RespectGlobalCap(const SampledSurface& source, const BandApproximationOptions& options,
+    const std::vector<double>& corners, std::vector<double>& boundaries)
+{
+    // Greedy splitting each corner interval must still respect the GLOBAL cap.
+    while(static_cast<int>(boundaries.size())-1>options.maximumPartCount) {
+        std::size_t pick=boundaries.size();double best=std::numeric_limits<double>::infinity();
+        for(std::size_t i=1;i+1<boundaries.size();++i) {
+            if(std::any_of(corners.begin(),corners.end(),[&](double c){return std::abs(c-boundaries[i])<1e-9;}))continue;
+            const double error=EstimateChordDeviation(source,options.splitAxis,boundaries[i-1],boundaries[i+1]);
+            if(error<best){best=error;pick=i;}
+        }
+        if(pick==boundaries.size())break;
+        boundaries.erase(boundaries.begin()+pick);
+    }
+}
+}
+
+Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
+    const BandApproximationOptions& options)
+{
+    using Out = Result<BandApproximationResult>;
+    const auto valid = ValidateBandOptions(source, options);
+    if (!valid.HasValue()) { return Out::Failure(valid.Diagnostics()); }
     // 角(縁の折れ)で必ず割る。区間 [角_i, 角_i+1] ごとに、貪欲 / 枚数 / 手動で境界を置く。
     std::vector<double> corners;
     if (options.splitAtCorners) {
         corners = CornerParameters(source, options.splitAxis, options.cornerAngleDeg);
     }
+    const int required=static_cast<int>(corners.size())+1;
+    if(required>options.maximumPartCount || (options.equalPartCount>0 && required>options.equalPartCount))
+        return Out::Failure(MakeError(kBandBadOptions,"角の区間数が指定枚数・上限を超えます。",
+            "枚数を増やすか「縁の角で必ず割る」を外してください。"));
     std::vector<double> segments{0.0};
     segments.insert(segments.end(), corners.begin(), corners.end());
     segments.push_back(1.0);
@@ -386,7 +427,11 @@ Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
             }
         }
         std::sort(boundaries.begin(), boundaries.end());
+        if(static_cast<int>(boundaries.size())-1>options.maximumPartCount)
+            return Out::Failure(MakeError(kBandBadOptions,"手動境界が枚数上限を超えます。",
+                "枚数上限を増やすか、手動境界を減らしてください。境界を勝手に削除しません。"));
     }
+    RespectGlobalCap(source, options, corners, boundaries);
     BandApproximationResult result;
     result.cornerParameters = corners;
     result.narrowestWidthMm = std::numeric_limits<double>::infinity();
@@ -405,6 +450,9 @@ Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
     result.reachedRequestedTolerance =
         result.maximumDeviationMm <= options.maximumDeviationMm + 1.0e-9;
     result.railParameters = std::move(boundaries);
+    if(!std::isfinite(result.maximumDeviationMm))
+        return Out::Failure(MakeError("FAB-B007","近似誤差を測定できません。",
+            "元の面の急な折れ・退化または許容条件を確認してください。"));
     return Out::Success(std::move(result));
 }
 

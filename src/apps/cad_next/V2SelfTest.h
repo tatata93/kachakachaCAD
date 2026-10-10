@@ -47,6 +47,7 @@ void Note(const char* what);
 [[nodiscard]] bool CaseOwnerDome(V2MainWindow& window);
 [[nodiscard]] bool CaseOwnerDomeBoth(V2MainWindow& window);
 [[nodiscard]] std::vector<SelfTestCase> GptFabricationCases();
+[[nodiscard]] std::vector<SelfTestCase> ApproxOutlineCases();
 
 //! 上段メニューの文字幅・重なり・マウス操作のケース。
 [[nodiscard]] std::vector<SelfTestCase> MenuCases();

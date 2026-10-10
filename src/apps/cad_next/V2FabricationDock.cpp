@@ -167,7 +167,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     stages_->addTab(bendPage, QStringLiteral("2 部材の編集・曲げ確認"));
 
     auto* material = BuildRangeAndMaterial(bendPage);
-    approximationLayout->insertWidget(1,
+    advancedWidget_->layout()->addWidget(
         material->findChild<QWidget*>(QStringLiteral("approximationRange")));
     bendLayout->insertWidget(2, material);
 
@@ -229,7 +229,14 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     layout->addWidget(MakeRun(box,QStringLiteral("ソリッドのフェイスを選ぶ"),"fabrication.from_face",this));
     // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
     // 共通UI: 対象を先に示し、その下に方法と条件を置く。
-    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("作り方")));
+    auto* compare=new QWidget(box);
+    auto* compareLayout=new QVBoxLayout(compare); compareLayout->setContentsMargins(0,0,0,0);
+    auto* toggle=new QPushButton(QStringLiteral("▸ 候補を比較・作り方を選ぶ"),box);
+    compareToggle_=toggle;
+    toggle->setObjectName(QStringLiteral("fabricationCompareToggle")); toggle->setCheckable(true);
+    layout->addWidget(toggle); layout->addWidget(compare); compare->hide();
+    QObject::connect(toggle,&QPushButton::toggled,compare,&QWidget::setVisible);
+    compareLayout->addWidget(MakePanelSectionTitle(compare, QStringLiteral("作り方")));
     // 4 枚を 2×2 に。横 1 列だと 330px の棚で 2 枚しか見えなかった(PC 画面 2026-09-19)。
     auto* policyRow = new QGridLayout();
     policyRow->setHorizontalSpacing(2);
@@ -248,9 +255,9 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
         policyRow->addWidget(button, at / 2, at % 2);
         policies_.push_back(button);
     }
-    layout->addLayout(policyRow);
+    compareLayout->addLayout(policyRow);
     ShowPolicy(0);
-    layout->addWidget(MakePanelSectionTitle(box, QStringLiteral("候補(実際に作って比べます)")));
+    compareLayout->addWidget(MakePanelSectionTitle(compare, QStringLiteral("候補(実際に作って比べます)")));
     for (int index = 0; index < 3; ++index) {
         auto* button = new QPushButton(box);
         button->setCheckable(true);
@@ -260,7 +267,7 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
             }
         });
         candidates_.push_back(button);
-        layout->addWidget(button);
+        compareLayout->addWidget(button);
     }
     ShowApproxInput(QString(), {}, -1, false, false);
     return box;
@@ -358,6 +365,7 @@ bool V2FabricationDock::ClickCandidate(int candidate)
     if (candidate < 0 || candidate >= static_cast<int>(candidates_.size())) {
         return false;
     }
+    if(compareToggle_)compareToggle_->setChecked(true);
     QPushButton* button = candidates_[static_cast<std::size_t>(candidate)];
     if (!button->isVisible() || !button->isEnabled()) {
         return false;
@@ -563,7 +571,7 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     deviation_ = MakeMm(formWidget, 0.0, 100.0, 0.05);
     deviation_->setToolTip(QStringLiteral("数の棚の「展開で許すずれ」と同じ値です。"));
     form_->addRow(QStringLiteral("許すずれ"), deviation_);
-    return formWidget;
+    return ArrangeQuickOptions(formWidget);
 
 }
 
@@ -923,10 +931,10 @@ void V2FabricationDock::Connect()
         RefreshMethodRows();
         Emit();
     });
-    QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
-    QObject::connect(adaptive_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { QuickOptionsChanged(); });
+    QObject::connect(adaptive_, &QCheckBox::toggled, this, [this] { QuickOptionsChanged(); });
     QObject::connect(splitAtCorners_, &QCheckBox::toggled, this, [this] { Emit(); });
-    QObject::connect(equalParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(equalParts_, &QDoubleSpinBox::valueChanged, this, [this] { QuickOptionsChanged(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
     for (QCheckBox* shown : {showSource_, showApprox_}) {
@@ -976,10 +984,7 @@ void V2FabricationDock::RefreshMethodRows()
 {
     // 分割軸・境界・上限・最小幅は V1 方式(帯)だけが使う。V2 方式では隠す。
     const bool band = method_->currentIndex() == 0;
-    form_->setRowVisible(splitAxis_, band);
-    form_->setRowVisible(adaptive_, band);
     form_->setRowVisible(splitAtCorners_, band);
-    form_->setRowVisible(equalParts_, band);
     form_->setRowVisible(automatic_, band);
     form_->setRowVisible(manual_, band);
     form_->setRowVisible(maxParts_, band);
@@ -1418,6 +1423,7 @@ void V2FabricationDock::ShowPolicy(int policy)
 
 bool V2FabricationDock::ClickPolicy(int policy)
 {
+    if(compareToggle_)compareToggle_->setChecked(true);
     if (policy < 0 || policy >= static_cast<int>(policies_.size())
         || !policies_[static_cast<std::size_t>(policy)]->isVisible()) {
         return false;

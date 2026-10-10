@@ -697,6 +697,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/SurfacePatchCrop.cpp
     src/next/kachakacha/fabrication/WrapProjection.cpp
     src/next/kachakacha/fabrication/BandDevelop.cpp
+    src/next/kachakacha/fabrication/BandRailSampling.cpp
     src/next/kachakacha/fabrication/BandBendRadius.cpp
     src/next/kachakacha/fabrication/BandPartition.cpp
     src/next/kachakacha/fabrication/BendRadius.cpp
@@ -765,6 +766,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctExtrudeToFace.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
+    src/next_occt/kachakacha/kernel/OcctFabricationSampling.cpp
+    src/next_occt/kachakacha/kernel/OcctMatchedRuled.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
@@ -1058,6 +1061,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestShellSplit.cpp
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
+        src/apps/cad_next/V2SelfTestApproxOutline.cpp
         src/apps/cad_next/V2SelfTestDome.cpp
         src/apps/cad_next/V2SelfTestGeneration.cpp
         src/apps/cad_next/V2SelfTestGptFabrication.cpp
@@ -1103,6 +1107,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceDock.cpp
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
+        src/apps/cad_next/V2ApproxPreview.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
         src/apps/cad_next/V2SelfTestImage.cpp
         src/apps/cad_next/V2FlowLayout.cpp
@@ -1234,6 +1239,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2CornerDock.cpp
         src/apps/cad_next/V2CornerDock.h
         src/apps/cad_next/V2FabricationDock.cpp
+        src/apps/cad_next/V2FabricationAdvancedUi.cpp
+        src/apps/cad_next/V2FabricationSources.cpp
         src/apps/cad_next/V2FabricationDock.h
         src/apps/cad_next/V2EditCommands.cpp
         src/apps/cad_next/V2ExportDock.h

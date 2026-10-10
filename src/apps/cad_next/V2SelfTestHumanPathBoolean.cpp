@@ -528,7 +528,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("HP-FA フェイスから作業面1を作る", plane && plane->displayName == "作業面1"
             && CountOfKind(window,EntityKind::WorkPlane) == 4)) return false;
     window.SelectTool(modeling::DrawingTool::Select);
-    for (const auto command : {"fabrication.from_face", "fabrication.gpt_from_face"}) {
+    for (const auto command : {"fabrication.from_face"}) {
         const int before = CountOfKind(window,EntityKind::GuideSurface);
         viewport.SetViewDirection(ViewDirection::Top);viewport.FitToDocument();
         viewport.SetSelection({});window.RunCommand(command);
@@ -549,7 +549,7 @@ using kachakacha::v2::domain::EntityKind;
         }
         window.HandleToolKey(Qt::Key_Escape,nullptr);
     }
-    for(const auto command:{"fabrication.create","fabrication.gpt_create"}){
+    for(const auto command:{"fabrication.create"}){
         const int before=CountOfKind(window,EntityKind::GuideSurface);
         app::SelectionRef face;face.entityId=part;face.kind=app::SelectionElementKind::Face;face.pickedFaceIndex=0;
         app::SelectionSet source;source.entityIds={part};source.ordered={face};viewport.SetSelection(source);window.RunCommand(command);
@@ -569,7 +569,7 @@ using kachakacha::v2::domain::EntityKind;
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
-        {"HP-FA-01 フェイスから作図と従来GPT近似", CaseFaceToolFirst},
+        {"HP-FA-01 フェイスから作図と近似", CaseFaceToolFirst},
         {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},
         {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},
         {"HP-CT-04 分割領域を選択して生成し保存再生成", CaseContactSplitSelection},

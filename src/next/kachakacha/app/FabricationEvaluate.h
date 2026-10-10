@@ -51,8 +51,12 @@ struct FabricationSource {
     std::string name;
     //! 形状ガイドの面の標本。曲がった面はこれで近似する。
     std::optional<fabrication::SurfacePatchSamples> samples;
+    //! Exact native surface in the SAME row/column convention as samples.
+    fabrication::SurfaceEvaluator evaluate;
+    std::vector<base::Diagnostic> samplingDiagnostics;
     //! 平らな部品の「平らな1枚」の輪郭。押し出しの端の輪郭。
     std::optional<std::vector<geometry::CurveSegment>> flatBoundary;
+    std::vector<std::vector<geometry::CurveSegment>> flatOpenings;
     //! 立体を面ごとに分けたとき(splitSolidFaces)の、元の立体での面番号。
     //! 3D で押した面(EX-02 と同じ pickedFaceIndex)を、どの部材に当てるかを
     //! 決めるためだけに持つ。分けていなければ値を持たない。

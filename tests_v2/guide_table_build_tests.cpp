@@ -105,6 +105,27 @@ KACHA_V2_TEST(guide_table_build, split_interval_and_reverse_survive_saved_defini
         "区間と向きが同じに戻る");
 }
 
+KACHA_V2_TEST(guide_table_build, dense_rail_references_prefer_exact_segments)
+{
+    using namespace kachakacha::v2;
+    Fixture fixture;
+    const auto id=fixture.AddLine({0,0,0},{.004,0,0},"rail");
+    auto scene=fixture.Scene();
+    for(int i=1;i<4;++i)scene.curves.push_back({id,
+        fixture.ids.NextTyped<base::IdKind::Segment>(),
+        CurveSegment::MakeLine({i*.004,0,0},{(i+1)*.004,0,0}).Value()});
+    GuideTable table;table.method=GuideSurfaceMethod::RuledSections;
+    modeling::GuideTableRow row;row.role=ChainRole::Section;row.sourceWireIds={id};
+    for(const auto& curve:scene.curves)row.segments.push_back(curve.segment);
+    table.rows.push_back(row);
+    const auto stored=DefinitionFromGuideTable(table,scene,.01);
+    Require(stored.HasValue(),"許容値より短い区間も参照を保存できる");
+    const auto& refs=stored.Value().chains.front().segments;
+    Require(refs.size()==scene.curves.size(),"全区間を保存");
+    for(std::size_t i=0;i<refs.size();++i)
+        Require(refs[i].segmentId==scene.curves[i].segmentId,"隣の短い区間へ化けない");
+}
+
 KACHA_V2_TEST(guide_table_build, おまかせは2本でルールド3本でロフト)
 {
     Fixture fixture;

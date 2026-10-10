@@ -754,6 +754,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctLoftSurface.cpp
     src/next_occt/kachakacha/kernel/OcctDomePatch.cpp
     src/next_occt/kachakacha/kernel/OcctDomeProfile.cpp
+    src/next_occt/kachakacha/kernel/OcctDomeSkirt.cpp
     src/next_occt/kachakacha/kernel/OcctGptFabrication.cpp
     src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp

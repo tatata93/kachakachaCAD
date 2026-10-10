@@ -81,7 +81,9 @@ public:
 
     void SetMethodHandler(std::function<void(int face, int methodIndex)> handler);
     void SetStyleHandler(std::function<void(int face, int style)> handler);
+    void SetApplyStyleHandler(std::function<void(int style)> handler);
     [[nodiscard]] bool ChooseStyle(int face,int style);
+    [[nodiscard]] bool ClickApplyStyleToAll(int face);
     void SetMakeHandler(std::function<void(int face, bool make)> handler);
     //! [寄せる] / [そのまま](そのままはトグル: 押すと leave が反転する)。
     void SetGapHandlers(std::function<void(int gap)> close, std::function<void(int gap)> leave);
@@ -120,6 +122,7 @@ private:
         QLabel* number = nullptr;
         QComboBox* method = nullptr;
         QComboBox* style = nullptr;
+        QPushButton* applyStyle = nullptr;
         QLabel* edges = nullptr;
         QLabel* status = nullptr;
         QCheckBox* make = nullptr;
@@ -160,6 +163,7 @@ private:
 
     std::function<void(int, int)> methodHandler_;
     std::function<void(int, int)> styleHandler_;
+    std::function<void(int)> applyStyleHandler_;
     std::function<void(int, bool)> makeHandler_;
     std::function<void(int, int)> continuityHandler_;
     std::function<void()> reopenHandler_;

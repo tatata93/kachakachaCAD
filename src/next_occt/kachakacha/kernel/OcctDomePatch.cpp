@@ -110,7 +110,9 @@ base::Result<occ::handle<Geom_BSplineSurface>> DomePatch(const occ::handle<Geom_
         || base->UMultiplicity(1)!=base->UDegree()+1 || base->UMultiplicity(base->NbUKnots())!=base->UDegree()+1
         || base->VMultiplicity(1)!=base->VDegree()+1 || base->VMultiplicity(base->NbVKnots())!=base->VDegree()+1)
         return fail("非有理の4側の境界が必要です。標準など別の張り方を選んでください。");
-    auto surface = TransportDomeProfile(base);
+    bool failed=false;
+    auto surface = TransportDomeProfile(base,failed);
+    if(failed)return fail("裾の幅を必要な精度で補間できませんでした。別の張り方を選ぶか、境界を分けてください。入力は保持します。");
     if(!surface.IsNull()) {
         if(!Regular(*surface,*base))return fail("断面を広げると面が折り返すか潰れます。境界を見直すか標準を選んでください。");
         return Out::Success(surface);

@@ -2,12 +2,15 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/base/Diagnostic.h"
 #include <Geom_BSplineSurface.hxx>
+#include <Geom_BSplineCurve.hxx>
 
 namespace kachakacha::v2::kernel::detail {
 // Boundary-preserving polynomial transfinite blend. No input guides are discarded.
 [[nodiscard]] base::Result<occ::handle<Geom_BSplineSurface>> DomePatch(
     const occ::handle<Geom_BSplineSurface>& base);
+[[nodiscard]] occ::handle<Geom_BSplineCurve> DomeSkirtWidth(const Geom_BSplineSurface& base,
+    const gp_XYZ& along,const gp_XYZ& across,bool& failed);
 [[nodiscard]] occ::handle<Geom_BSplineSurface> TransportDomeProfile(
-    const occ::handle<Geom_BSplineSurface>& base);
+    const occ::handle<Geom_BSplineSurface>& base,bool& failed);
 }
 #endif

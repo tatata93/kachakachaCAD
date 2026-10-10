@@ -296,6 +296,8 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 「面作成 → 面にする」で線を選び、区画ごとに作成対象と張り方を決めます。
 中央断面と外周から丸い屋根を作る場合は「滑らかなドーム（近似）」を選びます。
 不要な区画の「作る」を外し、下見を確認してEnterで確定します。
+張り方は区画ごとに設定します。左右をそろえるときは「この張り方を作る曲面すべてに適用」を押します。
+平面・ロフトと「作る」を外した区画は変えません。異なる設定が残っていると棚の状態に表示します。
 標準・平坦優先・丸み優先にも切り替えられます。内部ガイドや支持面G1/G2には標準などを使います。
 
 ![右区画だけの滑らかなドームの下見](images/v2-dome-preview.png)
@@ -303,6 +305,10 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 ![右区画だけのドームを確定した結果](images/v2-dome-result.png)
 
 115モデルのWindows自動試験の実画面です。左区画と元の線は変更しません。
+
+![両区画へ同じ張り方を一括適用したドーム](images/v2-dome-both.png)
+
+左右を同じドームにして確定した結果です。実位置で断面を対応させ、裾角付近の余計な盛り上がりを抑えます。
 
 - 表の行の色は、画面の中の線の色と同じです。
   どの線がどの役割なのかを、表と画面の両方で同時に見られます。
@@ -494,6 +500,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 画面を出さずに一通り触って確かめるには `--self-test` と打ちます。
 
 `dome-preview` と `dome-result` は `HP-LF-115-DOME` 自己試験で保存したWindows実画面です。
+`dome-both` は `HP-LF-115-DOME-BOTH` の両区画一括設定・確定後の実画面です。
 入力は `KACHACAD_SURFACE_TEST_FILE`、保存先の接頭辞は `KACHACAD_SURFACE_TEST_OUTPUT` で指定します。
 `--manual-state` の引数ではありません。元モデルは上書きしません。
 

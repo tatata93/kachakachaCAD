@@ -58,6 +58,18 @@ constexpr const char* kLabelJa = "面にする";
 
 } // namespace
 
+void V2LoopFacesTool::ApplyStyle(int face,int style,bool all)
+{
+    if(face<0 || static_cast<std::size_t>(face)>=styles_.size() || style<0 || style>3)return;
+    for(std::size_t i=0;i<styles_.size();++i) {
+        const auto method=MethodOf(i);
+        if((!all && i==static_cast<std::size_t>(face)) || (all && make_[i]
+            && (method==LoopFaceMethod::FourEdge || method==LoopFaceMethod::BoundaryFill)))
+            styles_[i]=static_cast<kachakacha::v2::modeling::FourEdgeStyle>(style);
+    }
+    ShowPreview();
+}
+
 V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
 {
     dock_ = new V2LoopFacesDock(&window);
@@ -72,10 +84,9 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
         }
     });
     dock_->SetStyleHandler([this](int face,int style) {
-        if (face<0||static_cast<std::size_t>(face)>=styles_.size()||style<0||style>3) return;
-        styles_[static_cast<std::size_t>(face)]=static_cast<kachakacha::v2::modeling::FourEdgeStyle>(style);
-        ShowPreview();
+        ApplyStyle(face,style,false);
     });
+    dock_->SetApplyStyleHandler([this](int style){ApplyStyle(0,style,true);});
     dock_->SetMakeHandler([this](int face, bool make) {
         if (plan_.has_value() && face >= 0 && static_cast<std::size_t>(face) < make_.size()) {
             make_[static_cast<std::size_t>(face)] = make;

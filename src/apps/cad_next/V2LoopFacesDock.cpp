@@ -199,7 +199,7 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     widgets.column->addWidget(widgets.status);
     if (face.styleIndex>=0) {
         auto* styleLine=new QHBoxLayout();
-        styleLine->addWidget(new QLabel(QStringLiteral("張り方（近似）"),widgets.row));
+        styleLine->addWidget(new QLabel(CircledNumber(face.number)+QStringLiteral("の張り方（近似）"),widgets.row));
         widgets.style=new QComboBox(widgets.row);
         widgets.style->addItem(QStringLiteral("標準"));
         widgets.style->addItem(QStringLiteral("平坦優先"));
@@ -209,6 +209,10 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
         widgets.style->setToolTip(QStringLiteral("同じ境界を保って比較します。滑らかなドームは断面の丸みを広げる近似です。内部ガイド・支持面G1/G2は標準などを選んでください。不要な区画は「作る」を外します。"));
         styleLine->addWidget(widgets.style,1);
         widgets.column->addLayout(styleLine);
+        widgets.applyStyle=new QPushButton(QStringLiteral("この張り方を作る曲面すべてに適用"),widgets.row);
+        widgets.applyStyle->setEnabled(face.make);
+        widgets.applyStyle->setToolTip(QStringLiteral("張り方は区画ごとの設定です。「作る」が有効な四辺面・境界面に適用します。平面・ロフトや「作る」を外した区画は変更しません。"));
+        widgets.column->addWidget(widgets.applyStyle);
     }
     return widgets;
 }
@@ -306,6 +310,10 @@ void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
         if (widgets.style) QObject::connect(widgets.style,&QComboBox::currentIndexChanged,this,[this,faceIndex](int style){
             if (!loading_&&styleHandler_) styleHandler_(faceIndex,style);
         });
+        if(widgets.applyStyle)QObject::connect(widgets.applyStyle,&QPushButton::clicked,this,[this,faceIndex]{
+            if(!loading_ && applyStyleHandler_ && static_cast<std::size_t>(faceIndex)<faceRows_.size())
+                applyStyleHandler_(faceRows_[static_cast<std::size_t>(faceIndex)].style->currentIndex());
+        });
         faceRows_.push_back(widgets);
     }
 }
@@ -354,6 +362,11 @@ void V2LoopFacesDock::ShowView(const V2LoopFacesView& view)
     RebuildFaceRows(view.faces);
     RebuildGapSection(view);
     summary_->setText(view.summaryJa);
+    int first=-1;bool different=false;
+    for(const auto& face:view.faces)if(face.make && face.styleIndex>=0) {
+        if(first<0)first=face.styleIndex;else different=different || first!=face.styleIndex;
+    }
+    if(different)summary_->setText(view.summaryJa+QStringLiteral("\n張り方が区画ごとに異なります。一括適用でそろえられます。"));
     confirm_->setEnabled(view.canConfirm);
     loading_ = false;
 }
@@ -514,6 +527,7 @@ QString V2LoopFacesDock::FaceRowTextJa(int face) const
     const FaceRowWidgets& widgets = faceRows_[static_cast<std::size_t>(face)];
     QString text = widgets.number->text() + QStringLiteral(" ") + widgets.method->currentText()
         + QStringLiteral("  ") + widgets.edges->text();
+    if(widgets.style)text+=QStringLiteral("  ")+widgets.style->currentText();
     if (!widgets.status->text().isEmpty()) {
         text += QStringLiteral("  ") + widgets.status->text();
     }
@@ -559,7 +573,18 @@ void V2LoopFacesDock::SetStyleHandler(std::function<void(int,int)> handler)
     styleHandler_=std::move(handler);
 }
 
+void V2LoopFacesDock::SetApplyStyleHandler(std::function<void(int)> handler)
+{
+    applyStyleHandler_=std::move(handler);
+}
+
 bool V2LoopFacesDock::ChooseStyle(int face,int style)
 {
     return face>=0&&face<static_cast<int>(faceRows_.size())&&ChooseIfUsable(faceRows_[static_cast<std::size_t>(face)].style,style);
+}
+
+bool V2LoopFacesDock::ClickApplyStyleToAll(int face)
+{
+    if(face<0 || static_cast<std::size_t>(face)>=faceRows_.size())return false;
+    return ClickIfUsable(faceRows_[static_cast<std::size_t>(face)].applyStyle);
 }

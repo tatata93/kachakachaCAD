@@ -10,6 +10,12 @@
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Ax1.hxx>
+#include <gp_Ax2.hxx>
+#include <GeomAPI_ProjectPointOnCurve.hxx>
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include <BRep_Tool.hxx>
+#include <TopoDS.hxx>
+#include <TopExp_Explorer.hxx>
 #include <algorithm>
 #include <cmath>
 
@@ -218,11 +224,19 @@ KACHA_V2_TEST(dome, 丸い裾の角を含む境界でも断面高さを広げる
             top[i-1]*v+(1-u)*(z[j-1]-6*v)));
     }
     const auto result=kernel::detail::DomePatch(base); Require(result.HasValue(),"丸い裾を含む屋根を作る");
-    Boundaries(*base,*result.Value());
+    const auto originalSkirt=base->UIso(1);
+    for(int k=0;k<=100;++k) {
+        const double t=k/100.0;
+        RequireNear(base->Value(0,t).Distance(result.Value()->Value(0,t)),0,1e-10,"中央断面を保持");
+        RequireNear(base->Value(t,1).Distance(result.Value()->Value(t,1)),0,1e-10,"上の輪郭を保持");
+        GeomAPI_ProjectPointOnCurve project(result.Value()->Value(1,t),originalSkirt);
+        Require(project.NbPoints()>0,"裾へ投影できる");
+        Require(project.LowerDistance()<2e-7,"パラメータ配分が変わっても同じ裾");
+    }
     for(double u:{0.25,0.5,0.75,0.9})for(double v:{0.1,0.4,0.7,0.9}) {
         const auto p=result.Value()->Value(u,v),old=base->Value(u,v);
-        RequireNear(p.X(),old.X(),1e-10,"丸い外周の足元を保つ");
-        RequireNear(p.Y(),old.Y(),1e-10,"外周の対応を保つ");
+        RequireNear(p.X(),u*result.Value()->Value(1,v).X(),1e-10,"同じ進み位置の裾幅を使う");
+        RequireNear(p.Y(),base->Value(0,v).Y(),1e-10,"中央断面の実際の位置で対応する");
         RequireNear(p.Z(),base->Value(u,1).Z()*base->Value(0,v).Z()/6,1e-10,"全幅に中央断面の高さを伝える");
         Require(p.Z()>old.Z(),"中央付近だけで弱まらない");
     }
@@ -235,6 +249,68 @@ KACHA_V2_TEST(dome, 丸い裾の角を含む境界でも断面高さを広げる
         for(int i=0;i<=20;++i)for(int j=0;j<=20;++j)
             RequireNear(result.Value()->Value(i/20.0,j/20.0).Distance(restored->Value(i/20.0,j/20.0)),0,1e-10,"開始方向に依存しない丸い裾");
     }
+}
+
+KACHA_V2_TEST(dome, 鏡像と非対称の裾でも不要な横方向の山を作らない)
+{
+    for(double bulge:{0.0,2.0,4.0}) {
+        const auto base=Patch(false,true);
+        const double y[]={0,0,10,21},z[]={0,6,6,6},top[]={6,6,5,0},skirt[]={12,12+bulge,12,12};
+        for(int i=1;i<=4;++i)for(int j=1;j<=4;++j) {
+            const double u=(i-1)/3.0,v=(j-1)/3.0;
+            base->SetPole(i,j,gp_Pnt(u*skirt[j-1],y[j-1]*(1-u)+21*v*u,
+                top[i-1]*v+(1-u)*(z[j-1]-6*v)));
+        }
+        const auto original=kernel::detail::DomePatch(base);Require(original.HasValue(),"非対称な裾を扱う");
+        gp_Trsf mirror;mirror.SetMirror(gp_Ax2(gp_Pnt(),gp_Dir(1,0,0)));
+        base->Transform(mirror);
+        const auto reflected=kernel::detail::DomePatch(base);Require(reflected.HasValue(),"鏡像も作れる");
+        for(int j=1;j<100;++j) {
+            double previous=1e10;
+            for(int i=0;i<=100;++i) {
+                const auto p=original.Value()->Value(i/100.0,j/100.0);
+                Require(p.Z()<=previous+1e-9,"同じ進み位置に余計な山がない");previous=p.Z();
+                auto expected=p;expected.Transform(mirror);
+                RequireNear(expected.Distance(reflected.Value()->Value(i/100.0,j/100.0)),0,1e-8,"鏡対称を保持");
+            }
+        }
+    }
+}
+
+KACHA_V2_TEST(dome, 複合8辺の屋根の実位置の勾配にこぶがない)
+{
+    using geometry::CurveSegment;
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::BoundaryFill;
+    request.fourEdgeStyle=modeling::FourEdgeStyle::Dome;
+    const auto top=CurveSegment::MakeCircularArc({0,0,-63.35728066542623},{0,1,0},{0,0,1},
+        95.85728066542625,0,0.14657473619151).Value();
+    const auto corner=CurveSegment::MakeCircularArc({13.5,0,27},{0,1,0},{1,0,0},4.5,0,-1.459455312453022).Value();
+    const auto skirt=CurveSegment::MakeCircularArc({15,-23.239601355301925,27},{0,0,-1},
+        {0.08304547985373978,-0.9965457582448798,0},3,0,-1.4876550949064555).Value();
+    const std::vector<CurveSegment> curves={
+        CurveSegment::MakeCubicBezier({{0,-27,27},{0,-27,32.5},{0,-10,32.5},{0,-10,32.5}}).Value(),
+        CurveSegment::MakeLine({0,-10,32.5},{0,0,32.5}).Value(),top,corner,
+        CurveSegment::MakeLine({18,0,27},skirt.EndPoint()).Value(),skirt,
+        CurveSegment::MakeLine(skirt.StartPoint(),{6,-27,27}).Value(),
+        CurveSegment::MakeLine({6,-27,27},{0,-27,27}).Value()};
+    for(std::size_t i=0;i<curves.size();++i) {
+        modeling::GuideChain chain;chain.role=modeling::ChainRole::BoundarySide;
+        chain.index=static_cast<int>(i+1);chain.segments={curves[i]};request.chains.push_back(chain);
+    }
+    const auto built=Build(request);Require(built.HasValue(),"8辺の実曲面を作る: "+built.FirstSummaryJa());
+    Require(built.Value().maximumDeviationMm<1e-5,"全ての元境界に沿う");
+    TopoDS_Shape shape;Require(kernel::LookupShape(built.Value().handle,shape),"正本形状");
+    TopExp_Explorer faces(shape,TopAbs_FACE);Require(faces.More(),"フェイス");
+    const auto surface=BRep_Tool::Surface(TopoDS::Face(faces.Current()));
+    double u0,u1,v0,v1;surface->Bounds(u0,u1,v0,v1);int checked=0;
+    for(int i=1;i<40;++i)for(int j=1;j<40;++j) {
+        gp_Pnt p;gp_Vec du,dv;surface->D1(u0+(u1-u0)*i/40,v0+(v1-v0)*j/40,p,du,dv);
+        const double determinant=du.X()*dv.Y()-dv.X()*du.Y();
+        if(std::abs(determinant)<1e-10)continue;
+        const double slopeX=(du.Z()*dv.Y()-dv.Z()*du.Y())/determinant;
+        Require(slopeX<=1e-7,"中央から裾まで高さが増える局所的なこぶを作らない");++checked;
+    }
+    Require(checked>1000,"屋根内部を広く検査");kernel::ReleaseShape(built.Value().handle);
 }
 #endif
 KACHA_V2_TEST_MAIN("kernel_dome_tests")

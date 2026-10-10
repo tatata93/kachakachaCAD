@@ -134,7 +134,6 @@ bool ClipOpeningIntoBandPanels(const BandOpeningTarget& target,
     if (pieces.empty()) {
         return false;
     }
-    const auto developed = DevelopedState(mesh);
     for (const auto& piece : pieces) {
         const std::size_t panelIndex = target.firstPanelIndex
             + static_cast<std::size_t>(piece.band);
@@ -142,11 +141,17 @@ bool ClipOpeningIntoBandPanels(const BandOpeningTarget& target,
             continue;
         }
         std::vector<Point2> outline;
+        BandMesh local;local.rows=2;local.columns=mesh.columns;
+        local.world={mesh.world[piece.band],mesh.world[piece.band+1]};
+        local.developed=mesh.developedBands.size()==static_cast<std::size_t>(mesh.BandCount())
+            ? mesh.developedBands[piece.band]
+            : std::vector<std::vector<Point2>>{mesh.developed[piece.band],mesh.developed[piece.band+1]};
+        const auto developed=DevelopedState(local);
         const std::vector<Vector3> followed = FollowRailsOnCuts(mesh, parameterState,
             target.railParameters, piece.points);
         outline.reserve(followed.size());
         for (const Vector3& point : followed) {
-            const auto mapped = fabrication::MapPointToBandState(mesh, developed, point);
+            const auto mapped = fabrication::MapPointToBandState(local, developed, point);
             if (!mapped.HasValue()) {
                 outline.clear();
                 break;

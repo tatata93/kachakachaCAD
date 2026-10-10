@@ -162,6 +162,8 @@ struct BandMesh {
     std::vector<int> creaseDirections;
     //! 直交方向の実パラメータ。曲線に沿う標本を不等間隔にしても対応を保持する。
     std::vector<double> longitudinalParameters;
+    //! 個々の板の等長展開。共有レールを強制一致させた表示座標を型紙に使わない。
+    std::vector<std::vector<std::vector<Point2>>> developedBands;
 
     [[nodiscard]] int BandCount() const noexcept { return rows > 0 ? rows - 1 : 0; }
     [[nodiscard]] int CreaseCount() const noexcept { return rows > 1 ? rows - 2 : 0; }

@@ -540,6 +540,19 @@ KACHA_V2_TEST(band_approximation, exact_evaluator_preserves_outline_across_shape
             Require(bands.HasValue(),bands.FirstMessageJa());Require(bands.Value().bands.size()==8,"specified count");
             const auto mesh=DevelopBandMesh(source,axis,bands.Value().railParameters,96);
             Require(mesh.HasValue(),mesh.FirstMessageJa());
+            for(int band=0;band<mesh.Value().BandCount();++band) {
+                const auto& paper=mesh.Value().developedBands[band];
+                const auto edge=[&](int a,int i,int b,int j){
+                    const auto p=paper[a][i],q=paper[b][j];
+                    const double flat=std::hypot(q.u-p.u,q.v-p.v);
+                    Require(std::abs(flat-(mesh.Value().world[band+b][j]-mesh.Value().world[band+a][i]).Length())<1e-7,
+                        "independent pattern preserves triangle edges without stretching");
+                };
+                for(int i=0;i<mesh.Value().columns;++i) {
+                    edge(0,i,1,i);
+                    if(i) {edge(0,i-1,0,i);edge(1,i-1,1,i);edge(1,i-1,0,i);}
+                }
+            }
             for(int row=0;row<mesh.Value().rows;++row)for(int col=0;col<mesh.Value().columns;++col) {
                 const double s=static_cast<double>(col)/(mesh.Value().columns-1);
                 const auto expected=source.EvaluateSplit(axis,bands.Value().railParameters[row],s);

@@ -267,6 +267,7 @@ Result<BandMesh> DevelopBandMesh(const SampledSurface& source, BandSplitAxis axi
         std::vector<Point2>(static_cast<std::size_t>(mesh.columns), Point2{}));
     for (int band = 0; band + 1 < mesh.rows; ++band) {
         auto [bottom2, top2] = DevelopOneBand(mesh, band);
+        mesh.developedBands.push_back({bottom2,top2});
         if (band == 0) {
             mesh.developed[0] = bottom2;
             mesh.developed[1] = top2;

@@ -585,3 +585,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 HP-AP-OUTLINE-115 のWindows自動試験画像です。等間隔/自動間隔と5方向を検査。選択面・12枚・縦方向・自動間隔では独立標本の最大偏差0.094534 mm、RMS0.031028 mm（全域保証ではありません）。
 
 `approx-outline-preview` と `approx-outline-result` はこの自己試験で撮影しています。`--manual-state` の引数ではありません。
+
+![12部材の独立した等長展開を原寸で配置した型紙](images/v2-approx-outline-pattern.png)
+
+`approx-outline-pattern` は同じ自己試験で展開ボタンの経路を通して撮影。5方向×両間隔の型紙で辺長を検査し、型紙の寸法と曲げ角からの計算上の再組立・継ぎ目は0.000001 mm未満でした。板厚・材料の曲げ癖・接着の実物検証は含みません。

@@ -489,8 +489,10 @@ std::vector<PatternPanel> PanelsFromBandMesh(const std::string& baseName,
 {
     std::vector<PatternPanel> panels;
     for (int band = 0; band < mesh.BandCount(); ++band) {
-        const auto& bottom = mesh.developed[static_cast<std::size_t>(band)];
-        const auto& top = mesh.developed[static_cast<std::size_t>(band) + 1];
+        const auto& bottom = mesh.developedBands.size()==static_cast<std::size_t>(mesh.BandCount())
+            ? mesh.developedBands[band][0] : mesh.developed[static_cast<std::size_t>(band)];
+        const auto& top = mesh.developedBands.size()==static_cast<std::size_t>(mesh.BandCount())
+            ? mesh.developedBands[band][1] : mesh.developed[static_cast<std::size_t>(band)+1];
         PatternPanel panel;
         panel.panelId = baseName + " 部材" + std::to_string(band + 1);
         // 外周: 下レールを順に、上レールを逆に。閉じた輪になる。

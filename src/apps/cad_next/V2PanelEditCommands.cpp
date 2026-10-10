@@ -179,16 +179,14 @@ bool V2MainWindow::CurrentBandPartition(std::vector<double>& railParameters,
     const auto& mesh = *found->second.bandMesh;
     for (int band = 0; band < mesh.BandCount(); ++band) {
         const auto row = static_cast<std::size_t>(band);
-        if (row + 1 >= mesh.developed.size() || mesh.developed[row].empty()
-            || mesh.developed[row + 1].empty()) {
+        if (row + 1 >= mesh.world.size() || mesh.world[row].empty()
+            || mesh.world[row + 1].empty()) {
             widthsMm.push_back(0.0);
             continue;
         }
         const std::size_t column =
-            std::min(mesh.developed[row].size(), mesh.developed[row + 1].size()) / 2;
-        const double du = mesh.developed[row + 1][column].u - mesh.developed[row][column].u;
-        const double dv = mesh.developed[row + 1][column].v - mesh.developed[row][column].v;
-        widthsMm.push_back(std::sqrt(du * du + dv * dv));
+            std::min(mesh.world[row].size(), mesh.world[row + 1].size()) / 2;
+        widthsMm.push_back((mesh.world[row+1][column]-mesh.world[row][column]).Length());
     }
     return !railParameters.empty();
 }

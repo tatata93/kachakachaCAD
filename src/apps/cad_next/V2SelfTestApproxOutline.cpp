@@ -6,6 +6,8 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/app/CommandCatalog.h"
+#include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/fabrication/BandFold.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include <QApplication>
@@ -100,6 +102,87 @@ bool MeasureOriginalDeviation(const app::FabricationSource& source,
     return Explain("表示する誤差と実際の生成形状が整合",count>1000
         && maximum<=result.maximumDeviationMm*1.15+.001);
 }
+geometry::Vector3 AssembleVertex(const geometry::Vector3& p,const geometry::Vector3& q,
+    const geometry::Vector3& previous,const geometry::Vector3& wp,const geometry::Vector3& wq,
+    const geometry::Vector3& wv,const geometry::Vector3& wprevious,double ra,double rb)
+{
+    using namespace geometry;
+    const auto axis=Normalized(q-p),worldAxis=Normalized(wq-wp);
+    const auto reject=[](const Vector3& v,const Vector3& e){return Normalized(v-e*Dot(v,e));};
+    const auto worldPrevious=reject(wprevious-wp,worldAxis),worldNext=reject(wv-wp,worldAxis);
+    const double cosine=Dot(worldNext,-worldPrevious);
+    const double sine=Dot(worldNext,Cross(worldAxis,worldPrevious));
+    const auto side=reject(previous-p,axis);
+    const double d=Distance(p,q),along=(ra*ra-rb*rb+d*d)/(2*d);
+    const double height=std::sqrt(std::max(0.0,ra*ra-along*along));
+    return p+axis*along+(-side*cosine+Cross(axis,side)*sine)*height;
+}
+bool ReassemblePatterns(const app::FabricationEvaluation& result)
+{
+    const auto& mesh=*result.bandMesh;double maximum=0,seam=0;
+    std::vector<std::vector<geometry::Vector3>> assembled;
+    for(int band=0;band<mesh.BandCount();++band) {
+        const auto& outline=result.panels[band].outline;const std::size_t n=mesh.columns;
+        const auto flat=[&](int side,std::size_t i){const auto& p=outline[side ? 2*n-1-i : i];
+            return geometry::Vector3{p.u,p.v,0};};
+        const auto length=[&](int a,std::size_t i,int b,std::size_t j){return geometry::Distance(flat(a,i),flat(b,j));};
+        const auto& a=mesh.world[band];const auto& b=mesh.world[band+1];
+        std::vector<geometry::Vector3> bottom(n),top(n);bottom[0]=a[0];
+        top[0]=bottom[0]+geometry::Normalized(b[0]-a[0])*length(0,0,1,0);
+        const auto axis=geometry::Normalized(top[0]-bottom[0]);
+        const double d=length(0,0,1,0),ra=length(0,0,0,1),rb=length(1,0,0,1);
+        const double along=(ra*ra-rb*rb+d*d)/(2*d);
+        const auto direction=a[1]-a[0];
+        bottom[1]=bottom[0]+axis*along+geometry::Normalized(direction-axis*geometry::Dot(direction,axis))
+            *std::sqrt(std::max(0.0,ra*ra-along*along));
+        for(std::size_t i=1;i<n;++i) {
+            top[i]=AssembleVertex(top[i-1],bottom[i],bottom[i-1],b[i-1],a[i],b[i],a[i-1],
+                length(1,i-1,1,i),length(0,i,1,i));
+            if(i+1<n)bottom[i+1]=AssembleVertex(bottom[i],top[i],top[i-1],a[i],b[i],a[i+1],b[i-1],
+                length(0,i,0,i+1),length(1,i,0,i+1));
+        }
+        for(std::size_t i=0;i<n;++i) {
+            maximum=std::max({maximum,geometry::Distance(bottom[i],a[i]),geometry::Distance(top[i],b[i])});
+            if(band)seam=std::max(seam,geometry::Distance(assembled.back()[i],bottom[i]));
+        }
+        assembled.push_back(top);
+    }
+    Note(QStringLiteral("型紙の寸法と曲げ角から再組立: 位置差%1mm 継ぎ目%2mm")
+        .arg(maximum,0,'g',8).arg(seam,0,'g',8).toUtf8().constData());
+    return Explain("型紙を伸縮させずに再組立",maximum<1e-5 && seam<1e-5);
+}
+bool CheckPanelLengths(const app::FabricationEvaluation& result)
+{
+    const auto& mesh=*result.bandMesh;double maximum=0,warp=0;
+    std::vector<std::vector<std::vector<geometry::Vector3>>> states;
+    for(double progress:{0.0,.5,.999999}) {
+        const auto state=fabrication::BuildBandFoldRails(mesh,std::vector<double>(mesh.CreaseCount(),1),
+            std::vector<double>(mesh.BandCount(),progress),0);
+        if(!state.HasValue())return false;states.push_back(state.Value());
+    }
+    for(int band=0;band<mesh.BandCount();++band) {
+        const auto& outline=result.panels[band].outline;
+        const std::size_t n=mesh.columns;if(outline.size()!=2*n)return false;
+        if(!Explain("型紙の輪郭が自己交差しない",!geometry::HasSelfIntersection(outline,1e-9)))return false;
+        const auto flat=[&](int side,std::size_t i){const auto& p=outline[side ? 2*n-1-i : i];
+            return geometry::Vector3{p.u,p.v,0};};
+        const auto edge=[&](int a,std::size_t i,int b,std::size_t j){
+            const double length=geometry::Distance(flat(a,i),flat(b,j));
+            maximum=std::max(maximum,std::abs(length-geometry::Distance(mesh.world[band+a][i],mesh.world[band+b][j])));
+            for(const auto& state:states)maximum=std::max(maximum,std::abs(length
+                -geometry::Distance(state[2*band+a][i],state[2*band+b][j])));};
+        for(std::size_t i=0;i<n;++i) {
+            edge(0,i,1,i);
+            if(i) {edge(0,i-1,0,i);edge(1,i-1,1,i);edge(1,i-1,0,i);
+                warp=std::max(warp,std::abs(geometry::Distance(flat(0,i-1),flat(1,i))
+                    -geometry::Distance(mesh.world[band][i-1],mesh.world[band+1][i])));}
+        }
+    }
+    Note(QStringLiteral("出力型紙の三角形辺長差: 最大%1mm").arg(maximum,0,'g',8).toUtf8().constData());
+    Note(QStringLiteral("滑らかな四辺形と三角形展開の対角線差: 最大%1mm")
+        .arg(warp,0,'g',8).toUtf8().constData());
+    return Explain("型紙が辺長を保持する",maximum<1e-7) && ReassemblePatterns(result);
+}
 bool OwnerOutline(V2MainWindow& window)
 {
     if(!window.OpenDocumentFile(qEnvironmentVariable("KACHACAD_SURFACE_TEST_FILE")))return false;
@@ -131,6 +214,7 @@ bool OwnerOutline(V2MainWindow& window)
         if(!result.HasValue()){Note(result.FirstMessageJa().c_str());return false;}
         if(!Explain("12枚と完成形レールを保持",result.Value().panels.size()==12 && result.Value().bandMesh.has_value()))return false;
         if(!MeasureOriginalDeviation(source,definition,result.Value()))return false;
+        if(!CheckPanelLengths(result.Value()))return false;
         const auto& mesh=*result.Value().bandMesh;
         const auto folded=app::FoldedRailsOf(definition,result.Value(),0);
         if(folded.size()!=24)return false;
@@ -179,6 +263,13 @@ bool OwnerOutline(V2MainWindow& window)
         if(!window.SaveAndReopen(output+"-adaptive-result.kcd2") || !window.RebuildProblems().isEmpty()
             || !GeneratedMatchesRails(window))return false;
     }
+    window.Viewport().SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),
+        domain::EntityKind::FabricationModel));
+    window.RunCommand("fabrication.create_pattern");QApplication::processEvents();
+    if(!Explain("実際の展開操作で12枚の原寸型紙を作れる",window.PatternDock().PageCount()>0
+        && window.StatusText().contains(QStringLiteral("12枚"))
+        && window.StatusText().contains(QStringLiteral("原寸"))))return false;
+    if(!output.isEmpty())window.grab().save(output+"-pattern.png");
     return checked==10;
 }
 }

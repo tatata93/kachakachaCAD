@@ -9,24 +9,22 @@
 namespace kachakacha::v2::fabrication {
 namespace {
 
-//! 帯 band の「曲げる向きの幅」を、展開図の真ん中の列で測る。
+//! 帯 band の「曲げる向きの幅」を、元の素線の真ん中の列で測る。
 //!
 //! 端の列で測ると、扇形に開いた帯では幅が実際より広い。真ん中を使う。
 [[nodiscard]] double BandWidthMm(const BandMesh& mesh, int band)
 {
     const auto row = static_cast<std::size_t>(band);
-    if (row + 1 >= mesh.developed.size()) {
+    if (row + 1 >= mesh.world.size()) {
         return 0.0;
     }
-    const auto& bottom = mesh.developed[row];
-    const auto& top = mesh.developed[row + 1];
+    const auto& bottom = mesh.world[row];
+    const auto& top = mesh.world[row + 1];
     if (bottom.empty() || top.empty()) {
         return 0.0;
     }
     const std::size_t column = std::min(bottom.size(), top.size()) / 2;
-    const double du = top[column].u - bottom[column].u;
-    const double dv = top[column].v - bottom[column].v;
-    return std::sqrt(du * du + dv * dv);
+    return (top[column]-bottom[column]).Length();
 }
 
 //! 帯 band の先にある折り線の角。最後の帯には折り線が無い。

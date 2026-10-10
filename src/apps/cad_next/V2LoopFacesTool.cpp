@@ -65,13 +65,16 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
         if (!plan_.has_value() || face < 0 || static_cast<std::size_t>(face) >= plan_->faces.size()) {
             return;
         }
-        const LoopFace& item = plan_->faces[static_cast<std::size_t>(face)];
-        const auto choices = kachakacha::v2::app::LoopFaceMethodChoices(item.sideCount,
-            item.method == LoopFaceMethod::Planar, item.method == LoopFaceMethod::Loft);
+        const auto choices = MethodChoices(static_cast<std::size_t>(face));
         if (methodIndex >= 0 && static_cast<std::size_t>(methodIndex) < choices.size()) {
             methodOverride_[static_cast<std::size_t>(face)] = choices[static_cast<std::size_t>(methodIndex)];
             ShowPreview();
         }
+    });
+    dock_->SetStyleHandler([this](int face,int style) {
+        if (face<0||static_cast<std::size_t>(face)>=styles_.size()||style<0||style>2) return;
+        styles_[static_cast<std::size_t>(face)]=static_cast<kachakacha::v2::modeling::FourEdgeStyle>(style);
+        ShowPreview();
     });
     dock_->SetMakeHandler([this](int face, bool make) {
         if (plan_.has_value() && face >= 0 && static_cast<std::size_t>(face) < make_.size()) {
@@ -95,7 +98,7 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
     });
     dock_->SetToleranceHandler([this](double joinMm) {
         joinMm_ = joinMm;
-        if (plan_.has_value() && Replan()) {
+        if (!selections_.empty() && Replan()) {
             ShowPreview();
         }
     });
@@ -137,6 +140,7 @@ void V2LoopFacesTool::HandleSelectionChanged()
         }
     }
     if (selections_.empty()) {
+        ResetSurfacePreview();
         plan_.reset();
         window_.viewport_->HideToolPreview();
         window_.viewport_->HideEditPreview();
@@ -164,7 +168,9 @@ kachakacha::v2::geometry::GeometryTolerance V2LoopFacesTool::ToleranceNow() cons
 
 bool V2LoopFacesTool::Replan()
 {
+    ResetSurfacePreview();
     networkTables_.clear();
+    networkUnusedJa_.clear();
     if (TryNetworkPlan()) return true;
     auto planned = kachakacha::v2::app::PlanLoopFaces(selections_, ToleranceNow(), Neighbors());
     if (!planned.HasValue()) {
@@ -178,6 +184,7 @@ bool V2LoopFacesTool::Replan()
         return false;
     }
     plan_ = planned.Value();
+    if (styles_.size()!=plan_->faces.size()) styles_.assign(plan_->faces.size(),kachakacha::v2::modeling::FourEdgeStyle::Coons);
     // 輪やずれの数が同じなら、人が決めたこと(作り方・作るか・そのまま)は持ち越す。
     if (methodOverride_.size() != plan_->faces.size()) {
         methodOverride_.assign(plan_->faces.size(), std::nullopt);
@@ -425,6 +432,7 @@ void V2LoopFacesTool::ShowPreview()
     } else {
         window_.viewport_->ShowEditPreview(std::move(gaps));
     }
+    ScheduleSurfacePreview();
     ShowDock();
     window_.ShowToolFooter(QStringLiteral("面にする: %1 / Preview only").arg(Text(plan_->summaryJa)));
     bool pending = false;
@@ -450,9 +458,7 @@ void V2LoopFacesTool::ShowDock()
         const LoopFace& face = plan_->faces[at];
         V2LoopFaceRow row;
         row.number = static_cast<int>(at + 1);
-        const auto choices = networkTables_.empty() ? kachakacha::v2::app::LoopFaceMethodChoices(face.sideCount,
-            face.method == LoopFaceMethod::Planar, face.method == LoopFaceMethod::Loft)
-            : std::vector<LoopFaceMethod>{face.method};
+        const auto choices = MethodChoices(at);
         const LoopFaceMethod current = MethodOf(at);
         for (std::size_t index = 0; index < choices.size(); ++index) {
             row.methodChoicesJa.push_back(Text(kachakacha::v2::app::LoopFaceMethodLabelJa(choices[index])));
@@ -467,6 +473,11 @@ void V2LoopFacesTool::ShowDock()
         row.statusJa = face.method == LoopFaceMethod::Planar || face.method == LoopFaceMethod::Loft
             ? QStringLiteral("✓")
             : QStringLiteral("平面から %1 mm").arg(face.planeDeviationMm, 0, 'f', 3);
+        if (at < previewFaceStatus_.size()) row.statusJa = previewFaceStatus_[at];
+        else row.statusJa = QStringLiteral("輪郭検出（面未計算）");
+        if (current==LoopFaceMethod::FourEdge||(current==LoopFaceMethod::BoundaryFill
+            &&(face.selections.size()>=4||(!networkTables_.empty()&&networkTables_[at].rows.size()>=4))))
+            row.styleIndex=static_cast<int>(styles_[at]);
         row.make = make_[at];
         const bool allowed = current == LoopFaceMethod::FourEdge || current == LoopFaceMethod::BoundaryFill;
         for (std::size_t e = 0; e < face.edges.size(); ++e) {
@@ -507,8 +518,14 @@ void V2LoopFacesTool::ShowDock()
         unused += (unused.isEmpty() ? QStringLiteral("") : QStringLiteral("、")) + Text(selections_[index].label);
     }
     view.unusedJa = unused.isEmpty() ? QString() : QStringLiteral("使わない線: %1").arg(unused);
+    if (!networkUnusedJa_.isEmpty())
+        view.unusedJa = QStringLiteral("輪に使わない区間（元の線は保持）: %1").arg(networkUnusedJa_);
     view.joinMm = ToleranceNow().interactiveJoinMm;
     view.summaryJa = Text(plan_->summaryJa);
+    bool alternatives = plan_->faces.size() > 1;
+    for (std::size_t i=0; i<plan_->faces.size(); ++i) alternatives = alternatives || MethodChoices(i).size()>1 || view.faces[i].styleIndex>=0;
+    if (alternatives) view.summaryJa.prepend(QStringLiteral("複数の面候補・作り方があります。「作る」「作り方」「張り方」で選び、3Dの面を確認してください。\n"));
+    if (!previewSummary_.isEmpty()) view.summaryJa += QStringLiteral("\n") + previewSummary_;
     bool any = false;
     for (const bool make : make_) {
         any = any || make;
@@ -543,6 +560,13 @@ bool V2LoopFacesTool::Confirm()
     if (!plan_.has_value()) {
         return false;
     }
+    if (previewPending_) BuildSurfacePreview();
+    if (!plan_->faces.empty() && !previewReady_) {
+        window_.SetStatus(previewSummary_);
+        return true;
+    }
+    dock_->SetProgressText(QStringLiteral("面を生成中…"));
+    window_.SetStatus(QStringLiteral("面を生成中…"));
     const QScopedValueRollback<bool> updateGuard(updating_, true);
     auto& document = window_.session_->GetDocument();
     const auto originalSelections = selections_;
@@ -668,6 +692,9 @@ bool V2LoopFacesTool::ReopenRecent()
 void V2LoopFacesTool::Clear(bool keepTool)
 {
     updating_ = true;
+    ResetSurfacePreview();
+    networkTables_.clear();
+    networkUnusedJa_.clear();
     waitingAfterCancel_ = keepTool;
     window_.viewport_->SetToolPickActive(keepTool);
     window_.viewport_->SetToolPickToggle(keepTool);
@@ -909,25 +936,27 @@ int V2LoopFacesTool::BuildFaces()
         std::vector<EntityId> supports;
         EdgeSupports(at, builtIds, continuity, supports);
         const auto table = networkTables_.empty() ? kachakacha::v2::app::LoopFaceTable(selections_, face, tolerance,
-            continuity, supports) : kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>::Success(networkTables_[at]);
+            continuity, supports) : kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>::Success(NetworkTable(at));
         if (!table.HasValue()) {
             window_.ReportDiagnostics(table.Diagnostics());
             return 0;
         }
         // 作る前に調べ、作れないものは理由を言って全部やめる(半分だけ作らない)。
-        const auto built = window_.BuildSurfaceFromTable(table.Value(), true);
+        auto styled=table.Value();
+        styled.fourEdgeStyle=styles_[at];
+        const auto built = window_.BuildSurfaceFromTable(styled, true);
         if (!built.has_value()) {
             return 0;
         }
         std::vector<EntityId> inputs;
-        for (const auto& row : table.Value().rows) for (const auto id : row.sourceWireIds)
+        for (const auto& row : styled.rows) for (const auto id : row.sourceWireIds)
             if (std::find(inputs.begin(), inputs.end(), id) == inputs.end()) inputs.push_back(id);
         bool smooth = false;
-        for (const auto& row : table.Value().rows) {
+        for (const auto& row : styled.rows) {
             smooth = smooth || row.continuity != SurfaceContinuity::G0;
         }
         const std::string label = MethodLabel(face.method) + (smooth ? "(辺の連続あり)" : "");
-        const EntityId id = window_.AdoptGuideSurface(table.Value(), *built, inputs, label);
+        const EntityId id = window_.AdoptGuideSurface(styled, *built, inputs, label);
         if (id.IsNil()) {
             return 0;
         }

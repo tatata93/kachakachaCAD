@@ -192,10 +192,23 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
         widgets.row);
     line->addWidget(widgets.edges);
     widgets.status = new QLabel(face.statusJa, widgets.row);
-    line->addWidget(widgets.status);
+    widgets.status->setWordWrap(true);
     widgets.make = new QCheckBox(QStringLiteral("作る"), widgets.row);
     widgets.make->setChecked(face.make);
     line->addWidget(widgets.make);
+    widgets.column->addWidget(widgets.status);
+    if (face.styleIndex>=0) {
+        auto* styleLine=new QHBoxLayout();
+        styleLine->addWidget(new QLabel(QStringLiteral("張り方（近似）"),widgets.row));
+        widgets.style=new QComboBox(widgets.row);
+        widgets.style->addItem(QStringLiteral("標準"));
+        widgets.style->addItem(QStringLiteral("平坦優先"));
+        widgets.style->addItem(QStringLiteral("丸み優先"));
+        widgets.style->setCurrentIndex(face.styleIndex);
+        widgets.style->setToolTip(QStringLiteral("同じ境界を保って張り方を比較します。切替後の面の下見を確認してください。"));
+        styleLine->addWidget(widgets.style,1);
+        widgets.column->addLayout(styleLine);
+    }
     return widgets;
 }
 
@@ -288,6 +301,9 @@ void V2LoopFacesDock::RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces)
             if (!loading_ && makeHandler_) {
                 makeHandler_(faceIndex, checked);
             }
+        });
+        if (widgets.style) QObject::connect(widgets.style,&QComboBox::currentIndexChanged,this,[this,faceIndex](int style){
+            if (!loading_&&styleHandler_) styleHandler_(faceIndex,style);
         });
         faceRows_.push_back(widgets);
     }
@@ -528,4 +544,20 @@ QString V2LoopFacesDock::SplitTextJa() const
 bool V2LoopFacesDock::ConfirmEnabled() const
 {
     return confirm_ != nullptr && confirm_->isEnabled();
+}
+
+void V2LoopFacesDock::SetProgressText(const QString& text)
+{
+    summary_->setText(text);
+    summary_->repaint();
+}
+
+void V2LoopFacesDock::SetStyleHandler(std::function<void(int,int)> handler)
+{
+    styleHandler_=std::move(handler);
+}
+
+bool V2LoopFacesDock::ChooseStyle(int face,int style)
+{
+    return face>=0&&face<static_cast<int>(faceRows_.size())&&ChooseIfUsable(faceRows_[static_cast<std::size_t>(face)].style,style);
 }

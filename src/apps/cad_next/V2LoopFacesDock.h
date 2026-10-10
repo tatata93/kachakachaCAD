@@ -38,6 +38,7 @@ struct V2LoopEdgeCell {
 struct V2LoopFaceRow {
     int number = 1;                       //!< ① から
     std::vector<QString> methodChoicesJa; //!< 作り方の選択肢(表示名)
+    int styleIndex = -1;                   //!< -1: 張り方の選択なし、0..2: Coons/Stretch/Curved
     int methodIndex = 0;                  //!< いま選ばれている選択肢
     int edgeCount = 0;                    //!< 辺(側)の数(ロフトなら断面の数)
     int lineCount = 0;                    //!< 線の本数(辺の数と違えば「辺 4(線 5)」と出す)
@@ -69,6 +70,7 @@ public:
 
     //! 計画を映す。行は毎回作り直す(輪の数が変わる)。
     void ShowView(const V2LoopFacesView& view);
+    void SetProgressText(const QString& text);
     //! 直前の操作(UI 設計 2-6): 「直前: 面にする(3 枚)」と [開いて直す]。作ったあとに出す。
     //! 開くと 1 回の取り消しで元に戻し、同じ線・同じ選択で構え直す(値を変えて Enter で作り直す)。
     void ShowRecent(const QString& textJa);
@@ -78,6 +80,8 @@ public:
     [[nodiscard]] QString RecentTextJa() const;
 
     void SetMethodHandler(std::function<void(int face, int methodIndex)> handler);
+    void SetStyleHandler(std::function<void(int face, int style)> handler);
+    [[nodiscard]] bool ChooseStyle(int face,int style);
     void SetMakeHandler(std::function<void(int face, bool make)> handler);
     //! [寄せる] / [そのまま](そのままはトグル: 押すと leave が反転する)。
     void SetGapHandlers(std::function<void(int gap)> close, std::function<void(int gap)> leave);
@@ -115,6 +119,7 @@ private:
         QWidget* row = nullptr;
         QLabel* number = nullptr;
         QComboBox* method = nullptr;
+        QComboBox* style = nullptr;
         QLabel* edges = nullptr;
         QLabel* status = nullptr;
         QCheckBox* make = nullptr;
@@ -154,6 +159,7 @@ private:
     QLabel* unusedLabel_ = nullptr;
 
     std::function<void(int, int)> methodHandler_;
+    std::function<void(int, int)> styleHandler_;
     std::function<void(int, bool)> makeHandler_;
     std::function<void(int, int)> continuityHandler_;
     std::function<void()> reopenHandler_;

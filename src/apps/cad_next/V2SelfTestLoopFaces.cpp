@@ -1126,6 +1126,45 @@ bool CaseLoopFacesToolFirst(V2MainWindow& window)
     return Explain("Esc後も再選択を下見する",tool.Active()&&tool.Plan()&&tool.Plan()->faces.size()==1);
 }
 
+bool CaseLoopFacesCompoundBranch(V2MainWindow& window)
+{
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto wire=window.Session().AddWire({line({0,0,0},{5,0,0}),line({5,0,0},{10,0,0}),
+        line({10,0,0},{10,10,0}),line({10,10,0},{5,10,0}),line({5,10,0},{0,10,0}),
+        line({0,10,0},{0,0,0}),line({20,0,0},{30,0,0})},false,"複合境界");
+    const auto rib=window.Session().AddWire({line({5,0,0},{5,10,0})},false,"中央");
+    if(!wire.committed||!rib.committed||!window.SaveAndReopen("compound-loop-fixture.kcd2"))return false;
+    const int before=CountOfKind(window,EntityKind::Wire);
+    window.Viewport().SetSelection({});window.RunCommand("surface.from_lines");
+    SelectAllWires(window);
+    auto& tool=window.LoopFacesTool();
+    if(!Explain("複合線の途中へ接続して2面と余る枝を認識する",tool.Plan()&&tool.Plan()->faces.size()==2
+        &&tool.Plan()->summaryJa.find("輪に使わない区間 1")!=std::string::npos))return false;
+    if(!Explain("面計算中と複数候補を表示する",tool.Dock()->SummaryTextJa().contains(QStringLiteral("計算中"))
+        &&tool.Dock()->SummaryTextJa().contains(QStringLiteral("複数"))))return false;
+    QApplication::processEvents();
+    const auto both=window.Viewport().ToolPreviewFaceCount();
+    if(!Explain("確定前に面を表示し文書には面を作らない",both>0&&CountOfKind(window,EntityKind::GuideSurface)==0))return false;
+    if(!tool.Dock()->ToggleMake(0))return false;
+    QApplication::processEvents();
+    if(!Explain("作らない候補は面の下見から外れる",window.Viewport().ToolPreviewFaceCount()>0
+        &&window.Viewport().ToolPreviewFaceCount()<both))return false;
+    if(!tool.Dock()->ToggleMake(0))return false;
+    window.HandleToolKey(Qt::Key_Escape,nullptr);
+    QApplication::processEvents();
+    if(!Explain("Esc後は遅れた下見も残らない",window.Viewport().ToolPreviewFaceCount()==0))return false;
+    SelectAllWires(window);
+    if(!Explain("Escから同じ入力で再試行する",tool.Active()&&tool.Plan()&&tool.Plan()->faces.size()==2))return false;
+    window.HandleToolKey(Qt::Key_Return,nullptr);
+    if(!Explain("枝を削除せず2面を作る",CountOfKind(window,EntityKind::GuideSurface)==2
+        &&CountOfKind(window,EntityKind::Wire)==before))return false;
+    window.RunCommand("edit.undo");
+    if(CountOfKind(window,EntityKind::GuideSurface)!=0)return false;
+    window.RunCommand("edit.redo");
+    return Explain("保存・再読込後も両方の面を復元する",window.SaveAndReopen("compound-loop-result.kcd2")
+        &&CountOfKind(window,EntityKind::GuideSurface)==2&&window.RebuildProblems().isEmpty());
+}
+
 bool CaseLoopFacesOwner115(V2MainWindow& window)
 {
     const QString path=qEnvironmentVariable("KACHACAD_SURFACE_TEST_FILE");
@@ -1164,11 +1203,64 @@ bool CaseLoopFacesOwner115(V2MainWindow& window)
     return true;
 }
 
+bool CaseLoopFacesOwnerRegion(V2MainWindow& window, const QString& name,
+    const std::vector<std::string>& suffixes, int unusedCount, int expected=1)
+{
+    const QString path=qEnvironmentVariable("KACHACAD_SURFACE_TEST_FILE");
+    if(path.isEmpty()||!window.OpenDocumentFile(path))return false;
+    window.resize(1600,1000);window.ApplyTheme(UiTheme::Windows95);
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    window.Viewport().FitToDocument();QApplication::processEvents();
+    window.Viewport().SetSelection({});window.RunCommand("surface.from_lines");
+    kachakacha::v2::app::SelectionSet selection;
+    for(const auto& entity:window.Session().GetDocument().Snapshot().entities)
+        for(const auto& suffix:suffixes)
+            if(entity.id.ToString().ends_with(suffix))selection.entityIds.push_back(entity.id);
+    if(selection.entityIds.size()!=suffixes.size())return false;
+    window.Viewport().SetSelection(selection);QApplication::processEvents();
+    const auto& plan=window.LoopFacesTool().Plan();
+    if(!Explain("実モデルも確定前に面を表示する",window.Viewport().ToolPreviewFaceCount()>0))return false;
+    if(!Explain("115の下部・閉曲線の輪を1つ下見",plan&&plan->faces.size()==static_cast<std::size_t>(expected)))return false;
+    if(unusedCount>0&&!Explain("余る区間の数を明示する",plan->summaryJa.find(
+        "輪に使わない区間 "+std::to_string(unusedCount))!=std::string::npos))return false;
+    if(name=="roof-center"||name=="lower-right"){
+        auto* dock=window.LoopFacesTool().Dock();
+        for(int style:{1,2,0}){
+            if(!dock->ChooseStyle(0,style))return false;
+            QApplication::processEvents();
+            if(!Explain("張り方を切替えても面の下見が出る",window.Viewport().ToolPreviewFaceCount()>0))return false;
+            const auto output=qEnvironmentVariable("KACHACAD_SURFACE_TEST_OUTPUT");
+            if(!output.isEmpty())window.grab().save(output+"-"+name+"-style-"+QString::number(style)+".png");
+        }
+    }
+    const int before=CountOfKind(window,EntityKind::GuideSurface);
+    const auto original=window.Session().GetDocument().Snapshot();
+    const QString output=qEnvironmentVariable("KACHACAD_SURFACE_TEST_OUTPUT")+"-"+name;
+    if(!qEnvironmentVariable("KACHACAD_SURFACE_TEST_OUTPUT").isEmpty())window.grab().save(output+"-preview.png");
+    window.HandleToolKey(Qt::Key_Return,nullptr);QApplication::processEvents();
+    if(!Explain("面が1枚でき元ワイヤーを保持する",CountOfKind(window,EntityKind::GuideSurface)==before+expected
+        &&window.Session().GetDocument().Snapshot().entities.size()==original.entities.size()+expected))return false;
+    window.RunCommand("edit.undo");
+    if(CountOfKind(window,EntityKind::GuideSurface)!=before)return false;
+    window.RunCommand("edit.redo");
+    if(!Explain("面を再構築できる",CountOfKind(window,EntityKind::GuideSurface)==before+expected
+        &&window.RebuildProblems().isEmpty()))return false;
+    window.Viewport().SetSelection({});QApplication::processEvents();
+    if(!qEnvironmentVariable("KACHACAD_SURFACE_TEST_OUTPUT").isEmpty()){
+        window.grab().save(output+"-result.png");
+        window.SetPathChooser([output](bool){return output+"-result.kcd2";});window.RunCommand("file.save_as");
+        if(!window.OpenDocumentFile(output+"-result.kcd2")||!window.RebuildProblems().isEmpty())return false;
+        if(CountOfKind(window,EntityKind::GuideSurface)!=before+expected)return false;
+    }
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> LoopFacesCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-LF-12 複合ワイヤーの枝と途中の接続から面を作る",CaseLoopFacesCompoundBranch},
         {"HP-LF-11 面にするを先に選び追加クリックで下見と確定",CaseLoopFacesToolFirst},
         {"HP-LF-01 面にするは閉じた輪を全部見つけて面にし、元の線を残す",
             CaseLoopFacesMakesFaceKeepsLines},
@@ -1199,8 +1291,17 @@ std::vector<SelfTestCase> LoopFacesCases()
         {"HP-AP-09 役割表の行の色分け(境界辺)は役割表の棚を見ている間だけ 3D に出る",
             CaseGuideRowsOnlyWithShelf},
     };
-    if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE"))
+    if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE")) {
+        cases.push_back({"HP-LF-115-R 下部右の丸めと枝を含む輪",[](V2MainWindow& w){
+            return CaseLoopFacesOwnerRegion(w,"lower-right",{"070","249","280","327","1e0","1a2","1d6"},4);}});
+        cases.push_back({"HP-LF-115-L 下部左の丸めと枝を含む輪",[](V2MainWindow& w){
+            return CaseLoopFacesOwnerRegion(w,"lower-left",{"06a","250","280","319","201","1ac","1e2"},4);}});
+        cases.push_back({"HP-LF-115-C 外周と中央断面のみの2曲面",[](V2MainWindow& w){
+            return CaseLoopFacesOwnerRegion(w,"roof-center",{"02e","038","03b","302","340","175","304"},0,2);}});
+        cases.push_back({"HP-LF-115-D 逆順区間を含む丸窓",[](V2MainWindow& w){
+            return CaseLoopFacesOwnerRegion(w,"window",{"0db"},0);}});
         cases.push_back({"HP-LF-115 添付モデルの上部ワイヤーから面を作る",CaseLoopFacesOwner115});
+    }
     return cases;
 }
 

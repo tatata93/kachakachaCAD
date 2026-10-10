@@ -8,6 +8,7 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/app/SurfaceNetwork.h"
+#include "kachakacha/geometry/WireEdit.h"
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -948,6 +949,151 @@ KACHA_V2_TEST(kernel_surface, branched_curved_network_builds_every_patch)
         Require(built.HasValue(), "各区画をOCCTで面生成できる");
         Require(HasShape(built.Value().handle), "形状を保持");
         ReleaseShape(built.Value().handle);
+    }
+}
+
+
+// Branches are reported at segment granularity, including parts of a used wire.
+KACHA_V2_TEST(kernel_surface, compound_curved_strip_with_unused_branches_order_matrix)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids{1024};
+    const auto arc=[](double z){return CurveSegment::MakeCircularArc(
+        {0,0,z},{0,0,1},{1,0,0},10,0,kPi*0.5).Value();};
+    const std::vector<app::RoleWire> original{
+        {ids.NextTyped<base::IdKind::Entity>(),{arc(0)}},
+        {ids.NextTyped<base::IdKind::Entity>(),{arc(5),Line({30,0,5},{40,0,5})}},
+        {ids.NextTyped<base::IdKind::Entity>(),{Line({10,0,0},{10,0,5})}},
+        {ids.NextTyped<base::IdKind::Entity>(),{Line({0,10,0},{0,10,5})}},
+        {ids.NextTyped<base::IdKind::Entity>(),{Line({10,0,0},{15,0,0})}}};
+    for(int permutation=0;permutation<10;++permutation){
+        auto wires=original;
+        std::rotate(wires.begin(),wires.begin()+permutation%wires.size(),wires.end());
+        if(permutation>=5)for(auto& wire:wires){
+            std::reverse(wire.segments.begin(),wire.segments.end());
+            for(auto& segment:wire.segments)segment=geometry::ReverseCurve(segment).Value();
+        }
+        const auto plan=app::PlanSurfaceNetwork(wires,Tolerance());
+        Require(plan.tables.size()==1,"選択順・逆向き・離れた枝でも閉じた曲面を採る");
+        Require(plan.unusedSegments.size()==2,"つながる枝と離れた枝の両方を報告する");
+        Require(app::SurfaceNetworkTables(wires,Tolerance()).empty(),"余る入力を表示しない呼出しでは黙って成功しない");
+        const auto request=modeling::ToGuideSurfaceRequest(plan.tables.front(),Tolerance());
+        Require(request.HasValue(),"面の入力");
+        const auto built=Build(request.Value());Require(built.HasValue(),"OCCTで曲面になる");
+        Require(built.Value().maximumDeviationMm<0.01,"境界の偏差を守る");
+        const auto mesh=kernel::BuildShapeMesh(built.Value().handle);
+        Require(mesh.HasValue()&&mesh.Value().minimum.z>=-0.01&&mesh.Value().maximum.z<=5.01,
+            "折り返し・飛び出しがない");
+        Require(built.Value().areaMm2>70&&built.Value().areaMm2<90,"1/4円筒に相当する面積");
+        ReleaseShape(built.Value().handle);
+    }
+}
+
+KACHA_V2_TEST(kernel_surface, connected_polyline_corner_t_junction_builds_two_regions)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids{1025};
+    // A branch meets an interior segment endpoint, not an endpoint of the whole Wire.
+    const std::vector<app::RoleWire> wires{
+        {ids.NextTyped<base::IdKind::Entity>(),{Line({0,0,0},{5,0,0}),Line({5,0,0},{10,0,0}),
+            Line({10,0,0},{10,10,0}),Line({10,10,0},{5,10,0}),Line({5,10,0},{0,10,0}),Line({0,10,0},{0,0,0})}},
+        {ids.NextTyped<base::IdKind::Entity>(),{Line({5,0,0},{5,10,0})}}};
+    const auto plan=app::PlanSurfaceNetwork(wires,Tolerance());
+    Require(plan.tables.size()==2&&plan.unusedSegments.empty(),"連続複合ワイヤーの途中の節を認識する");
+    double area=0;
+    for(const auto& table:plan.tables){
+        const auto request=modeling::ToGuideSurfaceRequest(table,Tolerance());Require(request.HasValue(),"面の入力");
+        const auto built=Build(request.Value());Require(built.HasValue(),"両区画の面を生成");
+        area+=built.Value().areaMm2;ReleaseShape(built.Value().handle);
+    }
+    RequireNear(area,100,1e-5,"区画が重複せず面積を保持");
+}
+
+KACHA_V2_TEST(kernel_surface, spatial_near_pass_and_open_gap_are_not_closed_by_projection)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids{1026};
+    for(double gap:{0.1,1.0,5.0}){
+        const std::vector<app::RoleWire> wires{
+            {ids.NextTyped<base::IdKind::Entity>(),{Line({0,0,0},{10,0,0}),Line({10,0,0},{10,10,0})}},
+            {ids.NextTyped<base::IdKind::Entity>(),{Line({10,10,0},{0,10,0}),Line({0,10,0},{0,0,gap})}}};
+        Require(app::PlanSurfaceNetwork(wires,Tolerance()).tables.empty(),"投影で閉じても深さが違う端はつながない");
+    }
+}
+
+
+KACHA_V2_TEST(kernel_surface, planar_network_shape_matrix)
+{
+    using namespace kachakacha::v2;
+    const auto circle=CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},10).Value();
+    const auto square=Rectangle(ChainRole::OuterBoundary,1,0,0,10,10).segments;
+    struct Fixture {std::vector<std::vector<CurveSegment>> wires;std::size_t faces;double area;std::size_t unused=0;};
+    const auto smallCircle=CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},3).Value();
+    const std::vector<Fixture> fixtures{
+        {{square,Rectangle(ChainRole::OuterBoundary,1,3,3,7,7).segments},1,84},
+        {{square,Rectangle(ChainRole::OuterBoundary,1,2,2,8,8).segments,
+            Rectangle(ChainRole::OuterBoundary,1,4,4,6,6).segments},2,68},
+        {{{circle},{smallCircle}},1,kPi*91},
+        {{{circle},{smallCircle},{Line({10,0,0},{3,0,0})}},1,kPi*91,1},
+        {{square,{Line({0,0,0},{10,0,0})}},1,100,1},
+        {{{circle}},1,kPi*100},
+        {{{circle},{Line({-10,0,0},{10,0,0})}},2,kPi*100},
+        {{{circle},{Line({-10,0,0},{10,0,0})},{Line({0,-10,0},{0,10,0})}},4,kPi*100},
+        {{square,{Line({0,0,0},{10,10,0})},{Line({0,10,0},{10,0,0})}},4,100},
+        {{{Line({0,0,0},{10,0,0}),Line({10,0,0},{10,4,0}),Line({10,4,0},{4,4,0}),
+            Line({4,4,0},{4,10,0}),Line({4,10,0},{0,10,0}),Line({0,10,0},{0,0,0})}},1,64},
+        {{square,Rectangle(ChainRole::OuterBoundary,1,20,0,30,10).segments},2,200},
+        {{{Line({0,0,0},{10,0,0}),Line({10,0,0},{10,6,8}),
+            Line({10,6,8},{0,6,8}),Line({0,6,8},{0,0,0})}},1,100}};
+    int number=0;
+    for(const auto& fixture:fixtures){
+        ++number;
+        for(int direction:{0,1}){
+            base::DeterministicIdGenerator ids{1027};std::vector<app::RoleWire> wires;
+            for(auto segments:fixture.wires){
+                if(direction){std::reverse(segments.begin(),segments.end());
+                    for(auto& segment:segments)segment=geometry::ReverseCurve(segment).Value();}
+                wires.push_back({ids.NextTyped<base::IdKind::Entity>(),segments});
+            }
+            if(direction)std::reverse(wires.begin(),wires.end());
+            const auto plan=app::PlanSurfaceNetwork(wires,Tolerance());
+            const auto label="pattern "+std::to_string(number)+" reverse="+std::to_string(direction);
+            Require(plan.tables.size()==fixture.faces,label+" closed regions");
+            Require(plan.unusedSegments.size()==fixture.unused,label+" all unused input reported");
+            double area=0;
+            for(const auto& table:plan.tables){
+                const auto request=modeling::ToGuideSurfaceRequest(table,Tolerance());Require(request.HasValue(),label+" request");
+                const auto built=Build(request.Value());Require(built.HasValue(),label+" OCCT face");
+                area+=built.Value().areaMm2;ReleaseShape(built.Value().handle);
+            }
+            RequireNear(area,fixture.area,0.001,label+" no extra or missing regions");
+        }
+    }
+}
+
+KACHA_V2_TEST(kernel_surface, bezier_spatial_t_junction_matrix)
+{
+    using namespace kachakacha::v2;
+    for(bool tilt:{false,true}){
+        const auto map=[&](Vector3 p){return tilt?Vector3{p.z+100,p.x-200,p.y+50}:p;};
+        base::DeterministicIdGenerator ids{1028};
+        std::vector<app::RoleWire> wires;
+        std::vector<CurveSegment> rails;
+        for(double y:{0.0,10.0})rails.push_back(CurveSegment::MakeCubicBezier(
+            {map({0,y,0}),map({3,y,4}),map({7,y,4}),map({10,y,0})}).Value());
+        for(const auto& rail:rails)wires.push_back({ids.NextTyped<base::IdKind::Entity>(),{rail}});
+        wires.push_back({ids.NextTyped<base::IdKind::Entity>(),{Line(rails[0].StartPoint(),rails[1].StartPoint()),
+            Line(rails[0].EndPoint(),rails[1].EndPoint())}});
+        wires.push_back({ids.NextTyped<base::IdKind::Entity>(),{Line(rails[0].Evaluate(0.5),rails[1].Evaluate(0.5))}});
+        const auto plan=app::PlanSurfaceNetwork(wires,Tolerance());
+        Require(plan.tables.size()==2&&plan.unusedSegments.empty(),"ベジェ途中の空間T字を2区画にする");
+        for(const auto& table:plan.tables){
+            const auto request=modeling::ToGuideSurfaceRequest(table,Tolerance());Require(request.HasValue(),"面入力");
+            const auto built=Build(request.Value());Require(built.HasValue(),"空間ベジェの面生成");
+            Require(built.Value().maximumDeviationMm<0.01,"元ベジェを境界に維持");
+            Require(built.Value().areaMm2>45&&built.Value().areaMm2<90,"曲面の面積範囲");
+            ReleaseShape(built.Value().handle);
+        }
     }
 }
 

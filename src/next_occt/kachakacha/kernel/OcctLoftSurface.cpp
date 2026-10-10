@@ -753,7 +753,7 @@ TopoDS_Face CoonsFromRing(const GuideSurfaceRequest& request, const std::vector<
             }
         }
         SnapCorners(curves);
-        GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], GeomFill_CoonsStyle);
+        GeomFill_BSplineCurves patch(curves[0], curves[1], curves[2], curves[3], StyleOf(request.fourEdgeStyle));
         const occ::handle<Geom_BSplineSurface> surface = patch.Surface();
         if (surface.IsNull()) {
             return Out::Success(TopoDS_Face());

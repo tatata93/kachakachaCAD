@@ -163,7 +163,12 @@ template<class Function>
             if (!hole.HasValue()) {
                 return Out::Failure(hole.Diagnostics());
             }
-            TopoDS_Wire holeWire = hole.Value();
+            // Normalize against the same plane before reversing into an inner wire.
+            // Input curve direction must not turn a hole into an added island.
+            BRepBuilderAPI_MakeFace holeFace(plane, hole.Value(), Standard_True);
+            if (!holeFace.IsDone()) return Out::Failure(MakeError(kSurfaceBuildFailed,
+                "穴の向きを決められませんでした。", {}));
+            TopoDS_Wire holeWire = BRepTools::OuterWire(holeFace.Face());
             holeWire.Reverse();
             maker.Add(holeWire);
             if (!maker.IsDone()) {

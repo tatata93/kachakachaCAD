@@ -27,10 +27,12 @@
 #include <vector>
 
 class V2MainWindow;
+class QTimer;
 
 class V2LoopFacesTool final {
 public:
     explicit V2LoopFacesTool(V2MainWindow& window);
+    ~V2LoopFacesTool();
 
     //! 命令 surface.from_lines(面にする)。いま選んでいる線から輪を探し、下見と棚を出す。
     void Start();
@@ -65,6 +67,11 @@ private:
     [[nodiscard]] bool Replan();
     [[nodiscard]] bool TryNetworkPlan();
     void ShowPreview();
+    void ScheduleSurfacePreview();
+    void BuildSurfacePreview();
+    void ResetSurfacePreview();
+    [[nodiscard]] std::vector<kachakacha::v2::app::LoopFaceMethod> MethodChoices(std::size_t face) const;
+    [[nodiscard]] kachakacha::v2::modeling::GuideTable NetworkTable(std::size_t face) const;
     void ShowDock();
     [[nodiscard]] kachakacha::v2::geometry::GeometryTolerance ToleranceNow() const;
     //! T 字で線を分ける(新しい線に置き換える)。文書が変わったら真。
@@ -97,6 +104,13 @@ private:
     std::vector<kachakacha::v2::modeling::GuideTableSelection> selections_;
     std::optional<kachakacha::v2::app::LoopFacePlan> plan_;
     std::vector<kachakacha::v2::modeling::GuideTable> networkTables_;
+    QString networkUnusedJa_;
+    QTimer* previewTimer_ = nullptr;
+    bool previewPending_ = false;
+    bool previewReady_ = false;
+    QString previewSummary_;
+    std::vector<QString> previewFaceStatus_;
+    std::vector<kachakacha::v2::modeling::FourEdgeStyle> styles_;
     //! 輪ごとの上書き(作り方・作るか)。計画し直すと輪の数に合わせて作り直す。
     std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methodOverride_;
     std::vector<bool> make_;

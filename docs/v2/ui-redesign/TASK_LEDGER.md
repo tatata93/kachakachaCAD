@@ -654,3 +654,7 @@ Windows自動検査はoffscreen。今回の手動目視・Linux/cloudは未実�
 検証対象 `1771fc793`。Windows `_GO.cmd` → `scripts/check.ps1 -Preset windows-msvc` 全187/187、本体・配布版GUI各423/423、旧CAD `--self-test` 終了0。指定ブランチへpush済み。kernel_surface 56/56、kernel_loftとarchitectureも通過。HP-LF-05は失敗時の入力保持と同じ選択からの再試行、HP-LF-11は帯の実ボタンからの未選択起動・3Dクリック・Escを検査。
 配布版exeで追加のHP-LF-115も1/1成功。上部8Wireから面3枚、Undo/Redo、別名保存、実アプリ画面のPNG取得を確認。元192要素と既存Feature・assets定義は結果ファイルにもすべて保持。境界偏差最大約0.000000464 mm、左右曲面の面積各533.505 mm²。画像から選択を推定したため、別の選択組合せまで保証したものではない。
 Windows自動試験はoffscreen。出力画像は確認済みだが、手動操作・Linux/cloud未実施、PC_VERIFIEDとはしない。
+
+### 2026-10-10 面の実形状下見・複合ワイヤーの汎用検査（全体検証中）
+115下部の生成失敗は、同じWireに含まれる反対側の未使用区間が閉区画全体を失敗させていた。未使用区間を明示して閉区画を提示し元線を保持する。連続複合WireのT字も処理。平面の穴/島、重複辺、穴の方向による面積の変化を検査・修正。面の実形状プレビュー、計算中/失敗理由、作成対象・方式・張り方の切替を追加。
+重点試験 kernel_surface 61/61、HP-LF 12/12、HP-AP 9/9、115実データ5/5（offscreen、元データは読取りのみ）。実データの選択IDは画像から推定したもの。全体Windowsゲートはこれから。手動操作・Linux/cloud未実施、PC_VERIFIEDではない。検査行列はSURFACE_PATTERN_TESTS.md。

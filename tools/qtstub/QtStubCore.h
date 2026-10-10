@@ -5,6 +5,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <utility>
+
+using qint64 = std::int64_t;
+using quint64 = std::uint64_t;
+using quintptr = std::uintptr_t;
+using qsizetype = std::ptrdiff_t;
 
 // Qt がマクロにしている語。本物と同じように空へ潰す。
 // これで「slots という名前の変数」を雲の側でも捕まえられる。
@@ -25,7 +31,7 @@ using TextInteractionFlags = int;
 enum GlobalColor { white, black, transparent, gray, red, blue, green, darkGray, lightGray };
 enum AlignmentFlagValue { AlignLeft = 1, AlignRight = 2, AlignHCenter = 4, AlignTop = 8,
     AlignBottom = 16, AlignVCenter = 32, AlignCenter = 36, TextSingleLine = 64,
-    TextShowMnemonic = 128, TextHideMnemonic = 256, AlignAbsolute = 512 };
+    TextShowMnemonic = 128, TextHideMnemonic = 256, AlignAbsolute = 512, TextWordWrap = 1024 };
 enum PenStyle { NoPen, SolidLine, DashLine, DotLine, DashDotLine };
 enum BrushStyle { NoBrush, SolidPattern };
 enum FocusPolicy { NoFocus, StrongFocus, ClickFocus, TabFocus, WheelFocus };
@@ -41,7 +47,7 @@ enum FocusReason { MouseFocusReason, TabFocusReason, ActiveWindowFocusReason,
     PopupFocusReason, ShortcutFocusReason, OtherFocusReason };
 enum Key { Key_Escape = 1, Key_Return, Key_Enter, Key_Backspace, Key_Tab, Key_Backtab,
     Key_Space, Key_Delete, Key_Left, Key_Right, Key_Up, Key_Down,
-    Key_A, Key_S, Key_D, Key_W, Key_C, Key_V, Key_X, Key_Z };
+    Key_A, Key_S, Key_D, Key_W, Key_C, Key_V, Key_X, Key_Z, Key_Y };
 enum ToolButtonStyle { ToolButtonIconOnly, ToolButtonTextOnly, ToolButtonTextBesideIcon,
     ToolButtonTextUnderIcon };
 enum WindowType { Widget = 0, Window = 1 };
@@ -65,7 +71,7 @@ enum BGMode { TransparentMode, OpaqueMode };
 enum TextElideMode { ElideLeft, ElideRight, ElideMiddle, ElideNone };
 enum CursorShape { ArrowCursor, CrossCursor, PointingHandCursor, SizeAllCursor,
     ForbiddenCursor,
-    WaitCursor, OpenHandCursor, ClosedHandCursor, BlankCursor, IBeamCursor };
+    WaitCursor, OpenHandCursor, ClosedHandCursor, BlankCursor, IBeamCursor, SizeFDiagCursor };
 using Alignment = int;
 using MouseButtons = int;
 using KeyboardModifiers = int;
@@ -77,6 +83,7 @@ enum DropAction { CopyAction, MoveAction, LinkAction, IgnoreAction, TargetMoveAc
 
 class QString;
 class QStringList;
+class QByteArray;
 class QChar {
 public:
     QChar() = default;
@@ -98,8 +105,9 @@ public:
     [[nodiscard]] QString toUpper() const;
     [[nodiscard]] QString toLower() const;
     [[nodiscard]] std::string toStdString() const;
-    [[nodiscard]] const char* toUtf8() const;
-    [[nodiscard]] const char* toLocal8Bit() const;
+    [[nodiscard]] QByteArray toUtf8() const;
+    [[nodiscard]] QByteArray toLocal8Bit() const;
+    [[nodiscard]] QByteArray toLatin1() const;
     [[nodiscard]] bool contains(const QString&) const;
     void clear();
     [[nodiscard]] bool startsWith(const QString&) const;
@@ -112,6 +120,7 @@ public:
     [[nodiscard]] QString right(int) const;
     [[nodiscard]] QString left(int) const;
     [[nodiscard]] int toInt() const;
+    [[nodiscard]] double toDouble() const;
     [[nodiscard]] QStringList split(const QString&) const;
     [[nodiscard]] QString arg(const QString&) const;
     [[nodiscard]] QString arg(const QString&, const QString&) const;
@@ -123,12 +132,15 @@ public:
     [[nodiscard]] QString arg(double, int, char, int, QChar) const;
     QString& append(const QString&);
     static QString number(int);
+    static QString number(unsigned long);
+    static QString number(unsigned long long);
     static QString number(double, char = 'g', int = 6);
     static QString fromStdString(const std::string&);
     static QString fromUtf8(const char*, int = -1);
     static QString fromUtf8(std::string_view);
     static QString fromLocal8Bit(const char*, int = -1);
     static QString fromLatin1(const char*, int = -1);
+    static QString fromLatin1(const QByteArray&);
     QString operator+(const QString&) const;
     QString& operator+=(const QString&);
     bool operator==(const QString&) const;
@@ -162,6 +174,7 @@ public:
     [[nodiscard]] static bool exists(const QString&);
     [[nodiscard]] static bool remove(const QString&);
     [[nodiscard]] QByteArray readAll();
+    qint64 write(const QByteArray&);QString fileName() const;
 };
 
 class QStringList {
@@ -185,8 +198,18 @@ public:
 
 class QByteArray {
 public:
+    QByteArray() = default;
+    QByteArray(const char*, int = -1) {}
     [[nodiscard]] const char* constData() const;
     [[nodiscard]] const char* data() const;
+    [[nodiscard]] int size() const;
+    [[nodiscard]] bool isEmpty() const;
+    [[nodiscard]] QByteArray toLower() const;
+    [[nodiscard]] QByteArray toBase64() const;
+    [[nodiscard]] QByteArray toHex() const;
+    [[nodiscard]] static QByteArray fromBase64(const QByteArray&);
+    [[nodiscard]] bool operator==(const QByteArray&) const;
+    [[nodiscard]] bool operator!=(const QByteArray&) const;
 };
 
 class QVariant {
@@ -231,4 +254,67 @@ class QDateTime {
 public:
     static QDateTime currentDateTime();
     [[nodiscard]] QString toString(Qt::DateFormat) const;
+};
+
+class QUuid {
+public:
+    QUuid() = default;
+    explicit QUuid(const QString&) {}
+    [[nodiscard]] static QUuid createUuid();
+    [[nodiscard]] bool isNull() const;
+    [[nodiscard]] QString toString() const;
+    [[nodiscard]] bool operator==(const QUuid&) const;
+    [[nodiscard]] bool operator!=(const QUuid&) const;
+};
+template<class K,class V> class QHash {
+public:
+    class const_iterator {
+    public:
+        const V& operator*() const;const V* operator->() const;
+        const_iterator& operator++();bool operator!=(const const_iterator&) const;
+        const K& key() const;const V& value() const;
+    };
+    class iterator {
+    public:
+        V& operator*() const;V* operator->() const;
+        iterator& operator++();bool operator!=(const iterator&) const;
+        const K& key() const;V& value() const;
+    };
+    bool contains(const K&) const;V value(const K&) const;void insert(const K&,const V&);
+    V& operator[](const K&);void clear();int size() const;bool isEmpty() const;
+    const_iterator constBegin() const;const_iterator constEnd() const;const_iterator constFind(const K&) const;
+    iterator begin();iterator end();iterator erase(iterator);
+};
+template<class T> class QSet {
+public:
+    bool contains(const T&) const;void insert(const T&);void clear();bool isEmpty() const;
+};
+class QBuffer : public QIODevice {
+public:
+    QBuffer() = default;explicit QBuffer(QByteArray*) {}
+    void setData(const QByteArray&);bool open(OpenMode);
+};
+class QFileInfo {
+public:
+    explicit QFileInfo(const QString&) {}
+    QString suffix() const;QString path() const;QString completeBaseName() const;
+};
+class QSaveFile : public QFile {
+public:
+    explicit QSaveFile(const QString&) {}
+    qint64 write(const QByteArray&);bool commit();
+};
+class QTemporaryDir {
+public:
+    bool isValid() const;QString filePath(const QString&) const;QString path() const;
+};
+class QDataStream {
+public:
+    QDataStream(QByteArray*,QIODevice::OpenMode) {}
+    template<class T> QDataStream& operator<<(const T&);
+};
+class QCryptographicHash {
+public:
+    enum Algorithm { Sha256 };
+    static QByteArray hash(const QByteArray&,Algorithm);
 };

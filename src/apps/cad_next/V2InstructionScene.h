@@ -8,6 +8,7 @@
 #include <QUuid>
 #include <QPointF>
 #include <QString>
+#include <QFont>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -28,8 +29,10 @@ struct InstructionMark {
     QString text;
     kachakacha::v2::geometry::Vector3 start{},end{};
     bool arrow=true;
+    QFont font=QFont(QString(),18);
 };
 struct InstructionPage {
+    QUuid id=QUuid::createUuid();
     QString title;
     QString legacyPng;
     QImage legacyImage;
@@ -45,7 +48,8 @@ public:
     void Refresh();
     void Fit();
     void SetTool(const QString&,const QString& text={});
-    void CancelInput() { arrowPending_=false; dragging_=false; Refresh(); }
+    void CancelInput();
+    void SetTextFont(const QFont& font) { textFont_=font; }
     void SetSelected(int);
     int Selected() const{return selected_;}
     int SelectedMark() const{return selectedMark_;}
@@ -54,6 +58,7 @@ public:
     QPointF Project(kachakacha::v2::geometry::Vector3) const;
     std::function<void()> beginChange,endChange;
     std::function<void(int)> selectedChanged;
+    std::function<void(QString)> refused;
 protected:
     void paintEvent(QPaintEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
@@ -61,10 +66,20 @@ protected:
     void mouseReleaseEvent(QMouseEvent*) override;
     void wheelEvent(QWheelEvent*) override;
 private:
+    void BeginEditDrag();
+    bool CanAddMark();
+    bool editDragPending_=false;
+    int dragPart_=-1,dragMark_=-1;
+    InstructionMark dragOriginalMark_;
+    kachakacha::v2::geometry::Vector3 dragOriginalOffset_{};
     InstructionPage* page_=nullptr;
     QString tool_,text_;
+    QFont textFont_=QFont(QString(),18);
     int selected_=-1,selectedMark_=-1;
     bool dragging_=false,arrowPending_=false;
+    bool arrowDrag_=false;
+    QPointF arrowPress_;
+    int markHandle_=-1;
     QPointF last_;
     kachakacha::v2::geometry::Vector3 start_{},preview_{};
     QImage cache_;

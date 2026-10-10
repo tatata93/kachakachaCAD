@@ -1,0 +1,15 @@
+#pragma once
+#include "QtStubCore.h"
+class QRegularExpressionMatch {
+public:
+    QString captured(int) const;
+};
+class QRegularExpressionMatchIterator {
+public:
+    bool hasNext() const;QRegularExpressionMatch next();
+};
+class QRegularExpression {
+public:
+    explicit QRegularExpression(const QString&) {}
+    QRegularExpressionMatchIterator globalMatch(const QString&) const;
+};

@@ -181,9 +181,10 @@ const std::vector<RibbonCategory>& OutputCategories()
 const std::vector<RibbonCategory>& RibbonCategoriesFor(UiMode mode)
 {
     static const std::vector<RibbonCategory> instructions{
-        {"pages","手順ページ",{Tool("新しい手順","instructions.new_page"),Tool("手順を複製","instructions.duplicate"),Tool("現在のモデルを選ぶ","instructions.capture"),Tool("別のモデルを読込","instructions.model_file")}},
-        {"illustrate","説明図",{Tool("選択・移動","instructions.move"),Tool("矢印","instructions.arrow"),Tool("番号・文章","instructions.text"),Tool("図から除去","instructions.remove")}},
-        {"document","保存・出力",{Tool("説明書を保存","instructions.save"),Tool("説明書を開く","instructions.open"),Tool("PDF","instructions.pdf"),Tool("コマを画像出力","instructions.image")}},
+        {"pages","場面・用紙",{Tool("画像エディター","instructions.scene_editor"),Tool("用紙編集","instructions.sheet_editor"),Tool("場面・用紙を追加","instructions.new_page"),Tool("場面・用紙を複製","instructions.duplicate"),Tool("現在のモデルを選ぶ","instructions.capture"),Tool("別のモデルを読込","instructions.model_file")}},
+        {"layout","用紙配置",{Tool("用紙サイズ","instructions.paper"),Tool("場面を配置","instructions.place_scene"),Tool("画像を貼る","instructions.insert_image")}},
+        {"illustrate","配置・注記",{Tool("選択・移動","instructions.move"),Tool("矢印","instructions.arrow"),Tool("番号・文章","instructions.text"),Tool("図から除去","instructions.remove")}},
+        {"document","保存・出力",{Tool("説明書を保存","instructions.save"),Tool("説明書を開く","instructions.open"),Tool("PDF","instructions.pdf"),Tool("場面・用紙を画像出力","instructions.image")}},
         {"find_view","探す・表示",{Tool("ページ全体","view.fit_all"),Tool("道具を検索","tools.search")}}};
     if(mode==UiMode::Instructions)return instructions;
     static const auto categories=[] {

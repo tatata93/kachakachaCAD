@@ -6,6 +6,7 @@
 
 //! QList は QtStubCore.h にある。ここで作り直さない。
 
+class QMetaObject;
 class QObject {
 public:
     QObject() = default;
@@ -14,6 +15,7 @@ public:
     void setObjectName(const QString&);
     [[nodiscard]] QString objectName() const;
     [[nodiscard]] QObject* parent() const;
+    [[nodiscard]] const QMetaObject* metaObject() const;
     void setParent(QObject*);
     [[nodiscard]] QVariant property(const char*) const;
     bool blockSignals(bool);
@@ -27,10 +29,13 @@ public:
     void raise();
     void lower();
     void installEventFilter(QObject*);
+    void deleteLater();
     void removeEventFilter(QObject*);
     virtual bool eventFilter(QObject*, QEvent*);
     virtual bool event(QEvent*);
-    template<class T> [[nodiscard]] QList<T> findChildren() const { return QList<T>{}; }
+    template<class T> [[nodiscard]] QList<T> findChildren(const QString& = QString()) const { return QList<T>{}; }
+    [[nodiscard]] QList<QObject*> children() const;
+    template<class T> [[nodiscard]] T findChild(const QString& = QString()) const { return nullptr; }
     bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}
@@ -40,6 +45,21 @@ public:
     static void connect(Sender, Signal, Context, Slot, Qt::ConnectionType) {}
 };
 
+class QTimer : public QObject {
+public:
+    explicit QTimer(QObject* = nullptr) {}
+    void setInterval(int);
+    void start();
+    void timeout();
+};
+
+template<class T> T qobject_cast(QObject* object) { return dynamic_cast<T>(object); }
+template<class T> class QPointer {
+public:
+    QPointer() = default;QPointer(T*) {}
+    QPointer& operator=(T*);T* operator->() const;operator T*() const;
+    void clear();T* data() const;bool isNull() const;
+};
 class QStyle;
 class QLayout;
 class QMenu;
@@ -93,6 +113,7 @@ public:
     [[nodiscard]] bool isEnabled() const;
     void setVisible(bool);
     [[nodiscard]] QWidget* parentWidget() const;
+    [[nodiscard]] QLayout* layout() const;
     void setToolTip(const QString&);
     [[nodiscard]] QString toolTip() const;
     [[nodiscard]] QRect geometry() const;
@@ -109,6 +130,7 @@ public:
     virtual void mouseMoveEvent(QMouseEvent*);
     virtual void mousePressEvent(QMouseEvent*);
     virtual void mouseReleaseEvent(QMouseEvent*);
+    virtual void mouseDoubleClickEvent(QMouseEvent*);
     virtual void wheelEvent(QWheelEvent*);
     virtual void keyPressEvent(QKeyEvent*);
     virtual void keyReleaseEvent(QKeyEvent*);
@@ -139,6 +161,7 @@ public:
     QGridLayout() = default;
     explicit QGridLayout(QWidget*) {}
     void addWidget(QWidget*, int, int);
+    void addWidget(QWidget*, int, int, int, int);
     void setHorizontalSpacing(int);
     void setVerticalSpacing(int);
 };
@@ -244,12 +267,16 @@ public:
     [[nodiscard]] QString text() const;
     void setAlignment(Qt::Alignment);
     void setWordWrap(bool);
+    void setTextInteractionFlags(Qt::TextInteractionFlags);
 };
 
 class QListWidgetItem {
 public:
     QListWidgetItem() = default;
     explicit QListWidgetItem(const QString&) {}
+    QListWidgetItem(const QString&,class QListWidget*) {}
+    void setFlags(Qt::ItemFlags);Qt::ItemFlags flags() const;
+    void setCheckState(Qt::CheckState);Qt::CheckState checkState() const;
     [[nodiscard]] QString text() const;
     void setText(const QString&);
     void setForeground(const QColor&);
@@ -297,6 +324,7 @@ public:
     [[nodiscard]] int count() const;
     [[nodiscard]] QListWidgetItem* item(int) const;
     QListWidgetItem* takeItem(int);
+    void setCurrentRow(int);void (*currentRowChanged)(int);
     [[nodiscard]] QListWidgetItem* currentItem() const;
 };
 
@@ -308,7 +336,9 @@ public:
     [[nodiscard]] QFont font(int) const;
     QTreeWidgetItem() = default;
     explicit QTreeWidgetItem(class QTreeWidget*) {}
+    QTreeWidgetItem(class QTreeWidget*, const QStringList&) {}
     explicit QTreeWidgetItem(QTreeWidgetItem*) {}
+    QTreeWidgetItem(QTreeWidgetItem*, const QStringList&) {}
     void setText(int, const QString&);
     [[nodiscard]] QString text(int) const;
     void setForeground(int, const QColor&);
@@ -430,10 +460,10 @@ class QFileDialog : public QWidget {
 public:
     [[nodiscard]] static QString getSaveFileName(QWidget* parent = nullptr,
         const QString& caption = QString(), const QString& directory = QString(),
-        const QString& filter = QString());
+        const QString& filter = QString(), QString* selectedFilter = nullptr);
     [[nodiscard]] static QString getOpenFileName(QWidget* parent = nullptr,
         const QString& caption = QString(), const QString& directory = QString(),
-        const QString& filter = QString());
+        const QString& filter = QString(), QString* selectedFilter = nullptr);
 };
 
 //! ダイアログ一式。作図の選択肢を並べるのに要る。
@@ -489,6 +519,7 @@ public:
     explicit QComboBox(QWidget*) {}
     void addItem(const QString&);
     void addItem(const QString&, const QVariant&);
+    void addItems(const QStringList&);
     void clear();
     [[nodiscard]] int count() const;
     [[nodiscard]] int currentIndex() const;
@@ -521,6 +552,7 @@ public:
     [[nodiscard]] QString text() const;
     void setPlaceholderText(const QString&);
     void (*textChanged)(const QString&);
+    void (*textEdited)(const QString&);
     void setClearButtonEnabled(bool);
 };
 
@@ -532,6 +564,8 @@ public:
     void interpretText();
     void setButtonSymbols(ButtonSymbols);
     void selectAll();
+    void setKeyboardTracking(bool);
+    void (*editingFinished)();
 };
 
 class QDoubleSpinBox : public QAbstractSpinBox {
@@ -543,6 +577,7 @@ public:
     void setSingleStep(double);
     void setPrefix(const QString&);
     void setSuffix(const QString&);
+    void setSpecialValueText(const QString&);
     void setValue(double);
     [[nodiscard]] double value() const;
     void (*valueChanged)(double);
@@ -671,6 +706,7 @@ public:
     static void processEvents();
     static int exec();
     static QWidget* activeWindow();
+    static QWidget* activeModalWidget();
     static std::vector<QWidget*> topLevelWidgets();
     static std::vector<QWidget*> allWidgets();
     static bool sendEvent(QObject*, QEvent*);
@@ -682,3 +718,33 @@ public:
 [[nodiscard]] QCoreApplication* QtStubApplication();
 
 #define qApp (QtStubApplication())
+
+class QFontComboBox : public QComboBox {
+public:
+    explicit QFontComboBox(QWidget* = nullptr) {}
+    QFont currentFont() const;void setCurrentFont(const QFont&);
+    void (*currentFontChanged)(const QFont&);
+};
+class QMessageBox : public QDialog {
+public:
+    enum StandardButton {Save=1,Discard=2,Cancel=4};
+    static StandardButton question(QWidget*,const QString&,const QString&,int);
+    [[nodiscard]] QString text() const;
+};
+class QMetaObject {
+public:
+    template<class... Args> static bool invokeMethod(QObject*,const char*,Args...);
+    [[nodiscard]] const char* className() const;
+};
+#define Q_ARG(type,value) value
+class QGraphicsItem {
+public:
+    virtual ~QGraphicsItem() = default;
+    void setPos(double,double);void setZValue(double);void setScale(double);
+};
+class QGraphicsScene {
+public:
+    void setSceneRect(double,double,double,double);
+    QGraphicsItem* addPixmap(const QPixmap&);QGraphicsItem* addText(const QString&,const QFont&);
+    QGraphicsItem* addPath(const QPainterPath&,const QPen& = QPen());void render(QPainter*);
+};

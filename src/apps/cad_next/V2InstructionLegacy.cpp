@@ -18,8 +18,10 @@
 #include <QByteArray>
 #include <QIODevice>
 #include <QString>
+#include <QUuid>
 #include <cmath>
-QJsonObject UpgradeInstructionDocument(const QJsonObject& doc){
+namespace {
+QJsonObject UpgradeVersionOne(const QJsonObject& doc){
     if(doc["format"]!="kachakacha-instructions"||doc["version"].toInt()!=1)return doc;
     QJsonArray pages;const auto old=doc["pages"].toArray();if(old.empty()||old.size()>200)return {};
     for(const auto& value:old){QGraphicsScene scene;scene.setSceneRect(0,0,1120,792);const auto page=value.toObject();const auto items=page["items"].toArray();if(items.size()>1000)return {};
@@ -41,4 +43,20 @@ QJsonObject UpgradeInstructionDocument(const QJsonObject& doc){
             {"yaw",-.785398},{"pitch",.61548},{"span",100},{"legacy",QString::fromLatin1(png.toBase64())}});
     }
     return {{"format","kachakacha-instructions"},{"version",2},{"current",doc["current"]},{"pages",pages},{"assets",QJsonArray{}}};
+}
+}
+QJsonObject UpgradeInstructionDocument(const QJsonObject& source){
+    auto doc=source;if(doc["format"]!="kachakacha-instructions")return doc;
+    if(doc["version"].toDouble()==1)doc=UpgradeVersionOne(doc);
+    if(doc["version"].toDouble()!=2)return doc;
+    const auto old=doc["pages"].toArray();if(old.empty()||old.size()>200)return {};
+    QJsonArray pages,sheets;
+    for(const auto& value:old){if(!value.isObject())return {};auto page=value.toObject();
+        const auto id=QUuid::createUuid().toString();page["id"]=id;pages.push_back(page);
+        const QJsonObject item{{"id",QUuid::createUuid().toString()},{"kind","scene"},{"sceneId",id},
+            {"rect",QJsonArray{15,15,267,180}}};
+        sheets.push_back(QJsonObject{{"id",QUuid::createUuid().toString()},{"title",page["title"]},
+            {"widthMm",297},{"heightMm",210},{"items",QJsonArray{item}}});}
+    doc["version"]=3;doc["pages"]=pages;doc["sheets"]=sheets;
+    doc["currentSheet"]=doc["current"];doc["workspace"]="scene";return doc;
 }

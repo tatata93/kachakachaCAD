@@ -60,6 +60,7 @@ const std::vector<std::string_view>& CommonCommandIds()
 const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 {
     static const std::vector<std::string_view> instructions{
+        "instructions.scene_editor","instructions.sheet_editor","instructions.paper","instructions.place_scene","instructions.insert_image",
         "instructions.new_page","instructions.duplicate","instructions.capture","instructions.move",
         "instructions.arrow","instructions.text","instructions.remove","instructions.save","instructions.open","instructions.pdf","instructions.model_file","instructions.image"};
     if(mode==UiMode::Instructions)return instructions;
@@ -124,8 +125,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
 const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
 {
     static const std::vector<std::string_view> instructions{
-        "instructions.new_page","instructions.duplicate","instructions.capture","instructions.model_file",
-        "instructions.move","instructions.arrow","instructions.text","instructions.save","instructions.image"};
+        "instructions.scene_editor","instructions.sheet_editor","instructions.new_page","instructions.capture",
+        "instructions.move","instructions.arrow","instructions.text","instructions.place_scene","instructions.insert_image","instructions.image"};
     if(mode==UiMode::Instructions)return instructions;
     // 上の帯に残すのは「そこから始める」ものだけ。
     // 表の行を動かす・板厚を当てる、といったものはその欄の隣(右の棚)にある。

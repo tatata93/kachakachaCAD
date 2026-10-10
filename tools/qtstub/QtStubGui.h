@@ -26,6 +26,7 @@ public:
     QPointF operator+(const QPointF&) const;
     QPointF operator-(const QPointF&) const;
     QPointF operator*(double) const;
+    QPointF operator/(double) const;
 };
 
 class QSize {
@@ -41,7 +42,14 @@ public:
     [[nodiscard]] QSize expandedTo(const QSize&) const;
     [[nodiscard]] QSize boundedTo(const QSize&) const;
     [[nodiscard]] bool isEmpty() const;
+    [[nodiscard]] bool isValid() const;
     QSize operator*(double) const;
+};
+class QSizeF {
+public:
+    QSizeF() = default;QSizeF(double,double) {}
+    double width() const;double height() const;
+    QSizeF operator*(double) const;
 };
 
 class QRect {
@@ -89,6 +97,7 @@ public:
     QRectF(double, double, double, double) {}
     QRectF(const QRect&) {}
     QRectF(const QPointF&, const QSize&) {}
+    QRectF(const QPointF&, const QSizeF&) {}
     QRectF(const QPointF&, const QPointF&) {}
     [[nodiscard]] double x() const;
     [[nodiscard]] double y() const;
@@ -101,8 +110,15 @@ public:
     [[nodiscard]] QPointF center() const;
     [[nodiscard]] QRectF adjusted(double, double, double, double) const;
     [[nodiscard]] QRectF normalized() const;
+    [[nodiscard]] QRectF translated(const QPointF&) const;
     [[nodiscard]] bool contains(const QPointF&) const;
     [[nodiscard]] QRect toRect() const;
+    [[nodiscard]] QSizeF size() const;
+    [[nodiscard]] QPointF topLeft() const;
+    [[nodiscard]] QPointF bottomRight() const;
+    [[nodiscard]] QPointF topRight() const;
+    [[nodiscard]] QPointF bottomLeft() const;
+    void moveTopLeft(const QPointF&);void setWidth(double);void setHeight(double);void setSize(const QSizeF&);
 };
 
 class QColor {
@@ -141,10 +157,7 @@ public:
     void setCapStyle(Qt::PenCapStyle);
     QPen() = default;
     QPen(const QColor&) {}
-    QPen(const QColor&, double) {}
-    QPen(const QColor&, double, Qt::PenStyle) {}
-    QPen(const QColor&, double, Qt::PenStyle, Qt::PenCapStyle, Qt::PenJoinStyle) {}
-    QPen(const QBrush&, double) {}
+    QPen(const QBrush&, double, Qt::PenStyle = Qt::SolidLine, Qt::PenCapStyle = Qt::SquareCap, Qt::PenJoinStyle = Qt::BevelJoin) {}
     QPen(Qt::PenStyle) {}
     void setWidthF(double);
     void setColor(const QColor&);
@@ -176,6 +189,8 @@ public:
     void setItalic(bool);
     void setUnderline(bool);
     [[nodiscard]] bool bold() const;
+    [[nodiscard]] bool italic() const;
+    [[nodiscard]] bool operator==(const QFont&) const;
 };
 
 class QFontMetrics {
@@ -194,6 +209,32 @@ public:
     enum SystemFont { GeneralFont, FixedFont };
     static QFont systemFont(SystemFont);
     static QStringList families();
+};
+class QFontMetricsF {
+public:
+    explicit QFontMetricsF(const QFont&) {}
+    double height() const;double ascent() const;double horizontalAdvance(const QString&) const;
+    QRectF boundingRect(const QString&) const;
+};
+class QVector3D {
+public:
+    QVector3D() = default;QVector3D(float,float,float) {}
+    float x() const;float y() const;float z() const;
+    QVector3D operator-(const QVector3D&) const;
+};
+class QQuaternion {
+public:
+    QQuaternion() = default;QQuaternion(float,float,float,float) {}
+    static QQuaternion fromEulerAngles(float,float,float);
+    QVector3D rotatedVector(const QVector3D&) const;
+    QQuaternion operator*(const QQuaternion&) const;
+    float x() const;float y() const;float z() const;float scalar() const;
+    float lengthSquared() const;void normalize();
+};
+class QLineF {
+public:
+    QLineF(const QPointF&,const QPointF&) {}
+    double length() const;
 };
 
 class QPolygonF {
@@ -244,14 +285,21 @@ public:
     QImage() = default;
     QImage(int, int, Format) {}
     QImage(const QSize&, Format) {}
+    explicit QImage(const QString&) {}
     void fill(const QColor&);
     void fill(Qt::GlobalColor);
     [[nodiscard]] bool save(const QString&, const char* = nullptr, int = -1) const;
+    [[nodiscard]] bool save(QIODevice*, const char* = nullptr, int = -1) const;
     [[nodiscard]] bool isNull() const;
     [[nodiscard]] int width() const;
     [[nodiscard]] int height() const;
     void setDevicePixelRatio(double);
     unsigned char* scanLine(int);
+    [[nodiscard]] QSize size() const;
+    [[nodiscard]] qsizetype sizeInBytes() const;
+    [[nodiscard]] unsigned int pixel(int,int) const;
+    [[nodiscard]] bool operator==(const QImage&) const;
+    [[nodiscard]] bool operator!=(const QImage&) const;
 };
 
 class QPixmap : public QPaintDevice {
@@ -324,6 +372,7 @@ public:
     void setPen(Qt::PenStyle);
     void setBrush(const QBrush&);
     void setBrush(const QColor&);
+    void setBrush(Qt::GlobalColor);
     void setBrush(Qt::BrushStyle);
     void setFont(const QFont&);
     [[nodiscard]] QFont font() const;
@@ -340,6 +389,8 @@ public:
     void fillRect(const QRect&, const QBrush&);
     void fillRect(const QRectF&, const QColor&);
     void fillRect(const QRectF&, const QBrush&);
+    void fillRect(const QRect&,Qt::GlobalColor);
+    void fillRect(const QRectF&,Qt::GlobalColor);
     void drawRect(int, int, int, int);
     void drawEllipse(int, int, int, int);
     void fillRect(int, int, int, int, const QColor&);
@@ -363,9 +414,12 @@ public:
     void drawText(const QRectF&, int, const QString&);
     void drawPixmap(const QRect&, const QPixmap&);
     void drawImage(const QRect&, const QImage&);
+    void drawImage(const QRectF&,const QImage&);
+    void drawImage(int,int,const QImage&);
     [[nodiscard]] QFontMetrics fontMetrics() const;
     [[nodiscard]] bool isActive() const;
     bool end();
+    bool begin(QPaintDevice*);
 };
 
 class QMouseEvent;
@@ -377,7 +431,7 @@ class QCloseEvent;
 class QEvent {
 public:
     enum Type { None, MouseButtonPress, MouseButtonRelease, MouseMove, KeyPress,
-        KeyRelease, Paint, Resize, FocusOut, FocusIn, ShortcutOverride };
+        KeyRelease, Paint, Resize, FocusOut, FocusIn, ShortcutOverride, Close, MouseButtonDblClick };
     [[nodiscard]] Type type() const;
     void accept();
     void ignore();
@@ -426,6 +480,45 @@ public:
 class QPaintEvent : public QEvent {
 public:
     [[nodiscard]] QRect rect() const;
+};
+class QCloseEvent : public QEvent {};
+
+[[nodiscard]] unsigned int qRgb(int,int,int);
+[[nodiscard]] int qRed(unsigned int);
+[[nodiscard]] int qGreen(unsigned int);
+[[nodiscard]] int qBlue(unsigned int);
+[[nodiscard]] int qGray(unsigned int);
+
+class QImageReader {
+public:
+    explicit QImageReader(QIODevice*,const QByteArray& = QByteArray()) {}
+    QSize size() const;QByteArray format() const;QImage read();
+};
+class QImageWriter {
+public:
+    QImageWriter(QIODevice*,const QByteArray&) {}
+    static QList<QByteArray> supportedImageFormats();
+    void setQuality(int);bool write(const QImage&);
+};
+class QMarginsF {
+public:
+    QMarginsF(double,double,double,double) {}
+};
+class QPageSize {
+public:
+    enum Unit {Millimeter};enum SizeMatchPolicy {ExactMatch};
+    QPageSize(const QSizeF&,Unit,const QString& = QString(),SizeMatchPolicy = ExactMatch) {}
+};
+class QPageLayout {
+public:
+    enum Orientation {Portrait,Landscape};
+};
+class QPdfWriter : public QPaintDevice {
+public:
+    explicit QPdfWriter(QIODevice*) {}
+    void setResolution(int);void setPageSize(const QPageSize&);
+    void setPageOrientation(QPageLayout::Orientation);void setPageMargins(const QMarginsF&);
+    bool newPage();
 };
 
 class QKeySequence {

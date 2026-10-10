@@ -274,23 +274,33 @@ WP-08は `AT-UIX-011` としてregistryの全IDについて次を自動検査す
 `draw.arc` の両端半径・始点接線に反転ボタン、`image.place` に回転有無付き4点フィットを追加。
 詳細とV1/Jw_cadとの差は [操作点検](ui-redesign/INTERACTION_AUDIT_2026-10-05.md)。
 
-## 組み立て説明書（2026-10-05追加）
+## 組み立て説明書（2026-10-10改訂）
 
 | ID | 操作 | 対象・結果 |
 | --- | --- | --- |
-| `instructions.new_page` | 手順ページを追加 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.duplicate` | 手順を複製 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.capture` | 現在モデルから使用部品を選択して3D配置 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.move` | 説明図の選択・移動 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.arrow` | 2点で矢印を配置 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.text` | 番号・文章を配置 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.remove` | 説明図の選択物を除去 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.save` | 専用kciに保存 | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.open` | 専用kciを開く | 説明書だけを編集・保存。元モデルは変更しない |
-| `instructions.pdf` | 全手順をA4横PDF出力 | 説明書だけを編集・保存。元モデルは変更しない |
+| `instructions.scene_editor` | 画像エディター | 場面を選び、3D部品・視点・矢印・文章を編集 |
+| `instructions.sheet_editor` | 用紙編集 | 用紙を選び、3D場面の参照・PNG/JPEG・文字を配置 |
+| `instructions.paper` | 用紙サイズ | A4/A3/A5/Letter/自由サイズ、幅・高さmm、縦横を設定 |
+| `instructions.place_scene` | 場面を配置 | 右ペインで場面を選び用紙をクリック。UUIDで元場面を参照し、編集を反映。ダブルクリックで場面編集へ戻る |
+| `instructions.insert_image` | 画像を貼る | PNG/JPEGを選んで用紙へクリック配置。元画像をkciへ内包 |
+| `instructions.new_page` | 場面・用紙を追加 | 現在のエディターへ独立した場面または用紙を追加 |
+| `instructions.duplicate` | 場面・用紙を複製 | 現在の場面または用紙を複製。用紙内の場面参照は維持 |
+| `instructions.capture` | 現在のモデルを選ぶ | 表示中の部品・面から使うものを選択し、画像エディターの3D場面へ配置 |
+| `instructions.model_file` | 別のモデルを読込 | 別KCDの表示中の部品・面を選び、3D場面へ追加 |
+| `instructions.move` | 選択・移動 | 場面では3D配置を移動。用紙では図・画像・文字をドラッグ移動、右下ハンドルでサイズ変更、位置・寸法mmでも調整 |
+| `instructions.arrow` | 矢印 | 画像エディターで始点から先端へドラッグ、または2クリック。選択・移動で始点の丸・先端の四角を調整 |
+| `instructions.text` | 番号・文章 | 場面・用紙をクリックして文字配置。フォント、文字サイズpt、太字・斜体、選択文字の更新 |
+| `instructions.remove` | 図から除去 | 選択物を場面または用紙から除去。元CADは変更しない |
+| `instructions.save` | 説明書を保存 | 場面の3D表示形状・視点と用紙の配置を .kci version 3へ保存 |
+| `instructions.open` | 説明書を開く | version 1/2/3を読み込み。旧版は場面を参照する用紙へ移行 |
+| `instructions.image` | 場面・用紙を画像出力 | 現在の場面または用紙を指定解像度・Qt対応画像形式で出力。選択強調は含めない |
+| `instructions.pdf` | 説明書PDF | 全用紙を各用紙の寸法・縦横でPDF出力 |
 
-| `instructions.model_file` | 別KCDモデルから使用部品を選択 | 元モデルを変更せず3D説明図へ配置 |
-| `instructions.image` | 現在のコマを画像出力 | 幅・高さ、Qt対応画像形式を選ぶ。選択強調は出力しない |
+用紙の場面図は保存PNGへ置換せず、場面のUUID参照から3D表示形状を再描画する。
+参照先の場面を編集すると同じ場面を使った全用紙へ反映する。元CADとの自動追従は行わない。
+説明書はCAD正本と別の表示形状スナップショットであり、輪郭・隠線は表示メッシュによる近似。
+画像エディターと用紙編集の新機能は全検証ゲート前（2026-10-10時点）。対応範囲・検証は
+[説明書仕様](ui-redesign/ASSEMBLY_INSTRUCTIONS.md)を参照。
 
 ### part.curved_emboss — 曲面押し出し
 部品→作成→曲面押し出し。支持面（形状ガイドまたはソリッドのフェイス）とその上の閉じたワイヤーを選ぶ。

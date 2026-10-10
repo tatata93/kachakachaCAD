@@ -20,6 +20,8 @@
 
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> InstructionCases();
+std::vector<SelfTestCase> InstructionArrowCases();
+std::vector<SelfTestCase> InstructionSheetCases();
 std::vector<SelfTestCase> CurvedEmbossCases();
 namespace {
 
@@ -76,6 +78,7 @@ namespace {
     const auto images=ImageCases();cases.insert(cases.end(),images.begin(),images.end());
     const auto emboss=CurvedEmbossCases();cases.insert(cases.end(),emboss.begin(),emboss.end());
     const auto instructions=InstructionCases();cases.insert(cases.end(),instructions.begin(),instructions.end());
+    for(const auto& group:{InstructionArrowCases(),InstructionSheetCases()})cases.insert(cases.end(),group.begin(),group.end());
     const std::vector<SelfTestCase> planes = PlaneCases();
     cases.insert(cases.end(), planes.begin(), planes.end());
     const auto dimensions=DimensionCases();cases.insert(cases.end(),dimensions.begin(),dimensions.end());

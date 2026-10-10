@@ -1,5 +1,5 @@
 #pragma once
-#include "V2InstructionScene.h"
+#include "V2InstructionSheet.h"
 #include <QWidget>
 #include <QJsonObject>
 #include <QPointer>
@@ -31,8 +31,17 @@ public:
 protected:
     bool eventFilter(QObject*,QEvent*) override;
 private:
+    void CancelInput();
     void NewPage(bool copy);
     void ShowPage(int);
+    void SwitchWorkspace(bool layout);
+    void NewSheet(bool copy);
+    void ShowSheet(int);
+    void ShowSheetSettings();
+    void ShowSceneSettings();
+    void InsertImage();
+    void AddFontControls(QWidget*,bool sheet);
+    void AddImageExportControls(QWidget*);
     void ShowSettings();
     void ShowModelPicker();
     bool Collect(V2MainWindow&);
@@ -42,14 +51,21 @@ private:
     void FileAction(std::string_view);
     V2MainWindow& window_;
     V2InstructionScene* view_=nullptr;
+    V2InstructionSheetView* sheetView_=nullptr;
     QComboBox* pages_=nullptr;
+    QComboBox* workspace_=nullptr;
     QLineEdit* title_=nullptr;
     QPointer<QLabel> hint_;
     QPointer<QWidget> settings_;
     QPointer<QListWidget> partList_;
     std::vector<InstructionPage> scenes_;
+    std::vector<InstructionSheet> sheets_;
     InstructionPage source_;
     int current_=0;
+    int currentSheet_=0;
+    bool layoutEditing_=false;
+    QFont textFont_=QFont(QString(),18);
+    InstructionSheetItem pendingItem_;
     bool loading_=false,dirty_=false,choosing_=false;
     QString path_,activeTool_="move";
     std::function<QString(bool)> pathChooser_;

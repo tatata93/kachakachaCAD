@@ -53,7 +53,7 @@ void V2MainWindow::BuildMenus()
     addCommands(file, {"file.new", "file.open", "file.save", "file.save_as"});
     file->addSeparator();
     auto* instructions=file->addMenu(QStringLiteral("組み立て説明書"));
-    addCommands(instructions,{"instructions.new_page","instructions.duplicate","instructions.capture","instructions.move",
+    addCommands(instructions,{"instructions.scene_editor","instructions.sheet_editor","instructions.paper","instructions.place_scene","instructions.insert_image","instructions.new_page","instructions.duplicate","instructions.capture","instructions.move",
         "instructions.arrow","instructions.text","instructions.remove","instructions.save","instructions.open","instructions.pdf","instructions.model_file","instructions.image"});
     file->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
 

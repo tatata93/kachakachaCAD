@@ -1,3 +1,4 @@
+#include <QSizeF>
 #include <QImage>
 #include <QPointF>
 #include "V2InstructionScene.h"
@@ -33,7 +34,8 @@ void Raster(const ScreenVertex* p,int index,int w,int h,std::vector<double>& dep
 void Arrow(QPainter& painter,QPointF a,QPointF b){
     const auto delta=b-a;const double length=std::hypot(delta.x(),delta.y());if(length<1)return;
     const auto d=delta/length;const QPointF side(-d.y(),d.x());painter.drawLine(a,b);
-    painter.drawPolyline(QPolygonF{b-d*14+side*6,b,b-d*14-side*6});
+    const double head=std::min(14.0,length*.4);
+    painter.drawPolyline(QPolygonF{b-d*head+side*head*.43,b,b-d*head-side*head*.43});
 }
 }
 QImage V2InstructionScene::Render(QSize size,bool selection){
@@ -67,11 +69,13 @@ QImage V2InstructionScene::Render(QSize size,bool selection){
             }
         }
     }
-    painter.setPen(QPen(Qt::black,std::max(1.5,w/700.0)));auto font=painter.font();font.setPixelSize(std::max(12,w/55));painter.setFont(font);
+    painter.setPen(QPen(Qt::black,std::max(1.5,w/700.0)));
     for(std::size_t i=0;i<page_->marks.size();++i){const auto& mark=page_->marks[i];painter.setPen(QPen(selection&&int(i)==selectedMark_?QColor(20,100,210):QColor(Qt::black),std::max(1.5,w/700.0)));
-        if(mark.arrow)Arrow(painter,project(mark.start),project(mark.end));else painter.drawText(project(mark.start),mark.text);
+        if(mark.arrow){Arrow(painter,project(mark.start),project(mark.end));
+            if(selection&&int(i)==selectedMark_){painter.setBrush(Qt::white);painter.drawEllipse(project(mark.start),5,5);const auto tip=project(mark.end);painter.drawRect(QRectF(tip-QPointF(5,5),QSizeF(10,10)));painter.setBrush(Qt::NoBrush);}}
+        else{auto font=mark.font;font.setPixelSize(std::max(1,int(std::round(mark.font.pointSizeF()*4/3*w/1400))));painter.setFont(font);painter.drawText(project(mark.start),mark.text);}
     }
-    if(selection&&arrowPending_)Arrow(painter,project(start_),project(preview_));painter.end();
+    if(selection&&arrowPending_){painter.setPen(QPen(QColor(20,100,210),2,Qt::DashLine));Arrow(painter,project(start_),project(preview_));painter.drawEllipse(project(start_),4,4);}painter.end();
     if(selection){pick_=std::move(ids);depth_=std::move(depth);mapping_=mapping;forward_=forward;}
     return image;
 }

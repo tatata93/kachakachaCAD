@@ -37,6 +37,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
+| `kernel/OcctFabricationTrim.h` | トリム曲面を実外周内の単一区間へ対応させる | **実行時は接続済み。**`FabricationEvaluatorOf` の分離実装 `OcctFabricationSampling.cpp` から呼ぶ。走査は公開 `OcctFaceQuery.h` と同名の `.cpp` しか辿らないため分離実装の呼出を検出できない。UIへ内部ヘッダを直接公開しない |
 
 ### 繋いだもの
 

@@ -97,6 +97,17 @@ KACHA_V2_TEST(warped_thicken, real_long_warped_band_is_refused_without_cache_gro
     Require(kernel::CachedShapeCount()==count&&kernel::CaptureOutputShape(source.Value()).Value()==before.Value(),"refusal preserves source and cache");
     kernel::ReleaseShape(source.Value());
 }
+KACHA_V2_TEST(warped_thicken, actual_ho_middle_state_preserves_source_instead_of_building_invalid_step) {
+    static const char* brep=
+#include "fixtures/ho-warped-middle-band.inc"
+    ;
+    const auto source=kernel::RestoreOutputShape(brep);Require(source.HasValue(),"actual HO middle band loads");
+    const auto before=kernel::CaptureOutputShape(source.Value());const auto count=kernel::CachedShapeCount();
+    const auto made=kernel::ThickenSurface(source.Value(),.3,fabrication::ThicknessPlacement::Centered,{});
+    Require(!made.HasValue()&&made.FirstDiagnostic().code==kernel::kThickenFailed,"unsafe HO middle-state solid is refused early");
+    Require(kernel::CachedShapeCount()==count&&kernel::CaptureOutputShape(source.Value()).Value()==before.Value(),"HO refusal preserves source and cache");
+    kernel::ReleaseShape(source.Value());
+}
 #else
 KACHA_V2_TEST(warped_thicken, missing_kernel_refuses_thickening) {
     kachakacha::v2::test::Require(!kachakacha::v2::kernel::ThickenSurface(0,.8,

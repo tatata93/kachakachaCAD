@@ -19,6 +19,7 @@
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/BendRadius.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include <QString>
 #include <QApplication>
@@ -267,8 +268,28 @@ using kachakacha::v2::domain::EntityKind;
         window.RunCommand("fabrication.set_assembly");
         const int wiresBefore = countVisible(EntityKind::Wire);
         const int surfacesBefore = countVisible(EntityKind::GuideSurface);
+        const auto snapshotJson = [&window] {
+            io::DocumentFile file;file.snapshot=window.Session().GetDocument().Snapshot();
+            return io::WriteDocumentJson(file);
+        };
+        const auto before=snapshotJson();
+        const int partsBefore=countVisible(EntityKind::Part);
         window.RunCommand("fabrication.freeze_state");
         const std::string at = std::to_string(static_cast<int>(percent)) + "%";
+        if(percent>0) {
+            // The actual curved-state bands have warped C0 creases. The old offset
+            // appeared successful, but even two spans failed strict STEP reread.
+            if(!Explain((at+": unsupported warped thickness is explained and rolled back").c_str(),
+                window.StatusText().contains(QStringLiteral("KER-T001"))
+                && window.StatusText().contains(QStringLiteral("折れ目"))
+                && snapshotJson()==before && countVisible(EntityKind::Part)==partsBefore))return false;
+            window.RunCommand("fabrication.freeze_wires");
+            if(!Explain((at+": editable contours remain available without unsafe solids").c_str(),
+                countVisible(EntityKind::Wire)>wiresBefore
+                && countVisible(EntityKind::GuideSurface)==surfacesBefore
+                && countVisible(EntityKind::Part)==partsBefore))return false;
+            continue;
+        }
         if (!Explain((at + ": 固定できる(帯は " + window.StatusText().toStdString()
                          + ")").c_str(),
                 window.StatusText().contains(QStringLiteral("現在状態を固定(")))) {
@@ -660,7 +681,7 @@ std::vector<SelfTestCase> HoModelCases()
         {"HOの見本で作業平面と面へ正対できる", CaseHoFacingWorkPlanesAndSurface},
         {"HOの見本の輪郭を押し出せる", CaseHoExtrudeFromSampleProfile},
         {"HOの見本で曲げ具合を0から100まで動かせる", CaseHoApproximateAndBend},
-        {"HOの見本の曲げ状態から線と面を作れる", CaseHoOutputsFromBendStates},
+        {"HOの見本の曲げ固定と非対応厚みの安全な拒否", CaseHoOutputsFromBendStates},
         {"HOの見本で実寸半径を入れて固定できる", CaseHoRadiusAutoAndLock},
         {"HOの見本が保存して開き直しても残る", CaseHoSampleSurvivesSaveAndOpen},
         {"曲げ半径は部材ごとに持ち、保存して開き直しても形ごと残る",

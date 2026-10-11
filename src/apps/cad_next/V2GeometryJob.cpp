@@ -1,24 +1,33 @@
 #include "V2GeometryJob.h"
+#include "kachakacha/app/GeometryJobDiagnostic.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QApplication>
+#include <QByteArray>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
 #include <QLabel>
+#include <QObject>
 #include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QString>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUuid>
 #include <QVBoxLayout>
+#include <QWidget>
 #include <functional>
 #include <iostream>
 #include <cmath>
@@ -27,8 +36,8 @@ namespace V2GeometryJob {
 using namespace kachakacha::v2;
 namespace {
 constexpr auto busyProperty="geometryJobActive";
-constexpr auto failedCode="JOB-001";
-constexpr auto cancelledCode="JOB-002";
+constexpr auto failedCode=app::kGeometryJobFailed;
+constexpr auto cancelledCode=app::kGeometryJobCancelled;
 using JsonResult=base::Result<QJsonObject>;
 base::Diagnostic Failed(const QString& detail) {
     return base::MakeError(failedCode,"計算を完了できませんでした。文書は変更していません。",detail.toStdString());
@@ -66,7 +75,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
         Busy(){qApp->setProperty(busyProperty,true);}
         ~Busy(){qApp->setProperty(busyProperty,false);}
     } busy;
-    QTemporaryDir scratch(QDir::tempPath()+QStringLiteral("/kachakacha-geometry-XXXXXX"));
+    QTemporaryDir scratch;
     if(!scratch.isValid())return JsonResult::Failure(Failed(QStringLiteral("計算用の一時フォルダーを作れません。")));
     QJsonArray shapes;
     for(const auto handle:inputs) {

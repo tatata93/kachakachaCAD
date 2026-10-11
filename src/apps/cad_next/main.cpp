@@ -18,6 +18,7 @@
 #include "kachakacha/kernel/KernelInfo.h"
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QImage>
 #include <QString>
 #include <QStringList>

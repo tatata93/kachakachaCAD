@@ -28,6 +28,7 @@
 #include <QApplication>
 #include <QPushButton>
 #include <QTimer>
+#include <QObject>
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QDir>

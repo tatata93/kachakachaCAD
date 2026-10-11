@@ -31,6 +31,7 @@
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
 #include <QTimer>
+#include <QObject>
 #include <QElapsedTimer>
 #include "V2Viewport.h"
 

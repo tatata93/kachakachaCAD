@@ -1313,8 +1313,7 @@ void V2MainWindow::RunCommand(std::string_view id)
     if(V2GeometryJob::Active())return;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
-        // 台帳に無い id を押した。黙って何も起きないのがいちばん困るので、そう言う
-        // (人には出ないはずの道。献立や帯の id を直し忘れたときに、ここで気づく)。
+        // 台帳に無い操作は、画面と台帳の食い違いとして知らせる。
         SetStatus(QStringLiteral("「%1」という操作は台帳にありません(画面と台帳が食い違っています)。")
                 .arg(QString::fromUtf8(std::string(id).c_str())));
         return;
@@ -1404,8 +1403,7 @@ void V2MainWindow::RunCommand(std::string_view id)
         ToggleSnap();
         return;
     }
-    // まだ入っていないものは、案内を出して何もしない。
-    // 「押せるのに何も起きない」より、いま何ができないかを言う。
+    // 未対応の操作には、台帳の案内を表示する。
     SetStatus(QStringLiteral("%1: %2 (この操作はまだ入っていません)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
                 QString::fromUtf8(std::string(command->operationGuideJa).c_str())));

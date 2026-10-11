@@ -16,6 +16,7 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <Bnd_Box.hxx>
 #include <BRepGProp.hxx>
@@ -162,6 +163,15 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         return Out::Failure(MakeError(kThickenSourceMissing,
             "元になる面がありません。",
             "先に形状ガイドで面を作ってから、厚みを付けてください。"));
+    }
+    // OCCT's simple offset adds side-surface pcurves to shared source edges.
+    // A private topology/geometry copy keeps the source and later rebuilds intact.
+    try {
+        BRepBuilderAPI_Copy copy(face,true,false);
+        if(!copy.IsDone())return Out::Failure(MakeError(kThickenFailed,"計算用の面を複製できませんでした。"));
+        face=copy.Shape();
+    } catch(const Standard_Failure&) {
+        return Out::Failure(MakeError(kThickenFailed,"計算用の面を複製できませんでした。"));
     }
     // どこから膨らませ始めるかを、厚みの付け方で決める。
     //   外側 : 元の面から外へ    → 元の面が内側の皮になる

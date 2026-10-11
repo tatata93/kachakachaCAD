@@ -11,6 +11,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
+#include "V2HeavyJobFixture.h"
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
 
@@ -247,12 +248,9 @@ bool CaseCancelRunningThickness(V2MainWindow& window)
     return Explain("retry after process cancel commits and survives save/reopen",CountOfKind(window,EntityKind::Part)==1
         &&window.SaveAndReopen(QStringLiteral("cancelled-thicken-retry.kcd2"))&&window.RebuildProblems().isEmpty());
 }
-bool ExerciseWarpedPanelStop(V2MainWindow& window,bool crash)
+bool ExerciseComplexSurfaceStop(V2MainWindow& window,bool crash)
 {
-    static const char* brep=
-#include "../../../tests_v2/fixtures/warped-panel-source.inc"
-    ;
-    const auto source=kernel::RestoreOutputShape(brep);if(!source.HasValue())return false;
+    const auto source=HeavySmoothSurface();if(!source.HasValue())return false;
     const auto before=kernel::CaptureOutputShape(source.Value());const auto count=kernel::CachedShapeCount();
     const auto revision=window.Session().GetDocument().Revision();
     QTimer timer;timer.setInterval(5);QElapsedTimer running,elapsed;elapsed.start();bool cancelled=false;int ticks=0;
@@ -262,7 +260,7 @@ bool ExerciseWarpedPanelStop(V2MainWindow& window,bool crash)
         if(dialog->property("calculationPhase").toString().contains(QStringLiteral("厚みを計算"))&&!running.isValid())running.start();
         if(!running.isValid()||running.elapsed()<150||cancelled)return;
         const auto report=qEnvironmentVariable("KACHACAD_JOB_REPORT_DIR");
-        if(!report.isEmpty()){QDir().mkpath(report);dialog->grab().save(report+(crash?"/warped-panel-crash.png":"/warped-panel-calculating.png"));}
+        if(!report.isEmpty()){QDir().mkpath(report);dialog->grab().save(report+(crash?"/complex-surface-crash.png":"/complex-surface-calculating.png"));}
         if(crash) {
             auto* child=dialog->findChild<QProcess*>("geometryJobProcess");
             if(child&&child->state()==QProcess::Running){cancelled=true;child->kill();}
@@ -277,16 +275,16 @@ bool ExerciseWarpedPanelStop(V2MainWindow& window,bool crash)
     const bool ok=cancelled&&!result.HasValue()&&result.FirstDiagnostic().code==(crash?"JOB-001":"JOB-002")
         &&ticks>10&&elapsed.elapsed()<10000&&unchanged&&kernel::CachedShapeCount()==count
         &&window.Session().GetDocument().Revision()==revision&&!V2GeometryJob::Active();
-    std::cout<<"warped panel "<<(crash?"crash":"cancellation")<<": elapsed="<<elapsed.elapsed()<<" ms, UI ticks="<<ticks<<'\n';
+    std::cout<<"complex smooth surface "<<(crash?"crash":"cancellation")<<": elapsed="<<elapsed.elapsed()<<" ms, UI ticks="<<ticks<<'\n';
     if(result.HasValue())kernel::ReleaseShape(result.Value().handle);
     kernel::ReleaseShape(source.Value());
-    if(!Explain("actual warped offset stops during calculation without changing source",ok))return false;
+    if(!Explain("actual smooth offset stops during calculation without changing source",ok))return false;
     if(!ArmThickenOnFreshSurface(window)||!ClickOnAnyGuideSurface(window)||!window.ThickenDock().ClickConfirm())return false;
     return Explain("normal operation and saved document remain usable after interrupted heavy job",
-        window.SaveAndReopen(QStringLiteral("warped-job-recovery.kcd2"))&&window.RebuildProblems().isEmpty());
+        window.SaveAndReopen(QStringLiteral("complex-job-recovery.kcd2"))&&window.RebuildProblems().isEmpty());
 }
-bool CaseCancelWarpedPanel(V2MainWindow& window){return ExerciseWarpedPanelStop(window,false);}
-bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseWarpedPanelStop(window,true);}
+bool CaseCancelComplexSurface(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,false);}
+bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,true);}
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
@@ -294,7 +292,7 @@ std::vector<SelfTestCase> ThickenCases()
     return {
         {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
         {"HP-TH-06 crashed calculation process preserves document and supports retry",CaseFailedThicknessProcess},
-        {"HP-TH-07 actual warped panel cancellation during kernel calculation",CaseCancelWarpedPanel},
+        {"HP-TH-07 actual complex smooth surface cancellation during kernel calculation",CaseCancelComplexSurface},
         {"HP-TH-04 thickness preview release, cancel and retry",CaseThickenPreviewOwnership},
         {"HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
             CaseHumanPathThickenManySurfaces},

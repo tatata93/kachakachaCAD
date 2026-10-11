@@ -49,11 +49,29 @@ std::optional<base::Result<TopoDS_Shape>> ThickenFoldedBand(
     if(std::abs(u0-s0)>1e-10||std::abs(u1-s1)>1e-10||std::abs(v0-t0)>1e-10||std::abs(v1-t1)>1e-10)return std::nullopt;
     const int n=surface->NbUPoles();std::vector<Vector3> a,b,normals,offset(n);
     for(int i=1;i<=n;++i){const auto p=surface->Pole(i,1),q=surface->Pole(i,2);a.push_back({p.X(),p.Y(),p.Z()});b.push_back({q.X(),q.Y(),q.Z()});}
+    bool nonPlanar=false;
     for(int i=0;i+1<n;++i) {
         auto normal=geometry::Cross(a[i+1]-a[i],b[i]-a[i]);
         if(normal.Length()<1e-10)return std::nullopt;normal=geometry::Normalized(normal);
-        if(std::abs(geometry::Dot(b[i+1]-a[i],normal))>tolerance.modelLinearMm)return std::nullopt;
+        nonPlanar=nonPlanar||std::abs(geometry::Dot(b[i+1]-a[i],normal))>tolerance.modelLinearMm;
         if(face.Orientation()==TopAbs_REVERSED)normal=-normal;normals.push_back(normal);
+    }
+    if(nonPlanar) {
+        for(int i=1;i+1<n;++i)for(double v:{0.0,.5,1.0}) {
+            const auto across=b[i]-a[i];
+            const auto left=geometry::Cross((a[i]-a[i-1])*(1-v)+(b[i]-b[i-1])*v,across);
+            const auto right=geometry::Cross((a[i+1]-a[i])*(1-v)+(b[i+1]-b[i])*v,across);
+            if(left.Length()<tolerance.numericEpsilon||right.Length()<tolerance.numericEpsilon)return Failed();
+            const auto nl=geometry::Normalized(left),nr=geometry::Normalized(right);
+            if(geometry::Cross(nl,nr).Length()>tolerance.modelAngularRad||geometry::Dot(nl,nr)<0)
+                return Out::Failure(base::MakeError(kThickenFailed,
+                    "ねじれた面が折れ目でつながる帯には、まだ正しい厚みを付けられません。",
+                    "汎用オフセットでは折れ目の厚み面を接合できず、出力時に体積が変わることがあります。"
+                    "帯を折れ目で分割して別部材にするか、平面部材へ近似してください。元の面は保持しています。"));
+        }
+        // A smooth bilinear patch (including redundant collinear stations) still
+        // uses the general offset path. Only unsupported warped creases are refused.
+        return std::nullopt;
     }
     offset.front()=normals.front();offset.back()=normals.back();
     for(int i=1;i+1<n;++i) {

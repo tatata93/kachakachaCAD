@@ -282,6 +282,10 @@ void V2MainWindow::RefreshApproxForSelectionChange()
     approxInput_ = kachakacha::v2::app::WithApproxSourcesToggled(approxInput_, accepted);
     MirrorApproxSourcesToSelection();
     RefreshApproxAll();
+    SetStatus(approxInput_.sources.empty()
+        ? QStringLiteral("近似: 面か立体を選んでください。")
+        : QStringLiteral("近似: 対象 %1つ。右の設定と下見を確認し、Enterで確定します。")
+              .arg(approxInput_.sources.size()));
 }
 
 //! 「近似」を押した。1度目は道具を構えて棚を出し、2度目は確定。
@@ -367,7 +371,9 @@ void V2MainWindow::EndApprox(bool keepTool)
     approxOutcomes_.clear();
     approxEvaluations_.clear();
     approxDefinitions_.clear();
-    approxMirror_.clear();
+    // 取消後も最後の対象で再開できる。選択との差分も同じ対象を保持し、
+    // 再選択時に残っていた対象を誤って解除することを防ぐ。
+    approxMirror_ = keepTool ? approxInput_.sources : std::vector<EntityId>{};
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();

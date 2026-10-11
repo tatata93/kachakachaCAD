@@ -670,7 +670,7 @@ bool V2LoopFacesTool::ReopenRecent()
     }
     // 面にするは作図の道具。製作モードの棚から「開いて直す」を押しても、作図へ移ってから構える
     // (製作モードのまま構えると、帯は製作の道具なのに右は面にするの棚、という食い違いになる。
-    // オーナーの画面 2026-09-29)。モードを替えると道具は解かれるが、直前の記録は残る。
+    // オーナーの画面 2026-09-29)。モードを替えると直前の記録も片づくので、上で控えてから移る。
     if (window_.Mode() != kachakacha::v2::app::UiMode::Drawing) {
         window_.SetMode(kachakacha::v2::app::UiMode::Drawing);
     }

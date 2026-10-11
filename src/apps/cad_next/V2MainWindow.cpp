@@ -386,7 +386,7 @@ void V2MainWindow::EndArmedTools()
     if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
     if (gptFabrication_ != nullptr) { gptFabrication_->End(); }
     if (gptSurface_ != nullptr) { gptSurface_->End(); }
-    if (loopFaces_ != nullptr) { loopFaces_->Clear(); }
+    if (loopFaces_ != nullptr) { loopFaces_->End(); }
     if (viewport_ != nullptr) {
         // 道具が消し忘れた札・下見・拾いの構えを念のため全部消す。
         viewport_->HideToolPreview();

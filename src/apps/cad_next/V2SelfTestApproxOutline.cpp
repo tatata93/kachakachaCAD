@@ -2,6 +2,9 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2FabricationDock.h"
+#include "V2LoopFacesTool.h"
+#include "V2OperationPanelHost.h"
+#include "V2Ribbon.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/FabricationEvaluate.h"
@@ -24,6 +27,87 @@
 namespace kachakacha::v2::selftest {
 bool MakeCurvedGuideSurface(V2MainWindow& window);
 namespace {
+bool QuickFieldsVisible(V2MainWindow& window)
+{
+    for(const char* id:{"fabricationPartCount","fabricationTolerance","fabricationDirection","fabricationAdaptiveSpacing"}) {
+        auto* field=window.findChild<QWidget*>(QString::fromLatin1(id));
+        if(!Explain(id,field && field->isVisible()))return false;
+    }
+    return true;
+}
+bool SwitchAfterFaceCreation(V2MainWindow& window,int route)
+{
+    if(!MakeCurvedGuideSurface(window))return false;
+    const auto source=window.Viewport().Selection();
+    const auto before=window.Session().GetDocument().Snapshot().entities;
+    if(!DrawRectangleByHand(window))return false;
+    app::SelectionSet wires;
+    for(const auto& entity:window.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==domain::EntityKind::Wire
+            && std::none_of(before.begin(),before.end(),[&](const auto& old){return old.id==entity.id;}))
+            wires.entityIds.push_back(entity.id);
+    // 実際に「面にする」を確定し、直前の操作を表示した状態から近似へ移る。
+    window.Viewport().SetSelection(wires);
+    window.ActivateCommand("surface.from_lines");
+    (void)window.HandleToolKey(Qt::Key_Return,nullptr);
+    if(!Explain("面作成の直前操作が残る",window.LoopFacesTool().HasRecent()))return false;
+    const auto revision=window.Session().GetDocument().Revision();
+    if(route!=0) {
+        window.SetMode(app::UiMode::Fabrication);
+        if(!Explain("モード切替後は前の操作でなくツール一覧",window.OperationHost().CurrentShelf()==app::Shelf::None))return false;
+    }
+    window.Viewport().SetSelection(route==2 ? app::SelectionSet{} : source);
+    if(route==0)window.ActivateCommand("fabrication.create");
+    else if(!window.Ribbon().ClickCategory(QStringLiteral("近似"))
+        || !window.Ribbon().ClickTool(QStringLiteral("近似")))return false;
+    if(route==2)window.Viewport().SetSelection(source);
+    QApplication::processEvents();
+    if(!Explain("近似の下見を表示",window.Viewport().ToolPreviewFaceCount()>0))return false;
+    if(!Explain("右ペインも近似へ切り替わる",
+        window.OperationHost().CurrentShelf()==app::Shelf::Fabrication
+        && !window.LoopFacesTool().HasRecent()))return false;
+    if(!QuickFieldsVisible(window) || !Explain("ツール切替で面と履歴は変更しない",
+        window.Session().GetDocument().Revision()==revision))return false;
+    auto& dock=window.FabricationDock();
+    dock.SetEqualPartCount(7);
+    auto* adaptive=window.findChild<QCheckBox*>(QStringLiteral("fabricationAdaptiveSpacing"));
+    adaptive->setChecked(true);
+    dock.SetSplitAxisIndex(1);dock.SetSplitAxisIndex(0);
+    auto* deviation=window.findChild<QDoubleSpinBox*>(QStringLiteral("fabricationTolerance"));
+    deviation->setValue(.25);
+    if(!Explain("表示中の日常設定で実際の下見を変更",
+        dock.Choice().equalPartCount==7 && dock.Choice().adaptiveSpacing
+        && window.ApproxOutcomes()[1].partCount==7
+        && window.Viewport().ToolPreviewFaceCount()>0))return false;
+    auto* details=window.findChild<QPushButton*>(QStringLiteral("fabricationDetailsToggle"));
+    details->click();details->click();
+    (void)window.HandleToolKey(Qt::Key_Escape,nullptr);
+    if(!Explain("取消しても近似と日常設定を維持",window.ApproxShelfShown() && QuickFieldsVisible(window)))return false;
+    // 画面で対象を解除し、同じ対象を選び直す二つの選択イベント。
+    window.Viewport().SetSelection({});
+    window.Viewport().SetSelection(source);
+    if(!Explain("取消後に対象を選び直して下見を再表示",window.Viewport().ToolPreviewFaceCount()>0
+        && window.Session().GetDocument().Revision()==revision
+        && !window.StatusText().contains(QStringLiteral("やめました"))))return false;
+    const QString output=qEnvironmentVariable("KACHACAD_APPROX_UI_OUTPUT");
+    if(!output.isEmpty() && route==1) {
+        window.resize(1600,1000);window.Viewport().SetViewDirection(ViewDirection::Isometric);
+        window.Viewport().FitToDocument();QApplication::processEvents();
+        const QString suffix=window.Theme()==UiTheme::Windows95 ? QStringLiteral("-win95.png") : QStringLiteral("-normal.png");
+        if(!window.grab().save(output+suffix))return false;
+    }
+    return QuickFieldsVisible(window);
+}
+bool SwitchAfterFaceCreationCases(V2MainWindow& window)
+{
+    for(const auto theme:{UiTheme::Normal,UiTheme::Windows95})for(int route=0;route<3;++route) {
+        window.RunCommand("file.new");window.ApplyTheme(theme);
+        Note(QStringLiteral("面作成→近似: theme=%1 route=%2").arg(static_cast<int>(theme)).arg(route).toUtf8().constData());
+        if(!SwitchAfterFaceCreation(window,route))return false;
+    }
+    window.ApplyTheme(UiTheme::Normal);
+    return true;
+}
 bool QuickSettings(V2MainWindow& window)
 {
     if(!MakeCurvedGuideSurface(window))return false;
@@ -31,10 +115,7 @@ bool QuickSettings(V2MainWindow& window)
     auto* details=window.findChild<QPushButton*>(QStringLiteral("fabricationDetailsToggle"));
     auto* method=window.findChild<QComboBox*>(QStringLiteral("fabricationMethod"));
     if(!details || !method || !Explain("方式は通常隠れている",!details->isChecked() && !method->isVisible()))return false;
-    for(const char* id:{"fabricationPartCount","fabricationTolerance","fabricationDirection","fabricationAdaptiveSpacing"}) {
-        auto* field=window.findChild<QWidget*>(QString::fromLatin1(id));
-        if(!Explain(id,field && field->isVisible()))return false;
-    }
+    if(!QuickFieldsVisible(window))return false;
     if(!Explain("GPT製作近似の新規入口を廃止",!app::FindCommand("fabrication.gpt_create")
         && !app::FindCommand("fabrication.gpt_from_face") && app::FindCommand("surface.gpt_create")))return false;
     window.FabricationDock().SetEqualPartCount(7);
@@ -363,7 +444,8 @@ bool CheckPracticalUnfold(V2MainWindow& window,const app::FabricationEvaluation&
 }
 std::vector<SelfTestCase> ApproxOutlineCases()
 {
-    std::vector<SelfTestCase> cases{{"HP-AP-QUICK 日常設定詳細折畳みと実面下見とGPT製作入口廃止",QuickSettings}};
+    std::vector<SelfTestCase> cases{{"HP-AP-QUICK 日常設定詳細折畳みと実面下見とGPT製作入口廃止",QuickSettings},
+        {"HP-AP-SWITCH 面作成直後から近似へ移ると日常設定が表示される",SwitchAfterFaceCreationCases}};
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE"))
         cases.push_back({"HP-AP-OUTLINE-115 元の実曲面を5方向と等間隔自動間隔で近似生成",OwnerOutline});
     return cases;

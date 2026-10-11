@@ -3,6 +3,7 @@
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include <cmath>
 #include <cstring>
@@ -19,6 +20,11 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <gp_Pln.hxx>
+#include <gp_Circ.hxx>
 #endif
 using namespace kachakacha::v2;
 using test::Require;
@@ -63,6 +69,41 @@ KACHA_V2_TEST(thicken_quality, rim_with_impossible_offset_is_rejected)
     Require(!solid.HasValue(),"self-intersecting simple offset must not become a part");
     Require(!solid.Diagnostics().empty()&&!solid.Diagnostics().front().detailsJa.empty(),"failure retains an actionable diagnostic");
     Require(kernel::CachedShapeCount()==before,"rejected thickness leaves no orphaned shape");
+}
+KACHA_V2_TEST(thicken_quality, planar_to_steep_plane_has_full_wedge_and_safe_roundtrip)
+{
+    auto face=BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,10),gp_Dir(0,0,1)),-1,1,-1,1).Face();
+    const double angle=75*std::acos(-1.0)/180;
+    for(int reverse=0;reverse<2;++reverse) {
+        if(reverse)face.Reverse();
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        const auto made=kernel::ThickenSurfaceToPlane(source,{0,0,0},{0,-std::sin(angle),std::cos(angle)},{});
+        if(!made.HasValue())std::cout<<made.FirstSummaryJa()<<' '<<made.FirstDetailsJa()<<'\n';
+        Require(made.HasValue(),"steep target receives the entire planar source, including reversed input");
+        test::RequireNear(made.Value().volumeMm3,40,1e-6,"independent wedge volume: area 4 times mean height 10");
+        const auto checked=kernel::CheckSolidForExport(made.Value().handle,1e-6);
+        Require(checked.HasValue()&&checked.Value().Ok(),"full manifold and self-intersection check");
+        Require(kernel::OutputStep({made.Value().handle}).HasValue(),"wedge STEP readback");
+        Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"source BRep preserved");
+        kernel::ReleaseShape(made.Value().handle);kernel::ReleaseShape(source);
+    }
+}
+KACHA_V2_TEST(thicken_quality, target_crossing_circle_boundary_is_rejected_without_leaks)
+{
+    const auto edge=BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0,0,1),gp_Dir(0,0,1)),3)).Edge();
+    const auto face=BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge).Wire(),true).Face();
+    const auto source=kernel::StoreShape(face);const auto count=kernel::CachedShapeCount();
+    const auto made=kernel::ThickenSurfaceToPlane(source,{0,0,0},{1,0,1},{});
+    Require(!made.HasValue()&&made.FirstDiagnostic().code==kernel::kThickenBadTarget,
+        "a periodic boundary crosses the plane between its topological vertices");
+    Require(kernel::CachedShapeCount()==count,"rejected source leaves no result");kernel::ReleaseShape(source);
+}
+KACHA_V2_TEST(thicken_quality, curved_to_plane_refuses_unreachable_normal_extrusion)
+{
+    const auto source=Revolved({{16,0,0},{16,0,70}});const auto count=kernel::CachedShapeCount();
+    const auto made=kernel::ThickenSurfaceToPlane(source,{0,0,-5},{0,0,1},{});
+    Require(!made.HasValue()&&!made.FirstDetailsJa().empty(),"radial offset cannot fill down to a horizontal plane");
+    Require(kernel::CachedShapeCount()==count,"no false successful tube");kernel::ReleaseShape(source);
 }
 KACHA_V2_TEST(thicken_quality, folded_band_has_exact_miter_thickness_and_portable_step)
 {

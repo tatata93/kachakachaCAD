@@ -13,7 +13,11 @@
 #include "kachakacha/kernel/OcctRevolvedThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <Bnd_Box.hxx>
 #include <BRepGProp.hxx>
 #include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepLib.hxx>
@@ -22,12 +26,15 @@
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
+#include <GeomLib_IsPlanarSurface.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
@@ -36,6 +43,8 @@
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Trsf.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
@@ -70,13 +79,6 @@ namespace {
         }
     }
     return edges;
-}
-
-[[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
-{
-    GProp_GProps properties;
-    detail::VolumeProperties(shape, properties);
-    return std::abs(properties.Mass());
 }
 
 //! 面を法線方向へずらした面(シェル)を作る。中央付け・内側付けの下ごしらえ。
@@ -227,28 +229,16 @@ struct PlaneReach {
 {
     using Out = Result<PlaneReach>;
     PlaneReach reach;
-    bool positive = false;
-    bool negative = false;
-    int vertices = 0;
-    for (TopExp_Explorer explorer(face, TopAbs_VERTEX); explorer.More(); explorer.Next()) {
-        const gp_Pnt point = BRep_Tool::Pnt(TopoDS::Vertex(explorer.Current()));
-        const geometry::Vector3 p{point.X(), point.Y(), point.Z()};
-        const double distance = Dot(p - origin, unitNormal);
-        ++vertices;
-        if (distance > toleranceMm) {
-            positive = true;
-        } else if (distance < -toleranceMm) {
-            negative = true;
-        }
-        if (std::abs(distance) > reach.maximumMm) {
-            reach.maximumMm = std::abs(distance);
-            reach.farthest = p;
-            reach.side = distance >= 0.0 ? 1 : -1;
-        }
-    }
-    if (vertices == 0) {
-        return Out::Failure(MakeError(kThickenBadTarget, "面に頂点がありません。", {}));
-    }
+    // Measure the entire boundary, including circular edges without extrema vertices.
+    gp_Trsf local;local.SetTransformation(gp_Ax3(ToPoint(origin),gp_Dir(ToVector(unitNormal))));
+    const auto transformed=BRepBuilderAPI_Transform(face,local,false).Shape();
+    Bnd_Box bounds;BRepBndLib::AddOptimal(transformed,bounds,false,false);
+    if(bounds.IsVoid())return Out::Failure(MakeError(kThickenBadTarget,"面の範囲を測れません。",{}));
+    double x0,y0,z0,x1,y1,z1;bounds.Get(x0,y0,z0,x1,y1,z1);
+    const bool positive=z1>toleranceMm,negative=z0<-toleranceMm;
+    reach.maximumMm=std::max(std::abs(z0),std::abs(z1));
+    reach.side=positive?1:-1;
+    reach.farthest=origin+unitNormal*(reach.maximumMm*reach.side);
     if (positive && negative) {
         return Out::Failure(MakeError(kThickenBadTarget,
             "面が相手の平面をまたいでいます。",
@@ -298,6 +288,14 @@ Result<ThickenedSolid> ThickenSurfaceToPlane(modeling::KernelShapeHandle sourceS
             "元になる面がありません。",
             "先に形状ガイドで面を作ってから、平面まで立体にしてください。"));
     }
+    try {
+    TopExp_Explorer sourceFaces(face,TopAbs_FACE);
+    if(!sourceFaces.More())return Out::Failure(MakeError(kThickenBadTarget,"元になる面がありません。",{}));
+    const auto sourceFace=TopoDS::Face(sourceFaces.Current());sourceFaces.Next();
+    const GeomLib_IsPlanarSurface planar(BRep_Tool::Surface(sourceFace),tolerance.modelLinearMm);
+    if(sourceFaces.More()||!planar.IsPlanar())return Out::Failure(MakeError(kThickenBadTarget,
+        "平面までの立体化は、1枚の平らな面で使用してください。",
+        "曲面や折れた面の法線は場所で変わるため、平面まで一様には届きません。曲面には厚みを数値で指定してください。"));
     const geometry::Vector3 unitNormal = planeNormal * (1.0 / planeNormal.Length());
     const auto reach = MeasureReach(face, planeOrigin, unitNormal,
         std::max(tolerance.modelLinearMm, 1.0e-6));
@@ -306,14 +304,15 @@ Result<ThickenedSolid> ThickenSurfaceToPlane(modeling::KernelShapeHandle sourceS
     }
     // 平面へ向かう向き。面の法線がそちらを向いていなければ、負の厚みで膨らませる。
     const geometry::Vector3 toward = unitNormal * (-static_cast<double>(reach.Value().side));
-    const double sign = Dot(MiddleNormal(face), toward) >= 0.0 ? 1.0 : -1.0;
-    // 斜めに届く分を見込んで余裕を持たせ、平面で切り落とす。
-    const double thickness = sign * (reach.Value().maximumMm * 2.5 + 1.0);
-    const auto built = ThickSolid(face, thickness);
-    if (!built.HasValue()) {
-        return Out::Failure(built.Diagnostics());
-    }
-    try {
+    const auto sourceNormal=MiddleNormal(face);
+    const double cosine=Dot(sourceNormal,toward);
+    if(std::abs(cosine)<=std::max(tolerance.modelAngularRad,1e-9))return Out::Failure(MakeError(kThickenBadTarget,
+        "面の法線方向では相手の平面に届きません。","相手の平面または元の面の向きを変更してください。"));
+    // Exact planar reach, including steeply inclined targets. A fixed multiplier
+    // can leave part of the source short of the target while still making a solid.
+    const double length=(reach.Value().maximumMm+std::max(tolerance.modelLinearMm*10,1e-5))/std::abs(cosine);
+    BRepPrimAPI_MakePrism prism(face,ToVector(sourceNormal*(cosine>0?length:-length)),true);
+    if(!prism.IsDone())return Out::Failure(MakeError(kThickenFailed,"平面へ向かう立体を作れませんでした。",{}));
         const double margin = std::max(reach.Value().maximumMm * 10.0, 1000.0);
         const gp_Pln plane(ToPoint(planeOrigin), gp_Dir(ToVector(unitNormal)));
         BRepBuilderAPI_MakeFace maker(plane, -margin, margin, -margin, margin);
@@ -327,22 +326,29 @@ Result<ThickenedSolid> ThickenSurfaceToPlane(modeling::KernelShapeHandle sourceS
             return Out::Failure(MakeError(kThickenTrimFailed,
                 "相手の平面で切るための領域を作れませんでした。", {}));
         }
-        BRepAlgoAPI_Common common(built.Value(), halfSpace.Solid());
+        TopTools_ListOfShape arguments,tools;arguments.Append(prism.Shape());tools.Append(halfSpace.Solid());
+        BRepAlgoAPI_Common common;common.SetArguments(arguments);common.SetTools(tools);common.SetNonDestructive(true);
         common.Build();
         if (!common.IsDone()) {
             return Out::Failure(MakeError(kThickenTrimFailed,
                 "相手の平面で切れませんでした。", {}));
         }
-        const TopoDS_Shape result = common.Shape();
-        const double volume = VolumeOf(result);
-        if (!(volume > 0.0)) {
+        TopExp_Explorer solids(common.Shape(),TopAbs_SOLID);
+        if(!solids.More())return Out::Failure(MakeError(kThickenTrimFailed,"平面で切った結果、立体が残りませんでした。",{}));
+        auto result=TopoDS::Solid(solids.Current());solids.Next();
+        if(solids.More()||!BRepLib::OrientClosedSolid(result))return Out::Failure(MakeError(kThickenTrimFailed,
+            "1つの閉じた立体にできませんでした。","面を分けて作成してください。"));
+        const auto handle=StoreShape(result);
+        const auto checked=CheckSolidForExport(handle,tolerance.modelLinearMm);
+        if (!checked.HasValue()||!checked.Value().Ok()) {
+            ReleaseShape(handle);
             return Out::Failure(MakeError(kThickenTrimFailed,
-                "相手の平面で切ったら、何も残りませんでした。",
-                "面の法線が平面と反対を向いているか、面が平面へ届きません。"));
+                "平面までの立体が安全検査に通らないため、部品を作りませんでした。",
+                checked.HasValue()?"閉鎖性・法線・体積・自己交差を確認してください。":checked.FirstDetailsJa()));
         }
         ThickenedSolid made;
-        made.handle = StoreShape(result);
-        made.volumeMm3 = volume;
+        made.handle = handle;
+        made.volumeMm3 = checked.Value().volumeMm3;
         made.thicknessMm = reach.Value().maximumMm;
         made.edges = EdgesOf(result, tolerance);
         return Out::Success(std::move(made));

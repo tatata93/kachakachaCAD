@@ -32,7 +32,7 @@ namespace {
 [[nodiscard]] std::string ReadFile(const std::filesystem::path& path)
 {
     std::ifstream stream(path, std::ios::binary);
-    Require(stream.good(), "読める: " + path.string());
+    Require(stream.good(), "読める: " + kachakacha::v2::io::FromPath(path));
     std::ostringstream buffer;
     buffer << stream.rdbuf();
     return buffer.str();

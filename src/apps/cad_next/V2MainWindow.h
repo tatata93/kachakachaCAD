@@ -759,8 +759,8 @@ public:
         int initial)>
         guideChoiceChooser_;
     //! id で指した線から面を作る(固定などが呼ぶ)。作り方は「おまかせ」(CreateGuideSurfaceFromSelection)と同じ。
-    kachakacha::v2::base::EntityId CreateGuideSurfaceFromWires(
-        const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label);
+    kachakacha::v2::base::EntityId CreateGuideSurfaceFromWires(const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label,
+        const kachakacha::v2::geometry::Vector3& normalPoint = {}, const kachakacha::v2::geometry::Vector3& expectedNormal = {});
     //! 出来た面の handle と境界。文書ではなく画面側が覚える。
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> guideShapes_;
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> guideEdges_;

@@ -17,6 +17,8 @@
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <QString>
 
@@ -31,6 +33,54 @@
 namespace {
 
 using kachakacha::v2::base::EntityId;
+
+bool StraightBandRails(const std::vector<kachakacha::v2::geometry::Vector3>& a,
+    const std::vector<kachakacha::v2::geometry::Vector3>& b)
+{
+    using namespace kachakacha::v2::geometry;
+    if (a.size()<3 || a.size()!=b.size()) return false;
+    const auto da=a.back()-a.front(),db=b.back()-b.front();
+    if (da.LengthSquared()<1e-18 || db.LengthSquared()<1e-18) return false;
+    for (std::size_t i=1;i+1<a.size();++i) {
+        const double ta=Dot(a[i]-a.front(),da)/da.LengthSquared();
+        const double tb=Dot(b[i]-b.front(),db)/db.LengthSquared();
+        if (ta<0 || ta>1 || tb<0 || tb>1 || std::abs(ta-tb)>1e-10
+            || Distance(a[i],a.front()+da*ta)>1e-9
+            || Distance(b[i],b.front()+db*tb)>1e-9) return false;
+    }
+    return true;
+}
+
+// Carry the source face's oriented side through the rigid folding of each band.
+// The geometric rail normal alone is insufficient: split axes can reverse it.
+kachakacha::v2::geometry::Vector3 FrozenBandNormal(
+    const kachakacha::v2::app::FabricationEvaluation& evaluated, std::size_t panel,
+    const std::vector<kachakacha::v2::geometry::Vector3>& a,
+    const std::vector<kachakacha::v2::geometry::Vector3>& b,
+    const std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle>& shapes)
+{
+    using namespace kachakacha::v2;
+    for (const auto& face : evaluated.bandFaces) {
+        const auto count = static_cast<std::size_t>(face.mesh.BandCount());
+        if (panel >= count) { panel -= count; continue; }
+        const auto found = shapes.find(face.entityId.ToString());
+        if (found == shapes.end() || a.size() < 2 || b.size() != a.size()) return {};
+        const auto& sourceA = face.mesh.world[panel];
+        const auto& sourceB = face.mesh.world[panel + 1];
+        const std::size_t i = (a.size() - 1) / 2;
+        const auto sourceFace = face.faceIndex ? kernel::OutputFace(found->second, *face.faceIndex)
+            : base::Result<modeling::KernelShapeHandle>::Success(found->second);
+        if (!sourceFace.HasValue()) return {};
+        const auto frame = kernel::OutputSurfaceFrame(sourceFace.Value(),
+            (sourceA[i] + sourceB[i] + sourceA[i+1] + sourceB[i+1]) * .25);
+        if (face.faceIndex) kernel::ReleaseShape(sourceFace.Value());
+        if (!frame.HasValue()) return {};
+        const auto sourceNormal = geometry::Cross(sourceB[i] - sourceA[i], sourceA[i+1] - sourceA[i]);
+        const double sign = geometry::Dot(sourceNormal, frame.Value().normal) < 0 ? -1 : 1;
+        return geometry::Cross(b[i] - a[i], a[i+1] - a[i]) * sign;
+    }
+    return {};
+}
 
 //! 固定する近似モデル 1 つぶんの写し。文書へ足すと entities / features の並びが作り直され、
 //! ポインタは指す先を失う(実際にそれで固定の途中で落ちた)。使うものは先に写しておく。
@@ -452,13 +502,21 @@ bool V2MainWindow::FreezeWithDefinition(
         session_->GetDocument(), "固定(" + stateName + ")");
     // 持ち上げ 0 で取る。画面では帯を離して見せるが、固定するのは本当の位置。
     const auto rails = kachakacha::v2::app::FoldedRailsOf(definition, evaluated, 0.0);
+    auto sourceShapes = guideShapes_;
+    sourceShapes.insert(partShapes_.begin(), partShapes_.end());
     const auto selected=SelectedPartNumbers();
     for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
         if (!selected.empty() && std::find(selected.begin(),selected.end(),band/2)==selected.end()) { continue; }
         const std::string label = modelName + " 部材"
             + std::to_string(band / 2 + 1) + " (" + stateName + ")";
-        const auto bottom = AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str());
-        const auto top = AddPlainWire(PolylineOf(rails[band + 1]), (label + " 上").c_str());
+        // Preserve correspondence while removing redundant subdivisions of an
+        // exactly straight band. Hundreds of collinear B-Rep edges made even a
+        // rectangular cylinder panel need minutes for offset/fuse validation.
+        const bool straight = StraightBandRails(rails[band], rails[band+1]);
+        const auto bottomPoints = straight ? std::vector{rails[band].front(),rails[band].back()} : rails[band];
+        const auto topPoints = straight ? std::vector{rails[band+1].front(),rails[band+1].back()} : rails[band+1];
+        const auto bottom = AddPlainWire(PolylineOf(bottomPoints), (label + " 下").c_str());
+        const auto top = AddPlainWire(PolylineOf(topPoints), (label + " 上").c_str());
         if (bottom.IsNil() || top.IsNil()) {
             return false;
         }
@@ -477,7 +535,15 @@ bool V2MainWindow::FreezeWithDefinition(
         // 面: 2本のレールを断面にしたルールド面。作り方はワイヤーを指すので、
         // 開き直しても作り直せる。
         AdoptCurrentDocument();
-        const auto surfaceId = CreateGuideSurfaceFromWires({bottom, top}, label + " 近似面");
+        const auto normal = FrozenBandNormal(evaluated, band / 2, rails[band], rails[band+1], sourceShapes);
+        if (normal.LengthSquared() < 1e-18) {
+            SetStatus(QStringLiteral("生成面: 元の面の向きを判定できません。面の形と参照を確認してください。"));
+            return false;
+        }
+        const std::size_t mid = (rails[band].size() - 1) / 2;
+        const auto point = (rails[band][mid] + rails[band+1][mid]
+            + rails[band][mid+1] + rails[band+1][mid+1]) * .25;
+        const auto surfaceId = CreateGuideSurfaceFromWires({bottom, top}, label + " 近似面", point, normal);
         if (surfaceId.IsNil()) {
             return false;
         }

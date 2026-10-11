@@ -166,6 +166,7 @@ namespace {
     const std::vector<SelfTestCase> loopFaces = LoopFacesCases();
     cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
     const auto outlines=ApproxOutlineCases();cases.insert(cases.end(),outlines.begin(),outlines.end());
+    const auto practical=PracticalCases();cases.insert(cases.end(),practical.begin(),practical.end());
     const auto gptFabrication = GptFabricationCases();
     cases.insert(cases.end(), gptFabrication.begin(), gptFabrication.end());
     const auto gptSurface = GptSurfaceCases();

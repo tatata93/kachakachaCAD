@@ -55,11 +55,14 @@ namespace {
     const QString& snapshot)
 {
     if (!window.OpenDocumentFile(path)) {
-        std::cerr << "開けませんでした: " << path.toStdString() << '\n';
+        std::cerr << "開けませんでした: " << path.toStdString() << '\n'
+                  << window.StatusText().toStdString() << '\n';
         return 5;
     }
     std::cout << "opened " << path.toStdString() << " entities="
               << window.Session().GetDocument().Snapshot().entities.size() << '\n';
+    if (!window.RebuildProblems().isEmpty())
+        std::cerr << "rebuild diagnostics: " << window.RebuildProblems().toUtf8().constData() << '\n';
     window.Viewport().FitToDocument();
     if (snapshot.isEmpty()) {
         return -1;

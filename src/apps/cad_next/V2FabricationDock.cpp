@@ -566,6 +566,7 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     fidelity_->setValue(6.0);
     form_->addRow(QStringLiteral("再現度"), fidelity_);
     thickness_ = MakeMm(formWidget, 0.0, 100.0, 0.1);
+    thickness_->setObjectName(QStringLiteral("fabricationThickness"));
     thickness_->setToolTip(QStringLiteral("数の棚の「板厚」と同じ値です。"));
     form_->addRow(QStringLiteral("板厚"), thickness_);
     deviation_ = MakeMm(formWidget, 0.0, 100.0, 0.05);

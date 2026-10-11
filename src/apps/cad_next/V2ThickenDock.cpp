@@ -63,6 +63,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     auto* form = new QFormLayout();
     thicknessLabel_ = MakePanelSectionTitle(body, QStringLiteral("厚み"));
     thickness_ = new QDoubleSpinBox(body);
+    thickness_->setObjectName(QStringLiteral("thickenAmount"));
     thickness_->setRange(0.0, 1000.0);
     thickness_->setDecimals(3);
     thickness_->setSuffix(QStringLiteral(" mm"));

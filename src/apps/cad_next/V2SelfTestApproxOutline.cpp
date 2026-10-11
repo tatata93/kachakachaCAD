@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QString>
 #include <QWidget>
+#include <algorithm>
 #include <cmath>
 
 namespace kachakacha::v2::selftest {
@@ -272,6 +273,93 @@ bool OwnerOutline(V2MainWindow& window)
     if(!output.isEmpty())window.grab().save(output+"-pattern.png");
     return checked==10;
 }
+}
+namespace {
+bool CheckPlanarPattern(V2MainWindow& window,const app::FabricationEvaluation& result,std::size_t index)
+{
+    if(index>=result.panelOrigins.size())return false;
+    const auto& origin=result.panelOrigins[index];
+    const auto& document=window.Session().GetDocument();
+    const auto* entity=document.FindEntity(origin.entityId);
+    const auto* feature=entity?document.FindFeature(entity->createdBy):nullptr;
+    const auto* definition=feature?std::get_if<domain::CreateGuideSurfaceDefinition>(&feature->definition):nullptr;
+    if(!definition)return Explain("planar practical source is an editable guide",false);
+    const geometry::GeometryTolerance tolerance;
+    const auto table=app::GuideTableFromDefinition(document,window.Session().Scene(),*definition);
+    if(!table.HasValue())return false;
+    const auto request=modeling::ToGuideSurfaceRequest(table.Value(),tolerance);
+    if(!request.HasValue())return false;
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request.Value(),tolerance);
+    if(!analysis.HasValue())return false;
+    const auto built=kernel::BuildGuideSurface(request.Value(),analysis.Value(),tolerance);
+    if(!built.HasValue())return false;
+    const auto boundary=kernel::FaceBoundaryOf(built.Value().handle,origin.faceIndex.value_or(0),tolerance);
+    kernel::ReleaseShape(built.Value().handle);
+    if(!boundary.HasValue())return false;
+    const auto& panel=result.panels[index];
+    if(!Explain("all planar openings retained",panel.openings.size()==boundary.Value().holeLoops.size()))return false;
+    std::vector<std::vector<geometry::CurveSegment>> curves{boundary.Value().outerLoop};
+    curves.insert(curves.end(),boundary.Value().holeLoops.begin(),boundary.Value().holeLoops.end());
+    std::vector<std::vector<geometry::Point2>> loops{panel.outline};
+    loops.insert(loops.end(),panel.openings.begin(),panel.openings.end());
+    std::vector<geometry::Vector3> world,flat;
+    double area=0,perimeter=0;
+    for(std::size_t loop=0;loop<loops.size();++loop) {
+        std::vector<geometry::Point2> clean;
+        for(const auto& point:loops[loop]) {
+            if(clean.empty()||std::hypot(point.u-clean.back().u,point.v-clean.back().v)>1e-9)clean.push_back(point);
+            flat.push_back({point.u,point.v,0});
+        }
+        if(clean.size()>1&&std::hypot(clean.front().u-clean.back().u,clean.front().v-clean.back().v)<1e-9)clean.pop_back();
+        if(clean.size()<3||geometry::HasSelfIntersection(clean,1e-9))return false;
+        area+=(loop? -1:1)*std::abs(geometry::SignedArea(clean));
+        for(std::size_t i=0;i<clean.size();++i) {
+            const auto& a=clean[i];const auto& b=clean[(i+1)%clean.size()];perimeter+=std::hypot(a.u-b.u,a.v-b.v);
+        }
+        for(const auto& curve:curves[loop])for(const auto& sample:geometry::SampleCurve(curve,.01))world.push_back(sample.position);
+    }
+    if(world.size()!=flat.size())return Explain("planar source and pattern correspondence",false);
+    double maximum=0;
+    for(std::size_t anchor=0;anchor<world.size();anchor+=std::max<std::size_t>(1,world.size()/24))
+        for(std::size_t i=0;i<world.size();++i)maximum=std::max(maximum,std::abs(
+            geometry::Distance(world[anchor],world[i])-geometry::Distance(flat[anchor],flat[i])));
+    Note(QStringLiteral("Planar pattern: openings=%1 area=%2 native area=%3 rigid-distance error=%4mm")
+        .arg(panel.openings.size()).arg(area,0,'g',12).arg(boundary.Value().areaMm2,0,'g',12)
+        .arg(maximum,0,'g',8).toUtf8().constData());
+    return Explain("planar dimensions and aperture positions preserved",maximum<1e-7)
+        &&Explain("planar net area agrees within curve chord tolerance",area>0&&std::abs(area-boundary.Value().areaMm2)<perimeter*.02);
+}
+}
+bool CheckPracticalUnfold(V2MainWindow& window,const app::FabricationEvaluation& result)
+{
+    std::size_t offset=0;
+    if(result.panels.empty())return Explain("geometry available for independent unfolding check",false);
+    for(const auto& face:result.bandFaces) {
+        const auto count=static_cast<std::size_t>(face.mesh.BandCount());
+        if(offset+count>result.panels.size())return false;
+        app::FabricationEvaluation single;
+        single.bandMesh=face.mesh;
+        single.panels.assign(result.panels.begin()+offset,result.panels.begin()+offset+count);
+        if(!CheckPanelLengths(single))return false;
+        double flatArea=0,worldArea=0;
+        for(std::size_t band=0;band<count;++band) {
+            const auto& outline=single.panels[band].outline;
+            const std::size_t n=face.mesh.columns;
+            const auto flat=[&](int side,std::size_t i){const auto& p=outline[side?2*n-1-i:i];return geometry::Vector3{p.u,p.v,0};};
+            const auto area=[](auto a,auto b,auto c){return geometry::Cross(b-a,c-a).Length()*.5;};
+            for(std::size_t i=1;i<n;++i) {
+                flatArea+=area(flat(0,i-1),flat(1,i-1),flat(0,i))+area(flat(1,i-1),flat(1,i),flat(0,i));
+                const auto& a=face.mesh.world[band];const auto& b=face.mesh.world[band+1];
+                worldArea+=area(a[i-1],b[i-1],a[i])+area(b[i-1],b[i],a[i]);
+            }
+        }
+        Note(QStringLiteral("展開三角形面積: flat=%1mm2 assembled=%2mm2 difference=%3mm2")
+            .arg(flatArea,0,'g',12).arg(worldArea,0,'g',12).arg(std::abs(flatArea-worldArea),0,'g',8).toUtf8().constData());
+        if(!Explain("triangulated sheet area preserved",std::abs(flatArea-worldArea)<1e-7*std::max(1.0,worldArea)))return false;
+        offset+=count;
+    }
+    for(;offset<result.panels.size();++offset)if(!CheckPlanarPattern(window,result,offset))return false;
+    return Explain("every banded and planar face checked",offset==result.panels.size());
 }
 std::vector<SelfTestCase> ApproxOutlineCases()
 {

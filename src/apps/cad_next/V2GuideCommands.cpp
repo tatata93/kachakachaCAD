@@ -23,6 +23,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/SurfaceCardinality.h"
@@ -328,7 +329,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
 }
 
 kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
-    const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label)
+    const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label,
+    const kachakacha::v2::geometry::Vector3& normalPoint,
+    const kachakacha::v2::geometry::Vector3& expectedNormal)
 {
     // 固定など、選択ではなく id で指した線から面を作る。作り方は「おまかせ」(CreateGuideSurfaceFromSelection)と同じ。
     GuideTableDraft made =
@@ -343,9 +346,35 @@ kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
         SetStatus(QStringLiteral("形状ガイド: 断面が2つ以上要ります。"));
         return kachakacha::v2::base::EntityId{};
     }
-    const auto built = BuildSurfaceFromTable(made.table, true);
+    auto built = BuildSurfaceFromTable(made.table, true);
     if (!built.has_value()) {
         return kachakacha::v2::base::EntityId{};
+    }
+    // Keep the original face's material side, including after saving/rebuilding.
+    // Reversing both rails changes the face orientation without changing its shape.
+    if (expectedNormal.LengthSquared() > 1e-18) {
+        const auto frame = kachakacha::v2::kernel::OutputSurfaceFrame(built->handle, normalPoint);
+        if (!frame.HasValue()) {
+            kachakacha::v2::kernel::ReleaseShape(built->handle);
+            return {};
+        }
+        if (kachakacha::v2::geometry::Dot(frame.Value().normal, expectedNormal) < 0) {
+            kachakacha::v2::kernel::ReleaseShape(built->handle);
+            for (std::size_t row = 0; row < made.table.rows.size(); ++row) {
+                const auto reversed = kachakacha::v2::modeling::ReverseRow(made.table, row);
+                if (!reversed.HasValue()) return {};
+                made.table = reversed.Value();
+            }
+            built = BuildSurfaceFromTable(made.table, true);
+            if (!built.has_value()) return {};
+            const auto corrected = kachakacha::v2::kernel::OutputSurfaceFrame(built->handle, normalPoint);
+            if (!corrected.HasValue()
+                || kachakacha::v2::geometry::Dot(corrected.Value().normal, expectedNormal) <= 0) {
+                kachakacha::v2::kernel::ReleaseShape(built->handle);
+                SetStatus(QStringLiteral("生成面: 元の面と向きをそろえられません。レールのねじれを確認してください。"));
+                return {};
+            }
+        }
     }
     return AdoptGuideSurface(made.table, *built, wireIds, label);
 }

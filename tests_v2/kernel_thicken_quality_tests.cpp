@@ -5,6 +5,21 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include <cmath>
+#include <cstring>
+#include <cstdint>
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include <BRep_Tool.hxx>
+#include <BRepTools.hxx>
+#include <IntCurvesFace_ShapeIntersector.hxx>
+#include <Geom_Surface.hxx>
+#include <TopoDS.hxx>
+#include <TopExp_Explorer.hxx>
+#include <gp_Lin.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#endif
 using namespace kachakacha::v2;
 using test::Require;
 
@@ -67,6 +82,84 @@ KACHA_V2_TEST(thicken_quality, folded_band_has_exact_miter_thickness_and_portabl
     test::RequireNear(solid.Value().volumeMm3,expected,1e-6,"independent two-plane miter volume");
     Require(kernel::OutputStep({solid.Value().handle}).HasValue(),"STEP roundtrip preserves the folded closed solid");
     kernel::ReleaseShape(solid.Value().handle);kernel::ReleaseShape(face.Value().handle);
+}
+KACHA_V2_TEST(thicken_quality, smooth_vase_inward_wall_preserves_exact_outer_skin)
+{
+    const std::vector<geometry::Vector3> points{
+#include "fixtures/vase_profile_points.inc"
+    };
+    modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;
+    chain.segments={geometry::CurveSegment::MakeCubicBSpline(points).Value()};
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::Revolve;
+    request.chains={chain};request.revolveAxisDirection={0,0,1};request.revolveAngleRad=2*std::acos(-1.0);
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,{});
+    Require(analysis.HasValue(),"Smooth photo profile request");
+    const auto surface=kernel::BuildGuideSurface(request,analysis.Value(),{});
+    Require(surface.HasValue(),"Full revolution source");
+    const auto solid=kernel::ThickenSurface(surface.Value().handle,.8,fabrication::ThicknessPlacement::Inside,{});
+    if(!solid.HasValue())for(const auto& diagnostic:solid.Diagnostics())
+        std::cout<<diagnostic.summaryJa<<" / "<<diagnostic.detailsJa<<'\n';
+    Require(solid.HasValue(),"Inward offset of smooth vase is a valid closed outward solid");
+    // Independent SciPy per-knot integration of pi*r^2 dz on the source
+    // spline and its exact .8mm normal offset (tools/integrate_vase.py).
+    test::RequireNear(solid.Value().volumeMm3,24083.255651747582,.0003,
+        "Spline revolution volume agrees with independent meridian integral");
+    TopoDS_Shape outer,wall;
+    Require(kernel::LookupShape(surface.Value().handle,outer)&&kernel::LookupShape(solid.Value().handle,wall),"Vase shapes available");
+    const auto face=TopoDS::Face(TopExp_Explorer(outer,TopAbs_FACE).Current());
+    const auto skin=BRep_Tool::Surface(face);double u0,u1,v0,v1;
+    BRepTools::UVBounds(face,u0,u1,v0,v1);
+    double maximumWallError=0;
+    for(int i=0;i<96;++i) {
+        gp_Pnt point;gp_Vec du,dv;
+        skin->D1(u0+(u1-u0)*(.07+.86*(i%17)/16),v0+(v1-v0)*(i+.5)/96,point,du,dv);
+        auto n=du.Crossed(dv);if(face.Orientation()==TopAbs_REVERSED)n.Reverse();n.Normalize();
+        IntCurvesFace_ShapeIntersector ray;ray.Load(wall,1e-7);
+        ray.Perform(gp_Lin(point,gp_Dir(-n)),-1e-4,1.6);
+        Require(ray.IsDone(),"Normal ray intersects the actual B-Rep wall");
+        double first=1e9,inside=1e9;
+        for(int j=1;j<=ray.NbPnt();++j) {
+            first=std::min(first,std::abs(ray.WParameter(j)));
+            if(ray.WParameter(j)>.01)inside=std::min(inside,ray.WParameter(j));
+        }
+        Require(first<1e-7,"Original outer skin retained on all sampled normals");
+        maximumWallError=std::max(maximumWallError,std::abs(inside-.8));
+    }
+    std::cout<<"Vase normal-ray wall error max="<<maximumWallError<<" mm / 96 samples\n";
+    Require(maximumWallError<2e-6,"Vase .8mm thickness measured on actual surfaces");
+    const auto step=kernel::OutputStep({solid.Value().handle});
+    if(!step.HasValue())for(const auto& diagnostic:step.Diagnostics())
+        std::cout<<diagnostic.summaryJa<<" / "<<diagnostic.detailsJa<<'\n';
+    Require(step.HasValue(),"Vase STEP rereads with identical volume and bounds");
+    // The real sample's separate base intersects the spline wall. Its joined
+    // STEP used to retain a valid B-Rep but fail accurate read-back integration.
+    BRepPrimAPI_MakeCylinder base(29.28301886792453,1.2);
+    BRepAlgoAPI_Fuse joined(wall,base.Shape());joined.Build();joined.SimplifyResult(true,true);
+    Require(joined.IsDone()&&BRepCheck_Analyzer(joined.Shape()).IsValid(),"Joined vase base is valid");
+    const auto joinedHandle=kernel::StoreShape(joined.Shape());
+    const auto joinedStep=kernel::OutputStep({joinedHandle});
+    if(!joinedStep.HasValue())for(const auto& diagnostic:joinedStep.Diagnostics())
+        std::cout<<diagnostic.summaryJa<<" / "<<diagnostic.detailsJa<<'\n';
+    Require(joinedStep.HasValue(),"Joined vase STEP retains original signed volume, closed solid and bounds");
+    kernel::ReleaseShape(joinedHandle);
+    kernel::ReleaseShape(solid.Value().handle);kernel::ReleaseShape(surface.Value().handle);
+}
+KACHA_V2_TEST(thicken_quality, stl_revolution_poles_have_no_collapsed_facets)
+{
+    const auto surface=Revolved({{0,0,0},{5,0,0},{5,0,10},{0,0,10}});
+    const auto stl=kernel::OutputStl({surface},.01);
+    if(!stl.HasValue())for(const auto& diagnostic:stl.Diagnostics())std::cout<<diagnostic.summaryJa<<" / "<<diagnostic.detailsJa<<'\n';
+    Require(stl.HasValue(),"Pole surface STL");const auto& bytes=stl.Value();
+    std::uint32_t count=0;std::memcpy(&count,bytes.data()+80,4);
+    Require(count>0&&bytes.size()==84+50*count,"Nonempty exact binary STL length");
+    for(std::size_t i=0;i<count;++i) {
+        geometry::Vector3 p[3];
+        for(int j=0;j<3;++j) {
+            float xyz[3];std::memcpy(xyz,bytes.data()+84+50*i+12+12*j,12);p[j]={xyz[0],xyz[1],xyz[2]};
+        }
+        Require(geometry::Cross(p[1]-p[0],p[2]-p[0]).Length()>0,"Every written float triangle has positive area");
+    }
+    kernel::ReleaseShape(surface);
 }
 #else
 KACHA_V2_TEST(thicken_quality, missing_kernel_is_reported)

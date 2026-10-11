@@ -19,6 +19,22 @@ constexpr const char* kBadPage = "EXP-P001";
 constexpr const char* kNotPlanar = "EXP-P002";
 constexpr const char* kBadMesh = "EXP-M001";
 
+std::string XmlText(const std::string& value)
+{
+    std::string result;
+    for(const char c:value) {
+        switch(c) {
+        case '&': result += "&amp;"; break;
+        case '<': result += "&lt;"; break;
+        case '>': result += "&gt;"; break;
+        case '\"': result += "&quot;"; break;
+        case '\'': result += "&apos;"; break;
+        default: result += c; break;
+        }
+    }
+    return result;
+}
+
 //! 数を、地域設定に左右されない形で書く。小数点はいつも '.'。
 [[nodiscard]] std::string Number(double value, int digits = 4)
 {
@@ -196,12 +212,13 @@ Result<std::string> WritePatternSvg(const PatternPage& page, const std::string& 
     std::string svg;
     svg += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     svg += "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\"\n";
+    svg += "     xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"\n";
     svg += "     width=\"" + Number(page.widthMm) + "mm\" height=\""
         + Number(page.heightMm) + "mm\"\n";
     // 実寸で出す。viewBox を mm と1対1にしておく。
     svg += "     viewBox=\"0 0 " + Number(page.widthMm) + " " + Number(page.heightMm)
         + "\">\n";
-    svg += "  <title>" + title + "</title>\n";
+    svg += "  <title>" + XmlText(title) + "</title>\n";
 
     // レイヤーごとにまとめる。順番は固定。
     const PatternLine order[]{PatternLine::Outline, PatternLine::Opening, PatternLine::Cut,
@@ -221,7 +238,7 @@ Result<std::string> WritePatternSvg(const PatternPage& page, const std::string& 
             svg += "    <path d=\"" + SvgPathFor(curve.segment, page.heightMm) + "\" style=\""
                 + SvgStyleFor(layer, curve.mountainFold) + "\"";
             if (!curve.label.empty()) {
-                svg += " data-label=\"" + curve.label + "\"";
+                svg += " data-label=\"" + XmlText(curve.label) + "\"";
             }
             svg += "/>\n";
         }

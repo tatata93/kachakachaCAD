@@ -17,6 +17,7 @@
 #include <BRepFill.hxx>
 #include <BRepLib.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepTools.hxx>
 #include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
@@ -203,7 +204,7 @@ CurvedEmbossResult Build(const TopoDS_Face& source, const std::vector<geometry::
     ShapeFix_Solid solidFix(BRepBuilderAPI_MakeSolid(shell).Solid()); solidFix.Perform();
     auto shape=solidFix.Solid();
     Require(BRepCheck_Analyzer(shape).IsValid(), "曲面押し出しが自己交差しています。高さか角度を小さくしてください。");
-    GProp_GProps props; BRepGProp::VolumeProperties(shape,props);
+    GProp_GProps props; detail::VolumeProperties(shape,props);
     const double volume=std::abs(props.Mass());
     Require(volume>std::pow(options.toleranceMm,3), "曲面押し出しの体積がありません。");
     return {StoreShape(shape),volume,error};

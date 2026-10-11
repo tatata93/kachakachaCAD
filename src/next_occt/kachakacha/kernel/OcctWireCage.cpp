@@ -13,6 +13,7 @@
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -171,7 +172,7 @@ Result<std::vector<BuiltCagePart>> BuildWireCageParts(
                 return Out::Failure(solid.Diagnostics());
             }
             GProp_GProps properties;
-            BRepGProp::VolumeProperties(solid.Value(), properties);
+            detail::VolumeProperties(solid.Value(), properties);
             const double volume = std::abs(properties.Mass());
             if (volume <= tolerance.modelLinearMm) {
                 return Out::Failure(MakeError(kCageInvalidSolid,

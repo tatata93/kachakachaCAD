@@ -771,8 +771,11 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctMatchedRuled.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
+    src/next_occt/kachakacha/kernel/OcctMeshPlanarFaces.cpp
+    src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctRevolvedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctMatchedLoft.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
@@ -808,6 +811,15 @@ if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
             TKDESTL
     )
     add_executable(kachakacha_inspect_brep tools/inspect_brep.cpp)
+    add_executable(kachakacha_volume_probe tools/probe_volume.cpp)
+    add_executable(kachakacha_assembly_probe tools/probe_assembly.cpp)
+    target_link_libraries(kachakacha_assembly_probe PRIVATE kachakacha_v2_occt TKBO TKTopAlgo TKBRep TKMath TKernel)
+    target_compile_features(kachakacha_assembly_probe PRIVATE cxx_std_20)
+    target_link_libraries(kachakacha_volume_probe PRIVATE kachakacha_v2_occt TKTopAlgo TKBRep TKMath TKernel)
+    target_compile_features(kachakacha_volume_probe PRIVATE cxx_std_20)
+    add_executable(kachakacha_probe_practical_geometry tools/probe_practical_geometry.cpp)
+    target_link_libraries(kachakacha_probe_practical_geometry PRIVATE kachakacha_v2_occt TKOffset TKBO TKTopAlgo TKBRep TKMath TKernel)
+    target_compile_features(kachakacha_probe_practical_geometry PRIVATE cxx_std_20)
     target_link_libraries(kachakacha_inspect_brep PRIVATE kachakacha_v2_occt TKDESTEP TKBO TKTopAlgo TKBRep TKMath TKernel)
     target_compile_features(kachakacha_inspect_brep PRIVATE cxx_std_20)
     if(MSVC)
@@ -1044,6 +1056,8 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_er_export_tests tests_v2/kernel_er_export_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_export_tests tests_v2/kernel_export_tests.cpp)
+    target_compile_definitions(kachakacha_v2_kernel_export_tests PRIVATE
+        KACHACAD_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests_v2/fixtures")
 endif()
 
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
@@ -1074,6 +1088,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
         src/apps/cad_next/V2SelfTestApproxOutline.cpp
         src/apps/cad_next/V2SelfTestPractical.cpp
+        src/apps/cad_next/V2SelfTestPracticalFreeze.cpp
         src/apps/cad_next/V2SelfTestDome.cpp
         src/apps/cad_next/V2SelfTestGeneration.cpp
         src/apps/cad_next/V2SelfTestGptFabrication.cpp
@@ -1222,6 +1237,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GenerationCommands.cpp
         src/apps/cad_next/V2FabricationGenerationUi.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
+      src/apps/cad_next/V2FreezePlanar.cpp
         src/apps/cad_next/V2GuideCommands.cpp
         src/apps/cad_next/V2GuideTableCommands.cpp
         src/apps/cad_next/V2TreeCommands.cpp

@@ -80,6 +80,19 @@ void RequireCount(std::size_t actual, std::size_t expected, const std::string& w
 
 // ---------------------------------------------------------------- SVG
 
+KACHA_V2_TEST(exportSvg, layer_namespace_and_user_text_are_valid_xml)
+{
+    auto page=SamplePage();page.curves.front().label="Panel <A> & \"B\" 'C'";
+    const auto svg=WritePatternSvg(page,"Roof & <window>");
+    Require(svg.HasValue(),"Export succeeds for XML-sensitive names");
+    Require(svg.Value().find("xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"")!=std::string::npos,
+        "Layer attributes have a declared XML namespace");
+    Require(svg.Value().find("<title>Roof &amp; &lt;window&gt;</title>")!=std::string::npos,
+        "Title is XML text, not markup");
+    Require(svg.Value().find("data-label=\"Panel &lt;A&gt; &amp; &quot;B&quot; &apos;C&apos;\"")!=std::string::npos,
+        "Attribute text preserves quotes and special characters");
+}
+
 KACHA_V2_TEST(exportSvg, 実寸で出る)
 {
     const auto svg = WritePatternSvg(SamplePage(), "テスト型紙");

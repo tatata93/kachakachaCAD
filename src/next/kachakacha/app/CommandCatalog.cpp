@@ -24,6 +24,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneDerivedEntity: return "派生したものを1つ選んでください。";
     case SelectionPredicate::OneOrMoreDerivedEntities: return "派生したものを1つ以上選んでください。";
     case SelectionPredicate::OneFabricationModel: return "製作モデルを1つ選んでください。";
+    case SelectionPredicate::OneOrMoreFabricationModels: return "製作モデルを1つ以上選んでください。";
     case SelectionPredicate::OneFabricationPanel: return "部材を1つ選んでください。";
     case SelectionPredicate::OneOrMorePatterns: return "型紙を1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreSelectedCurves: return "曲線を1つ以上選んでください。";
@@ -653,21 +654,21 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "選んだ線を、近似の実形状へ寄せた「_接続」の線にします。元の線は変えません。",
             true, {"AT-FAB-015"}},
         {"fabrication.freeze_state", "現在状態を固定", CommandMode::Instant, "fab_freeze", "",
-            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            SelectionPredicate::OneOrMoreFabricationModels, "製作モデルを1つ以上選んでください。",
             "いまの状態を固定して、独立したワイヤーや部品にします。", true,
             {"AT-FAB-011"}},
         {"fabrication.freeze_flat", "展開状態(0%)を線にする", CommandMode::Instant, "fab_flat", "",
-            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            SelectionPredicate::OneOrMoreFabricationModels, "製作モデルを1つ以上選んでください。",
             "いまの曲げ具合を変えずに、0%(平らに展開した状態)の輪郭を線として作ります。"
             "近似モデルはそのまま残ります。", true,
             {"AT-FAB-011"}},
         {"fabrication.freeze_target", "目標形状(100%)を固定", CommandMode::Instant, "fab_target",
-            "", SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            "", SelectionPredicate::OneOrMoreFabricationModels, "製作モデルを1つ以上選んでください。",
             "いまの曲げ具合を変えずに、100%(目標の形)の状態を固定して、"
             "固定で作るものの設定どおりに線や部品にします。近似モデルはそのまま残ります。", true,
             {"AT-FAB-011"}},
         {"fabrication.freeze_wires", "輪郭を線にする", CommandMode::Instant, "fab_wires", "",
-            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            SelectionPredicate::OneOrMoreFabricationModels, "製作モデルを1つ以上選んでください。",
             "いまの曲げ状態の輪郭だけを線として作ります(固定で作るものの設定に関わらず"
             "線のみ)。近似モデルはそのまま残ります。", true,
             {"AT-FAB-011"}},

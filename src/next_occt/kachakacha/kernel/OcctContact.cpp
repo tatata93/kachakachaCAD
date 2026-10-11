@@ -9,6 +9,7 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
 #include <ShapeAnalysis_FreeBounds.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
@@ -90,7 +91,7 @@ Result<std::vector<ContactPiece>> ContactSolidPieces(KernelShapeHandle handle, d
     std::vector<ContactPiece> result;
     for (TopExp_Explorer solid(shape, TopAbs_SOLID); solid.More(); solid.Next()) {
         GProp_GProps properties;
-        BRepGProp::VolumeProperties(solid.Current(), properties);
+        detail::VolumeProperties(solid.Current(), properties,true);
         const double volume = std::abs(properties.Mass());
         if (volume <= std::pow(tolerance, 3))
             return Out::Failure(MakeError("KER-CT03", "許容差より小さい領域があります。", "形状または許容差を確認してください。"));

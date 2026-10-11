@@ -138,6 +138,7 @@ V2PatternDock::V2PatternDock(QWidget* parent)
     rowLayout->setContentsMargins(0, 0, 0, 0);
     previous_ = new QPushButton(QStringLiteral("前の紙"), row);
     next_ = new QPushButton(QStringLiteral("次の紙"), row);
+    view_->setToolTip(QStringLiteral("SVG・DXFは表示中の紙を、PDFは全ページを書き出します。"));
     summary_ = new QLabel(row);
     QObject::connect(previous_, &QPushButton::clicked, this,
         [this] { ShowPage(current_ - 1); });

@@ -234,21 +234,20 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     // 相手を順に足す・引く(何個でも。古い文書は相手 1 個)。
-    auto current = base->second;
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> tools;
     for (const auto& tool : definition->tools) {
         const auto other = partShapes_.find(tool.ToString());
-        if (other == partShapes_.end()) {
-            return false;
-        }
-        const auto built = kachakacha::v2::kernel::BuildBoolean(
-            KernelBooleanOperation(kachakacha::v2::app::BooleanKindOfMode(definition->mode)),
-            current, other->second, tolerance);
-        if (!built.HasValue()) {
-            return false;
-        }
-        current = built.Value().handle;
+        if (other == partShapes_.end()) return false;
+        tools.push_back(other->second);
     }
-    partShapes_[output.ToString()] = current;
+    const auto built = kachakacha::v2::kernel::BuildBooleans(
+        KernelBooleanOperation(kachakacha::v2::app::BooleanKindOfMode(definition->mode)),
+        base->second, tools, tolerance);
+    if (!built.HasValue()) {
+        ReportDiagnostics(built.Diagnostics());
+        return false;
+    }
+    partShapes_[output.ToString()] = built.Value().handle;
     return true;
 }
 

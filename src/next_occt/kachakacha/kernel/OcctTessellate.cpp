@@ -6,6 +6,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctMeshPlanarFaces.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBndLib.hxx>
@@ -223,11 +224,12 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
     try {
         const double chosen = deflectionMm > 0.0 ? deflectionMm
                                                  : DeflectionForSize(DiagonalOf(shape));
-        BRepMesh_IncrementalMesh mesh(shape, chosen, Standard_False, 0.12, Standard_True);
+        const auto meshingShape=detail::MeshReadyShape(shape);
+        BRepMesh_IncrementalMesh mesh(meshingShape, chosen, Standard_False, 0.12, Standard_True);
         (void)mesh;
         ShapeMesh made;
         made.closed = IsClosedSolid(shape);
-        CollectTriangles(shape, made);
+        CollectTriangles(meshingShape, made);
         CollectEdges(shape, chosen, made);
         if (isoLinesPerDirection > 0) {
             for (TopExp_Explorer faces(shape, TopAbs_FACE); faces.More(); faces.Next()) {

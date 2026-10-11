@@ -62,6 +62,15 @@ std::optional<base::Result<TopoDS_Shape>> BuildMatchedLoft(
     frame.x=geometry::Normalized(frame.x);
     if(geometry::Dot(rows.back()[0]-first[0],frame.x)<0)frame.x=-frame.x;
     frame.y=geometry::Normalized(first.back()-first.front());
+    const auto startTangent=first[1]-first[0],endTangent=first.back()-first[first.size()-2];
+    if(startTangent.Length()>1e-9&&endTangent.Length()>1e-9
+        &&std::abs(geometry::Dot(geometry::Normalized(startTangent),geometry::Normalized(endTangent)))<1e-10) {
+        // Orthogonal endpoint tangents give the natural section axes. A chord
+        // frame mixes width and height, allowing an eccentric tank's constant
+        // width to bulge while its centre height changes. Reversal swaps these
+        // axes, preserving the same component-wise monotone interpolation.
+        frame.y=geometry::Normalized(startTangent);
+    }
     if(frame.y.Length()<1e-9)return std::nullopt;
     frame.z=geometry::Cross(frame.x,frame.y);
     std::vector<double> stations;

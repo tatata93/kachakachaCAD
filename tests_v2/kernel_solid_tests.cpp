@@ -3,6 +3,9 @@
 // core が入力を調べ(modeling/SolidInput)、核が形を作る。体積を解析解と突き合わせる。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctSolid.h"
+#include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include <array>
 
 #include <cmath>
 #include <string>
@@ -83,6 +86,25 @@ KACHA_V2_TEST(kernel_solid_absent, カーネルが無い版は立体を作らず
 }
 
 #else
+
+KACHA_V2_TEST(kernel_solid, uneven_nose_sections_keep_their_width_envelope)
+{
+    LoftSolidRequest request;
+    for(const auto& row:std::array<std::array<double,4>,9>{{
+        {0,1.6,3,4.5},{3,3.1,3,5},{7,4.8,3.1,6},{13,6.8,3.3,8},
+        {21,8.5,3.6,11.5},{31,9.8,4,16.5},{42,10.7,4.6,21.2},
+        {54,11.15,5.2,23.7},{64,11.2,5.4,24}}})
+        request.sections.push_back(Rectangle(-row[1],row[2],row[1],row[3],row[0]));
+    const auto analysis=AnalyzeLoftSolid(request,Tolerance());
+    Require(analysis.HasValue(),"Nose sections accepted");
+    const auto solid=BuildLoftSolid(request,analysis.Value(),Tolerance());
+    Require(solid.HasValue(),"Nose solid built");
+    const auto mesh=kachakacha::v2::kernel::BuildShapeMesh(solid.Value().handle,.005);
+    Require(mesh.HasValue(),"Nose mesh available");
+    for(const auto& t:mesh.Value().triangles)for(const auto& p:t.points)
+        Require(std::abs(p.x)<=11.215&&p.y<=24.015,"Loft cannot balloon beyond the input envelope");
+    kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);
+}
 
 KACHA_V2_TEST(kernel_solid, 回転体の体積がPappusどおりで角度と対称も効く)
 {

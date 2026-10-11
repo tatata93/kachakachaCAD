@@ -14,8 +14,10 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepOffsetAPI_MakePipe.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
+#include <Approx_ParametrizationType.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRep_Builder.hxx>
 #include <GProp_GProps.hxx>
@@ -46,7 +48,7 @@ using Out = Result<SolidBuildResult>;
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return std::abs(properties.Mass());
 }
 
@@ -191,6 +193,10 @@ Result<SolidBuildResult> BuildLoftSolid(const modeling::LoftSolidRequest& reques
     return Guarded([&]() -> Out {
         BRepOffsetAPI_ThruSections loft(Standard_True, Standard_False,
             std::max(tolerance.modelLinearMm, 1.0e-6));
+        // Uneven nose stations must not become a high-degree global polynomial:
+        // it can balloon beyond the widest input and dip between rising roofs.
+        loft.SetMaxDegree(3);
+        loft.SetParType(Approx_ChordLength);
         for (const auto& section : request.sections) {
             auto wire = ToWire(section.segments, tolerance.modelLinearMm);
             if (!wire.HasValue()) {

@@ -20,6 +20,7 @@
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepTools.hxx>
@@ -63,7 +64,7 @@ namespace {
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return std::abs(properties.Mass());
 }
 

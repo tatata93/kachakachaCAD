@@ -9,6 +9,8 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <TopoDS_Shape.hxx>
+#include <BRepTools.hxx>
+#include <sstream>
 #endif
 
 #include <string>
@@ -93,6 +95,51 @@ KACHA_V2_TEST(kernel_boolean_absent, カーネルが無い版は足し引きせ�
 }
 
 #else
+
+KACHA_V2_TEST(kernel_boolean, batch_union_matches_ordered_union_and_preserves_inputs)
+{
+    using kachakacha::v2::kernel::BuildBooleans;
+    const auto a = Box(0, 0, 10, 10, 0, 10);
+    const auto b = Box(5, 0, 15, 10, 0, 10);
+    const auto c = Box(10, 0, 20, 10, 0, 10);
+    const auto serialized = [](KernelShapeHandle handle) {
+        TopoDS_Shape shape;
+        Require(kachakacha::v2::kernel::LookupShape(handle, shape), "input exists");
+        std::ostringstream stream;
+        BRepTools::Write(shape, stream);
+        return stream.str();
+    };
+    const auto aa = serialized(a), bb = serialized(b), cc = serialized(c);
+    const auto batch = BuildBooleans(BooleanOperation::Union, a, {b, c}, 1e-6);
+    Require(batch.HasValue(), batch.FirstSummaryJa());
+    const auto reversed = BuildBooleans(BooleanOperation::Union, c, {b, a}, 1e-6);
+    Require(reversed.HasValue(), reversed.FirstSummaryJa());
+    RequireNear(batch.Value().volumeMm3, 2000, 1e-6, "exact union volume");
+    RequireNear(reversed.Value().volumeMm3, batch.Value().volumeMm3, 1e-6, "input order invariant");
+    RequireNear(batch.Value().previousVolumeMm3, 1000, 1e-6, "original base volume");
+    Require(serialized(a) == aa && serialized(b) == bb && serialized(c) == cc,
+        "batch union preserves all source BREP geometry and topology");
+    const auto ab = BuildBoolean(BooleanOperation::Union, a, b, 1e-6);
+    Require(ab.HasValue(), ab.FirstSummaryJa());
+    const auto sequential = BuildBoolean(BooleanOperation::Union, ab.Value().handle, c, 1e-6);
+    Require(sequential.HasValue(), sequential.FirstSummaryJa());
+    RequireNear(batch.Value().volumeMm3, sequential.Value().volumeMm3, 1e-6, "same result as ordered union");
+}
+
+KACHA_V2_TEST(kernel_boolean, batch_union_redundant_tools_and_missing_inputs)
+{
+    using kachakacha::v2::kernel::BuildBooleans;
+    const auto a = Box(0, 0, 10, 10, 0, 10);
+    const auto inside = Box(2, 2, 4, 4, 2, 2);
+    const auto b = Box(5, 0, 15, 10, 0, 10);
+    const auto useful = BuildBooleans(BooleanOperation::Union, a, {inside, b}, 1e-6);
+    Require(useful.HasValue(), useful.FirstSummaryJa());
+    RequireNear(useful.Value().volumeMm3, 1500, 1e-6, "contained tool does not reject useful batch");
+    const auto unchanged = BuildBooleans(BooleanOperation::Union, a, {inside, inside}, 1e-6);
+    Require(!unchanged.HasValue() && FirstCode(unchanged.Diagnostics()) == "KER-B003", "whole no-change remains rejected");
+    const auto missing = BuildBooleans(BooleanOperation::Union, a, {b, {}}, 1e-6);
+    Require(!missing.HasValue() && FirstCode(missing.Diagnostics()) == "KER-B002", "missing input rejects entire batch");
+}
 
 KACHA_V2_TEST(kernel_boolean, inward_input_is_rejected_instead_of_hidden_by_absolute_volume)
 {

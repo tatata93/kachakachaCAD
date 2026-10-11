@@ -1071,7 +1071,7 @@ std::optional<kachakacha::v2::modeling::WorkPlaneFrame> V2MainWindow::WorkPlaneF
     return frame;
 }
 
-void V2MainWindow::RunThickenSurface()
+void V2MainWindow::RunThickenSurface(double thicknessOverrideMm)
 {
     using kachakacha::v2::fabrication::ThicknessPlacement;
 
@@ -1089,7 +1089,7 @@ void V2MainWindow::RunThickenSurface()
         SetStatus(QStringLiteral("面に厚みを付ける: 先に形状ガイドの面を選んでください。"));
         return;
     }
-    const double thickness = ExtrudeDistanceMm();
+    const double thickness = thicknessOverrideMm > 0 ? thicknessOverrideMm : ExtrudeDistanceMm();
     const ThicknessPlacement placement = thicknessPlacement_;
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     int made = 0;

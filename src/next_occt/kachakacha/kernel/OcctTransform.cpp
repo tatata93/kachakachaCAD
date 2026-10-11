@@ -9,6 +9,7 @@
 
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopoDS_Shape.hxx>
@@ -67,7 +68,7 @@ namespace {
 [[nodiscard]] double SignedVolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return properties.Mass();
 }
 

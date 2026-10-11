@@ -7,6 +7,8 @@
 #include <limits>
 #include <algorithm>
 #include <cmath>
+#include <array>
+#include <map>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -16,13 +18,18 @@
 #include <TopoDS_Vertex.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <ShapeUpgrade_ShapeDivideContinuity.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRep_Tool.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
 #include <STEPControl_Writer.hxx>
 #include <STEPControl_Reader.hxx>
+#include <Standard_Failure.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -71,6 +78,72 @@ Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle, double t
 }
 namespace {
 template<class T> Result<T> Failed() {return Result<T>::Failure(base::MakeError("EXP-P001","出力形状を作れません。","入力形状または配置基準を確認してください。"));}
+using StlTriangle=std::array<Vector3,3>;
+bool Collapsed(const StlTriangle& t) {
+    const double scale=std::max((t[1]-t[0]).LengthSquared(),(t[2]-t[0]).LengthSquared());
+    return Cross(t[1]-t[0],t[2]-t[0]).LengthSquared()<=1e-24*scale*scale;
+}
+std::vector<StlTriangle> StlTriangles(const modeling::ShapeMesh& mesh) {
+    std::vector<StlTriangle> result,splits;
+    const auto rounded=[](Vector3 p){return Vector3{static_cast<float>(p.x),static_cast<float>(p.y),static_cast<float>(p.z)};};
+    for(const auto& t:mesh.triangles) {
+        StlTriangle p{rounded(t.points[0]),rounded(t.points[1]),rounded(t.points[2])};
+        if(!Collapsed(p)){result.push_back(p);continue;}
+        if(p[0]==p[1]||p[1]==p[2]||p[2]==p[0])continue;
+        std::size_t longest=0;
+        for(std::size_t i=1;i<3;++i)
+            if(Distance(p[i],p[(i+1)%3])>Distance(p[longest],p[(longest+1)%3]))longest=i;
+        splits.push_back({p[longest],p[(longest+1)%3],p[(longest+2)%3]});
+    }
+    // A collinear triangle A-M-B can bridge an edge A-B to A-M/M-B.
+    // Removing it alone creates a T-junction. Split its neighbour at the existing
+    // point M, retaining orientation and geometry without filling any opening.
+    for(const auto& split:splits) {
+        const auto count=result.size();
+        for(std::size_t index=0;index<count;++index) {
+            const auto t=result[index];
+            for(std::size_t i=0;i<3;++i) {
+                const auto a=t[i],b=t[(i+1)%3],c=t[(i+2)%3];
+                if(!((a==split[0]&&b==split[1])||(a==split[1]&&b==split[0])))continue;
+                result[index]={a,split[2],c};result.push_back({split[2],b,c});break;
+            }
+        }
+    }
+    return result;
+}
+std::string ClosedStlProblem(const std::vector<StlTriangle>& triangles) {
+    // Check the exact float coordinates that will be serialized, per input part.
+    // B-Rep validity alone can miss a boundary pinched along a coincident edge.
+    std::map<std::array<double,3>,std::size_t> vertices;
+    struct Use {int count=0;int orientation=0;};
+    std::map<std::array<std::size_t,2>,Use> edges;
+    double volume=0;
+    for(const auto& triangle:triangles) {
+        std::array<std::size_t,3> ids;
+        for(std::size_t i=0;i<3;++i) {
+            const auto p=triangle[i];
+            if(!p.IsFinite())return "non-finite coordinate";
+            ids[i]=vertices.emplace(std::array{p.x,p.y,p.z},vertices.size()).first->second;
+        }
+        volume+=Dot(triangle[0],Cross(triangle[1],triangle[2]))/6.0;
+        for(std::size_t i=0;i<3;++i) {
+            const auto a=ids[i],b=ids[(i+1)%3];
+            if(a==b)return "collapsed edge";
+            auto& use=edges[std::array{std::min(a,b),std::max(a,b)}];
+            ++use.count;use.orientation+=a<b?1:-1;
+        }
+    }
+    std::size_t open=0,nonmanifold=0,orientation=0;
+    for(const auto& [edge,use]:edges) {
+        if(use.count==1)++open;
+        else if(use.count!=2)++nonmanifold;
+        else if(use.orientation!=0)++orientation;
+    }
+    if(open||nonmanifold||orientation||!(volume>0))
+        return "open="+std::to_string(open)+" nonmanifold="+std::to_string(nonmanifold)
+            +" winding="+std::to_string(orientation)+" volume="+std::to_string(volume);
+    return {};
+}
 #ifdef KACHACAD_V2_WITH_OCCT
 struct StepSolidFacts {
     int count=0;
@@ -79,23 +152,51 @@ struct StepSolidFacts {
     bool valid=true;
     void Add(const TopoDS_Shape& shape) {
         for(TopExp_Explorer e(shape,TopAbs_SOLID);e.More();e.Next()) {
-            ++count;GProp_GProps props;BRepGProp::VolumeProperties(e.Current(),props);
+            ++count;GProp_GProps props;detail::VolumeProperties(e.Current(),props);
             volume+=props.Mass();valid=valid&&props.Mass()>0&&BRepCheck_Analyzer(e.Current()).IsValid();
             BRepBndLib::AddOptimal(e.Current(),bounds,false,false);
         }
     }
 };
-bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source) {
+bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,std::string& reason) {
+    try {
     if(!source.count)return true; // Explicit surface/curve exports remain supported.
     STEPControl_Reader reader;std::istringstream in(content);
     if(reader.ReadStream("output-validation.step",in)!=IFSelect_RetDone||!reader.TransferRoots())return false;
     StepSolidFacts restored;restored.Add(reader.OneShape());
+    reason="valid="+std::to_string(restored.valid)+" solids="+std::to_string(source.count)+"/"+std::to_string(restored.count)
+        +" volume="+std::to_string(source.volume)+"/"+std::to_string(restored.volume);
     if(!restored.valid||restored.count!=source.count
         ||std::abs(restored.volume-source.volume)>std::max(.001,source.volume*1e-5))return false;
     double a[6],b[6];source.bounds.Get(a[0],a[1],a[2],a[3],a[4],a[5]);
     restored.bounds.Get(b[0],b[1],b[2],b[3],b[4],b[5]);
-    for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4)return false;
+    for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4){reason+=" bound["+std::to_string(i)+"]="+std::to_string(a[i])+"/"+std::to_string(b[i]);return false;}
     return true;
+    }catch(const Standard_Failure& failure){reason=failure.GetMessageString();return false;}
+}
+
+std::string StepText(const std::vector<TopoDS_Shape>& shapes,bool divide) {
+    STEPControl_Writer writer;
+    for(auto shape:shapes) {
+        bool composite=false;
+        if(divide)for(TopExp_Explorer e(shape,TopAbs_FACE);e.More()&&!composite;e.Next()) {
+            BRepAdaptor_Surface surface(TopoDS::Face(e.Current()));
+            composite=surface.NbUIntervals(GeomAbs_C3)>1||surface.NbVIntervals(GeomAbs_C3)>1;
+        }
+        if(composite) {
+            // Exact subdivision of an export copy preserves spline continuity
+            // spans explicitly so STEP read-back can integrate them accurately.
+            BRepBuilderAPI_Copy copy(shape,true,false);
+            ShapeUpgrade_ShapeDivideContinuity split(copy.Shape());
+            split.SetSurfaceCriterion(GeomAbs_C3);split.SetBoundaryCriterion(GeomAbs_C3);
+            split.SetPCurveCriterion(GeomAbs_C3);split.SetTolerance(1e-7);split.Perform();
+            if(split.Result().IsNull()||!BRepCheck_Analyzer(split.Result()).IsValid())return {};
+            shape=split.Result();
+        }
+        if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return {};
+    }
+    std::ostringstream out;if(writer.WriteStream(out)!=IFSelect_RetDone)return {};
+    return out.str();
 }
 gp_Trsf Placement(const OutputPlacement& placement) {
     gp_Trsf trsf;
@@ -221,22 +322,31 @@ Result<CurveSegment> OutputEdge(KernelShapeHandle handle,const Vector3& point) {
 }
 Result<std::string> OutputStep(const std::vector<KernelShapeHandle>& handles) {
 #ifdef KACHACAD_V2_WITH_OCCT
+    std::string stage="元の形の検証";
     try {
         if(handles.empty())return Failed<std::string>();
-        STEPControl_Writer writer;StepSolidFacts source;
+        StepSolidFacts source;std::vector<TopoDS_Shape> shapes;
         for(const auto handle:handles){TopoDS_Shape shape;if(!LookupShape(handle,shape)||shape.IsNull()||!BRepCheck_Analyzer(shape).IsValid())return Failed<std::string>();
             if(TopExp_Explorer(shape,TopAbs_SOLID).More()) {
                 const auto check=CheckSolidForExport(handle,1e-6);
                 if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001","不正な立体は書き出せません。","閉鎖性・内外の向き・自己交差を確認してください。"));
             }
-            source.Add(shape);
-            if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return Failed<std::string>();}
-        std::ostringstream out;if(writer.WriteStream(out)!=IFSelect_RetDone)return Failed<std::string>();
-        if(!StepRetainsSolids(out.str(),source))return Result<std::string>::Failure(base::MakeError(
+            source.Add(shape);shapes.push_back(shape);}
+        auto content=StepText(shapes,false);if(content.empty())return Failed<std::string>();
+        stage="STEPの再読込検証";
+        std::string reason;
+        if(!StepRetainsSolids(content,source,reason)) {
+            content=StepText(shapes,true);
+            if(content.empty()||!StepRetainsSolids(content,source,reason))return Result<std::string>::Failure(base::MakeError(
             "EXP-P003","STEPを再読込すると立体の形または閉鎖性が変わります。",
-            "このSTEPは保存しません。元のKCDを保ち、形状を整理するかSTLを選んでください。"));
-        return Result<std::string>::Success(out.str());
-    }catch(...){return Failed<std::string>();}
+            "このSTEPは保存しません。元のKCDを保ち、形状を整理するかSTLを選んでください。 "+reason));
+        }
+        return Result<std::string>::Success(std::move(content));
+    }catch(const Standard_Failure& failure){return Result<std::string>::Failure(base::MakeError(
+        "EXP-P003","STEPの形状を確認できなかったため、保存しませんでした。",stage+": "+failure.GetMessageString()));}
+    catch(const std::exception& failure){return Result<std::string>::Failure(base::MakeError(
+        "EXP-P003","STEPの形状を確認できなかったため、保存しませんでした。",stage+": "+failure.what()));}
+    catch(...){return Failed<std::string>();}
 #else
     (void)handles;return Failed<std::string>();
 #endif
@@ -245,22 +355,38 @@ Result<std::string> OutputStl(const std::vector<KernelShapeHandle>& handles,doub
     if(handles.empty())return Failed<std::string>();
     std::string bytes(84,'\0');std::uint32_t count=0;
     const auto append=[&](float f){std::uint32_t bits;std::memcpy(&bits,&f,4);for(int i=0;i<4;++i)bytes.push_back(static_cast<char>(bits>>(8*i)));};
+    std::size_t outputIndex=0;
     for(const auto handle:handles) {
+        ++outputIndex;
+        bool requireClosed=false;
 #ifdef KACHACAD_V2_WITH_OCCT
         TopoDS_Shape shape;
         if(!LookupShape(handle,shape))return Failed<std::string>();
-        if(TopExp_Explorer(shape,TopAbs_SOLID).More()) {
+        requireClosed=TopExp_Explorer(shape,TopAbs_SOLID).More();
+        if(requireClosed) {
             const auto check=CheckSolidForExport(handle,1e-6);
-            if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001","不正な立体はSTLにできません。","閉鎖性・内外の向き・自己交差を確認してください。"));
+            if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001",
+                "不正な立体はSTLにできません。対象 " + std::to_string(outputIndex)
+                + (check.HasValue() ? " / volume="+std::to_string(check.Value().volumeMm3)
+                    + " / closed="+std::to_string(check.Value().closed)
+                    + " / intersectionFree="+std::to_string(check.Value().selfIntersectionFree) : ""),
+                "閉鎖性・内外の向き・自己交差を確認してください。"));
         }
 #endif
         const auto mesh=BuildShapeMesh(handle,deflection);
         if(!mesh.HasValue())return Result<std::string>::Failure(mesh.Diagnostics());
         if(mesh.Value().triangles.empty())return Result<std::string>::Failure(base::MakeError("EXP-P002","線や点はSTLにできません。","STEPかKCDを選ぶか、対象を外してください。"));
-        for(const auto& t:mesh.Value().triangles){const auto n=Normalized(Cross(t.points[1]-t.points[0],t.points[2]-t.points[0]));
-            for(const auto p:{n,t.points[0],t.points[1],t.points[2]}){append(static_cast<float>(p.x));append(static_cast<float>(p.y));append(static_cast<float>(p.z));}
+        const auto triangles=StlTriangles(mesh.Value());
+        const auto problem=requireClosed?ClosedStlProblem(triangles):std::string();
+        if(!problem.empty())return Result<std::string>::Failure(base::MakeError("EXP-P001",
+            "STLの三角形が閉じた立体を表していません。対象 "+std::to_string(outputIndex),
+            "辺だけで接する部品や接合方向を確認してください。 / "+problem));
+        for(const auto& t:triangles){
+            const auto n=Normalized(Cross(t[1]-t[0],t[2]-t[0]),0.0);
+            for(const auto p:{n,t[0],t[1],t[2]}){append(static_cast<float>(p.x));append(static_cast<float>(p.y));append(static_cast<float>(p.z));}
             bytes.append(2,'\0');++count;}
     }
+    if(count==0)return Failed<std::string>();
     for(int i=0;i<4;++i)bytes[80+i]=static_cast<char>(count>>(8*i));
     return Result<std::string>::Success(std::move(bytes));
 }

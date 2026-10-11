@@ -48,7 +48,10 @@ bool CaseCurvedEmboss(V2MainWindow& window)
     if(!Explain("viewport input keeps tool",clicked&&tool->isVisible()))return false;
     const auto revision=window.Session().GetDocument().Revision();
     if(!Explain("preview without document changes",tool->Preview()&&window.Viewport().ToolPreviewFaceCount()>0
-        &&window.Session().GetDocument().Revision()==revision))return false;
+        &&window.Session().GetDocument().Revision()==revision)) {
+        for(const auto* label:tool->findChildren<QLabel*>())Note(label->text().toUtf8().constData());
+        Note(window.StatusText().toUtf8().constData());return false;
+    }
     auto* output=tool->findChild<QComboBox*>(QStringLiteral("embossOutput"));output->setCurrentIndex(1);
     if(!tool->Preview()||window.Viewport().ToolPreviewFaceCount()!=0)return false;
     const auto before=CountOfKind(window,domain::EntityKind::Wire);

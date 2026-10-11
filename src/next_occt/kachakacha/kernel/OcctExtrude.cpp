@@ -20,6 +20,8 @@
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
+#include <BRepLib.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepTools.hxx>
@@ -100,7 +102,7 @@ template<class Function>
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return std::abs(properties.Mass());
 }
 
@@ -527,7 +529,12 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
 
         // ---- 結果をまとめる ----
         for (const TopoDS_Shape& shape : finished) {
-            for (const TopoDS_Shape& solid : SolidsOf(shape)) {
+            for (const TopoDS_Shape& rawSolid : SolidsOf(shape)) {
+                auto solid = TopoDS::Solid(rawSolid);
+                if (!BRepLib::OrientClosedSolid(solid)) {
+                    return Out::Failure(MakeError(kExtrudeBuildFailed,
+                        "押し出した立体の内外を決められません。", "輪郭と接合を確認してください。"));
+                }
                 ExtrudedPart part;
                 part.volumeMm3 = VolumeOf(solid);
                 part.faceCount = CountOf(solid, TopAbs_FACE);

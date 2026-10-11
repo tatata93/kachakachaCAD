@@ -6,6 +6,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 
 #include <cmath>
 #include <string>
@@ -718,6 +719,40 @@ KACHA_V2_TEST(kernel_extrude, 穴の回り順と平面の向きによらず窓�
     }
 }
 
+KACHA_V2_TEST(kernel_extrude, OppositeDirectionsRetainOutwardSolids)
+{
+    for (const double sign : {-1.0, 1.0}) {
+        auto request = BasicRequest();
+        request.profiles = {Circle({0,0,0},4.3)};
+        request.directionMode = ExtrudeDirectionMode::CustomXYZ;
+        request.customDirection = {0,0,sign};
+        request.distanceMm = 2.2;
+        const auto built = Build(request);
+        Require(built.HasValue(), "Wheel disc builds in both directions");
+        const auto checked = kachakacha::v2::kernel::CheckSolidForExport(built.Value().parts.front().handle,1e-6);
+        Require(checked.HasValue() && checked.Value().Ok(), "Signed outward closed solid passes independent export check");
+        RequireNear(checked.Value().volumeMm3,kPi*4.3*4.3*2.2,1e-6,"Physical signed volume");
+        ClearShapeCache();
+    }
+}
+KACHA_V2_TEST(kernel_extrude, BezierDiscGetsACompletedGeometricExportCheck)
+{
+    auto request=BasicRequest();ExtrudeProfile profile;profile.closed=true;
+    const double r=1.6,k=4.0/3*std::tan(kPi/8);
+    for(int q=0;q<4;++q) {
+        const double a=q*kPi/2,b=a+kPi/2;
+        const Vector3 p{0,r*std::cos(a),23+r*std::sin(a)},t{0,r*std::cos(b),23+r*std::sin(b)};
+        const Vector3 v{0,-r*std::sin(a),r*std::cos(a)},w{0,-r*std::sin(b),r*std::cos(b)};
+        profile.segments.push_back(CurveSegment::MakeCubicBezier({p,p+v*k,t-w*k,t}).Value());
+    }
+    request.profiles={profile};request.directionMode=ExtrudeDirectionMode::CustomXYZ;
+    request.customDirection={1,0,0};request.distanceMm=1;
+    const auto built=Build(request);Require(built.HasValue(),"Bezier tank end disc builds");
+    const auto checked=kachakacha::v2::kernel::CheckSolidForExport(built.Value().parts.front().handle,1e-6);
+    Require(checked.HasValue()&&checked.Value().Ok(),"Exact NURBS analysis copy completes the aborted OCCT check");
+    RequireNear(checked.Value().volumeMm3,built.Value().totalVolumeMm3,1e-8,"Analysis preserves source volume");
+    ClearShapeCache();
+}
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_extrude_tests")

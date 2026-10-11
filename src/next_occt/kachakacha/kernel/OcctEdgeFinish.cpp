@@ -18,6 +18,7 @@
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
@@ -46,7 +47,7 @@ namespace {
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return std::abs(properties.Mass());
 }
 

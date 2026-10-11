@@ -14,6 +14,7 @@
 
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
+#include <vector>
 
 namespace kachakacha::v2::kernel {
 
@@ -46,6 +47,12 @@ struct BooleanBuildResult {
 //! 何も残らない(引き切る・重ならないものを交差させる)ときも断る。
 [[nodiscard]] base::Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     modeling::KernelShapeHandle first, modeling::KernelShapeHandle second,
+    double toleranceMm);
+
+//! Multiple tools use one non-destructive union; cut/common retain ordered semantics.
+//! A wholly unchanged result is rejected; redundant tools do not invalidate a useful union.
+[[nodiscard]] base::Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
+    modeling::KernelShapeHandle first, const std::vector<modeling::KernelShapeHandle>& tools,
     double toleranceMm);
 
 } // namespace kachakacha::v2::kernel

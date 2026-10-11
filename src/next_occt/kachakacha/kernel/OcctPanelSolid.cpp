@@ -10,6 +10,7 @@
 
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <GProp_GProps.hxx>
 #include <TopoDS_Face.hxx>
@@ -142,7 +143,7 @@ Result<BuiltPanelSolid> BuildPanelSolid(const fabrication::PanelSolidRequest& re
         }
         const TopoDS_Shape solid = prism.Shape();
         GProp_GProps properties;
-        BRepGProp::VolumeProperties(solid, properties);
+        detail::VolumeProperties(solid, properties);
         const double volume = std::abs(properties.Mass());
         if (volume <= 0.0) {
             return Out::Failure(MakeError(kPanelSolidFailed,

@@ -10,10 +10,12 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctFoldedBandThicken.h"
+#include "kachakacha/kernel/OcctRevolvedThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepLib.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepGProp_Face.hxx>
@@ -23,6 +25,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -72,7 +75,7 @@ namespace {
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return std::abs(properties.Mass());
 }
 
@@ -166,9 +169,9 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     // 決まらず、元の面が動いてしまうからである。
     const double startOffset =
         placement == fabrication::ThicknessPlacement::Centered ? -thicknessMm * 0.5
-        : placement == fabrication::ThicknessPlacement::Inside ? -thicknessMm
                                                                : 0.0;
-    const auto folded=detail::ThickenFoldedBand(face,thicknessMm,placement,tolerance);
+    auto folded=detail::ThickenFoldedBand(face,thicknessMm,placement,tolerance);
+    if(!folded)folded=detail::ThickenRevolvedProfile(face,thicknessMm,placement,tolerance);
     TopoDS_Shape base = face;
     if (!folded && startOffset != 0.0) {
         const auto moved = OffsetSurface(face, startOffset);
@@ -177,11 +180,21 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         }
         base = moved.Value();
     }
-    const auto built = folded ? *folded : ThickSolid(base, thicknessMm);
+    // A one-sided inward wall starts at the exact source and offsets once.
+    // Offset(-t) followed by Offset(+t) creates nested offset surfaces and can
+    // corrupt B-spline revolution seams instead of retaining the source skin.
+    const double signedThickness=placement==fabrication::ThicknessPlacement::Inside ? -thicknessMm : thicknessMm;
+    const auto built = folded ? *folded : ThickSolid(base, signedThickness);
     if (!built.HasValue()) {
         return Out::Failure(built.Diagnostics());
     }
-    const double volume = VolumeOf(built.Value());
+    double volume=0;
+    try { volume=VolumeOf(built.Value()); }
+    catch(const Standard_Failure& failure) {
+        return Out::Failure(MakeError(kThickenFailed,
+            "厚みを付けた形の体積を必要な精度で確認できませんでした。",
+            std::string(failure.GetMessageString())));
+    }
     if (!(volume > 0.0)) {
         // 出来たと言われても、中身が無いなら立体ではない。
         // ここを飛ばすと「作れた」と言いながら STL が空になる。

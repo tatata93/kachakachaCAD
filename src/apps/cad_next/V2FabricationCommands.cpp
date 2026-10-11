@@ -436,13 +436,15 @@ void V2MainWindow::RunCreatePattern()
     using kachakacha::v2::fabrication::PaperSize;
     using kachakacha::v2::fabrication::PlacePanelCurves;
 
-    if (fabricationPanels_.empty()) {
+    const auto model=fabricationModels_.find(CurrentFabricationModelId().ToString());
+    if (model==fabricationModels_.end() || model->second.panels.empty()) {
         SetStatus(QStringLiteral(
             "型紙を作る: 先に「製作モデルを作る」で部材にしてください。"));
         return;
     }
+    const auto& panels=model->second.panels;
     PaperSize paper;
-    const auto layout = LayoutPattern(fabricationPanels_, paper);
+    const auto layout = LayoutPattern(panels, paper);
     if (!layout.HasValue()) {
         ReportDiagnostics(layout.Diagnostics());
         return;
@@ -455,7 +457,7 @@ void V2MainWindow::RunCreatePattern()
         page.heightMm = paper.heightMm;
     }
     for (const auto& placement : layout.Value().placements) {
-        for (const auto& panel : fabricationPanels_) {
+        for (const auto& panel : panels) {
             if (panel.panelId != placement.panelId) {
                 continue;
             }
@@ -485,7 +487,7 @@ void V2MainWindow::RunCreatePattern()
     }
     SetStatus(QStringLiteral("型紙を作る: A4 %1ページに %2枚を並べました(原寸)。")
             .arg(static_cast<int>(patternPages_.size()))
-            .arg(static_cast<int>(fabricationPanels_.size())));
+            .arg(static_cast<int>(panels.size())));
 }
 
 kachakacha::v2::app::FabricationMarkings V2MainWindow::FabricationMarkingsFor(

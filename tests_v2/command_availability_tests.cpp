@@ -8,6 +8,7 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/domain/Feature.h"
 
 #include <set>
 #include <string>
@@ -250,6 +251,29 @@ KACHA_V2_TEST(availability, 製作は部品からでも形状ガイドからで�
         "両方だと決まらない");
 }
 
+KACHA_V2_TEST(availability, selected_fabrication_model_is_not_the_document_total)
+{
+    Bench bench;ExternalCounts external;external.fabricationModels=9;
+    const auto a=bench.AddEntity(EntityKind::FabricationModel);
+    const auto b=bench.AddEntity(EntityKind::FabricationModel);
+    const auto guide=bench.AddEntity(EntityKind::GuideSurface);
+    kachakacha::v2::domain::Feature feature;feature.id=bench.ids.NextTyped<IdKind::Feature>();
+    feature.inputEntityIds={guide};bench.snapshot.features.push_back(feature);
+    bench.snapshot.entities[0].createdBy=feature.id;
+    bench.selection.entityIds={a};
+    Require(SelectionSatisfies(SelectionPredicate::OneFabricationModel,bench.Facts(external)),
+        "One selected model can unfold in a document containing many models");
+    bench.selection.entityIds={a,b};
+    Require(!SelectionSatisfies(SelectionPredicate::OneFabricationModel,bench.Facts(external)),
+        "Two explicit models are not silently treated as one");
+    bench.selection.entityIds={guide};
+    Require(SelectionSatisfies(SelectionPredicate::OneFabricationModel,bench.Facts(external)),
+        "A source guide resolves to its own manufacturing model");
+    bench.selection.entityIds.clear();
+    Require(!SelectionSatisfies(SelectionPredicate::OneFabricationModel,bench.Facts(external)),
+        "Multiple unselected models remain ambiguous");
+}
+
 KACHA_V2_TEST(availability, 製作モデルと型紙は画面から数をもらう)
 {
     // 部材も型紙も文書には入らない。画面が覚えているので、そこから渡す。
@@ -443,6 +467,18 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
         joined += id + " ";
     }
     Require(unexpected.empty(), "判断のあるコマンドだけが残る: " + joined);
+}
+
+KACHA_V2_TEST(availability, freeze_accepts_multiple_selected_models)
+{
+    SelectionFacts facts; facts.fabricationModels=2;
+    for(const auto& command:CommandCatalog()) {
+        if(command.id=="fabrication.freeze_state"||command.id=="fabrication.freeze_flat"
+            ||command.id=="fabrication.freeze_target"||command.id=="fabrication.freeze_wires")
+            Require(SelectionSatisfies(command.predicate,facts),"batch freeze must remain reachable");
+        if(command.id=="fabrication.create_pattern")
+            Require(!SelectionSatisfies(command.predicate,facts),"pattern needs one model");
+    }
 }
 
 KACHA_V2_TEST_MAIN("command_availability_tests")

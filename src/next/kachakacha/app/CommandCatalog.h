@@ -51,6 +51,7 @@ enum class SelectionPredicate {
     //! 作られたもの(派生)を1つ以上。現在状態を固定(選んだものごとに 1 本ずつ固定する)。
     OneOrMoreDerivedEntities,
     OneFabricationModel,
+    OneOrMoreFabricationModels,
     OneFabricationPanel,
     OneOrMorePatterns,
     OneOrMoreSelectedCurves,

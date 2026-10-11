@@ -1,5 +1,6 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctCurvedEmboss.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -31,6 +32,9 @@ KACHA_V2_TEST(curved_emboss, plane_normal_volume) {
     const auto result=kernel::BuildCurvedEmboss(kernel::StoreShape(face),curves.Value(),options);
     Require(result.HasValue(),result.HasValue() ? "ok" : result.FirstSummaryJa()+result.FirstDiagnostic().detailsJa);
     RequireNear(result.Value().volumeMm3,400,0.05,"closed rectangular volume");
+    const auto preview=kernel::BuildShapeMesh(result.Value().handle);
+    Require(preview.HasValue()&&!preview.Value().triangles.empty(),
+        "Ordinary planar spline caps remain displayable after pole-mesh normalization");
     options.heightMm=-2;
     const auto reverse=kernel::BuildCurvedEmboss(kernel::StoreShape(face),curves.Value(),options);
     Require(reverse.HasValue(),"negative height");RequireNear(reverse.Value().volumeMm3,400,0.05,"reversed closed volume");

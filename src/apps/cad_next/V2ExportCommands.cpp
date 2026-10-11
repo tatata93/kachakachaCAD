@@ -92,6 +92,13 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
     using kachakacha::v2::app::ExportTarget;
     using Out = kachakacha::v2::base::Result<std::string>;
     const auto& snapshot = session_->GetDocument().Snapshot();
+    // SVG/DXF are single-sheet formats. Respect the sheet shown in preview;
+    // PDF intentionally contains every sheet in the current pattern.
+    const auto shownPage = [this]() -> const kachakacha::v2::exporters::PatternPage& {
+        const int index = patternDock_ == nullptr ? 0 : patternDock_->CurrentPage();
+        return patternPages_[static_cast<std::size_t>(std::clamp(index, 0,
+            static_cast<int>(patternPages_.size()) - 1))];
+    };
     if (request.target == ExportTarget::Project) {
         kachakacha::v2::io::DocumentFile file;
         file.snapshot = snapshot;
@@ -132,9 +139,9 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
             return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
         }
         if (request.format == ExportFormat::Svg) {
-            return kachakacha::v2::exporters::WritePatternSvg(patternPages_.front(), "型紙");
+            return kachakacha::v2::exporters::WritePatternSvg(shownPage(), "型紙");
         }
-        return kachakacha::v2::exporters::WritePatternDxf(patternPages_.front());
+        return kachakacha::v2::exporters::WritePatternDxf(shownPage());
     }
     if (request.target == ExportTarget::SelectedWires) {
         kachakacha::v2::app::WirePatternRequest wires;
@@ -166,10 +173,10 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
                 return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
             }
             if (request.format == ExportFormat::Svg) {
-                return kachakacha::v2::exporters::WritePatternSvg(patternPages_.front(),
+                return kachakacha::v2::exporters::WritePatternSvg(shownPage(),
                     "部材");
             }
-            return kachakacha::v2::exporters::WritePatternDxf(patternPages_.front());
+            return kachakacha::v2::exporters::WritePatternDxf(shownPage());
         }
         // 立体で出すときは、その部材のもとになった部品の形を出す。
         return MakeSolidContent(PanelSourceShapes(), request.format);

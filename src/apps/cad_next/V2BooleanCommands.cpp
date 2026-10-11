@@ -319,32 +319,25 @@ void V2MainWindow::RefreshBooleanPreview()
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     // 相手を順に足す・引く(何個でも)。1 つでもできなければ、何も作らない。
-    auto current = base->second;
-    double previous = -1.0;
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> tools;
     for (const EntityId& tool : booleanInput_.tools) {
         const auto other = partShapes_.find(tool.ToString());
         if (other == partShapes_.end()) {
             booleanOutcome_.refusalJa = "選んだ部品の立体がまだありません";
             return;
         }
-        const auto built = kachakacha::v2::kernel::BuildBoolean(
-            KernelBooleanOperation(booleanInput_.kind), current, other->second, tolerance);
-        if (!built.HasValue()) {
-            const auto* entity = session_->GetDocument().FindEntity(tool);
-            booleanOutcome_.refusalJa = (booleanInput_.tools.size() > 1 && entity != nullptr
-                                                ? entity->displayName + ": "
-                                                : std::string())
-                + built.FirstSummaryJa();
-            return;
-        }
-        if (previous < 0.0) {
-            previous = built.Value().previousVolumeMm3;
-        }
-        current = built.Value().handle;
-        booleanOutcome_.volumeMm3 = built.Value().volumeMm3;
+        tools.push_back(other->second);
     }
+    const auto built = kachakacha::v2::kernel::BuildBooleans(
+        KernelBooleanOperation(booleanInput_.kind), base->second, tools, tolerance);
+    if (!built.HasValue()) {
+        booleanOutcome_.refusalJa = built.FirstSummaryJa();
+        return;
+    }
+    const auto current = built.Value().handle;
     booleanOutcome_.available = true;
-    booleanOutcome_.previousVolumeMm3 = previous;
+    booleanOutcome_.volumeMm3 = built.Value().volumeMm3;
+    booleanOutcome_.previousVolumeMm3 = built.Value().previousVolumeMm3;
     booleanBuilt_ = current;
     // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
     const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(current);

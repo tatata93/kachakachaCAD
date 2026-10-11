@@ -1,4 +1,5 @@
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctOutput.h"
 
 #include <algorithm>
 #include <type_traits>
@@ -11,8 +12,11 @@
 
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepBuilderAPI_NurbsConvert.hxx>
+#include <ShapeCustom.hxx>
 #include <BOPAlgo_ArgumentAnalyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRep_Builder.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -28,6 +32,9 @@
 #include <STEPControl_Writer.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopoDS_Edge.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
@@ -39,6 +46,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <atomic>
+#include <random>
 
 #endif
 
@@ -98,9 +107,11 @@ template<class Function>
 //! 利用者の指定した場所へは、検査を全部通ってから原子的に置く。
 [[nodiscard]] std::filesystem::path ScratchPath(const char* suffix)
 {
-    static int counter = 0;
+    static std::atomic<unsigned long long> counter{0};
+    static const auto nonce = [] {std::random_device r;return
+        (static_cast<unsigned long long>(r())<<32)^r();}();
     return std::filesystem::temp_directory_path()
-        / ("kachakacha_v2_export_" + std::to_string(++counter) + suffix);
+        / ("kachakacha_v2_export_" + std::to_string(nonce)+"_"+std::to_string(++counter) + suffix);
 }
 
 [[nodiscard]] std::string ReadAndRemove(const std::filesystem::path& path)
@@ -115,23 +126,6 @@ template<class Function>
     std::error_code code;
     std::filesystem::remove(path, code);
     return content;
-}
-
-void AppendLittleEndian(std::string& out, float value)
-{
-    static_assert(sizeof(float) == 4, "float は4バイトであること");
-    std::uint32_t bits = 0;
-    std::memcpy(&bits, &value, sizeof(bits));
-    for (int shift = 0; shift < 32; shift += 8) {
-        out.push_back(static_cast<char>((bits >> shift) & 0xFFu));
-    }
-}
-
-void AppendLittleEndian(std::string& out, std::uint32_t value)
-{
-    for (int shift = 0; shift < 32; shift += 8) {
-        out.push_back(static_cast<char>((value >> shift) & 0xFFu));
-    }
 }
 
 //! OCCT の印字先を一時的に外す。抜けるときに元へ戻す。
@@ -153,6 +147,54 @@ private:
     std::decay_t<decltype(Message::DefaultMessenger()->Printers())> saved_;
 };
 
+bool ManifoldEdgeUse(const TopoDS_Shape& shape)
+{
+    TopTools_IndexedMapOfShape edges;
+    TopExp::MapShapes(shape,TopAbs_EDGE,edges);
+    std::vector<int> uses(static_cast<std::size_t>(edges.Extent()+1));
+    std::vector<bool> internal(static_cast<std::size_t>(edges.Extent()+1));
+    for(TopExp_Explorer face(shape,TopAbs_FACE);face.More();face.Next())
+        for(TopExp_Explorer edge(face.Current(),TopAbs_EDGE);edge.More();edge.Next())
+            if(!BRep_Tool::Degenerated(TopoDS::Edge(edge.Current()))) {
+                const auto index=static_cast<std::size_t>(edges.FindIndex(edge.Current()));
+                // INTERNAL edges lie inside a face; they do not bound material.
+                // Boolean operations may retain such imprinted curves.
+                if(edge.Current().Orientation()==TopAbs_INTERNAL)internal[index]=true;
+                else ++uses[index];
+            }
+    for(int i=1;i<=edges.Extent();++i)
+        if(!BRep_Tool::Degenerated(TopoDS::Edge(edges(i)))) {
+            const auto index=static_cast<std::size_t>(i);
+            if(uses[index]!=2&&!(uses[index]==0&&internal[index]))return false;
+        }
+    return true;
+}
+
+bool SelfIntersectionFree(const TopoDS_Shape& shape,double toleranceMm)
+{
+    BOPAlgo_ArgumentAnalyzer check;check.SetShape1(shape);check.SelfInterMode()=true;
+    check.StopOnFirstFaulty()=true;check.Perform();
+    if(!check.HasFaulty()&&!check.HasErrors())return true;
+    if(check.HasErrors()||check.GetCheckResult().IsEmpty())return false;
+    for(const auto& fault:check.GetCheckResult())
+        if(fault.GetCheckStatus()!=BOPAlgo_OperationAborted)return false;
+    // Preserve edges and their parameters. Converting all edges to NURBS can
+    // create near-coincident knots after a Boolean; only the swept surface
+    // representation needs changing to avoid OCCT's extrusion intersection abort.
+    const auto converted=ShapeCustom::ConvertToBSpline(shape,true,false,false,false);
+    if(converted.IsNull()||!BRepCheck_Analyzer(converted).IsValid())return false;
+    GProp_GProps before,after;detail::VolumeProperties(shape,before);
+    detail::VolumeProperties(converted,after);
+    if(std::abs(before.Mass()-after.Mass())>std::max(1e-7,std::abs(before.Mass())*1e-8))return false;
+    Bnd_Box a,b;BRepBndLib::AddOptimal(shape,a,false,false);
+    BRepBndLib::AddOptimal(converted,b,false,false);
+    if(a.IsVoid()||b.IsVoid())return false;
+    double av[6],bv[6];a.Get(av[0],av[1],av[2],av[3],av[4],av[5]);b.Get(bv[0],bv[1],bv[2],bv[3],bv[4],bv[5]);
+    for(int i=0;i<6;++i)if(std::abs(av[i]-bv[i])>std::max(toleranceMm,1e-6))return false;
+    BOPAlgo_ArgumentAnalyzer retry;retry.SetShape1(converted);retry.SelfInterMode()=true;
+    retry.StopOnFirstFaulty()=true;retry.Perform();
+    return !retry.HasFaulty()&&!retry.HasErrors();
+}
 } // namespace
 
 Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double toleranceMm)
@@ -171,11 +213,11 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
             explorer.Next()) {
             ++solids;
         }
-        check.closed = solids > 0;
+        check.closed = solids > 0 && ManifoldEdgeUse(shape);
 
         // 2. 体積が正か。
         GProp_GProps properties;
-        BRepGProp::VolumeProperties(shape, properties);
+        detail::VolumeProperties(shape, properties);
         check.volumeMm3 = properties.Mass();
         const double diagonal = DiagonalOf(shape);
         check.boundingDiagonalMm = diagonal;
@@ -192,15 +234,10 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
         // leaving contacts between separate assembly parts to assembly checks.
         for (TopExp_Explorer e(shape, TopAbs_SOLID); e.More(); e.Next()) {
             GProp_GProps component;
-            BRepGProp::VolumeProperties(e.Current(), component);
+            detail::VolumeProperties(e.Current(), component);
             check.positiveVolume = check.positiveVolume && component.Mass() > floorVolume;
-            BOPAlgo_ArgumentAnalyzer intersections;
-            intersections.SetShape1(e.Current());
-            intersections.SelfInterMode() = true;
-            intersections.StopOnFirstFaulty() = true;
-            intersections.Perform();
             check.selfIntersectionFree = check.selfIntersectionFree
-                && !intersections.HasFaulty() && !intersections.HasErrors();
+                && SelfIntersectionFree(e.Current(),toleranceMm);
         }
 
         return Result<SolidExportCheck>::Success(check);
@@ -326,39 +363,8 @@ Result<std::string> BuildBinaryStl(KernelShapeHandle handle, double deflectionMm
     if (!shape.HasValue()) {
         return Result<std::string>::Failure(shape.Diagnostics());
     }
-    return Guarded([&]() -> Result<std::string> {
-        const std::vector<Triangle> triangles =
-            Triangulate(shape.Value(), deflectionMm);
-        if (triangles.empty()) {
-            return Result<std::string>::Failure(MakeError(kExportFailed,
-                "三角形が1つも作れませんでした。", "0バイトのファイルは残しません。"));
-        }
-        std::string content;
-        content.reserve(84 + triangles.size() * 50);
-        content.append(80, '\0');
-        AppendLittleEndian(content, static_cast<std::uint32_t>(triangles.size()));
-        for (const Triangle& triangle : triangles) {
-            const gp_Vec first(triangle.a, triangle.b);
-            const gp_Vec second(triangle.a, triangle.c);
-            gp_Vec normal = first.Crossed(second);
-            if (normal.Magnitude() > 1.0e-12) {
-                normal.Normalize();
-            } else {
-                normal = gp_Vec(0.0, 0.0, 0.0);
-            }
-            AppendLittleEndian(content, static_cast<float>(normal.X()));
-            AppendLittleEndian(content, static_cast<float>(normal.Y()));
-            AppendLittleEndian(content, static_cast<float>(normal.Z()));
-            for (const gp_Pnt& point : {triangle.a, triangle.b, triangle.c}) {
-                AppendLittleEndian(content, static_cast<float>(point.X()));
-                AppendLittleEndian(content, static_cast<float>(point.Y()));
-                AppendLittleEndian(content, static_cast<float>(point.Z()));
-            }
-            content.push_back('\0');
-            content.push_back('\0');
-        }
-        return Result<std::string>::Success(std::move(content));
-    }, "STL の作成");
+    // All STL entry points share float-coordinate topology validation.
+    return OutputStl({handle}, deflectionMm);
 }
 
 Result<MeshMeasure> MeasureMesh(KernelShapeHandle handle, double deflectionMm)
@@ -443,7 +449,7 @@ namespace {
         // 選ばれていないものを混ぜない。渡された形だけを足す。
         builder.Add(compound, shape);
         GProp_GProps properties;
-        BRepGProp::VolumeProperties(shape, properties);
+        detail::VolumeProperties(shape, properties);
         totalVolume += std::abs(properties.Mass());
         ++componentCount;
     }
@@ -508,8 +514,7 @@ Result<SelectedExport> BuildBinaryStlForSelection(
     if (!gathered.HasValue()) {
         return Out::Failure(gathered.Diagnostics());
     }
-    const KernelShapeHandle merged = StoreShape(gathered.Value());
-    const auto stl = BuildBinaryStl(merged, deflectionMm);
+    const auto stl = OutputStl(selected, deflectionMm);
     if (!stl.HasValue()) {
         return Out::Failure(stl.Diagnostics());
     }

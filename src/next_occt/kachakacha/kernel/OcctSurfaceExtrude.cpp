@@ -7,6 +7,7 @@
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepLib.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <GProp_GProps.hxx>
@@ -66,7 +67,7 @@ Result<ExtrudeBuildResult> BuildSurfaceExtrude(KernelShapeHandle source,
                 return Out::Failure(MakeError("EXT-008", "押し出し結果が閉じていません。", {}));
             }
             GProp_GProps properties;
-            BRepGProp::VolumeProperties(solid, properties);
+            detail::VolumeProperties(solid, properties);
             const double volume = std::abs(properties.Mass());
             if (volume <= std::pow(tolerance.modelLinearMm, 3)) {
                 return Out::Failure(MakeError("EXT-007", "この方向では面に体積が付きません。", {}));

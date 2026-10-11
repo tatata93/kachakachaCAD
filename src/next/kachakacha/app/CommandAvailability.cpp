@@ -3,6 +3,7 @@
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/GroupTree.h"
 #include <algorithm>
+#include <set>
 #include "kachakacha/geometry/WireChain.h"
 
 #include <vector>
@@ -54,6 +55,8 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.derivedEntities >= 1;
     case SelectionPredicate::OneFabricationModel:
         return facts.fabricationModels == 1;
+    case SelectionPredicate::OneOrMoreFabricationModels:
+        return facts.fabricationModels >= 1;
     case SelectionPredicate::OneFabricationPanel:
         return facts.fabricationPanels == 1;
     case SelectionPredicate::OneOrMorePatterns:
@@ -141,6 +144,24 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.selectedGuideRows = external.selectedGuideRows;
     facts.guideRows = external.guideRows;
     std::vector<base::EntityId> selectedWireIds;
+    std::set<base::EntityId> selectedModels;
+    for(const auto& entity:snapshot.entities) {
+        if(entity.kind!=domain::EntityKind::FabricationModel)continue;
+        if(std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)!=selection.entityIds.end())
+            selectedModels.insert(entity.id);
+    }
+    // A guide picked in 3D addresses its fabrication model, just as selecting
+    // the model row in the tree does. Explicit model selection takes priority.
+    if(selectedModels.empty())for(const auto& entity:snapshot.entities) {
+        if(entity.kind!=domain::EntityKind::FabricationModel)continue;
+        const auto feature=std::find_if(snapshot.features.begin(),snapshot.features.end(),
+            [&](const auto& item){return item.id==entity.createdBy;});
+        if(feature==snapshot.features.end())continue;
+        for(const auto& id:selection.entityIds)
+            if(std::find(feature->inputEntityIds.begin(),feature->inputEntityIds.end(),id)!=feature->inputEntityIds.end())
+                selectedModels.insert(entity.id);
+    }
+    if(!selectedModels.empty())facts.fabricationModels=static_cast<int>(selectedModels.size());
 
     // 立体の面そのものを選んでいる数。物体の並び(entityIds)には出てこないので、
     // 押した順の並び(ordered)から数える。

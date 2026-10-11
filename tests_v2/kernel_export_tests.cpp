@@ -7,9 +7,22 @@
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include <BRep_Builder.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <TopExp_Explorer.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#include <BRepTools.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Shape.hxx>
+#include <gp_Pnt.hxx>
+#endif
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -119,6 +132,21 @@ KACHA_V2_TEST(kernel_export_absent, カーネルが無い版は書き出さず�
 }
 
 #else
+
+KACHA_V2_TEST(kernel_export, stl_refuses_edge_touching_solids_but_keeps_independent_parts)
+{
+    using namespace kachakacha::v2::kernel;
+    const TopoDS_Shape a=BRepPrimAPI_MakeBox(gp_Pnt(0,0,0),10,10,10).Shape();
+    const TopoDS_Shape b=BRepPrimAPI_MakeBox(gp_Pnt(10,10,0),10,10,10).Shape();
+    TopoDS_Compound compound;BRep_Builder builder;
+    builder.MakeCompound(compound);builder.Add(compound,a);builder.Add(compound,b);
+    const auto joined=StoreShape(compound),first=StoreShape(a),second=StoreShape(b);
+    Require(!OutputStl({joined},.03).HasValue(), "an edge-only material contact is not one printable boundary");
+    Require(!BuildBinaryStl(joined,.03).HasValue(), "the other STL entry point applies the same check");
+    Require(OutputStl({first,second},.03).HasValue(), "explicit independent parts remain separately validated");
+    Require(OutputStl({first},.03).HasValue(), "a closed ordinary box exports");
+    ReleaseShape(joined);ReleaseShape(first);ReleaseShape(second);
+}
 
 // =====================================================================
 //  AT-EXP-010 STEP と STL が同じ形になる
@@ -447,6 +475,27 @@ KACHA_V2_TEST(kernel_export, 選んだ数を変えれば出る数も変わる)
         RequireEqual(std::to_string(counted.Value()), std::to_string(howMany),
             "選んだ数と同じ");
     }
+}
+
+KACHA_V2_TEST(kernel_export, internal_face_imprint_is_not_an_open_boundary)
+{
+    // The real six-part can union retains an INTERNAL face imprint. Only its
+    // cached triangulation was removed; geometry and topology are unchanged.
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"can_internal_imprint.brep");
+    Require(input.good(),"Regression fixture exists");
+    TopoDS_Shape box;BRep_Builder builder;BRepTools::Read(box,input,builder);
+    Require(!box.IsNull(),"Regression fixture reads");
+    bool imprint=false;
+    for(TopExp_Explorer f(box,TopAbs_FACE);f.More();f.Next())
+        for(TopExp_Explorer e(f.Current(),TopAbs_EDGE);e.More();e.Next())
+            imprint=imprint||e.Current().Orientation()==TopAbs_INTERNAL;
+    Require(imprint,"Can union contains an internal curve on the outer face");
+    Require(BRepCheck_Analyzer(box).IsValid(),"Internal face curve is valid BRep input");
+    const auto handle=kachakacha::v2::kernel::StoreShape(box);
+    const auto check=CheckSolidForExport(handle,1e-6);
+    Require(check.HasValue()&&check.Value().Ok(),"Internal imprint does not open solid boundary");
+    RequireNear(check.Value().volumeMm3,6282.177935961462,1e-7,"Internal curve does not change material volume");
+    Require(BuildBinaryStl(handle,.01).HasValue(),"Internal imprint preserves closed STL output");
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

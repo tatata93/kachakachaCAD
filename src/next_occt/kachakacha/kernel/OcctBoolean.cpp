@@ -14,9 +14,11 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopTools_ListOfShape.hxx>
 
 #endif
 
@@ -33,7 +35,7 @@ namespace {
 [[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
 {
     GProp_GProps properties;
-    BRepGProp::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties);
     return properties.Mass();
 }
 
@@ -166,6 +168,72 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     }
 }
 
+Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
+    KernelShapeHandle first, const std::vector<KernelShapeHandle>& tools, double toleranceMm)
+{
+    using Out = Result<BooleanBuildResult>;
+    if (tools.empty()) return Out::Failure(MakeError(kBooleanTargetMissing, "相手の部品がありません。", {}));
+    if (tools.size() == 1) return BuildBoolean(operation, first, tools.front(), toleranceMm);
+    if (operation != BooleanOperation::Union) {
+        auto current = first;
+        double before = -1;
+        BooleanBuildResult result;
+        for (const auto tool : tools) {
+            const auto next = BuildBoolean(operation, current, tool, toleranceMm);
+            if (current.value != first.value) ReleaseShape(current);
+            if (!next.HasValue()) return next;
+            result = next.Value();
+            if (before < 0) before = result.previousVolumeMm3;
+            current = result.handle;
+        }
+        result.previousVolumeMm3 = before;
+        return Out::Success(result);
+    }
+    try {
+        TopoDS_Shape base;
+        if (!LookupShape(first, base)) return Out::Failure(MakeError(kBooleanTargetMissing, "土台の部品がありません。", {}));
+        const double before = VolumeOf(base);
+        double sum = before, largest = before;
+        if (!std::isfinite(before) || before <= 0) return Out::Failure(MakeError(kBooleanFailed, "土台の体積が不正です。", {}));
+        TopTools_ListOfShape arguments, others;
+        arguments.Append(base);
+        for (const auto handle : tools) {
+            TopoDS_Shape shape;
+            if (!LookupShape(handle, shape)) return Out::Failure(MakeError(kBooleanTargetMissing, "相手の部品がありません。", {}));
+            const double volume = VolumeOf(shape);
+            if (!std::isfinite(volume) || volume <= 0) return Out::Failure(MakeError(kBooleanFailed, "相手の体積が不正です。", {}));
+            sum += volume;
+            largest = std::max(largest, volume);
+            others.Append(shape);
+        }
+        BRepAlgoAPI_Fuse fuse;
+        fuse.SetArguments(arguments);
+        fuse.SetTools(others);
+        fuse.SetNonDestructive(true);
+        fuse.Build();
+        if (!fuse.IsDone()) return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", {}));
+        fuse.SimplifyResult(true, true);
+        const double after = VolumeOf(fuse.Shape());
+        const double epsilon = std::max(std::pow(std::max(toleranceMm, 1e-6), 3.0), largest * 1e-7);
+        if (!std::isfinite(after) || after < largest - epsilon || after > sum + epsilon)
+            return Out::Failure(MakeError(kBooleanFailed, "結合後の体積が入力と矛盾します。", {}));
+        if (std::abs(after - before) / before <= 1e-9) return Out::Failure(NoChange(operation));
+        const auto handle = StoreShape(fuse.Shape());
+        const auto checked = CheckSolidForExport(handle, toleranceMm);
+        if (!checked.HasValue() || !checked.Value().Ok()) {
+            ReleaseShape(handle);
+            return Out::Failure(MakeError(kBooleanFailed, "結合後の閉鎖性・法線・自己交差の検査に失敗しました。", {}));
+        }
+        return Out::Success(BooleanBuildResult{handle, after, before});
+    } catch (const Standard_Failure& error) {
+        return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", error.GetMessageString()));
+    } catch (const std::exception& error) {
+        return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", error.what()));
+    } catch (...) {
+        return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", {}));
+    }
+}
+
 #else
 
 Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
@@ -177,6 +245,12 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     (void)toleranceMm;
     return Result<BooleanBuildResult>::Failure(MakeError(kBooleanUnsupported,
         "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
+    KernelShapeHandle first, const std::vector<KernelShapeHandle>& tools, double toleranceMm)
+{
+    return BuildBoolean(operation, first, tools.empty() ? KernelShapeHandle{} : tools.front(), toleranceMm);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

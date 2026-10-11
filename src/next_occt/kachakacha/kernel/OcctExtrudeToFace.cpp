@@ -9,6 +9,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRep_Builder.hxx>
 #include <GProp_GProps.hxx>
@@ -121,7 +122,7 @@ Out Trim(const ExtrudeBuildResult& extended, const TopoDS_Face& target, const Ve
         }
         for (TopExp_Explorer solids(cut.Shape(), TopAbs_SOLID); solids.More(); solids.Next()) {
             GProp_GProps volume;
-            BRepGProp::VolumeProperties(solids.Current(), volume);
+            detail::VolumeProperties(solids.Current(), volume);
             ExtrudedPart made;
             made.handle = StoreShape(solids.Current());
             made.volumeMm3 = std::abs(volume.Mass());

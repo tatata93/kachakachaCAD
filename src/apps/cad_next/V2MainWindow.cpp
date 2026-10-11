@@ -1,6 +1,7 @@
 #include "V2OffsetTool.h"
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
+#include "V2DocumentOpen.h"
 #include "V2ToolBindings.h"
 #include "V2InstructionMode.h"
 #include "V2GptSurfaceTool.h"
@@ -804,53 +805,7 @@ void V2MainWindow::RefreshProcessSteps()
 
 void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snapshot)
 {
-    // 開いた文書の ID より先から振る。番号が 1 へ戻ると前の回の ID とぶつかり、面を作る・
-    // 固定するときに DOC-C003「同じ ID のオブジェクトが既にあります」で断られる
-    // (オーナー報告 2026-09-27: 面生成に失敗)。
-    kachakacha::v2::app::AdvanceIdsPastDocument(*ids_, snapshot);
-    const auto problems = session_->GetDocument().ResetTo(std::move(snapshot));
-    bool refused = false;
-    for (const auto& diagnostic : problems) {
-        AddDiagnostic(QStringLiteral("%1 %2")
-                .arg(QString::fromStdString(diagnostic.code),
-                    QString::fromStdString(diagnostic.summaryJa)));
-        refused = refused || diagnostic.IsError();
-    }
-    if (refused) {
-        SetStatus(QStringLiteral("開けませんでした。いまの文書はそのままです。"));
-        return;
-    }
-    // 原点の基準平面(top_XY / front_XZ / side_YZ)が無ければ足す。V1 と同じく
-    // 一覧の最上部に固定で出し、「平面から離す」などの相手として最初から選べるようにする。
-    kachakacha::v2::app::EnsureOriginPlanes(session_->GetDocument(), *ids_);
-    // 原点の3面は文書の土台であって操作ではない。開いた直後に「元に戻す」で
-    // 消えてしまわないよう、ここで履歴の境界にする(開く・新規と同じ扱い)。
-    session_->GetDocument().MarkHistoryBoundary();
-    // 文書が入れ替わった。構えていた道具はやめる。古い入力を新しい文書へ持ち越さない。
-    EndArmedTools();
-    // 線を場面へ並べ直す。見ている場所は変えない。
-    session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
-        session_->GetDocument().Snapshot(), *ids_));
-    viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
-    // 作業中の平面が文書に無ければ、上面 XY を作業中にする。
-    if (session_->GetDocument().FindEntity(activeWorkPlaneId_) == nullptr) {
-        const auto top = kachakacha::v2::app::OriginPlaneId(
-            session_->GetDocument().Snapshot(), kachakacha::v2::modeling::StandardPlaneKind::XY);
-        if (top.has_value()) {
-            ApplyWorkPlane(kachakacha::v2::modeling::StandardPlane(
-                               kachakacha::v2::modeling::StandardPlaneKind::XY),
-                *top);
-        }
-    }
-    // 立体と面を作り方から作り直す。作り直さないと、線だけが残って
-    // 立体が消えたことに気づかないまま、出そうとしたときに初めて分かる。
-    RebuildKernelShapes();
-    // 作り直した形を画面へ渡す(形の網・残した寸法・一覧・書き出しの数)。ここで渡していなかったので、
-    // 開き直すと立体と面の塗りが出ず、新規にしても前の文書の塗りが残っていた(PC 自己試験 HP-PL-01)。
-    AdoptCurrentDocument();
-    RefreshPartEdges();   // 場面を作り直したので、部品と面の辺を足し直す
-    RefreshWorkPlaneDock();
-    viewport_->update();
+    (void)V2DocumentOpen::Adopt(*this,std::move(snapshot));
 }
 
 void V2MainWindow::SetPathChooser(std::function<QString(bool forSave)> chooser)
@@ -908,30 +863,8 @@ bool V2MainWindow::ImportKcdFile(const QString& path)
 bool V2MainWindow::OpenDocumentFile(const QString& path)
 {
     if(V2GeometryJob::Active())return false;
-    if (kachakacha::v2::io::LooksLikeKcdPath(path.toStdString())) {
-        return ImportKcdFile(path);
-    }
-    const auto text = kachakacha::v2::io::ReadWholeFile(path.toStdString());
-    if (!text.HasValue()) {
-        ReportDiagnostics(text.Diagnostics());
-        return false;
-    }
-    const auto loaded = kachakacha::v2::io::LoadDocument(text.Value());
-    if (!loaded.HasValue()) {
-        ReportDiagnostics(loaded.Diagnostics());
-        return false;
-    }
-    const std::uint64_t before = session_->GetDocument().Revision();
-    AdoptDocument(loaded.Value().snapshot);
-    if (session_->GetDocument().Snapshot().entities.empty()
-        && !loaded.Value().snapshot.entities.empty()) {
-        // ResetTo が断った。いまの文書はそのままなので、開けたことにしない。
-        (void)before;
-        return false;
-    }
-    documentPath_ = path;
-    SetStatus(QStringLiteral("%1 を開きました。").arg(path));
-    return true;
+    if(kachakacha::v2::io::LooksLikeKcdPath(path.toStdString()))return ImportKcdFile(path);
+    return V2DocumentOpen::Open(*this,path);
 }
 
 void V2MainWindow::RunFileCommand(std::string_view id)
@@ -965,9 +898,8 @@ void V2MainWindow::RunFileCommand(std::string_view id)
             path += QStringLiteral(".kcd2");
         }
     }
-    DocumentFile file;
-    file.snapshot = session_->GetDocument().Snapshot();
-    file.metadata.title = path.toStdString();
+    DocumentFile file=V2DocumentOpen::FileForSave(*this);
+    if(file.metadata.title.empty())file.metadata.title = path.toStdString();
     const auto archive = kachakacha::v2::io::SaveDocument(file);
     if (!archive.HasValue()) {
         ReportDiagnostics(archive.Diagnostics());

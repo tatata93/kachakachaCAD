@@ -10,6 +10,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "V2DocumentOpen.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "V2EdgeFinishTool.h"
@@ -373,9 +374,10 @@ void V2MainWindow::RebuildKernelShapes()
         RefreshFabricationView();
         return;
     }
-    int made = 0;
+    int made = 0, completed = 0;
     std::vector<std::string> failed;
     for (const auto& step : steps) {
+        V2DocumentOpen::Progress(completed++,static_cast<int>(steps.size()),step.displayName);
         const auto* feature = session_->GetDocument().FindFeature(step.featureId);
         if (feature == nullptr) {
             continue;
@@ -394,6 +396,7 @@ void V2MainWindow::RebuildKernelShapes()
                 name += "(" + why + ")";
             }
             failed.push_back(std::move(name));
+            if(V2DocumentOpen::IsWorker())break;
         }
     }
     RefreshPartEdges();

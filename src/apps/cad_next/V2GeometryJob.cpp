@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSaveFile>
@@ -67,9 +68,24 @@ geometry::Vector3 Point(const QJsonValue& value) {
 }
 void Phase(const char* text) {std::cout<<"KACHACAD_PHASE:"<<text<<std::endl;}
 
+JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const DocumentReader& reader,
+    const std::function<bool()>& pulse) {
+    const auto response=ReadJson(scratch.filePath("response.json"));
+    if(response.value("version").toInt()!=1||response.value("token").toString()!=token)
+        return JsonResult::Failure(Failed(QStringLiteral("計算結果が不完全なため採用しませんでした。")));
+    if(!response.value("ok").toBool())return JsonResult::Failure(base::MakeError(
+        response.value("code").toString(failedCode).toStdString(),response.value("summary").toString(QStringLiteral("計算に失敗しました。")).toStdString(),response.value("details").toString().toStdString()));
+    if(reader) {
+        const auto loaded=reader(scratch.filePath("prepared.bin"),token,pulse);
+        if(!loaded.HasValue())return JsonResult::Failure(loaded.Diagnostics());
+    }
+    return JsonResult::Success(response);
+}
+
 // The only process we may stop is this private calculation child. Its only
 // writable outputs are scratch files; it never receives the document or a save path.
-JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::KernelShapeHandle>& inputs) {
+JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::KernelShapeHandle>& inputs,
+    const DocumentReader& reader={}) {
     if(Active())return JsonResult::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     struct Busy {
         Busy(){qApp->setProperty(busyProperty,true);}
@@ -87,7 +103,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     request["version"]=1;request["token"]=token;request["shapes"]=shapes;
     if(!WriteJson(scratch.filePath("request.json"),request))return JsonResult::Failure(Failed(QStringLiteral("計算用入力を書き込めません。")));
     JobDialog dialog(parent);dialog.setObjectName("geometryJobDialog");
-    dialog.setWindowTitle(QStringLiteral("形状を計算"));dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.setWindowTitle(reader?QStringLiteral("文書を開く"):QStringLiteral("形状を計算"));dialog.setWindowModality(Qt::ApplicationModal);
     dialog.setMinimumWidth(420);
     auto* layout=new QVBoxLayout(&dialog);
     auto* label=new QLabel(QStringLiteral("計算を準備しています…"),&dialog);label->setWordWrap(true);layout->addWidget(label);
@@ -95,12 +111,12 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     auto* elapsed=new QLabel(&dialog);layout->addWidget(elapsed);
     auto* cancel=new QPushButton(QStringLiteral("計算を取り消す"),&dialog);cancel->setObjectName("geometryJobCancel");layout->addWidget(cancel);
     QProcess process(&dialog);process.setObjectName("geometryJobProcess");
-    bool cancelled=false;bool exited=false;int exitCode=-1;
+    bool cancelled=false;bool exited=false;int exitCode=-1;std::optional<JsonResult> result;
     QByteArray output,errorOutput;
     QElapsedTimer clock;clock.start();QTimer timer;timer.setInterval(100);
     QObject::connect(&timer,&QTimer::timeout,&dialog,[&]{elapsed->setText(QStringLiteral("経過 %1 秒 — 完了するまで文書は変更しません").arg(clock.elapsed()/1000));});
     dialog.cancel=[&]{
-        if(cancelled||exited)return;cancelled=true;cancel->setEnabled(false);
+        if(cancelled)return;cancelled=true;cancel->setEnabled(false);
         label->setText(QStringLiteral("計算を取り消しています…"));
         if(process.state()!=QProcess::NotRunning)process.kill();
         else dialog.done(QDialog::Rejected);
@@ -119,28 +135,37 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     });
     QObject::connect(&process,&QProcess::readyReadStandardError,&dialog,[&]{errorOutput=(errorOutput+process.readAllStandardError()).right(4096);});
     QObject::connect(&process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),&dialog,[&](int code,QProcess::ExitStatus status){
-        exited=true;exitCode=status==QProcess::NormalExit?code:-1;dialog.done(QDialog::Accepted);
+        exited=true;exitCode=status==QProcess::NormalExit?code:-1;
+        QTimer::singleShot(0,&dialog,[&]{
+            if(!cancelled&&exitCode==0) {
+                label->setText(QStringLiteral("計算結果を読み込んでいます…"));
+                result=ReadResponse(scratch,token,reader,[&]{QCoreApplication::processEvents();return !cancelled;});
+            }
+            dialog.done(QDialog::Accepted);
+        });
     });
     QObject::connect(&process,&QProcess::errorOccurred,&dialog,[&](QProcess::ProcessError error){
         if(error==QProcess::FailedToStart){exited=true;dialog.done(QDialog::Rejected);}
     });
     process.setWorkingDirectory(scratch.path());
-    QTimer::singleShot(0,&dialog,[&]{if(!cancelled)process.start(QCoreApplication::applicationFilePath(),{"--geometry-job",scratch.path()});});
+    if(reader){auto environment=QProcessEnvironment::systemEnvironment();environment.insert("QT_QPA_PLATFORM","offscreen");process.setProcessEnvironment(environment);}
+    QTimer::singleShot(0,&dialog,[&]{if(!cancelled)process.start(QCoreApplication::applicationFilePath(),{reader?"--document-job":"--geometry-job",scratch.path()});});
     timer.start();dialog.exec();
     // Also cover application shutdown while the modal event loop is running.
     if(process.state()!=QProcess::NotRunning){cancelled=true;process.kill();process.waitForFinished(3000);}
     if(cancelled)return JsonResult::Failure(base::MakeError(cancelledCode,"計算を取り消しました。文書は変更していません。","入力を変更するか、選び直して再計算できます。"));
     if(!exited||exitCode!=0)return JsonResult::Failure(Failed(QStringLiteral("計算用プロセスが正常に終了しませんでした。再試行できます。\n終了コード: %1\n%2")
         .arg(exitCode).arg(QString::fromUtf8(errorOutput))));
-    const auto response=ReadJson(scratch.filePath("response.json"));
-    if(response.value("version").toInt()!=1||response.value("token").toString()!=token)
-        return JsonResult::Failure(Failed(QStringLiteral("計算結果が不完全なため採用しませんでした。")));
-    if(!response.value("ok").toBool())return JsonResult::Failure(base::MakeError(
-        response.value("code").toString(failedCode).toStdString(),response.value("summary").toString(QStringLiteral("計算に失敗しました。")).toStdString(),response.value("details").toString().toStdString()));
-    return JsonResult::Success(response);
+    return result?std::move(*result):JsonResult::Failure(Failed(QStringLiteral("計算結果を受け取れませんでした。")));
 }
 }
 bool Active(){return QCoreApplication::instance()&&QCoreApplication::instance()->property(busyProperty).toBool();}
+
+base::Result<bool> PrepareDocument(QWidget* parent,const QString& path,const DocumentReader& reader) {
+    const auto result=Run(parent,{{"source",path}}, {}, reader);
+    if(!result.HasValue())return base::Result<bool>::Failure(result.Diagnostics());
+    return base::Result<bool>::Success(true);
+}
 
 int Worker(const QString& directory) {
     const QDir dir(directory);const auto request=ReadJson(dir.filePath("request.json"));

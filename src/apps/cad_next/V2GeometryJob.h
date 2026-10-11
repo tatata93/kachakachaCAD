@@ -4,11 +4,15 @@
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include <optional>
+#include <functional>
 class QWidget;
 class QString;
 
 namespace V2GeometryJob {
 bool Active();
+using DocumentReader = std::function<kachakacha::v2::base::Result<bool>(
+    const QString&, const QString&, const std::function<bool()>&)>;
+kachakacha::v2::base::Result<bool> PrepareDocument(QWidget* parent, const QString& path, const DocumentReader& reader);
 int Worker(const QString& directory);
 kachakacha::v2::base::Result<kachakacha::v2::kernel::ThickenedSolid> Thicken(
     QWidget* parent, kachakacha::v2::modeling::KernelShapeHandle source,

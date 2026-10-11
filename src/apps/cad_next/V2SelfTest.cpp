@@ -23,6 +23,7 @@ std::vector<SelfTestCase> InstructionCases();
 std::vector<SelfTestCase> InstructionArrowCases();
 std::vector<SelfTestCase> InstructionSheetCases();
 std::vector<SelfTestCase> CurvedEmbossCases();
+std::vector<SelfTestCase> DocumentOpenCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -68,6 +69,8 @@ namespace {
 [[nodiscard]] std::vector<SelfTestCase> AllCases()
 {
     std::vector<SelfTestCase> cases = BasicCases();
+    const auto documentOpen = DocumentOpenCases();
+    cases.insert(cases.end(), documentOpen.begin(), documentOpen.end());
     const std::vector<SelfTestCase> menus = MenuCases();
     cases.insert(cases.end(), menus.begin(), menus.end());
     const std::vector<SelfTestCase> input = InputCases();

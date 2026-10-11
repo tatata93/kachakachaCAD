@@ -13,6 +13,7 @@
 #include "V2MainWindow.h"
 #include "V2SelfTest.h"
 #include "V2GeometryJob.h"
+#include "V2DocumentOpen.h"
 
 #include "kachakacha/base/Version.h"
 #include "kachakacha/kernel/KernelInfo.h"
@@ -98,6 +99,8 @@ int main(int argc, char** argv)
         return V2GeometryJob::Worker(ValueAfter(arguments,QStringLiteral("--geometry-job")));
     }
     QApplication application(argc, argv);
+    if(arguments.contains(QStringLiteral("--document-job")))
+        return V2DocumentOpen::Worker(ValueAfter(arguments,QStringLiteral("--document-job")));
 
     const QString state = ValueAfter(arguments, QStringLiteral("--manual-state"));
     const QString snapshot = ValueAfter(arguments, QStringLiteral("--snapshot"));

@@ -19,6 +19,7 @@
 //! (オーナー指示 §9)。
 
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
 #include "V2EdgeFinishTool.h"
@@ -299,6 +300,7 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
 
 bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
+    if(V2GeometryJob::Active())return QMainWindow::eventFilter(target,event);
     if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn))
         if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if (event != nullptr && event->type() == QEvent::KeyPress) {

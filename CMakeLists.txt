@@ -1105,6 +1105,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
+        src/apps/cad_next/V2SelfTestDocumentOpen.cpp
         src/apps/cad_next/V2SelfTestSurfaceEdit.cpp
         src/apps/cad_next/V2SelfTestSurfaceAnalysis.cpp
         src/apps/cad_next/V2SelfTestWorkPlanePreview.cpp
@@ -1182,6 +1183,9 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2OverlapBrowser.cpp
         src/apps/cad_next/V2ThickenCommands.cpp
         src/apps/cad_next/V2GeometryJob.cpp
+        src/apps/cad_next/V2PreparedDocument.cpp
+        src/apps/cad_next/V2DocumentOpen.cpp
+        src/apps/cad_next/V2DocumentWorker.cpp
         src/apps/cad_next/V2OffsetTool.cpp
         src/apps/cad_next/V2CornerPreview.cpp
         src/apps/cad_next/V2WorkPlanePreview.cpp

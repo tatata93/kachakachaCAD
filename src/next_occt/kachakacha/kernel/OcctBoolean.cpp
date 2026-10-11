@@ -1,11 +1,14 @@
 #include "kachakacha/kernel/OcctBoolean.h"
 
 #include <cmath>
+#include <algorithm>
 #include <string>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -31,7 +34,7 @@ namespace {
 {
     GProp_GProps properties;
     BRepGProp::VolumeProperties(shape, properties);
-    return std::abs(properties.Mass());
+    return properties.Mass();
 }
 
 //! 演算ごとに OCCT の道具で形を作る。止まったら空の形と、どこで止まったかの一言。
@@ -41,17 +44,20 @@ namespace {
     if (operation == BooleanOperation::Union) {
         BRepAlgoAPI_Fuse fuse(base, other);
         fuse.Build();
+        if (fuse.IsDone()) fuse.SimplifyResult(true, true);
         stoppedAt = fuse.IsDone() ? std::string() : "足すところで止まりました。";
         return fuse.IsDone() ? fuse.Shape() : TopoDS_Shape();
     }
     if (operation == BooleanOperation::Difference) {
         BRepAlgoAPI_Cut cut(base, other);
         cut.Build();
+        if (cut.IsDone()) cut.SimplifyResult(true, true);
         stoppedAt = cut.IsDone() ? std::string() : "引くところで止まりました。";
         return cut.IsDone() ? cut.Shape() : TopoDS_Shape();
     }
     BRepAlgoAPI_Common common(base, other);
     common.Build();
+    if (common.IsDone()) common.SimplifyResult(true, true);
     stoppedAt = common.IsDone() ? std::string() : "共通部分を求めるところで止まりました。";
     return common.IsDone() ? common.Shape() : TopoDS_Shape();
 }
@@ -88,7 +94,6 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     KernelShapeHandle first, KernelShapeHandle second, double toleranceMm)
 {
     using Out = Result<BooleanBuildResult>;
-    (void)toleranceMm;
     TopoDS_Shape base;
     TopoDS_Shape other;
     if (!first.Valid() || !LookupShape(first, base)) {
@@ -101,6 +106,12 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     }
     try {
         const double before = VolumeOf(base);
+        const double added = VolumeOf(other);
+        if (!std::isfinite(before) || !std::isfinite(added) || before <= 0 || added <= 0) {
+            return Out::Failure(MakeError(kBooleanFailed,
+                "足し引きの入力が正しい向きの立体ではありません。",
+                "入力部品の閉じ方と法線を確認してください。"));
+        }
         std::string stoppedAt;
         const TopoDS_Shape made = RunOperation(operation, base, other, stoppedAt);
         if (!stoppedAt.empty() || made.IsNull()) {
@@ -108,6 +119,19 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
                 stoppedAt.empty() ? std::string("形が出来ませんでした。") : stoppedAt));
         }
         const double after = VolumeOf(made);
+        const double volumeTolerance = std::max(std::pow(std::max(toleranceMm, 1e-6), 3.0),
+            std::max(before, added) * 1e-7);
+        if (!std::isfinite(after) || after < -volumeTolerance
+            || (operation == BooleanOperation::Union
+                && (after < std::max(before, added) - volumeTolerance
+                    || after > before + added + volumeTolerance))
+            || (operation == BooleanOperation::Difference && after > before + volumeTolerance)
+            || (operation == BooleanOperation::Intersection
+                && after > std::min(before, added) + volumeTolerance)) {
+            return Out::Failure(MakeError(kBooleanFailed,
+                "足し引きの結果の体積が入力と矛盾するため、変更しませんでした。",
+                "接合部の隙間・重なり・自己交差を確認してください。"));
+        }
         if (after <= 0.0) {
             // 引き切った・重ならないものを交差させた。消えた部品を持ち続けない。
             return Out::Failure(NothingLeft(operation));
@@ -119,6 +143,13 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
         }
         BooleanBuildResult built;
         built.handle = StoreShape(made);
+        const auto checked = CheckSolidForExport(built.handle, toleranceMm);
+        if (!checked.HasValue() || !checked.Value().Ok()) {
+            ReleaseShape(built.handle);
+            return Out::Failure(MakeError(kBooleanFailed,
+                "足し引きの結果が閉じた正しい立体にならないため、変更しませんでした。",
+                "接合部の隙間・重なり・自己交差を確認してください。"));
+        }
         built.volumeMm3 = after;
         built.previousVolumeMm3 = before;
         return Out::Success(built);

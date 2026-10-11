@@ -7,10 +7,15 @@
 
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctFoldedBandThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepGProp.hxx>
+#include <BRepLib.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepGProp_Face.hxx>
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
@@ -24,6 +29,8 @@
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Solid.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pln.hxx>
@@ -107,7 +114,23 @@ namespace {
                 "厚みが曲がりに対して大きすぎるか、面が自分自身と交わります。"
                 "厚みを小さくするか、面を分けてください。"));
         }
-        return Out::Success(maker.Shape());
+        // Simple thickening can return an inside-out solid. Absolute volume hid
+        // that defect, while STL consumers received inward-facing triangles.
+        std::vector<TopoDS_Solid> solids;
+        for (TopExp_Explorer e(maker.Shape(), TopAbs_SOLID); e.More(); e.Next()) {
+            auto solid = TopoDS::Solid(e.Current());
+            if (!BRepLib::OrientClosedSolid(solid)) {
+                return Out::Failure(MakeError(kThickenFailed,
+                    "厚みを付けた形の内外を決められません。", "開いた殻や不整合な接続があります。"));
+            }
+            solids.push_back(solid);
+        }
+        if (solids.empty()) return Out::Failure(MakeError(kThickenFailed,
+            "厚みを付けても閉じた立体になりませんでした。", {}));
+        if (solids.size() == 1) return Out::Success(solids.front());
+        TopoDS_Compound compound; BRep_Builder builder; builder.MakeCompound(compound);
+        for (const auto& solid : solids) builder.Add(compound, solid);
+        return Out::Success(compound);
     } catch (const std::exception& error) {
         return Out::Failure(MakeError(kThickenFailed,
             "面に厚みを付けられませんでした。", error.what()));
@@ -145,15 +168,16 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         placement == fabrication::ThicknessPlacement::Centered ? -thicknessMm * 0.5
         : placement == fabrication::ThicknessPlacement::Inside ? -thicknessMm
                                                                : 0.0;
+    const auto folded=detail::ThickenFoldedBand(face,thicknessMm,placement,tolerance);
     TopoDS_Shape base = face;
-    if (startOffset != 0.0) {
+    if (!folded && startOffset != 0.0) {
         const auto moved = OffsetSurface(face, startOffset);
         if (!moved.HasValue()) {
             return Out::Failure(moved.Diagnostics());
         }
         base = moved.Value();
     }
-    const auto built = ThickSolid(base, thicknessMm);
+    const auto built = folded ? *folded : ThickSolid(base, thicknessMm);
     if (!built.HasValue()) {
         return Out::Failure(built.Diagnostics());
     }
@@ -167,6 +191,13 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     }
     ThickenedSolid made;
     made.handle = StoreShape(built.Value());
+    const auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
+    if (!checked.HasValue() || !checked.Value().Ok()) {
+        ReleaseShape(made.handle);
+        return Out::Failure(MakeError(kThickenFailed,
+            "厚みを付けた形が自己交差するか、閉じた正しい立体になりません。",
+            "厚みを小さくするか、急な折れや巻き縁を別部品にしてください。"));
+    }
     made.volumeMm3 = volume;
     made.thicknessMm = thicknessMm;
     made.edges = EdgesOf(built.Value(), tolerance);

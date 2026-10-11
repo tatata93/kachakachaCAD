@@ -1,9 +1,12 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 #include <sstream>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <algorithm>
+#include <cmath>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -18,6 +21,11 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
 #include <STEPControl_Writer.hxx>
+#include <STEPControl_Reader.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopExp.hxx>
@@ -64,6 +72,31 @@ Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle, double t
 namespace {
 template<class T> Result<T> Failed() {return Result<T>::Failure(base::MakeError("EXP-P001","出力形状を作れません。","入力形状または配置基準を確認してください。"));}
 #ifdef KACHACAD_V2_WITH_OCCT
+struct StepSolidFacts {
+    int count=0;
+    double volume=0;
+    Bnd_Box bounds;
+    bool valid=true;
+    void Add(const TopoDS_Shape& shape) {
+        for(TopExp_Explorer e(shape,TopAbs_SOLID);e.More();e.Next()) {
+            ++count;GProp_GProps props;BRepGProp::VolumeProperties(e.Current(),props);
+            volume+=props.Mass();valid=valid&&props.Mass()>0&&BRepCheck_Analyzer(e.Current()).IsValid();
+            BRepBndLib::AddOptimal(e.Current(),bounds,false,false);
+        }
+    }
+};
+bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source) {
+    if(!source.count)return true; // Explicit surface/curve exports remain supported.
+    STEPControl_Reader reader;std::istringstream in(content);
+    if(reader.ReadStream("output-validation.step",in)!=IFSelect_RetDone||!reader.TransferRoots())return false;
+    StepSolidFacts restored;restored.Add(reader.OneShape());
+    if(!restored.valid||restored.count!=source.count
+        ||std::abs(restored.volume-source.volume)>std::max(.001,source.volume*1e-5))return false;
+    double a[6],b[6];source.bounds.Get(a[0],a[1],a[2],a[3],a[4],a[5]);
+    restored.bounds.Get(b[0],b[1],b[2],b[3],b[4],b[5]);
+    for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4)return false;
+    return true;
+}
 gp_Trsf Placement(const OutputPlacement& placement) {
     gp_Trsf trsf;
     if(!placement.keepPosition) {
@@ -190,10 +223,18 @@ Result<std::string> OutputStep(const std::vector<KernelShapeHandle>& handles) {
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         if(handles.empty())return Failed<std::string>();
-        STEPControl_Writer writer;
+        STEPControl_Writer writer;StepSolidFacts source;
         for(const auto handle:handles){TopoDS_Shape shape;if(!LookupShape(handle,shape)||shape.IsNull()||!BRepCheck_Analyzer(shape).IsValid())return Failed<std::string>();
+            if(TopExp_Explorer(shape,TopAbs_SOLID).More()) {
+                const auto check=CheckSolidForExport(handle,1e-6);
+                if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001","不正な立体は書き出せません。","閉鎖性・内外の向き・自己交差を確認してください。"));
+            }
+            source.Add(shape);
             if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return Failed<std::string>();}
         std::ostringstream out;if(writer.WriteStream(out)!=IFSelect_RetDone)return Failed<std::string>();
+        if(!StepRetainsSolids(out.str(),source))return Result<std::string>::Failure(base::MakeError(
+            "EXP-P003","STEPを再読込すると立体の形または閉鎖性が変わります。",
+            "このSTEPは保存しません。元のKCDを保ち、形状を整理するかSTLを選んでください。"));
         return Result<std::string>::Success(out.str());
     }catch(...){return Failed<std::string>();}
 #else
@@ -205,6 +246,14 @@ Result<std::string> OutputStl(const std::vector<KernelShapeHandle>& handles,doub
     std::string bytes(84,'\0');std::uint32_t count=0;
     const auto append=[&](float f){std::uint32_t bits;std::memcpy(&bits,&f,4);for(int i=0;i<4;++i)bytes.push_back(static_cast<char>(bits>>(8*i)));};
     for(const auto handle:handles) {
+#ifdef KACHACAD_V2_WITH_OCCT
+        TopoDS_Shape shape;
+        if(!LookupShape(handle,shape))return Failed<std::string>();
+        if(TopExp_Explorer(shape,TopAbs_SOLID).More()) {
+            const auto check=CheckSolidForExport(handle,1e-6);
+            if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001","不正な立体はSTLにできません。","閉鎖性・内外の向き・自己交差を確認してください。"));
+        }
+#endif
         const auto mesh=BuildShapeMesh(handle,deflection);
         if(!mesh.HasValue())return Result<std::string>::Failure(mesh.Diagnostics());
         if(mesh.Value().triangles.empty())return Result<std::string>::Failure(base::MakeError("EXP-P002","線や点はSTLにできません。","STEPかKCDを選ぶか、対象を外してください。"));

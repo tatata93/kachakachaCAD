@@ -5,6 +5,11 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctExtrude.h"
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include <TopoDS_Shape.hxx>
+#endif
 
 #include <string>
 #include <vector>
@@ -88,6 +93,22 @@ KACHA_V2_TEST(kernel_boolean_absent, カーネルが無い版は足し引きせ�
 }
 
 #else
+
+KACHA_V2_TEST(kernel_boolean, inward_input_is_rejected_instead_of_hidden_by_absolute_volume)
+{
+    const auto a = Box(0, 0, 10, 10, 0, 10);
+    const auto b = Box(5, 0, 15, 10, 0, 10);
+    TopoDS_Shape reversed;
+    Require(kachakacha::v2::kernel::LookupShape(a, reversed), "input available");
+    reversed.Reverse();
+    const auto bad = kachakacha::v2::kernel::StoreShape(reversed);
+    const auto result = BuildBoolean(BooleanOperation::Union, bad, b, 1e-6);
+    Require(!result.HasValue() && FirstCode(result.Diagnostics()) == "KER-B001",
+        "an inverted solid must never produce a successful union");
+    kachakacha::v2::kernel::ReleaseShape(a);
+    kachakacha::v2::kernel::ReleaseShape(b);
+    kachakacha::v2::kernel::ReleaseShape(bad);
+}
 
 KACHA_V2_TEST(kernel_boolean, 重なる2つの箱を足す引く交差すると体積が合う)
 {

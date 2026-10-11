@@ -17,6 +17,7 @@
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctLoftSurface.h"
 #include "kachakacha/kernel/OcctMatchedRuled.h"
+#include "kachakacha/kernel/OcctMatchedLoft.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -210,10 +211,19 @@ template<class Function>
         if (ruled) {
             const auto matched=detail::BuildMatchedRuled(request,order,tolerance);
             if(matched)return *matched;
+        } else {
+            const auto matched=detail::BuildMatchedLoft(request,order,tolerance);
+            if(matched)return *matched;
         }
         BRepOffsetAPI_ThruSections generator(Standard_False,
             ruled ? Standard_True : Standard_False,
             std::max(tolerance.modelLinearMm, Precision::Confusion()));
+        if (!ruled) {
+            // High-degree global interpolation can balloon between unequally
+            // spaced nose/body stations, even when later sections are constant.
+            generator.SetMaxDegree(3);
+            generator.SetParType(Approx_ChordLength);
+        }
         for (const std::size_t index : order) {
             auto wire = WireOf(request, index, tolerance);
             if (!wire.HasValue()) {

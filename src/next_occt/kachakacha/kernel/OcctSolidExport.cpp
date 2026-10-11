@@ -11,6 +11,7 @@
 
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BOPAlgo_ArgumentAnalyzer.hxx>
 #include <BRepGProp.hxx>
 #include <BRep_Builder.hxx>
 #include <IFSelect_ReturnStatus.hxx>
@@ -175,7 +176,7 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
         // 2. 体積が正か。
         GProp_GProps properties;
         BRepGProp::VolumeProperties(shape, properties);
-        check.volumeMm3 = std::abs(properties.Mass());
+        check.volumeMm3 = properties.Mass();
         const double diagonal = DiagonalOf(shape);
         check.boundingDiagonalMm = diagonal;
         // 大きさに応じた下限。小さい部品でも判定できるようにする。
@@ -186,6 +187,21 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
         // 3. 自己交差などの不正が無いか。
         BRepCheck_Analyzer analyzer(shape);
         check.selfIntersectionFree = analyzer.IsValid() == Standard_True;
+        // BRepCheck validates topology and parameter consistency; it does not
+        // perform a geometric self-intersection test. Check every solid itself,
+        // leaving contacts between separate assembly parts to assembly checks.
+        for (TopExp_Explorer e(shape, TopAbs_SOLID); e.More(); e.Next()) {
+            GProp_GProps component;
+            BRepGProp::VolumeProperties(e.Current(), component);
+            check.positiveVolume = check.positiveVolume && component.Mass() > floorVolume;
+            BOPAlgo_ArgumentAnalyzer intersections;
+            intersections.SetShape1(e.Current());
+            intersections.SelfInterMode() = true;
+            intersections.StopOnFirstFaulty() = true;
+            intersections.Perform();
+            check.selfIntersectionFree = check.selfIntersectionFree
+                && !intersections.HasFaulty() && !intersections.HasErrors();
+        }
 
         return Result<SolidExportCheck>::Success(check);
     }, "書き出し前の検査");

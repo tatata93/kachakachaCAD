@@ -772,6 +772,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctMatchedLoft.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
@@ -805,6 +807,12 @@ if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
             TKDESTEP
             TKDESTL
     )
+    add_executable(kachakacha_inspect_brep tools/inspect_brep.cpp)
+    target_link_libraries(kachakacha_inspect_brep PRIVATE kachakacha_v2_occt TKDESTEP TKBO TKTopAlgo TKBRep TKMath TKernel)
+    target_compile_features(kachakacha_inspect_brep PRIVATE cxx_std_20)
+    if(MSVC)
+        target_compile_options(kachakacha_inspect_brep PRIVATE /utf-8 /EHsc)
+    endif()
     # 辺の丸め・面取り(BRepFilletAPI、P-12)。TKOffset から間接に入ることが多いが、名指しで結ぶ。
     if(TARGET TKFillet)
         target_link_libraries(kachakacha_v2_occt PRIVATE TKFillet)
@@ -1028,6 +1036,8 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_boolean_tests tests_v2/kernel_boolean_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_place_tests tests_v2/kernel_place_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_solid_tests tests_v2/kernel_solid_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_thicken_quality_tests tests_v2/kernel_thicken_quality_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_loft_envelope_tests tests_v2/kernel_loft_envelope_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_edge_finish_tests tests_v2/kernel_edge_finish_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_shell_split_tests tests_v2/kernel_shell_split_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)

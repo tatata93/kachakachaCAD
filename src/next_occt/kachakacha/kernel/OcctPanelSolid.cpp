@@ -118,7 +118,10 @@ Result<BuiltPanelSolid> BuildPanelSolid(const fabrication::PanelSolidRequest& re
                 "折った立体が正しく作れませんでした。",
                 "つぶれた輪郭です: " + request.panelId));
         }
-        const auto wire = ToWire(loop, tolerance.interactiveJoinMm);
+        // Generated panel vertices already coincide. The UI picking/join radius
+        // is not a B-Rep tolerance: inflating it made a 0.2mm plate's opposite
+        // vertices overlap topologically and fail geometric interference checks.
+        const auto wire = ToWire(loop, tolerance.modelLinearMm);
         if (!wire.HasValue()) {
             return Out::Failure(wire.Diagnostics());
         }

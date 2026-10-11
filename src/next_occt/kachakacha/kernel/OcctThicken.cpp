@@ -193,7 +193,10 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     const auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
     if (!checked.HasValue() || !checked.Value().Ok()) {
         ReleaseShape(made.handle);
-        if(!checked.HasValue())return Out::Failure(checked.Diagnostics());
+        if(!checked.HasValue())return Out::Failure(MakeError(kThickenFailed,
+            "厚みを付けた形の安全性を確認できませんでした。",
+            checked.FirstSummaryJa()+(checked.Diagnostics().empty()?std::string():
+                "\n"+checked.Diagnostics().front().detailsJa)));
         const auto reason=!checked.Value().closed
             ? "厚み面の境界が閉じていないか、1本の辺へ3面以上が接続しています。"
             : !checked.Value().positiveVolume

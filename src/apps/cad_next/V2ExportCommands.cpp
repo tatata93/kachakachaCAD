@@ -28,6 +28,32 @@
 #include <string_view>
 #include <vector>
 
+namespace {
+kachakacha::v2::base::Result<std::string> MakePatternContent(
+    const std::vector<kachakacha::v2::exporters::PatternPage>& pages,
+    int currentPage, kachakacha::v2::app::ExportFormat format,
+    double referenceScale, const std::string& title)
+{
+    using namespace kachakacha::v2;
+    if (pages.empty()) {
+        return base::Result<std::string>::Failure(base::MakeError("EXP-D001",
+            "ページがありません。",
+            "先に「製作」→「型紙を作る」で型紙を作ってください。"));
+    }
+    if (format == app::ExportFormat::Pdf) {
+        exporters::PdfMetadata metadata;
+        metadata.title = title;
+        metadata.referenceScaleDenominator = referenceScale;
+        return exporters::WritePatternPdf(pages, metadata);
+    }
+    // SVG/DXF contain the sheet currently displayed; PDF contains all sheets.
+    const auto& page = pages[static_cast<std::size_t>(std::clamp(currentPage, 0,
+        static_cast<int>(pages.size()) - 1))];
+    return format == app::ExportFormat::Svg
+        ? exporters::WritePatternSvg(page, title) : exporters::WritePatternDxf(page);
+}
+} // namespace
+
 void V2MainWindow::RunExportCommand(std::string_view id)
 {
     using kachakacha::v2::app::ExportFormat;
@@ -92,12 +118,11 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
     using kachakacha::v2::app::ExportTarget;
     using Out = kachakacha::v2::base::Result<std::string>;
     const auto& snapshot = session_->GetDocument().Snapshot();
-    // SVG/DXF are single-sheet formats. Respect the sheet shown in preview;
-    // PDF intentionally contains every sheet in the current pattern.
-    const auto shownPage = [this]() -> const kachakacha::v2::exporters::PatternPage& {
-        const int index = patternDock_ == nullptr ? 0 : patternDock_->CurrentPage();
-        return patternPages_[static_cast<std::size_t>(std::clamp(index, 0,
-            static_cast<int>(patternPages_.size()) - 1))];
+    const auto patternContent = [this, &request](const std::string& title) {
+        return MakePatternContent(patternPages_,
+            patternDock_ == nullptr ? 0 : patternDock_->CurrentPage(), request.format,
+            kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+                kachakacha::v2::app::ParameterId::ScaleDenominator), title);
     };
     if (request.target == ExportTarget::Project) {
         kachakacha::v2::io::DocumentFile file;
@@ -124,24 +149,7 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         return kachakacha::v2::app::MakeProjectContent(file);
     }
     if (request.target == ExportTarget::CurrentPattern) {
-        if (patternPages_.empty()) {
-            return Out::Failure(kachakacha::v2::base::MakeError("EXP-D001",
-                "ページがありません。",
-                "先に「製作」→「型紙を作る」で型紙を作ってください。"));
-        }
-        if (request.format == ExportFormat::Pdf) {
-            kachakacha::v2::exporters::PdfMetadata metadata;
-            metadata.title = "型紙";
-            // 縮尺は紙に書く。書かないと、刷った紙だけを見た人に伝わらない。
-            metadata.referenceScaleDenominator = kachakacha::v2::app::ParameterValueOf(
-                parameterDock_->Values(),
-                kachakacha::v2::app::ParameterId::ScaleDenominator);
-            return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
-        }
-        if (request.format == ExportFormat::Svg) {
-            return kachakacha::v2::exporters::WritePatternSvg(shownPage(), "型紙");
-        }
-        return kachakacha::v2::exporters::WritePatternDxf(shownPage());
+        return patternContent("型紙");
     }
     if (request.target == ExportTarget::SelectedWires) {
         kachakacha::v2::app::WirePatternRequest wires;
@@ -159,24 +167,7 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         // 部材の絵は型紙と同じものである。別に作ると食い違う。
         if (request.format == ExportFormat::Svg || request.format == ExportFormat::Dxf
             || request.format == ExportFormat::Pdf) {
-            if (patternPages_.empty()) {
-                return Out::Failure(kachakacha::v2::base::MakeError("EXP-D001",
-                    "ページがありません。",
-                    "先に「製作」→「型紙を作る」で型紙を作ってください。"));
-            }
-            if (request.format == ExportFormat::Pdf) {
-                kachakacha::v2::exporters::PdfMetadata metadata;
-                metadata.title = "部材";
-                metadata.referenceScaleDenominator = kachakacha::v2::app::ParameterValueOf(
-                    parameterDock_->Values(),
-                    kachakacha::v2::app::ParameterId::ScaleDenominator);
-                return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
-            }
-            if (request.format == ExportFormat::Svg) {
-                return kachakacha::v2::exporters::WritePatternSvg(shownPage(),
-                    "部材");
-            }
-            return kachakacha::v2::exporters::WritePatternDxf(shownPage());
+            return patternContent("部材");
         }
         // 立体で出すときは、その部材のもとになった部品の形を出す。
         return MakeSolidContent(PanelSourceShapes(), request.format);

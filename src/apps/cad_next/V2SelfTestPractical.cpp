@@ -17,6 +17,7 @@
 #include <QDoubleSpinBox>
 #include <QDir>
 #include <QFile>
+#include <QIODevice>
 #include <QLabel>
 #include <QPixmap>
 #include <QTextStream>

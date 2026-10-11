@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QFile>
 #include <QPixmap>
+#include <QString>
 #include <iostream>
 
 namespace kachakacha::v2::selftest {

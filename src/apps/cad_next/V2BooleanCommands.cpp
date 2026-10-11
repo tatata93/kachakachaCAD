@@ -33,6 +33,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/kernel/OcctBoolean.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -305,6 +306,7 @@ void V2MainWindow::RefreshBooleanForSelectionChange()
 void V2MainWindow::RefreshBooleanPreview()
 {
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
+    if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
     booleanBuilt_.reset();
     viewport_->HideToolPreview();
     if (!kachakacha::v2::app::BooleanReady(booleanInput_)) {
@@ -332,6 +334,8 @@ void V2MainWindow::RefreshBooleanPreview()
         KernelBooleanOperation(booleanInput_.kind), base->second, tools, tolerance);
     if (!built.HasValue()) {
         booleanOutcome_.refusalJa = built.FirstSummaryJa();
+        if(!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())
+            booleanOutcome_.refusalJa += "\n" + built.Diagnostics().front().detailsJa;
         return;
     }
     const auto current = built.Value().handle;
@@ -419,6 +423,7 @@ void V2MainWindow::ClearBooleanSlot(BooleanSlot slot)
 //! 足す ⇄ 引く ⇄ 交差。入力はそのまま、下見だけ作り直す。
 void V2MainWindow::ChooseBooleanOperation(kachakacha::v2::app::BooleanKind kind)
 {
+    if(booleanInput_.kind==kind)return;
     booleanInput_.kind = kind;
     RefreshBooleanAll();
     SetStatus(QStringLiteral("%1: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。\n%2")
@@ -433,6 +438,7 @@ void V2MainWindow::EndBoolean(bool keepTool)
     contactBase_.reset();
     contactBuilt_.reset();
     booleanShelfShown_ = keepTool;
+    if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
     booleanBuilt_.reset();
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
     booleanMirror_.clear();
@@ -485,6 +491,7 @@ void V2MainWindow::ConfirmBoolean()
     if (!transaction.Commit()) {
         return;
     }
+    booleanBuilt_.reset(); // Ownership moved to the committed part.
     EndBoolean();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("%1: 体積が %2 mm3 から %3 mm3 になりました。")

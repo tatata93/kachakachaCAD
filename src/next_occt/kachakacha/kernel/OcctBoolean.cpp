@@ -39,29 +39,29 @@ namespace {
     return properties.Mass();
 }
 
+template<class Operation>
+TopoDS_Shape NonDestructiveOperation(const TopoDS_Shape& base,const TopoDS_Shape& other,
+    std::string& stoppedAt,const char* failure)
+{
+    TopTools_ListOfShape arguments,tools;arguments.Append(base);tools.Append(other);
+    Operation operation;operation.SetArguments(arguments);operation.SetTools(tools);
+    operation.SetNonDestructive(true);operation.Build();
+    if(operation.IsDone())operation.SimplifyResult(true,true);
+    stoppedAt=operation.IsDone()?std::string():failure;
+    return operation.IsDone()?operation.Shape():TopoDS_Shape();
+}
+
 //! 演算ごとに OCCT の道具で形を作る。止まったら空の形と、どこで止まったかの一言。
 [[nodiscard]] TopoDS_Shape RunOperation(BooleanOperation operation, const TopoDS_Shape& base,
     const TopoDS_Shape& other, std::string& stoppedAt)
 {
     if (operation == BooleanOperation::Union) {
-        BRepAlgoAPI_Fuse fuse(base, other);
-        fuse.Build();
-        if (fuse.IsDone()) fuse.SimplifyResult(true, true);
-        stoppedAt = fuse.IsDone() ? std::string() : "足すところで止まりました。";
-        return fuse.IsDone() ? fuse.Shape() : TopoDS_Shape();
+        return NonDestructiveOperation<BRepAlgoAPI_Fuse>(base,other,stoppedAt,"足すところで止まりました。");
     }
     if (operation == BooleanOperation::Difference) {
-        BRepAlgoAPI_Cut cut(base, other);
-        cut.Build();
-        if (cut.IsDone()) cut.SimplifyResult(true, true);
-        stoppedAt = cut.IsDone() ? std::string() : "引くところで止まりました。";
-        return cut.IsDone() ? cut.Shape() : TopoDS_Shape();
+        return NonDestructiveOperation<BRepAlgoAPI_Cut>(base,other,stoppedAt,"引くところで止まりました。");
     }
-    BRepAlgoAPI_Common common(base, other);
-    common.Build();
-    if (common.IsDone()) common.SimplifyResult(true, true);
-    stoppedAt = common.IsDone() ? std::string() : "共通部分を求めるところで止まりました。";
-    return common.IsDone() ? common.Shape() : TopoDS_Shape();
+    return NonDestructiveOperation<BRepAlgoAPI_Common>(base,other,stoppedAt,"共通部分を求めるところで止まりました。");
 }
 
 //! 何も残らなかったときの一言(引き切った / 重なっていない)。

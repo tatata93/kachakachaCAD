@@ -27,6 +27,7 @@
 #include "V2ExtrudeDock.h"
 #include "kachakacha/kernel/OcctContact.h"
 #include "kachakacha/kernel/OcctExtrude.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -564,11 +565,32 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("HP-FA 保存後の独立フェイスも近似できる",!viewport.ToolPreview().empty());
 }
 
+bool CaseBooleanPreviewOwnership(V2MainWindow& window)
+{
+    EntityId first,second;
+    if(!ArmUnionOnTwoBoxes(window,&first,&second))return false;
+    const auto baseline=kachakacha::v2::kernel::CachedShapeCount();
+    if(!PressPart(window,first)||!PressPart(window,second))return false;
+    for(int i=0;i<8;++i) {
+        const auto kind=i%2?app::BooleanKind::Add:app::BooleanKind::Cut;
+        if(!window.BooleanDock().ClickOperation(kind))return false;
+        if(!Explain("only current boolean preview is retained",
+            kachakacha::v2::kernel::CachedShapeCount()==baseline+1))return false;
+    }
+    if(!window.HandleToolKey(Qt::Key_Escape,nullptr))return false;
+    if(!Explain("cancel releases boolean preview without changing parts",
+        kachakacha::v2::kernel::CachedShapeCount()==baseline&&CountOfKind(window,EntityKind::Part)==2))return false;
+    if(!PressPart(window,first)||!PressPart(window,second)||!window.BooleanDock().ClickConfirm())return false;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("boolean retry and undo/redo preserve a usable result",
+        CountOfKind(window,EntityKind::Part)==3&&window.RebuildProblems().isEmpty());
+}
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-BO-04 boolean preview release, cancel and retry",CaseBooleanPreviewOwnership},
         {"HP-FA-01 フェイスから作図と近似", CaseFaceToolFirst},
         {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},
         {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},

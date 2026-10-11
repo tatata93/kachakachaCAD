@@ -58,8 +58,11 @@ KACHA_V2_TEST(thicken_quality, cylinder_wall_has_outward_winding_and_analytic_vo
 KACHA_V2_TEST(thicken_quality, rim_with_impossible_offset_is_rejected)
 {
     const auto surface=Revolved({{15.9,0,1},{16.5,0,1.6},{16.5,0,3},{16.2,0,3.3},{16.2,0,63}});
+    const auto before=kernel::CachedShapeCount();
     const auto solid=kernel::ThickenSurface(surface,.8,fabrication::ThicknessPlacement::Inside,{});
     Require(!solid.HasValue(),"self-intersecting simple offset must not become a part");
+    Require(!solid.Diagnostics().empty()&&!solid.Diagnostics().front().detailsJa.empty(),"failure retains an actionable diagnostic");
+    Require(kernel::CachedShapeCount()==before,"rejected thickness leaves no orphaned shape");
 }
 KACHA_V2_TEST(thicken_quality, folded_band_has_exact_miter_thickness_and_portable_step)
 {

@@ -21,6 +21,12 @@ option(KACHACAD_BUILD_TESTS "Build kachakachaCAD tests" ON)
 option(KACHACAD_BUILD_QT_APP "Build the Qt desktop application when Qt 6 is available" ON)
 option(KACHACAD_ENABLE_OCCT "Enable Open CASCADE B-Rep and 3D export support" ON)
 
+# Geometry failures are caught at the command boundary. Stack-owned guards
+# must unwind even when a caller overrides CMAKE_CXX_FLAGS in a local preset.
+if(MSVC)
+    add_compile_options(/EHsc)
+endif()
+
 # テスト実行ファイル共通のコンパイル設定を1か所にまとめる。
 # /utf-8 が無いと、日本語コメントを含むヘッダで MSVC が C4819 を大量に出す。
 function(kachakacha_apply_test_options target)
@@ -824,6 +830,9 @@ if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
     target_compile_features(kachakacha_inspect_brep PRIVATE cxx_std_20)
     if(MSVC)
         target_compile_options(kachakacha_inspect_brep PRIVATE /utf-8 /EHsc)
+        target_compile_options(kachakacha_probe_practical_geometry PRIVATE /utf-8 /EHsc)
+        target_compile_options(kachakacha_volume_probe PRIVATE /utf-8 /EHsc)
+        target_compile_options(kachakacha_assembly_probe PRIVATE /utf-8 /EHsc)
     endif()
     # 辺の丸め・面取り(BRepFilletAPI、P-12)。TKOffset から間接に入ることが多いが、名指しで結ぶ。
     if(TARGET TKFillet)

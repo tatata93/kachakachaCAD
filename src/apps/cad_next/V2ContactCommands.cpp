@@ -4,6 +4,7 @@
 #include "V2MainWindow.h"
 #include "V2OverlapBrowser.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/document/Commands.h"
 #include <algorithm>
@@ -60,6 +61,7 @@ bool V2MainWindow::RefreshContactPreview()
 {
     using namespace kachakacha::v2;
     if (!IsContact(booleanInput_.kind)) return false;
+    if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
     contactBuilt_.reset(); booleanBuilt_.reset(); viewport_->HideToolPreview();
     std::vector<QString> status;
     booleanDock_->ShowInput(booleanInput_, {}, {}, {}, false); // configure selected tool before reading options

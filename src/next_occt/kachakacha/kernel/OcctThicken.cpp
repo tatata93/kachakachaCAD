@@ -188,30 +188,22 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     if (!built.HasValue()) {
         return Out::Failure(built.Diagnostics());
     }
-    double volume=0;
-    try { volume=VolumeOf(built.Value()); }
-    catch(const Standard_Failure& failure) {
-        return Out::Failure(MakeError(kThickenFailed,
-            "厚みを付けた形の体積を必要な精度で確認できませんでした。",
-            std::string(failure.GetMessageString())));
-    }
-    if (!(volume > 0.0)) {
-        // 出来たと言われても、中身が無いなら立体ではない。
-        // ここを飛ばすと「作れた」と言いながら STL が空になる。
-        return Out::Failure(MakeError(kThickenFailed,
-            "面に厚みを付けられませんでした。",
-            "体積が0になりました。面が閉じていないか、厚みが小さすぎます。"));
-    }
     ThickenedSolid made;
     made.handle = StoreShape(built.Value());
     const auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
     if (!checked.HasValue() || !checked.Value().Ok()) {
         ReleaseShape(made.handle);
+        if(!checked.HasValue())return Out::Failure(checked.Diagnostics());
+        const auto reason=!checked.Value().closed
+            ? "厚み面の境界が閉じていないか、1本の辺へ3面以上が接続しています。"
+            : !checked.Value().positiveVolume
+                ? "閉じた形の体積または内外の向きが不正です。"
+                : "厚み面の接続・境界の整合性または自己交差の検査に失敗しました。";
         return Out::Failure(MakeError(kThickenFailed,
-            "厚みを付けた形が自己交差するか、閉じた正しい立体になりません。",
-            "厚みを小さくするか、急な折れや巻き縁を別部品にしてください。"));
+            "厚みを付けた形の安全検査に失敗したため、部品を作りませんでした。",
+            std::string(reason)+"厚みを小さくするか、急な折れや巻き縁を別部品にしてください。"));
     }
-    made.volumeMm3 = volume;
+    made.volumeMm3 = checked.Value().volumeMm3;
     made.thicknessMm = thicknessMm;
     made.edges = EdgesOf(built.Value(), tolerance);
     return Out::Success(std::move(made));

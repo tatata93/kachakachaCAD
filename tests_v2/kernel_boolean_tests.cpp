@@ -126,6 +126,24 @@ KACHA_V2_TEST(kernel_boolean, batch_union_matches_ordered_union_and_preserves_in
     RequireNear(batch.Value().volumeMm3, sequential.Value().volumeMm3, 1e-6, "same result as ordered union");
 }
 
+KACHA_V2_TEST(kernel_boolean, binary_operations_preserve_source_geometry)
+{
+    for(const auto operation:{BooleanOperation::Union,BooleanOperation::Difference,BooleanOperation::Intersection}) {
+        const auto a=Box(0,0,10,10,0,10),b=Box(5,0,15,10,0,10);
+        const auto serialized=[](KernelShapeHandle handle) {
+            TopoDS_Shape shape;Require(kachakacha::v2::kernel::LookupShape(handle,shape),"input exists");
+            std::ostringstream stream;BRepTools::Write(shape,stream);return stream.str();
+        };
+        const auto beforeA=serialized(a),beforeB=serialized(b);
+        const auto result=BuildBoolean(operation,a,b,1e-6);
+        Require(result.HasValue(),result.FirstSummaryJa());
+        Require(serialized(a)==beforeA&&serialized(b)==beforeB,"preview operation leaves original BRep unchanged");
+        RequireNear(result.Value().volumeMm3,operation==BooleanOperation::Union?1500:500,1e-6,"independent analytic volume");
+        kachakacha::v2::kernel::ReleaseShape(result.Value().handle);
+        kachakacha::v2::kernel::ReleaseShape(a);kachakacha::v2::kernel::ReleaseShape(b);
+    }
+}
+
 KACHA_V2_TEST(kernel_boolean, batch_union_redundant_tools_and_missing_inputs)
 {
     using kachakacha::v2::kernel::BuildBooleans;

@@ -19,6 +19,7 @@
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QString>
@@ -32,6 +33,14 @@
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::fabrication::ThicknessPlacement;
+
+namespace {
+void ReleaseThickenPreview(std::vector<kachakacha::v2::modeling::KernelShapeHandle>& handles)
+{
+    for(const auto handle:handles)kachakacha::v2::kernel::ReleaseShape(handle);
+    handles.clear();
+}
+}
 
 //! 「厚み」を押す。構えていなければ構え、構えていれば何もしない
 //! (足す・引くと違い、操作の切り替えが無いので2度目に意味が無い)。
@@ -125,7 +134,7 @@ void V2MainWindow::RefreshThickenForSelectionChange()
 void V2MainWindow::RefreshThickenPreview()
 {
     thickenOutcome_ = kachakacha::v2::app::ThickenPreviewOutcome{};
-    thickenBuilt_.clear();
+    ReleaseThickenPreview(thickenBuilt_);
     thickenBuiltEdges_.clear();
     thickenBuiltThickness_.clear();
     viewport_->HideToolPreview();
@@ -151,7 +160,7 @@ void V2MainWindow::RefreshThickenPreview()
         const std::string name = entity != nullptr ? entity->displayName : std::string("面");
         if (found == guideShapes_.end()) {
             thickenOutcome_.refusalJa = name + ": 面の形がまだありません";
-            thickenBuilt_.clear();
+            ReleaseThickenPreview(thickenBuilt_);
             return;
         }
         const auto built = thickenInput_.toPlane
@@ -162,7 +171,9 @@ void V2MainWindow::RefreshThickenPreview()
         if (!built.HasValue()) {
             thickenOutcome_.refusalJa = (thickenInput_.surfaces.size() > 1 ? name + ": " : std::string())
                 + built.FirstSummaryJa();
-            thickenBuilt_.clear();
+            if(!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())
+                thickenOutcome_.refusalJa += "\n" + built.Diagnostics().front().detailsJa;
+            ReleaseThickenPreview(thickenBuilt_);
             thickenBuiltEdges_.clear();
             thickenBuiltThickness_.clear();
             return;
@@ -244,6 +255,7 @@ void V2MainWindow::ReselectThicken()
 //! 作り方のカード(外側・中央・内側)。「平面まで」は解いて、指定の作り方にする。
 void V2MainWindow::ChooseThickenPlacement(ThicknessPlacement value)
 {
+    if(thickenInput_.placement==value&&!thickenInput_.toPlane)return;
     thickenInput_.placement = value;
     thickenInput_.toPlane = false;
     thicknessPlacement_ = value;   // 部品の棚の組み合わせ欄とも値をそろえる(RefreshPartDock)。
@@ -273,6 +285,7 @@ void V2MainWindow::ChooseThickenTarget(const EntityId& planeId)
 //! 厚み(mm)の欄を打った。数の棚(板厚)とも値をそろえる。
 void V2MainWindow::ApplyThickenThicknessMm(double value)
 {
+    if(thickenInput_.thicknessMm==value)return;
     thickenInput_.thicknessMm = value;
     (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
         QString::number(value, 'f', 3));
@@ -284,7 +297,7 @@ void V2MainWindow::EndThicken(bool keepTool)
 {
     thickenShelfShown_ = keepTool;
     if (keepTool) { thickenInput_.surfaces.clear(); thickenInput_.targetPlane = {}; }
-    thickenBuilt_.clear();
+    ReleaseThickenPreview(thickenBuilt_);
     thickenBuiltEdges_.clear();
     thickenBuiltThickness_.clear();
     thickenOutcome_ = kachakacha::v2::app::ThickenPreviewOutcome{};
@@ -342,6 +355,8 @@ void V2MainWindow::ConfirmThicken()
         AdoptCurrentDocument();
         return;
     }
+    // Committed parts now own these handles; cancelling only owns previews.
+    thickenBuilt_.clear();
     EndThicken();
     AdoptCurrentDocument();
     SetStatus(surfaces.size() > 1

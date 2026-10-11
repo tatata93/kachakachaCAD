@@ -19,6 +19,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <QPointF>
 #include <QString>
@@ -185,11 +186,32 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
     return Explain("1 回の取り消しで 2 個とも消える", CountOfKind(window, EntityKind::Part) == 0);
 }
 
+bool CaseThickenPreviewOwnership(V2MainWindow& window)
+{
+    if(!ArmThickenOnFreshSurface(window))return false;
+    const auto baseline=kachakacha::v2::kernel::CachedShapeCount();
+    if(!ClickOnAnyGuideSurface(window))return false;
+    for(int i=0;i<8;++i) {
+        const auto placement=i%2?ThicknessPlacement::Inside:ThicknessPlacement::Outside;
+        if(!window.ThickenDock().ClickPlacementCard(placement))return false;
+        if(!Explain("only current thickness preview is retained",
+            kachakacha::v2::kernel::CachedShapeCount()==baseline+1))return false;
+    }
+    if(!window.HandleToolKey(Qt::Key_Escape,nullptr))return false;
+    if(!Explain("cancel releases thickness preview and preserves the guide",
+        kachakacha::v2::kernel::CachedShapeCount()==baseline&&CountOfKind(window,EntityKind::Part)==0))return false;
+    if(!ClickOnAnyGuideSurface(window)||!window.ThickenDock().ClickConfirm())return false;
+    if(!Explain("retry commits a usable part",CountOfKind(window,EntityKind::Part)==1))return false;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("committed shape survives undo and redo",CountOfKind(window,EntityKind::Part)==1
+        &&window.RebuildProblems().isEmpty());
+}
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
 {
     return {
+        {"HP-TH-04 thickness preview release, cancel and retry",CaseThickenPreviewOwnership},
         {"HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
             CaseHumanPathThickenManySurfaces},
         {"HP-TH-01 面を3Dで拾い、作り方を選んで Enter すると部品になり、取り消しで消える",

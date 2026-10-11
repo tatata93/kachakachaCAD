@@ -29,6 +29,9 @@
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
+#include <QTimer>
+#include <QElapsedTimer>
 #include "V2Viewport.h"
 
 #include "kachakacha/app/BooleanInputState.h"
@@ -585,11 +588,34 @@ bool CaseBooleanPreviewOwnership(V2MainWindow& window)
     return Explain("boolean retry and undo/redo preserve a usable result",
         CountOfKind(window,EntityKind::Part)==3&&window.RebuildProblems().isEmpty());
 }
+
+bool CaseCancelRunningBoolean(V2MainWindow& window)
+{
+    EntityId first,second;if(!ArmUnionOnTwoBoxes(window,&first,&second)||!PressPart(window,first))return false;
+    const auto revision=window.Session().GetDocument().Revision();const auto baseline=kernel::CachedShapeCount();
+    int ticks=0;bool cancelled=false;QElapsedTimer elapsed;elapsed.start();QTimer timer;timer.setInterval(1);
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        if(!V2GeometryJob::Active())return;++ticks;
+        auto* dialog=QApplication::activeModalWidget();
+        if(!dialog||dialog->objectName()!="geometryJobDialog"||dialog->property("calculationPid").toLongLong()==0)return;
+        auto* button=dialog->findChild<QPushButton*>("geometryJobCancel");
+        if(button&&button->isEnabled()){cancelled=true;button->click();}
+    });
+    timer.start();const auto picked=PressPart(window,second);timer.stop();
+    if(!Explain("boolean job cancels responsively without modifying the document",picked&&cancelled&&ticks>0&&elapsed.elapsed()<10000
+        &&window.Session().GetDocument().Revision()==revision&&kernel::CachedShapeCount()==baseline
+        &&CountOfKind(window,EntityKind::Part)==2&&!V2GeometryJob::Active()))return false;
+    if(!window.BooleanDock().ClickOperation(app::BooleanKind::Cut)||!window.BooleanDock().ClickConfirm())return false;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("boolean retry survives undo/redo and save/reopen",CountOfKind(window,EntityKind::Part)==3
+        &&window.SaveAndReopen(QStringLiteral("cancelled-boolean-retry.kcd2"))&&window.RebuildProblems().isEmpty());
+}
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-BO-05 running job cancellation and saved retry",CaseCancelRunningBoolean},
         {"HP-BO-04 boolean preview release, cancel and retry",CaseBooleanPreviewOwnership},
         {"HP-FA-01 フェイスから作図と近似", CaseFaceToolFirst},
         {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},

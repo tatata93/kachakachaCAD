@@ -13,6 +13,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 #include "V2OutputTool.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
@@ -330,8 +331,14 @@ void V2MainWindow::RefreshBooleanPreview()
         }
         tools.push_back(other->second);
     }
-    const auto built = kachakacha::v2::kernel::BuildBooleans(
+    const auto revision=session_->GetDocument().Revision();
+    const auto built = V2GeometryJob::Boolean(this,
         KernelBooleanOperation(booleanInput_.kind), base->second, tools, tolerance);
+    if(session_->GetDocument().Revision()!=revision) {
+        if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
+        booleanOutcome_.refusalJa="文書が変更されたため、古い計算結果を採用しませんでした。";
+        return;
+    }
     if (!built.HasValue()) {
         booleanOutcome_.refusalJa = built.FirstSummaryJa();
         if(!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())

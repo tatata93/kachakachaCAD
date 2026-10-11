@@ -10,6 +10,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
 
@@ -20,9 +21,17 @@
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctOutput.h"
 
 #include <QPointF>
 #include <QString>
+#include <QApplication>
+#include <QPushButton>
+#include <QTimer>
+#include <QElapsedTimer>
+#include <QProcess>
+#include <QDir>
+#include <iostream>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -206,11 +215,83 @@ bool CaseThickenPreviewOwnership(V2MainWindow& window)
     return Explain("committed shape survives undo and redo",CountOfKind(window,EntityKind::Part)==1
         &&window.RebuildProblems().isEmpty());
 }
+
+bool ExerciseStoppedThickness(V2MainWindow& window,bool crash)
+{
+    if(!ArmThickenOnFreshSurface(window))return false;
+    const auto revision=window.Session().GetDocument().Revision();
+    const auto baseline=kernel::CachedShapeCount();
+    int heartbeats=0;bool cancelled=false;QElapsedTimer elapsed;elapsed.start();
+    QTimer timer;timer.setInterval(1);
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        if(!V2GeometryJob::Active())return;
+        ++heartbeats;
+        auto* dialog=QApplication::activeModalWidget();
+        if(!dialog||dialog->objectName()!="geometryJobDialog"||dialog->property("calculationPid").toLongLong()==0)return;
+        // A queued command must not replace the document during the modal job.
+        window.RunCommand("file.new");
+        const auto report=qEnvironmentVariable("KACHACAD_JOB_REPORT_DIR");
+        if(!report.isEmpty()&&!cancelled){QDir().mkpath(report);dialog->grab().save(report+(crash?"/crash-progress.png":"/cancel-progress.png"));}
+        if(crash) {
+            auto* child=dialog->findChild<QProcess*>("geometryJobProcess");
+            if(child&&child->state()==QProcess::Running){cancelled=true;child->kill();}
+        } else {
+            auto* button=dialog->findChild<QPushButton*>("geometryJobCancel");
+            if(button&&button->isEnabled()){cancelled=true;button->click();}
+        }
+    });
+    timer.start();const bool picked=ClickOnAnyGuideSurface(window);timer.stop();
+    if(!Explain("running thickness cancels while UI timer remains responsive",picked&&cancelled&&heartbeats>0&&elapsed.elapsed()<10000))return false;
+    if(!Explain("cancel keeps document and shape cache unchanged",window.Session().GetDocument().Revision()==revision
+        &&CountOfKind(window,EntityKind::Part)==0&&kernel::CachedShapeCount()==baseline&&!V2GeometryJob::Active()))return false;
+    if(!Explain("stopped job leaves a reason and no confirmable result",window.ThickenDock().StatusTextJa().contains(crash?QStringLiteral("正常に終了しません"):QStringLiteral("取り消"))
+        &&!window.ThickenDock().ClickConfirm()))return false;
+    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Inside)||!window.ThickenDock().ClickConfirm())return false;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("retry after process cancel commits and survives save/reopen",CountOfKind(window,EntityKind::Part)==1
+        &&window.SaveAndReopen(QStringLiteral("cancelled-thicken-retry.kcd2"))&&window.RebuildProblems().isEmpty());
+}
+bool CaseCancelRunningThickness(V2MainWindow& window){return ExerciseStoppedThickness(window,false);}
+bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseStoppedThickness(window,true);}
+
+bool CaseCancelWarpedPanel(V2MainWindow& window)
+{
+    static const char* brep=
+#include "../../../tests_v2/fixtures/warped-panel-source.inc"
+    ;
+    const auto source=kernel::RestoreOutputShape(brep);if(!source.HasValue())return false;
+    const auto before=kernel::CaptureOutputShape(source.Value());const auto count=kernel::CachedShapeCount();
+    const auto revision=window.Session().GetDocument().Revision();
+    QTimer timer;timer.setInterval(5);QElapsedTimer running,elapsed;elapsed.start();bool cancelled=false;int ticks=0;
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        auto* dialog=QApplication::activeModalWidget();
+        if(!dialog||dialog->objectName()!="geometryJobDialog")return;++ticks;
+        if(dialog->property("calculationPhase").toString().contains(QStringLiteral("厚みを計算"))&&!running.isValid())running.start();
+        if(!running.isValid()||running.elapsed()<150||cancelled)return;
+        const auto report=qEnvironmentVariable("KACHACAD_JOB_REPORT_DIR");
+        if(!report.isEmpty()){QDir().mkpath(report);dialog->grab().save(report+"/warped-panel-calculating.png");}
+        auto* button=dialog->findChild<QPushButton*>("geometryJobCancel");
+        if(button&&button->isEnabled()){cancelled=true;button->click();}
+    });
+    timer.start();const auto result=V2GeometryJob::Thicken(&window,source.Value(),.8,ThicknessPlacement::Inside,std::nullopt,{});timer.stop();
+    const auto after=kernel::CaptureOutputShape(source.Value());
+    const bool unchanged=before.HasValue()&&after.HasValue()&&before.Value()==after.Value();
+    const bool ok=cancelled&&!result.HasValue()&&result.FirstDiagnostic().code=="JOB-002"
+        &&ticks>10&&elapsed.elapsed()<10000&&unchanged&&kernel::CachedShapeCount()==count
+        &&window.Session().GetDocument().Revision()==revision&&!V2GeometryJob::Active();
+    std::cout<<"warped panel cancellation: elapsed="<<elapsed.elapsed()<<" ms, UI ticks="<<ticks<<'\n';
+    if(result.HasValue())kernel::ReleaseShape(result.Value().handle);
+    kernel::ReleaseShape(source.Value());
+    return Explain("actual warped offset cancels during calculation, not only startup, without changing source",ok);
+}
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
 {
     return {
+        {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
+        {"HP-TH-06 crashed calculation process preserves document and supports retry",CaseFailedThicknessProcess},
+        {"HP-TH-07 actual warped panel cancellation during kernel calculation",CaseCancelWarpedPanel},
         {"HP-TH-04 thickness preview release, cancel and retry",CaseThickenPreviewOwnership},
         {"HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
             CaseHumanPathThickenManySurfaces},

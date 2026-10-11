@@ -1,5 +1,6 @@
 #include "V2OffsetTool.h"
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 #include "V2ToolBindings.h"
 #include "V2InstructionMode.h"
 #include "V2GptSurfaceTool.h"
@@ -906,6 +907,7 @@ bool V2MainWindow::ImportKcdFile(const QString& path)
 
 bool V2MainWindow::OpenDocumentFile(const QString& path)
 {
+    if(V2GeometryJob::Active())return false;
     if (kachakacha::v2::io::LooksLikeKcdPath(path.toStdString())) {
         return ImportKcdFile(path);
     }
@@ -1308,6 +1310,7 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 
 void V2MainWindow::RunCommand(std::string_view id)
 {
+    if(V2GeometryJob::Active())return;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         // 台帳に無い id を押した。黙って何も起きないのがいちばん困るので、そう言う

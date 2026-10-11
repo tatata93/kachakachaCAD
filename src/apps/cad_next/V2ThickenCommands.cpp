@@ -9,6 +9,7 @@
 //! 3D で押し直しても外れる。何が欄に入るかは core(app/ThickenInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
@@ -142,7 +143,8 @@ void V2MainWindow::RefreshThickenPreview()
         return;
     }
     thickenOutcome_.evaluated = true;
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto revision = session_->GetDocument().Revision();
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> frame;
     if (thickenInput_.toPlane) {
         frame = WorkPlaneFrameOf(thickenInput_.targetPlane);
@@ -163,11 +165,14 @@ void V2MainWindow::RefreshThickenPreview()
             ReleaseThickenPreview(thickenBuilt_);
             return;
         }
-        const auto built = thickenInput_.toPlane
-            ? kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second, frame->origin,
-                  frame->normal, tolerance)
-            : kachakacha::v2::kernel::ThickenSurface(found->second, thickenInput_.thicknessMm,
-                  thickenInput_.placement, tolerance);
+        const auto built = V2GeometryJob::Thicken(this,found->second,thickenInput_.thicknessMm,
+            thickenInput_.placement,frame,tolerance);
+        if(session_->GetDocument().Revision()!=revision) {
+            if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
+            ReleaseThickenPreview(thickenBuilt_);
+            thickenOutcome_.refusalJa="文書が変更されたため、古い計算結果を採用しませんでした。";
+            return;
+        }
         if (!built.HasValue()) {
             thickenOutcome_.refusalJa = (thickenInput_.surfaces.size() > 1 ? name + ": " : std::string())
                 + built.FirstSummaryJa();

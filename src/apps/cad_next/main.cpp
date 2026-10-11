@@ -12,6 +12,7 @@
 
 #include "V2MainWindow.h"
 #include "V2SelfTest.h"
+#include "V2GeometryJob.h"
 
 #include "kachakacha/base/Version.h"
 #include "kachakacha/kernel/KernelInfo.h"
@@ -91,6 +92,10 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    if(arguments.contains(QStringLiteral("--geometry-job"))) {
+        QCoreApplication application(argc,argv);
+        return V2GeometryJob::Worker(ValueAfter(arguments,QStringLiteral("--geometry-job")));
+    }
     QApplication application(argc, argv);
 
     const QString state = ValueAfter(arguments, QStringLiteral("--manual-state"));

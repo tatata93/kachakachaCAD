@@ -13,6 +13,7 @@ public:
         const std::function<void()>& install={});
     static kachakacha::v2::io::DocumentFile FileForSave(V2MainWindow& window);
     static int Worker(const QString& directory);
+    static void CacheSaved(V2MainWindow& window, const std::string& archive);
     static bool IsWorker();
     static void Progress(int completed,int total,const std::string& name);
 private:

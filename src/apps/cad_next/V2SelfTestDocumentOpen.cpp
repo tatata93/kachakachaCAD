@@ -1,6 +1,7 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2DocumentOpen.h"
+#include "V2DocumentCache.h"
 #include "V2GeometryJob.h"
 #include "V2HeavyJobFixture.h"
 #include "V2ThickenDock.h"
@@ -9,9 +10,12 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include <QApplication>
+#include <QByteArray>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QFile>
+#include <QIODevice>
 #include <QKeyEvent>
 #include <QObject>
 #include <QProcess>
@@ -114,11 +118,54 @@ bool Metadata(V2MainWindow& w) {
     return Explain("save after prepared open preserves editable history and unknown file data",io::WriteDocumentJson(saved.Value())==io::WriteDocumentJson(file)
         &&saved.Value().sideEntries.size()==1&&saved.Value().sideEntries.front().data=="reference bytes");
 }
+struct CacheScope {
+    QByteArray previous=qgetenv("KACHACAD_DOCUMENT_CACHE_DIR");QTemporaryDir folder;
+    CacheScope(){qputenv("KACHACAD_DOCUMENT_CACHE_DIR",folder.path().toUtf8());}
+    ~CacheScope(){if(previous.isNull())qunsetenv("KACHACAD_DOCUMENT_CACHE_DIR");else qputenv("KACHACAD_DOCUMENT_CACHE_DIR",previous);}
+};
+bool Cache(V2MainWindow& w) {
+    CacheScope scope;if(!scope.folder.isValid())return false;
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
+    w.RunCommand("surface.create");if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    const auto path=scope.folder.filePath("model.kcd2");
+    w.SetPathChooser([path](bool){return path;});w.RunCommand("file.save_as");
+    const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
+    if(!Explain("saving seeds a complete calculation cache",V2DocumentCache::Read(original.Value()).has_value()))return false;
+    auto changed=V2DocumentOpen::FileForSave(w);changed.metadata.description="different file bytes";
+    const auto bytes=io::SaveDocument(changed);
+    if(!Explain("any source byte change invalidates cached result",bytes.HasValue()&&!V2DocumentCache::Read(bytes.Value())))return false;
+    bool hit=false;QTimer timer;timer.setInterval(1);
+    QObject::connect(&timer,&QTimer::timeout,&w,[&]{auto* job=QApplication::activeModalWidget();
+        if(job&&job->property("calculationPhase").toString().contains(QStringLiteral("内容が一致")))hit=true;});
+    QElapsedTimer elapsed;elapsed.start();timer.start();const bool opened=w.OpenDocumentFile(path);timer.stop();
+    std::cout<<"cached saved document open="<<elapsed.elapsed()<<" ms\n";
+    if(!Explain("cache restores exact native shape with editable history",opened&&hit&&w.KernelShapeCount()==1&&w.RebuildProblems().isEmpty()))return false;
+    const auto cachePath=scope.folder.filePath(V2DocumentCache::Key(original.Value())+".bin");
+    QFile corrupted(cachePath);if(!corrupted.open(QIODevice::ReadWrite)||!corrupted.seek(corrupted.size()-1))return false;
+    const char byte=char(corrupted.read(1).at(0)^0x7f);corrupted.seek(corrupted.size()-1);corrupted.write(&byte,1);corrupted.close();
+    if(!Explain("corrupted cache rejected before native restoration",!V2DocumentCache::Read(original.Value())))return false;
+    hit=false;timer.start();elapsed.restart();const bool rebuilt=w.OpenDocumentFile(path);timer.stop();
+    std::cout<<"cold rebuild after cache corruption="<<elapsed.elapsed()<<" ms\n";
+    return Explain("bad cache falls back to full reconstruction and leaves source intact",rebuilt&&!hit&&w.KernelShapeCount()==1
+        &&V2DocumentCache::Read(original.Value()).has_value()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
 }
-std::vector<SelfTestCase> DocumentOpenCases(){return {
+bool OwnerRead(V2MainWindow& w) {
+    CacheScope scope;const auto path=qEnvironmentVariable("KACHACAD_OWNER_OPEN_FILE");
+    const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
+    QElapsedTimer time;time.start();if(!w.OpenDocumentFile(path))return false;const auto cold=time.elapsed();
+    const auto snapshot=Snapshot(w);const auto count=w.KernelShapeCount();
+    time.restart();if(!w.OpenDocumentFile(path))return false;const auto warm=time.elapsed();
+    std::cout<<"owner KCD read cold="<<cold<<" ms, reused="<<warm<<" ms, shapes="<<count<<std::endl;
+    return Explain("owner read cache keeps native geometry, history and source bytes",Snapshot(w)==snapshot&&w.KernelShapeCount()==count
+        &&w.RebuildProblems().isEmpty()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
+}
+}
+std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-01 Escape cancels saved vessel history with an armed editor and preserves Undo",Cancel},
     {"HP-OPEN-02 crashed rebuild preserves document path and permits retry",Crash},
     {"HP-OPEN-03 invalid rebuilt geometry preserves original document",Failure},
     {"HP-OPEN-04 prepared open preserves metadata and unknown archive entries",Metadata},
-    {"HP-OPEN-05 unsupported warped history preserves the old document",Unsupported}};}
+    {"HP-OPEN-05 unsupported warped history preserves the old document",Unsupported},
+    {"HP-OPEN-06 saved native cache, invalidation and corruption recovery",Cache}};
+    if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}
 }

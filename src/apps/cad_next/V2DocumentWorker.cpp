@@ -1,4 +1,5 @@
 #include "V2DocumentOpen.h"
+#include "V2DocumentCache.h"
 #include "V2MainWindow.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -35,6 +36,16 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
     data.samples=w.guideSamples_;data.fabrication=w.fabricationModels_;data.guideTable=w.guideTable_;
     return base::Result<V2PreparedDocument>::Success(std::move(data));
 }
+void V2DocumentOpen::CacheSaved(V2MainWindow& w,const std::string& archive) {
+    if(IsWorker()||!w.rebuildProblems_.isEmpty())return;
+    for(const auto& e:w.session_->GetDocument().Snapshot().entities) {
+        const auto key=e.id.ToString();
+        if(e.kind==domain::EntityKind::Part&&!w.partShapes_.contains(key))return;
+        if(e.kind==domain::EntityKind::GuideSurface&&!w.guideShapes_.contains(key))return;
+    }
+    auto result=Capture(w,archive);
+    if(result.HasValue()){auto data=result.Value();(void)V2DocumentCache::Write(archive,data);}
+}
 int V2DocumentOpen::Worker(const QString& directory) {
     QCoreApplication::instance()->setProperty("documentRebuildWorker",true);
     const QDir dir(directory);QFile requestFile(dir.filePath("request.json"));
@@ -48,6 +59,11 @@ int V2DocumentOpen::Worker(const QString& directory) {
         const auto bytes=io::ReadWholeFile(request.value("source").toString().toStdString());
         if(!bytes.HasValue())throw bytes.FirstDiagnostic();
         auto loaded=io::LoadDocument(bytes.Value());if(!loaded.HasValue())throw loaded.FirstDiagnostic();
+        if(auto cached=V2DocumentCache::Read(bytes.Value())) {
+            Progress(1,1,"内容が一致する計算済み形状を復元しています");
+            if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,*cached))throw std::runtime_error("Cannot transfer cached document");
+            response["ok"]=true;
+        } else {
         V2MainWindow window;
         if(!Adopt(window,loaded.Value().snapshot)||!window.RebuildProblems().isEmpty())
             throw std::runtime_error(window.RebuildProblems().isEmpty()?window.StatusText().toStdString():window.RebuildProblems().toStdString());
@@ -57,7 +73,9 @@ int V2DocumentOpen::Worker(const QString& directory) {
         auto captured=Capture(window,archive.Value());if(!captured.HasValue())throw captured.FirstDiagnostic();
         auto data=captured.Value();
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
+        (void)V2DocumentCache::Write(bytes.Value(),data);
         response["ok"]=true;
+        }
     }catch(const base::Diagnostic& diagnostic) {
         response["code"]=QString::fromStdString(diagnostic.code);
         response["summary"]=QString::fromStdString(diagnostic.summaryJa);

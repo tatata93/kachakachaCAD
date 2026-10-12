@@ -13,6 +13,7 @@
 //! 部品が10個あるだけで画面が固まる。番号で覚えるのはそのためである。
 
 #include "V2MainWindow.h"
+#include "V2DocumentOpen.h"
 #include "V2ImageTool.h"
 #include "V2FabricationDock.h"
 #include "V2SurfaceAnalysisTool.h"
@@ -45,6 +46,8 @@ constexpr int kSurfaceGridLinesPerDirection = 8;
 
 void V2MainWindow::RefreshShapeViews()
 {
+    // The private reader transfers native shapes; only the visible process needs a display mesh.
+    if (V2DocumentOpen::IsWorker()) return;
     if (viewport_ == nullptr) {
         return;
     }

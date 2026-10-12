@@ -912,6 +912,7 @@ void V2MainWindow::RunFileCommand(std::string_view id)
         return;
     }
     documentPath_ = path;
+    V2DocumentOpen::CacheSaved(*this, archive.Value());
     session_->GetDocument().MarkHistoryBoundary();
     SetStatus(QStringLiteral("%1 へ保存しました。").arg(path));
 }

@@ -95,7 +95,7 @@ void V2MainWindow::BeginGptSurface()
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
-    if (thickenShelfShown_) { EndThicken(); }
+    if (thicken_.shelfShown) { EndThicken(); }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
     SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     EndOwnedToolsBut(gptSurface_.get());

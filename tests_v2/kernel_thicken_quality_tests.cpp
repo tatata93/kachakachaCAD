@@ -6,9 +6,11 @@
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/kernel/OcctMassProperties.h"
+#include "kachakacha/kernel/OcctImage.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
+#include <algorithm>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Tool.hxx>
@@ -69,6 +71,23 @@ KACHA_V2_TEST(thicken_quality, dense_offset_integrates_native_spans_and_preserve
     const auto handle=kernel::StoreShape(solid);
     const auto before=kernel::CaptureOutputShape(handle);Require(before.HasValue(),"dense offset captures before display");
     Require(kernel::BuildShapeMesh(handle,.01).HasValue(),"dense offset displays");
+    const auto display=kernel::BuildShapeMesh(handle);Require(display.HasValue(),"parent display built for decal");
+    const auto imageFace=kernel::ImageFace(handle,0);Require(imageFace.HasValue(),"independent image face captured");
+    const auto faceBrep=kernel::CaptureOutputShape(imageFace.Value());Require(faceBrep.HasValue(),"image face serializes with tessellation");
+    domain::CreateImageDefinition image;image.faceBrep=faceBrep.Value();image.pixelWidth=32;image.pixelHeight=32;
+    const auto count=kernel::CachedShapeCount();
+    std::vector<modeling::MeshTriangle> expectedFace;
+    for(const auto& triangle:display.Value().triangles)if(triangle.faceIndex==0)expectedFace.push_back(triangle);
+    for(int repeat=0;repeat<3;++repeat) {
+        const auto triangles=kernel::ImageSurfaceTriangles(image);Require(triangles.HasValue(),"image face renders repeatedly");
+        Require(triangles.Value().size()==expectedFace.size(),"decal reuses parent display tessellation");
+        for(std::size_t i=0;i<expectedFace.size();++i)for(const auto& p:triangles.Value()[i].mesh.points) {
+            double nearest=1e99;for(const auto& q:expectedFace[i].points)nearest=std::min(nearest,geometry::Distance(p,q));
+            Require(nearest<1e-8,"decal vertices match parent without flicker");
+        }
+        Require(kernel::CachedShapeCount()==count,"image preview releases transient native shapes");
+    }
+    kernel::ReleaseShape(imageFace.Value());
     const auto after=kernel::CaptureOutputShape(handle);
     Require(after.HasValue()&&before.Value()==after.Value(),"display must not mutate authoritative topology or triangulation");
     const auto restored=kernel::RestoreOutputShape(after.Value());Require(restored.HasValue(),"displayed shape roundtrips");

@@ -8,6 +8,7 @@
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QApplication>
 #include <QBuffer>
 #include <QByteArray>
@@ -39,6 +40,8 @@ V2ImageTool* V2ImageTool::Open(V2MainWindow& window) {
 V2ImageTool::V2ImageTool(V2MainWindow& window):QWidget(&window),window_(window),savedViews_(window.viewport_->ImageViews()) {
     setObjectName(QStringLiteral("imagePlacementPanel"));BuildUi();UseWorkPlane();qApp->installEventFilter(this);
 }
+V2ImageTool::~V2ImageTool(){ReleaseFace();}
+void V2ImageTool::ReleaseFace(){if(face_.Valid())kernel::ReleaseShape(face_);face_={};}
 void V2ImageTool::closeEvent(QCloseEvent* event) {
     window_.viewport_->SetImageViews({});Refresh(window_);window_.viewport_->HideToolRoleLabels();
     window_.viewport_->HideToolPreview();QWidget::closeEvent(event);
@@ -104,7 +107,7 @@ bool V2ImageTool::EditSelectedImage() {
     if(!image)return false;
     definition_=*image;editing_=entity->id;
     image_=QImage::fromData(QByteArray::fromBase64(QByteArray::fromStdString(image->pngBase64)),"PNG");
-    face_={};
+    ReleaseFace();
     if(!image->faceBrep.empty()){const auto shape=kernel::RestoreOutputShape(image->faceBrep);if(shape.HasValue())face_=shape.Value();}
     UpdateFields();Preview();return true;
 }

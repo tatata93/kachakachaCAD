@@ -378,7 +378,7 @@ void V2MainWindow::EndArmedTools()
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
-    if (thickenShelfShown_) { EndThicken(); }
+    if (thicken_.shelfShown) { EndThicken(); }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
     if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }

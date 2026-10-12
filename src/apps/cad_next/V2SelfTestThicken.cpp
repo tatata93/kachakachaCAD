@@ -26,6 +26,8 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include <QFile>
+#include <QByteArray>
+#include <QIODevice>
 
 #include <QPointF>
 #include <QString>
@@ -296,6 +298,9 @@ bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseComplexSurf
 bool CaseInteractiveThicknessChanges(V2MainWindow& window)
 {
     if(!ArmThickenOnFreshSurface(window))return false;
+    // Earlier cases may have validated the same rectangle/default amount.
+    // Start with a distinct input to exercise a running calculation.
+    auto* initial=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!initial)return false;initial->setValue(.617);
     const auto revision=window.Session().GetDocument().Revision();
     bool changed=false,enabled=false,moved=false,consistent=false;
     QTimer timer;timer.setInterval(1);
@@ -384,8 +389,10 @@ bool CaseOwnerThickness(V2MainWindow& window)
         <<" status="<<window.ThickenDock().StatusTextJa().toStdString()<<std::endl;
     if(!Explain("owner calculation accepts changed input while viewport stays usable",edited&&responsive
         &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.Session().GetDocument().Revision()==revision))return false;
-    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Centered))return false;
-    time.restart();if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside))return false;
+    // Clear the amount without starting another expensive cold calculation,
+    // then restore the previously verified owner condition.
+    amount->setValue(0);
+    time.restart();amount->setValue(.5);
     std::cout<<"owner reused outside .5 mm: "<<time.elapsed()<<" ms\n";
     if(!Explain("owner verified preview is reusable within one second",time.elapsed()<1000&&window.ThickenDock().ClickConfirm()))return false;
     if(!directory.isEmpty())window.grab().save(directory+"/outside-half-mm-result.png");

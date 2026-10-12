@@ -266,8 +266,8 @@ void V2MainWindow::BuildOutputShelves()
         RefreshPartDock();
         if (approxShelfShown_ && AdoptFabricationChoice()) { RefreshApproxAll(); }
         // 板厚を数の棚から直したときも、厚みの道具の欄と下見をそろえる。
-        if (thickenShelfShown_) {
-            thickenInput_.thicknessMm = kachakacha::v2::app::ParameterValueOf(
+        if (thicken_.shelfShown) {
+            thicken_.input.thicknessMm = kachakacha::v2::app::ParameterValueOf(
                 parameterDock_->Values(), kachakacha::v2::app::ParameterId::ExtrudeDistance);
             RefreshThickenAll();
         }

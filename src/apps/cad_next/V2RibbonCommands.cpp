@@ -69,7 +69,7 @@ bool V2MainWindow::IsEditingCommand(std::string_view id) const
     if ((id == "part.extrude" && extrudeShelfShown_)
         || (id == "workplane.create" && ShelfShown(kachakacha::v2::app::Shelf::WorkPlane))
         || (id == "surface.create" && surfaceShelfShown_)
-        || (id == "part.thicken" && thickenShelfShown_)
+        || (id == "part.thicken" && thicken_.shelfShown)
         || (id == "fabrication.create" && approxShelfShown_)) return true;
     if (gptSurface_ && gptSurface_->Active() && id == "surface.gpt_create") return true;
     if (gptFabrication_ && gptFabrication_->Active() && id == "fabrication.gpt_create") return true;

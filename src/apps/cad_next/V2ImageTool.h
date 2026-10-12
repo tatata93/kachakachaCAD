@@ -17,6 +17,7 @@ class QEvent;
 class QCloseEvent;
 class V2ImageTool final:public QWidget {
 public:
+    ~V2ImageTool() override;
     static V2ImageTool* Open(V2MainWindow&);
     static void Refresh(V2MainWindow&);
     static bool MakeView(const kachakacha::v2::domain::CreateImageDefinition&,V2ImageView&,QString&);
@@ -30,6 +31,7 @@ protected:
     bool eventFilter(QObject*,QEvent*) override;
     void closeEvent(QCloseEvent*) override;
 private:
+    void ReleaseFace();
     explicit V2ImageTool(V2MainWindow&);
     void BuildUi();
     void CancelInput();

@@ -7,6 +7,7 @@
 #include "V2Viewport.h"
 #include "kachakacha/kernel/OcctImage.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QEvent>
 #include <QImage>
@@ -23,22 +24,22 @@ using namespace geometry;
 void V2ImageTool::UseWorkPlane() {
     const auto frame=window_.WorkPlaneFrameOf(window_.ActiveWorkPlaneId());
     if(!frame){status_->setText(QStringLiteral("作業面を選んでください。"));return;}
-    face_={};definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
+    ReleaseFace();definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
     definition_.anchorUv={};definition_.uvMetric={1,1,0};definition_.followSurface=false;UpdateFields();
 }
 bool V2ImageTool::SetTarget(const app::SelectionRef& ref) {
     if(const auto frame=window_.WorkPlaneFrameOf(ref.entityId);frame){
-        face_={};definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
+        ReleaseFace();definition_.faceBrep.clear();definition_.origin=frame->origin;definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;
         definition_.followSurface=false;UpdateFields();Preview();return true;}
     auto shape=window_.partShapes_.find(ref.entityId.ToString());modeling::KernelShapeHandle handle;
     if(shape!=window_.partShapes_.end()){if(!ref.pickedFaceIndex){status_->setText(QStringLiteral("3Dビューで貼付先のフェイスを選んでください。"));Pick(1);return false;}handle=shape->second;}
     else {auto guide=window_.guideShapes_.find(ref.entityId.ToString());if(guide!=window_.guideShapes_.end())handle=guide->second;}
     if(!handle.Valid()){status_->setText(QStringLiteral("作業面・面・ソリッドのフェイスを選んでください。"));return false;}
-    const auto face=kernel::OutputFace(handle,ref.pickedFaceIndex.value_or(0));
+    const auto face=kernel::ImageFace(handle,ref.pickedFaceIndex.value_or(0));
     if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return false;}
     const auto frame=kernel::OutputSurfaceFrame(face.Value(),ref.hitPoint);const auto brep=kernel::CaptureOutputShape(face.Value());
-    if(!frame.HasValue()||!brep.HasValue()){status_->setText(QStringLiteral("貼付先の面を読み取れません。"));return false;}
-    face_=face.Value();definition_.faceBrep=brep.Value();definition_.uAxis=Normalized(frame.Value().xDirection);
+    if(!frame.HasValue()||!brep.HasValue()){kernel::ReleaseShape(face.Value());status_->setText(QStringLiteral("貼付先の面を読み取れません。"));return false;}
+    ReleaseFace();face_=face.Value();definition_.faceBrep=brep.Value();definition_.uAxis=Normalized(frame.Value().xDirection);
     definition_.vAxis=Normalized(Cross(Normalized(frame.Value().normal),definition_.uAxis));
     if(!SetAnchor(ref.hitPoint))return false;UpdateFields();Preview();return true;
 }
@@ -54,6 +55,7 @@ void V2ImageTool::CancelInput() {
     window_.viewport_->CancelPointPick();window_.viewport_->SetImageViews({});Refresh(window_);
     window_.viewport_->HideToolRoleLabels();window_.viewport_->HideToolPreview();
     image_=QImage();definition_.pngBase64.clear();previewOk_=false;editing_={};
+    ReleaseFace();
     status_->setText(QStringLiteral("変更を取り消しました。画像ツールはそのままです。画像を選んでください。"));
 }
 bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {

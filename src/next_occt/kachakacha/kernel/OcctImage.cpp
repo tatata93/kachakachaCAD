@@ -1,9 +1,11 @@
 #include "kachakacha/kernel/OcctImage.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctMeshPlanarFaces.h"
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
@@ -23,6 +25,20 @@ using namespace geometry;
 using base::Result;
 namespace {
 template<class T> Result<T> Failure(){return Result<T>::Failure(base::MakeError("IMG-003","貼付先の面を読み取れません。","別の面か貼り方を選んでください。"));}
+}
+Result<modeling::KernelShapeHandle> ImageFace(modeling::KernelShapeHandle handle,std::size_t faceIndex) {
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {
+        TopoDS_Shape shape;if(!LookupShape(handle,shape))return Failure<modeling::KernelShapeHandle>();
+        const auto display=detail::TessellatedCopy(shape);
+        std::size_t at=0;
+        for(TopExp_Explorer face(display,TopAbs_FACE);face.More();face.Next(),++at)
+            if(at==faceIndex)return Result<modeling::KernelShapeHandle>::Success(StoreShape(face.Current()));
+    }catch(...){return Failure<modeling::KernelShapeHandle>();}
+#else
+    (void)handle;(void)faceIndex;
+#endif
+    return Failure<modeling::KernelShapeHandle>();
 }
 Result<ImageSurfacePoint> ImagePointOnSurface(modeling::KernelShapeHandle handle,const Vector3& point) {
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -46,7 +62,8 @@ Result<std::vector<modeling::ImageTriangle>> ImageSurfaceTriangles(const domain:
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         const auto handle=RestoreOutputShape(image.faceBrep);if(!handle.HasValue())return Failure<Triangles>();
-        TopoDS_Shape shape;if(!LookupShape(handle.Value(),shape))return Failure<Triangles>();
+        TopoDS_Shape shape;const bool found=LookupShape(handle.Value(),shape);ReleaseShape(handle.Value());
+        if(!found)return Failure<Triangles>();
         // Retain the captured tessellation: remeshing a face alone may choose a
         // different deflection than its parent and make a coplanar decal flicker.
         bool complete=true;
@@ -54,7 +71,7 @@ Result<std::vector<modeling::ImageTriangle>> ImageSurfaceTriangles(const domain:
             TopLoc_Location location;const auto mesh=BRep_Tool::Triangulation(TopoDS::Face(e.Current()),location);
             if(mesh.IsNull()||!mesh->HasUVNodes()){complete=false;break;}
         }
-        if(!complete){const auto tessellation=BuildShapeMesh(handle.Value());if(!tessellation.HasValue())return Failure<Triangles>();}
+        if(!complete)shape=detail::TessellatedCopy(shape);
         Triangles result;
         for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
             const auto face=TopoDS::Face(e.Current());TopLoc_Location location;

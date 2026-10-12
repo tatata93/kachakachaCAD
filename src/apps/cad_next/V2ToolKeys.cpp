@@ -90,7 +90,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     return (operationHost_ && dynamic_cast<V2OffsetTool*>(operationHost_->TemporaryPage()))
         || !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
-        || thickenShelfShown_ || cornerPreviewShown_
+        || thicken_.shelfShown || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
@@ -177,7 +177,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
     }
-    if (thickenShelfShown_) {
+    if (thicken_.shelfShown) {
         return HandleThickenToolKey(key, target);
     }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) {
@@ -228,16 +228,16 @@ bool V2MainWindow::HandleThickenToolKey(int key, QObject* target)
     context.inTypingField = IsTypingField(target);
     if (context.inTypingField) {
         // 打ちかけの字を、まず値にする。変わったかどうかは入力の厚みで見る。
-        const double before = thickenInput_.thicknessMm;
+        const double before = thicken_.input.thicknessMm;
         if (auto* spin = dynamic_cast<QAbstractSpinBox*>(target); spin != nullptr) {
             spin->interpretText();
         }
-        context.valueChanged = thickenInput_.thicknessMm != before;
+        context.valueChanged = thicken_.input.thicknessMm != before;
     }
     if (kachakacha::v2::app::ActionForConfirmKey(context) == ToolKeyAction::CommitValueAndWait) {
         SetStatus(QStringLiteral("厚み: %1 mm にしました。"
                                  "下見のとおりでよければ、もう一度 Enter で確定します。")
-                .arg(thickenInput_.thicknessMm));
+                .arg(thicken_.input.thicknessMm));
         return true;
     }
     ConfirmThicken();
@@ -302,7 +302,7 @@ bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
     if(V2GeometryJob::Active()) {
         if(event&&event->type()==QEvent::KeyPress&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape
-            &&thickenRefreshing_) {V2GeometryJob::CancelPreview(this);return true;}
+            &&thicken_.refreshing) {V2GeometryJob::CancelPreview(this);return true;}
         return QMainWindow::eventFilter(target,event);
     }
     if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn))

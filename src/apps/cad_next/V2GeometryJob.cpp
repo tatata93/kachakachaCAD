@@ -5,6 +5,7 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QApplication>
 #include <QByteArray>
+#include <QChar>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDialog>

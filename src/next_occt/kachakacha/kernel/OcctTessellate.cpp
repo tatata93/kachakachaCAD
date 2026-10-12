@@ -213,6 +213,24 @@ std::vector<std::vector<Vector3>> FaceIsoLines(const TopoDS_Face& face, int coun
     return lines;
 }
 
+namespace detail {
+TopoDS_Shape TessellatedCopy(const TopoDS_Shape& shape,double deflectionMm)
+{
+    const double chosen=deflectionMm>0.0?deflectionMm:DeflectionForSize(DiagonalOf(shape));
+    auto meshingShape=MeshReadyShape(shape);
+    if(meshingShape.IsSame(shape)) {
+        // Meshing updates tolerances and representations on shared edges.
+        // Those changes must not invalidate the editable/exportable BRep.
+        BRepBuilderAPI_Copy copy(shape,true,false);
+        if(!copy.IsDone())throw Standard_Failure("Cannot copy shape for display");
+        meshingShape=copy.Shape();
+    }
+    BRepMesh_IncrementalMesh mesh(meshingShape,chosen,false,0.12,true);
+    (void)mesh;
+    return meshingShape;
+}
+}
+
 Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double deflectionMm,
     int isoLinesPerDirection)
 {
@@ -225,16 +243,7 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
     try {
         const double chosen = deflectionMm > 0.0 ? deflectionMm
                                                  : DeflectionForSize(DiagonalOf(shape));
-        auto meshingShape=detail::MeshReadyShape(shape);
-        if(meshingShape.IsSame(shape)) {
-            // Meshing updates tolerances and representations on shared edges.
-            // Those changes must not invalidate the editable/exportable BRep.
-            BRepBuilderAPI_Copy copy(shape,true,false);
-            if(!copy.IsDone())throw Standard_Failure("Cannot copy shape for display");
-            meshingShape=copy.Shape();
-        }
-        BRepMesh_IncrementalMesh mesh(meshingShape, chosen, Standard_False, 0.12, Standard_True);
-        (void)mesh;
+        const auto meshingShape=detail::TessellatedCopy(shape,chosen);
         ShapeMesh made;
         made.closed = IsClosedSolid(shape);
         CollectTriangles(meshingShape, made);

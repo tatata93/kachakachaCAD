@@ -1019,7 +1019,7 @@ void V2MainWindow::RefreshRightShelves()
     // (オーナー指摘 2026-09-13)。
     drawingDock_->SetTool(session_->CurrentTool());
     auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
-        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thickenShelfShown_,
+        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thicken_.shelfShown,
         surfaceEdit_ != nullptr && surfaceEdit_->Active(),
         surfaceAnalysis_ != nullptr && surfaceAnalysis_->Shown(), OwnedToolShelf());
     if (operationHost_ != nullptr) {

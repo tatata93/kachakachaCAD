@@ -245,10 +245,10 @@ public:
     [[nodiscard]] V2HoverEditTool& HoverEditTool() { return *hoverEdit_; }
     [[nodiscard]] V2LoopFacesTool& LoopFacesTool() { return *loopFaces_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
-    [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
+    [[nodiscard]] bool ThickenShelfShown() const noexcept { return thicken_.shelfShown; }
     [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
     {
-        return thickenInput_;
+        return thicken_.input;
     }
     //! いまの入力と、おまかせの分類。試験から見る。
     [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
@@ -1038,18 +1038,7 @@ private:
     bool booleanMirroring_ = false;
     V2BooleanDock* booleanDock_ = nullptr;
     //! 「厚み」の道具。面・作り方・相手の平面・下見の形。確定するまで文書へは入らない。
-    bool thickenShelfShown_ = false;
-    kachakacha::v2::app::ThickenInputState thickenInput_;
-    kachakacha::v2::app::ThickenPreviewOutcome thickenOutcome_;
-    //! 下見に使った形。**確定はこれをそのまま入れる。**
-    std::vector<kachakacha::v2::modeling::KernelShapeHandle> thickenBuilt_;   // 面ごと(欄と同じ並び)
-    std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> thickenBuiltEdges_;
-    std::vector<double> thickenBuiltThickness_;
-    //! 3D の選択に映した、面の写し(空なら Nil 相当)。差分を読むための前回の写し。
-    std::vector<kachakacha::v2::base::EntityId> thickenMirror_;
-    bool thickenMirroring_ = false;
-    bool thickenRefreshing_ = false;
-    bool thickenRefreshPending_ = false;
+    V2ThickenPreviewState thicken_;
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;

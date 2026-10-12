@@ -120,6 +120,27 @@ KACHA_V2_TEST(thicken_quality, cylinder_wall_has_outward_winding_and_analytic_vo
     const auto step=kernel::OutputStep({solid.Value().handle});
     Require(step.HasValue(),"STEP writer verifies solid count, signed volume and bounds after rereading");
 }
+
+KACHA_V2_TEST(thicken_quality, radius_five_outer_skin_and_one_mm_wall_have_radius_four_inner_skin)
+{
+    const double pi=std::acos(-1.0);
+    const occ::handle<Geom_Surface> cylinder=new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0,0,0),gp_Dir(0,0,1)),5);
+    const auto face=BRepBuilderAPI_MakeFace(cylinder,0,pi*.5,0,10,1e-7).Face();
+    const auto source=kernel::StoreShape(face);const auto original=kernel::CaptureOutputShape(source);
+    const auto wall=kernel::ThickenSurface(source,1,fabrication::ThicknessPlacement::Inside,{});
+    Require(wall.HasValue(),"one mm wall must retain the radius-five outside skin");
+    TopoDS_Shape solid;Require(kernel::LookupShape(wall.Value().handle,solid),"native solid retained");
+    IntCurvesFace_ShapeIntersector ray;ray.Load(solid,1e-7);
+    ray.Perform(gp_Lin(gp_Pnt(0,0,5),gp_Dir(1,1,0)),0,6);
+    Require(ray.IsDone()&&ray.NbPnt()==2,"radial ray meets precisely the inner and outer skin");
+    std::vector<double> radii;for(int i=1;i<=ray.NbPnt();++i)radii.push_back(ray.WParameter(i));std::sort(radii.begin(),radii.end());
+    test::RequireNear(radii[0],4,1e-7,"inner radius is four mm");
+    test::RequireNear(radii[1],5,1e-7,"outer radius remains five mm");
+    test::RequireNear(wall.Value().volumeMm3,pi*.25*(25-16)*10,1e-6,"analytic material volume");
+    const auto after=kernel::CaptureOutputShape(source);
+    Require(original.HasValue()&&after.HasValue()&&original.Value()==after.Value(),"thickness does not alter the source face");
+    kernel::ReleaseShape(source);kernel::ReleaseShape(wall.Value().handle);
+}
 KACHA_V2_TEST(thicken_quality, rim_with_impossible_offset_is_rejected)
 {
     const auto surface=Revolved({{15.9,0,1},{16.5,0,1.6},{16.5,0,3},{16.2,0,3.3},{16.2,0,63}});

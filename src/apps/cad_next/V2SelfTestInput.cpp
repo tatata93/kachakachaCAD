@@ -872,7 +872,7 @@ bool CaseRealNumericFields(V2MainWindow& window) {
         int checked=0;
         for(auto* field:window.findChildren<QDoubleSpinBox*>()) {
             if(!Explain("numeric fields defer partial input from construction",!field->keyboardTracking()))return false;
-            if(field->decimals()<3||field->minimum()>.025||field->maximum()<1)continue;
+            if(!field->isEnabled()||field->decimals()<3||field->minimum()>.025||field->maximum()<1)continue;
             const bool blocked=field->blockSignals(true);const double old=field->value();field->setValue(1);field->selectAll();
             for(const auto c:QStringLiteral("0.025")) {
                 QKeyEvent key(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));

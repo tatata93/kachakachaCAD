@@ -567,7 +567,7 @@ std::vector<SelfTestCase> FabricationCases()
     return {
         {"回り込み投影は面が2枚以上要る", &CaseWrapProjectionNeedsTwoSurfaces},
         {"製作の棚の範囲と材料・積層が効く", &CaseFabricationDockRangeAndMaterial},
-        {"製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
+        {"HP-FAB-SHELF 製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
         {"HP-FB-05 組立状態は窓を出さず棚の欄へ案内し、当てるまで文書は変わらない",

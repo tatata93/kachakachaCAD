@@ -952,7 +952,7 @@ void V2FabricationDock::Connect()
         [this] { SyncRadiusFromPercent(); });
     QObject::connect(radius_, &QDoubleSpinBox::valueChanged, this,
         [this] { SyncPercentFromRadius(); });
-    QObject::connect(manual_, &QLineEdit::editingFinished, this, [this] { Emit(); });
+    QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(reliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });

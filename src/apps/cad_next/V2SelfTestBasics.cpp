@@ -1213,12 +1213,9 @@ namespace {
     // 板厚が決め打ちだったころ、プラ板を使い分けられなかった。
     // 変えられないものは、使えないのと同じである。
     auto& dock = window.ParameterDock();
-    // 打ち替えられる11行(押し出しの距離を板厚から分けたぶん1つ増えた)と、
-    // 計算して出るだけの1行。
-    if (!Explain((std::string("行が12(実際は ") + std::to_string(dock.RowCount())
-                     + ")").c_str(), dock.RowCount() == 12)) {
-        return false;
-    }
+    // Every editable parameter plus the single computed scale row.
+    const auto expected=kachakacha::v2::app::ParameterDefinitions().size()+1;
+    if(!Explain("all parameter rows and one computed row",dock.RowCount()==static_cast<int>(expected)))return false;
     if (!Explain("式で入る",
             dock.Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
                 QStringLiteral("0.3*2")))) {
@@ -1473,7 +1470,7 @@ std::vector<SelfTestCase> BasicCases()
         {"輪は線から少しずれても掴める", &CaseRingIsGrabbableWithSlack},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
-        {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
+        {"HP-PARAM 数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
         {"決めた板厚が押し出しに効く", &CaseExtrudeUsesTheParameter},
         {"縮尺で割った寸法が棚に出る", &CaseScaleShowsTheModelSize},
         {"見え方は4段から直接選べて形を変えない", &CaseDisplaySettingsCycle},

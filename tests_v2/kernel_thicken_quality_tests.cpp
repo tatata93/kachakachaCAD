@@ -5,6 +5,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/kernel/OcctMassProperties.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -25,6 +26,14 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Circ.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom_RectangularTrimmedSurface.hxx>
+#include <GeomConvert.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepLib.hxx>
+#include <GProp_GProps.hxx>
 #endif
 using namespace kachakacha::v2;
 using test::Require;
@@ -45,6 +54,37 @@ modeling::KernelShapeHandle Revolved(const std::vector<geometry::Vector3>& point
     const auto made=kernel::BuildGuideSurface(request,analyzed.Value(),{});
     Require(made.HasValue(),"revolved surface built");return made.Value().handle;
 }
+}
+KACHA_V2_TEST(thicken_quality, dense_offset_integrates_native_spans_and_preserves_signed_volume_and_centroid)
+{
+    const double pi=std::acos(-1.0),radius=12,height=30,thickness=.5;
+    const occ::handle<Geom_Surface> cylinder=new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0,0,0),gp_Dir(0,0,1)),radius);
+    const occ::handle<Geom_Surface> trimmed=new Geom_RectangularTrimmedSurface(cylinder,0,pi*.5,0,height);
+    auto surface=GeomConvert::SurfaceToBSplineSurface(trimmed);
+    for(int i=1;i<80;++i)surface->InsertUKnot(pi*.5*i/80,1,1e-12,false);
+    for(int i=1;i<12;++i)surface->InsertVKnot(height*i/12,1,1e-12,false);
+    BRepOffsetAPI_MakeThickSolid offset;offset.MakeThickSolidBySimple(BRepBuilderAPI_MakeFace(surface,1e-7).Face(),thickness);
+    Require(offset.IsDone(),"dense spline offset constructed");
+    auto solid=TopoDS::Solid(offset.Shape());Require(BRepLib::OrientClosedSolid(solid),"dense wall oriented");
+    const auto handle=kernel::StoreShape(solid);
+    const auto before=kernel::CaptureOutputShape(handle);Require(before.HasValue(),"dense offset captures before display");
+    Require(kernel::BuildShapeMesh(handle,.01).HasValue(),"dense offset displays");
+    const auto after=kernel::CaptureOutputShape(handle);
+    Require(after.HasValue()&&before.Value()==after.Value(),"display must not mutate authoritative topology or triangulation");
+    const auto restored=kernel::RestoreOutputShape(after.Value());Require(restored.HasValue(),"displayed shape roundtrips");
+    kernel::ReleaseShape(restored.Value());kernel::ReleaseShape(handle);
+    const double expected=pi*.25*((radius+thickness)*(radius+thickness)-radius*radius)*height;
+    const double center=4/(3*pi)*(std::pow(radius+thickness,3)-std::pow(radius,3))/((radius+thickness)*(radius+thickness)-radius*radius);
+    gp_Trsf transform;transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(0,1,0)),.7);
+    transform.SetTranslationPart(gp_Vec(1000,-2000,3000));
+    auto placed=BRepBuilderAPI_Transform(solid,transform,false).Shape();
+    for(bool reverse:{false,true}) {
+        GProp_GProps properties;kernel::detail::VolumeProperties(placed,properties,true);
+        test::RequireNear(properties.Mass(),reverse?-expected:expected,expected*1e-8,"dense offset signed analytic volume");
+        auto wanted=gp_Pnt(center,center,height*.5);wanted.Transform(transform);
+        test::RequireNear(properties.CentreOfMass().Distance(wanted),0,1e-7,"rotated translated offset analytic centroid");
+        placed.Reverse();
+    }
 }
 KACHA_V2_TEST(thicken_quality, cylinder_wall_has_outward_winding_and_analytic_volume)
 {
@@ -69,6 +109,30 @@ KACHA_V2_TEST(thicken_quality, rim_with_impossible_offset_is_rejected)
     Require(!solid.HasValue(),"self-intersecting simple offset must not become a part");
     Require(!solid.Diagnostics().empty()&&!solid.Diagnostics().front().detailsJa.empty(),"failure retains an actionable diagnostic");
     Require(kernel::CachedShapeCount()==before,"rejected thickness leaves no orphaned shape");
+}
+KACHA_V2_TEST(thicken_quality, focal_fold_rejection_respects_placement_and_reversed_normal)
+{
+    const double pi=std::acos(-1.0),radius=2,height=5;
+    const occ::handle<Geom_Surface> cylinder=new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0,0,0),gp_Dir(0,0,1)),radius);
+    auto face=BRepBuilderAPI_MakeFace(cylinder,0,pi*.5,0,height,1e-7).Face();
+    for(bool reversed:{false,true}) {
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        Require(before.HasValue(),"cylinder source captures");
+        for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside,fabrication::ThicknessPlacement::Centered}) {
+            const double thickness=placement==fabrication::ThicknessPlacement::Centered?6:3;
+            const auto count=kernel::CachedShapeCount();const auto made=kernel::ThickenSurface(source,thickness,placement,{});
+            const bool outward=placement==(reversed?fabrication::ThicknessPlacement::Inside:fabrication::ThicknessPlacement::Outside);
+            Require(made.HasValue()==outward,"only a thickness crossing the actual oriented focal radius is rejected");
+            if(made.HasValue()) {
+                test::RequireNear(made.Value().volumeMm3,pi*.25*(25-4)*height,1e-7,"outward wall analytic volume");
+                kernel::ReleaseShape(made.Value().handle);
+            } else Require(made.FirstSummaryJa()=="この厚みでは曲面の内側が折り返します。","focal fold has specific actionable reason");
+            Require(kernel::CachedShapeCount()==count,"placement check releases all temporary results");
+        }
+        const auto after=kernel::CaptureOutputShape(source);
+        Require(after.HasValue()&&before.Value()==after.Value(),"placement checks preserve native source");
+        kernel::ReleaseShape(source);face.Reverse();
+    }
 }
 KACHA_V2_TEST(thicken_quality, planar_to_steep_plane_has_full_wedge_and_safe_roundtrip)
 {

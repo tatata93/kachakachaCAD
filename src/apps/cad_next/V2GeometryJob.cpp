@@ -6,9 +6,11 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QIODevice>
 #include <QJsonArray>
@@ -32,6 +34,7 @@
 #include <functional>
 #include <iostream>
 #include <cmath>
+#include <deque>
 
 namespace V2GeometryJob {
 using namespace kachakacha::v2;
@@ -40,6 +43,25 @@ constexpr auto busyProperty="geometryJobActive";
 constexpr auto failedCode=app::kGeometryJobFailed;
 constexpr auto cancelledCode=app::kGeometryJobCancelled;
 using JsonResult=base::Result<QJsonObject>;
+struct PreviewCacheEntry {QByteArray key;QJsonObject result;qsizetype bytes=0;};
+std::deque<PreviewCacheEntry>& PreviewCache(){static std::deque<PreviewCacheEntry> entries;return entries;}
+QByteArray PreviewKey(const QJsonObject& request,modeling::KernelShapeHandle source) {
+    const auto captured=kernel::CaptureOutputShape(source);if(!captured.HasValue())return {};
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(QJsonDocument(request).toJson(QJsonDocument::Compact));
+    hash.addData(QByteArray::fromStdString(captured.Value()));return hash.result();
+}
+void CachePreview(const QByteArray& key,const QJsonObject& result) {
+    // Retain only validated geometry bytes, never live document IDs or handles.
+    // Four entries / 16 MiB bound the cost for repeated placement/value changes.
+    constexpr qsizetype limit=16*1024*1024;
+    const qsizetype bytes=result.value("brep").toString().size()*sizeof(QChar);
+    if(key.isEmpty()||bytes>limit)return;
+    auto& entries=PreviewCache();qsizetype total=bytes;
+    for(const auto& entry:entries)total+=entry.bytes;
+    while(!entries.empty()&&(entries.size()>=4||total>limit)){total-=entries.front().bytes;entries.pop_front();}
+    entries.push_back({key,result,bytes});
+}
 base::Diagnostic Failed(const QString& detail) {
     return base::MakeError(failedCode,"計算を完了できませんでした。文書は変更していません。",detail.toStdString());
 }
@@ -85,7 +107,7 @@ JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const 
 // The only process we may stop is this private calculation child. Its only
 // writable outputs are scratch files; it never receives the document or a save path.
 JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::KernelShapeHandle>& inputs,
-    const DocumentReader& reader={}) {
+    const DocumentReader& reader={}, bool interactivePreview=false) {
     if(Active())return JsonResult::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     struct Busy {
         Busy(){qApp->setProperty(busyProperty,true);}
@@ -103,7 +125,10 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     request["version"]=1;request["token"]=token;request["shapes"]=shapes;
     if(!WriteJson(scratch.filePath("request.json"),request))return JsonResult::Failure(Failed(QStringLiteral("計算用入力を書き込めません。")));
     JobDialog dialog(parent);dialog.setObjectName("geometryJobDialog");
-    dialog.setWindowTitle(reader?QStringLiteral("文書を開く"):QStringLiteral("形状を計算"));dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.setWindowTitle(reader?QStringLiteral("文書を開く"):QStringLiteral("形状を計算"));
+    dialog.setWindowModality(interactivePreview?Qt::NonModal:Qt::ApplicationModal);
+    dialog.setProperty("interactiveGeometryPreview",interactivePreview);
+    if(interactivePreview)dialog.setAttribute(Qt::WA_ShowWithoutActivating,true);
     dialog.setMinimumWidth(420);
     auto* layout=new QVBoxLayout(&dialog);
     auto* label=new QLabel(QStringLiteral("計算を準備しています…"),&dialog);label->setWordWrap(true);layout->addWidget(label);
@@ -150,7 +175,16 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     process.setWorkingDirectory(scratch.path());
     if(reader){auto environment=QProcessEnvironment::systemEnvironment();environment.insert("QT_QPA_PLATFORM","offscreen");process.setProcessEnvironment(environment);}
     QTimer::singleShot(0,&dialog,[&]{if(!cancelled)process.start(QCoreApplication::applicationFilePath(),{reader?"--document-job":"--geometry-job",scratch.path()});});
-    timer.start();dialog.exec();
+    timer.start();
+    if(interactivePreview) {
+        // Keep the viewport and parameter pane usable while the private child
+        // validates the preview. Input changes cancel it and schedule the latest
+        // request; document commands remain guarded by Active().
+        QEventLoop loop;
+        bool finished=false;
+        QObject::connect(&dialog,&QDialog::finished,&loop,[&]{finished=true;loop.quit();});
+        dialog.show();if(!finished)loop.exec();
+    } else dialog.exec();
     // Also cover application shutdown while the modal event loop is running.
     if(process.state()!=QProcess::NotRunning){cancelled=true;process.kill();process.waitForFinished(3000);}
     if(cancelled)return JsonResult::Failure(base::MakeError(cancelledCode,"計算を取り消しました。文書は変更していません。","入力を変更するか、選び直して再計算できます。"));
@@ -160,6 +194,11 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
 }
 }
 bool Active(){return QCoreApplication::instance()&&QCoreApplication::instance()->property(busyProperty).toBool();}
+void CancelPreview(QWidget* parent) {
+    if(!parent)return;
+    auto* dialog=parent->findChild<QDialog*>("geometryJobDialog");
+    if(dialog&&dialog->property("interactiveGeometryPreview").toBool())dialog->reject();
+}
 
 base::Result<bool> PrepareDocument(QWidget* parent,const QString& path,const DocumentReader& reader) {
     const auto result=Run(parent,{{"source",path}}, {}, reader);
@@ -201,8 +240,7 @@ int Worker(const QString& directory) {
             }
         }
         if(result.Valid()) {
-            Phase("表示用の形状を準備しています…");
-            const auto mesh=kernel::BuildShapeMesh(result);(void)mesh;
+            Phase("計算結果を転送しています…");
             const auto captured=kernel::CaptureOutputShape(result);
             if(!captured.HasValue())response=Diagnostic(captured.FirstDiagnostic());
             else response={{"ok",true},{"brep",QString::fromLatin1(QByteArray::fromStdString(captured.Value()).toBase64())},
@@ -217,14 +255,21 @@ int Worker(const QString& directory) {
 
 base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelShapeHandle source,
     double thickness,fabrication::ThicknessPlacement placement,const std::optional<modeling::WorkPlaneFrame>& plane,
-    const geometry::GeometryTolerance& tolerance) {
+    const geometry::GeometryTolerance& tolerance,bool interactivePreview) {
     using Out=base::Result<kernel::ThickenedSolid>;
+    if(Active())return Out::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     QJsonObject request{{"operation","thicken"},{"thickness",thickness},{"placement",static_cast<int>(placement)},
         {"linear",tolerance.modelLinearMm},{"angular",tolerance.modelAngularRad},{"epsilon",tolerance.numericEpsilon},{"toPlane",plane.has_value()}};
     if(plane){request["origin"]=Point(plane->origin);request["normal"]=Point(plane->normal);}
-    const auto response=Run(parent,request,{source});if(!response.HasValue())return Out::Failure(response.Diagnostics());
-    const auto& data=response.Value();const auto handle=kernel::RestoreOutputShape(QByteArray::fromBase64(data.value("brep").toString().toLatin1()).toStdString());
+    const auto key=interactivePreview?PreviewKey(request,source):QByteArray{};
+    std::optional<QJsonObject> cached;
+    if(!key.isEmpty())for(const auto& entry:PreviewCache())if(entry.key==key){cached=entry.result;break;}
+    const auto response=cached?JsonResult::Success(*cached):Run(parent,request,{source},{},interactivePreview);
+    if(!response.HasValue())return Out::Failure(response.Diagnostics());
+    const auto& data=response.Value();
+    const auto handle=kernel::RestoreOutputShape(QByteArray::fromBase64(data.value("brep").toString().toLatin1()).toStdString());
     if(!handle.HasValue())return Out::Failure(handle.Diagnostics());
+    if(!cached)CachePreview(key,data);
     kernel::ThickenedSolid made;made.handle=handle.Value();made.volumeMm3=data.value("volume").toDouble();made.thicknessMm=data.value("thickness").toDouble();
     const auto edges=kernel::OutputEdges(made.handle,tolerance.modelLinearMm);
     if(edges.HasValue())made.edges=edges.Value();

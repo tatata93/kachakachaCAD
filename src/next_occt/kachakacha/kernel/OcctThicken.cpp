@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <string>
+#include <algorithm>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
@@ -31,6 +32,8 @@
 #include <GeomLib_IsPlanarSurface.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
+#include <NCollection_Array1.hxx>
+#include <BRepClass_FaceClassifier.hxx>
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -48,6 +51,7 @@
 #include <gp_Trsf.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
 
 #include <exception>
@@ -148,6 +152,32 @@ namespace {
 
 } // namespace
 
+namespace {
+bool OffsetCrossesFocalPoint(const TopoDS_Shape& shape,double first,double last) {
+    for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
+        const auto face=TopoDS::Face(e.Current());BRepAdaptor_Surface surface(face,true);
+        const int nu=surface.NbUIntervals(GeomAbs_CN),nv=surface.NbVIntervals(GeomAbs_CN);
+        if(nu<=0||nv<=0||nu>20000/nv)continue;
+        NCollection_Array1<double> us(1,nu+1),vs(1,nv+1);
+        surface.UIntervals(us,GeomAbs_CN);surface.VIntervals(vs,GeomAbs_CN);
+        for(int i=1;i<=nu;++i)for(int j=1;j<=nv;++j)for(double a:{1.0/6,.5,5.0/6})for(double b:{1.0/6,.5,5.0/6}) {
+            const double u=us(i)+(us(i+1)-us(i))*a,v=vs(j)+(vs(j+1)-vs(j))*b;
+            if(BRepClass_FaceClassifier(face,gp_Pnt2d(u,v),1e-9).State()==TopAbs_OUT)continue;
+            gp_Pnt p;gp_Vec du,dv,duu,dvv,duv;surface.D2(u,v,p,du,dv,duu,dvv,duv);
+            auto normal=du.Crossed(dv);const double area=normal.SquareMagnitude();if(area<1e-28)continue;
+            normal.Normalize();if(face.Orientation()==TopAbs_REVERSED)normal.Reverse();
+            const double E=du.Dot(du),F=du.Dot(dv),G=dv.Dot(dv);
+            const double l=normal.Dot(duu),m=normal.Dot(duv),n=normal.Dot(dvv);
+            const double mean=(l*G-2*m*F+n*E)/(2*area),gaussian=(l*n-m*m)/area;
+            const double delta=std::sqrt(std::max(0.0,mean*mean-gaussian));
+            for(double k:{mean-delta,mean+delta})for(double distance:{first,last})
+                if(std::isfinite(k)&&1-distance*k<=1e-9)return true;
+        }
+    }
+    return false;
+}
+}
+
 Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     double thicknessMm, fabrication::ThicknessPlacement placement,
     const geometry::GeometryTolerance& tolerance)
@@ -182,6 +212,18 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     const double startOffset =
         placement == fabrication::ThicknessPlacement::Centered ? -thicknessMm * 0.5
                                                                : 0.0;
+    // A focal fold found at any point is a definitive invalid offset. Absence
+    // of a sampled fold is not acceptance: the full solid checks still run.
+    try {
+        const double endOffset=placement==fabrication::ThicknessPlacement::Inside?-thicknessMm:
+            placement==fabrication::ThicknessPlacement::Centered?thicknessMm*.5:thicknessMm;
+        if(OffsetCrossesFocalPoint(face,startOffset,endOffset))return Out::Failure(MakeError(kThickenFailed,
+            "この厚みでは曲面の内側が折り返します。",
+            "局所的な曲率半径を超える厚みです。厚みを小さくするか、外側付けへ切り替えてください。元の面は変更していません。"));
+    } catch(const Standard_Failure&) {
+        // A preliminary differential check is optional; the authoritative
+        // construction and validity checks below retain their existing refusal.
+    }
     auto folded=detail::ThickenFoldedBand(face,thicknessMm,placement,tolerance);
     if(!folded)folded=detail::ThickenRevolvedProfile(face,thicknessMm,placement,tolerance);
     TopoDS_Shape base = face;
@@ -211,9 +253,9 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
                 "\n"+checked.Diagnostics().front().detailsJa)));
         const auto reason=!checked.Value().closed
             ? "厚み面の境界が閉じていないか、1本の辺へ3面以上が接続しています。"
-            : !checked.Value().positiveVolume
-                ? "閉じた形の体積または内外の向きが不正です。"
-                : "厚み面の接続・境界の整合性または自己交差の検査に失敗しました。";
+            : !checked.Value().selfIntersectionFree
+                ? "厚み面の接続・境界の整合性または自己交差の検査に失敗しました。"
+                : "閉じた形の体積または内外の向きが不正です。";
         return Out::Failure(MakeError(kThickenFailed,
             "厚みを付けた形の安全検査に失敗したため、部品を作りませんでした。",
             std::string(reason)+"厚みを小さくするか、急な折れや巻き縁を別部品にしてください。"));

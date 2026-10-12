@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctMeshPlanarFaces.h"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -224,7 +225,14 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
     try {
         const double chosen = deflectionMm > 0.0 ? deflectionMm
                                                  : DeflectionForSize(DiagonalOf(shape));
-        const auto meshingShape=detail::MeshReadyShape(shape);
+        auto meshingShape=detail::MeshReadyShape(shape);
+        if(meshingShape.IsSame(shape)) {
+            // Meshing updates tolerances and representations on shared edges.
+            // Those changes must not invalidate the editable/exportable BRep.
+            BRepBuilderAPI_Copy copy(shape,true,false);
+            if(!copy.IsDone())throw Standard_Failure("Cannot copy shape for display");
+            meshingShape=copy.Shape();
+        }
         BRepMesh_IncrementalMesh mesh(meshingShape, chosen, Standard_False, 0.12, Standard_True);
         (void)mesh;
         ShapeMesh made;

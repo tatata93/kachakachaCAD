@@ -24,6 +24,7 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QString>
+#include <QScopedValueRollback>
 
 #include <algorithm>
 #include <optional>
@@ -134,6 +135,7 @@ void V2MainWindow::RefreshThickenForSelectionChange()
 //! 面と作り方がそろっていれば **実際に厚みを付けて** 稜線を下見に出す。文書へは書かない。
 void V2MainWindow::RefreshThickenPreview()
 {
+    const auto input=thickenInput_;
     thickenOutcome_ = kachakacha::v2::app::ThickenPreviewOutcome{};
     ReleaseThickenPreview(thickenBuilt_);
     thickenBuiltEdges_.clear();
@@ -155,8 +157,9 @@ void V2MainWindow::RefreshThickenPreview()
     }
     // 面ごとに実際に厚みを付ける。1 枚でも付けられなければ、どれも作らない(半分だけ
     // 作れたことにしない)。
+    RefreshThickenDock();
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
-    for (const EntityId& id : thickenInput_.surfaces) {
+    for (const EntityId& id : input.surfaces) {
         const auto found = guideShapes_.find(id.ToString());
         const auto* entity = session_->GetDocument().FindEntity(id);
         const std::string name = entity != nullptr ? entity->displayName : std::string("面");
@@ -165,8 +168,14 @@ void V2MainWindow::RefreshThickenPreview()
             ReleaseThickenPreview(thickenBuilt_);
             return;
         }
-        const auto built = V2GeometryJob::Thicken(this,found->second,thickenInput_.thicknessMm,
-            thickenInput_.placement,frame,tolerance);
+        const auto built = V2GeometryJob::Thicken(this,found->second,input.thicknessMm,
+            input.placement,frame,tolerance,true);
+        if(thickenRefreshPending_||!thickenShelfShown_||input.surfaces!=thickenInput_.surfaces
+            ||input.thicknessMm!=thickenInput_.thicknessMm||input.placement!=thickenInput_.placement
+            ||input.toPlane!=thickenInput_.toPlane||input.targetPlane!=thickenInput_.targetPlane) {
+            if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
+            ReleaseThickenPreview(thickenBuilt_);return;
+        }
         if(session_->GetDocument().Revision()!=revision) {
             if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
             ReleaseThickenPreview(thickenBuilt_);
@@ -214,11 +223,16 @@ void V2MainWindow::RefreshThickenDock()
                                                                   : std::string("名前のないもの");
     };
     const bool previewShown = !viewport_->ToolPreview().empty();
+    const bool calculating=thickenRefreshing_&&kachakacha::v2::app::ThickenReadyToBuild(thickenInput_)
+        &&!thickenOutcome_.available&&thickenOutcome_.refusalJa.empty();
+    auto shownOutcome=thickenOutcome_;
+    if(calculating)shownOutcome.evaluated=false;
     std::vector<QString> lines;
     for (const std::string& line : kachakacha::v2::app::ThickenStatusLinesJa(thickenInput_,
-             thickenOutcome_, previewShown)) {
+             shownOutcome, previewShown)) {
         lines.push_back(QString::fromStdString(line));
     }
+    if(calculating)lines.front()=QStringLiteral("計算中です。3D表示と設定は操作できます。設定を変えると計算し直します。");
     // 面の名前を並べる(何枚でも)。
     std::string names;
     for (const EntityId& id : thickenInput_.surfaces) {
@@ -229,7 +243,8 @@ void V2MainWindow::RefreshThickenDock()
     }
     thickenDock_->SetTargets(ExtrudeTargets());
     thickenDock_->ShowInput(thickenInput_, QString::fromStdString(names), lines,
-        !thickenBuilt_.empty());
+        thickenOutcome_.available&&!thickenRefreshPending_&&!V2GeometryJob::Active()
+            &&!thickenBuilt_.empty()&&thickenBuilt_.size()==thickenInput_.surfaces.size());
     ShowToolFooter(thickenShelfShown_
             ? QString::fromStdString(kachakacha::v2::app::ThickenFooterLine(thickenInput_,
                   names, nameOf(thickenInput_.targetPlane), thickenOutcome_, previewShown))
@@ -245,8 +260,19 @@ void V2MainWindow::RefreshThickenDock()
 
 void V2MainWindow::RefreshThickenAll()
 {
-    RefreshThickenPreview();
-    RefreshThickenDock();
+    if(thickenRefreshing_) {
+        thickenRefreshPending_=true;
+        V2GeometryJob::CancelPreview(this);
+        RefreshThickenDock();return;
+    }
+    QScopedValueRollback<bool> refreshing(thickenRefreshing_,true);
+    do {
+        thickenRefreshPending_=false;
+        // Show selected faces and new values before starting the calculation.
+        RefreshThickenDock();
+        RefreshThickenPreview();
+    } while(thickenRefreshPending_&&thickenShelfShown_);
+    if(thickenShelfShown_)RefreshThickenDock();
 }
 
 //! 「選び直す」。面の欄を空にし、次のクリックを待つ。
@@ -300,6 +326,7 @@ void V2MainWindow::ApplyThickenThicknessMm(double value)
 //! やめる。文書は始める前とまったく同じ。
 void V2MainWindow::EndThicken(bool keepTool)
 {
+    V2GeometryJob::CancelPreview(this);
     thickenShelfShown_ = keepTool;
     if (keepTool) { thickenInput_.surfaces.clear(); thickenInput_.targetPlane = {}; }
     ReleaseThickenPreview(thickenBuilt_);
@@ -325,6 +352,7 @@ void V2MainWindow::EndThicken(bool keepTool)
 //! 確定。**下見に使った形をそのまま**文書へ入れる。何枚でも 1 回の取り消しで戻る。
 void V2MainWindow::ConfirmThicken()
 {
+    if(thickenRefreshing_||V2GeometryJob::Active())return;
     if (thickenBuilt_.empty() || thickenBuilt_.size() != thickenInput_.surfaces.size()) {
         SetStatus(QStringLiteral(
             "厚み: まだ作れません。面と作り方(平面までなら相手も)を入れてください。"));

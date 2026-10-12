@@ -173,7 +173,7 @@ bool ManifoldEdgeUse(const TopoDS_Shape& shape)
 bool SelfIntersectionFree(const TopoDS_Shape& shape,double toleranceMm)
 {
     BOPAlgo_ArgumentAnalyzer check;check.SetShape1(shape);check.SelfInterMode()=true;
-    check.StopOnFirstFaulty()=true;check.Perform();
+    check.SetRunParallel(true);check.StopOnFirstFaulty()=true;check.Perform();
     if(!check.HasFaulty()&&!check.HasErrors())return true;
     if(check.HasErrors()||check.GetCheckResult().IsEmpty())return false;
     for(const auto& fault:check.GetCheckResult())
@@ -192,7 +192,7 @@ bool SelfIntersectionFree(const TopoDS_Shape& shape,double toleranceMm)
     double av[6],bv[6];a.Get(av[0],av[1],av[2],av[3],av[4],av[5]);b.Get(bv[0],bv[1],bv[2],bv[3],bv[4],bv[5]);
     for(int i=0;i<6;++i)if(std::abs(av[i]-bv[i])>std::max(toleranceMm,1e-6))return false;
     BOPAlgo_ArgumentAnalyzer retry;retry.SetShape1(converted);retry.SelfInterMode()=true;
-    retry.StopOnFirstFaulty()=true;retry.Perform();
+    retry.SetRunParallel(true);retry.StopOnFirstFaulty()=true;retry.Perform();
     return !retry.HasFaulty()&&!retry.HasErrors();
 }
 } // namespace
@@ -214,6 +214,9 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
             ++solids;
         }
         check.closed = solids > 0 && ManifoldEdgeUse(shape);
+        BRepCheck_Analyzer analyzer(shape);
+        check.selfIntersectionFree=analyzer.IsValid()==Standard_True;
+        if(!check.closed||!check.selfIntersectionFree)return Result<SolidExportCheck>::Success(check);
 
         // 2. 体積が正か。
         GProp_GProps properties;
@@ -227,14 +230,14 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
         check.positiveVolume = check.volumeMm3 > floorVolume;
 
         // 3. 自己交差などの不正が無いか。
-        BRepCheck_Analyzer analyzer(shape);
         check.selfIntersectionFree = analyzer.IsValid() == Standard_True;
         // BRepCheck validates topology and parameter consistency; it does not
         // perform a geometric self-intersection test. Check every solid itself,
         // leaving contacts between separate assembly parts to assembly checks.
         for (TopExp_Explorer e(shape, TopAbs_SOLID); e.More(); e.Next()) {
             GProp_GProps component;
-            detail::VolumeProperties(e.Current(), component);
+            if(shape.ShapeType()==TopAbs_SOLID)component=properties;
+            else detail::VolumeProperties(e.Current(), component);
             check.positiveVolume = check.positiveVolume && component.Mass() > floorVolume;
             check.selfIntersectionFree = check.selfIntersectionFree
                 && SelfIntersectionFree(e.Current(),toleranceMm);

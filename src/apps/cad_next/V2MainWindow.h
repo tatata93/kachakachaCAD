@@ -1048,6 +1048,8 @@ private:
     //! 3D の選択に映した、面の写し(空なら Nil 相当)。差分を読むための前回の写し。
     std::vector<kachakacha::v2::base::EntityId> thickenMirror_;
     bool thickenMirroring_ = false;
+    bool thickenRefreshing_ = false;
+    bool thickenRefreshPending_ = false;
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;

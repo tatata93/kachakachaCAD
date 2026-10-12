@@ -300,7 +300,11 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
 
 bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
-    if(V2GeometryJob::Active())return QMainWindow::eventFilter(target,event);
+    if(V2GeometryJob::Active()) {
+        if(event&&event->type()==QEvent::KeyPress&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape
+            &&thickenRefreshing_) {V2GeometryJob::CancelPreview(this);return true;}
+        return QMainWindow::eventFilter(target,event);
+    }
     if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn))
         if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if (event != nullptr && event->type() == QEvent::KeyPress) {

@@ -4,8 +4,8 @@
 //! 作り方(外側/中央/内側)を選ぶ → Enter で確定、1回の取り消しで消える。
 //! Esc でやめれば何も作らない。
 //!
-//! 選ぶのは実際に拾う道(`SelectAt` 経由の `ClickOnAnyGuideSurface`)だけ。
-//! ID の注入も、見えない widget を叩くこともしない。
+//! HP-TH-01〜08 の選択は実際に拾う道(`SelectAt` 経由の `ClickOnAnyGuideSurface`)。
+//! 添付文書の任意試験 HP-TH-OWNER は、対象の形状ガイドIDで選択を指定する。
 
 #include "V2SelfTest.h"
 
@@ -23,6 +23,9 @@
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/modeling/GuideSurfaceInput.h"
+#include <QFile>
 
 #include <QPointF>
 #include <QString>
@@ -33,6 +36,8 @@
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QDir>
+#include <QDialog>
+#include <QDoubleSpinBox>
 #include <iostream>
 
 namespace kachakacha::v2::selftest {
@@ -221,6 +226,9 @@ bool CaseThickenPreviewOwnership(V2MainWindow& window)
 bool CaseCancelRunningThickness(V2MainWindow& window)
 {
     if(!ArmThickenOnFreshSurface(window))return false;
+    // Use a new value so this test actually starts a process rather than
+    // correctly reusing an identical, already validated preview.
+    auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.731);
     const auto revision=window.Session().GetDocument().Revision();
     const auto baseline=kernel::CachedShapeCount();
     int heartbeats=0;bool cancelled=false;QElapsedTimer elapsed;elapsed.start();
@@ -228,7 +236,7 @@ bool CaseCancelRunningThickness(V2MainWindow& window)
     QObject::connect(&timer,&QTimer::timeout,&window,[&]{
         if(!V2GeometryJob::Active())return;
         ++heartbeats;
-        auto* dialog=QApplication::activeModalWidget();
+        auto* dialog=window.findChild<QDialog*>("geometryJobDialog");
         if(!dialog||dialog->objectName()!="geometryJobDialog"||dialog->property("calculationPid").toLongLong()==0)return;
         // A queued command must not replace the document during the modal job.
         window.RunCommand("file.new");
@@ -285,11 +293,112 @@ bool ExerciseComplexSurfaceStop(V2MainWindow& window,bool crash)
 }
 bool CaseCancelComplexSurface(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,false);}
 bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,true);}
+bool CaseInteractiveThicknessChanges(V2MainWindow& window)
+{
+    if(!ArmThickenOnFreshSurface(window))return false;
+    const auto revision=window.Session().GetDocument().Revision();
+    bool changed=false,enabled=false,moved=false,consistent=false;
+    QTimer timer;timer.setInterval(1);
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        auto* dialog=window.findChild<QDialog*>("geometryJobDialog");
+        if(changed||!dialog||dialog->property("calculationPid").toLongLong()==0)return;
+        changed=true;enabled=window.isEnabled()&&window.Viewport().isEnabled()
+            &&window.ThickenDock().isEnabled()&&QApplication::activeModalWidget()==nullptr;
+        consistent=window.ThickenDock().StatusTextJa().contains(QStringLiteral("計算中"))
+            &&!window.ThickenDock().StatusTextJa().contains(QStringLiteral("作れません"))
+            &&!window.ThickenDock().ClickConfirm()&&window.Session().GetDocument().Revision()==revision;
+        window.RunCommand("view.fit_all");
+        window.Viewport().SetViewDirection(ViewDirection::Front);moved=window.Viewport().Direction()==ViewDirection::Front;
+        auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");
+        if(amount)amount->setValue(.35);
+        (void)window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside);
+    });
+    timer.start();const bool picked=ClickOnAnyGuideSurface(window);timer.stop();
+    if(!Explain("parameters and viewport stay enabled during real calculation",picked&&changed&&enabled&&moved&&consistent))return false;
+    if(!Explain("latest input replaces cancelled generation without committing",window.ThickenInput().thicknessMm==.35
+        &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.Session().GetDocument().Revision()==revision
+        &&CountOfKind(window,EntityKind::Part)==0&&!window.Viewport().ToolPreview().empty()))return false;
+    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Inside))return false;
+    int jobs=0;QTimer observed;observed.setInterval(1);
+    QObject::connect(&observed,&QTimer::timeout,&window,[&]{if(V2GeometryJob::Active())++jobs;});
+    QElapsedTimer repeat;repeat.start();observed.start();
+    const bool reused=window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside);observed.stop();
+    if(!Explain("identical validated preview is reused without starting a process",reused&&jobs==0&&repeat.elapsed()<1000))return false;
+    if(!window.ThickenDock().ClickConfirm())return false;
+    bool correct=false;
+    for(const auto& f:window.Session().GetDocument().Snapshot().features)
+        if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&f.definition))correct=d->thickness.value==.35&&d->placement==0;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    return Explain("only the latest thickness is committed and survives undo redo",correct
+        &&CountOfKind(window,EntityKind::Part)==1&&window.RebuildProblems().isEmpty());
+}
+bool CaseOwnerThickness(V2MainWindow& window)
+{
+    if(!window.OpenDocumentFile(qEnvironmentVariable("KACHACAD_THICKEN_TEST_FILE")))return false;
+    const auto directory=qEnvironmentVariable("KACHACAD_THICKEN_TEST_OUTPUT");
+    if(!directory.isEmpty())QDir().mkpath(directory);
+    base::EntityId source;
+    for(const auto& feature:window.Session().GetDocument().Snapshot().features) {
+        const auto* definition=std::get_if<domain::CreateGuideSurfaceDefinition>(&feature.definition);
+        if(!definition)continue;
+        if(definition->method==5)source=feature.outputs.front().entityId;
+        const auto table=app::GuideTableFromDefinition(window.Session().GetDocument(),window.Session().Scene(),*definition);
+        if(!table.HasValue())return false;
+        const auto request=modeling::ToGuideSurfaceRequest(table.Value(),{});if(!request.HasValue())return false;
+        const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request.Value(),{});if(!analysis.HasValue())return false;
+        const auto built=kernel::BuildGuideSurface(request.Value(),analysis.Value(),{});if(!built.HasValue())return false;
+        const auto captured=kernel::CaptureOutputShape(built.Value().handle);if(!captured.HasValue())return false;
+        if(!directory.isEmpty()) {
+            const auto name=QString::fromStdString(feature.outputs.front().entityId.ToString());
+            QFile file(directory+"/"+name+".brep");if(!file.open(QIODevice::WriteOnly))return false;
+            file.write(QByteArray::fromStdString(captured.Value()));file.close();
+        }
+        kernel::ReleaseShape(built.Value().handle);
+    }
+    if(source.IsNil())return false;
+    std::cout<<"owner selected source="<<source.ToString()<<std::endl;
+    window.resize(1600,1000);window.SetMode(UiMode::Part);window.Viewport().FitToDocument();
+    (void)window.ParameterDock().Apply(app::ParameterId::ExtrudeDistance,QStringLiteral("6"));
+    window.Viewport().SetSelection({});window.RunCommand("part.thicken");
+    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Centered))return false;
+    const auto revision=window.Session().GetDocument().Revision();QElapsedTimer time;time.start();
+    app::SelectionSet selection;selection.entityIds={source};window.Viewport().SetSelection(selection);
+    std::cout<<"owner centered 6 mm: "<<time.elapsed()<<" ms\n";
+    if(!Explain("invalid owner thickness reports within five seconds without changing document",time.elapsed()<5000
+        &&window.Session().GetDocument().Revision()==revision&&!window.ThickenDock().ClickConfirm()))return false;
+    if(!directory.isEmpty())window.grab().save(directory+"/six-mm-refusal.png");
+    bool edited=false,responsive=false;QTimer timer;timer.setInterval(5);
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        auto* dialog=window.findChild<QDialog*>("geometryJobDialog");
+        if(edited||!dialog||dialog->property("calculationPid").toLongLong()==0)return;
+        edited=true;responsive=window.isEnabled()&&window.Viewport().isEnabled()&&window.ThickenDock().isEnabled();
+        window.Viewport().SetViewDirection(ViewDirection::Isometric);
+        (void)window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside);
+        if(!directory.isEmpty())window.grab().save(directory+"/editable-during-calculation.png");
+    });
+    auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;
+    timer.start();time.restart();amount->setValue(.5);timer.stop();
+    std::cout<<"owner editable outside .5 mm: "<<time.elapsed()<<" ms\n";
+    std::cout<<"owner changed="<<edited<<" responsive="<<responsive<<" placement="<<int(window.ThickenInput().placement)
+        <<" status="<<window.ThickenDock().StatusTextJa().toStdString()<<std::endl;
+    if(!Explain("owner calculation accepts changed input while viewport stays usable",edited&&responsive
+        &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.Session().GetDocument().Revision()==revision))return false;
+    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Centered))return false;
+    time.restart();if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside))return false;
+    std::cout<<"owner reused outside .5 mm: "<<time.elapsed()<<" ms\n";
+    if(!Explain("owner verified preview is reusable within one second",time.elapsed()<1000&&window.ThickenDock().ClickConfirm()))return false;
+    if(!directory.isEmpty())window.grab().save(directory+"/outside-half-mm-result.png");
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("owner valid solid survives undo redo and saved rebuild",window.RebuildProblems().isEmpty()
+        &&window.SaveAndReopen(QStringLiteral("owner-thickness-performance.kcd2"))&&window.RebuildProblems().isEmpty());
+}
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
 {
-    return {
+    std::vector<SelfTestCase> cases{
+        {"HP-TH-08 editable viewport and coalesced latest thickness preview",CaseInteractiveThicknessChanges},
         {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
         {"HP-TH-06 crashed calculation process preserves document and supports retry",CaseFailedThicknessProcess},
         {"HP-TH-07 actual complex smooth surface cancellation during kernel calculation",CaseCancelComplexSurface},
@@ -301,6 +410,8 @@ std::vector<SelfTestCase> ThickenCases()
         {"HP-TH-02 Esc は何も作らずにやめられ、同じ面を押し直すと欄が空になる",
             CaseHumanPathThickenEscAndRepick},
     };
+    if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-OWNER actual owner surfaces",CaseOwnerThickness});
+    return cases;
 }
 
 } // namespace kachakacha::v2::selftest

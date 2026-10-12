@@ -1242,7 +1242,7 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 
 void V2MainWindow::RunCommand(std::string_view id)
 {
-    if(V2GeometryJob::Active())return;
+    if(V2GeometryJob::Active()&&id.substr(0,5)!="view.")return;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         // 台帳に無い操作は、画面と台帳の食い違いとして知らせる。

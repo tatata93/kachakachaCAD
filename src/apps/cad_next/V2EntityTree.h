@@ -9,6 +9,8 @@
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 
 #include <QTreeWidget>
+#include <QString>
+#include <map>
 
 #include <functional>
 #include <vector>
@@ -28,9 +30,20 @@ public:
     //! 試験から呼ぶ。本物の引きずりを使わずに同じ道を通す。
     void DropOnto(const std::vector<QTreeWidgetItem*>& moved, QTreeWidgetItem* onto);
 
+    // View state uses document/UUID/category keys, independent of labels and visibility.
+    static void Key(QTreeWidgetItem* item, const QString& key);
+    static QString KeyOf(const QTreeWidgetItem* item);
+    void BeginRebuild(const QString& documentId);
+    void EndRebuild();
+    bool BeginFilter(const QString& term);
+    static bool AncestorsExpanded(const QTreeWidgetItem* item);
+
 protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
     std::function<void(const std::vector<QTreeWidgetItem*>&, QTreeWidgetItem*)> dropHandler_;
+    std::map<QString, bool> expanded_, beforeFilter_;
+    QString documentId_, filter_;
+    int scroll_ = 0;
 };

@@ -348,7 +348,7 @@ void V2MainWindow::HighlightTreeForSelection()
             last = item;
         }
     }
-    if (last != nullptr) {
+    if (last != nullptr && V2EntityTree::AncestorsExpanded(last)) {
         // 最後に選んだものが見えるところまで送る。選んだのに画面外では気づけない。
         entityTree_->scrollToItem(last);
     }

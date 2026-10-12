@@ -63,20 +63,20 @@ namespace {
 //! 自分か祖先が当たれば、下のものごと残す。下のどれかが当たれば、祖先も残す。
 //! こうしないと、まとまりの中の1本を探したときに、まとまりごと消えてしまう。
 //! 残すかどうかの判断は core(app/NameFilter)にある。
-bool ApplyFilterToItem(QTreeWidgetItem* item, const std::string& term, bool ancestorMatches)
+bool ApplyFilterToItem(QTreeWidgetItem* item, const std::string& term, bool ancestorMatches, bool expandMatches)
 {
     const bool selfMatches = kachakacha::v2::app::NameMatchesFilter(
         item->text(0).toStdString(), item->text(1).toStdString(), term);
     bool descendantMatches = false;
     for (int index = 0; index < item->childCount(); ++index) {
-        if (ApplyFilterToItem(item->child(index), term, ancestorMatches || selfMatches)) {
+        if (ApplyFilterToItem(item->child(index), term, ancestorMatches || selfMatches, expandMatches)) {
             descendantMatches = true;
         }
     }
     const bool empty = kachakacha::v2::app::TrimmedFilterTerm(term).empty();
     const bool visible = empty || ancestorMatches || selfMatches || descendantMatches;
     item->setHidden(!visible);
-    if (!empty && visible && item->childCount() > 0) {
+    if (expandMatches && !empty && visible && item->childCount() > 0) {
         item->setExpanded(true);
     }
     return selfMatches || descendantMatches;
@@ -109,8 +109,9 @@ void V2MainWindow::ApplyEntityTreeFilter()
         return;
     }
     const std::string term = entityFilter_->text().toStdString();
+    const bool expandMatches = entityTree_->BeginFilter(QString::fromStdString(std::string(kachakacha::v2::app::TrimmedFilterTerm(term))));
     for (int index = 0; index < entityTree_->topLevelItemCount(); ++index) {
-        (void)ApplyFilterToItem(entityTree_->topLevelItem(index), term, false);
+        (void)ApplyFilterToItem(entityTree_->topLevelItem(index), term, false, expandMatches);
     }
 }
 

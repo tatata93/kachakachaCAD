@@ -55,6 +55,7 @@ void MarkIfActiveWorkPlane(QTreeWidgetItem* item, bool active)
     auto* item = new QTreeWidgetItem(parent);
     const QString name = QString::fromUtf8(
         std::string(kachakacha::v2::app::ExplorerSectionNameJa(section)).c_str());
+    V2EntityTree::Key(item, V2EntityTree::KeyOf(parent) + "/section:" + QString::number(static_cast<int>(section)));
     item->setText(0, name);
     item->setText(1, QStringLiteral("節"));
     item->setIcon(0, section == ExplorerSection::Origin ? V2OriginTreeIcon() : V2GroupTreeIcon());
@@ -87,12 +88,14 @@ void V2MainWindow::RefreshEntityList()
     // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
     // 「名前が変わった」と誤って伝わり、名前が入れ替わる。
     const bool blocked = entityTree_->blockSignals(true);
+    entityTree_->BeginRebuild(QString::fromStdString(session_->GetDocument().Snapshot().id.ToString()));
     entityTree_->clear();
     entityItems_.clear();
     axisItems_.fill(nullptr);
     const auto& snapshot = session_->GetDocument().Snapshot();
     // 文書の行。正本の Project に当たる。
     auto* root = new QTreeWidgetItem(entityTree_);
+    V2EntityTree::Key(root, QStringLiteral("document"));
     root->setText(0, DocumentDisplayName());
     root->setText(1, QStringLiteral("文書"));
     root->setFlags((root->flags() | Qt::ItemIsDropEnabled) & ~Qt::ItemIsEditable
@@ -138,7 +141,7 @@ void V2MainWindow::RefreshEntityList()
         }
         AddEntityRow(parent, entity);
     }
-    entityTree_->expandAll();
+    entityTree_->EndRebuild();
     for (int column = 0; column < entityTree_->columnCount(); ++column) {
         entityTree_->resizeColumnToContents(column);
     }
@@ -173,6 +176,7 @@ void V2MainWindow::BuildOriginRows(QTreeWidgetItem* originRoot)
     const char* axisNames[3] = {"X軸", "Y軸", "Z軸"};
     for (int axis = 0; axis < 3; ++axis) {
         auto* item = new QTreeWidgetItem(originRoot);
+        V2EntityTree::Key(item, QString("axis:%1").arg(axis));
         item->setText(0, QString::fromUtf8(axisNames[axis]));
         item->setText(1, QStringLiteral("軸"));
         item->setIcon(0, V2AxisTreeIcon(axis));
@@ -190,6 +194,7 @@ QTreeWidgetItem* V2MainWindow::AddEntityRow(QTreeWidgetItem* parent,
     const kachakacha::v2::domain::Entity& entity)
 {
     auto* item = new QTreeWidgetItem(parent);
+    V2EntityTree::Key(item, "entity:" + QString::fromStdString(entity.id.ToString()));
     const QString name = entity.displayName.empty() ? QStringLiteral("(名前なし)")
                                                     : QString::fromUtf8(entity.displayName.c_str());
     item->setText(0, name);
@@ -229,6 +234,7 @@ void V2MainWindow::AddGeneratedRows(QTreeWidgetItem* modelItem,
         return;
     }
     auto* node = new QTreeWidgetItem(modelItem);
+    V2EntityTree::Key(node, V2EntityTree::KeyOf(modelItem) + "/generated");
     node->setText(0, QStringLiteral("生成物"));
     node->setText(1, QStringLiteral("%1 個").arg(static_cast<int>(generated.size())));
     node->setToolTip(0, QStringLiteral("この近似モデルから「生成」で作ったもの。"
@@ -250,17 +256,20 @@ void V2MainWindow::AddApproximationRows(QTreeWidgetItem* modelItem,
     }
     const auto& evaluation = found->second;
     auto* candidate = new QTreeWidgetItem(modelItem);
+    V2EntityTree::Key(candidate, V2EntityTree::KeyOf(modelItem) + "/candidate");
     candidate->setText(0, !evaluation.gptPanels.empty() ? QStringLiteral("候補: GPT版近似")
         : evaluation.bandMesh.has_value() ? QStringLiteral("候補: 帯で近似")
                                                             : QStringLiteral("候補: 面ごとに展開"));
     candidate->setText(1, QStringLiteral("候補"));
     candidate->setFlags(candidate->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
     auto* parts = new QTreeWidgetItem(modelItem);
+    V2EntityTree::Key(parts, V2EntityTree::KeyOf(modelItem) + "/parts");
     parts->setText(0, QStringLiteral("部材"));
     parts->setText(1, QStringLiteral("%1 枚").arg(static_cast<int>(evaluation.panels.size())));
     parts->setFlags(parts->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
     for (std::size_t index = 0; index < evaluation.panels.size(); ++index) {
         auto* part = new QTreeWidgetItem(parts);
+        V2EntityTree::Key(part, V2EntityTree::KeyOf(parts) + "/" + QString::number(index));
         part->setText(0, QStringLiteral("部材 %1").arg(static_cast<int>(index + 1)));
         part->setText(1, QStringLiteral("近似部品"));
         part->setFlags(part->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
@@ -286,12 +295,14 @@ void V2MainWindow::AddApproximationRows(QTreeWidgetItem* modelItem,
             continue;
         }
         auto* group = new QTreeWidgetItem(modelItem);
+        V2EntityTree::Key(group, V2EntityTree::KeyOf(modelItem) + "/role:" + QString::number(wires == &definition->openingWires ? 0 : wires == &definition->foldWires ? 1 : 2));
         group->setText(0, role);
         group->setText(1, QStringLiteral("%1 本").arg(static_cast<int>(wires->size())));
         group->setFlags(group->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
         for (const auto& id : *wires) {
             const auto* wire = FindEntityByIdText(snapshot, id.ToString());
             auto* row = new QTreeWidgetItem(group);
+            V2EntityTree::Key(row, V2EntityTree::KeyOf(group) + "/" + QString::fromStdString(id.ToString()));
             row->setText(0, wire == nullptr || wire->displayName.empty()
                     ? QStringLiteral("(見つからない線)")
                     : QString::fromUtf8(wire->displayName.c_str()));
@@ -330,6 +341,7 @@ void V2MainWindow::BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGr
         QTreeWidgetItem* parent = group->parentId.has_value() ? make(*group->parentId)
                                                               : nullptr;
         auto* made = new QTreeWidgetItem(parent != nullptr ? parent : groupsRoot);
+        V2EntityTree::Key(made, "group:" + QString::fromStdString(key));
         const bool active = snapshot.settings.activeGroupId.has_value()
             && *snapshot.settings.activeGroupId == id;
         made->setText(0, QString::fromStdString(

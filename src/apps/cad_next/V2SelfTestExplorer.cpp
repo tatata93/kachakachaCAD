@@ -17,6 +17,7 @@
 #include <QString>
 #include <QTreeWidgetItem>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -181,6 +182,51 @@ using kachakacha::v2::domain::Visibility;
                 && window.ItemOfEntity(line)->parent()->parent() == window.GroupItems().front().first);
 }
 
+bool CaseExplorerKeepsViewState(V2MainWindow& window) {
+    window.RunCommand("file.new");
+    const auto line=DrawLineAt(window,0);if(line.IsNil())return false;
+    auto* row=window.ItemOfEntity(line);if(!row)return false;
+    row->parent()->setExpanded(false);
+    const auto wireKey=V2EntityTree::KeyOf(row->parent());
+    EntityId plane;
+    for(const auto& e:window.Session().GetDocument().Snapshot().entities)
+        if(e.kind==EntityKind::WorkPlane){plane=e.id;break;}
+    window.ItemOfEntity(plane)->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    Note((std::string("tree wire expanded=")+std::to_string(window.ItemOfEntity(line)->parent()->isExpanded())
+        +" plane hidden="+std::to_string(VisibilityOf(window,plane)==Visibility::Hidden)+" status="+window.StatusText().toStdString()).c_str());
+    if(!Explain("hiding a plane preserves collapsed wire category",!window.ItemOfEntity(line)->parent()->isExpanded()
+        &&VisibilityOf(window,plane)==Visibility::Hidden))return false;
+    window.ItemOfEntity(line)->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    window.RunCommand("group.create");
+    if(!Explain("unrelated changes preserve hidden entities and category identity",VisibilityOf(window,line)==Visibility::Hidden
+        &&VisibilityOf(window,plane)==Visibility::Hidden&&V2EntityTree::KeyOf(window.ItemOfEntity(line)->parent())==wireKey
+        &&!window.ItemOfEntity(line)->parent()->isExpanded()))return false;
+    auto* group=window.GroupItems().front().first;const auto groupId=window.GroupItems().front().second;
+    window.EntityTree()->clearSelection();group->setSelected(true);window.RunCommand("group.create");
+    window.EntityTree()->clearSelection();
+    for(const auto& entry:window.GroupItems())if(entry.second==groupId)entry.first->setSelected(true);
+    window.RunCommand("group.create");window.EntityTree()->clearSelection();
+    std::map<QString,bool> categories;
+    for(const auto& entry:window.GroupItems()) {
+        for(int i=0;i<entry.first->childCount();++i) {
+            auto* item=entry.first->child(i);if(item->text(1)!=QStringLiteral("節"))continue;
+            const bool open=categories.size()%2==0;item->setExpanded(open);categories[V2EntityTree::KeyOf(item)]=open;
+        }
+    }
+    window.ItemOfEntity(plane)->setCheckState(0,Qt::Checked);QApplication::processEvents();
+    for(const auto& entry:window.GroupItems())for(int i=0;i<entry.first->childCount();++i) {
+        auto* item=entry.first->child(i);const auto found=categories.find(V2EntityTree::KeyOf(item));
+        if(found!=categories.end()&&!Explain("nested sibling categories preserve independent expansion",item->isExpanded()==found->second))return false;
+    }
+    window.SetEntityFilterText(QString::fromStdString(window.Session().GetDocument().FindEntity(line)->displayName));
+    if(!Explain("search reveals matching category",window.ItemOfEntity(line)->parent()->isExpanded()))return false;
+    window.SetEntityFilterText(QString());
+    if(!Explain("clearing search restores previous collapse",!window.ItemOfEntity(line)->parent()->isExpanded()))return false;
+    window.RunCommand("edit.undo");window.RunCommand("edit.redo");
+    return Explain("undo redo preserves collapse and unrelated visibility",!window.ItemOfEntity(line)->parent()->isExpanded()
+        &&VisibilityOf(window,line)==Visibility::Hidden&&VisibilityOf(window,plane)==Visibility::Visible);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExplorerCases()
@@ -190,6 +236,7 @@ std::vector<SelfTestCase> ExplorerCases()
         {"HP-XP-02 ◉ で1つずつ出し隠しでき、取り消しで戻る", CaseExplorerToggleVisibilityPerEntity},
         {"HP-XP-03 3D と一覧の選択が両方向に同期する", CaseExplorerSelectionSyncBothWays},
         {"HP-XP-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
+        {"HP-XP-05 collapse, nested groups, visibility, search and undo redo", CaseExplorerKeepsViewState},
     };
 }
 

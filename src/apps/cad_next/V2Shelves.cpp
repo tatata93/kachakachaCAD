@@ -21,6 +21,19 @@
 #include <QDockWidget>
 #include <QPointF>
 #include <QString>
+#include <optional>
+
+namespace {
+std::optional<double> ChangedThickenAmount(const V2ThickenPreviewState& state,
+    const kachakacha::v2::app::ParameterSet& values)
+{
+    if(!state.shelfShown)return std::nullopt;
+    const auto amount=kachakacha::v2::app::ParameterValueOf(values,kachakacha::v2::app::ParameterId::ExtrudeDistance);
+    // The thickness pane sets its input before mirroring this value. Only
+    // external changes need another preview refresh, not the echoed value.
+    return amount!=state.input.thicknessMm?std::optional<double>(amount):std::nullopt;
+}
+}
 
 void V2MainWindow::BuildEditingShelves()
 {
@@ -266,9 +279,8 @@ void V2MainWindow::BuildOutputShelves()
         RefreshPartDock();
         if (approxShelfShown_ && AdoptFabricationChoice()) { RefreshApproxAll(); }
         // 板厚を数の棚から直したときも、厚みの道具の欄と下見をそろえる。
-        if (thicken_.shelfShown) {
-            thicken_.input.thicknessMm = kachakacha::v2::app::ParameterValueOf(
-                parameterDock_->Values(), kachakacha::v2::app::ParameterId::ExtrudeDistance);
+        if(const auto amount=ChangedThickenAmount(thicken_,parameterDock_->Values())) {
+            thicken_.input.thicknessMm=*amount;
             RefreshThickenAll();
         }
     });

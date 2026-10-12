@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2GptSurfaceTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -70,7 +71,7 @@ void V2GptSurfaceTool::BuildControls(QVBoxLayout* layout)
     layout->addWidget(list_);
     layout->addWidget(MakePanelSectionTitle(dock_->widget(), QStringLiteral("作り方")));
     layout->addWidget(method_);
-    tolerance_ = new QDoubleSpinBox(dock_->widget());
+    tolerance_ = new V2NumericSpinBox(dock_->widget());
     tolerance_->setObjectName(QStringLiteral("gptSurfaceTolerance"));
     tolerance_->setDecimals(6);
     tolerance_->setRange(0.000001, 1.0);

@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QObject>
 #include <QString>
 #include <QWidget>
@@ -24,7 +25,7 @@ void Values(const std::array<QDoubleSpinBox*,3>& boxes,geometry::Vector3 v){boxe
 }
 void V2OutputTool::AddVectorRow(QFormLayout* layout,const QString& label,std::array<QDoubleSpinBox*,3>& values,const geometry::Vector3& initial) {
     auto* row=new QWidget(this);auto* fields=new QHBoxLayout(row);fields->setContentsMargins(0,0,0,0);
-    for(auto& value:values){value=new QDoubleSpinBox(row);value->setRange(-1e9,1e9);value->setDecimals(6);value->setMaximumWidth(105);fields->addWidget(value);}
+    for(auto& value:values){value=new V2NumericSpinBox(row);value->setRange(-1e9,1e9);value->setDecimals(6);value->setMaximumWidth(105);fields->addWidget(value);}
     Values(values,initial);layout->addRow(label,row);
     for(auto* value:values)QObject::connect(value,&QDoubleSpinBox::valueChanged,this,[this]{RefreshPreview();});
 }

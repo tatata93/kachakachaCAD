@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2DrawingDock.h"
 #include "V2ToolIcons.h"
 #include <QSize>
@@ -483,14 +484,14 @@ void V2DrawingDock::SetCursorFieldHandler(std::function<void(const QString&)> ha
 void V2DrawingDock::BuildArcRows(QFormLayout* form)
 {
     // 作り方(3点 / 始点・終点・半径 / 始点接線)はカードで決める。ここは値の欄だけ。
-    arcRadius_ = new QDoubleSpinBox(body_);
+    arcRadius_ = new V2NumericSpinBox(body_);
     arcRadius_->setRange(0.001, 100000.0);
     arcRadius_->setDecimals(3);
     arcRadius_->setSingleStep(1.0);
     arcRadius_->setSuffix(QStringLiteral(" mm"));
     arcRadius_->setValue(10.0);
     form->addRow(QStringLiteral("半径"), arcRadius_);
-    arcSweep_ = new QDoubleSpinBox(body_);
+    arcSweep_ = new V2NumericSpinBox(body_);
     arcSweep_->setRange(-360.0, 360.0);
     arcSweep_->setDecimals(3);
     arcSweep_->setSingleStep(5.0);
@@ -508,7 +509,7 @@ void V2DrawingDock::BuildArcRows(QFormLayout* form)
     QObject::connect(arcSweep_, &QDoubleSpinBox::valueChanged, this,
         [this] { EmitSettings(); });
     // スケールの倍率(D-22)。作り方が「倍率」のときだけ出す(基準の2点は点が決める)。
-    scaleFactor_ = new QDoubleSpinBox(body_);
+    scaleFactor_ = new V2NumericSpinBox(body_);
     scaleFactor_->setObjectName(QStringLiteral("drawingScaleFactor"));
     scaleFactor_->setRange(0.001, 1000.0);
     scaleFactor_->setDecimals(4);
@@ -531,7 +532,7 @@ void V2DrawingDock::BuildDirectWireRows(QFormLayout* form)
         wirePoints_[index] = AddVectorRow(form,
             QStringLiteral("点%1 mm").arg(static_cast<int>(index) + 1));
     }
-    wireRadius_ = new QDoubleSpinBox(body_);
+    wireRadius_ = new V2NumericSpinBox(body_);
     // 0 も入れられる。断るのは core(UI-D002)で、欄が黙って 0.001 に寄せない。
     wireRadius_->setRange(0.0, 100000.0);
     wireRadius_->setDecimals(3);
@@ -557,7 +558,7 @@ std::array<QDoubleSpinBox*, 3> V2DrawingDock::AddVectorRow(QFormLayout* form,
     rowLayout->setSpacing(2);
     std::array<QDoubleSpinBox*, 3> fields{};
     for (std::size_t index = 0; index < 3; ++index) {
-        auto* field = new QDoubleSpinBox(row);
+        auto* field = new V2NumericSpinBox(row);
         field->setRange(-100000.0, 100000.0);
         field->setDecimals(3);
         field->setSingleStep(1.0);

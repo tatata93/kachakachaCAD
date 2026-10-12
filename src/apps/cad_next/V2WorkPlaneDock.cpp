@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2WorkPlaneDock.h"
 #include "V2PanelFrame.h"
 
@@ -171,7 +172,7 @@ std::array<QDoubleSpinBox*, 3> V2WorkPlaneDock::AddVectorRow(const QString& labe
     std::array<QDoubleSpinBox*, 3> fields{};
     const double values[3] = {initial.x, initial.y, initial.z};
     for (std::size_t index = 0; index < 3; ++index) {
-        auto* field = new QDoubleSpinBox(row);
+        auto* field = new V2NumericSpinBox(row);
         field->setRange(-100000.0, 100000.0);
         field->setDecimals(3);
         field->setSingleStep(step);
@@ -188,7 +189,7 @@ std::array<QDoubleSpinBox*, 3> V2WorkPlaneDock::AddVectorRow(const QString& labe
 QDoubleSpinBox* V2WorkPlaneDock::AddNumberRow(const QString& label, double minimum,
     double maximum, double initial, const QString& suffix)
 {
-    auto* field = new QDoubleSpinBox(body_);
+    auto* field = new V2NumericSpinBox(body_);
     field->setRange(minimum, maximum);
     field->setDecimals(3);
     field->setSingleStep(1.0);

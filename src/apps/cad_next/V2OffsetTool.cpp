@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QString>
 #include <QWidget>
 #include "V2OffsetTool.h"
@@ -34,7 +35,7 @@ V2OffsetTool::V2OffsetTool(V2MainWindow& w):QWidget(&w),window_(w) {
     for(const auto& entity:w.Session().GetDocument().Snapshot().entities)if(entity.kind==domain::EntityKind::WorkPlane)
         plane_->addItem(QString::fromStdString(entity.displayName),QString::fromStdString(entity.id.ToString()));
     layout->addWidget(plane_);layout->addWidget(new QLabel(QStringLiteral("距離（符号で反転）"),this));
-    distance_=new QDoubleSpinBox(this);distance_->setObjectName(QStringLiteral("offsetDistance"));
+    distance_=new V2NumericSpinBox(this);distance_->setObjectName(QStringLiteral("offsetDistance"));
     distance_->setRange(-1000,1000);distance_->setDecimals(3);distance_->setSuffix(QStringLiteral(" mm"));
     distance_->setValue(app::ParameterValueOf(w.ParameterDock().Values(),app::ParameterId::OffsetDistanceMm));layout->addWidget(distance_);
     status_=new QLabel(this);status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();

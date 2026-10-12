@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QFont>
 #include <QPointer>
 #include <QQuaternion>
@@ -39,7 +40,7 @@ void V2InstructionMode::ShowSceneSettings(){
     view_->selectedChanged=[target=QPointer<QComboBox>(target)](int index){if(target){const QSignalBlocker blocker(target);target->setCurrentIndex(index+1);}};
     auto* form=new QFormLayout;layout->addLayout(form);std::vector<QDoubleSpinBox*> values;
     for(const auto* label:{"X移動 mm","Y移動 mm","Z移動 mm","X回転 °","Y回転 °","Z回転 °"}){
-        auto* value=new QDoubleSpinBox(panel);value->setRange(-100000,100000);value->setDecimals(3);value->setKeyboardTracking(false);form->addRow(QString::fromUtf8(label),value);values.push_back(value);}
+        auto* value=new V2NumericSpinBox(panel);value->setRange(-100000,100000);value->setDecimals(3);value->setKeyboardTracking(false);form->addRow(QString::fromUtf8(label),value);values.push_back(value);}
     auto* transform=new QPushButton(QStringLiteral("選択部品に移動・回転を加える"),panel);layout->addWidget(transform);
     connect(transform,&QPushButton::clicked,this,[this,values]{const int i=view_->Selected();if(i<0){hint_->setText(QStringLiteral("3D上で部品を選んでください。"));return;}
         before_=Snapshot();auto& part=scenes_[current_].parts[i];part.offset=part.offset+kachakacha::v2::geometry::Vector3{values[0]->value(),values[1]->value(),values[2]->value()};
@@ -66,7 +67,7 @@ void V2InstructionMode::AddFontControls(QWidget* panel,bool sheet){
     if(!sheet&&selected>=0&&!scenes_[current_].marks[selected].arrow)initial=scenes_[current_].marks[selected].font;
     auto* family=new QFontComboBox(panel);family->setObjectName("instructionFont");family->setCurrentFont(initial);layout->addWidget(family);
     auto* row=new QHBoxLayout;layout->addLayout(row);row->addWidget(new QLabel(QStringLiteral("文字 pt"),panel));
-    auto* size=new QDoubleSpinBox(panel);size->setObjectName("instructionFontSize");size->setRange(1,300);size->setDecimals(1);size->setKeyboardTracking(false);size->setValue(initial.pointSizeF());row->addWidget(size);
+    auto* size=new V2NumericSpinBox(panel);size->setObjectName("instructionFontSize");size->setRange(1,300);size->setDecimals(1);size->setKeyboardTracking(false);size->setValue(initial.pointSizeF());row->addWidget(size);
     auto* bold=new QCheckBox(QStringLiteral("太字"),panel);bold->setObjectName("instructionTextBold");bold->setChecked(initial.bold());row->addWidget(bold);
     auto* italic=new QCheckBox(QStringLiteral("斜体"),panel);italic->setChecked(initial.italic());row->addWidget(italic);
     const auto update=[this,sheet,family,size,bold,italic]{if(loading_)return;auto font=family->currentFont();font.setPointSizeF(size->value());font.setBold(bold->isChecked());font.setItalic(italic->isChecked());

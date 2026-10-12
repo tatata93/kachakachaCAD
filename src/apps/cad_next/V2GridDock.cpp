@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2GridDock.h"
 
 #include "kachakacha/geometry/Expression.h"
@@ -58,12 +59,12 @@ V2GridDock::V2GridDock(QWidget* parent)
     subdivision_->addItem(QStringLiteral("1/4"));
     form->addRow(QStringLiteral("副点"), subdivision_);
 
-    originU_ = new QDoubleSpinBox(body);
+    originU_ = new V2NumericSpinBox(body);
     originU_->setRange(-100000.0, 100000.0);
     originU_->setDecimals(3);
     originU_->setSuffix(QStringLiteral(" mm"));
     form->addRow(QStringLiteral("基準 X(u)"), originU_);
-    originV_ = new QDoubleSpinBox(body);
+    originV_ = new V2NumericSpinBox(body);
     originV_->setRange(-100000.0, 100000.0);
     originV_->setDecimals(3);
     originV_->setSuffix(QStringLiteral(" mm"));
@@ -121,8 +122,8 @@ V2GridDock::V2GridDock(QWidget* parent)
 void V2GridDock::ConnectSignals()
 {
     QObject::connect(visible_, &QCheckBox::toggled, this, [this] { Emit(); });
-    QObject::connect(spacing_, &QLineEdit::textChanged, this,
-        [this](const QString& text) { (void)ApplySpacingExpression(text); });
+    QObject::connect(spacing_, &QLineEdit::editingFinished, this,
+        [this] { if(!loading_)(void)ApplySpacingExpression(spacing_->text()); });
     QObject::connect(subdivision_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
     QObject::connect(originU_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(originV_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });

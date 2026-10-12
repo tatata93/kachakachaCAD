@@ -56,7 +56,7 @@ void V2MainWindow::RunThickenTool()
     // 選んであった形状ガイドの面は、そのまま欄へ入れる(選んでから押す道も残す)。
     thicken_.input = kachakacha::v2::app::ThickenInputState{};
     thicken_.input.placement = thicknessPlacement_;
-    thicken_.input.thicknessMm = ExtrudeDistanceMm();
+    thicken_.input.thicknessMm = kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(), kachakacha::v2::app::ParameterId::ThickenThicknessMm);
     const auto& document = session_->GetDocument();
     for (const EntityId& id : viewport_->Selection().entityIds) {
         const auto* entity = document.FindEntity(id);
@@ -318,7 +318,7 @@ void V2MainWindow::ApplyThickenThicknessMm(double value)
 {
     if(thicken_.input.thicknessMm==value)return;
     thicken_.input.thicknessMm = value;
-    (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
+    (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::ThickenThicknessMm,
         QString::number(value, 'f', 3));
     RefreshThickenAll();
 }

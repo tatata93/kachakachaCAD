@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2SolidDock.h"
 #include "V2PanelFrame.h"
 
@@ -153,7 +154,7 @@ void V2SolidDock::BuildSettings(QVBoxLayout* layout)
     auto* angleRow = new QHBoxLayout();
     angleLabel_ = new QLabel(QStringLiteral("角度"), widget());
     angleRow->addWidget(angleLabel_);
-    angle_ = new QDoubleSpinBox(widget());
+    angle_ = new V2NumericSpinBox(widget());
     angle_->setObjectName(QStringLiteral("solidAngle"));
     angle_->setRange(0.1, 360.0);
     angle_->setDecimals(3);

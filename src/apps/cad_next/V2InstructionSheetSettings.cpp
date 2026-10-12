@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QIODevice>
 #include <QRectF>
 #include <QSizeF>
@@ -23,7 +24,7 @@
 #include <algorithm>
 namespace {
 QDoubleSpinBox* Number(QWidget* panel,const char* name,double value,double low,double high){
-    auto* box=new QDoubleSpinBox(panel);box->setObjectName(name);box->setRange(low,high);box->setDecimals(2);box->setKeyboardTracking(false);box->setSuffix(QStringLiteral(" mm"));box->setValue(value);return box;
+    auto* box=new V2NumericSpinBox(panel);box->setObjectName(name);box->setRange(low,high);box->setDecimals(3);box->setKeyboardTracking(false);box->setSuffix(QStringLiteral(" mm"));box->setValue(value);return box;
 }
 }
 void V2InstructionMode::ShowSheetSettings(){

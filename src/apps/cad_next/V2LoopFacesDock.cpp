@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 //! 「面にする」の棚。見出しは V2LoopFacesDock.h。
 
 #include "V2LoopFacesDock.h"
@@ -120,7 +121,7 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* toleranceRow = new QHBoxLayout();
     toleranceRow->addWidget(new QLabel(QStringLiteral("許容(端)"), body));
-    tolerance_ = new QDoubleSpinBox(body);
+    tolerance_ = new V2NumericSpinBox(body);
     tolerance_->setObjectName(QStringLiteral("loopFacesTolerance"));
     tolerance_->setRange(0.001, 1.0);
     tolerance_->setDecimals(3);

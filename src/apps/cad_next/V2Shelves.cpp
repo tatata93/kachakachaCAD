@@ -28,7 +28,7 @@ std::optional<double> ChangedThickenAmount(const V2ThickenPreviewState& state,
     const kachakacha::v2::app::ParameterSet& values)
 {
     if(!state.shelfShown)return std::nullopt;
-    const auto amount=kachakacha::v2::app::ParameterValueOf(values,kachakacha::v2::app::ParameterId::ExtrudeDistance);
+    const auto amount=kachakacha::v2::app::ParameterValueOf(values,kachakacha::v2::app::ParameterId::ThickenThicknessMm);
     // The thickness pane sets its input before mirroring this value. Only
     // external changes need another preview refresh, not the echoed value.
     return amount!=state.input.thicknessMm?std::optional<double>(amount):std::nullopt;

@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2SurfaceEditDock.h"
 #include "V2PanelFrame.h"
 
@@ -166,14 +167,14 @@ void V2SurfaceEditDock::BuildOptions(QVBoxLayout* layout)
     FillContinuity(continuityB_);
     form->addRow(continuityBLabel_, continuityB_);
     toleranceLabel_ = new QLabel(QStringLiteral("許容"), widget());
-    tolerance_ = new QDoubleSpinBox(widget());
+    tolerance_ = new V2NumericSpinBox(widget());
     tolerance_->setRange(0.0001, 10.0);
     tolerance_->setDecimals(4);
     tolerance_->setSingleStep(0.005);
     tolerance_->setSuffix(QStringLiteral(" mm"));
     form->addRow(toleranceLabel_, tolerance_);
     tensionLabel_ = new QLabel(QStringLiteral("張りの強さ"), widget());
-    tension_ = new QDoubleSpinBox(widget());
+    tension_ = new V2NumericSpinBox(widget());
     tension_->setRange(0.1, 5.0);
     tension_->setDecimals(2);
     tension_->setSingleStep(0.1);

@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2EdgeFinishDock.h"
 #include "V2PanelFrame.h"
 
@@ -84,7 +85,7 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
     auto* sizeRow = new QHBoxLayout();
     sizeLabel_ = new QLabel(QStringLiteral("半径"), body);
     sizeRow->addWidget(sizeLabel_);
-    size_ = new QDoubleSpinBox(body);
+    size_ = new V2NumericSpinBox(body);
     size_->setObjectName(QStringLiteral("edgeFinishSize"));
     size_->setRange(0.001, 10000.0);
     size_->setDecimals(3);

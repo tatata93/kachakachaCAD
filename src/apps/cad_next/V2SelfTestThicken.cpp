@@ -40,6 +40,9 @@
 #include <QDir>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QKeyEvent>
+#include <QEvent>
+#include <QChar>
 #include <iostream>
 
 namespace kachakacha::v2::selftest {
@@ -302,7 +305,7 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
     // Start with a distinct input to exercise a running calculation.
     auto* initial=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!initial)return false;initial->setValue(.617);
     const auto revision=window.Session().GetDocument().Revision();
-    bool changed=false,enabled=false,moved=false,consistent=false;
+    bool changed=false,enabled=false,moved=false,consistent=false,decimal=false;
     QTimer timer;timer.setInterval(1);
     QObject::connect(&timer,&QTimer::timeout,&window,[&]{
         auto* dialog=window.findChild<QDialog*>("geometryJobDialog");
@@ -315,12 +318,20 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
         window.RunCommand("view.fit_all");
         window.Viewport().SetViewDirection(ViewDirection::Front);moved=window.Viewport().Direction()==ViewDirection::Front;
         auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");
-        if(amount)amount->setValue(.35);
+        if(amount) {
+            amount->selectAll();
+            for(const auto c:QStringLiteral("0.035")) {
+                QKeyEvent key(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));
+                QApplication::sendEvent(amount,&key);
+            }
+            decimal=amount->text().startsWith("0.035")&&amount->value()==.617;
+            QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QApplication::sendEvent(amount,&enter);
+        }
         (void)window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Outside);
     });
     timer.start();const bool picked=ClickOnAnyGuideSurface(window);timer.stop();
-    if(!Explain("parameters and viewport stay enabled during real calculation",picked&&changed&&enabled&&moved&&consistent))return false;
-    if(!Explain("latest input replaces cancelled generation without committing",window.ThickenInput().thicknessMm==.35
+    if(!Explain("parameters and viewport stay enabled during real calculation",picked&&changed&&enabled&&moved&&consistent&&decimal))return false;
+    if(!Explain("latest input replaces cancelled generation without committing",window.ThickenInput().thicknessMm==.035
         &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.Session().GetDocument().Revision()==revision
         &&CountOfKind(window,EntityKind::Part)==0&&!window.Viewport().ToolPreview().empty()))return false;
     if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Inside))return false;
@@ -332,7 +343,7 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
     if(!window.ThickenDock().ClickConfirm())return false;
     bool correct=false;
     for(const auto& f:window.Session().GetDocument().Snapshot().features)
-        if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&f.definition))correct=d->thickness.value==.35&&d->placement==0;
+        if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&f.definition))correct=d->thickness.value==.035&&d->placement==0;
     window.RunCommand("edit.undo");window.RunCommand("edit.redo");
     window.Viewport().SetViewDirection(ViewDirection::Isometric);
     return Explain("only the latest thickness is committed and survives undo redo",correct
@@ -364,7 +375,7 @@ bool CaseOwnerThickness(V2MainWindow& window)
     if(source.IsNil())return false;
     std::cout<<"owner selected source="<<source.ToString()<<std::endl;
     window.resize(1600,1000);window.SetMode(UiMode::Part);window.Viewport().FitToDocument();
-    (void)window.ParameterDock().Apply(app::ParameterId::ExtrudeDistance,QStringLiteral("6"));
+    (void)window.ParameterDock().Apply(app::ParameterId::ThickenThicknessMm,QStringLiteral("6"));
     window.Viewport().SetSelection({});window.RunCommand("part.thicken");
     if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Centered))return false;
     const auto revision=window.Session().GetDocument().Revision();QElapsedTimer time;time.start();

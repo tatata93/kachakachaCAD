@@ -20,6 +20,14 @@ using kachakacha::v2::app::SetParameter;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
 
+KACHA_V2_TEST(parameters, geometry_thickness_accepts_sub_stock_values)
+{
+    const auto changed=SetParameter(DefaultParameters(),ParameterId::ThickenThicknessMm,"0.025 mm");
+    Require(changed.HasValue(),"thin geometry is not limited by the fabrication stock setting");
+    Require(std::abs(ParameterValueOf(changed.Value(),ParameterId::ThickenThicknessMm)-.025)<1e-12,"exact thickness retained");
+    Require(std::abs(ParameterValueOf(changed.Value(),ParameterId::ExtrudeDistance)-.5)<1e-12,"stock setting unaffected");
+}
+
 KACHA_V2_TEST(parameters, 既定は板厚0_5mm)
 {
     const ParameterSet set = DefaultParameters();

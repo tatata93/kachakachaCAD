@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2CurvedEmbossTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -57,7 +58,7 @@ void V2CurvedEmbossTool::BuildUi()
 void V2CurvedEmbossTool::BuildSettings(QVBoxLayout* layout)
 {
     auto field=[&](const QString& title,const char* name,double low,double high,double initial,const QString& unit){
-        layout->addWidget(new QLabel(title,this));auto* f=new QDoubleSpinBox(this);f->setObjectName(QString::fromLatin1(name));
+        layout->addWidget(new QLabel(title,this));auto* f=new V2NumericSpinBox(this);f->setObjectName(QString::fromLatin1(name));
         f->setRange(low,high);f->setDecimals(4);f->setValue(initial);f->setSuffix(unit);layout->addWidget(f);
         connect(f,&QDoubleSpinBox::valueChanged,this,[this]{Invalidate();});return f;};
     height_=field(QStringLiteral("高さ（負数で内側）"),"embossHeight",-10000,10000,1,QStringLiteral(" mm"));

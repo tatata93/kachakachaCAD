@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2ExtrudeDock.h"
 #include "V2PanelFrame.h"
 
@@ -104,9 +105,9 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     form_ = new QFormLayout();
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setSpacing(3);
-    distance_ = new QDoubleSpinBox(body_);
+    distance_ = new V2NumericSpinBox(body_);
     distance_->setRange(-100000.0, 100000.0);
-    distance_->setDecimals(2);
+    distance_->setDecimals(3);
     distance_->setSingleStep(1.0);
     distance_->setSuffix(QStringLiteral(" mm"));
     distance_->setValue(10.0);
@@ -124,9 +125,9 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     }
     form_->addRow(QStringLiteral("範囲"), extent_);
     form_->addRow(QStringLiteral("距離"), distance_);
-    secondDistance_ = new QDoubleSpinBox(body_);
+    secondDistance_ = new V2NumericSpinBox(body_);
     secondDistance_->setRange(0.0, 100000.0);
-    secondDistance_->setDecimals(2);
+    secondDistance_->setDecimals(3);
     secondDistance_->setSingleStep(1.0);
     secondDistance_->setSuffix(QStringLiteral(" mm"));
     secondDistance_->setValue(10.0);
@@ -147,7 +148,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     customLayout->setContentsMargins(0, 0, 0, 0);
     customLayout->setSpacing(2);
     for (QDoubleSpinBox** field : {&customX_, &customY_, &customZ_}) {
-        *field = new QDoubleSpinBox(customRow_);
+        *field = new V2NumericSpinBox(customRow_);
         (*field)->setRange(-100000.0, 100000.0);
         (*field)->setDecimals(3);
         (*field)->setSingleStep(1.0);
@@ -161,7 +162,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     form_->addRow(QString(), reverse_);
 
     // テーパー。核に無いので押せない形 + 理由(P-07)。
-    taper_ = new QDoubleSpinBox(body_);
+    taper_ = new V2NumericSpinBox(body_);
     taper_->setRange(-89.0, 89.0);
     taper_->setDecimals(1);
     taper_->setSuffix(QStringLiteral(" 度"));

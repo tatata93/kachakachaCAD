@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2GptFabricationTool.h"
 #include "V2MainWindow.h"
 #include "V2FaceActions.h"
@@ -41,7 +42,7 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
     sources_=new QLabel(QStringLiteral("面を選んで追加してください。"),dock_->widget());
     sources_->setWordWrap(true); layout->addWidget(sources_);
     const auto number=[&](const char* name,const QString& label,double value,double minimum,double maximum) {
-        auto* box=new QDoubleSpinBox(dock_->widget()); box->setObjectName(QString::fromLatin1(name));
+        auto* box=new V2NumericSpinBox(dock_->widget()); box->setObjectName(QString::fromLatin1(name));
         box->setDecimals(4); box->setRange(minimum,maximum); box->setValue(value);
         box->setPrefix(label); box->setSuffix(QStringLiteral(" mm")); layout->addWidget(box);
         QObject::connect(box,&QDoubleSpinBox::valueChanged,dock_,[this](double){Invalidate();}); return box;
@@ -61,7 +62,7 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
     QObject::connect(adaptive_,&QCheckBox::toggled,dock_,[this](bool){Invalidate();});
     panels_=new QTreeWidget(dock_->widget()); panels_->setObjectName(QStringLiteral("gptFabricationPanels"));
     panels_->setHeaderLabels({QStringLiteral("部材"),QStringLiteral("最大偏差 mm")}); layout->addWidget(panels_);
-    assembly_=new QDoubleSpinBox(dock_->widget()); assembly_->setObjectName(QStringLiteral("gptFabricationAssembly"));
+    assembly_=new V2NumericSpinBox(dock_->widget()); assembly_->setObjectName(QStringLiteral("gptFabricationAssembly"));
     assembly_->setRange(0,100); assembly_->setValue(100); assembly_->setPrefix(QStringLiteral("組立 "));
     assembly_->setSuffix(QStringLiteral(" %")); layout->addWidget(assembly_);
     QObject::connect(assembly_,&QDoubleSpinBox::valueChanged,dock_,[this](double value){definition_.masterPercent=value;ShowPreview();});

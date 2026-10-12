@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2EditDock.h"
 
 #include <QAbstractSpinBox>
@@ -34,7 +35,7 @@ constexpr int kArcGeometry = 1;
 
 [[nodiscard]] QDoubleSpinBox* MakeNumber(QWidget* parent, double step, double minimum = -1.0e6)
 {
-    auto* field = new QDoubleSpinBox(parent);
+    auto* field = new V2NumericSpinBox(parent);
     field->setRange(minimum, 1.0e6);
     field->setDecimals(3);
     field->setSingleStep(step);

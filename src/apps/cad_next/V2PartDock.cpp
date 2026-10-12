@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2PartDock.h"
 #include "V2PanelFrame.h"
 #include "kachakacha/app/CommandCatalog.h"
@@ -23,7 +24,7 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
 [[nodiscard]] QDoubleSpinBox* MakeField(QWidget* parent, double minimum, double maximum,
     const QString& suffix)
 {
-    auto* box = new QDoubleSpinBox(parent);
+    auto* box = new V2NumericSpinBox(parent);
     box->setRange(minimum, maximum);
     box->setDecimals(3);
     box->setSuffix(suffix);

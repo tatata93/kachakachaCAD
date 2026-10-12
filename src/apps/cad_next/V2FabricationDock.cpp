@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2FabricationDock.h"
 #include "V2PanelFrame.h"
 
@@ -41,7 +42,7 @@ constexpr int kSplitAxisChoices = 5;
 
 [[nodiscard]] QDoubleSpinBox* MakeCount(QWidget* parent, double minimum, double maximum)
 {
-    auto* field = new QDoubleSpinBox(parent);
+    auto* field = new V2NumericSpinBox(parent);
     field->setRange(minimum, maximum);
     field->setDecimals(0);
     field->setSingleStep(1.0);
@@ -50,7 +51,7 @@ constexpr int kSplitAxisChoices = 5;
 
 [[nodiscard]] QDoubleSpinBox* MakeMm(QWidget* parent, double minimum, double maximum, double step)
 {
-    auto* field = new QDoubleSpinBox(parent);
+    auto* field = new V2NumericSpinBox(parent);
     field->setRange(minimum, maximum);
     field->setDecimals(3);
     field->setSingleStep(step);
@@ -591,7 +592,7 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     const auto makeUnit = [widget](double value) {
-        auto* field = new QDoubleSpinBox(widget);
+        auto* field = new V2NumericSpinBox(widget);
         field->setRange(0.0, 1.0);
         field->setDecimals(3);
         field->setSingleStep(0.05);
@@ -646,7 +647,7 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     auto* assemblyRow = new QWidget(bendWidget);
     auto* assemblyLayout = new QHBoxLayout(assemblyRow);
     assemblyLayout->setContentsMargins(0, 0, 0, 0);
-    assembly_ = new QDoubleSpinBox(assemblyRow);
+    assembly_ = new V2NumericSpinBox(assemblyRow);
     assembly_->setRange(0.0, 100.0);
     assembly_->setDecimals(1);
     assembly_->setSingleStep(5.0);
@@ -693,9 +694,9 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     auto* radiusRow = new QWidget(bendWidget);
     auto* radiusLayout = new QHBoxLayout(radiusRow);
     radiusLayout->setContentsMargins(0, 0, 0, 0);
-    radius_ = new QDoubleSpinBox(radiusRow);
+    radius_ = new V2NumericSpinBox(radiusRow);
     radius_->setRange(0.0, 100000.0);
-    radius_->setDecimals(2);
+    radius_->setDecimals(3);
     radius_->setSingleStep(0.5);
     radius_->setSuffix(QStringLiteral(" mm"));
     radius_->setToolTip(QStringLiteral(
@@ -951,7 +952,7 @@ void V2FabricationDock::Connect()
         [this] { SyncRadiusFromPercent(); });
     QObject::connect(radius_, &QDoubleSpinBox::valueChanged, this,
         [this] { SyncPercentFromRadius(); });
-    QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
+    QObject::connect(manual_, &QLineEdit::editingFinished, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(reliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });

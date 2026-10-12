@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2ArrayDock.h"
 #include "V2PanelFrame.h"
 
@@ -23,7 +24,7 @@ namespace {
 //! mm の欄。範囲は模型の大きさに合わせる(実物 1/87 で数メートル)。
 [[nodiscard]] QDoubleSpinBox* MakeLength(QWidget* parent, double value)
 {
-    auto* box = new QDoubleSpinBox(parent);
+    auto* box = new V2NumericSpinBox(parent);
     box->setRange(-100000.0, 100000.0);
     box->setDecimals(3);
     box->setSuffix(QStringLiteral(" mm"));
@@ -100,7 +101,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     circularForm->addRow(QStringLiteral("中心 u"), centerU_);
     centerV_ = MakeLength(circularRow_, 0.0);
     circularForm->addRow(QStringLiteral("中心 v"), centerV_);
-    totalAngle_ = new QDoubleSpinBox(circularRow_);
+    totalAngle_ = new V2NumericSpinBox(circularRow_);
     totalAngle_->setRange(-360.0, 360.0);
     totalAngle_->setDecimals(2);
     totalAngle_->setSuffix(QStringLiteral(" °"));

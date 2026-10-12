@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2ExtrudeDialog.h"
 
 #include <QCheckBox>
@@ -81,7 +82,7 @@ void V2ExtrudeDialog::BuildExtentRows(
     extent_->setCurrentIndex(ExtentIndexOf(initial.extent));
     form->addRow(QStringLiteral("どこまで"), extent_);
 
-    distance_ = new QDoubleSpinBox(this);
+    distance_ = new V2NumericSpinBox(this);
     distance_->setRange(0.0, 10000.0);
     distance_->setDecimals(3);
     distance_->setSingleStep(0.1);
@@ -89,7 +90,7 @@ void V2ExtrudeDialog::BuildExtentRows(
     distance_->setValue(initial.distanceMm);
     form->addRow(QStringLiteral("距離"), distance_);
 
-    secondDistance_ = new QDoubleSpinBox(this);
+    secondDistance_ = new V2NumericSpinBox(this);
     secondDistance_->setRange(0.0, 10000.0);
     secondDistance_->setDecimals(3);
     secondDistance_->setSingleStep(0.1);

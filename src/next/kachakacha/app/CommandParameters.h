@@ -40,6 +40,7 @@ enum class ParameterId {
     MaxDeviationMm,    //!< 展開で許すずれ(mm)。ここが通るか通らないかを決める
     RevolveAngleDeg,   //!< 回転体で回す角度(度)。360 で一周
     JigClearanceMm,    //!< 治具のすき間(mm)。0 なら面にぴったり当てる
+    ThickenThicknessMm, //!< Geometry thickness, independent of fabrication stock thickness.
     JigThicknessMm,    //!< 治具の厚み(mm)。正なら面の表側、負なら裏側
 };
 

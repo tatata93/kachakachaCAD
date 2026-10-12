@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2ThickenDock.h"
 #include "V2PanelFrame.h"
 
@@ -62,7 +63,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     // 3. 厚み。「平面まで」の間は相手の作業平面の欄に差し替わる。
     auto* form = new QFormLayout();
     thicknessLabel_ = MakePanelSectionTitle(body, QStringLiteral("厚み"));
-    thickness_ = new QDoubleSpinBox(body);
+    thickness_ = new V2NumericSpinBox(body);
     thickness_->setObjectName(QStringLiteral("thickenAmount"));
     thickness_->setRange(0.0, 1000.0);
     thickness_->setDecimals(3);
@@ -123,6 +124,9 @@ void V2ThickenDock::BuildPlacementCards(QVBoxLayout* layout)
     outsideCard_ = new QPushButton(QStringLiteral("外側"), widget());
     centeredCard_ = new QPushButton(QStringLiteral("中央"), widget());
     insideCard_ = new QPushButton(QStringLiteral("内側"), widget());
+    outsideCard_->setToolTip(QStringLiteral("元の面を内面として保ち、外へ厚みを付けます。半径5 mmに厚み1 mmなら外面は6 mm。"));
+    centeredCard_->setToolTip(QStringLiteral("元の面を中央として、両側へ厚みの半分ずつ付けます。"));
+    insideCard_->setToolTip(QStringLiteral("元の面を外面として保ち、内へ厚みを付けます。半径5 mmに厚み1 mmなら内面は4 mm。"));
     toPlaneCard_ = new QPushButton(QStringLiteral("平面まで"), widget());
     for (QPushButton* card : {outsideCard_, centeredCard_, insideCard_, toPlaneCard_}) {
         card->setCheckable(true);

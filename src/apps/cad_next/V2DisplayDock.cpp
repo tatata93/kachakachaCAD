@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2DisplayDock.h"
 
 #include <QColor>
@@ -32,7 +33,7 @@ constexpr std::array<LineStyle, 3> kStyles{LineStyle::Solid, LineStyle::Dashed,
 
 [[nodiscard]] QDoubleSpinBox* MakeWidth(QWidget* parent, double initial)
 {
-    auto* field = new QDoubleSpinBox(parent);
+    auto* field = new V2NumericSpinBox(parent);
     field->setRange(0.25, 12.0);
     field->setDecimals(2);
     field->setSingleStep(0.25);

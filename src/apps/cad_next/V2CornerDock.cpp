@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2CornerDock.h"
 #include "V2PanelFrame.h"
 
@@ -22,7 +23,7 @@ namespace {
 
 [[nodiscard]] QDoubleSpinBox* MakeMm(QWidget* parent, double minimum)
 {
-    auto* field = new QDoubleSpinBox(parent);
+    auto* field = new V2NumericSpinBox(parent);
     field->setRange(minimum, 1.0e6);
     field->setDecimals(3);
     field->setSingleStep(0.5);
@@ -100,7 +101,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     cornerForm->setContentsMargins(0, 0, 0, 0);
     onlyVertex_ = new QCheckBox(QStringLiteral("この頂点の角だけ"), cornerWidget);
     cornerForm->addRow(onlyVertex_);
-    vertex_ = new QDoubleSpinBox(cornerWidget);
+    vertex_ = new V2NumericSpinBox(cornerWidget);
     vertex_->setRange(0.0, 9999.0);
     vertex_->setDecimals(0);
     vertex_->setSingleStep(1.0);

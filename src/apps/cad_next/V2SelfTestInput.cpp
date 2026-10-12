@@ -865,6 +865,36 @@ bool CaseDecimalThemes(V2MainWindow& window) {
     window.ApplyTheme(UiTheme::Normal);return true;
 }
 
+bool CaseRealNumericFields(V2MainWindow& window) {
+    window.RunCommand("file.new");
+    for(const auto theme:{UiTheme::Normal,UiTheme::Windows95}) {
+        window.ApplyTheme(theme);
+        int checked=0;
+        for(auto* field:window.findChildren<QDoubleSpinBox*>()) {
+            if(!Explain("numeric fields defer partial input from construction",!field->keyboardTracking()))return false;
+            if(field->decimals()<3||field->minimum()>.025||field->maximum()<1)continue;
+            const bool blocked=field->blockSignals(true);const double old=field->value();field->setValue(1);field->selectAll();
+            for(const auto c:QStringLiteral("0.025")) {
+                QKeyEvent key(QEvent::KeyPress,c==QChar('.')?Qt::Key_Period:Qt::Key_0+c.digitValue(),Qt::NoModifier,QString(c));
+                QCoreApplication::sendEvent(field,&key);
+            }
+            const bool draft=field->cleanText().startsWith("0.025")&&field->value()==1;
+            QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QCoreApplication::sendEvent(field,&enter);
+            const bool applied=std::abs(field->value()-.025)<1e-9;
+            const auto details=std::string("real tool fields preserve and commit 0.025: ")+field->objectName().toStdString()
+                +" parent="+field->parent()->objectName().toStdString()+" text="+field->text().toStdString()
+                +" value="+std::to_string(field->value())+" draft="+std::to_string(draft);
+            field->setValue(old);field->blockSignals(blocked);++checked;
+            if(!Explain(details.c_str(),draft&&applied))return false;
+        }
+        if(!Explain("multiple actual tool panels were tested",checked>=15))return false;
+    }
+    window.ApplyTheme(UiTheme::Normal);window.RunCommand("part.thicken");
+    auto* field=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!field)return false;field->setValue(.025);
+    return Explain("geometry thickness is independent of plate stock minimum",window.ThickenInput().thicknessMm==.025
+        &&kachakacha::v2::app::ParameterValueOf(window.ParameterDock().Values(),kachakacha::v2::app::ParameterId::ThickenThicknessMm)==.025);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
@@ -873,6 +903,7 @@ std::vector<SelfTestCase> InputCases()
         {"HP-SCOPE planar and spatial", &CaseDrawingScope},
         {"HP-NUM direction follows snap", &CaseNumericKeepsSnappedDirection},
         {"HP-NUM decimal dimensions", &CaseDecimalThemes},
+        {"HP-NUM actual tool fields and geometry thickness", &CaseRealNumericFields},
         {"作図中に入力列が出て数で線が決まる", &CaseCursorInputOpensWhileDrawingAndPlacesByNumber},
         {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},

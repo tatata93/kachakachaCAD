@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2ShellSplitDock.h"
 #include "V2PanelFrame.h"
 
@@ -58,7 +59,7 @@ namespace {
     auto* line = new QHBoxLayout(row);
     line->setContentsMargins(0, 0, 0, 0);
     line->addWidget(new QLabel(name, row));
-    *box = new QDoubleSpinBox(row);
+    *box = new V2NumericSpinBox(row);
     (*box)->setObjectName(objectName);
     (*box)->setRange(minimum, 100000.0);
     (*box)->setDecimals(3);

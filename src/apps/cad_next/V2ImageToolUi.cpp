@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QImage>
 #include <QString>
 #include <QWidget>
@@ -52,7 +53,7 @@ void V2ImageTool::BuildUi() {
         definition_.uAxis=frame->uAxis;definition_.vAxis=frame->vAxis;mode_->setCurrentIndex(0);Preview();});
     auto* note=new QLabel(QStringLiteral("投影方向は貼付位置の面法線、または作業面法線。面に沿わせると伸縮や継ぎ目が生じます。面形状は貼付時の独立コピーです。"),this);
     note->setWordWrap(true);layout->addWidget(note);
-    auto field=[&](const QString& text,const char* name,double min,double max,double value,const QString& suffix){auto* box=new QDoubleSpinBox(this);
+    auto field=[&](const QString& text,const char* name,double min,double max,double value,const QString& suffix){auto* box=new V2NumericSpinBox(this);
         box->setObjectName(QString::fromLatin1(name));box->setDecimals(5);box->setRange(min,max);box->setValue(value);box->setSuffix(suffix);form->addRow(text,box);
         connect(box,&QDoubleSpinBox::valueChanged,this,[this]{Preview();});return box;};
     width_=field(QStringLiteral("画像の幅"),"imageWidth",0.00001,10000000,100,QStringLiteral(" mm"));

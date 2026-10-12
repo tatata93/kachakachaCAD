@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include "V2DimensionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -38,7 +39,7 @@ void V2DimensionTool::BuildUi()
     layout->addWidget(MakePanelSectionTitle(this,QStringLiteral("寸法値")));
     driving_=new QCheckBox(QStringLiteral("寸法値で形状を変更する（外すと参照寸法）"),this);
     driving_->setObjectName(QStringLiteral("dimensionDriving"));driving_->setChecked(true);layout->addWidget(driving_);
-    value_=new QDoubleSpinBox(this);value_->setObjectName(QStringLiteral("dimensionValue"));value_->setRange(0.000001,1000000);
+    value_=new V2NumericSpinBox(this);value_->setObjectName(QStringLiteral("dimensionValue"));value_->setRange(0.000001,1000000);
     value_->setDecimals(6);value_->setKeyboardTracking(false);value_->setValue(10);layout->addWidget(value_);
     name_=new QLineEdit(this);name_->setPlaceholderText(QStringLiteral("寸法の名前（任意）"));layout->addWidget(name_);
     button(QStringLiteral("3Dビューで配置位置を指定"),[this]{placing_=true;RefreshPreview();});

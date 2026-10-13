@@ -589,3 +589,8 @@ HP-AP-OUTLINE-115 のWindows自動試験画像です。等間隔/自動間隔と
 ![12部材の独立した等長展開を原寸で配置した型紙](images/v2-approx-outline-pattern.png)
 
 `approx-outline-pattern` は同じ自己試験で展開ボタンの経路を通して撮影。5方向×両間隔の型紙で辺長を検査し、型紙の寸法と曲げ角からの計算上の再組立・継ぎ目は0.000001 mm未満でした。板厚・材料の曲げ癖・接着の実物検証は含みません。
+
+
+![元面を保持した厚み補正の下見と数値結果](images/v2-thicken-corrected.png)
+
+`thicken-corrected` は HP-TH-CORRECT-OWNER の配布版Windows自動操作で撮影。内側0.5 mm、反対面を補正を選び、下見・確定・Undo/Redo・保存再生成を検査した画面です。対応点の法線距離・位置偏差は標本結果で、厳密な一定厚みの保証ではありません。`--manual-state` の引数ではありません。

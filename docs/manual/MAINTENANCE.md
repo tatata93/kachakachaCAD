@@ -30,3 +30,7 @@ SVG2枚は `diagrams/` に置く説明用模式図で、ソフトの画面では
 - 画像一覧と日本語を目視確認。内蔵ブラウザーはfile URLを拒否したため、ブラウザーの
   実表示・レスポンシブ表示・印刷結果は未確認。PC_VERIFIEDや全機能の再検証とは扱わない。
 - 変更はマニュアルのみ。CAD本体の再ビルド・全機能試験は今回実施しない。
+
+
+2026-10-13: `images/v2-thicken-corrected.png` は更新配布版のHP-TH-CORRECT-OWNERから撮影。
+自己試験用の環境変数KACHACAD_THICKEN_TEST_FILEで入力文書を指定し、KACHACAD_THICKEN_TEST_OUTPUTへ画像と別名の結果を保存する。原本は上書きしない。

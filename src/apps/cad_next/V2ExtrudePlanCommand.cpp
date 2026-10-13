@@ -15,6 +15,7 @@
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/domain/Entity.h"
 
 #include <QString>
@@ -99,7 +100,13 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
         plan.needsJa = "押し出す面を1枚だけ選んでください。方向の線と終端は右ペインの専用欄で選びます。";
         return plan;
     }
-    return kachakacha::v2::app::PlanExtrude(facts, solids, profiles, profilesAreFaces);
+    auto plan=kachakacha::v2::app::PlanExtrude(facts, solids, profiles, profilesAreFaces);
+    if(!plan.readyToPreview&&!wireIds.empty()) {
+        const auto curves=kachakacha::v2::app::SelectedCurves(selection,session_->Scene());
+        if(kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,document.Snapshot().settings.tolerance))
+            plan.needsJa="輪郭は閉じていますが、同一平面にありません。「曲面押し出し」で支持面と輪郭を指定してください。";
+    }
+    return plan;
 }
 
 QString V2MainWindow::ExtrudePlanTextJa() const

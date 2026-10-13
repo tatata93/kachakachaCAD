@@ -1,8 +1,10 @@
 #include "kachakacha/kernel/OcctProjectionVisibility.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/Units.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <optional>
 namespace kachakacha::v2::kernel::detail {
 namespace {
 using geometry::CurveSegment;
@@ -57,6 +59,32 @@ std::vector<Candidate> Candidates(const WireProjectionResult& result,const Proje
     }
     return candidates;
 }
+}
+void SimplifyProjectionRun(std::vector<geometry::CurveSegment>& run) {
+    using geometry::CurveKind;
+    for(std::size_t i=1;i<run.size();) {
+        const auto& a=run[i-1];const auto& b=run[i];std::optional<CurveSegment> merged;
+        if(geometry::Distance(a.EndPoint(),b.StartPoint())<1e-9) {
+            if(a.Kind()==CurveKind::Line&&b.Kind()==CurveKind::Line) {
+                const auto u=geometry::Normalized(a.EndPoint()-a.StartPoint()),v=geometry::Normalized(b.EndPoint()-b.StartPoint());
+                if(geometry::Cross(u,v).Length()<1e-10&&geometry::Dot(u,v)>0) {
+                    const auto line=CurveSegment::MakeLine(a.StartPoint(),b.EndPoint());if(line.HasValue())merged=line.Value();
+                }
+            } else if(a.Kind()==CurveKind::CircularArc&&b.Kind()==CurveKind::CircularArc
+                &&geometry::Distance(a.Center(),b.Center())<1e-10&&std::abs(a.Radius()-b.Radius())<1e-10
+                &&geometry::Distance(a.Normal(),b.Normal())<1e-10&&a.SweepAngleRad()*b.SweepAngleRad()>0) {
+                const double sweep=a.SweepAngleRad()+b.SweepAngleRad();
+                if(std::abs(std::abs(sweep)-2*geometry::kPi)<1e-10) {
+                    const auto circle=CurveSegment::MakeCircle(a.Center(),a.Normal()*(sweep>0?1:-1),
+                        geometry::Normalized(a.StartPoint()-a.Center()),a.Radius());if(circle.HasValue())merged=circle.Value();
+                } else if(std::abs(sweep)<2*geometry::kPi) {
+                    const auto arc=CurveSegment::MakeCircularArc(a.Center(),a.Normal(),a.ReferenceDirection(),a.Radius(),a.StartAngleRad(),sweep);
+                    if(arc.HasValue())merged=arc.Value();
+                }
+            }
+        }
+        if(merged){run[i-1]=*merged;run.erase(run.begin()+i);}else ++i;
+    }
 }
 void SelectVisibleProjection(WireProjectionResult& result,const ProjectionSourceMatch& match,
     const WireProjectionOptions& options) {

@@ -6,6 +6,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
+#include "kachakacha/kernel/OcctProjectionVisibility.h"
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -67,7 +68,7 @@ void Boundary(RegionProjectionResult& result,const TopoDS_Face& face,double tole
         }
         Require(!run.empty(),"投影した面の境界がありません。");
         Require((run.back().EndPoint()-run.front().StartPoint()).Length()<=tolerance*3,"投影した面の境界が閉じていません。");
-        result.boundary.wires.push_back(std::move(run));
+        detail::SimplifyProjectionRun(run);result.boundary.wires.push_back(std::move(run));
     }
 }
 }

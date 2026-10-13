@@ -2,12 +2,15 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <optional>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include "kachakacha/kernel/OcctWireWrap.h"
 #include "kachakacha/kernel/OcctProjectionVisibility.h"
+#include "kachakacha/kernel/OcctProjectionConnections.h"
+#include "kachakacha/geometry/CurveFit.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <BRep_Builder.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -20,6 +23,7 @@
 #include <BRepClass_FaceClassifier.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
+#include <GeomLib_IsPlanarSurface.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
@@ -29,6 +33,7 @@
 #include <TopoDS_Wire.hxx>
 #include <Standard_Failure.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Pln.hxx>
 #endif
 namespace kachakacha::v2::kernel {
 using geometry::Vector3;
@@ -116,10 +121,40 @@ void KeepNearest(WireProjectionResult& result,const WireProjectionInput& input,c
         } else ++j;
     }
 }
+void Join(WireProjectionResult& result,double tolerance);
+void RestorePlanarForm(WireProjectionResult& result,const CurveSegment& source,
+    const WireProjectionInput& input,const std::vector<TopoDS_Face>& faces,const WireProjectionOptions& options) {
+    if(faces.size()!=1||result.wires.empty())return;
+    constexpr double precision=1e-10;
+    const GeomLib_IsPlanarSurface flat(BRep_Tool::Surface(faces.front()),precision);if(!flat.IsPlanar())return;
+    const auto plane=flat.Plan();const auto normal=plane.Axis().Direction();const Vector3 n{normal.X(),normal.Y(),normal.Z()};
+    const auto direction=options.mode==WireProjectionMode::Closest?n:geometry::Normalized(input.direction);
+    const double denominator=geometry::Dot(n,direction);if(std::abs(denominator)<precision)return;
+    const auto origin=FromPoint(plane.Location());
+    const auto project=[&](Vector3 p){return p+direction*(geometry::Dot(origin-p,n)/denominator);};
+    std::optional<CurveSegment> exact;
+    if(source.Kind()==geometry::CurveKind::Circle||source.Kind()==geometry::CurveKind::CircularArc) {
+        if(geometry::Cross(source.Normal(),n).Length()>precision)return; // Oblique projection is an ellipse, not a circle.
+        exact=geometry::TranslateCurve(source,project(source.Center())-source.Center());
+    } else if(source.Kind()==geometry::CurveKind::Line) {
+        const auto line=CurveSegment::MakeLine(project(source.StartPoint()),project(source.EndPoint()));if(line.HasValue())exact=line.Value();
+    } else if(!source.IsClosed(precision)) {
+        auto points=source.ControlPoints();for(auto& p:points)p=project(p);
+        const auto curve=source.Kind()==geometry::CurveKind::CubicBezier?CurveSegment::MakeCubicBezier(points):CurveSegment::MakeCubicBSpline(points);
+        if(curve.HasValue())exact=curve.Value();
+    }
+    if(!exact)return;auto joined=result;Join(joined,std::min(options.joinToleranceMm,1e-7));if(joined.wires.size()!=1)return;
+    const auto& run=joined.wires.front();
+    const bool complete=source.Kind()==geometry::CurveKind::Circle?joined.openEnds==0:
+        geometry::Distance(run.front().StartPoint(),exact->StartPoint())<1e-7&&geometry::Distance(run.back().EndPoint(),exact->EndPoint())<1e-7;
+    if(complete){result.wires={{*exact}};result.maxCurveDeviationMm=precision;result.openEnds=source.Kind()==geometry::CurveKind::Circle?0:2;}
+}
 void ProjectOne(WireProjectionResult& result,const std::vector<TopoDS_Face>& faces,
-    const WireProjectionInput& input,const WireProjectionOptions& options) {
+    const WireProjectionInput& input,const WireProjectionOptions& options,
+    std::vector<detail::ProjectionRunOrigin>& origins,const detail::ProjectionRunOrigin* inherited=nullptr) {
     // Separate edges also support an unordered selection of disconnected source wires.
     for(const auto& segment:input.curves) {
+        const auto origin=inherited?*inherited:detail::ProjectionRunOrigin{&segment};
         WireProjectionResult pieces;WireProjectionInput one{{segment},input.direction};
         const auto d=geometry::Normalized(input.direction),delta=segment.EndPoint()-segment.StartPoint();
         if(options.mode==WireProjectionMode::Direction&&segment.Kind()==geometry::CurveKind::Line
@@ -144,11 +179,34 @@ void ProjectOne(WireProjectionResult& result,const std::vector<TopoDS_Face>& fac
                 for(;projection.More();projection.Next())for(BRepTools_WireExplorer e(projection.Current());e.More();e.Next())AddEdge(pieces,e.Current(),one,options);
             }
         }
-        if(options.mode==WireProjectionMode::Direction&&options.hits!=WireProjectionHits::All&&!segment.IsClosed(options.toleranceMm))
+        if((options.mode==WireProjectionMode::Closest||options.hits!=WireProjectionHits::All)&&segment.IsClosed(1e-9)) {
+            // Complementary arcs of a periodic source can share BOTH endpoints.
+            // They are not duplicate hits. Join a complete single contour first;
+            // resolve multiple/partial layers using exact nonperiodic subarcs.
+            auto joined=pieces;Join(joined,options.joinToleranceMm);
+            if(joined.wires.size()==1&&joined.openEnds==0)pieces=std::move(joined);
+            else if(pieces.wires.size()>1) {
+                if(segment.Kind()==geometry::CurveKind::CubicBSpline) {
+                    WireProjectionInput spans;spans.direction=input.direction;
+                    for(const auto& control:geometry::UniformBSplineBezierSpans(segment.ControlPoints())) {
+                        const auto bezier=CurveSegment::MakeCubicBezier({control.begin(),control.end()});
+                        Require(bezier.HasValue(),"閉スプラインの投影区間を分けられません。");spans.curves.push_back(bezier.Value());
+                    }
+                    Require(!spans.curves.empty(),"閉スプラインの制御点が足りません。");ProjectOne(result,faces,spans,options,origins,&origin);continue;
+                }
+                const auto half=segment.Split(.5);Require(half.HasValue(),"閉曲線の投影区間を分けられません。");
+                const auto first=half.Value().first->Split(.5),second=half.Value().second->Split(.5);
+                Require(first.HasValue()&&second.HasValue(),"閉曲線の投影区間を分けられません。");
+                ProjectOne(result,faces,{{*first.Value().first,*first.Value().second,*second.Value().first,*second.Value().second},input.direction},options,origins,&origin);
+                continue;
+            }
+        } else if(options.mode==WireProjectionMode::Direction&&options.hits!=WireProjectionHits::All)
             detail::SelectVisibleProjection(pieces,[&](Vector3 point){return SourceMatch(point,segment,one,options);},options);
         else if(options.mode==WireProjectionMode::Closest||options.hits!=WireProjectionHits::All)KeepNearest(pieces,one,options);
+        RestorePlanarForm(pieces,segment,one,faces,options);
         result.maxCurveDeviationMm=std::max(result.maxCurveDeviationMm,pieces.maxCurveDeviationMm);
         result.wires.insert(result.wires.end(),pieces.wires.begin(),pieces.wires.end());
+        origins.insert(origins.end(),pieces.wires.size(),origin);
     }
 }
 bool SameRun(const std::vector<CurveSegment>& a,const std::vector<CurveSegment>& b,double tolerance) {
@@ -171,6 +229,10 @@ int EndpointCount(const std::vector<std::vector<CurveSegment>>& runs,Vector3 poi
     return count;
 }
 void Join(WireProjectionResult& result,double tolerance) {
+    // Generated native edge ends must coincide. The interactive pick radius can
+    // exceed an entire small lamp; it must not collapse its arcs or close a gap.
+    tolerance=std::min(tolerance,1e-6);
+    result.openEnds=0;
     auto& runs=result.wires;
     for(std::size_t i=0;i<runs.size();++i)for(std::size_t j=i+1;j<runs.size();) {
         if(SameRun(runs[i],runs[j],tolerance))runs.erase(runs.begin()+j);else ++j;
@@ -191,7 +253,7 @@ void Join(WireProjectionResult& result,double tolerance) {
             }
         }
     }
-    for(const auto& run:runs)if(geometry::Distance(run.front().StartPoint(),run.back().EndPoint())>tolerance)result.openEnds+=2;
+    for(auto& run:runs){detail::SimplifyProjectionRun(run);if(geometry::Distance(run.front().StartPoint(),run.back().EndPoint())>tolerance)result.openEnds+=2;}
 }
 double SurfaceDistance(const Vector3& point,const std::vector<TopoDS_Face>& faces,double tolerance) {
     double best=1e100;
@@ -224,7 +286,11 @@ Out ProjectNativeWires(const std::vector<modeling::KernelShapeHandle>& targets,
                 "等長巻き付けは平面・円柱・円錐を1面ずつ指定してください。","複数面には方向投影／最近点投影を使い、端点を接続します。"));
             const auto wrapped=detail::WrapNativeWires(faces.front(),inputs,options);
             if(!wrapped.HasValue())return wrapped;result=wrapped.Value();
-        } else for(const auto& input:inputs)ProjectOne(result,faces,input,options);
+        } else {
+            std::vector<detail::ProjectionRunOrigin> origins;
+            for(const auto& input:inputs)ProjectOne(result,faces,input,options,origins);
+            if(faces.size()==1)detail::ConnectSingleFaceProjection(result,faces.front(),origins,options.toleranceMm);
+        }
         Require(!result.wires.empty(),"指定した向き・距離では選んだ面に当たりません。方向反転や投影先を確認してください。");
         Join(result,options.joinToleranceMm);
         for(const auto& run:result.wires)for(const auto& c:run)for(int k=0;k<=16;++k) {

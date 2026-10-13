@@ -127,7 +127,7 @@ bool V2ProjectionTool::Preview() {
     options.hits=output_->currentIndex()==1?kernel::WireProjectionHits::NearestPositive:
         static_cast<kernel::WireProjectionHits>(hits_->currentIndex());
     options.toleranceMm=tolerance_->value();options.maximumDistanceMm=distance_->value();
-    options.joinToleranceMm=window_.session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    options.joinToleranceMm=window_.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     options.sourceOrigin=sourceOrigin_;options.sourceU=sourceU_;options.sourceV=sourceV_;options.targetPoint=targetPoint_;
     options.wrapRotationRad=rotation_->value()*3.141592653589793/180;
     std::vector<kernel::WireProjectionInput> inputs;std::vector<modeling::KernelShapeHandle> faces;
@@ -146,6 +146,7 @@ bool V2ProjectionTool::Preview() {
     window_.viewport_->ShowToolPreview(lines);
     status_->setText(QStringLiteral("プレビュー: %1本 / 曲線偏差 %2 mm / 面上の標本偏差 %3 mm\n未接続の端点 %4個。Enterで確定。巻付けの曲線偏差は補間標本、他方式は変換上界です。")
         .arg(result_->wires.size()).arg(result_->maxCurveDeviationMm,0,'g',5).arg(result_->maxSampledSurfaceDeviationMm,0,'g',5).arg(result_->openEnds));
+    if(result_->openEnds)status_->setText(status_->text()+QStringLiteral("\n閉じていない輪郭があります。面の範囲・穴・複数面の深さ差を確認してください。端点を勝手に直線で結びません。"));
     confirm_->setEnabled(true);return true;
 }
 bool V2ProjectionTool::AddResults() {
@@ -174,8 +175,9 @@ bool V2ProjectionTool::AddResults() {
 bool V2ProjectionTool::Commit() {
     if(!result_){Preview();return false;}
     if(previewRevision_!=window_.session_->GetDocument().Revision()){Invalidate();return false;}
-    const int count=static_cast<int>(result_->wires.size()),faceCount=static_cast<int>(regions_.size());if(!AddResults())return false;
+    const int count=static_cast<int>(result_->wires.size()),faceCount=static_cast<int>(regions_.size()),openEnds=result_->openEnds;if(!AddResults())return false;
     CancelInput();revision_=window_.session_->GetDocument().Revision();window_.AdoptCurrentDocument();
     status_->setText(QStringLiteral("%1本を面へ落とし、ワイヤーを生成しました（面 %2枚）。設定を維持して次の投影を続けられます。").arg(count).arg(faceCount));
+    if(openEnds)status_->setText(status_->text()+QStringLiteral("\n開いた輪郭が含まれます。投影先の面の範囲・穴・深さ差を確認してください。"));
     window_.SetStatus(status_->text());return true;
 }

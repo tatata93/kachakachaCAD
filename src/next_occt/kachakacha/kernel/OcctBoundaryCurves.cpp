@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include <BRep_Tool.hxx>
 #include <GeomConvert.hxx>
 #include <GeomConvert_BSplineCurveToBezierCurve.hxx>
@@ -66,6 +67,24 @@ double DeviationBound(const Bezier& native,const Polygon& cubic) {
 gp_Pnt Evaluate(Polygon p,double t) {return SplitPolygon(p,t).first.back();}
 bool Fit(const std::vector<Piece>& pieces,double tolerance,int depth,BoundedBoundaryCurves& out) {
     if(depth>24||out.curves.size()>=4096)return false;
+    // Projection onto a planar B-spline face may return a B-spline even for a
+    // straight source. Positive rational weights keep its entire curve inside
+    // the control hull; certify the line geometrically, not by sparse samples.
+    const auto a=pieces.front().curve->Value(0),b=pieces.back().curve->Value(1);
+    const gp_XYZ axis=b.XYZ()-a.XYZ();const double lengthSquared=axis.SquareModulus();
+    if(lengthSquared>1e-20) {
+        double bound=0;bool positive=true;
+        for(const auto& piece:pieces)for(int i=1;i<=piece.curve->NbPoles();++i) {
+            positive=positive&&piece.curve->Weight(i)>0;
+            const auto p=piece.curve->Pole(i).XYZ();const double t=std::clamp((p-a.XYZ()).Dot(axis)/lengthSquared,0.0,1.0);
+            bound=std::max(bound,(p-a.XYZ()-axis*t).Modulus());
+        }
+        if(positive&&bound<=std::min(tolerance,1e-10*std::max(1.0,std::sqrt(lengthSquared)))) {
+            const auto line=geometry::CurveSegment::MakeLine(FromPoint(a),FromPoint(b));
+            if(line.HasValue()){out.curves.push_back(line.Value());out.parameters.push_back({pieces.front().first,pieces.back().last});
+                out.maxDeviationBoundMm=std::max(out.maxDeviationBoundMm,bound);return true;}
+        }
+    }
     const auto proposal=Proposal(pieces);
     const double start=pieces.front().first,length=pieces.back().last-start;
     double bound=0;
@@ -88,8 +107,8 @@ bool Fit(const std::vector<Piece>& pieces,double tolerance,int depth,BoundedBoun
         return Fit({pieces.begin(),mid},tolerance,depth+1,out)&&Fit({mid,pieces.end()},tolerance,depth+1,out);
     }
     const auto& piece=pieces.front();const double mid=(piece.first+piece.last)*.5;
-    auto a=Bezier::DownCast(piece.curve->Copy()),b=Bezier::DownCast(piece.curve->Copy());a->Segment(0,.5);b->Segment(.5,1);
-    return Fit({{piece.first,mid,a}},tolerance,depth+1,out)&&Fit({{mid,piece.last,b}},tolerance,depth+1,out);
+    auto left=Bezier::DownCast(piece.curve->Copy()),right=Bezier::DownCast(piece.curve->Copy());left->Segment(0,.5);right->Segment(.5,1);
+    return Fit({{piece.first,mid,left}},tolerance,depth+1,out)&&Fit({{mid,piece.last,right}},tolerance,depth+1,out);
 }
 }
 base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,double tolerance) {
@@ -110,8 +129,8 @@ base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,doubl
         if(edge.Orientation()==TopAbs_REVERSED) {
             std::reverse(out.curves.begin(),out.curves.end());std::reverse(out.parameters.begin(),out.parameters.end());
             for(std::size_t i=0;i<out.curves.size();++i) {
-                auto points=out.curves[i].ControlPoints();std::reverse(points.begin(),points.end());
-                out.curves[i]=geometry::CurveSegment::MakeCubicBezier(std::move(points)).Value();
+                const auto reversed=geometry::ReverseCurve(out.curves[i]);if(!reversed.HasValue())throw Standard_Failure("Boundary reversal failed");
+                out.curves[i]=reversed.Value();
                 std::swap(out.parameters[i].first,out.parameters[i].second);
             }
         }

@@ -2,6 +2,7 @@
 #include "kachakacha/kernel/OcctWireProjection.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/geometry/WireChain.h"
 #include <cmath>
 #include <functional>
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -176,6 +177,101 @@ KACHA_V2_TEST(projection, CircularAndBezierSourcesStaySmooth) {
     Require(spline.HasValue(),spline.FirstMessageJa());OnSurface(spline.Value(),.001,[](auto p){return std::abs(p.z);});
     Require(spline.Value().wires.front().front().Kind()!=geometry::CurveKind::Line,"curved source never flattened to lines");
 }
+KACHA_V2_TEST(projection, PeriodicComplementaryArcsOnSplinePlane) {
+    TColgp_Array2OfPnt p(1,2,1,2);
+    for(int i=1;i<=2;++i)for(int j=1;j<=2;++j){const double x=i==1?-30:30,y=j==1?-30:30;p.SetValue(i,j,gp_Pnt(x,y,.08*x));}
+    TColStd_Array1OfReal k(1,2);k.SetValue(1,0);k.SetValue(2,1);
+    TColStd_Array1OfInteger m(1,2);m.SetValue(1,2);m.SetValue(2,2);
+    occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(p,k,k,m,m,1,1);
+    Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());
+    for(const double radius:{.1,.75,1.25,1.5,4.0})for(const double phase:{0.0,.4,1.7})for(const double sign:{-1.0,1.0}) {
+        const auto circle=geometry::CurveSegment::MakeCircle({2,0,10},{0,0,sign},{std::cos(phase),std::sin(phase),0},radius).Value();
+        const auto r=kernel::ProjectNativeWires({face.h},{{{circle},{0,0,-1}}},Options());
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"periodic complementary arcs stay closed");
+        OnSurface(r.Value(),.001,[](auto q){return std::abs(q.z-.08*q.x);});
+        for(int i=0;i<256;++i){const auto original=circle.Evaluate(i/256.0);const geometry::Vector3 expected{original.x,original.y,.08*original.x};double distance=1e100;
+            for(const auto& c:r.Value().wires.front())distance=std::min(distance,c.ClosestPoint(expected).distance);
+            Require(distance<.002,"every angle covered by the projected lamp");}
+    }
+}
+KACHA_V2_TEST(projection, PeriodicCircleWithPartialNearLayer) {
+    auto back=Plane();Owned near(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,2),gp_Dir(0,0,1)),0,30,-30,30).Face());
+    const auto circle=geometry::CurveSegment::MakeCircle({0,0,10},{0,0,1},{0,1,0},4).Value();
+    const auto r=kernel::ProjectNativeWires({back.h,near.h},{{{circle},{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());
+    for(const auto& run:r.Value().wires)for(const auto& c:run)for(int i=1;i<16;++i){const auto q=c.Evaluate(i/16.0);
+        Require(std::abs(q.z-(q.x>1e-4?2:0))<.002,"nearest layer chosen around the periodic seam");}
+    Require(r.Value().openEnds==4,"different depths do not receive artificial joining walls");
+}
+KACHA_V2_TEST(projection, PeriodicCylinderCircleKeepsFullFrontLoop) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),0,geometry::kPi*2,-10,10).Face());
+    for(const double phase:{0.0,.8,2.4}) {
+        const auto circle=geometry::CurveSegment::MakeCircle({20,0,0},{1,0,0},{0,std::cos(phase),std::sin(phase)},2).Value();
+        const auto r=kernel::ProjectNativeWires({cylinder.h},{{{circle},{-1,0,0}}},Options());
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"cylinder front circle is closed across its seam");
+        OnSurface(r.Value(),.003,[](auto q){return std::abs(std::hypot(q.x,q.y)-10);});
+        for(const auto& c:r.Value().wires.front())for(int i=0;i<=16;++i)Require(c.Evaluate(i/16.0).x>9,"rear circumference excluded");
+    }
+}
+KACHA_V2_TEST(projection, ClippedCircleNeverInventsMissingArc) {
+    Owned face(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(),gp_Dir(0,0,1)),0,10,-10,10).Face());
+    const auto circle=geometry::CurveSegment::MakeCircle({0,0,3},{0,0,1},{1,0,0},2).Value();
+    const auto r=kernel::ProjectNativeWires({face.h},{{{circle},{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().openEnds==2,"out-of-face half remains open");
+    OnSurface(r.Value(),1e-6,[](auto q){return q.x<0?-q.x:std::abs(q.z);});
+}
+KACHA_V2_TEST(projection, NativeCurveFormsAndUnnecessarySplits) {
+    auto face=Plane();const auto circle=geometry::CurveSegment::MakeCircle({0,0,3},{0,0,1},{1,0,0},2).Value();
+    const auto half=circle.Split(.5).Value();const auto first=half.first->Split(.5).Value(),last=half.second->Split(.5).Value();
+    const auto r=kernel::ProjectNativeWires({face.h},{{{*first.first,*first.second,*last.first,*last.second},{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().wires.front().size()==1
+        &&r.Value().wires.front().front().Kind()==geometry::CurveKind::Circle,"four exact arcs merge into an analytic circle");
+    const auto line=kernel::ProjectNativeWires({face.h},{{{Line({-4,0,3},{0,0,3}),Line({0,0,3},{4,0,3})},{0,0,-1}}},Options());
+    Require(line.HasValue()&&line.Value().wires.front().size()==1&&line.Value().wires.front().front().Kind()==geometry::CurveKind::Line,"collinear source splits do not create extra projected segments");
+}
+KACHA_V2_TEST(projection, PlanarSplineSupportPreservesSourceTypes) {
+    TColgp_Array2OfPnt p(1,2,1,2);for(int i=1;i<=2;++i)for(int j=1;j<=2;++j)p.SetValue(i,j,gp_Pnt(i==1?-30:30,j==1?-30:30,0));
+    TColStd_Array1OfReal k(1,2);k.SetValue(1,0);k.SetValue(2,1);TColStd_Array1OfInteger m(1,2);m.SetValue(1,2);m.SetValue(2,2);
+    occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(p,k,k,m,m,1,1);Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());
+    const std::vector<geometry::CurveSegment> sources={Line({-2,0,3},{2,0,3}),
+        geometry::CurveSegment::MakeCircle({0,0,3},{0,0,1},{1,0,0},2).Value(),
+        geometry::CurveSegment::MakeCircularArc({0,0,3},{0,0,1},{1,0,0},2,.3,-1.7).Value(),
+        geometry::CurveSegment::MakeCubicBezier({{-2,0,3},{-1,2,3},{1,-2,3},{2,0,3}}).Value(),
+        geometry::CurveSegment::MakeCubicBSpline({{-3,0,3},{-2,2,3},{0,-2,3},{2,2,3},{3,0,3}}).Value()};
+    for(const auto mode:{kernel::WireProjectionMode::Direction,kernel::WireProjectionMode::Closest})for(const auto& source:sources) {
+        const auto r=kernel::ProjectNativeWires({face.h},{{{source},{0,0,-1}}},Options(mode));
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().wires.front().size()==1,"untrimmed source stays a single segment");
+        const auto& output=r.Value().wires.front().front();Require(output.Kind()==source.Kind(),"line circle arc Bezier and B-spline retain their native core type");
+        for(int i=0;i<=128;++i){auto expected=source.Evaluate(i/128.0);expected.z=0;Require(geometry::Distance(output.Evaluate(i/128.0),expected)<1e-7,"full source parameterization preserved");}
+    }
+}
+KACHA_V2_TEST(projection, ClosedBSplinePartialLayersStayCurved) {
+    auto back=Plane();Owned near(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,2),gp_Dir(0,0,1)),0,30,-30,30).Face());
+    const auto source=geometry::CurveSegment::MakeCubicBSpline({{0,2,10},{-2,0,10},{0,-2,10},{2,0,10},{0,2,10},{-2,0,10},{0,-2,10}}).Value();
+    const auto r=kernel::ProjectNativeWires({back.h,near.h},{{{source},{0,0,-1}}},Options());Require(r.HasValue(),r.FirstMessageJa());
+    for(const auto& run:r.Value().wires)for(const auto& c:run)for(int i=1;i<16;++i){const auto q=c.Evaluate(i/16.0);
+        Require(std::abs(q.z-(q.x>1e-4?2:0))<.002,"closed spline resolves partial near layer without flattening");}
+    Require(r.Value().openEnds==4,"depth discontinuities remain explicit");
+}
+KACHA_V2_TEST(projection, SmallCurvesDoNotCollapseInsideInteractiveJoinRadius) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),0,geometry::kPi*2,-10,10).Face());
+    const auto circle=geometry::CurveSegment::MakeCircle({20,0,0},{1,0,0},{0,1,0},.005).Value();auto options=Options();options.toleranceMm=1e-5;
+    const auto r=kernel::ProjectNativeWires({cylinder.h},{{{circle},{-1,0,0}}},options);
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"0.01mm lamp stays a complete loop");
+    double length=0;for(const auto& c:r.Value().wires.front())length+=c.TotalLength(1e-7);
+    Require(std::abs(length-2*geometry::kPi*.005)<1e-4,"small lamp perimeter remains complete");
+    for(int i=0;i<128;++i){const auto source=circle.Evaluate(i/128.0);const geometry::Vector3 expected{std::sqrt(100-source.y*source.y),source.y,source.z};double distance=1e100;
+        for(const auto& c:r.Value().wires.front())distance=std::min(distance,c.ClosestPoint(expected).distance);
+        Require(distance<1.2e-5,"every angle of the small lamp is covered within geometric tolerance");}
+    auto back=Plane();Owned near(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,2),gp_Dir(0,0,1)),0,30,-30,30).Face());
+    const auto line=kernel::ProjectNativeWires({back.h,near.h},{{{Line({-.001,0,3},{.001,0,3})},{0,0,-1}}},Options());
+    Require(line.HasValue(),line.FirstMessageJa());Require(line.Value().openEnds==4,"short open line is not treated as periodic or closed");
+}
+KACHA_V2_TEST(projection, NearbyDisconnectedSourcesAreNeverHealed) {
+    auto face=Plane();const auto r=kernel::ProjectNativeWires({face.h},
+        {{{Line({-2,0,3},{-.00002,0,3})},{0,0,-1}},{{Line({.00002,0,3},{2,0,3})},{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==2&&r.Value().openEnds==4,"distinct nearby sources stay disconnected");
+}
 KACHA_V2_TEST(projection, RationalDegreeSevenSurface) {
     TColgp_Array2OfPnt points(1,8,1,8);TColStd_Array2OfReal weights(1,8,1,8);
     for(int i=1;i<=8;++i)for(int j=1;j<=8;++j){const double x=(i-4.5)*3,y=(j-4.5)*3;points.SetValue(i,j,gp_Pnt(x,y,2*std::exp(-(x*x+y*y)/60)));weights.SetValue(i,j,1+.02*(i+j));}
@@ -196,7 +292,10 @@ KACHA_V2_TEST(projection, C0RationalFaceUnchangedInBothProjectionModes) {
     Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());const auto original=kernel::CaptureOutputShape(face.h).Value();
     for(const auto mode:{kernel::WireProjectionMode::Direction,kernel::WireProjectionMode::Closest}) {
         const auto r=kernel::ProjectNativeWires({face.h},{{ClosedSquare(10),{0,0,-1}}},Options(mode));
-        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"closed C0 rational projection");
+        Require(r.HasValue(),r.FirstMessageJa());std::string ends;for(const auto& run:r.Value().wires){const auto a=run.front().StartPoint(),b=run.back().EndPoint();ends+=" ["+std::to_string(a.x)+","+std::to_string(a.y)+","+std::to_string(a.z)+" -> "+std::to_string(b.x)+","+std::to_string(b.y)+","+std::to_string(b.z)+"]";}
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"closed C0 rational projection mode "+std::to_string(static_cast<int>(mode))+ends);
+        Require(geometry::SegmentsFormClosedLoop(r.Value().wires.front(),{}),"projection joins satisfy modeling precision, not just the pick radius");
+        Require(r.Value().maxCurveDeviationMm<=Options().toleranceMm,"connection correction remains inside the reported whole-curve bound");
         Require(kernel::CaptureOutputShape(face.h).Value()==original,"native caller bytes protected in every mode");
     }
 }

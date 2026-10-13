@@ -1,5 +1,6 @@
 #include "V2SelfTest.h"
 #include "V2ProjectionTool.h"
+#include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2EntityTree.h"
@@ -167,12 +168,25 @@ bool SourcePlaneDefault(V2MainWindow& window) {
     window.Viewport().SetWorkPlane(plane);auto* tool=V2ProjectionTool::Open(window);
     return Explain("PROJ source plane supplies direction independently of current drawing plane",AddGuideInputs(*tool)&&tool->Preview());
 }
+bool ProjectedProfileExtrudes(V2MainWindow& window) {
+    if(!Fixture(window))return false;auto* tool=V2ProjectionTool::Open(window);
+    if(!AddGuideInputs(*tool)||!tool->Preview()||!tool->Commit())return false;
+    const auto& entities=window.Session().GetDocument().Snapshot().entities;
+    app::SelectionSet selected;selected.entityIds={entities.back().id};window.Viewport().SetSelection(selected);
+    window.ActivateCommand("part.extrude");
+    if(!Explain("PROJ derived closed wire remains a usable extrusion profile",window.Viewport().ExtrudeHandleShown()))return false;
+    window.ExtrudeDock().TypeDistanceMm(.5);
+    if(!window.HandleToolKey(Qt::Key_Return,nullptr)||CountOfKind(window,domain::EntityKind::Part)!=1)return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
+    window.RunCommand("edit.redo");return Explain("PROJ extrusion persists through Undo and save",window.SaveAndReopen("projected-extrusion.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
+}
 }
 std::vector<SelfTestCase> OwnerProjectionCases();
 std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
     {"PROJ preselection",Preselection},{"PROJ solid face viewport click",SolidFaceClick},{"PROJ wrap closest fractional numeric retry",WrapClosestAndFraction},
     {"PROJ manual direction and one-button reverse",ManualDirectionPreserved},{"PROJ role marks preserve tree and document",RoleMarks},
     {"PROJ direct tree inputs and lifecycle",TreeInput},{"PROJ explicit segments and multiple marks",SegmentMarks},
-    {"PROJ native region output and Undo",RegionOutput},{"PROJ source-plane direction default",SourcePlaneDefault}};
+    {"PROJ native region output and Undo",RegionOutput},{"PROJ source-plane direction default",SourcePlaneDefault},
+    {"PROJ projected wire extrudes and survives save",ProjectedProfileExtrudes}};
     const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
 }

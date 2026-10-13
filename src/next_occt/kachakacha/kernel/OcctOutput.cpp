@@ -10,6 +10,9 @@
 #include <array>
 #include <iomanip>
 #include <map>
+#include <deque>
+#include <mutex>
+#include <optional>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
@@ -36,6 +39,7 @@
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <Interface_Static.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
@@ -167,16 +171,65 @@ std::string ClosedStlProblem(const std::vector<StlTriangle>& triangles) {
 struct StepSolidFacts {
     int count=0;
     double volume=0;
-    Bnd_Box bounds;
+    mutable Bnd_Box bounds;
+    std::vector<TopoDS_Shape> solids;
     bool valid=true;
-    void Add(const TopoDS_Shape& shape) {
+    void Add(const TopoDS_Shape& shape, const SolidExportCheck* checked=nullptr) {
+        const auto first=solids.size();
         for(TopExp_Explorer e(shape,TopAbs_SOLID);e.More();e.Next()) {
-            ++count;GProp_GProps props;detail::VolumeProperties(e.Current(),props);
-            volume+=props.Mass();valid=valid&&props.Mass()>0&&BRepCheck_Analyzer(e.Current()).IsValid();
-            BRepBndLib::AddOptimal(e.Current(),bounds,false,false);
+            ++count;
+            // A broken imported pcurve can make integration take minutes.
+            // Reject invalid topology before attempting any mass/extrema work.
+            if(!checked&&!BRepCheck_Analyzer(e.Current()).IsValid()) { valid=false; return; }
+            solids.push_back(e.Current());
+        }
+        if(checked) { volume+=checked->volumeMm3; valid=valid&&checked->Ok(); return; }
+        for(std::size_t i=first;i<solids.size();++i) {
+            GProp_GProps props;detail::VolumeProperties(solids[i],props);
+            volume+=props.Mass();valid=valid&&props.Mass()>0;
         }
     }
+    void MeasureBounds() const {
+        if(!bounds.IsVoid()) return;
+        for(const auto& solid:solids) BRepBndLib::AddOptimal(solid,bounds,false,false);
+    }
 };
+struct ValidatedStep { std::string key, content; };
+std::deque<ValidatedStep>& StepCache() { static std::deque<ValidatedStep> entries; return entries; }
+std::mutex& StepCacheMutex() { static std::mutex mutex; return mutex; }
+std::string StepKey(const std::vector<KernelShapeHandle>& handles) {
+    std::string key = "checked-step-v1:" + std::to_string(handles.size());
+    for (const auto name : {"write.step.schema", "write.step.unit", "write.step.assembly",
+            "write.step.product.name", "write.surfacecurve.mode", "write.precision.mode",
+            "write.precision.val", "read.surfacecurve.mode", "read.precision.mode",
+            "read.precision.val", "read.maxprecision.mode", "read.maxprecision.val"}) {
+        const auto value = Interface_Static::CVal(name);
+        const std::string option = value ? value : "";
+        key += ":" + std::to_string(option.size()) + ":" + option;
+    }
+    for (const auto handle : handles) {
+        TopoDS_Shape shape; if (!LookupShape(handle, shape)) return {};
+        std::ostringstream stream; BRepTools::Write(shape, stream); const auto bytes = stream.str();
+        key += ":" + std::to_string(bytes.size()) + ":" + bytes;
+    }
+    return key;
+}
+std::optional<std::string> CachedStep(const std::string& key) {
+    std::lock_guard<std::mutex> lock(StepCacheMutex());
+    for (const auto& entry : StepCache()) if (entry.key == key) return entry.content;
+    return std::nullopt;
+}
+void CacheStep(const std::string& key, const std::string& content) {
+    constexpr std::size_t limit = 16 * 1024 * 1024;
+    std::size_t total = key.size() + content.size();
+    if (key.empty() || total > limit) return;
+    std::lock_guard<std::mutex> lock(StepCacheMutex()); auto& entries = StepCache();
+    for (const auto& entry : entries) total += entry.key.size() + entry.content.size();
+    while (!entries.empty() && (entries.size() >= 4 || total > limit)) {
+        total -= entries.front().key.size() + entries.front().content.size(); entries.pop_front();
+    }
+    entries.push_back({key, content});
+}
 bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,std::string& reason) {
     try {
     if(!source.count)return true; // Explicit surface/curve exports remain supported.
@@ -187,6 +240,7 @@ bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,s
         +" volume="+std::to_string(source.volume)+"/"+std::to_string(restored.volume);
     if(!restored.valid||restored.count!=source.count
         ||std::abs(restored.volume-source.volume)>std::max(.001,source.volume*1e-5))return false;
+    source.MeasureBounds();restored.MeasureBounds();
     double a[6],b[6];source.bounds.Get(a[0],a[1],a[2],a[3],a[4],a[5]);
     restored.bounds.Get(b[0],b[1],b[2],b[3],b[4],b[5]);
     for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4){reason+=" bound["+std::to_string(i)+"]="+std::to_string(a[i])+"/"+std::to_string(b[i]);return false;}
@@ -197,6 +251,7 @@ bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,s
 std::string StepText(const std::vector<TopoDS_Shape>& shapes,bool divide) {
     STEPControl_Writer writer;
     for(auto shape:shapes) {
+        BRepBuilderAPI_Copy exportCopy(shape,true,false);shape=exportCopy.Shape();
         bool composite=false;
         if(divide)for(TopExp_Explorer e(shape,TopAbs_FACE);e.More()&&!composite;e.Next()) {
             BRepAdaptor_Surface surface(TopoDS::Face(e.Current()));
@@ -208,7 +263,8 @@ std::string StepText(const std::vector<TopoDS_Shape>& shapes,bool divide) {
             BRepBuilderAPI_Copy copy(shape,true,false);
             ShapeUpgrade_ShapeDivideContinuity split(copy.Shape());
             split.SetSurfaceCriterion(GeomAbs_C3);split.SetBoundaryCriterion(GeomAbs_C3);
-            split.SetPCurveCriterion(GeomAbs_C3);split.SetTolerance(1e-7);split.Perform();
+            split.SetPCurveCriterion(GeomAbs_C3);split.SetTolerance(1e-7);
+            split.SetSurfaceSegmentMode(true);split.Perform();
             if(split.Result().IsNull()||!BRepCheck_Analyzer(split.Result()).IsValid())return {};
             shape=split.Result();
         }
@@ -343,14 +399,19 @@ Result<std::string> OutputStep(const std::vector<KernelShapeHandle>& handles) {
 #ifdef KACHACAD_V2_WITH_OCCT
     std::string stage="元の形の検証";
     try {
+        STEPControl_Writer initializeParameters;
+        const auto key = StepKey(handles);
+        if (!key.empty()) if (const auto cached = CachedStep(key)) return Result<std::string>::Success(*cached);
         if(handles.empty())return Failed<std::string>();
         StepSolidFacts source;std::vector<TopoDS_Shape> shapes;
         for(const auto handle:handles){TopoDS_Shape shape;if(!LookupShape(handle,shape)||shape.IsNull()||!BRepCheck_Analyzer(shape).IsValid())return Failed<std::string>();
+            std::optional<SolidExportCheck> checked;
             if(TopExp_Explorer(shape,TopAbs_SOLID).More()) {
                 const auto check=CheckSolidForExport(handle,1e-6);
                 if(!check.HasValue()||!check.Value().Ok())return Result<std::string>::Failure(base::MakeError("EXP-P001","不正な立体は書き出せません。","閉鎖性・内外の向き・自己交差を確認してください。"));
+                checked=check.Value();
             }
-            source.Add(shape);shapes.push_back(shape);}
+            source.Add(shape,checked?&*checked:nullptr);shapes.push_back(shape);}
         auto content=StepText(shapes,false);if(content.empty())return Failed<std::string>();
         stage="STEPの再読込検証";
         std::string reason;
@@ -360,6 +421,7 @@ Result<std::string> OutputStep(const std::vector<KernelShapeHandle>& handles) {
             "EXP-P003","STEPを再読込すると立体の形または閉鎖性が変わります。",
             "このSTEPは保存しません。元のKCDを保ち、形状を整理するかSTLを選んでください。 "+reason));
         }
+        CacheStep(key, content);
         return Result<std::string>::Success(std::move(content));
     }catch(const Standard_Failure& failure){return Result<std::string>::Failure(base::MakeError(
         "EXP-P003","STEPの形状を確認できなかったため、保存しませんでした。",stage+": "+failure.GetMessageString()));}

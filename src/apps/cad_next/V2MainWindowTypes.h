@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -53,12 +54,15 @@ struct V2PreparedExtrudeChoice {
 //! 下見を出した瞬間の入力の写し(オーナー指示 §9)。**下見と確定は同じ写しから作る。**
 //! 確定のときに選択を読み直すと、下見のあとに選択が変わった分だけ別の形が出来る。
 //! 選択が変わったら写しを作り直し、下見も出し直す(黙って読み直さない)。
+namespace kachakacha::v2::kernel { struct ExtrudeBuildResult; }
 struct V2ExtrudeSnapshot {
     kachakacha::v2::app::ExtrudePlan plan;
     std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
     std::vector<kachakacha::v2::geometry::Vector3> profileSeeds;
     //! 面を押しているか。面の縁は `faceProfileLoops_` が持つ。
     bool facePushPull = false;
+    std::shared_ptr<kachakacha::v2::kernel::ExtrudeBuildResult> nativePreview;
+    std::string nativePreviewKey;
 };
 
 //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

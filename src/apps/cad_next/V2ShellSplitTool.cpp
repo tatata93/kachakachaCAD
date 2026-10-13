@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 「シェル・分割」の道具。V2ShellSplitTool.h の頭の注記を見よ。
 
 #include "V2ShellSplitTool.h"
@@ -327,7 +328,8 @@ void V2ShellSplitTool::RefreshShellPreview(const kachakacha::v2::modeling::Kerne
         return;
     }
     outcome_.evaluated = true;
-    const auto made = kachakacha::v2::kernel::ShellSolid(shape, input_.faces, input_.thicknessMm,
+    const auto made = V2Calculation::Call(nullptr, "部品のシェルを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ShellSolid(values...); }, shape, input_.faces, input_.thicknessMm,
         tolerance);
     if (!made.HasValue()) {
         outcome_.refusalJa = RefusalOf(made);
@@ -350,7 +352,8 @@ void V2ShellSplitTool::RefreshSplitPreview(const kachakacha::v2::modeling::Kerne
 {
     outcome_.evaluated = true;
     const SplitPlane plane = CurrentSplitPlane();
-    const auto made = kachakacha::v2::kernel::SplitSolidByPlane(shape, plane.origin, plane.normal,
+    const auto made = V2Calculation::Call(nullptr, "部品を分割しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::SplitSolidByPlane(values...); }, shape, plane.origin, plane.normal,
         window_.session_->GetDocument().Snapshot().settings.tolerance);
     if (!made.HasValue()) {
         outcome_.refusalJa = RefusalOf(made);
@@ -523,7 +526,8 @@ bool V2ShellSplitTool::Rebuild(const kachakacha::v2::domain::Feature& feature, c
     const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
     std::optional<kachakacha::v2::modeling::KernelShapeHandle> handle;
     if (definition->method == 1) {
-        const auto made = kachakacha::v2::kernel::SplitSolidByPlane(source->second,
+        const auto made = V2Calculation::Call(nullptr, "部品を分割しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::SplitSolidByPlane(values...); }, source->second,
             definition->planeOrigin, definition->planeNormal, tolerance);
         if (!made.HasValue()) {
             window_.ReportDiagnostics(made.Diagnostics());
@@ -531,7 +535,8 @@ bool V2ShellSplitTool::Rebuild(const kachakacha::v2::domain::Feature& feature, c
         }
         handle = definition->side < 0 ? made.Value().negative : made.Value().positive;
     } else {
-        const auto made = kachakacha::v2::kernel::ShellSolid(source->second, definition->facePoints,
+        const auto made = V2Calculation::Call(nullptr, "部品のシェルを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ShellSolid(values...); }, source->second, definition->facePoints,
             definition->thickness.value, tolerance);
         if (!made.HasValue()) {
             window_.ReportDiagnostics(made.Diagnostics());

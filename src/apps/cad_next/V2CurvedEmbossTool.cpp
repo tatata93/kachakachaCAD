@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2CurvedEmbossTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -94,13 +95,15 @@ bool V2CurvedEmbossTool::Preview()
     options.tiltRad=tiltEnabled_->isChecked()?tilt_->value()*rad:0;
     const auto frame=window_.viewport_->WorkPlane();
     options.tiltReference=frame.uAxis*std::cos(heading_->value()*rad)+frame.vAxis*std::sin(heading_->value()*rad);
-    const auto result=kernel::BuildCurvedEmboss(supportShape_,boundary,options);
+    const auto result=V2Calculation::Call(nullptr, "曲面の押し出しを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildCurvedEmboss(values...); }, supportShape_,boundary,options);
     if(!result.HasValue()){status_->setText(QString::fromStdString(result.FirstSummaryJa()+result.FirstDiagnostic().detailsJa));return false;}
     built_=result.Value();
     if(operation_->currentIndex()==1){
         const auto source=window_.partShapes_.find(support_.ToString());
         if(source==window_.partShapes_.end()){status_->setText(QStringLiteral("足す場合は立体のフェイスを支持面に選んでください。"));return false;}
-        const auto united=kernel::BuildBoolean(kernel::BooleanOperation::Union,source->second,built_->handle,options.toleranceMm);
+        const auto united=V2Calculation::Call(nullptr, "部品の演算を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildBoolean(values...); }, kernel::BooleanOperation::Union,source->second,built_->handle,options.toleranceMm);
         if(!united.HasValue()){status_->setText(QString::fromStdString(united.FirstSummaryJa()));return false;}
         kernel::ReleaseShape(built_->handle);built_->handle=united.Value().handle;built_->volumeMm3=united.Value().volumeMm3;
     }

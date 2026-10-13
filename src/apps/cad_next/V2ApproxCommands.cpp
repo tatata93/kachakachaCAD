@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。
 //!
 //! これまでの近似は「選んでから押す」しかなく、押した瞬間に文書へ入っていた。
@@ -99,11 +100,12 @@ void V2MainWindow::EvaluateApproxCandidates()
             outcome.refusalJa = "元になる面が取れません";
             continue;
         }
-        const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
+        const auto evaluated = V2Calculation::Call(nullptr, "部材近似と展開を計算しています…", [](const auto&... values) { return kachakacha::v2::app::EvaluateFabrication(values...); }, definition, sources,
             FabricationMarkingsFor(definition), tolerance);
         if (!evaluated.HasValue()) {
             outcome.available = false;
             outcome.refusalJa = evaluated.FirstMessageJa();
+            if (evaluated.FirstDiagnostic().code == kachakacha::v2::app::kGeometryJobCancelled) return;
             continue;
         }
         outcome.available = true;
@@ -416,7 +418,7 @@ void V2MainWindow::ConfirmApprox()
             auto one = definition;
             one.parts = {part};
             const auto sources = FabricationSourcesFor(one.parts, one.splitSolidFaces);
-            const auto made = kachakacha::v2::app::EvaluateFabrication(one, sources,
+            const auto made = V2Calculation::Call(nullptr, "部材近似と展開を計算しています…", [](const auto&... values) { return kachakacha::v2::app::EvaluateFabrication(values...); }, one, sources,
                 FabricationMarkingsFor(one), tolerance);
             if (!made.HasValue()) {
                 ReportDiagnostics(made.Diagnostics());

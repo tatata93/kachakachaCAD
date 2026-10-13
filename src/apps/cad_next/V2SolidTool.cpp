@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 「立体を作る」の道具。V2SolidTool.h の頭の注記を見よ。
 
 #include "V2SolidTool.h"
@@ -366,7 +367,8 @@ SolidResult V2SolidTool::BuildShape(const CreateSolidDefinition& definition) con
         if (!analysis.HasValue()) {
             return SolidResult::Failure(analysis.Diagnostics());
         }
-        return kachakacha::v2::kernel::BuildRevolveSolid(request, analysis.Value(), tolerance);
+        return V2Calculation::Call(nullptr, "回転体を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildRevolveSolid(values...); }, request, analysis.Value(), tolerance);
     }
     case SolidMethod::Loft: {
         // 断面は 1 つずつ読む(まとめて読むと、重なった断面が 1 つの領域に畳まれる)。
@@ -384,7 +386,8 @@ SolidResult V2SolidTool::BuildShape(const CreateSolidDefinition& definition) con
         if (!analysis.HasValue()) {
             return SolidResult::Failure(analysis.Diagnostics());
         }
-        return kachakacha::v2::kernel::BuildLoftSolid(request, analysis.Value(), tolerance);
+        return V2Calculation::Call(nullptr, "ロフトを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildLoftSolid(values...); }, request, analysis.Value(), tolerance);
     }
     case SolidMethod::Sweep: {
         SweepSolidRequest request;
@@ -397,7 +400,8 @@ SolidResult V2SolidTool::BuildShape(const CreateSolidDefinition& definition) con
         if (!analysis.HasValue()) {
             return SolidResult::Failure(analysis.Diagnostics());
         }
-        return kachakacha::v2::kernel::BuildSweepSolid(request, analysis.Value(), tolerance);
+        return V2Calculation::Call(nullptr, "スイープを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildSweepSolid(values...); }, request, analysis.Value(), tolerance);
     }
     }
     return SolidResult::Failure(kachakacha::v2::base::MakeError(kSolidBadInput,
@@ -420,7 +424,8 @@ SolidResult V2SolidTool::Build(const CreateSolidDefinition& definition) const
     }
     const double joinMm =
         window_.session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto combined = kachakacha::v2::kernel::BuildBoolean(definition.booleanMode == 2
+    const auto combined = V2Calculation::Call(nullptr, "部品の演算を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildBoolean(values...); }, definition.booleanMode == 2
             ? kachakacha::v2::kernel::BooleanOperation::Difference
             : kachakacha::v2::kernel::BooleanOperation::Union,
         target->second, made.Value().handle, joinMm);

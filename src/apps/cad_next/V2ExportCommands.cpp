@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 書き出しのコマンド(WP-11)。棚を作り、中身を作り、ファイルへ置く。
 //!
 //! ここを V2MainWindow.cpp から分けたのは、
@@ -245,13 +246,15 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeSolidContent(
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     if (format == kachakacha::v2::app::ExportFormat::Step) {
-        const auto built = kachakacha::v2::kernel::BuildStepForSelection(shapes, tolerance);
+        const auto built = V2Calculation::Call(nullptr, "選択した部品のSTEPを生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildStepForSelection(values...); }, shapes, tolerance);
         if (!built.HasValue()) {
             return Out::Failure(built.Diagnostics());
         }
         return Out::Success(built.Value().content);
     }
-    const auto built = kachakacha::v2::kernel::BuildBinaryStlForSelection(shapes, tolerance);
+    const auto built = V2Calculation::Call(nullptr, "選択した部品のSTLを生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildBinaryStlForSelection(values...); }, shapes, tolerance);
     if (!built.HasValue()) {
         return Out::Failure(built.Diagnostics());
     }
@@ -306,7 +309,8 @@ void V2MainWindow::ValidateSelectedSolid()
             continue;
         }
         const QString name = QString::fromStdString(entity.displayName);
-        const auto checked = kachakacha::v2::kernel::CheckSolidForExport(found->second, tolerance);
+        const auto checked = V2Calculation::Call(nullptr, "部品の閉鎖性・体積・自己交差を検査しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::CheckSolidForExport(values...); }, found->second, tolerance);
         if (!checked.HasValue()) {
             ReportDiagnostics(checked.Diagnostics());
             problems << QStringLiteral("%1: 調べられません").arg(name);

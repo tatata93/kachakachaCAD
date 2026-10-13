@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include <QPointF>
 #include <QCheckBox>
 #include <QString>
@@ -89,14 +90,16 @@ bool V2MainWindow::RefreshContactPreview()
     const QString key=selectionKey+QString::number(wantWire);
     const auto tolerance=session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     if (!contactBase_.has_value() || key!=contactPreviewKey_) {
-        const auto built=kernel::BuildContact(a->second,b->second,wantWire,!wire&&!trim,!wire,tolerance);
+        const auto built=V2Calculation::Call(nullptr, "交差領域を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildContact(values...); }, a->second,b->second,wantWire,!wire&&!trim,!wire,tolerance);
         if (!built.HasValue()) { status.push_back(QString::fromStdString(built.FirstSummaryJa())); contactBase_.reset(); finish(false); return true; }
         contactBase_=built.Value(); contactPreviewKey_=key;
     }
     booleanDock_->SetContactRegions(selectionKey,RegionNames(*contactBase_,wire));
     const auto chosen=booleanDock_->ContactRegions();
     if (trim) {
-        const auto built=kernel::BuildLocalTrim(a->second,b->second,booleanDock_->ContactRemovals(),tolerance);
+        const auto built=V2Calculation::Call(nullptr, "選んだ交差領域を削っています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildLocalTrim(values...); }, a->second,b->second,booleanDock_->ContactRemovals(),tolerance);
         if (!built.HasValue()) { status.push_back(QString::fromStdString(built.FirstSummaryJa())); finish(false); return true; }
         contactBuilt_=built.Value(); contactBuilt_->wires=contactBase_->wires;
     } else contactBuilt_=*contactBase_;

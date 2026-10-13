@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 製作のコマンド(V2MainWindow の一部)。製作モデルと型紙。
 //!
 //! 思想。**立体は「作れる形」とは限らない。**
@@ -246,7 +247,7 @@ bool V2MainWindow::RebuildFabricationModel(const kachakacha::v2::domain::Feature
     const auto sources = FabricationSourcesFor(definition->parts, definition->splitSolidFaces);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(*definition, sources,
+    const auto evaluated = V2Calculation::Call(nullptr, "部材近似と展開を計算しています…", [](const auto&... values) { return kachakacha::v2::app::EvaluateFabrication(values...); }, *definition, sources,
         FabricationMarkingsFor(*definition), tolerance);
     if (!evaluated.HasValue()) {
         return false;
@@ -626,7 +627,7 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
     }
     // 先に作れるかを確かめる。定義を書き換えてから断ると、壊れた作り方が残る。
     const auto sources = FabricationSourcesFor(definition.parts, definition.splitSolidFaces);
-    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
+    const auto evaluated = V2Calculation::Call(nullptr, "部材近似と展開を計算しています…", [](const auto&... values) { return kachakacha::v2::app::EvaluateFabrication(values...); }, definition, sources,
         FabricationMarkingsFor(definition), tolerance.interactiveJoinMm);
     if (!evaluated.HasValue()) {
         ReportDiagnostics(evaluated.Diagnostics());

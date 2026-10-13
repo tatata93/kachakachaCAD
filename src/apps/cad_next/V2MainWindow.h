@@ -1275,6 +1275,10 @@ public:
     //! 棚の「曲げる部材」に書いた番号。0 起点。
     [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;
     bool HandleSurfaceExtrude(bool confirm);
+    bool PrepareSurfaceExtrudeSource(kachakacha::v2::app::ExtrudePlan& plan);
+    kachakacha::v2::base::EntityId CommitSurfaceExtrudeFace();
+    kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> SurfaceExtrudePreview(const kachakacha::v2::app::ExtrudeChoice& choice,
+        kachakacha::v2::modeling::KernelShapeHandle source, double start, double end);
     bool HandleTargetExtrude(bool confirm);
     kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> BuildToTarget(
         const kachakacha::v2::app::ExtrudeChoice& choice,

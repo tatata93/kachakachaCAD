@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 「辺の丸め・面取り」の道具。V2EdgeFinishTool.h の頭の注記を見よ。
 
 #include "V2EdgeFinishTool.h"
@@ -257,7 +258,8 @@ void V2EdgeFinishTool::RefreshPreview()
         return;
     }
     outcome_.evaluated = true;
-    const auto made = kachakacha::v2::kernel::FinishSolidEdges(shape->second,
+    const auto made = V2Calculation::Call(nullptr, "フィレット・面取りを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::FinishSolidEdges(values...); }, shape->second,
         KernelKind(input_.kind), input_.sizeMm, input_.edges, tolerance);
     if (!made.HasValue()) {
         outcome_.refusalJa = made.FirstSummaryJa();
@@ -368,7 +370,8 @@ bool V2EdgeFinishTool::Rebuild(const kachakacha::v2::domain::Feature& feature, c
     if (source == window_.partShapes_.end()) {
         return false;   // 元がまだ出来ていない。黙って作らない。
     }
-    const auto made = kachakacha::v2::kernel::FinishSolidEdges(source->second,
+    const auto made = V2Calculation::Call(nullptr, "フィレット・面取りを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::FinishSolidEdges(values...); }, source->second,
         KernelKind(definition->kind), definition->size.value, definition->edgeMidpoints,
         window_.session_->GetDocument().Snapshot().settings.tolerance);
     if (!made.HasValue()) {

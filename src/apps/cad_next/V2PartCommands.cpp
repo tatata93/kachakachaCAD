@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 形をつくるコマンド(V2MainWindow の一部)。押し出し・かご・足す引く・固定。
 //!
 //! 思想。**面が張れるかどうかを、面を張る前に判定する。**
@@ -524,7 +525,8 @@ void V2MainWindow::ConfirmExtrude()
     if (!booleanTarget.has_value()) {
         return;   // 理由はそちらで言っている。
     }
-    const auto built = kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(),
+    const auto built = V2Calculation::Call(nullptr, "押し出しを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrude(values...); }, request, analysis.Value(),
         tolerance, *booleanTarget);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
@@ -691,7 +693,8 @@ bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoi
             viewport_->WorkPlane(), targetPlane);
         const auto analysis = kachakacha::v2::modeling::AnalyzeExtrudeRequest(request, tolerance);
         const auto built = analysis.HasValue()
-            ? kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(), tolerance, *target)
+            ? V2Calculation::Call(nullptr, "押し出しを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrude(values...); }, request, analysis.Value(), tolerance, *target)
             : kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult>::Failure(
                   analysis.Diagnostics());
         if (!built.HasValue()) {
@@ -893,7 +896,8 @@ void V2MainWindow::RunWireCage()
         ReportDiagnostics(planned.Diagnostics());
         return;
     }
-    const auto built = kachakacha::v2::kernel::BuildWireCageParts(inputs, analysis.Value(),
+    const auto built = V2Calculation::Call(nullptr, "輪郭から立体を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildWireCageParts(values...); }, inputs, analysis.Value(),
         planned.Value(), tolerance);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
@@ -1103,7 +1107,8 @@ void V2MainWindow::RunThickenSurface(double thicknessOverrideMm)
             SetStatus(QStringLiteral("面に厚みを付ける: 選んだ面の形がまだありません。"));
             return;
         }
-        const auto built = kachakacha::v2::kernel::ThickenSurface(found->second,
+        const auto built = V2Calculation::Call(nullptr, "厚みを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ThickenSurface(values...); }, found->second,
             thickness, placement, tolerance);
         if (!built.HasValue()) {
             ReportDiagnostics(built.Diagnostics());
@@ -1163,7 +1168,8 @@ bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
         return false;
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto solid = kachakacha::v2::kernel::ThickenSurface(found->second,
+    const auto solid = V2Calculation::Call(nullptr, "厚みを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ThickenSurface(values...); }, found->second,
         plan.thicknessMm, plan.placement, tolerance);
     if (!solid.HasValue()) {
         ReportDiagnostics(solid.Diagnostics());
@@ -1283,7 +1289,8 @@ void V2MainWindow::RunThickenSurfaceToPlane()
                 ok = false;   // 面の形が無い(作り直せていない)。全部やめる。
                 break;
             }
-            const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(
+            const auto built = V2Calculation::Call(nullptr, "指定平面までの厚みを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ThickenSurfaceToPlane(values...); },
                 shape->second, frame->origin, frame->normal, tolerance);
             if (!built.HasValue()) {
                 ReportDiagnostics(built.Diagnostics());

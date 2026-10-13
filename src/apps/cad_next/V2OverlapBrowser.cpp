@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2OverlapBrowser.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -206,7 +207,8 @@ private:
         selectedSide_=side;r.removal=(mode_->currentIndex()==0 ? side:1-side)==0 ? 1:2;
         side_[0]->setChecked(side==0);side_[1]->setChecked(side==1);
         overlay_->result.clear();ready_=false;
-        const auto built=kernel::BuildLocalTrim(sources_[r.first].handle,sources_[r.second].handle,Masks(),tolerance_);
+        const auto built=V2Calculation::Call(nullptr, "選んだ交差領域を削っています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildLocalTrim(values...); }, sources_[r.first].handle,sources_[r.second].handle,Masks(),tolerance_);
         if(!built.HasValue())status_->setText(QString::fromStdString(built.FirstSummaryJa()));
         else {
             ready_=true;
@@ -252,7 +254,8 @@ private:
         });
     }
     void ScanPair(const OverlapSource& a,const OverlapSource& b) {
-        const auto built=kernel::BuildContact(a.handle,b.handle,false,false,true,tolerance_);
+        const auto built=V2Calculation::Call(nullptr, "交差領域を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildContact(values...); }, a.handle,b.handle,false,false,true,tolerance_);
         if(!built.HasValue()) {
             if(built.FirstSummaryJa().find("重なり体積がありません")!=std::string::npos) {
                 ScanTouch(a,b);return;
@@ -272,7 +275,8 @@ private:
         overlay_->update();
     }
     void ScanTouch(const OverlapSource& a,const OverlapSource& b) {
-        const auto contact=kernel::BuildContact(a.handle,b.handle,true,false,false,tolerance_);
+        const auto contact=V2Calculation::Call(nullptr, "交差領域を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildContact(values...); }, a.handle,b.handle,true,false,false,tolerance_);
         if(!contact.HasValue()) {
             if(contact.FirstSummaryJa().find("線になる接触・交差がありません")==std::string::npos) {
                 ++failures_;missing_+=QStringLiteral("\n%1 / %2: %3").arg(a.name,b.name,QString::fromStdString(contact.FirstSummaryJa()));

@@ -26,6 +26,8 @@
 #include "kachakacha/app/FacePushPull.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <QString>
 
@@ -121,6 +123,11 @@ bool V2MainWindow::CommitFaceProfileWires(
 //! 抱えていた縁を捨てる。取消・道具替え・確定のあとに呼ぶ。
 void V2MainWindow::ForgetFaceProfile()
 {
+    const auto preview = guideShapes_.find(faceProfileSolid_.ToString());
+    if (preview != guideShapes_.end() && partShapes_.contains(faceProfileSolid_.ToString())) {
+        kachakacha::v2::kernel::ReleaseShape(preview->second);
+        guideShapes_.erase(preview);
+    }
     faceProfileLoops_.clear();
     faceProfileSolid_ = kachakacha::v2::base::EntityId{};
 }

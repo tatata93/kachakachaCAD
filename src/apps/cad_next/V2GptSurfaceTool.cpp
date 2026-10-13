@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2NumericSpinBox.h"
 #include "V2GptSurfaceTool.h"
 #include "V2MainWindow.h"
@@ -316,7 +317,8 @@ void V2GptSurfaceTool::Preview()
         }
         status_->setText(QString::fromStdString(request.FirstSummaryJa() + "\n" + request.FirstDiagnostic().detailsJa)); return;
     }
-    const auto made = kernel::BuildGptSurface(request.Value(), document.Snapshot().settings.tolerance);
+    const auto made = V2Calculation::Call(nullptr, "面を生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildGptSurface(values...); }, request.Value(), document.Snapshot().settings.tolerance);
     if (!made.HasValue()) {
         status_->setText(QString::fromStdString(made.FirstSummaryJa() + "\n" + made.FirstDiagnostic().detailsJa)); return;
     }
@@ -401,7 +403,8 @@ bool V2GptSurfaceTool::Rebuild(const domain::Feature& feature, const base::Entit
     const auto& document = window_.session_->GetDocument();
     const auto request = app::ResolveGptSurface(document, window_.session_->Scene(), *definition);
     if (!request.HasValue()) { window_.ReportDiagnostics(request.Diagnostics()); return false; }
-    const auto made = kernel::BuildGptSurface(request.Value(), document.Snapshot().settings.tolerance);
+    const auto made = V2Calculation::Call(nullptr, "面を生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildGptSurface(values...); }, request.Value(), document.Snapshot().settings.tolerance);
     if (!made.HasValue()) { window_.ReportDiagnostics(made.Diagnostics()); return false; }
     Store(output, made.Value());
     return true;

@@ -17,6 +17,9 @@
 #include <BRepTools.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <TopoDS.hxx>
+#include <BRep_Tool.hxx>
 #include <gp_Pnt.hxx>
 #endif
 
@@ -496,6 +499,30 @@ KACHA_V2_TEST(kernel_export, internal_face_imprint_is_not_an_open_boundary)
     Require(check.HasValue()&&check.Value().Ok(),"Internal imprint does not open solid boundary");
     RequireNear(check.Value().volumeMm3,6282.177935961462,1e-7,"Internal curve does not change material volume");
     Require(BuildBinaryStl(handle,.01).HasValue(),"Internal imprint preserves closed STL output");
+}
+
+KACHA_V2_TEST(kernel_export, validated_cache_detects_native_mutation_and_selected_shape_changes)
+{
+    auto box=BRepPrimAPI_MakeBox(2,3,4).Shape();
+    const auto handle=kachakacha::v2::kernel::StoreShape(box);
+    const auto before=kachakacha::v2::kernel::CaptureOutputShape(handle);
+    const auto first=kachakacha::v2::kernel::OutputStep({handle});
+    const auto after=kachakacha::v2::kernel::CaptureOutputShape(handle);
+    Require(before.HasValue()&&after.HasValue()&&before.Value()==after.Value(),"STEP preserves native input bytes");
+    const auto repeated=kachakacha::v2::kernel::OutputStep({handle});
+    Require(first.HasValue(),"first STEP: "+first.FirstSummaryJa());
+    Require(repeated.HasValue(),"repeated STEP: "+repeated.FirstSummaryJa());
+    Require(first.Value()==repeated.Value(),"same validated native shape is reusable");
+    const auto other=kachakacha::v2::kernel::StoreShape(BRepPrimAPI_MakeBox(5,3,4).Shape());
+    const auto changed=kachakacha::v2::kernel::OutputStep({other});
+    Require(changed.HasValue()&&changed.Value()!=first.Value(),"different geometry never reuses the old STEP");
+    TopExp_Explorer vertices(box,TopAbs_VERTEX); Require(vertices.More(),"box has a vertex");
+    const auto vertex=TopoDS::Vertex(vertices.Current());
+    BRep_Builder builder;builder.UpdateVertex(vertex,gp_Pnt(100,100,100),1e-6);
+    const auto check=CheckSolidForExport(handle,1e-6);
+    Require(!check.HasValue()||!check.Value().Ok(),"mutating a shared native shape invalidates the validation cache");
+    Require(!kachakacha::v2::kernel::OutputStep({handle}).HasValue(),"a cached good STEP never hides new invalid geometry");
+    kachakacha::v2::kernel::ReleaseShape(handle);kachakacha::v2::kernel::ReleaseShape(other);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

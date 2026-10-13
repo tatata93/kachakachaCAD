@@ -1130,6 +1130,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GroupCommands.cpp
         src/apps/cad_next/V2FacePushPull.cpp
         src/apps/cad_next/V2SelfTestExtrudePromise.cpp
+        src/apps/cad_next/V2SelfTestFaceExtrude.cpp
         src/apps/cad_next/V2SelfTestExtrudeGraph.cpp
         src/apps/cad_next/V2SelfTestApproxFlow.cpp
         src/apps/cad_next/V2SelfTestFacing.cpp
@@ -1138,6 +1139,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExtrudeHandle.cpp
         src/apps/cad_next/V2ExtrudeInteractive.cpp
         src/apps/cad_next/V2SurfaceExtrude.cpp
+        src/apps/cad_next/V2SurfaceExtrudeSource.cpp
         src/apps/cad_next/V2ExtrudeReferences.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDock.cpp
@@ -1188,6 +1190,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ThickenCommands.cpp
         src/apps/cad_next/V2SolidOutputPreview.cpp
         src/apps/cad_next/V2GeometryJob.cpp
+        src/apps/cad_next/V2Calculation.cpp
         src/apps/cad_next/V2PreparedDocument.cpp
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp

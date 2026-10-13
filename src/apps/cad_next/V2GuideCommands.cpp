@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 形状ガイドのコマンド(V2MainWindow の一部)。
 //!
 //! 形状ガイドは「面をどう作るか」を役割で言い表したものである。
@@ -241,7 +242,8 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
             }
         }
     }
-    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
+    const auto built = V2Calculation::Call(nullptr, "面を生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildGuideSurface(values...); }, request.Value(),
         analysis.Value(), tolerance, source);
     if (!built.HasValue()) {
         if (report) {

@@ -24,6 +24,7 @@ std::vector<SelfTestCase> InstructionArrowCases();
 std::vector<SelfTestCase> InstructionSheetCases();
 std::vector<SelfTestCase> CurvedEmbossCases();
 std::vector<SelfTestCase> DocumentOpenCases();
+std::vector<SelfTestCase> FaceExtrudeCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -98,6 +99,7 @@ namespace {
     const std::vector<SelfTestCase> humanPathApprox = HumanPathApproxCases();
     cases.insert(cases.end(), humanPathApprox.begin(), humanPathApprox.end());
     const auto output=OutputCases();cases.insert(cases.end(),output.begin(),output.end());
+    const auto faceExtrude=FaceExtrudeCases();cases.insert(cases.end(),faceExtrude.begin(),faceExtrude.end());
     const std::vector<SelfTestCase> humanPathBoolean = HumanPathBooleanCases();
     cases.insert(cases.end(), humanPathBoolean.begin(), humanPathBoolean.end());
     const std::vector<SelfTestCase> humanPathCorner = HumanPathCornerCases();

@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -103,7 +104,8 @@ void V2LoopFacesTool::BuildSurfacePreview()
                 const auto analysis=modeling::AnalyzeGuideSurfaceRequest(filled,ToleranceNow());
                 error=analysis.FirstSummaryJa();
                 if (analysis.HasValue()) {
-                    const auto built=kernel::BuildGuideSurface(filled,analysis.Value(),ToleranceNow());
+                    const auto built=V2Calculation::Call(nullptr, "面を生成しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildGuideSurface(values...); }, filled,analysis.Value(),ToleranceNow());
                     error=built.FirstSummaryJa();
                     if (built.HasValue()) {
                         temporary.handles.push_back(built.Value().handle);

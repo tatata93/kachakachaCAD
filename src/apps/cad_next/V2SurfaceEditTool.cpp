@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 //! 「面の編集」の道具。V2SurfaceEditTool.h の頭の注記を見よ。
 
 #include "V2SurfaceEditTool.h"
@@ -319,10 +320,12 @@ void V2SurfaceEditTool::BuildSurfaces()
             definition.tension = input_.tension;
         }
         const auto made = match
-            ? kachakacha::v2::kernel::MatchSurfaceEdge(ShapeOf(window_.guideShapes_, a.surface),
+            ? V2Calculation::Call(nullptr, "面の境界を合わせています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::MatchSurfaceEdge(values...); }, ShapeOf(window_.guideShapes_, a.surface),
                   a.edgeIndex, ShapeOf(window_.guideShapes_, b.surface), b.edgeIndex,
                   input_.continuityA, tolerance)
-            : kachakacha::v2::kernel::BridgeSurfaceEdges(ShapeOf(window_.guideShapes_, a.surface),
+            : V2Calculation::Call(nullptr, "面の間をつないでいます…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BridgeSurfaceEdges(values...); }, ShapeOf(window_.guideShapes_, a.surface),
                   a.edgeIndex, input_.continuityA, ShapeOf(window_.guideShapes_, b.surface),
                   b.edgeIndex, input_.continuityB, input_.tension, tolerance);
         (void)accept(made, definition, {a.surface, b.surface},
@@ -342,8 +345,10 @@ void V2SurfaceEditTool::BuildSurfaces()
             one.planeNormal = plane.normal;
             const auto shape = ShapeOf(window_.guideShapes_, id);
             const auto made = refit
-                ? kachakacha::v2::kernel::RefitSurface(shape, input_.toleranceMm, tolerance)
-                : kachakacha::v2::kernel::MirrorSurface(shape, plane.point, plane.normal, tolerance);
+                ? V2Calculation::Call(nullptr, "曲面を整えています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::RefitSurface(values...); }, shape, input_.toleranceMm, tolerance)
+                : V2Calculation::Call(nullptr, "面をミラーしています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::MirrorSurface(values...); }, shape, plane.point, plane.normal, tolerance);
             // 1 枚でも作れなければ、全部作らない(半分だけ作れたことにしない)。
             if (!accept(made, one, {id}, NameOf(id) + (refit ? "(整えた)" : "(対称)"),
                     NameOf(id) + ": ")) {
@@ -365,7 +370,8 @@ void V2SurfaceEditTool::BuildWires()
     const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
     if (input_.operation == SurfaceEditOperation::IsoCurve) {
         for (const EntityId& id : input_.surfaces) {
-            const auto made = kachakacha::v2::kernel::ExtractIsoCurves(
+            const auto made = V2Calculation::Call(nullptr, "面のU/V線を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ExtractIsoCurves(values...); },
                 ShapeOf(window_.guideShapes_, id), input_.isoDirection, input_.isoCount, tolerance);
             if (!made.HasValue()) {
                 outcome_.refusalJa = NameOf(id) + ": " + made.FirstSummaryJa();
@@ -383,7 +389,8 @@ void V2SurfaceEditTool::BuildWires()
         one.entityIds.push_back(id);
         inputs.push_back(kachakacha::v2::app::SelectedCurves(one, window_.session_->Scene()));
     }
-    const auto made = kachakacha::v2::kernel::ProjectWiresOntoSurface(
+    const auto made = V2Calculation::Call(nullptr, "ワイヤーを曲面に投影しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ProjectWiresOntoSurface(values...); },
         ShapeOf(window_.guideShapes_, input_.surfaces.front()), inputs,
         window_.viewport_->WorkPlane().normal * -1.0, tolerance);
     if (!made.HasValue()) {
@@ -619,18 +626,22 @@ bool V2SurfaceEditTool::Rebuild(const kachakacha::v2::domain::Feature& feature,
             kachakacha::v2::base::MakeError("KER-D001", "知らない面の編集です。", {}));
     switch (static_cast<SurfaceEditOperation>(definition->operation)) {
     case SurfaceEditOperation::Match:
-        made = kachakacha::v2::kernel::MatchSurfaceEdge(first, edge(0), second, edge(1),
+        made = V2Calculation::Call(nullptr, "面の境界を合わせています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::MatchSurfaceEdge(values...); }, first, edge(0), second, edge(1),
             continuity(0), tolerance);
         break;
     case SurfaceEditOperation::Bridge:
-        made = kachakacha::v2::kernel::BridgeSurfaceEdges(first, edge(0), continuity(0), second,
+        made = V2Calculation::Call(nullptr, "面の間をつないでいます…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BridgeSurfaceEdges(values...); }, first, edge(0), continuity(0), second,
             edge(1), continuity(1), definition->tension, tolerance);
         break;
     case SurfaceEditOperation::Refit:
-        made = kachakacha::v2::kernel::RefitSurface(first, definition->toleranceMm, tolerance);
+        made = V2Calculation::Call(nullptr, "曲面を整えています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::RefitSurface(values...); }, first, definition->toleranceMm, tolerance);
         break;
     case SurfaceEditOperation::Mirror:
-        made = kachakacha::v2::kernel::MirrorSurface(first, definition->planePoint,
+        made = V2Calculation::Call(nullptr, "面をミラーしています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::MirrorSurface(values...); }, first, definition->planePoint,
             definition->planeNormal, tolerance);
         break;
     case SurfaceEditOperation::IsoCurve:
@@ -670,7 +681,8 @@ bool V2SurfaceEditTool::ProjectSelectionExactly(const EntityId& surfaceId)
         return false;
     }
     const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
-    const auto made = kachakacha::v2::kernel::ProjectWiresOntoSurface(shape, groups,
+    const auto made = V2Calculation::Call(nullptr, "ワイヤーを曲面に投影しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::ProjectWiresOntoSurface(values...); }, shape, groups,
         window_.viewport_->WorkPlane().normal, tolerance);
     if (!made.HasValue()) {
         return false;   // 窓が標本から折れ線で落とす道へ戻す。

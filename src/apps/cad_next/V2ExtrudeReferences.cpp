@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
 #include "V2Viewport.h"
@@ -100,7 +101,8 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
             if (found != guideShapes_.end()) target = found->second;
         }
     }
-    return kernel::BuildExtrudeToFace(request, source, target,
+    return V2Calculation::Call(nullptr, "選んだ終端までの押し出しを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrudeToFace(values...); }, request, source, target,
         session_->GetDocument().Snapshot().settings.tolerance);
 }
 
@@ -144,7 +146,8 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         }
         const auto operation = choice.booleanMode == modeling::ExtrudeBooleanMode::AddToPart
             ? kernel::BooleanOperation::Union : kernel::BooleanOperation::Difference;
-        const auto combined = kernel::BuildBoolean(operation, target->second, built.Value().parts[0].handle,
+        const auto combined = V2Calculation::Call(nullptr, "部品の演算を計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildBoolean(values...); }, operation, target->second, built.Value().parts[0].handle,
             session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
         if (!combined.HasValue()) { refuse(QString::fromStdString(combined.FirstSummaryJa())); return true; }
         auto updated = built.Value();

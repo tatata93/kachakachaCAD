@@ -15,6 +15,9 @@
 #include <sstream>
 #include <iomanip>
 #include <BRepAdaptor_Curve2d.hxx>
+#include <Geom2d_BSplineCurve.hxx>
+#include <Geom2d_BezierCurve.hxx>
+#include <gp_Pnt2d.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <TopoDS_Face.hxx>
@@ -84,19 +87,40 @@ Integral Integrate(BRepAdaptor_Surface& surface,const gp_Pnt& origin,double u0,d
     }
     return sum;
 }
+bool RectangularEdge(const BRepAdaptor_Curve2d& curve,double u0,double u1,double v0,double v1) {
+    const double tu=std::max(1e-12,(u1-u0)*1e-10),tv=std::max(1e-12,(v1-v0)*1e-10);
+    const auto first=curve.Value(curve.FirstParameter()),last=curve.Value(curve.LastParameter());
+    const bool vertical=std::abs(first.X()-last.X())<=tu&&
+        (std::abs(first.X()-u0)<=tu||std::abs(first.X()-u1)<=tu);
+    const bool horizontal=std::abs(first.Y()-last.Y())<=tv&&
+        (std::abs(first.Y()-v0)<=tv||std::abs(first.Y()-v1)<=tv);
+    if(!vertical&&!horizontal)return false;
+    if(curve.GetType()==GeomAbs_Line)return true;
+    // STEP may encode a straight UV trim as a rational spline. Prove that its
+    // whole control hull lies on a rectangle edge; endpoint sampling is not enough.
+    const auto contained=[&](const auto& spline) {
+        for(int i=1;i<=spline->NbPoles();++i) {
+            if(!(spline->Weight(i)>0))return false;
+            const auto p=spline->Pole(i);
+            if(vertical&&(std::abs(p.X()-first.X())>tu||p.Y()<v0-tv||p.Y()>v1+tv))return false;
+            if(horizontal&&(std::abs(p.Y()-first.Y())>tv||p.X()<u0-tu||p.X()>u1+tu))return false;
+        }
+        return true;
+    };
+    if(curve.GetType()==GeomAbs_BSplineCurve) {
+        return contained(curve.BSpline());
+    }
+    if(curve.GetType()==GeomAbs_BezierCurve) {
+        return contained(curve.Bezier());
+    }
+    return false;
+}
 bool Rectangle(const TopoDS_Face& face,double u0,double u1,double v0,double v1) {
     int wires=0;for(TopExp_Explorer e(face,TopAbs_WIRE);e.More();e.Next())++wires;
     if(wires!=1)return false;
     for(TopExp_Explorer e(face,TopAbs_EDGE);e.More();e.Next()) {
         const auto edge=TopoDS::Edge(e.Current());if(BRep_Tool::Degenerated(edge))continue;
-        BRepAdaptor_Curve2d c(edge,face);if(c.GetType()!=GeomAbs_Line)return false;
-        const auto first=c.Value(c.FirstParameter()),last=c.Value(c.LastParameter());
-        const double tu=std::max(1e-12,(u1-u0)*1e-10),tv=std::max(1e-12,(v1-v0)*1e-10);
-        const bool vertical=std::abs(first.X()-last.X())<=tu&&
-            (std::abs(first.X()-u0)<=tu||std::abs(first.X()-u1)<=tu);
-        const bool horizontal=std::abs(first.Y()-last.Y())<=tv&&
-            (std::abs(first.Y()-v0)<=tv||std::abs(first.Y()-v1)<=tv);
-        if(!vertical&&!horizontal)return false;
+        if(!RectangularEdge(BRepAdaptor_Curve2d(edge,face),u0,u1,v0,v1))return false;
     }
     return true;
 }

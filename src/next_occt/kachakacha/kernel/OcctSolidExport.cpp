@@ -6,6 +6,10 @@
 #include <type_traits>
 #include <cmath>
 #include <string>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <sstream>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
@@ -238,6 +242,28 @@ bool SelfIntersectionFree(const TopoDS_Shape& original,double toleranceMm)
 }
 } // namespace
 
+namespace {
+struct CheckedShape { std::string bytes; double tolerance; SolidExportCheck check; };
+std::deque<CheckedShape>& CheckedShapes() { static std::deque<CheckedShape> entries; return entries; }
+std::mutex& CheckedShapesMutex() { static std::mutex mutex; return mutex; }
+std::optional<SolidExportCheck> CachedCheck(const std::string& bytes, double tolerance) {
+    std::lock_guard<std::mutex> lock(CheckedShapesMutex());
+    for (const auto& entry : CheckedShapes())
+        if (entry.tolerance == tolerance && entry.bytes == bytes) return entry.check;
+    return std::nullopt;
+}
+void RememberCheck(std::string bytes, double tolerance, const SolidExportCheck& check) {
+    constexpr std::size_t limit = 16 * 1024 * 1024;
+    if (!check.Ok() || bytes.empty() || bytes.size() > limit) return;
+    std::lock_guard<std::mutex> lock(CheckedShapesMutex());
+    auto& entries = CheckedShapes(); std::size_t total = bytes.size();
+    for (const auto& entry : entries) total += entry.bytes.size();
+    while (!entries.empty() && (entries.size() >= 8 || total > limit)) {
+        total -= entries.front().bytes.size(); entries.pop_front();
+    }
+    entries.push_back({std::move(bytes), tolerance, check});
+}
+}
 Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double toleranceMm)
 {
     TopoDS_Shape shape;
@@ -246,6 +272,15 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
             "その番号の形は表にありません。", {}));
     }
     return Guarded([&]() -> Result<SolidExportCheck> {
+        // Byte equality includes geometry, topology, orientation and location;
+        // a reused handle or changed tolerance can never reuse a different check.
+        std::ostringstream encoded; BRepTools::Write(shape, encoded);
+        const std::string bytes = encoded.str();
+        if (const auto cached = CachedCheck(bytes, toleranceMm))
+            return Result<SolidExportCheck>::Success(*cached);
+        // Native checkers can adjust edge flags/tolerances. Work on a deep copy
+        // so a read-only export never changes the editable input or its cache key.
+        BRepBuilderAPI_Copy copy(shape, true, false); shape = copy.Shape();
         SolidExportCheck check;
 
         // 1. 閉じているか。開いた殻は中身の無い形なので、部品として出さない。
@@ -284,6 +319,7 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
                 && SelfIntersectionFree(e.Current(),toleranceMm);
         }
 
+        RememberCheck(bytes, toleranceMm, check);
         return Result<SolidExportCheck>::Success(check);
     }, "書き出し前の検査");
 }

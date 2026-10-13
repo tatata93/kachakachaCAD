@@ -1,3 +1,4 @@
+#include "V2Calculation.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
 #include "V2Viewport.h"
@@ -40,8 +41,8 @@ void ShowBuilt(V2Viewport& viewport, const kachakacha::v2::kernel::ExtrudeBuildR
 
 bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
 {
-    const auto plan = extrudeSnapshot_.has_value() ? extrudeSnapshot_->plan : PlanExtrudeFromSelection();
-    if (plan.kind != kachakacha::v2::app::ExtrudeInputKind::FaceOnly || plan.profiles.size() != 1) return false;
+    auto plan = extrudeSnapshot_.has_value() ? extrudeSnapshot_->plan : PlanExtrudeFromSelection();
+    if (!PrepareSurfaceExtrudeSource(plan)) return false;
     const auto found = guideShapes_.find(plan.profiles.front().ToString());
     if (found == guideShapes_.end()) return false;
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
@@ -94,10 +95,8 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     choice.reversed = false;
     choice.targetEntityId = extrudeDock_->TargetEntityId();
     choice.targetParameter = extrudeDock_->TargetParameter();
-    const auto built = extrudeDock_->ExtentMode() == ExtrudeExtentMode::ToTarget
-        ? BuildToTarget(choice, {}, found->second)
-        : kachakacha::v2::kernel::BuildSurfaceExtrude(found->second,
-              handle.direction, offsets.first, offsets.second, tolerance);
+    choice.extent = extrudeDock_->ExtentMode();
+    const auto built = SurfaceExtrudePreview(choice, found->second, offsets.first, offsets.second);
     if (!built.HasValue()) {
         viewport_->ShowExtrudeHandle(handle, {});
         viewport_->SetExtrudePreviewFaces({});
@@ -109,6 +108,11 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         .arg(built.Value().totalVolumeMm3, 0, 'f', 3)}, true);
     if (!confirm) return true;
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), "面の押し出し");
+    if (!faceProfileSolid_.IsNil()) {
+        const auto face = CommitSurfaceExtrudeFace();
+        if (face.IsNil()) return true;
+        plan.profiles = {face};
+    }
     for (const auto& part : built.Value().parts) {
         ExtrudeDefinition definition;
         definition.profiles = plan.profiles;
@@ -127,6 +131,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
                 part.handle, {}, "面の押し出し", inputs).IsNil()) return true;
     }
     if (!transaction.Commit()) return true;
+    extrudeSnapshot_->nativePreview->parts.clear(); // Committed parts now own these handles.
     EndExtrudePreview();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("面を押し出して立体を作りました。"));
@@ -146,7 +151,8 @@ bool V2MainWindow::RebuildSurfaceExtrude(const ExtrudeDefinition& definition,
     choice.targetEntityId = definition.extentTarget;
     choice.targetParameter = definition.targetParameter;
     const auto result = choice.extent == ExtrudeExtentMode::ToTarget ? BuildToTarget(choice, {}, found->second)
-        : kachakacha::v2::kernel::BuildSurfaceExtrude(found->second,
+        : V2Calculation::Call(nullptr, "面の押し出しを計算しています…",
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildSurfaceExtrude(values...); }, found->second,
               definition.direction, offsets.first, offsets.second,
               session_->GetDocument().Snapshot().settings.tolerance);
     if (!result.HasValue() || ordinal >= result.Value().parts.size()) return false;

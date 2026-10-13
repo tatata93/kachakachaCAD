@@ -22,6 +22,12 @@ template<class T> void Discard(const T& value) {
     }
     if constexpr (requires { value.parts; }) for (const auto& part : value.parts) Discard(part);
     if constexpr (requires { value.pieces; }) for (const auto& piece : value.pieces) Discard(piece);
+    if constexpr (requires { value.positive.Valid(); }) {
+        if (value.positive.Valid()) kachakacha::v2::kernel::ReleaseShape(value.positive);
+    }
+    if constexpr (requires { value.negative.Valid(); }) {
+        if (value.negative.Valid()) kachakacha::v2::kernel::ReleaseShape(value.negative);
+    }
 }
 
 // Arguments are copied on the GUI thread, before any native calculation starts.

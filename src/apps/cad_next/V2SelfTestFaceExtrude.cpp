@@ -8,6 +8,7 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctShellSplit.h"
 #include <QApplication>
 #include <QDialog>
 #include <QObject>
@@ -133,10 +134,33 @@ bool CaseProgressCancellation(V2MainWindow& window) {
         && Explain("取消で生成形状を残さない", kernel::CachedShapeCount() == count - 1)
         && Explain("計算の取消では文書を変更しない", revision == window.Session().GetDocument().Revision());
 }
+bool CaseSplitCancellation(V2MainWindow& window) {
+    const auto source = CurvedSource(); if (!source.HasValue()) return false;
+    const auto solid = kernel::BuildSurfaceExtrude(source.Value().handle, {1, 1, 0}, 0, 1, {});
+    kernel::ReleaseShape(source.Value().handle);
+    if (!solid.HasValue() || solid.Value().parts.size() != 1) return false;
+    const auto count = kernel::CachedShapeCount(); bool seen = false;
+    QTimer timer; timer.setInterval(10);
+    QObject::connect(&timer, &QTimer::timeout, &window, [&] {
+        auto* dialog = window.findChild<QDialog*>("calculationDialog");
+        if (dialog && dialog->isVisible()) {
+            seen = true; if (auto* button = dialog->findChild<QPushButton*>("calculationCancel")) button->click();
+        }
+    }); timer.start();
+    const auto result = V2Calculation::Call(&window, "部品を分割しています…", [](auto handle) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(350));
+        return kernel::SplitSolidByPlane(handle, {0, 0, 10}, {0, 0, 1}, {});
+    }, solid.Value().parts[0].handle);
+    timer.stop();
+    const bool clean = kernel::CachedShapeCount() == count;
+    kernel::ReleaseShape(solid.Value().parts[0].handle);
+    return Explain("分割の取消で両側の立体を解放", seen && !result.HasValue() && clean);
+}
 }
 std::vector<SelfTestCase> FaceExtrudeCases() {
     return {{"HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存", CaseNativeFace},
         {"HP-EX-LINE 曲面フェイスから線まで・保存再計算", CaseNativeFaceToLine},
-        {"HP-CALC-01 計算バー・GUI応答・取消・形状の解放", CaseProgressCancellation}};
+        {"HP-CALC-01 計算バー・GUI応答・取消・形状の解放", CaseProgressCancellation},
+        {"HP-CALC-02 分割取消で両側の内部形状を解放", CaseSplitCancellation}};
 }
 }

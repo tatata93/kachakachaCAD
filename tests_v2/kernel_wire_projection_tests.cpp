@@ -115,6 +115,18 @@ KACHA_V2_TEST(projection, ObliqueProjectionKeepsNearestFaceAndSourceParameter) {
     OnSurface(r.Value(),1e-6,[](auto p){return std::abs(p.z-10);});
     Require(geometry::Distance(r.Value().wires[0].front().StartPoint(),{10,0,10})<.001,"ray origin source start");
 }
+KACHA_V2_TEST(projection, PartialOcclusionUsesNearFaceOnlyInOverlappingInterval) {
+    Owned first(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,10),gp_Dir(0,0,1)),5,10,-5,5).Face());auto second=Plane(20);
+    const auto r=kernel::ProjectNativeWires({first.h,second.h},{{{Line({0,0,0},{10,0,0})},{0,0,1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==2,"two depth intervals, no spurious connecting edge");
+    for(const auto& run:r.Value().wires)for(const auto& c:run)for(int i=1;i<64;++i){const auto p=c.Evaluate(i/64.0);Require(std::abs(p.z-(p.x<5?20:10))<.001,"nearest in partial overlap");}
+}
+KACHA_V2_TEST(projection, IntersectingTargetsChangeNearestSide) {
+    auto flat=Plane(10);Owned tilted(BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(gp_Pnt(5,0,10),gp_Dir(-1,0,1),gp_Dir(1,0,1))),-20,20,-5,5).Face());
+    const auto r=kernel::ProjectNativeWires({flat.h,tilted.h},{{{Line({0,0,0},{10,0,0})},{0,0,1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());
+    for(const auto& run:r.Value().wires)for(const auto& c:run)for(int i=0;i<=64;++i){const auto p=c.Evaluate(i/64.0);Require(std::abs(p.z-std::min(10.0,p.x+5))<.001,"first surface changes at native crossing");}
+}
 KACHA_V2_TEST(projection, WrapCylinderPreservesLengthAndClosure) {
     Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),-1,1,-10,10).Face());auto o=Options(kernel::WireProjectionMode::Wrap);o.targetPoint={10,0,0};
     const auto r=kernel::ProjectNativeWires({cylinder.h},{{ClosedSquare(0),{}}},o);

@@ -7,6 +7,7 @@
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include "kachakacha/kernel/OcctWireWrap.h"
+#include "kachakacha/kernel/OcctProjectionVisibility.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <BRep_Builder.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -139,7 +140,9 @@ void ProjectOne(WireProjectionResult& result,const std::vector<TopoDS_Face>& fac
                 for(;projection.More();projection.Next())for(BRepTools_WireExplorer e(projection.Current());e.More();e.Next())AddEdge(pieces,e.Current(),one,options);
             }
         }
-        if(options.mode==WireProjectionMode::Closest||options.hits!=WireProjectionHits::All)KeepNearest(pieces,one,options);
+        if(options.mode==WireProjectionMode::Direction&&options.hits!=WireProjectionHits::All&&!segment.IsClosed(options.toleranceMm))
+            detail::SelectVisibleProjection(pieces,[&](Vector3 point){return SourceMatch(point,segment,one,options);},options);
+        else if(options.mode==WireProjectionMode::Closest||options.hits!=WireProjectionHits::All)KeepNearest(pieces,one,options);
         result.maxCurveDeviationMm=std::max(result.maxCurveDeviationMm,pieces.maxCurveDeviationMm);
         result.wires.insert(result.wires.end(),pieces.wires.begin(),pieces.wires.end());
     }

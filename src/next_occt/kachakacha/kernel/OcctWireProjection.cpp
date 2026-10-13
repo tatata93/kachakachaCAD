@@ -11,6 +11,7 @@
 #include "kachakacha/geometry/WireEdit.h"
 #include <BRep_Builder.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepOffsetAPI_NormalProjection.hxx>
 #include <BRepProj_Projection.hxx>
 #include <BRepTools_WireExplorer.hxx>
@@ -42,7 +43,10 @@ std::vector<TopoDS_Face> NativeFaces(const std::vector<modeling::KernelShapeHand
         TopoDS_Shape shape;Require(LookupShape(handle,shape),"投影先の形状がありません。選び直してください。");
         for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
             const auto f=TopoDS::Face(e.Current());
-            if(std::none_of(faces.begin(),faces.end(),[&](const auto& existing){return existing.IsSame(f);}))faces.push_back(f);
+            // OCCT projection may update flags, p-curves or tolerances on a target.
+            // A deep geometric copy protects the caller's shared native part/guide.
+            BRepBuilderAPI_Copy copy(f,true,false);Require(copy.IsDone(),"投影先の面を複製できません。");
+            faces.push_back(TopoDS::Face(copy.Shape()));
         }
     }
     Require(!faces.empty(),"投影先の面を選んでください。");return faces;

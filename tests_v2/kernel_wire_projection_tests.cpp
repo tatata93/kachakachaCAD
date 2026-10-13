@@ -187,5 +187,18 @@ KACHA_V2_TEST(projection, RationalDegreeSevenSurface) {
     OnSurface(r.Value(),.003,[&](auto p){GeomAPI_ProjectPointOnSurf projection(gp_Pnt(p.x,p.y,p.z),surface);return projection.NbPoints()>0?projection.LowerDistance():1e100;});
     Require(kernel::CaptureOutputShape(face.h).Value()==original,"rational input BRep unchanged");
 }
+KACHA_V2_TEST(projection, C0RationalFaceUnchangedInBothProjectionModes) {
+    TColgp_Array2OfPnt points(1,15,1,8);TColStd_Array2OfReal weights(1,15,1,8);
+    for(int i=1;i<=15;++i)for(int j=1;j<=8;++j){const double x=(i-8)*1.5,y=(j-4.5)*3;points.SetValue(i,j,gp_Pnt(x,y,2*std::exp(-(x*x+y*y)/60)));weights.SetValue(i,j,1+.01*(i+j));}
+    TColStd_Array1OfReal uk(1,3),vk(1,2);uk.SetValue(1,0);uk.SetValue(2,.5);uk.SetValue(3,1);vk.SetValue(1,0);vk.SetValue(2,1);
+    TColStd_Array1OfInteger um(1,3),vm(1,2);um.SetValue(1,8);um.SetValue(2,7);um.SetValue(3,8);vm.SetValue(1,8);vm.SetValue(2,8);
+    occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(points,weights,uk,vk,um,vm,7,7);
+    Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());const auto original=kernel::CaptureOutputShape(face.h).Value();
+    for(const auto mode:{kernel::WireProjectionMode::Direction,kernel::WireProjectionMode::Closest}) {
+        const auto r=kernel::ProjectNativeWires({face.h},{{ClosedSquare(10),{0,0,-1}}},Options(mode));
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1&&r.Value().openEnds==0,"closed C0 rational projection");
+        Require(kernel::CaptureOutputShape(face.h).Value()==original,"native caller bytes protected in every mode");
+    }
+}
 #endif
 KACHA_V2_TEST_MAIN("kernel_wire_projection_tests")

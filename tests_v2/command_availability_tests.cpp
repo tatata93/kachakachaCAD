@@ -395,6 +395,9 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneDerivedEntity,
         // 面ちょうど1つと平面1つ ── 面を平面まで立体にに付いていたが、面は何枚でもにしたので外した。
         SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
+        // 投影は未選択で専用ツールを開始する。旧APIの事前選択条件は互換として残す。
+        SelectionPredicate::WiresAndOneGuideSurface,
+        SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces,
     };
     std::string unused;
     for (const SelectionPredicate predicate : all) {
@@ -467,6 +470,18 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
         joined += id + " ";
     }
     Require(unexpected.empty(), "判断のあるコマンドだけが残る: " + joined);
+}
+KACHA_V2_TEST(availability, projection_tools_start_without_preselection)
+{
+    Bench bench;
+    for(const std::string id:{"wire.project_surface","wire.wrap_project"}) {
+        bool found=false;
+        for(const auto& command:CommandCatalog())if(command.id==id) {
+            found=true;Require(command.predicate==SelectionPredicate::Always,"projection owns input slots, launch remains enabled");
+            Require(SelectionSatisfies(command.predicate,bench.Facts()),"tool starts without selecting an object first");
+        }
+        Require(found,"projection command is registered");
+    }
 }
 
 KACHA_V2_TEST(availability, freeze_accepts_multiple_selected_models)

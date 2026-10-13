@@ -119,6 +119,16 @@ bool V2CurvedEmbossTool::Preview()
 bool V2CurvedEmbossTool::Commit()
 {
     if(!Preview())return false;
+    // Rebuilding can process deferred deletion of this panel. Capture values
+    // before changing the document or replacing the page; never read it afterwards.
+    const auto restore=[height=height_->value(),draft=draft_->value(),tilt=tilt_->value(),
+        heading=heading_->value(),tolerance=tolerance_->value(),draftEnabled=draftEnabled_->isChecked(),
+        tiltEnabled=tiltEnabled_->isChecked(),output=output_->currentIndex(),operation=operation_->currentIndex()](V2CurvedEmbossTool& next) {
+        next.height_->setValue(height);next.draft_->setValue(draft);next.tilt_->setValue(tilt);
+        next.heading_->setValue(heading);next.tolerance_->setValue(tolerance);
+        next.draftEnabled_->setChecked(draftEnabled);next.tiltEnabled_->setChecked(tiltEnabled);
+        next.output_->setCurrentIndex(output);next.operation_->setCurrentIndex(operation);
+    };
     const auto brep=kernel::CaptureOutputShape(built_->handle);
     const auto edges=kernel::OutputEdges(built_->handle,tolerance_->value());
     if(!brep.HasValue()||(output_->currentIndex()!=2&&!edges.HasValue())){status_->setText(QStringLiteral("生成形状を保存できません。"));return false;}
@@ -136,10 +146,7 @@ bool V2CurvedEmbossTool::Commit()
     if(!transaction.Commit())return false;
     auto& window=window_;window.operationHost_->SetShelves({});window.AdoptCurrentDocument();window.RebuildKernelShapes();window.RefreshShapeViews();
     window.viewport_->SetSelection({});auto* next=Open(window);
-    next->height_->setValue(height_->value());next->draft_->setValue(draft_->value());next->tilt_->setValue(tilt_->value());
-    next->heading_->setValue(heading_->value());next->tolerance_->setValue(tolerance_->value());
-    next->draftEnabled_->setChecked(draftEnabled_->isChecked());next->tiltEnabled_->setChecked(tiltEnabled_->isChecked());
-    next->output_->setCurrentIndex(output_->currentIndex());next->operation_->setCurrentIndex(operation_->currentIndex());
+    restore(*next);
     next->status_->setText(QStringLiteral("生成しました。設定を維持しています。次の支持面を選んでください。"));
     window.SetStatus(QStringLiteral("曲面押し出しを独立形状として生成しました。Undoでまとめて戻せます。"));return true;
 }

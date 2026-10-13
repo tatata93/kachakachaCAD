@@ -9,6 +9,7 @@
 #include "V2FabricationDock.h"
 #include "V2MainWindow.h"
 #include "V2ParameterDock.h"
+#include "V2ProjectionTool.h"
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/Selection.h"
@@ -20,6 +21,8 @@
 
 #include <QPointF>
 #include <QString>
+#include <QLabel>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -282,6 +285,13 @@ namespace kachakacha::v2::selftest {
         return false;
     }
     window.RunCommand("wire.project_surface");
+    auto* projection = dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));
+    if (!Explain("PROJ legacy window has projection panel",projection!=nullptr)) return false;
+    if (!projection->Preview()) {
+        auto* status=projection->findChild<QLabel*>("projectionStatus");
+        return Explain((std::string("PROJ legacy preview: ")+(status?status->text().toStdString():"missing status")).c_str(),false);
+    }
+    if (!Explain("PROJ legacy projection commits",projection->Commit())) return false;
     if (!window.StatusText().contains(QStringLiteral("面へ落とし"))) {
         // 落ちないときは、四角と面がどこにあるかを出す。PC でしか出ない失敗を推測で直さないため。
         std::string where = "四角:";
@@ -490,7 +500,7 @@ namespace kachakacha::v2::selftest {
     return Explain("戻すと外れる", entity != nullptr && !entity->manufacturing.has_value());
 }
 
-[[nodiscard]] bool CaseWrapProjectionNeedsTwoSurfaces(V2MainWindow& window)
+[[nodiscard]] bool CaseWrapProjectionStartsWithOneSurface(V2MainWindow& window)
 {
     // 回り込み投影(V1 の「複数の面へ回り込み投影」)。面が1枚なら「曲面へ投影」の側。
     window.RunCommand("file.new");
@@ -512,17 +522,16 @@ namespace kachakacha::v2::selftest {
     if (!Explain("線と面がある", !wires.entityIds.empty() && !surfaces.entityIds.empty())) {
         return false;
     }
-    // 面1枚と線を選んで押す。1枚では押せない(台帳の条件が 2 枚以上)。
+    // 面1枚と線を選んで押す。専用ツールに取り込み、確定前は文書を変えない。
     kachakacha::v2::app::SelectionSet one;
     one.entityIds.push_back(wires.entityIds.back());
     one.entityIds.push_back(surfaces.entityIds.front());
     viewport.SetSelection(one);
     const auto before = window.Session().GetDocument().Revision();
     window.RunCommand("wire.wrap_project");
-    return Explain((std::string("面が1枚なら押せない(") + window.StatusText().toStdString()
-                       + ")").c_str(),
-        window.Session().GetDocument().Revision() == before
-            && window.StatusText().contains(QStringLiteral("2つ以上")));
+    auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));
+    return Explain("PROJ winding starts with one surface, without committing",
+        tool&&tool->WireCount()==1&&tool->TargetCount()==1&&window.Session().GetDocument().Revision()==before);
 }
 
 //! HP-FB-05。メニューの「組立状態」は窓を出さず、右の棚の組立率の欄へ案内する。
@@ -565,7 +574,7 @@ namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
-        {"回り込み投影は面が2枚以上要る", &CaseWrapProjectionNeedsTwoSurfaces},
+        {"PROJ 回り込み投影は1面から開始できる", &CaseWrapProjectionStartsWithOneSurface},
         {"製作の棚の範囲と材料・積層が効く", &CaseFabricationDockRangeAndMaterial},
         {"HP-FAB-SHELF 製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
@@ -574,7 +583,7 @@ std::vector<SelfTestCase> FabricationCases()
             &CaseSetAssemblyGoesToTheShelfNotADialog},
         {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},
         {"曲げ状態で固定すると線と面と部品になる", &CaseFreezeAtBendStateMakesWiresSurfaceAndPart},
-        {"曲面へ落とした窓が帯の型紙に開く", &CaseWindowProjectedOntoCurvedSurfaceOpensInBands},
+        {"PROJ 曲面へ落とした窓が帯の型紙に開く", &CaseWindowProjectedOntoCurvedSurfaceOpensInBands},
     };
 }
 

@@ -473,17 +473,17 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "線を作業平面や面へ投影します。", true,
             {"AT-FAB-007"}},
-        {"wire.wrap_project", "回り込み投影", CommandMode::Instant, "wrap_project", "",
-            SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces,
-            "ワイヤーを1つ以上と、落とす先の形状ガイドの面を2つ以上選んでください。",
-            "角をまたぐ線を、面ごとの区間に分けて落とします(パノラミックウインドウなど)。"
-            "面と面の間は橋渡ししません。落とす先が1枚なら「曲面へ投影」を使います。", true,
+        {"wire.wrap_project", "回り込み投影", CommandMode::Dialog, "wrap_project", "",
+            SelectionPredicate::Always,
+            "元ワイヤーと投影先の面を、道具を開始してから指定できます。",
+            "投影ツールの等長巻き付けを開始します。平面・円柱・円錐の1面に対応。"
+            "複数面には方向投影／最近点投影を選び、接続する端点を確認してください。", true,
             {"AT-FAB-006"}},
-        {"wire.project_surface", "曲面へ投影", CommandMode::Instant, "project_surface", "",
-            SelectionPredicate::WiresAndOneGuideSurface,
-            "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。",
-            "線を、作業平面の向きに沿って形状ガイドの曲面へ落とします。落ちた線は面の上の曲線で、"
-            "折れ線にしません(面の形が無いときだけ標本から折れ線で落とします)。曲がった面に窓を開ける元になります。",
+        {"wire.project_surface", "曲面へ投影", CommandMode::Dialog, "project_surface", "",
+            SelectionPredicate::Always,
+            "元ワイヤーと投影先の面を、道具を開始してから指定できます。",
+            "図面からの方向投影・等長巻き付け・最近点投影を切り替えます。ソリッドのフェイスと複数面に対応。"
+            "ワイヤーごとの方向・基準点・最大距離・偏差を設定し、3Dプレビューを確認してEnterで確定。元の線は残します。",
             true, {"AT-FAB-013", "AT-SRF-010"}},
         {"part.extrude", "押し出し", CommandMode::Dialog, "extrude", "Shift+E",
             SelectionPredicate::ClosedProfilesOrSolidFace,

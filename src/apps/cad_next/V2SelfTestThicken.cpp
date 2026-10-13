@@ -513,7 +513,10 @@ bool CaseOwnerCorrectedThickness(V2MainWindow& window)
         const auto* shown=window.findChild<QLabel*>("thickenStatus");
         if(!Explain("owner deviation lines are not clipped",shown&&shown->height()>=shown->heightForWidth(shown->width())))return false;
         if(!directory.isEmpty())window.grab().save(directory+"/corrected-"+stem+"-preview.png");
-        if(!window.ThickenDock().ClickConfirm()||CountOfKind(window,EntityKind::Part)!=parts+1
+        const bool confirmed=window.ThickenDock().ClickConfirm();
+        std::cout<<"owner both confirmed="<<confirmed<<" parts="<<CountOfKind(window,EntityKind::Part)<<" wires="<<CountOfKind(window,EntityKind::Wire)
+            <<" status="<<window.StatusText().toStdString()<<std::endl;
+        if(!confirmed||CountOfKind(window,EntityKind::Part)!=parts+1
             ||CountOfKind(window,EntityKind::Wire)<=oldWires)return false;
         bool stored=false;
         for(const auto& feature:window.Session().GetDocument().Snapshot().features)
@@ -613,6 +616,8 @@ bool CaseOwnerWireOutput(V2MainWindow& window)
     app::SelectionSet selected;selected.entityIds={source};window.Viewport().SetSelection(selected);
     if(!window.ThickenDock().ClickConfirm())return false;
     const int madeWires=CountOfKind(window,EntityKind::Wire);
+    std::cout<<"owner wire-only parts="<<CountOfKind(window,EntityKind::Part)<<" old parts="<<parts<<" wires="<<madeWires<<" old wires="<<wires
+        <<" status="<<window.StatusText().toStdString()<<std::endl;
     if(!Explain("actual corrected roof wire-only has native curves without a new part",CountOfKind(window,EntityKind::Part)==parts&&madeWires>wires))return false;
     window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Wire)!=wires)return false;
     window.RunCommand("edit.redo");

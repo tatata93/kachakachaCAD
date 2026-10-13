@@ -21,6 +21,7 @@
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 
@@ -201,6 +202,7 @@ void V2MainWindow::RefreshThickenPreview()
             return;
         }
         thicken_.outcome.volumeMm3 += built.Value().volumeMm3;
+        for(const auto& note:built.Diagnostics())thicken_.outcome.boundaryNotesJa.push_back(note.summaryJa);
         thicken_.outcome.thicknessMm = std::max(thicken_.outcome.thicknessMm, built.Value().thicknessMm);
         thicken_.outcome.corrected = thicken_.outcome.corrected || built.Value().corrected;
         thicken_.outcome.normalThicknessMinMm = thicken_.built.empty() ? built.Value().normalThicknessMinMm
@@ -250,6 +252,10 @@ void V2MainWindow::RefreshThickenDock()
         lines.push_back(QString::fromStdString(line));
     }
     if(calculating)lines.front()=QStringLiteral("計算中です。3D表示と設定は操作できます。設定を変えると計算し直します。");
+    const bool needsWires=kachakacha::v2::app::IncludesWires(thickenDock_->OutputMode());
+    const bool boundariesReady=!needsWires || (!thicken_.builtEdges.empty()&&std::all_of(thicken_.builtEdges.begin(),thicken_.builtEdges.end(),
+        [](const auto& curves){return !curves.empty();}));
+    if(thicken_.outcome.available&&!boundariesReady)lines.push_back(QStringLiteral("境界ワイヤーを作れません。ソリッドのみを選ぶか、面を分けてください。"));
     if(thicken_.outcome.available)lines.push_back(thickenDock_->OutputMode()==kachakacha::v2::app::SolidOutputMode::WiresOnly
         ? QStringLiteral("境界ワイヤーを生成します。ソリッドは保存しません。")
         : thickenDock_->OutputMode()==kachakacha::v2::app::SolidOutputMode::Both
@@ -264,7 +270,7 @@ void V2MainWindow::RefreshThickenDock()
     }
     thickenDock_->SetTargets(ExtrudeTargets());
     thickenDock_->ShowInput(thicken_.input, QString::fromStdString(names), lines,
-        thicken_.outcome.available&&!thicken_.refreshPending&&!V2GeometryJob::Active()
+        thicken_.outcome.available&&boundariesReady&&!thicken_.refreshPending&&!V2GeometryJob::Active()
             &&!thicken_.built.empty()&&thicken_.built.size()==thicken_.input.surfaces.size());
     ShowToolFooter(thicken_.shelfShown
             ? QString::fromStdString(kachakacha::v2::app::ThickenFooterLine(thicken_.input,
@@ -403,8 +409,10 @@ void V2MainWindow::ConfirmThicken()
             definition.placement = static_cast<int>(thicken_.input.placement);
         }
         if(kachakacha::v2::app::IncludesWires(outputMode)) {
-            if(edges[index].empty()) { SetStatus(QStringLiteral("厚み: 境界ワイヤーを取得できませんでした。")); return; }
-            for(const auto& edge:edges[index])if(AddPlainWire({edge},"厚みの境界").IsNil())return;
+            const auto wires=kachakacha::v2::kernel::OutputBoundaryWires(built[index],
+                session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+            if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());return;}
+            for(const auto& wire:wires.Value())if(AddPlainWire(wire,"厚みの境界").IsNil())return;
         }
         if(kachakacha::v2::app::IncludesSolid(outputMode)) {
             const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,

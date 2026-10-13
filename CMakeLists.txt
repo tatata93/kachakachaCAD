@@ -788,6 +788,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
     src/next_occt/kachakacha/kernel/OcctIntersectionPartition.cpp
+    src/next_occt/kachakacha/kernel/OcctBoundaryCurves.cpp
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
     src/next_occt/kachakacha/kernel/OcctImage.cpp
     src/next_occt/kachakacha/kernel/OcctOutput.cpp

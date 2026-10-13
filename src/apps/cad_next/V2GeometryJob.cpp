@@ -280,7 +280,8 @@ base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelSha
     made.maxOffsetDeviationMm=data.value("maxDeviation").toDouble();made.rmsOffsetDeviationMm=data.value("rmsDeviation").toDouble();
     const auto edges=kernel::OutputEdges(made.handle,tolerance.modelLinearMm);
     if(edges.HasValue())made.edges=edges.Value();
-    return Out::Success(std::move(made));
+    return Out::Success(std::move(made),edges.HasValue()?edges.Diagnostics():std::vector<base::Diagnostic>{
+        base::MakeWarning("EXP-W002","境界ワイヤーを取り出せませんでした。",edges.FirstSummaryJa())});
 }
 base::Result<kernel::BooleanBuildResult> Boolean(QWidget* parent,kernel::BooleanOperation operation,
     modeling::KernelShapeHandle first,const std::vector<modeling::KernelShapeHandle>& tools,double tolerance) {

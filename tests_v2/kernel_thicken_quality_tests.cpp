@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctMassProperties.h"
 #include "kachakacha/kernel/OcctImage.h"
 #include "kachakacha/kernel/OcctIntersectionPartition.h"
+#include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -411,6 +412,38 @@ KACHA_V2_TEST(thicken_quality, intersection_partition_preserves_dense_native_sur
         Require(count>1,"dense exact geometry is partitioned for intersection analysis");
         Require(kernel::CaptureOutputShape(source).Value()==original.Value(),"analysis never mutates authoritative native source");
         kernel::ReleaseShape(source);
+    }
+}
+KACHA_V2_TEST(thicken_quality, bounded_boundary_handles_high_degree_nonuniform_rational_trimmed_reversed_edges)
+{
+    for(int mode:{0,1,2}) {
+        NCollection_Array1<gp_Pnt> poles(1,15);NCollection_Array1<double> weights(1,15);
+        for(int i=1;i<=15;++i){poles(i)=gp_Pnt(i,i%2?4:-3,.1*i*i);weights(i)=mode==1&&i%2?.7:1;}
+        NCollection_Array1<double> knots(1,3);knots(1)=0;knots(2)=.0001;knots(3)=1;
+        NCollection_Array1<int> multiplicities(1,3);multiplicities(1)=8;multiplicities(2)=7;multiplicities(3)=8;
+        const occ::handle<Geom_BSplineCurve> spline=new Geom_BSplineCurve(poles,weights,knots,multiplicities,7);
+        auto edge=BRepBuilderAPI_MakeEdge(spline,.000025,.75).Edge();
+        if(mode==1)edge.Reverse();
+        if(mode==2){gp_Trsf tr;tr.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.73);
+            tr.SetTranslationPart(gp_Vec(111,-222,333));edge=TopoDS::Edge(BRepBuilderAPI_Transform(edge,tr,true).Shape());}
+        const auto handle=kernel::StoreShape(edge);const auto before=kernel::CaptureOutputShape(handle);
+        const auto result=kernel::detail::BoundaryCurves(edge,.001);
+        Require(result.HasValue(),"high-degree uneven native knots become smooth bounded curves");
+        Require(result.Value().maxDeviationBoundMm<=.001&&result.Value().curves.size()<512,"deviation bound holds without a dense point cloud");
+        double first,last;const auto native=BRep_Tool::Curve(edge,first,last);
+        for(std::size_t at=0;at<result.Value().curves.size();++at) {
+            const auto& c=result.Value().curves[at];const auto [a,b]=result.Value().parameters[at];
+            Require(c.Kind()==geometry::CurveKind::CubicBezier,"editable smooth geometry, never sampled line segments");
+            for(int i=0;i<=64;++i) {
+                const double t=i/64.0;const auto p=c.Evaluate(t);const auto q=native->Value(a+(b-a)*t);
+                Require(gp_Pnt(p.x,p.y,p.z).Distance(q)<=result.Value().maxDeviationBoundMm+1e-10,"dense independent samples lie inside reported bound");
+            }
+            if(at)Require(geometry::Distance(result.Value().curves[at-1].EndPoint(),c.StartPoint())<1e-9,"connected spans retain shared endpoints");
+        }
+        const auto grouped=kernel::OutputBoundaryWires(handle,.001);
+        Require(grouped.HasValue()&&grouped.Value().size()==1&&!grouped.Diagnostics().empty(),"one native edge stays one wire and deviation is reported");
+        Require(kernel::CaptureOutputShape(handle).Value()==before.Value(),"conversion does not mutate the native edge");
+        kernel::ReleaseShape(handle);
     }
 }
 #else

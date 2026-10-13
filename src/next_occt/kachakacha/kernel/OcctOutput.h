@@ -17,6 +17,9 @@ namespace kachakacha::v2::kernel {
 // Extract each topological edge once; fail rather than silently dropping an edge.
 [[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> OutputEdges(
     modeling::KernelShapeHandle shape, double tolerance);
+// One wire per native edge; a complex edge may contain several smooth cubic spans.
+[[nodiscard]] base::Result<std::vector<std::vector<geometry::CurveSegment>>> OutputBoundaryWires(
+    modeling::KernelShapeHandle shape, double tolerance);
 [[nodiscard]] base::Result<std::string> OutputStep(const std::vector<modeling::KernelShapeHandle>& shapes);
 [[nodiscard]] base::Result<std::string> OutputStl(const std::vector<modeling::KernelShapeHandle>& shapes,double deflection);
 }

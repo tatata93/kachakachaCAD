@@ -26,6 +26,7 @@
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctWireCage.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/WireCage.h"
 
@@ -1177,8 +1178,10 @@ bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
     const auto mode=output?static_cast<kachakacha::v2::app::SolidOutputMode>(output->currentIndex())
         : kachakacha::v2::app::SolidOutputMode::SolidOnly;
     if(kachakacha::v2::app::IncludesWires(mode)) {
-        if(solid.Value().edges.empty()){kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;}
-        for(const auto& edge:solid.Value().edges)if(AddPlainWire({edge},"治具の境界").IsNil()) {
+        const auto wires=kachakacha::v2::kernel::OutputBoundaryWires(solid.Value().handle,tolerance.modelLinearMm);
+        if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;}
+        if(!wires.Diagnostics().empty())ReportDiagnostics(wires.Diagnostics());
+        for(const auto& wire:wires.Value())if(AddPlainWire(wire,"治具の境界").IsNil()) {
             kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;
         }
     }

@@ -1133,3 +1133,12 @@ public:
 `maxOffsetDeviationMm/rmsOffsetDeviationMm` を返す。補正時の標本計測と指定厚みを区別する。
 `ThickenSurfaceDefinition.correctOpposite` と `ThickenInputState.correctOpposite` は明示選択の真偽値。
 既存文書の省略値false。幾何カーネルの型をcoreやUIへ公開しない。
+
+### ネイティブ境界の編集用ワイヤー出力（2026-10-13）
+
+`kernel::OutputBoundaryWires(handle, tolerance)` は、退化した辺を除いてネイティブ辺ごとに
+一つの曲線列を返す。`OutputEdges` は同じ結果を平坦化する互換APIである。
+高次数・不均等ノット・有理曲線は位置偏差の上限を検査した3次Bezier区間へ変換し、
+情報診断`EXP-I002`に偏差上限と標本RMSを返す。元のネイティブ形状は変更しない。
+境界の変換に失敗した場合は全体を拒否し、一部の辺だけを黙って出さない。
+ワイヤーのみの確定でも、この診断と許容を保持して通常の独立ワイヤーとして保存する。

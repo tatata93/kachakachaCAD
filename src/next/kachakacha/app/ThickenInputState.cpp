@@ -105,6 +105,7 @@ std::vector<std::string> ThickenStatusLinesJa(const ThickenInputState& state,
         lines.push_back("反対面を補正。法線厚み（対応点・標本）: "+mm(outcome.normalThicknessMinMm)+"〜"+mm(outcome.normalThicknessMaxMm)+" mm");
         lines.push_back("位置ずれ 最大 "+mm(outcome.maxOffsetDeviationMm)+" mm / RMS（最大部材）"+mm(outcome.rmsOffsetDeviationMm)+" mm");
     }
+    for(const auto& note:outcome.boundaryNotesJa)lines.push_back(note);
     lines.push_back(previewShown ? "✓ 下見を表示中(まだ文書へ保存していません)"
                                   : "× 下見が作れませんでした");
     return lines;

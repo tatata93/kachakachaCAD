@@ -8,10 +8,12 @@
 #include <algorithm>
 #include <cmath>
 #include <array>
+#include <iomanip>
 #include <map>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include <BRepTools.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -52,8 +54,8 @@ namespace kachakacha::v2::kernel {
 using namespace geometry;
 using modeling::KernelShapeHandle;
 using base::Result;
-Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle, double tolerance) {
-    using Out = Result<std::vector<CurveSegment>>;
+Result<std::vector<std::vector<CurveSegment>>> OutputBoundaryWires(KernelShapeHandle handle, double tolerance) {
+    using Out = Result<std::vector<std::vector<CurveSegment>>>;
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         TopoDS_Shape shape;
@@ -61,20 +63,37 @@ Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle, double t
             return Out::Failure(base::MakeError("EXP-P001", "出力する実形状がありません。", {}));
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(shape, TopAbs_EDGE, edges);
-        std::vector<CurveSegment> curves;
+        std::vector<std::vector<CurveSegment>> curves;
+        double bound=0,squared=0;std::size_t samples=0;
         for (int i = 1; i <= edges.Extent(); ++i) {
             const auto edge = TopoDS::Edge(edges(i));
             if (BRep_Tool::Degenerated(edge)) continue;
-            const auto curve = FromEdge(edge, tolerance);
+            const auto curve = detail::BoundaryCurves(edge, tolerance);
             if (!curve.HasValue()) return Out::Failure(curve.Diagnostics());
-            curves.push_back(curve.Value());
+            curves.push_back(curve.Value().curves);
+            bound=std::max(bound,curve.Value().maxDeviationBoundMm);
+            squared+=curve.Value().squaredDeviationMm;samples+=curve.Value().samples;
         }
-        if (!curves.empty()) return Out::Success(std::move(curves));
+        if (!curves.empty()) {
+            std::vector<base::Diagnostic> diagnostics;
+            if(samples) {
+                std::ostringstream text;text<<std::setprecision(6)<<"境界ワイヤー：位置偏差の上限 "<<bound
+                    <<" mm / RMS（標本） "<<std::sqrt(squared/samples)<<" mm";
+                diagnostics.push_back(base::MakeInformation("EXP-I002",text.str()));
+            }
+            return Out::Success(std::move(curves),std::move(diagnostics));
+        }
     } catch (...) {}
 #else
     (void)handle; (void)tolerance;
 #endif
     return Out::Failure(base::MakeError("EXP-P001", "全ての辺をワイヤーに変換できません。", {}));
+}
+Result<std::vector<CurveSegment>> OutputEdges(KernelShapeHandle handle,double tolerance) {
+    using Out=Result<std::vector<CurveSegment>>;
+    const auto wires=OutputBoundaryWires(handle,tolerance);if(!wires.HasValue())return Out::Failure(wires.Diagnostics());
+    std::vector<CurveSegment> curves;for(const auto& wire:wires.Value())curves.insert(curves.end(),wire.begin(),wire.end());
+    return Out::Success(std::move(curves),wires.Diagnostics());
 }
 namespace {
 template<class T> Result<T> Failed() {return Result<T>::Failure(base::MakeError("EXP-P001","出力形状を作れません。","入力形状または配置基準を確認してください。"));}

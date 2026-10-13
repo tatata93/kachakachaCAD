@@ -59,6 +59,7 @@ struct ThickenPreviewOutcome {
     //! 作った部品の数(面の数と同じ)。
     std::size_t count = 0;
     std::string refusalJa;
+    std::vector<std::string> boundaryNotesJa;
     bool corrected = false;
     double normalThicknessMinMm = 0.0, normalThicknessMaxMm = 0.0;
     double maxOffsetDeviationMm = 0.0, rmsOffsetDeviationMm = 0.0;

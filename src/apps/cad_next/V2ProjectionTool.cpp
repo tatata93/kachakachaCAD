@@ -6,6 +6,8 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/document/Commands.h"
 #include <QComboBox>
@@ -17,9 +19,23 @@
 #include <QString>
 #include <algorithm>
 using namespace kachakacha::v2;
-V2ProjectionTool::~V2ProjectionTool() {for(const auto& target:targets_)kernel::ReleaseShape(target.shape);}
+namespace {
+geometry::Vector3 InitialDirection(const std::vector<geometry::CurveSegment>& curves,
+    const geometry::Vector3& fallback,double tolerance) {
+    std::vector<geometry::Vector3> points;
+    for(const auto& c:curves)for(int i=0;i<=4;++i)points.push_back(c.Evaluate(i/4.0));
+    const auto plane=geometry::FitPlane(points);
+    if(plane.valid&&std::all_of(curves.begin(),curves.end(),[&](const auto& c){
+        return geometry::CurveLiesInPlane(c,plane.origin,plane.normal,tolerance);}))return -plane.normal;
+    return fallback;
+}
+}
+V2ProjectionTool::~V2ProjectionTool() {ClearResult();for(const auto& target:targets_)kernel::ReleaseShape(target.shape);}
+void V2ProjectionTool::ClearResult() {
+    result_.reset();for(const auto& region:regions_)kernel::ReleaseShape(region);regions_.clear();
+}
 void V2ProjectionTool::Invalidate() {
-    result_.reset();confirm_->setEnabled(false);window_.viewport_->HideToolPreview();
+    ClearResult();confirm_->setEnabled(false);window_.viewport_->HideToolPreview();
     if(!sources_.empty()&&!targets_.empty())update_->start();
     else status_->setText(QStringLiteral("元ワイヤーと投影先の面を追加してください。"));
 }
@@ -28,8 +44,8 @@ void V2ProjectionTool::RefreshRows() {
     for(const auto& source:sources_) {
         const auto* e=window_.session_->GetDocument().FindEntity(source.ref.entityId);const auto d=source.input.direction;
         const auto name=e?QString::fromStdString(e->displayName):QStringLiteral("ワイヤー");
-        wireRows_->addItem(mode_->currentIndex()==0?QStringLiteral("%1 → (%2, %3, %4)").arg(name)
-            .arg(d.x,0,'g',3).arg(d.y,0,'g',3).arg(d.z,0,'g',3):name);
+        wireRows_->addItem(mode_->currentIndex()==0?QStringLiteral("元 %5: %1 → (%2, %3, %4)").arg(name)
+            .arg(d.x,0,'g',3).arg(d.y,0,'g',3).arg(d.z,0,'g',3).arg(wireRows_->count()+1):QStringLiteral("元 %1: %2").arg(wireRows_->count()+1).arg(name));
     }
     for(const auto& target:targets_) {
         const auto* e=window_.session_->GetDocument().FindEntity(target.ref.entityId);
@@ -37,6 +53,7 @@ void V2ProjectionTool::RefreshRows() {
             +(target.ref.pickedFaceIndex?QStringLiteral(" / フェイス %1").arg(*target.ref.pickedFaceIndex+1):QString()));
     }
     if(row>=0&&row<wireRows_->count())wireRows_->setCurrentRow(row);
+    RefreshMarks();
 }
 bool V2ProjectionTool::AddWire(const app::SelectionRef& ref,bool toggle) {
     if(window_.session_->GetDocument().Snapshot().id!=documentId_||((!sources_.empty()||!targets_.empty())&&window_.session_->GetDocument().Revision()!=revision_)) {
@@ -51,7 +68,8 @@ bool V2ProjectionTool::AddWire(const app::SelectionRef& ref,bool toggle) {
         app::SelectionSet selection;selection.entityIds={ref.entityId};selection.ordered={ref};
         const auto curves=app::SelectedCurves(selection,window_.session_->Scene());if(curves.empty())return false;
         if(sources_.empty())sourceOrigin_=curves.front().StartPoint();
-        auto direction=-window_.viewport_->WorkPlane().normal;
+        auto direction=InitialDirection(curves,-window_.viewport_->WorkPlane().normal,
+            window_.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
         if(!targets_.empty()&&geometry::Dot(targetPoint_-curves.front().Evaluate(.5),direction)<0)direction=-direction;
         sources_.push_back({ref,{curves,direction}});
     }
@@ -78,14 +96,15 @@ bool V2ProjectionTool::AddTarget(const app::SelectionRef& ref,bool toggle) {
         const auto bytes=kernel::CaptureOutputShape(guide->second);if(!bytes.HasValue()){status_->setText(QString::fromStdString(bytes.FirstMessageJa()));return false;}
         const auto copy=kernel::RestoreOutputShape(bytes.Value());if(!copy.HasValue()){status_->setText(QString::fromStdString(copy.FirstMessageJa()));return false;}shape=copy.Value();
     } else {status_->setText(QStringLiteral("投影先には形状ガイドの面か、ソリッドのフェイスを選んでください。"));return false;}
+    auto placed=ref;const auto frame=kernel::OutputSurfaceFrame(shape,ref.hitPoint);
+    if(frame.HasValue())placed.hitPoint=frame.Value().origin;
     if(targets_.empty()) {
-        const auto frame=kernel::OutputSurfaceFrame(shape,ref.hitPoint);
         targetPoint_=frame.HasValue()?frame.Value().origin:ref.hitPoint;
         for(auto& source:sources_)if(!source.directionExplicit&&!source.input.curves.empty()
             &&geometry::Dot(targetPoint_-source.input.curves.front().Evaluate(.5),source.input.direction)<0)
             source.input.direction=-source.input.direction;
     }
-    targets_.push_back({ref,shape});revision_=window_.session_->GetDocument().Revision();RefreshRows();Invalidate();return true;
+    targets_.push_back({placed,shape});revision_=window_.session_->GetDocument().Revision();RefreshRows();Invalidate();return true;
 }
 void V2ProjectionTool::SetDirection(geometry::Vector3 direction) {
     direction=geometry::Normalized(direction);
@@ -95,17 +114,18 @@ void V2ProjectionTool::SetDirection(geometry::Vector3 direction) {
 }
 void V2ProjectionTool::CancelInput() {
     update_->stop();sources_.clear();for(const auto& target:targets_)kernel::ReleaseShape(target.shape);targets_.clear();
-    role_=0;RefreshRows();Invalidate();window_.viewport_->SetSelection({});
+    SetPickRole(0);RefreshRows();Invalidate();window_.viewport_->SetSelection({});
     status_->setText(QStringLiteral("入力のみ取り消しました。方式・数値を維持しています。次のワイヤーを選べます。"));
 }
 bool V2ProjectionTool::Preview() {
-    update_->stop();result_.reset();window_.viewport_->HideToolPreview();confirm_->setEnabled(false);
+    update_->stop();ClearResult();window_.viewport_->HideToolPreview();confirm_->setEnabled(false);
     if(window_.session_->GetDocument().Snapshot().id!=documentId_||window_.session_->GetDocument().Revision()!=revision_) {
         status_->setText(QStringLiteral("文書が変更されています。入力を取消して選び直してください。"));return false;
     }
     if(sources_.empty()||targets_.empty()){status_->setText(QStringLiteral("元ワイヤーと投影先の面を指定してください。"));return false;}
     kernel::WireProjectionOptions options;options.mode=static_cast<kernel::WireProjectionMode>(mode_->currentIndex());
-    options.hits=static_cast<kernel::WireProjectionHits>(hits_->currentIndex());
+    options.hits=output_->currentIndex()==1?kernel::WireProjectionHits::NearestPositive:
+        static_cast<kernel::WireProjectionHits>(hits_->currentIndex());
     options.toleranceMm=tolerance_->value();options.maximumDistanceMm=distance_->value();
     options.joinToleranceMm=window_.session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     options.sourceOrigin=sourceOrigin_;options.sourceU=sourceU_;options.sourceV=sourceV_;options.targetPoint=targetPoint_;
@@ -113,6 +133,7 @@ bool V2ProjectionTool::Preview() {
     std::vector<kernel::WireProjectionInput> inputs;std::vector<modeling::KernelShapeHandle> faces;
     for(const auto& source:sources_)inputs.push_back(source.input);for(const auto& target:targets_)faces.push_back(target.shape);
     status_->setText(QStringLiteral("投影を計算中…"));
+    if(output_->currentIndex()==1) return PreviewRegions(faces,inputs,options);
     const auto made=V2Calculation::Call(this,"ワイヤーの投影を計算しています…",
         [](const auto&... values){return kernel::ProjectNativeWires(values...);},faces,inputs,options);
     if(!made.HasValue()){status_->setText(QString::fromStdString(made.FirstMessageJa()));return false;}
@@ -148,13 +169,13 @@ bool V2ProjectionTool::AddResults() {
         const auto added=document.Run(document::AddFeatureCommand(feature,{entity},"曲面へ投影"));
         if(!added.committed){window_.ReportDiagnostics(added.diagnostics);return false;}
     }
-    return transaction.Commit();
+    return AddRegions(inputIds)&&transaction.Commit();
 }
 bool V2ProjectionTool::Commit() {
     if(!result_){Preview();return false;}
     if(previewRevision_!=window_.session_->GetDocument().Revision()){Invalidate();return false;}
-    const int count=static_cast<int>(result_->wires.size());if(!AddResults())return false;
+    const int count=static_cast<int>(result_->wires.size()),faceCount=static_cast<int>(regions_.size());if(!AddResults())return false;
     CancelInput();revision_=window_.session_->GetDocument().Revision();window_.AdoptCurrentDocument();
-    status_->setText(QStringLiteral("%1本を面へ落とし、ワイヤーを生成しました。設定を維持して次の投影を続けられます。").arg(count));
+    status_->setText(QStringLiteral("%1本を面へ落とし、ワイヤーを生成しました（面 %2枚）。設定を維持して次の投影を続けられます。").arg(count).arg(faceCount));
     window_.SetStatus(status_->text());return true;
 }

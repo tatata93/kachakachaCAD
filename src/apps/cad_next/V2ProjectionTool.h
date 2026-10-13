@@ -37,20 +37,30 @@ private:
     void RefreshRows();
     void SetDirection(kachakacha::v2::geometry::Vector3 direction);
     void PickViewport(const QPointF& position);
+    void SetPickRole(int role);
+    void RefreshMarks();
+    void ClearMarks();
+    void TakeActiveSelection();
     bool AddResults();
+    void ClearResult();
+    bool PreviewRegions(const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& faces,
+        const std::vector<kachakacha::v2::kernel::WireProjectionInput>& inputs,
+        const kachakacha::v2::kernel::WireProjectionOptions& options);
+    bool AddRegions(const std::vector<kachakacha::v2::base::EntityId>& inputIds);
     V2MainWindow& window_;
     kachakacha::v2::base::DocumentId documentId_;
     std::uint64_t revision_=0,previewRevision_=0;
     std::vector<Source> sources_;
     std::vector<Target> targets_;
     std::optional<kachakacha::v2::kernel::WireProjectionResult> result_;
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> regions_;
     kachakacha::v2::geometry::Vector3 sourceOrigin_{},targetPoint_{};
     kachakacha::v2::geometry::Vector3 sourceU_{1,0,0},sourceV_{0,1,0};
     int role_=0;
-    QComboBox *mode_,*hits_;
+    QComboBox *mode_,*hits_,*output_;
     QDoubleSpinBox *tolerance_,*distance_,*rotation_;
-    QLabel* status_;
+    QLabel *status_, *pickPrompt_;
     QListWidget *wireRows_,*targetRows_;
-    QPushButton* confirm_;
+    QPushButton *confirm_, *pickWire_, *pickTarget_;
     QTimer* update_;
 };

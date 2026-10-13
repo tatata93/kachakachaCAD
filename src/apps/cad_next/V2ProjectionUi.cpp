@@ -4,10 +4,14 @@
 #include "V2OperationPanelHost.h"
 #include "V2PanelFrame.h"
 #include "V2NumericSpinBox.h"
+#include "V2EntityTree.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QApplication>
+#include <QAbstractItemModel>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -23,6 +27,7 @@
 #include <QScrollArea>
 #include <QString>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
@@ -45,6 +50,11 @@ V2ProjectionTool::V2ProjectionTool(V2MainWindow& window):QWidget(&window),window
     sourceU_=window.viewport_->WorkPlane().uAxis;sourceV_=window.viewport_->WorkPlane().vAxis;
     update_=new QTimer(this);update_->setSingleShot(true);update_->setInterval(250);
     connect(update_,&QTimer::timeout,this,[this]{Preview();});BuildUi();qApp->installEventFilter(this);
+    connect(window_.entityTree_,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem*,int){
+        if(isVisible()&&(role_==0||role_==1))TakeActiveSelection();});
+    auto* marks=new QTimer(this);marks->setSingleShot(true);marks->setInterval(0);
+    connect(window_.entityTree_->model(),&QAbstractItemModel::rowsInserted,this,[marks]{marks->start();});
+    connect(marks,&QTimer::timeout,this,[this]{if(isVisible())RefreshMarks();});
 }
 void V2ProjectionTool::BuildUi() {
     auto* outer=new QVBoxLayout(this);auto* scroll=new QScrollArea(this);scroll->setWidgetResizable(true);
@@ -53,13 +63,23 @@ void V2ProjectionTool::BuildUi() {
     mode_=new QComboBox(body);mode_->setObjectName(QStringLiteral("projectionMode"));
     mode_->addItems({QStringLiteral("図面から投影（方向指定）"),QStringLiteral("曲面に巻き付け（等長）"),QStringLiteral("3Dワイヤーを面に載せる（最近点）")});layout->addWidget(mode_);
     layout->addWidget(MakePanelSectionTitle(body,QStringLiteral("入力")));
-    button(QStringLiteral("① 元ワイヤーを追加・解除"),[this]{role_=0;status_->setText(QStringLiteral("3Dビューで元のワイヤーを選んでください。"));});
+    auto* legend=new QLabel(QStringLiteral("<b style='color:#963ccd'>紫: 元ワイヤー</b> → <b style='color:#1ea046'>緑: 投影先</b><br>水色の破線: 投影結果（未確定）"),body);
+    legend->setObjectName(QStringLiteral("projectionLegend"));layout->addWidget(legend);
+    pickPrompt_=new QLabel(body);pickPrompt_->setObjectName(QStringLiteral("projectionPickPrompt"));pickPrompt_->setWordWrap(true);layout->addWidget(pickPrompt_);
+    pickWire_=button(QStringLiteral("① 元ワイヤーを選ぶ"),[this]{SetPickRole(0);});
+    pickWire_->setObjectName(QStringLiteral("projectionPickWire"));pickWire_->setCheckable(true);
     wireRows_=new QListWidget(body);wireRows_->setObjectName(QStringLiteral("projectionWireRows"));wireRows_->setMaximumHeight(110);layout->addWidget(wireRows_);
     button(QStringLiteral("選択行のワイヤーを解除"),[this]{const int i=wireRows_->currentRow();if(i>=0){sources_.erase(sources_.begin()+i);RefreshRows();Invalidate();}});
-    button(QStringLiteral("② 投影先の面・フェイスを追加・解除"),[this]{role_=1;status_->setText(QStringLiteral("投影する面の内側を選んでください。複数の面を選べます。"));});
+    pickTarget_=button(QStringLiteral("② 投影先を選ぶ"),[this]{SetPickRole(1);});
+    pickTarget_->setObjectName(QStringLiteral("projectionPickTarget"));pickTarget_->setCheckable(true);
     targetRows_=new QListWidget(body);targetRows_->setObjectName(QStringLiteral("projectionTargetRows"));targetRows_->setMaximumHeight(100);layout->addWidget(targetRows_);
     button(QStringLiteral("選択行の面を解除"),[this]{const int i=targetRows_->currentRow();if(i>=0){kernel::ReleaseShape(targets_[i].shape);targets_.erase(targets_.begin()+i);RefreshRows();Invalidate();}});
-    button(QStringLiteral("左ペインの選択を取り込む"),[this]{TakeSelection();});
+    button(QStringLiteral("左ペインの選択を現在の役割へ追加"),[this]{TakeActiveSelection();});
+    output_=new QComboBox(body);output_->setObjectName(QStringLiteral("projectionOutput"));
+    output_->addItems({QStringLiteral("出力: ワイヤーのみ"),QStringLiteral("出力: 面＋ワイヤー（閉領域を選択面へ）")});layout->addWidget(output_);
+    auto* outputHelp=new QLabel(QStringLiteral("面＋ワイヤー: 閉じた平面輪郭を指定方向に投影し、選択したすべてのフェイスの曲率・穴を保ちます。手前判定はワイヤーのみで使用します。"),body);
+    outputHelp->setWordWrap(true);outputHelp->setProperty("projectionOnlyMode",0);layout->addWidget(outputHelp);
+    connect(output_,&QComboBox::currentIndexChanged,this,[this]{hits_->setVisible(mode_->currentIndex()==0&&output_->currentIndex()==0);Invalidate();});
     BuildSettings(layout);
     button(QStringLiteral("プレビューを更新"),[this]{Preview();});layout->addStretch();
     status_=new QLabel(QStringLiteral("元ワイヤーと投影先を選び、プレビューを確認してEnterで確定。"),this);status_->setObjectName(QStringLiteral("projectionStatus"));status_->setWordWrap(true);status_->setMinimumHeight(68);outer->addWidget(status_);
@@ -72,12 +92,14 @@ void V2ProjectionTool::BuildUi() {
     connect(mode_,&QComboBox::currentIndexChanged,this,[this]{RefreshModeUi();Invalidate();});RefreshModeUi();
 }
 void V2ProjectionTool::RefreshModeUi() {
-    const int mode=mode_->currentIndex();role_=0;
+    const int mode=mode_->currentIndex();SetPickRole(0);
+    if(mode!=0)output_->setCurrentIndex(0);output_->setEnabled(mode==0);
     for(auto* widget:findChildren<QWidget*>()) {
         const auto setting=widget->property("projectionOnlyMode");if(!setting.isValid())continue;
         widget->setVisible(setting.toInt()==mode||(setting.toInt()==-1&&mode!=1));
     }
     rotation_->setEnabled(mode==1);RefreshRows();
+    hits_->setVisible(mode==0&&output_->currentIndex()==0);
 }
 void V2ProjectionTool::BuildSettings(QVBoxLayout* layout) {
     layout->addWidget(MakePanelSectionTitle(this,QStringLiteral("設定")));
@@ -87,6 +109,8 @@ void V2ProjectionTool::BuildSettings(QVBoxLayout* layout) {
     connect(hits_,&QComboBox::currentIndexChanged,this,[this]{Invalidate();});
     auto* note=new QLabel(QStringLiteral("方向は元ワイヤーの選択行に適用します。行未選択なら全入力に適用。"),this);note->setWordWrap(true);layout->addWidget(note);
     note->setProperty("projectionOnlyMode",0);
+    auto* allDirections=new QPushButton(QStringLiteral("方向の設定対象: 元ワイヤーすべて"),this);allDirections->setProperty("projectionOnlyMode",0);layout->addWidget(allDirections);
+    connect(allDirections,&QPushButton::clicked,this,[this]{wireRows_->setCurrentRow(-1);wireRows_->clearSelection();});
     auto direction=[&](const QString& text,geometry::Vector3 d){auto* b=new QPushButton(text,this);b->setProperty("projectionOnlyMode",0);connect(b,&QPushButton::clicked,this,[this,d]{SetDirection(d);});return b;};
     auto* axes=new QHBoxLayout;axes->addWidget(direction(QStringLiteral("X方向"),{1,0,0}));axes->addWidget(direction(QStringLiteral("Y方向"),{0,1,0}));axes->addWidget(direction(QStringLiteral("Z方向"),{0,0,1}));layout->addLayout(axes);
     auto* normal=new QPushButton(QStringLiteral("作業平面の法線方向"),this);layout->addWidget(normal);
@@ -95,12 +119,15 @@ void V2ProjectionTool::BuildSettings(QVBoxLayout* layout) {
     auto* reverse=new QPushButton(QStringLiteral("方向を反転"),this);layout->addWidget(reverse);
     reverse->setProperty("projectionOnlyMode",0);
     connect(reverse,&QPushButton::clicked,this,[this]{const int row=wireRows_->currentRow();for(std::size_t i=0;i<sources_.size();++i)if(row<0||i==static_cast<std::size_t>(row)){sources_[i].input.direction=-sources_[i].input.direction;sources_[i].directionExplicit=true;}RefreshRows();Invalidate();});
-    auto pick=[&](const QString& text,int role){auto* b=new QPushButton(text,this);b->setProperty("projectionOnlyMode",role==4?0:1);layout->addWidget(b);connect(b,&QPushButton::clicked,this,[this,role,text]{role_=role;status_->setText(text+QStringLiteral(": 3Dビューでクリックしてください。"));});};
+    auto pick=[&](const QString& text,int role){auto* b=new QPushButton(text,this);b->setProperty("projectionOnlyMode",role==4?0:1);layout->addWidget(b);connect(b,&QPushButton::clicked,this,[this,role]{SetPickRole(role);});};
     pick(QStringLiteral("線で投影方向を指定"),4);pick(QStringLiteral("巻き付け: 元ワイヤーの基準点"),2);pick(QStringLiteral("巻き付け: 面上の配置基準点"),3);
     auto* plane=new QPushButton(QStringLiteral("巻き付け元の平面を現在の作業面にする"),this);layout->addWidget(plane);
     plane->setProperty("projectionOnlyMode",1);
     connect(plane,&QPushButton::clicked,this,[this]{sourceU_=window_.viewport_->WorkPlane().uAxis;sourceV_=window_.viewport_->WorkPlane().vAxis;Invalidate();});
-    auto field=[&](const QString& name,const char* id,double low,double high,double value,const QString& unit){auto* label=new QLabel(name,this);layout->addWidget(label);auto* s=new V2NumericSpinBox(this);s->setObjectName(QString::fromLatin1(id));s->setDecimals(6);s->setRange(low,high);s->setValue(value);s->setSuffix(unit);layout->addWidget(s);if(QString::fromLatin1(id)!="projectionTolerance"){const int mode=QString::fromLatin1(id)=="projectionRotation"?1:-1;label->setProperty("projectionOnlyMode",mode);s->setProperty("projectionOnlyMode",mode);}connect(s,&QDoubleSpinBox::valueChanged,this,[this]{Invalidate();});return s;};
+    auto* detailsButton=new QToolButton(this);detailsButton->setText(QStringLiteral("詳細（許容偏差・最大距離・巻き付け角）"));detailsButton->setCheckable(true);detailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);detailsButton->setArrowType(Qt::RightArrow);layout->addWidget(detailsButton);
+    auto* details=new QWidget(this);auto* fields=new QVBoxLayout(details);fields->setContentsMargins(0,0,0,0);layout->addWidget(details);details->hide();
+    connect(detailsButton,&QToolButton::toggled,this,[details,detailsButton](bool expanded){details->setVisible(expanded);detailsButton->setArrowType(expanded?Qt::DownArrow:Qt::RightArrow);});
+    auto field=[&](const QString& name,const char* id,double low,double high,double value,const QString& unit){auto* label=new QLabel(name,details);fields->addWidget(label);auto* s=new V2NumericSpinBox(details);s->setObjectName(QString::fromLatin1(id));s->setDecimals(6);s->setRange(low,high);s->setValue(value);s->setSuffix(unit);fields->addWidget(s);if(QString::fromLatin1(id)!="projectionTolerance"){const int mode=QString::fromLatin1(id)=="projectionRotation"?1:-1;label->setProperty("projectionOnlyMode",mode);s->setProperty("projectionOnlyMode",mode);}connect(s,&QDoubleSpinBox::valueChanged,this,[this]{Invalidate();});return s;};
     tolerance_=field(QStringLiteral("許容偏差"),"projectionTolerance",0.000001,1,0.001,QStringLiteral(" mm"));
     distance_=field(QStringLiteral("最大投影距離"),"projectionDistance",0.000001,1000000,10000,QStringLiteral(" mm"));
     rotation_=field(QStringLiteral("巻き付けの向き"),"projectionRotation",-360,360,0,QStringLiteral(" °"));rotation_->setEnabled(false);
@@ -164,5 +191,5 @@ bool V2ProjectionTool::eventFilter(QObject* object,QEvent* event) {
     PickViewport(mouse->position());return true;
 }
 void V2ProjectionTool::closeEvent(QCloseEvent* event) {
-    update_->stop();qApp->removeEventFilter(this);window_.viewport_->HideToolPreview();setObjectName({});QWidget::closeEvent(event);
+    update_->stop();qApp->removeEventFilter(this);ClearMarks();window_.viewport_->HideToolPreview();setObjectName({});QWidget::closeEvent(event);
 }

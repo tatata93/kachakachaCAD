@@ -200,5 +200,40 @@ KACHA_V2_TEST(projection, C0RationalFaceUnchangedInBothProjectionModes) {
         Require(kernel::CaptureOutputShape(face.h).Value()==original,"native caller bytes protected in every mode");
     }
 }
+KACHA_V2_TEST(projection, NativeRegionKeepsFaceAndClosedBoundary) {
+    auto face=Plane();const auto original=kernel::CaptureOutputShape(face.h).Value();
+    const auto r=kernel::ProjectNativeRegions({face.h},{{ClosedSquare(10),{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().faces.size()==1&&r.Value().boundary.wires.size()==1,"one native window face");
+    OnSurface(r.Value().boundary,1e-6,[](auto p){return std::abs(p.z);});
+    for(const auto& wire:r.Value().boundary.wires)Require((wire.front().StartPoint()-wire.back().EndPoint()).Length()<1e-6,"native closed loop");
+    for(const auto& h:r.Value().faces)kernel::ReleaseShape(h);
+    Require(kernel::CaptureOutputShape(face.h).Value()==original,"face region projection preserves original bytes");
+}
+KACHA_V2_TEST(projection, NativeRegionPreservesHole) {
+    BRepBuilderAPI_MakeFace builder(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),-10,10,-10,10);
+    BRepBuilderAPI_MakePolygon hole;hole.Add(gp_Pnt(-1,-1,0));hole.Add(gp_Pnt(-1,1,0));hole.Add(gp_Pnt(1,1,0));hole.Add(gp_Pnt(1,-1,0));hole.Close();builder.Add(hole.Wire());Owned face(builder.Face());
+    const auto r=kernel::ProjectNativeRegions({face.h},{{ClosedSquare(10),{0,0,-1}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().faces.size()==1&&r.Value().boundary.wires.size()==2,"window region preserves target hole");
+    for(const auto& h:r.Value().faces)kernel::ReleaseShape(h);
+}
+KACHA_V2_TEST(projection, NativeRegionOnCurvedFaceAndMultipleTargets) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),-.8,.8,-10,10).Face());
+    const std::vector<geometry::CurveSegment> window={Line({20,-2,-2},{20,2,-2}),Line({20,2,-2},{20,2,2}),Line({20,2,2},{20,-2,2}),Line({20,-2,2},{20,-2,-2})};
+    const auto original=kernel::CaptureOutputShape(cylinder.h).Value();
+    const auto r=kernel::ProjectNativeRegions({cylinder.h},{{window,{-1,0,0}}},Options());
+    Require(r.HasValue(),r.FirstMessageJa());OnSurface(r.Value().boundary,.003,[](auto p){return std::abs(std::hypot(p.x,p.y)-10);});
+    for(const auto& h:r.Value().faces)kernel::ReleaseShape(h);
+    Require(kernel::CaptureOutputShape(cylinder.h).Value()==original,"curved target unchanged");
+    auto front=Plane(3),back=Plane(0);const auto both=kernel::ProjectNativeRegions({front.h,back.h},{{ClosedSquare(10),{0,0,-1}}},Options());
+    Require(both.HasValue()&&both.Value().faces.size()==2,"only explicitly selected faces receive region");
+    for(const auto& h:both.Value().faces)kernel::ReleaseShape(h);
+}
+KACHA_V2_TEST(projection, NativeRegionRefusesOpenParallelAndNonplanar) {
+    auto face=Plane();auto curves=ClosedSquare(10);curves.pop_back();
+    Require(!kernel::ProjectNativeRegions({face.h},{{curves,{0,0,-1}}},Options()).HasValue(),"open contour refusal");
+    Require(!kernel::ProjectNativeRegions({face.h},{{ClosedSquare(10),{1,0,0}}},Options()).HasValue(),"parallel direction refusal");
+    curves={Line({0,0,10},{2,0,10}),Line({2,0,10},{2,2,11}),Line({2,2,11},{0,2,10}),Line({0,2,10},{0,0,10})};
+    Require(!kernel::ProjectNativeRegions({face.h},{{curves,{0,0,-1}}},Options()).HasValue(),"nonplanar source refusal");
+}
 #endif
 KACHA_V2_TEST_MAIN("kernel_wire_projection_tests")

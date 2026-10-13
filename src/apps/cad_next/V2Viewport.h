@@ -268,6 +268,19 @@ public:
     //! 空にすると、ふだんの色(選択の色)に戻る。
     void SetRoleColors(std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> colors);
     [[nodiscard]] std::optional<QColor> RoleColorOf(const kachakacha::v2::base::EntityId& id) const;
+    struct SegmentRoleColor { kachakacha::v2::base::EntityId entityId;
+        kachakacha::v2::base::SegmentId segmentId; QColor color; };
+    void SetSegmentRoleColors(std::vector<SegmentRoleColor> colors);
+    [[nodiscard]] std::optional<QColor> SegmentRoleColorOf(
+        const kachakacha::v2::base::EntityId& id, const kachakacha::v2::base::SegmentId& segmentId) const;
+    struct FaceRoleColor {
+        kachakacha::v2::base::EntityId entityId;
+        std::optional<std::size_t> faceIndex;
+        QColor color;
+    };
+    void SetFaceRoleColors(std::vector<FaceRoleColor> colors);
+    [[nodiscard]] std::optional<QColor> FaceRoleColorOf(
+        const kachakacha::v2::base::EntityId& id, std::size_t faceIndex) const;
     //! いま出ている札。試験から読む。
     [[nodiscard]] const std::vector<PlacedRoleLabel>& ToolRoleLabels() const noexcept
     {
@@ -1091,6 +1104,11 @@ private:
     //! 3D の中の役割の札。空なら何も描かない。
     std::vector<PlacedRoleLabel> toolRoleLabels_;
     std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> roleColors_;
+    std::vector<FaceRoleColor> faceRoleColors_;
+    std::vector<SegmentRoleColor> segmentRoleColors_;
+    struct RoleShapePiece { kachakacha::v2::base::EntityId entityId;
+        kachakacha::v2::modeling::ShapeMesh mesh; QColor color; };
+    std::vector<RoleShapePiece> roleShapePieces_;
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;

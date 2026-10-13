@@ -386,7 +386,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         double width = plain && curve.construction ? display_.constructionWidthPx
                                                    : SemanticWidthPx(state);
         // 面を作っている最中は、欄に入った線を役割の色で出す(3D・右の棚・札で同じ色)。
-        if (const auto role = RoleColorOf(curve.entityId); role.has_value()) {
+        if (const auto role = SegmentRoleColorOf(curve.entityId,curve.segmentId); role.has_value()) {
             color = *role;
             width = std::max(width, 3.0);
         }
@@ -679,6 +679,7 @@ void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
 {
     ++shapeViewRevision_;
     shapeViews_ = std::move(shapes);
+    if (!faceRoleColors_.empty()) SetFaceRoleColors(faceRoleColors_);
     // 当たり判定へ渡す網を作り直す。カーソルが動くたびに三角形を写さないため、
     // ここで1度だけ並べておく。並びは shapeViews_ と同じ(索引で引き当てる)。
     pickMeshes_.clear();

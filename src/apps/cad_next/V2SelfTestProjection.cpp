@@ -2,6 +2,8 @@
 #include "V2ProjectionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
+#include "V2Calculation.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -20,6 +22,8 @@
 #include <QTemporaryDir>
 #include <QString>
 #include <QWidget>
+#include <QTreeWidgetItem>
+#include <QBrush>
 #include <cstdlib>
 namespace kachakacha::v2::selftest {
 namespace {
@@ -105,8 +109,70 @@ bool ManualDirectionPreserved(V2MainWindow& window) {
     if(!Explain("PROJ manual direction is not automatically reversed",!tool->Preview()))return false;
     reverse->click();return Explain("PROJ one-button reverse restores projection",tool->Preview());
 }
+bool RoleMarks(V2MainWindow& window) {
+    if(!Fixture(window,true))return false;
+    auto* row=window.ItemOfEntity(WireId());auto* category=row->parent();category->setExpanded(false);
+    const auto name=row->text(0);const auto snapshot=window.Session().GetDocument().Snapshot();
+    auto* tool=V2ProjectionTool::Open(window);app::SelectionRef w;w.entityId=WireId();tool->AddWire(w);
+    app::SelectionRef t;t.entityId=TargetId();t.pickedFaceIndex=0;tool->AddTarget(t);
+    const auto source=window.Viewport().RoleColorOf(WireId());
+    if(!Explain("PROJ source marked in viewport and collapsed tree",source&&row->text(0).contains(QStringLiteral("元 1"))&&!category->isExpanded()))return false;
+    if(!Explain("PROJ target marks only chosen native face",window.Viewport().FaceRoleColorOf(TargetId(),0)
+        &&!window.Viewport().FaceRoleColorOf(TargetId(),1)))return false;
+    tool->CancelInput();
+    return Explain("PROJ cancel restores tree and transient colors without document changes",
+        row->text(0)==name&&!category->isExpanded()&&!window.Viewport().RoleColorOf(WireId())
+        &&!window.Viewport().FaceRoleColorOf(TargetId(),0)&&window.Viewport().ToolRoleLabels().empty()
+        &&window.Session().GetDocument().Snapshot().revision==snapshot.revision);
 }
-std::vector<SelfTestCase> ProjectionCases(){return {{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
+bool TreeInput(V2MainWindow& window) {
+    if(!Fixture(window))return false;auto* tool=V2ProjectionTool::Open(window);
+    auto* source=tool->findChild<QPushButton*>("projectionPickWire");auto* target=tool->findChild<QPushButton*>("projectionPickTarget");
+    if(!source->isChecked()||target->isChecked())return false;
+    window.SelectTreeRowForEntity(WireId());window.EntityTree()->itemClicked(window.ItemOfEntity(WireId()),0);
+    if(!Explain("PROJ tree click directly adds source",tool->WireCount()==1))return false;
+    target->click();window.SelectTreeRowForEntity(TargetId());window.EntityTree()->itemClicked(window.ItemOfEntity(TargetId()),0);
+    if(!Explain("PROJ active slot and tree target",target->isChecked()&&!source->isChecked()&&tool->TargetCount()==1&&tool->Preview()))return false;
+    window.RunCommand("selection.activate");
+    return Explain("PROJ tool switch removes all input marks",window.Viewport().ToolRoleLabels().empty()
+        &&!window.Viewport().RoleColorOf(WireId())&&!window.Viewport().FaceRoleColorOf(TargetId(),0)
+        &&window.ItemOfEntity(WireId())->text(0)==QStringLiteral("投影元"));
+}
+bool SegmentMarks(V2MainWindow& window) {
+    if(!Fixture(window))return false;const auto name=window.ItemOfEntity(WireId())->text(0);
+    auto* tool=V2ProjectionTool::Open(window);app::SelectionRef ref;ref.entityId=WireId();
+    ref.segmentId=*base::SegmentId::Parse("b0000000-0000-4000-8000-000000000201");tool->AddWire(ref);
+    ref.segmentId=*base::SegmentId::Parse("b0000000-0000-4000-8000-000000000202");tool->AddWire(ref);
+    if(!Explain("PROJ only explicit source segments are colored",!window.Viewport().RoleColorOf(WireId())
+        &&window.Viewport().SegmentRoleColorOf(WireId(),*base::SegmentId::Parse("b0000000-0000-4000-8000-000000000201"))
+        &&!window.Viewport().SegmentRoleColorOf(WireId(),*base::SegmentId::Parse("b0000000-0000-4000-8000-000000000203"))))return false;
+    tool->CancelInput();return Explain("PROJ multiple segment labels restore original editable name",
+        window.ItemOfEntity(WireId())->text(0)==name&&(window.ItemOfEntity(WireId())->flags()&Qt::ItemIsEditable));
+}
+bool RegionOutput(V2MainWindow& window) {
+    if(!Fixture(window,true))return false;auto* tool=V2ProjectionTool::Open(window);
+    app::SelectionRef source;source.entityId=WireId();tool->AddWire(source);
+    app::SelectionRef face;face.entityId=TargetId();face.pickedFaceIndex=5;tool->AddTarget(face);
+    // Face index 5 is the box's top face (confirmed by the existing viewport pick test).
+    auto* output=tool->findChild<QComboBox*>("projectionOutput");output->setCurrentIndex(1);
+    if(!Explain("PROJ closed region preview contains native face",tool->Preview()&&window.Viewport().ToolPreviewFaceCount()>0))return false;
+    const auto count=window.Session().GetDocument().Snapshot().entities.size();
+    if(!tool->Commit())return false;const auto& entities=window.Session().GetDocument().Snapshot().entities;
+    if(!Explain("PROJ native face and wire committed together",entities.size()==count+2))return false;
+    window.RunCommand("edit.undo");return Explain("PROJ region projection one Undo",window.Session().GetDocument().Snapshot().entities.size()==count);
+}
+bool SourcePlaneDefault(V2MainWindow& window) {
+    if(!Fixture(window))return false;
+    auto plane=window.Viewport().WorkPlane();plane.normal={1,0,0};plane.uAxis={0,1,0};plane.vAxis={0,0,1};
+    window.Viewport().SetWorkPlane(plane);auto* tool=V2ProjectionTool::Open(window);
+    return Explain("PROJ source plane supplies direction independently of current drawing plane",AddGuideInputs(*tool)&&tool->Preview());
+}
+}
+std::vector<SelfTestCase> OwnerProjectionCases();
+std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
     {"PROJ preselection",Preselection},{"PROJ solid face viewport click",SolidFaceClick},{"PROJ wrap closest fractional numeric retry",WrapClosestAndFraction},
-    {"PROJ manual direction and one-button reverse",ManualDirectionPreserved}};}
+    {"PROJ manual direction and one-button reverse",ManualDirectionPreserved},{"PROJ role marks preserve tree and document",RoleMarks},
+    {"PROJ direct tree inputs and lifecycle",TreeInput},{"PROJ explicit segments and multiple marks",SegmentMarks},
+    {"PROJ native region output and Undo",RegionOutput},{"PROJ source-plane direction default",SourcePlaneDefault}};
+    const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
 }

@@ -22,6 +22,9 @@ template<class T> void Discard(const T& value) {
     }
     if constexpr (requires { value.parts; }) for (const auto& part : value.parts) Discard(part);
     if constexpr (requires { value.pieces; }) for (const auto& piece : value.pieces) Discard(piece);
+    if constexpr (requires { value.faces.front().Valid(); }) {
+        for (const auto& face : value.faces) if (face.Valid()) kachakacha::v2::kernel::ReleaseShape(face);
+    }
     if constexpr (requires { value.positive.Valid(); }) {
         if (value.positive.Valid()) kachakacha::v2::kernel::ReleaseShape(value.positive);
     }

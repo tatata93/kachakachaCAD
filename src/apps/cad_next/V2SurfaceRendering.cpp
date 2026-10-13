@@ -20,7 +20,8 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
         const std::uint32_t color = shape.surface ? (selected ? 0xb0d2e8 : 0x91bed9)
             : (selected ? 0xc8d4df : 0xb2bcc7);
         for (const auto& triangle : shape.mesh.triangles) {
-            raster.Draw(triangle, mapping_, forward, shape.mesh.closed, color);
+            const auto role = FaceRoleColorOf(shape.entityId, triangle.faceIndex);
+            raster.Draw(triangle, mapping_, forward, shape.mesh.closed, role ? role->rgb() & 0xffffffu : color);
         }
     }
     struct Layer { const modeling::ImageTriangle* triangle; const view::RasterImage* image; double depth; };
@@ -63,7 +64,13 @@ bool V2Viewport::DrawGpuShapes(QPainter& painter) const
         if(selected)edge=SemanticColor(kachakacha::v2::app::SemanticState::Selected).darker(125);
         else if(hovered)edge=SemanticColor(kachakacha::v2::app::SemanticState::Hover);
         const unsigned fill=shape.surface?(selected?0xb0d2e8:0x91bed9):(selected?0xc8d4df:0xb2bcc7);
-        items.push_back({&shape.mesh,fill,edge.rgb()&0xffffffu,
+        bool split = false;
+        for (const auto& piece : roleShapePieces_) if (piece.entityId == shape.entityId) {
+            items.push_back({&piece.mesh,piece.color.isValid() ? piece.color.rgb()&0xffffffu : fill,
+                edge.rgb()&0xffffffu,display_.shapesVisible&&EntityShown(shape.entityId),selected||hovered});
+            split = true;
+        }
+        if (!split) items.push_back({&shape.mesh,fill,edge.rgb()&0xffffffu,
             display_.shapesVisible&&EntityShown(shape.entityId),selected||hovered});
     }
     const bool native=gpuRenderer_.PaintingFrame();

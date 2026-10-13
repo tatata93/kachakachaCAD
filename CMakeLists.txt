@@ -766,6 +766,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
     src/next_occt/kachakacha/kernel/OcctWireProjection.cpp
+    src/next_occt/kachakacha/kernel/OcctProjectedRegions.cpp
     src/next_occt/kachakacha/kernel/OcctWireWrap.cpp
     src/next_occt/kachakacha/kernel/OcctProjectionVisibility.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceAnalysis.cpp
@@ -1222,7 +1223,11 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2CurvedEmbossUi.cpp
         src/apps/cad_next/V2ProjectionTool.cpp
         src/apps/cad_next/V2ProjectionUi.cpp
+        src/apps/cad_next/V2ProjectionMarks.cpp
+        src/apps/cad_next/V2ProjectionRegions.cpp
+        src/apps/cad_next/V2FaceRoleColors.cpp
         src/apps/cad_next/V2SelfTestProjection.cpp
+        src/apps/cad_next/V2SelfTestOwnerProjection.cpp
         src/apps/cad_next/V2SelfTestCurvedEmboss.cpp
         src/apps/cad_next/V2ShellSplitDock.cpp
         src/apps/cad_next/V2ShellSplitTool.cpp

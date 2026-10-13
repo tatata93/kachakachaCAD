@@ -32,4 +32,13 @@ struct WireProjectionResult {
 base::Result<WireProjectionResult> ProjectNativeWires(
     const std::vector<modeling::KernelShapeHandle>& faces,
     const std::vector<WireProjectionInput>& inputs, const WireProjectionOptions& options);
+// Closed planar regions, along a direction, on every explicitly selected face.
+// Caller owns the returned native face handles. Source/target topology is unchanged.
+struct RegionProjectionResult {
+    std::vector<modeling::KernelShapeHandle> faces;
+    WireProjectionResult boundary;
+};
+base::Result<RegionProjectionResult> ProjectNativeRegions(
+    const std::vector<modeling::KernelShapeHandle>& faces,
+    const std::vector<WireProjectionInput>& inputs, const WireProjectionOptions& options);
 }

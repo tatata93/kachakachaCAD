@@ -693,6 +693,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         }
         made.thickness = loader.ReadExpression(definition, "thickness", where);
         made.placement = static_cast<int>(loader.NumberOr(definition, "placement", 1.0));
+        made.correctOpposite = loader.BoolOr(definition, "correctOpposite", false);
         if (const JsonValue* plane = definition.Find("targetPlane");
             plane != nullptr && plane->Type() == JsonType::String) {
             made.targetPlane = EntityId::Parse(plane->AsString());

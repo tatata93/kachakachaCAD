@@ -220,6 +220,7 @@ int Worker(const QString& directory) {
             shapes.push_back(shape.Value());
         }
         modeling::KernelShapeHandle result;double volume=0,thickness=0,previous=0;
+        kernel::ThickenedSolid wall;
         if(response.isEmpty()&&!shapes.empty()) {
             const auto operation=request.value("operation").toString();
             if(operation=="thicken") {
@@ -230,9 +231,9 @@ int Worker(const QString& directory) {
                 tolerance.numericEpsilon=request.value("epsilon").toDouble();
                 const auto built=request.value("toPlane").toBool()
                     ? kernel::ThickenSurfaceToPlane(shapes.front(),Point(request.value("origin")),Point(request.value("normal")),tolerance)
-                    : kernel::ThickenSurface(shapes.front(),request.value("thickness").toDouble(),static_cast<fabrication::ThicknessPlacement>(request.value("placement").toInt()),tolerance);
+                    : kernel::ThickenSurface(shapes.front(),request.value("thickness").toDouble(),static_cast<fabrication::ThicknessPlacement>(request.value("placement").toInt()),tolerance,request.value("correctOpposite").toBool());
                 if(!built.HasValue())response=Diagnostic(built.FirstDiagnostic());
-                else {result=built.Value().handle;volume=built.Value().volumeMm3;thickness=built.Value().thicknessMm;}
+                else {result=built.Value().handle;volume=built.Value().volumeMm3;thickness=built.Value().thicknessMm;wall=built.Value();}
             } else if(operation=="boolean"&&shapes.size()>1) {
                 Phase("部品の結合・切取りと安全検査を行っています…");
                 const auto built=kernel::BuildBooleans(static_cast<kernel::BooleanOperation>(request.value("kind").toInt()),shapes.front(),{shapes.begin()+1,shapes.end()},request.value("linear").toDouble());
@@ -245,7 +246,9 @@ int Worker(const QString& directory) {
             const auto captured=kernel::CaptureOutputShape(result);
             if(!captured.HasValue())response=Diagnostic(captured.FirstDiagnostic());
             else response={{"ok",true},{"brep",QString::fromLatin1(QByteArray::fromStdString(captured.Value()).toBase64())},
-                {"volume",volume},{"thickness",thickness},{"previous",previous}};
+                {"volume",volume},{"thickness",thickness},{"previous",previous},
+                {"corrected",wall.corrected},{"normalMin",wall.normalThicknessMinMm},{"normalMax",wall.normalThicknessMaxMm},
+                {"maxDeviation",wall.maxOffsetDeviationMm},{"rmsDeviation",wall.rmsOffsetDeviationMm}};
         }
         if(response.isEmpty())response=Diagnostic(Failed(QStringLiteral("計算の入力が不正です。")));
     }catch(const std::exception& e){response=Diagnostic(Failed(QString::fromUtf8(e.what())));}
@@ -256,10 +259,10 @@ int Worker(const QString& directory) {
 
 base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelShapeHandle source,
     double thickness,fabrication::ThicknessPlacement placement,const std::optional<modeling::WorkPlaneFrame>& plane,
-    const geometry::GeometryTolerance& tolerance,bool interactivePreview) {
+    const geometry::GeometryTolerance& tolerance,bool interactivePreview,bool correctOpposite) {
     using Out=base::Result<kernel::ThickenedSolid>;
     if(Active())return Out::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
-    QJsonObject request{{"operation","thicken"},{"thickness",thickness},{"placement",static_cast<int>(placement)},
+    QJsonObject request{{"operation","thicken"},{"correctOpposite",correctOpposite},{"thickness",thickness},{"placement",static_cast<int>(placement)},
         {"linear",tolerance.modelLinearMm},{"angular",tolerance.modelAngularRad},{"epsilon",tolerance.numericEpsilon},{"toPlane",plane.has_value()}};
     if(plane){request["origin"]=Point(plane->origin);request["normal"]=Point(plane->normal);}
     const auto key=interactivePreview?PreviewKey(request,source):QByteArray{};
@@ -272,6 +275,9 @@ base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelSha
     if(!handle.HasValue())return Out::Failure(handle.Diagnostics());
     if(!cached)CachePreview(key,data);
     kernel::ThickenedSolid made;made.handle=handle.Value();made.volumeMm3=data.value("volume").toDouble();made.thicknessMm=data.value("thickness").toDouble();
+    made.corrected=data.value("corrected").toBool();
+    made.normalThicknessMinMm=data.value("normalMin").toDouble();made.normalThicknessMaxMm=data.value("normalMax").toDouble();
+    made.maxOffsetDeviationMm=data.value("maxDeviation").toDouble();made.rmsOffsetDeviationMm=data.value("rmsDeviation").toDouble();
     const auto edges=kernel::OutputEdges(made.handle,tolerance.modelLinearMm);
     if(edges.HasValue())made.edges=edges.Value();
     return Out::Success(std::move(made));

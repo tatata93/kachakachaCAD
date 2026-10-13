@@ -40,6 +40,7 @@
 #include <QDir>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <QKeyEvent>
 #include <QEvent>
 #include <QChar>
@@ -317,6 +318,7 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
             &&!window.ThickenDock().ClickConfirm()&&window.Session().GetDocument().Revision()==revision;
         window.RunCommand("view.fit_all");
         window.Viewport().SetViewDirection(ViewDirection::Front);moved=window.Viewport().Direction()==ViewDirection::Front;
+        (void)window.ThickenDock().ClickCorrection(true);
         auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");
         if(amount) {
             amount->selectAll();
@@ -332,7 +334,7 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
     timer.start();const bool picked=ClickOnAnyGuideSurface(window);timer.stop();
     if(!Explain("parameters and viewport stay enabled during real calculation",picked&&changed&&enabled&&moved&&consistent&&decimal))return false;
     if(!Explain("latest input replaces cancelled generation without committing",window.ThickenInput().thicknessMm==.035
-        &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.Session().GetDocument().Revision()==revision
+        &&window.ThickenInput().placement==ThicknessPlacement::Outside&&window.ThickenInput().correctOpposite&&window.Session().GetDocument().Revision()==revision
         &&CountOfKind(window,EntityKind::Part)==0&&!window.Viewport().ToolPreview().empty()))return false;
     if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Inside))return false;
     int jobs=0;QTimer observed;observed.setInterval(1);
@@ -343,11 +345,96 @@ bool CaseInteractiveThicknessChanges(V2MainWindow& window)
     if(!window.ThickenDock().ClickConfirm())return false;
     bool correct=false;
     for(const auto& f:window.Session().GetDocument().Snapshot().features)
-        if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&f.definition))correct=d->thickness.value==.035&&d->placement==0;
+        if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&f.definition))correct=d->thickness.value==.035&&d->placement==0&&d->correctOpposite;
     window.RunCommand("edit.undo");window.RunCommand("edit.redo");
     window.Viewport().SetViewDirection(ViewDirection::Isometric);
     return Explain("only the latest thickness is committed and survives undo redo",correct
         &&CountOfKind(window,EntityKind::Part)==1&&window.RebuildProblems().isEmpty());
+}
+
+bool CaseCorrectionButtons(V2MainWindow& window)
+{
+    if(!ArmThickenOnFreshSurface(window)||!ClickOnAnyGuideSurface(window))return false;
+    const auto revision=window.Session().GetDocument().Revision();
+    if(!window.ThickenDock().ClickCorrection(true)||!window.ThickenInput().correctOpposite)return false;
+    if(!window.ThickenDock().ClickCorrection(false)||window.ThickenInput().correctOpposite)return false;
+    if(!window.ThickenDock().ClickCorrection(true))return false;
+    QApplication::processEvents();
+    const auto* status=window.findChild<QLabel*>("thickenStatus");
+    if(!Explain("result lines have enough visible height",status&&status->height()>=status->heightForWidth(status->width())))return false;
+    if(!window.ThickenDock().ClickConfirm())return false;
+    bool recorded=false;
+    for(const auto& feature:window.Session().GetDocument().Snapshot().features)
+        if(const auto* definition=std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition))recorded=definition->correctOpposite;
+    if(!Explain("correction mode is explicit and committed once",recorded&&window.Session().GetDocument().Revision()>revision))return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Part)!=0)return false;
+    window.RunCommand("edit.redo");
+    if(!window.SaveAndReopen(QStringLiteral("correction-option-roundtrip.kcd2")))return false;
+    recorded=false;
+    for(const auto& feature:window.Session().GetDocument().Snapshot().features)
+        if(const auto* definition=std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition))recorded=definition->correctOpposite;
+    return Explain("correction flag survives native rebuilt save",recorded&&window.RebuildProblems().isEmpty()&&CountOfKind(window,EntityKind::Part)==1);
+}
+bool CaseCorrectionThemes(V2MainWindow& window)
+{
+    for(const auto theme:{UiTheme::Normal,UiTheme::Windows95}) {
+        window.ApplyTheme(theme);
+        if(!CaseCorrectionButtons(window)){window.ApplyTheme(UiTheme::Normal);return false;}
+    }
+    window.ApplyTheme(UiTheme::Normal);return true;
+}
+
+bool CaseOwnerCorrectedThickness(V2MainWindow& window)
+{
+    const auto path=qEnvironmentVariable("KACHACAD_THICKEN_TEST_FILE");
+    const auto directory=qEnvironmentVariable("KACHACAD_THICKEN_TEST_OUTPUT");
+    QFile sourceFile(path);if(!sourceFile.open(QIODevice::ReadOnly))return false;
+    const auto original=sourceFile.readAll();sourceFile.close();
+    if(!directory.isEmpty())QDir().mkpath(directory);
+    for(const auto placement:{ThicknessPlacement::Inside,ThicknessPlacement::Centered}) {
+        if(!window.OpenDocumentFile(path))return false;
+        base::EntityId source;
+        for(const auto& feature:window.Session().GetDocument().Snapshot().features)
+            if(const auto* d=std::get_if<domain::CreateGuideSurfaceDefinition>(&feature.definition);d&&d->method==5)
+                source=feature.outputs.front().entityId;
+        if(source.IsNil())return false;
+        const auto before=window.Session().GetDocument().Snapshot();const auto parts=CountOfKind(window,EntityKind::Part);
+        window.resize(1600,1000);window.SetMode(UiMode::Part);window.Viewport().SetViewDirection(ViewDirection::Isometric);window.Viewport().FitToDocument();window.Viewport().SetSelection({});
+        window.RunCommand("part.thicken");auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
+        if(!window.ThickenDock().ClickPlacementCard(placement))return false;
+        app::SelectionSet selected;selected.entityIds={source};window.Viewport().SetSelection(selected);
+        if(!Explain("strict owner offset still refuses a focal fold",!window.ThickenDock().ClickConfirm()))return false;
+        QElapsedTimer time;time.start();if(!window.ThickenDock().ClickCorrection(true))return false;
+        const auto status=window.ThickenDock().StatusTextJa();
+        std::cout<<"owner corrected placement="<<int(placement)<<" elapsed="<<time.elapsed()<<" ms "<<status.toStdString()<<std::endl;
+        if(!Explain("owner corrected preview reports actual measured deviations",status.contains(QStringLiteral("反対面を補正"))
+            &&status.contains(QStringLiteral("法線厚み"))&&window.Session().GetDocument().Snapshot().features.size()==before.features.size()))return false;
+        amount->setValue(0);int repeatedJobs=0;QTimer observed;observed.setInterval(1);
+        QObject::connect(&observed,&QTimer::timeout,&window,[&]{if(V2GeometryJob::Active())++repeatedJobs;});
+        observed.start();time.restart();amount->setValue(.5);observed.stop();
+        std::cout<<"owner corrected reused="<<time.elapsed()<<" ms jobs="<<repeatedJobs<<std::endl;
+        if(!Explain("corrected preview reuses checked result without another process",repeatedJobs==0&&time.elapsed()<2000))return false;
+        const auto stem=placement==ThicknessPlacement::Inside?QStringLiteral("inside"):QStringLiteral("centered");
+        QApplication::processEvents();
+        const auto* shown=window.findChild<QLabel*>("thickenStatus");
+        if(!Explain("owner deviation lines are not clipped",shown&&shown->height()>=shown->heightForWidth(shown->width())))return false;
+        if(!directory.isEmpty())window.grab().save(directory+"/corrected-"+stem+"-preview.png");
+        if(!window.ThickenDock().ClickConfirm()||CountOfKind(window,EntityKind::Part)!=parts+1)return false;
+        bool stored=false;
+        for(const auto& feature:window.Session().GetDocument().Snapshot().features)
+            if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition);d&&d->surface==source)
+                stored=stored||(d->correctOpposite&&d->thickness.value==.5&&d->placement==int(placement));
+        if(!stored)return false;
+        QApplication::processEvents();
+        if(!directory.isEmpty())window.grab().save(directory+"/corrected-"+stem+"-result.png");
+        window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Part)!=parts)return false;
+        window.RunCommand("edit.redo");if(CountOfKind(window,EntityKind::Part)!=parts+1||!window.RebuildProblems().isEmpty())return false;
+        if(!window.SaveAndReopen("owner-corrected-"+stem+".kcd2")||!window.RebuildProblems().isEmpty())return false;
+        // Persist a reviewable result outside the temporary test document.
+        if(!directory.isEmpty()) {window.SetPathChooser([directory,stem](bool){return directory+"/corrected-"+stem+".kcd2";});window.RunCommand("file.save_as");}
+    }
+    if(!sourceFile.open(QIODevice::ReadOnly))return false;
+    return Explain("owner source bytes were never changed",sourceFile.readAll()==original);
 }
 bool CaseOwnerThickness(V2MainWindow& window)
 {
@@ -416,6 +503,7 @@ bool CaseOwnerThickness(V2MainWindow& window)
 std::vector<SelfTestCase> ThickenCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-TH-CORRECT explicit correction buttons and saved native rebuild",CaseCorrectionThemes},
         {"HP-TH-08 editable viewport and coalesced latest thickness preview",CaseInteractiveThicknessChanges},
         {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
         {"HP-TH-06 crashed calculation process preserves document and supports retry",CaseFailedThicknessProcess},
@@ -429,6 +517,7 @@ std::vector<SelfTestCase> ThickenCases()
             CaseHumanPathThickenEscAndRepick},
     };
     if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-OWNER actual owner surfaces",CaseOwnerThickness});
+    if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-CORRECT-OWNER actual owner corrected inside and centered",CaseOwnerCorrectedThickness});
     return cases;
 }
 

@@ -276,7 +276,7 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
         : kachakacha::v2::kernel::ThickenSurface(found->second, definition->thickness.value,
               static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(
                   definition->placement),
-              tolerance);
+              tolerance, definition->correctOpposite);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
         return false;

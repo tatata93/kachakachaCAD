@@ -144,4 +144,20 @@ KACHA_V2_TEST(thicken_input, 平面までの一行は相手の平面を出す)
         "一行: " + footer);
 }
 
+
+KACHA_V2_TEST(thicken_input, corrected_status_reports_sample_range_and_maximum_part_rms)
+{
+    ThickenInputState state;state.surfaces={Id(1)};state.thicknessMm=.5;state.correctOpposite=true;
+    ThickenPreviewOutcome result;result.evaluated=result.available=result.corrected=true;result.count=1;
+    result.thicknessMm=.5;result.normalThicknessMinMm=.484;result.normalThicknessMaxMm=.5;
+    result.maxOffsetDeviationMm=.071;result.rmsOffsetDeviationMm=.012;
+    const auto lines=ThickenStatusLinesJa(state,result,true);std::string all;for(const auto& line:lines)all+=line;
+    Require(all.find("0.484〜0.500")!=std::string::npos,"measured range is shown");
+    Require(all.find("最大 0.071")!=std::string::npos&&all.find("RMS（最大部材）0.012")!=std::string::npos,"deviations and aggregation are explicit");
+}
+KACHA_V2_TEST(thicken_input, footer_keeps_small_fractional_thickness)
+{
+    ThickenInputState state;state.surfaces={Id(1)};state.thicknessMm=.125;
+    Require(ThickenFooterLine(state,"面","",{},true).find("0.125mm")!=std::string::npos,"footer does not round a thickness to 0.1mm");
+}
 KACHA_V2_TEST_MAIN("thicken_input_state_tests")

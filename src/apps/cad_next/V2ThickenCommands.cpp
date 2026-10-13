@@ -169,9 +169,10 @@ void V2MainWindow::RefreshThickenPreview()
             return;
         }
         const auto built = V2GeometryJob::Thicken(this,found->second,input.thicknessMm,
-            input.placement,frame,tolerance,true);
+            input.placement,frame,tolerance,true,input.correctOpposite);
         if(thicken_.refreshPending||!thicken_.shelfShown||input.surfaces!=thicken_.input.surfaces
             ||input.thicknessMm!=thicken_.input.thicknessMm||input.placement!=thicken_.input.placement
+            ||input.correctOpposite!=thicken_.input.correctOpposite
             ||input.toPlane!=thicken_.input.toPlane||input.targetPlane!=thicken_.input.targetPlane) {
             if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
             ReleaseThickenPreview(thicken_.built);return;
@@ -194,6 +195,12 @@ void V2MainWindow::RefreshThickenPreview()
         }
         thicken_.outcome.volumeMm3 += built.Value().volumeMm3;
         thicken_.outcome.thicknessMm = std::max(thicken_.outcome.thicknessMm, built.Value().thicknessMm);
+        thicken_.outcome.corrected = thicken_.outcome.corrected || built.Value().corrected;
+        thicken_.outcome.normalThicknessMinMm = thicken_.built.empty() ? built.Value().normalThicknessMinMm
+            : std::min(thicken_.outcome.normalThicknessMinMm,built.Value().normalThicknessMinMm);
+        thicken_.outcome.normalThicknessMaxMm = std::max(thicken_.outcome.normalThicknessMaxMm,built.Value().normalThicknessMaxMm);
+        thicken_.outcome.maxOffsetDeviationMm = std::max(thicken_.outcome.maxOffsetDeviationMm,built.Value().maxOffsetDeviationMm);
+        thicken_.outcome.rmsOffsetDeviationMm = std::max(thicken_.outcome.rmsOffsetDeviationMm,built.Value().rmsOffsetDeviationMm);
         thicken_.built.push_back(built.Value().handle);
         thicken_.builtEdges.push_back(built.Value().edges);
         thicken_.builtThickness.push_back(built.Value().thicknessMm);
@@ -370,6 +377,7 @@ void V2MainWindow::ConfirmThicken()
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
         kachakacha::v2::domain::ThickenSurfaceDefinition definition;
         definition.surface = surfaces[index];
+        definition.correctOpposite = !toPlane && thicken_.input.correctOpposite;
         definition.thickness.value = thickness[index];
         definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
         if (toPlane) {
@@ -401,4 +409,7 @@ void V2MainWindow::ConfirmThicken()
                   .arg(QString::fromUtf8(label))
                   .arg(outcome.thicknessMm, 0, 'f', 3)
                   .arg(outcome.volumeMm3, 0, 'f', 3));
+    if(outcome.corrected)SetStatus(QStringLiteral("厚み: 反対面を補正しました。法線厚み（対応点・標本）%1〜%2 mm、位置ずれ最大 %3 mm / RMS（最大部材）%4 mm。")
+        .arg(outcome.normalThicknessMinMm,0,'f',3).arg(outcome.normalThicknessMaxMm,0,'f',3)
+        .arg(outcome.maxOffsetDeviationMm,0,'f',3).arg(outcome.rmsOffsetDeviationMm,0,'f',3));
 }

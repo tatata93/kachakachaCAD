@@ -13,6 +13,11 @@
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <ShapeUpgrade_ShapeDivideContinuity.hxx>
+#include <ShapeFix_Shape.hxx>
 #include <ShapeCustom.hxx>
 #include <BOPAlgo_ArgumentAnalyzer.hxx>
 #include <BRepGProp.hxx>
@@ -170,8 +175,42 @@ bool ManifoldEdgeUse(const TopoDS_Shape& shape)
     return true;
 }
 
-bool SelfIntersectionFree(const TopoDS_Shape& shape,double toleranceMm)
+TopoDS_Shape IntersectionAnalysisShape(const TopoDS_Shape& shape,double toleranceMm)
 {
+    bool denseC0=false;
+    for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
+        BRepAdaptor_Surface surface(TopoDS::Face(e.Current()));
+        if(surface.GetType()==GeomAbs_BSplineSurface&&(surface.NbUIntervals(GeomAbs_C1)>1||surface.NbVIntervals(GeomAbs_C1)>1)) {
+            const auto spline=surface.BSpline();
+            denseC0=denseC0||spline->NbUPoles()>64||spline->NbVPoles()>64;
+        }
+    }
+    if(!denseC0)return shape;
+    try {
+    // Subdivide an analysis copy at C0 joins. The stored solid and exact source
+    // skin remain unchanged. This avoids solving a giant spline as one patch.
+    BRepBuilderAPI_Copy copy(shape,true,false);
+    ShapeUpgrade_ShapeDivideContinuity split(copy.Shape());
+    split.SetSurfaceCriterion(GeomAbs_C1);split.SetBoundaryCriterion(GeomAbs_C1);
+    split.SetPCurveCriterion(GeomAbs_C1);split.SetTolerance(1e-7);split.Perform();
+    const double precision=std::clamp(toleranceMm,1e-7,1e-6);
+    ShapeFix_Shape fix(split.Result());fix.SetPrecision(1e-7);fix.SetMaxTolerance(precision);fix.Perform();
+    const auto analysis=fix.Shape();
+    if(analysis.IsNull()||!BRepCheck_Analyzer(analysis).IsValid()||!ManifoldEdgeUse(analysis))return shape;
+    GProp_GProps before,after;detail::VolumeProperties(shape,before);detail::VolumeProperties(analysis,after);
+    if(std::abs(before.Mass()-after.Mass())>std::max(1e-7,std::abs(before.Mass())*1e-8))return shape;
+    Bnd_Box a,b;BRepBndLib::AddOptimal(shape,a,false,false);BRepBndLib::AddOptimal(analysis,b,false,false);
+    if(a.IsVoid()||b.IsVoid())return shape;
+    double av[6],bv[6];a.Get(av[0],av[1],av[2],av[3],av[4],av[5]);b.Get(bv[0],bv[1],bv[2],bv[3],bv[4],bv[5]);
+    for(int i=0;i<6;++i)if(std::abs(av[i]-bv[i])>precision)return shape;
+    return analysis;
+    } catch(const Standard_Failure&) {return shape;}
+      catch(const std::exception&) {return shape;}
+}
+
+bool SelfIntersectionFree(const TopoDS_Shape& original,double toleranceMm)
+{
+    const auto shape=IntersectionAnalysisShape(original,toleranceMm);
     BOPAlgo_ArgumentAnalyzer check;check.SetShape1(shape);check.SelfInterMode()=true;
     check.SetRunParallel(true);check.StopOnFirstFaulty()=true;check.Perform();
     if(!check.HasFaulty()&&!check.HasErrors())return true;

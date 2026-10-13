@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QString>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -59,6 +60,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     layout->addLayout(inputRow);
 
     BuildPlacementCards(layout);
+    BuildCorrectionCards(layout);
 
     // 3. 厚み。「平面まで」の間は相手の作業平面の欄に差し替わる。
     auto* form = new QFormLayout();
@@ -91,7 +93,9 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     // 4. 状態。
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
+    status_->setObjectName(QStringLiteral("thickenStatus"));
     status_->setWordWrap(true);
+    status_->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Minimum);
     layout->addWidget(status_);
     layout->addStretch(1);
 
@@ -155,6 +159,35 @@ void V2ThickenDock::BuildPlacementCards(QVBoxLayout* layout)
     layout->addLayout(cards);
 }
 
+void V2ThickenDock::BuildCorrectionCards(QVBoxLayout* layout)
+{
+    correctionRow_ = new QWidget(widget());
+    auto* row = new QHBoxLayout(correctionRow_);
+    row->setContentsMargins(0,0,0,0);
+    strictCard_ = new QPushButton(QStringLiteral("一定厚み"),correctionRow_);
+    correctionCard_ = new QPushButton(QStringLiteral("反対面を補正"),correctionRow_);
+    strictCard_->setObjectName(QStringLiteral("thickenStrict"));
+    correctionCard_->setObjectName(QStringLiteral("thickenCorrectOpposite"));
+    strictCard_->setToolTip(QStringLiteral("指定厚みを厳密に保ちます。自己交差する条件では生成しません。"));
+    correctionCard_->setToolTip(QStringLiteral("元の面を保ち、必要な場合に反対面の法線変位を滑らかにします。厚みのずれを表示します。中央付けは両側の新しい面を補正します。"));
+    strictCard_->setCheckable(true);correctionCard_->setCheckable(true);
+    strictCard_->setAutoExclusive(true);correctionCard_->setAutoExclusive(true);
+    row->addWidget(strictCard_);row->addWidget(correctionCard_);
+    QObject::connect(strictCard_,&QPushButton::clicked,this,[this]{if(!loading_&&correctionHandler_)correctionHandler_(false);});
+    QObject::connect(correctionCard_,&QPushButton::clicked,this,[this]{if(!loading_&&correctionHandler_)correctionHandler_(true);});
+    layout->addWidget(correctionRow_);
+}
+
+void V2ThickenDock::SetCorrectionHandler(std::function<void(bool)> handler)
+{
+    correctionHandler_ = std::move(handler);
+}
+
+bool V2ThickenDock::ClickCorrection(bool corrected)
+{
+    return ClickIfVisible(corrected ? correctionCard_ : strictCard_);
+}
+
 void V2ThickenDock::ShowInput(const kachakacha::v2::app::ThickenInputState& state,
     const QString& surfaceNameJa, const std::vector<QString>& statusLinesJa, bool canConfirm)
 {
@@ -165,6 +198,9 @@ void V2ThickenDock::ShowInput(const kachakacha::v2::app::ThickenInputState& stat
     centeredCard_->setChecked(!state.toPlane && state.placement == ThicknessPlacement::Centered);
     insideCard_->setChecked(!state.toPlane && state.placement == ThicknessPlacement::Inside);
     toPlaneCard_->setChecked(state.toPlane);
+    strictCard_->setChecked(!state.correctOpposite);
+    correctionCard_->setChecked(state.correctOpposite);
+    correctionRow_->setVisible(!state.toPlane);
     thickness_->setValue(state.thicknessMm);
     thicknessLabel_->setVisible(!state.toPlane);
     thickness_->setVisible(!state.toPlane);

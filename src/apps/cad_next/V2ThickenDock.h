@@ -57,6 +57,8 @@ public:
         std::function<void(const kachakacha::v2::base::EntityId&)> handler);
     //! 厚みの欄を打った。
     void SetThicknessHandler(std::function<void(double)> handler);
+    void SetCorrectionHandler(std::function<void(bool)> handler);
+    [[nodiscard]] bool ClickCorrection(bool corrected);
     //! 下の2つのボタン。
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel);
 
@@ -78,6 +80,7 @@ public:
 
 private:
     void BuildPlacementCards(QVBoxLayout* layout);
+    void BuildCorrectionCards(QVBoxLayout* layout);
 
     QLabel* surfaceValue_ = nullptr;
     QPushButton* reselect_ = nullptr;
@@ -85,6 +88,9 @@ private:
     QPushButton* centeredCard_ = nullptr;
     QPushButton* insideCard_ = nullptr;
     QPushButton* toPlaneCard_ = nullptr;
+    QWidget* correctionRow_ = nullptr;
+    QPushButton* strictCard_ = nullptr;
+    QPushButton* correctionCard_ = nullptr;
     QLabel* thicknessLabel_ = nullptr;
     QDoubleSpinBox* thickness_ = nullptr;
     QLabel* targetLabel_ = nullptr;
@@ -100,6 +106,7 @@ private:
     std::function<void()> toPlaneHandler_;
     std::function<void(const kachakacha::v2::base::EntityId&)> targetHandler_;
     std::function<void(double)> thicknessHandler_;
+    std::function<void(bool)> correctionHandler_;
     std::function<void()> confirmHandler_;
     std::function<void()> cancelHandler_;
 };

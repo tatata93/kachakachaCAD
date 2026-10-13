@@ -308,6 +308,10 @@ void V2MainWindow::BuildThickenDock()
     thickenDock_->SetTargetHandler(
         [this](const kachakacha::v2::base::EntityId& id) { ChooseThickenTarget(id); });
     thickenDock_->SetThicknessHandler([this](double value) { ApplyThickenThicknessMm(value); });
+    thickenDock_->SetCorrectionHandler([this](bool corrected) {
+        if(thicken_.input.correctOpposite==corrected)return;
+        thicken_.input.correctOpposite=corrected;RefreshThickenAll();
+    });
     thickenDock_->SetActionHandlers([this] { ConfirmThicken(); },
         [this] {
             EndThicken(true);

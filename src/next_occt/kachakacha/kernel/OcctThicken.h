@@ -31,8 +31,13 @@ inline constexpr const char* kThickenTrimFailed = "KER-T005";
 struct ThickenedSolid {
     modeling::KernelShapeHandle handle;
     double volumeMm3 = 0.0;
-    //! 実際に付いた厚み。指定と一致する。
+    //! 指定厚み。補正使用時の実測範囲は以下を参照。
     double thicknessMm = 0.0;
+    //! 補正使用時のみtrue。計測値は対応点の法線距離と位置偏差の標本結果。
+    //! 全域の誤差上界や、任意の方向での最短壁厚を意味しない。
+    bool corrected = false;
+    double normalThicknessMinMm = 0.0, normalThicknessMaxMm = 0.0;
+    double maxOffsetDeviationMm = 0.0, rmsOffsetDeviationMm = 0.0;
     //! 立体の辺。画面に出すために使う。
     std::vector<geometry::CurveSegment> edges;
 };
@@ -42,10 +47,11 @@ struct ThickenedSolid {
 //! `placement` は厚みをどちらへ付けるか。外側・中央・内側。
 //! 中央は、面を挟んで前後へ半分ずつ付ける。
 //! 厚みが正でなければ断る。0mm の板は作れない。
+//! correctOppositeは明示的な補正選択。指定値を厳密に満たせる場合は既存方式を使う。
 [[nodiscard]] base::Result<ThickenedSolid> ThickenSurface(
     modeling::KernelShapeHandle sourceShape, double thicknessMm,
     fabrication::ThicknessPlacement placement,
-    const geometry::GeometryTolerance& tolerance);
+    const geometry::GeometryTolerance& tolerance, bool correctOpposite = false);
 
 //! 1枚の平らな面から、相手の平面まで立体にする。
 //! 曲面の一様法線オフセットでは平面到達を保証できないため、その入力は理由付きで断る。

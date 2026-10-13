@@ -96,3 +96,6 @@ PC の MSVC で初めて落ちたことがある。
 OCCT の宣言だけのスタブを作れば雲でも見られるが、使っているヘッダが78個あり、
 本物と食い違えば **第二の真実** になって、かえって当てにならなくなる。
 そこで作らない。かわりに **カーネルの変更は小さく刻んで、1往復ずつ PC で確かめる**。
+
+2026-10-13: `kernel/OcctCorrectedThicken.h` は `OcctThicken.cpp` から明示補正時だけ呼ぶ内部実装。
+UIの厚みペイン → V2GeometryJob → OcctThicken → CorrectedThickenへ到達する。

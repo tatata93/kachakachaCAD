@@ -381,6 +381,7 @@ void WriteDimensionExtras(JsonObject& object, const ReferenceDimension& dim)
         definition["surface"] = WriteId(thicken->surface);
         definition["thickness"] = WriteExpression(thicken->thickness);
         definition["placement"] = JsonValue::Number(static_cast<double>(thicken->placement));
+        if (thicken->correctOpposite) definition["correctOpposite"] = JsonValue::Bool(true);
         if (thicken->targetPlane.has_value()) {
             definition["targetPlane"] = WriteId(*thicken->targetPlane);
         }

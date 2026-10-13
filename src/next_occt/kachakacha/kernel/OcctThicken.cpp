@@ -1,4 +1,5 @@
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctCorrectedThicken.h"
 
 #include <cmath>
 #include <string>
@@ -180,9 +181,15 @@ bool OffsetCrossesFocalPoint(const TopoDS_Shape& shape,double first,double last)
 
 Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     double thicknessMm, fabrication::ThicknessPlacement placement,
-    const geometry::GeometryTolerance& tolerance)
+    const geometry::GeometryTolerance& tolerance, bool correctOpposite)
 {
     using Out = Result<ThickenedSolid>;
+    if(correctOpposite) {
+        const auto exact=ThickenSurface(sourceShape,thicknessMm,placement,tolerance,false);
+        if(exact.HasValue())return exact;
+        if(!(thicknessMm>0)||!std::isfinite(thicknessMm))return exact;
+        return detail::CorrectedThicken(sourceShape,thicknessMm,placement,tolerance);
+    }
     if (!(thicknessMm > 0.0) || !std::isfinite(thicknessMm)) {
         return Out::Failure(MakeError(kThickenBadThickness,
             "厚みが正の数ではありません。",
@@ -262,6 +269,7 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     }
     made.volumeMm3 = checked.Value().volumeMm3;
     made.thicknessMm = thicknessMm;
+    made.normalThicknessMinMm = made.normalThicknessMaxMm = thicknessMm;
     made.edges = EdgesOf(built.Value(), tolerance);
     return Out::Success(std::move(made));
 }
@@ -416,7 +424,7 @@ Result<ThickenedSolid> ThickenSurfaceToPlane(modeling::KernelShapeHandle sourceS
 #else
 
 Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle,
-    double, fabrication::ThicknessPlacement, const geometry::GeometryTolerance&)
+    double, fabrication::ThicknessPlacement, const geometry::GeometryTolerance&, bool)
 {
     return Result<ThickenedSolid>::Failure(MakeError(kThickenFailed,
         "面に厚みを付けられませんでした。",

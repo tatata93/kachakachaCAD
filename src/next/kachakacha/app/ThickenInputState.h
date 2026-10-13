@@ -29,9 +29,10 @@ struct ThickenInputState {
     fabrication::ThicknessPlacement placement = fabrication::ThicknessPlacement::Outside;
     //! 4枚目のカード「平面まで」を選んでいるか。
     bool toPlane = false;
+    bool correctOpposite = false;
     //! 「平面まで」の相手の作業平面。toPlane のときだけ使う。
     base::EntityId targetPlane;
-    //! 厚み(mm)。ParameterId::ExtrudeDistance(板厚)と同じ値を持つ。
+    //! 厚み(mm)。ParameterId::ThickenThicknessMmと同じ値を持つ。
     //! 「平面まで」のときは使わない(相手との距離で厚みが決まる)。
     double thicknessMm = 0.0;
 };
@@ -53,11 +54,14 @@ struct ThickenPreviewOutcome {
     bool evaluated = false;
     bool available = false;
     double volumeMm3 = 0.0;
-    //! 実際に付いた厚み。「平面まで」のときは指定でなく計算した値(何枚かなら最も厚いもの)。
+    //! 指定厚み。補正時の計測範囲とは別。「平面まで」は計算した値(複数なら最大)。
     double thicknessMm = 0.0;
     //! 作った部品の数(面の数と同じ)。
     std::size_t count = 0;
     std::string refusalJa;
+    bool corrected = false;
+    double normalThicknessMinMm = 0.0, normalThicknessMaxMm = 0.0;
+    double maxOffsetDeviationMm = 0.0, rmsOffsetDeviationMm = 0.0;
 };
 
 //! 棚の「状態」に出す行。

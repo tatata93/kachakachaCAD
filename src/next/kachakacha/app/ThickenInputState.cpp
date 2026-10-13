@@ -13,8 +13,16 @@ using fabrication::ThicknessPlacement;
 [[nodiscard]] std::string FormatMm1(double value)
 {
     char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%.1f", value);
+    std::snprintf(buffer, sizeof(buffer), value>0&&value<.1?"%.3f":"%.1f", value);
     return std::string(buffer);
+}
+
+std::string FormatThickness(double value)
+{
+    char buffer[64];std::snprintf(buffer,sizeof(buffer),"%.3f",value);
+    std::string shown(buffer);
+    while(shown.size()>2&&shown.back()=='0'&&shown[shown.size()-2]!='.')shown.pop_back();
+    return shown;
 }
 
 } // namespace
@@ -91,7 +99,12 @@ std::vector<std::string> ThickenStatusLinesJa(const ThickenInputState& state,
     }
     lines.push_back("✓ 生成可能: "
         + (outcome.count > 1 ? std::to_string(outcome.count) + " 個、体積の合計 " : std::string("体積 "))
-        + FormatMm1(outcome.volumeMm3) + " mm3、厚み " + FormatMm1(outcome.thicknessMm) + " mm");
+        + FormatMm1(outcome.volumeMm3) + " mm3、指定厚み " + FormatThickness(outcome.thicknessMm) + " mm");
+    if(outcome.corrected) {
+        const auto mm=[](double v){char b[64];std::snprintf(b,sizeof(b),"%.3f",v);return std::string(b);};
+        lines.push_back("反対面を補正。法線厚み（対応点・標本）: "+mm(outcome.normalThicknessMinMm)+"〜"+mm(outcome.normalThicknessMaxMm)+" mm");
+        lines.push_back("位置ずれ 最大 "+mm(outcome.maxOffsetDeviationMm)+" mm / RMS（最大部材）"+mm(outcome.rmsOffsetDeviationMm)+" mm");
+    }
     lines.push_back(previewShown ? "✓ 下見を表示中(まだ文書へ保存していません)"
                                   : "× 下見が作れませんでした");
     return lines;
@@ -107,7 +120,7 @@ std::string ThickenFooterLine(const ThickenInputState& state, const std::string&
         line += "PLANE=" + (state.targetPlane.IsNil() ? std::string("(なし)") : planeName);
         line += " / 平面まで";
     } else {
-        line += FormatMm1(state.thicknessMm) + "mm";
+        line += FormatThickness(state.thicknessMm) + "mm";
         line += " / " + std::string(ThicknessPlacementNameJa(state.placement));
     }
     if (outcome.evaluated && outcome.available) {

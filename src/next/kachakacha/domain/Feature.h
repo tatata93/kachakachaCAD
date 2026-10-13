@@ -277,6 +277,8 @@ struct ThickenSurfaceDefinition {
     geometry::EvaluatedValue thickness;
     //! fabrication::ThicknessPlacement と同じ並び。0=外側 1=中央 2=内側。
     int placement = 1;
+    //! ADR 0031: 明示選択した反対面補正。旧文書は一定厚み。
+    bool correctOpposite = false;
     //! 「任意の面まで」のときの相手の作業平面。あれば thickness と placement は使わない。
     std::optional<EntityId> targetPlane;
 };

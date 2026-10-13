@@ -1125,3 +1125,11 @@ public:
 5. 一時的なoverloadには削除WPと期限を付ける。
 
 担当AIが自分のWPだけで似た型を新設して回避してはならない。
+
+### 2026-10-13 明示的な厚み補正（ADR 0031）
+
+`kernel::ThickenSurface` の末尾に `bool correctOpposite = false` を追加する。既存呼出は一定厚みを維持。
+`ThickenedSolid` は `corrected`、`normalThicknessMinMm/normalThicknessMaxMm`、
+`maxOffsetDeviationMm/rmsOffsetDeviationMm` を返す。補正時の標本計測と指定厚みを区別する。
+`ThickenSurfaceDefinition.correctOpposite` と `ThickenInputState.correctOpposite` は明示選択の真偽値。
+既存文書の省略値false。幾何カーネルの型をcoreやUIへ公開しない。

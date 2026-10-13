@@ -1,6 +1,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctCorrectedThicken.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
@@ -308,6 +309,77 @@ KACHA_V2_TEST(thicken_quality, stl_revolution_poles_have_no_collapsed_facets)
         Require(geometry::Cross(p[1]-p[0],p[2]-p[0]).Length()>0,"Every written float triangle has positive area");
     }
     kernel::ReleaseShape(surface);
+}
+
+namespace {
+TopoDS_Face TightParabola()
+{
+    NCollection_Array2<gp_Pnt> poles(1,3,1,2);
+    for(int j=1;j<=2;++j) {poles(1,j)=gp_Pnt(-1,(j-1)*5,3);poles(2,j)=gp_Pnt(0,(j-1)*5,-3);poles(3,j)=gp_Pnt(1,(j-1)*5,3);}
+    NCollection_Array1<double> knots(1,2);knots(1)=0;knots(2)=1;
+    NCollection_Array1<int> um(1,2),vm(1,2);um.Init(3);vm.Init(2);
+    return BRepBuilderAPI_MakeFace(new Geom_BSplineSurface(poles,knots,knots,um,vm,2,1),1e-7).Face();
+}
+void Diagnose(const base::Result<kernel::ThickenedSolid>& result)
+{
+    if(!result.HasValue())for(const auto& d:result.Diagnostics())std::cout<<d.summaryJa<<" / "<<d.detailsJa<<std::endl;
+}
+}
+KACHA_V2_TEST(thicken_quality, corrected_opposite_retains_source_and_passes_native_checks_under_focal_limit)
+{
+    const auto face=TightParabola();
+    for(int mode=0;mode<3;++mode) {
+        auto input=face;
+        if(mode==1)input.Reverse();
+        if(mode==2){gp_Trsf tr;tr.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.73);tr.SetTranslationPart(gp_Vec(21,-32,41));input=TopoDS::Face(BRepBuilderAPI_Transform(input,tr,true).Shape());}
+        const auto source=kernel::StoreShape(input);const auto original=kernel::CaptureOutputShape(source);
+        const auto placement=mode==1?fabrication::ThicknessPlacement::Inside:fabrication::ThicknessPlacement::Outside;
+        Require(!kernel::ThickenSurface(source,.3,placement,{}).HasValue(),"strict focal offset refused");
+        const auto corrected=kernel::ThickenSurface(source,.3,placement,{},true);Diagnose(corrected);
+        Require(corrected.HasValue()&&corrected.Value().corrected,"explicit correction builds native solid");
+        const auto& wall=corrected.Value();
+        Require(wall.normalThicknessMinMm>0&&wall.normalThicknessMaxMm<=.30001,"positive measured thickness, nominal not falsified");
+        Require(wall.maxOffsetDeviationMm>0&&wall.rmsOffsetDeviationMm>0&&wall.rmsOffsetDeviationMm<=wall.maxOffsetDeviationMm,"reported correction errors");
+        Require(kernel::CaptureOutputShape(source).Value()==original.Value(),"exact source BRep unchanged");
+        TopoDS_Shape nativeWall;Require(kernel::LookupShape(wall.handle,nativeWall),"native wall available");
+        const auto skin=BRep_Tool::Surface(input);bool retained=false;
+        for(TopExp_Explorer f(nativeWall,TopAbs_FACE);f.More();f.Next()) {
+            const auto candidate=BRep_Tool::Surface(TopoDS::Face(f.Current()));bool same=true;
+            for(double u:{.2,.5,.8})for(double v:{.2,.5,.8})same=same&&skin->Value(u,v).Distance(candidate->Value(u,v))<1e-8;
+            retained=retained||same;
+        }
+        Require(retained,"original geometric skin is also retained inside the resulting solid");
+
+        const auto check=kernel::CheckSolidForExport(wall.handle,1e-6);
+        Require(check.HasValue()&&check.Value().Ok(),"native closure, positive volume and self intersection check");
+        const auto encoded=kernel::CaptureOutputShape(wall.handle);const auto restored=kernel::RestoreOutputShape(encoded.Value());
+        Require(restored.HasValue()&&kernel::CheckSolidForExport(restored.Value(),1e-6).Value().Ok(),"native result survives serialization");
+        kernel::ReleaseShape(restored.Value());kernel::ReleaseShape(wall.handle);kernel::ReleaseShape(source);
+    }
+}
+KACHA_V2_TEST(thicken_quality, corrected_centered_preserves_reference_and_rejects_excessive_thickness)
+{
+    const auto source=kernel::StoreShape(TightParabola());const auto original=kernel::CaptureOutputShape(source);
+    const auto center=kernel::ThickenSurface(source,.6,fabrication::ThicknessPlacement::Centered,{},true);Diagnose(center);
+    Require(center.HasValue()&&center.Value().corrected,"both new skins corrected");
+    Require(kernel::CaptureOutputShape(source).Value()==original.Value(),"center reference unchanged");
+    Require(!kernel::ThickenSurface(source,3,fabrication::ThicknessPlacement::Outside,{},true).HasValue(),"inverted or grossly displaced opposite skin refused");
+    kernel::ReleaseShape(center.Value().handle);kernel::ReleaseShape(source);
+}
+KACHA_V2_TEST(thicken_quality, correction_option_keeps_exact_radius_when_possible_and_does_not_fill_holes)
+{
+    const occ::handle<Geom_Surface> cylinder=new Geom_CylindricalSurface(gp_Ax3(),5);
+    const auto source=kernel::StoreShape(BRepBuilderAPI_MakeFace(cylinder,0,std::acos(-1.0)/2,0,10,1e-7).Face());
+    const auto exact=kernel::ThickenSurface(source,1,fabrication::ThicknessPlacement::Inside,{},true);
+    Require(exact.HasValue()&&!exact.Value().corrected,"R5 to R4 remains exact in correction mode");
+    Require(exact.Value().normalThicknessMinMm==1&&exact.Value().normalThicknessMaxMm==1&&exact.Value().maxOffsetDeviationMm==0,"strict metrics stay exact");
+    kernel::ReleaseShape(exact.Value().handle);kernel::ReleaseShape(source);
+    BRepBuilderAPI_MakeFace maker(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),-5,5,-5,5);
+    BRepBuilderAPI_MakeWire hole(BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0,0,0),gp_Dir(0,0,1)),1)).Edge());
+    auto reversed=hole.Wire();reversed.Reverse();maker.Add(reversed);
+    const auto holeSource=kernel::StoreShape(maker.Face());
+    Require(!kernel::detail::CorrectedThicken(holeSource,.3,fabrication::ThicknessPlacement::Inside,{}).HasValue(),"unsupported correction never fills an inner boundary");
+    kernel::ReleaseShape(holeSource);
 }
 #else
 KACHA_V2_TEST(thicken_quality, missing_kernel_is_reported)

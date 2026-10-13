@@ -4,6 +4,7 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2SolidOutputPreview.h"
 #include "V2OverlapBrowser.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
@@ -308,6 +309,10 @@ void V2MainWindow::BuildThickenDock()
     thickenDock_->SetTargetHandler(
         [this](const kachakacha::v2::base::EntityId& id) { ChooseThickenTarget(id); });
     thickenDock_->SetThicknessHandler([this](double value) { ApplyThickenThicknessMm(value); });
+    thickenDock_->SetOutputHandler([this] {
+        if (thicken_.outcome.available) ShowSolidOutputPreview(*viewport_, thicken_.builtMesh, thickenDock_->OutputMode());
+        RefreshThickenDock();
+    });
     thickenDock_->SetCorrectionHandler([this](bool corrected) {
         if(thicken_.input.correctOpposite==corrected)return;
         thicken_.input.correctOpposite=corrected;RefreshThickenAll();

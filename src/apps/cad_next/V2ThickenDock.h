@@ -13,6 +13,7 @@
 //! (V2BooleanDock と同じ役目分け)。
 
 #include "V2ExtrudeTargetChoice.h"
+#include "V2SolidOutputSelector.h"
 
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/base/Ids.h"
@@ -59,6 +60,8 @@ public:
     void SetThicknessHandler(std::function<void(double)> handler);
     void SetCorrectionHandler(std::function<void(bool)> handler);
     [[nodiscard]] bool ClickCorrection(bool corrected);
+    [[nodiscard]] kachakacha::v2::app::SolidOutputMode OutputMode() const { return output_->Mode(); }
+    void SetOutputHandler(std::function<void()> handler) { output_->changed = std::move(handler); }
     //! 下の2つのボタン。
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel);
 
@@ -97,6 +100,7 @@ private:
     QComboBox* target_ = nullptr;
     std::vector<ExtrudeTargetChoice> targets_;
     QLabel* status_ = nullptr;
+    V2SolidOutputSelector* output_ = nullptr;
     QPushButton* cancel_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;

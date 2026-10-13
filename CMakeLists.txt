@@ -787,6 +787,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
+    src/next_occt/kachakacha/kernel/OcctIntersectionPartition.cpp
     src/next_occt/kachakacha/kernel/OcctBoolean.cpp
     src/next_occt/kachakacha/kernel/OcctImage.cpp
     src/next_occt/kachakacha/kernel/OcctOutput.cpp
@@ -1184,6 +1185,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2OutputPreview.cpp
         src/apps/cad_next/V2OverlapBrowser.cpp
         src/apps/cad_next/V2ThickenCommands.cpp
+        src/apps/cad_next/V2SolidOutputPreview.cpp
         src/apps/cad_next/V2GeometryJob.cpp
         src/apps/cad_next/V2PreparedDocument.cpp
         src/apps/cad_next/V2DocumentCache.cpp

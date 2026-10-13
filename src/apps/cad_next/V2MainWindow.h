@@ -875,7 +875,7 @@ private:
     std::optional<kachakacha::v2::kernel::ContactResult> contactBuilt_;
     QString contactPreviewKey_;
     //! 「厚み」の道具(指示書 matrix P-10、V2ThickenCommands.cpp)。
-    void RunThickenTool();
+    void RunThickenTool(bool toPlane = false);
     void MirrorThickenToSelection();
     void RefreshThickenForSelectionChange();
     void RefreshThickenPreview();

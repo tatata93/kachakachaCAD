@@ -73,6 +73,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     form->addRow(thicknessLabel_, thickness_);
     targetLabel_ = MakePanelSectionTitle(body, QStringLiteral("相手の作業平面"));
     target_ = new QComboBox(body);
+    target_->setObjectName(QStringLiteral("thickenTarget"));
     form->addRow(targetLabel_, target_);
     layout->addLayout(form);
     QObject::connect(thickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
@@ -91,6 +92,9 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     });
 
     // 4. 状態。
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("生成対象")));
+    output_ = new V2SolidOutputSelector(body, "thickenOutput");
+    layout->addWidget(output_);
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setObjectName(QStringLiteral("thickenStatus"));

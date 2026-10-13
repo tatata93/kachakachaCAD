@@ -11,6 +11,7 @@
 //! 何が入るかは core(app/ShellSplitInputState)が決める。ここは映して押すだけ。
 
 #include "kachakacha/app/ShellSplitInputState.h"
+#include "V2SolidOutputSelector.h"
 
 #include <QDockWidget>
 #include <QString>
@@ -39,6 +40,8 @@ public:
     //! 部品の「解除」/ 面の「解除」。
     void SetClearHandlers(std::function<void()> part, std::function<void()> faces);
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel);
+    [[nodiscard]] kachakacha::v2::app::SolidOutputMode OutputMode() const { return output_->Mode(); }
+    void SetOutputHandler(std::function<void()> handler) { output_->changed = std::move(handler); }
 
     //! **見えていて押せるボタンを実際に押す。**人の道の試験はこちらを使う。
     [[nodiscard]] bool ClickMethod(int method);
@@ -70,6 +73,8 @@ private:
     QWidget* offsetRow_ = nullptr;
     QDoubleSpinBox* offset_ = nullptr;
     QLabel* status_ = nullptr;
+    QWidget* outputRow_ = nullptr;
+    V2SolidOutputSelector* output_ = nullptr;
     QPushButton* cancel_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;

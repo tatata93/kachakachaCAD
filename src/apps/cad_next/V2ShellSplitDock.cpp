@@ -120,6 +120,13 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
     thicknessRow_ = MakeSpinRow(body, QStringLiteral("肉厚"), QStringLiteral("shellSplitThickness"),
         0.001, &thickness_);
     layout->addWidget(thicknessRow_);
+    outputRow_ = new QWidget(body);
+    auto* outputLayout = new QVBoxLayout(outputRow_);
+    outputLayout->setContentsMargins(0,0,0,0);
+    outputLayout->addWidget(MakePanelSectionTitle(outputRow_, QStringLiteral("生成対象")));
+    output_ = new V2SolidOutputSelector(outputRow_, "shellOutput");
+    outputLayout->addWidget(output_);
+    layout->addWidget(outputRow_);
     planeRow_ = new QWidget(body);
     auto* planeLine = new QHBoxLayout(planeRow_);
     planeLine->setContentsMargins(0, 0, 0, 0);
@@ -174,6 +181,7 @@ void V2ShellSplitDock::ShowInput(const kachakacha::v2::app::ShellSplitInputState
     clearPart_->setEnabled(!state.part.IsNil());
     facesRow_->setVisible(!split);
     thicknessRow_->setVisible(!split);
+    outputRow_->setVisible(!split);
     planeRow_->setVisible(split);
     offsetRow_->setVisible(split);
     facesValue_->setText(state.faces.empty() ? QStringLiteral("(選んでいません)")

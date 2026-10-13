@@ -1,5 +1,6 @@
 #include "V2NumericSpinBox.h"
 #include "V2PartDock.h"
+#include "V2SolidOutputSelector.h"
 #include "V2PanelFrame.h"
 #include "kachakacha/app/CommandCatalog.h"
 
@@ -87,6 +88,7 @@ V2PartDock::V2PartDock(QWidget* parent)
     jigThickness_->setToolTip(QStringLiteral(
         "治具の厚み。**正なら面の表側、負なら裏側** に当て板を作ります。0 にはできません。"));
     form->addRow(QStringLiteral("治具の厚み"), jigThickness_);
+    form->addRow(QStringLiteral("生成対象"), new V2SolidOutputSelector(body,"jigOutput"));
 
     auto* footer = new QWidget(this);
     auto* footerLayout = new QVBoxLayout(footer);
@@ -218,6 +220,8 @@ void V2PartDock::FocusCommand(std::string_view command)
     form_->setRowVisible(revolveAngle_, command == "guide.revolve");
     form_->setRowVisible(jigClearance_, jig);
     form_->setRowVisible(jigThickness_, jig);
+    // The operation host reparents the page out of the QDockWidget.
+    form_->setRowVisible(form_->parentWidget()->findChild<QComboBox*>("jigOutput"), jig);
     const auto* spec = kachakacha::v2::app::FindCommand(command);
     confirm_->setText(spec ? QString::fromUtf8(std::string(spec->labelJa).c_str()) : QStringLiteral("確定 Enter"));
 }

@@ -135,9 +135,10 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         return true;
     }
     // 厚みも未選択から構え、選択済みなら欄へ取り込む。
-    if (id == "part.thicken") {
+    if (id == "part.thicken" || id == "part.thicken_to_plane") {
         ClearPendingCommand();
-        RunThickenTool();
+        if(id=="part.thicken")RunThickenTool();
+        else ChooseThickenToPlane();
         return true;
     }
     const auto endOwnedToolsBut = [this](const void* keep) { EndOwnedToolsBut(keep); };

@@ -1,5 +1,6 @@
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctIntersectionPartition.h"
 
 #include <algorithm>
 #include <type_traits>
@@ -194,7 +195,8 @@ TopoDS_Shape IntersectionAnalysisShape(const TopoDS_Shape& shape,double toleranc
     split.SetSurfaceCriterion(GeomAbs_C1);split.SetBoundaryCriterion(GeomAbs_C1);
     split.SetPCurveCriterion(GeomAbs_C1);split.SetTolerance(1e-7);split.Perform();
     const double precision=std::clamp(toleranceMm,1e-7,1e-6);
-    ShapeFix_Shape fix(split.Result());fix.SetPrecision(1e-7);fix.SetMaxTolerance(precision);fix.Perform();
+    ShapeFix_Shape fix(detail::PartitionIntersectionFaces(split.Result()));
+    fix.SetPrecision(1e-7);fix.SetMaxTolerance(precision);fix.Perform();
     const auto analysis=fix.Shape();
     if(analysis.IsNull()||!BRepCheck_Analyzer(analysis).IsValid()||!ManifoldEdgeUse(analysis))return shape;
     GProp_GProps before,after;detail::VolumeProperties(shape,before);detail::VolumeProperties(analysis,after);

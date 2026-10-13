@@ -4,6 +4,9 @@
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2SolidOutputPreview.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ToolRoleLabels.h"
@@ -63,6 +66,10 @@ V2ShellSplitTool::V2ShellSplitTool(V2MainWindow& window)
     : window_(window)
 {
     dock_ = new V2ShellSplitDock(&window);
+    dock_->SetOutputHandler([this] {
+        if(built_ && input_.method==0)ShowSolidOutputPreview(*window_.viewport_,builtMesh_,dock_->OutputMode());
+        RefreshDock();
+    });
     dock_->SetMethodHandler([this](int method) {
         input_ = kachakacha::v2::app::WithShellSplitMethod(input_, method);
         Refresh();
@@ -148,6 +155,9 @@ void V2ShellSplitTool::End(bool keepTool)
 {
     active_ = keepTool;
     if (keepTool) { input_.part = {}; input_.faces.clear(); }
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
+    if(builtOther_)kachakacha::v2::kernel::ReleaseShape(*builtOther_);
+    builtMesh_ = {};
     built_.reset();
     builtOther_.reset();
     outcome_ = kachakacha::v2::app::ShellSplitOutcome{};
@@ -279,6 +289,9 @@ void V2ShellSplitTool::Refresh()
 void V2ShellSplitTool::RefreshPreview()
 {
     outcome_ = kachakacha::v2::app::ShellSplitOutcome{};
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
+    if(builtOther_)kachakacha::v2::kernel::ReleaseShape(*builtOther_);
+    builtMesh_ = {};
     built_.reset();
     builtOther_.reset();
     window_.viewport_->HideToolPreview();
@@ -327,7 +340,8 @@ void V2ShellSplitTool::RefreshShellPreview(const kachakacha::v2::modeling::Kerne
     built_ = made.Value().handle;
     const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(made.Value().handle);
     if (mesh.HasValue()) {
-        window_.viewport_->ShowToolPreview(mesh.Value().edges);
+        builtMesh_ = mesh.Value();
+        ShowSolidOutputPreview(*window_.viewport_,builtMesh_,dock_->OutputMode());
     }
 }
 
@@ -418,23 +432,28 @@ void V2ShellSplitTool::ConfirmShell()
     const EntityId source = input_.part;
     auto& document = window_.session_->GetDocument();
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
-    const auto madeId = window_.AddPartFeature(kachakacha::v2::domain::FeatureType::ShellSplit,
-        definition, handle, {}, label.c_str(), {source});
-    if (madeId.IsNil()) {
-        return;
+    const auto mode=dock_->OutputMode();
+    if(kachakacha::v2::app::IncludesWires(mode)) {
+        const auto edges=kachakacha::v2::kernel::OutputEdges(handle,document.Snapshot().settings.tolerance.modelLinearMm);
+        if(!edges.HasValue()){window_.ReportDiagnostics(edges.Diagnostics());return;}
+        for(const auto& edge:edges.Value())if(window_.AddPlainWire({edge},"シェルの境界").IsNil())return;
     }
-    // 元の部品は隠す(消すと作り方をたどれない)。
-    const auto hidden = document.Run(kachakacha::v2::document::SetVisibilityCommand(
-        {source}, kachakacha::v2::domain::Visibility::Hidden));
-    if (!hidden.committed) {
-        window_.ReportDiagnostics(hidden.diagnostics);
-        return;
+    if(kachakacha::v2::app::IncludesSolid(mode)) {
+        if(window_.AddPartFeature(kachakacha::v2::domain::FeatureType::ShellSplit,
+            definition,handle,{},label.c_str(),{source}).IsNil())return;
+        const auto hidden=document.Run(kachakacha::v2::document::SetVisibilityCommand(
+            {source},kachakacha::v2::domain::Visibility::Hidden));
+        if(!hidden.committed){window_.ReportDiagnostics(hidden.diagnostics);return;}
     }
     if (!transaction.Commit()) {
         return;
     }
+    if(kachakacha::v2::app::IncludesSolid(mode))built_.reset();
     End();
     window_.AdoptCurrentDocument();
+    if(mode==kachakacha::v2::app::SolidOutputMode::WiresOnly) {
+        window_.SetStatus(QStringLiteral("シェル: 境界ワイヤーを生成しました。元の部品はそのままです。"));return;
+    }
     window_.SetStatus(QStringLiteral("シェル: 面を %1 枚抜いて肉厚 %2 mm を残し、体積が %3 mm3 から %4 mm3 に"
                                      "なりました。元の部品は隠しました。")
             .arg(static_cast<int>(definition.facePoints.size()))
@@ -480,6 +499,8 @@ void V2ShellSplitTool::ConfirmSplit()
     if (!transaction.Commit()) {
         return;
     }
+    built_.reset();
+    builtOther_.reset();
     End();
     window_.AdoptCurrentDocument();
     window_.SetStatus(QStringLiteral("分割: 2 つに分けました(法線の側 %1 mm3 / 反対の側 %2 mm3)。"

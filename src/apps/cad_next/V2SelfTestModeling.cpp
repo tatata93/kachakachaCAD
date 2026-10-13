@@ -1226,10 +1226,12 @@ namespace {
     }
     const int partsBefore = CountParts(window);
     window.RunCommand("part.thicken_to_plane");
+    if(!Explain("平面まで厚みも生成対象を指定してEnterで確定する",window.ThickenShelfShown()
+        &&window.ThickenInput().toPlane&&window.HandleToolKey(Qt::Key_Return,nullptr)))return false;
     if (!Explain((std::string("平面まで埋めた部品ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             CountParts(window) == partsBefore + 1
-                && window.StatusText().contains(QStringLiteral("最大 5.000 mm")))) {
+                && window.StatusText().contains(QStringLiteral("5.000 mm")))) {
         return false;
     }
     // 保存して開き直しても、同じ道で作り直される。

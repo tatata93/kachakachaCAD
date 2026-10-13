@@ -20,6 +20,7 @@
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 
 #include <optional>
 #include <string>
@@ -83,6 +84,7 @@ private:
     std::optional<kachakacha::v2::modeling::KernelShapeHandle> built_;
     //! 分割の反対の側。
     std::optional<kachakacha::v2::modeling::KernelShapeHandle> builtOther_;
+    kachakacha::v2::modeling::ShapeMesh builtMesh_;
     //! 下見を作ったときの平面(確定はこの平面を文書へ残す)。
     SplitPlane builtPlane_;
 };

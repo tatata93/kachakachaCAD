@@ -9,6 +9,8 @@
 //! 文書は「どう作ったか」だけを持ち、形は作り直す。
 
 #include "V2MainWindow.h"
+#include "kachakacha/app/SolidOutputMode.h"
+#include <QComboBox>
 
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -23,6 +25,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctWireCage.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/WireCage.h"
 
@@ -1170,9 +1173,18 @@ bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
     definition.thickness.value = plan.thicknessMm;
     definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.placement = static_cast<int>(plan.placement);
-    return !AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-        std::move(definition), solid.Value().handle, solid.Value().edges, "治具")
-                .IsNil();
+    const auto* output=findChild<QComboBox*>("jigOutput");
+    const auto mode=output?static_cast<kachakacha::v2::app::SolidOutputMode>(output->currentIndex())
+        : kachakacha::v2::app::SolidOutputMode::SolidOnly;
+    if(kachakacha::v2::app::IncludesWires(mode)) {
+        if(solid.Value().edges.empty()){kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;}
+        for(const auto& edge:solid.Value().edges)if(AddPlainWire({edge},"治具の境界").IsNil()) {
+            kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;
+        }
+    }
+    if(kachakacha::v2::app::IncludesSolid(mode))return !AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+        std::move(definition),solid.Value().handle,solid.Value().edges,"治具").IsNil();
+    kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return true;
 }
 
 void V2MainWindow::RunSurfaceJig()

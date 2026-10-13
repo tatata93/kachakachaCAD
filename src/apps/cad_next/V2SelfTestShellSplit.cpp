@@ -18,6 +18,9 @@
 
 #include <QPointF>
 #include <QString>
+#include <QComboBox>
+#include <QApplication>
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <cmath>
 #include <optional>
@@ -250,11 +253,41 @@ struct Box3 {
     return ReopenKeepsShapes(window, QStringLiteral("kacha_selftest_split.kcd2"), 2);
 }
 
+bool CaseShellOutputs(V2MainWindow& window)
+{
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95})for(int mode:{0,1,2}) {
+        window.ApplyTheme(theme);Box3 box;const auto source=MakeBox(window,box);if(source.IsNil())return false;
+        const int oldWires=CountOfKind(window,EntityKind::Wire);
+        window.RunCommand("part.shell");auto& tool=window.ShellSplitTool();auto& dock=*tool.Dock();
+        if(!dock.TypeThickness(1)||!PressAt(window,{(box.minimum.x+box.maximum.x)*.5,(box.minimum.y+box.maximum.y)*.5,box.maximum.z})
+            ||!tool.Outcome().available)return false;
+        auto* output=window.findChild<QComboBox*>("shellOutput");if(!output||!output->isVisible())return false;
+        const auto handles=kernel::CachedShapeCount();const auto revision=window.Session().GetDocument().Revision();
+        for(int pick:{0,1,2,mode}) {
+            output->setCurrentIndex(pick);
+            if(!Explain("shell output toggles existing preview only",kernel::CachedShapeCount()==handles
+                &&window.Session().GetDocument().Revision()==revision&&(window.Viewport().ToolPreviewFaceCount()>0)==(pick!=1)))return false;
+        }
+        if(!dock.ClickConfirm())return false;
+        const int parts=mode==1?1:2;
+        const int wires=CountOfKind(window,EntityKind::Wire);
+        if(!Explain("shell produces only requested kinds and retains source for wire-only",CountOfKind(window,EntityKind::Part)==parts
+            &&(mode==0?wires==oldWires:wires>oldWires)&&VisibleParts(window).size()==1
+            &&(mode!=1||VisibleParts(window).front()==source)))return false;
+        window.RunCommand("edit.undo");
+        if(CountOfKind(window,EntityKind::Part)!=1||CountOfKind(window,EntityKind::Wire)!=oldWires||VisibleParts(window).front()!=source)return false;
+        window.RunCommand("edit.redo");
+        if(!ReopenKeepsShapes(window,QStringLiteral("shell-outputs.kcd2"),1)||CountOfKind(window,EntityKind::Part)!=parts
+            ||CountOfKind(window,EntityKind::Wire)!=wires)return false;
+    }
+    window.ApplyTheme(UiTheme::Normal);return true;
+}
 } // namespace
 
 std::vector<SelfTestCase> ShellSplitCases()
 {
     return {
+        {"HP-SH-OUTPUT all output kinds themes preview undo and saved boundaries",CaseShellOutputs},
         {"HP-SH-01 シェルは面を押して選び押し直すと外れ肉厚で内側へ残し1回で戻り開き直しても同じ",
             CaseShellTopFace},
         {"HP-SH-02 分割は作業平面が部品を通らなければ断りずらすと両側を2つの部品にする",

@@ -10,6 +10,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
+#include "V2SolidOutputPreview.h"
 
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
@@ -46,7 +47,7 @@ void ReleaseThickenPreview(std::vector<kachakacha::v2::modeling::KernelShapeHand
 
 //! 「厚み」を押す。構えていなければ構え、構えていれば何もしない
 //! (足す・引くと違い、操作の切り替えが無いので2度目に意味が無い)。
-void V2MainWindow::RunThickenTool()
+void V2MainWindow::RunThickenTool(bool toPlane)
 {
     if (thicken_.shelfShown) {
         // 構えている間の2度目は確定(回転体・足す引くと同じ文法)。
@@ -55,6 +56,7 @@ void V2MainWindow::RunThickenTool()
     }
     // 選んであった形状ガイドの面は、そのまま欄へ入れる(選んでから押す道も残す)。
     thicken_.input = kachakacha::v2::app::ThickenInputState{};
+    thicken_.input.toPlane = toPlane;
     thicken_.input.placement = thicknessPlacement_;
     thicken_.input.thicknessMm = kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(), kachakacha::v2::app::ParameterId::ThickenThicknessMm);
     const auto& document = session_->GetDocument();
@@ -63,6 +65,10 @@ void V2MainWindow::RunThickenTool()
         if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
             thicken_.input = kachakacha::v2::app::WithThickenPick(thicken_.input, id);   // 何枚でも
         }
+        if(toPlane && entity && entity->kind==EntityKind::WorkPlane)thicken_.input.targetPlane=id;
+    }
+    if(toPlane && thicken_.input.targetPlane.IsNil()) {
+        const auto targets=ExtrudeTargets();if(!targets.empty())thicken_.input.targetPlane=targets.front().entityId;
     }
     thicken_.shelfShown = true;
     RefreshRightShelves();
@@ -140,6 +146,7 @@ void V2MainWindow::RefreshThickenPreview()
     ReleaseThickenPreview(thicken_.built);
     thicken_.builtEdges.clear();
     thicken_.builtThickness.clear();
+    thicken_.builtMesh = {};
     viewport_->HideToolPreview();
     if (!kachakacha::v2::app::ThickenReadyToBuild(thicken_.input)) {
         return;
@@ -208,12 +215,15 @@ void V2MainWindow::RefreshThickenPreview()
         const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle);
         if (mesh.HasValue()) {
             lines.insert(lines.end(), mesh.Value().edges.begin(), mesh.Value().edges.end());
+            thicken_.builtMesh.triangles.insert(thicken_.builtMesh.triangles.end(),
+                mesh.Value().triangles.begin(), mesh.Value().triangles.end());
         }
     }
     thicken_.outcome.available = true;
     thicken_.outcome.count = thicken_.built.size();
     if (!lines.empty()) {
-        viewport_->ShowToolPreview(lines);
+        thicken_.builtMesh.edges = std::move(lines);
+        ShowSolidOutputPreview(*viewport_, thicken_.builtMesh, thickenDock_->OutputMode());
     }
 }
 
@@ -240,6 +250,10 @@ void V2MainWindow::RefreshThickenDock()
         lines.push_back(QString::fromStdString(line));
     }
     if(calculating)lines.front()=QStringLiteral("計算中です。3D表示と設定は操作できます。設定を変えると計算し直します。");
+    if(thicken_.outcome.available)lines.push_back(thickenDock_->OutputMode()==kachakacha::v2::app::SolidOutputMode::WiresOnly
+        ? QStringLiteral("境界ワイヤーを生成します。ソリッドは保存しません。")
+        : thickenDock_->OutputMode()==kachakacha::v2::app::SolidOutputMode::Both
+        ? QStringLiteral("ソリッドと独立した境界ワイヤーを生成します。") : QStringLiteral("ソリッドのみを生成します。"));
     // 面の名前を並べる(何枚でも)。
     std::string names;
     for (const EntityId& id : thicken_.input.surfaces) {
@@ -303,6 +317,7 @@ void V2MainWindow::ChooseThickenPlacement(ThicknessPlacement value)
 //! 「平面まで」のカード。相手の作業平面は、既定でいちばん上のものにしておく。
 void V2MainWindow::ChooseThickenToPlane()
 {
+    if(!thicken_.shelfShown){RunThickenTool(true);return;}
     thicken_.input.toPlane = true;
     if (thicken_.input.targetPlane.IsNil()) {
         const auto targets = ExtrudeTargets();
@@ -339,6 +354,7 @@ void V2MainWindow::EndThicken(bool keepTool)
     ReleaseThickenPreview(thicken_.built);
     thicken_.builtEdges.clear();
     thicken_.builtThickness.clear();
+    thicken_.builtMesh = {};
     thicken_.outcome = kachakacha::v2::app::ThickenPreviewOutcome{};
     thicken_.mirror.clear();
     if (viewport_ != nullptr) {
@@ -373,6 +389,7 @@ void V2MainWindow::ConfirmThicken()
     const auto built = thicken_.built;
     const auto edges = thicken_.builtEdges;
     const auto thickness = thicken_.builtThickness;
+    const auto outputMode = thickenDock_->OutputMode();
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
         kachakacha::v2::domain::ThickenSurfaceDefinition definition;
@@ -385,10 +402,14 @@ void V2MainWindow::ConfirmThicken()
         } else {
             definition.placement = static_cast<int>(thicken_.input.placement);
         }
-        const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-            std::move(definition), built[index], edges[index], label, {surfaces[index]});
-        if (madeId.IsNil()) {
-            return;   // まとまりごと戻る(AddPartFeature が診断を出している)。
+        if(kachakacha::v2::app::IncludesWires(outputMode)) {
+            if(edges[index].empty()) { SetStatus(QStringLiteral("厚み: 境界ワイヤーを取得できませんでした。")); return; }
+            for(const auto& edge:edges[index])if(AddPlainWire({edge},"厚みの境界").IsNil())return;
+        }
+        if(kachakacha::v2::app::IncludesSolid(outputMode)) {
+            const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+                std::move(definition), built[index], edges[index], label, {surfaces[index]});
+            if (madeId.IsNil()) return;
         }
     }
     if (!transaction.Commit()) {
@@ -397,9 +418,12 @@ void V2MainWindow::ConfirmThicken()
         return;
     }
     // Committed parts now own these handles; cancelling only owns previews.
-    thicken_.built.clear();
+    if(kachakacha::v2::app::IncludesSolid(outputMode))thicken_.built.clear();
     EndThicken();
     AdoptCurrentDocument();
+    if(outputMode==kachakacha::v2::app::SolidOutputMode::WiresOnly) {
+        SetStatus(QStringLiteral("厚み: 出来上がりの境界ワイヤーを生成しました。"));return;
+    }
     SetStatus(surfaces.size() > 1
             ? QStringLiteral("%1: %2 枚の面から部品を %2 個作りました(体積の合計 %3 mm3)。")
                   .arg(QString::fromUtf8(label))

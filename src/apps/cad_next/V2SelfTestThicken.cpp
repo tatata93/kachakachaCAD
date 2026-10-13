@@ -44,6 +44,7 @@
 #include <QKeyEvent>
 #include <QEvent>
 #include <QChar>
+#include <QComboBox>
 #include <iostream>
 
 namespace kachakacha::v2::selftest {
@@ -375,6 +376,93 @@ bool CaseCorrectionButtons(V2MainWindow& window)
         if(const auto* definition=std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition))recorded=definition->correctOpposite;
     return Explain("correction flag survives native rebuilt save",recorded&&window.RebuildProblems().isEmpty()&&CountOfKind(window,EntityKind::Part)==1);
 }
+bool CaseThickenOutput(V2MainWindow& window,int mode,int placement)
+{
+    if(!MakeFreshGuideSurface(window))return false;
+    if(placement==3) {
+        WorkPlaneChoice plane;plane.method=modeling::WorkPlaneMethod::PointNormal;
+        plane.origin={0,0,3};plane.name="厚み終端試験";
+        window.Viewport().SetSelection({});window.CreateWorkPlaneFromChoice(plane,false);
+    }
+    window.Viewport().SetSelection({});window.SetMode(UiMode::Part);
+    window.RunCommand(placement==3?"part.thicken_to_plane":"part.thicken");
+    auto* output=window.findChild<QComboBox*>("thickenOutput");
+    auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");
+    if(!output||!output->isVisible()||!amount||!ClickOnAnyGuideSurface(window))return false;
+    amount->setValue(.125);
+    if(placement==3) {
+        if(!window.ThickenDock().ClickToPlaneCard())return false;
+        auto* target=window.findChild<QComboBox*>("thickenTarget");
+        if(!target||!target->isVisible())return false;
+        const int at=target->findText(QStringLiteral("厚み終端試験"));if(at<0)return false;
+        target->setCurrentIndex(at);
+    } else if(!window.ThickenDock().ClickPlacementCard(static_cast<ThicknessPlacement>(placement)))return false;
+    const auto before=window.Session().GetDocument().Snapshot();
+    const int oldWires=CountOfKind(window,EntityKind::Wire);
+    const auto revision=window.Session().GetDocument().Revision();
+    int jobs=0;QTimer observed;observed.setInterval(5);
+    QObject::connect(&observed,&QTimer::timeout,&window,[&]{if(V2GeometryJob::Active())++jobs;});
+    observed.start();QElapsedTimer elapsed;elapsed.start();
+    for(int pick:{0,1,2,mode}) {
+        output->setCurrentIndex(pick);
+        if(!Explain("preview shading follows output choice",(window.Viewport().ToolPreviewFaceCount()>0)==(pick!=1)))return false;
+    }
+    observed.stop();
+    if(!Explain("output choice does not calculate or edit document",jobs==0&&elapsed.elapsed()<500
+        &&window.Session().GetDocument().Revision()==revision)||!window.ThickenDock().ClickConfirm())return false;
+    const int parts=mode==1?0:1;
+    const int wires=CountOfKind(window,EntityKind::Wire);
+    if(!Explain("only requested output entities are committed",CountOfKind(window,EntityKind::Part)==parts
+        &&(mode==0?wires==oldWires:wires>oldWires)&&CountOfKind(window,EntityKind::GuideSurface)==1))return false;
+    window.RunCommand("edit.undo");
+    const auto undone=window.Session().GetDocument().Snapshot();
+    const bool same=undone.entities.size()==before.entities.size()&&std::equal(before.entities.begin(),before.entities.end(),undone.entities.begin(),
+        [](const auto& a,const auto& b){return a.id==b.id&&a.kind==b.kind&&a.visibility==b.visibility&&a.displayName==b.displayName;});
+    if(!Explain("one undo restores every original entity",same
+        &&CountOfKind(window,EntityKind::Wire)==oldWires&&CountOfKind(window,EntityKind::Part)==0))return false;
+    window.RunCommand("edit.redo");
+    return Explain("requested solids and native boundary curves survive save",window.SaveAndReopen(QStringLiteral("thicken-output.kcd2"))
+        &&window.RebuildProblems().isEmpty()&&CountOfKind(window,EntityKind::Part)==parts&&CountOfKind(window,EntityKind::Wire)==wires);
+}
+bool CaseThickenOutputMatrix(V2MainWindow& window)
+{
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95}) {
+        window.ApplyTheme(theme);
+        for(int placement:{0,1,2,3})for(int output:{0,1,2})
+            if(!CaseThickenOutput(window,output,placement)){window.ApplyTheme(UiTheme::Normal);return false;}
+    }
+    window.ApplyTheme(UiTheme::Normal);return true;
+}
+bool CaseJigOutputMatrix(V2MainWindow& window)
+{
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95})for(int mode:{0,1,2}) {
+        std::cout<<"jig output mode="<<mode<<" theme="<<int(theme)<<" setup"<<std::endl;
+        window.ApplyTheme(theme);if(!MakeFreshGuideSurface(window))return false;
+        std::cout<<"jig source ready"<<std::endl;
+        window.Viewport().SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),EntityKind::GuideSurface));
+        window.SetMode(UiMode::Part);window.ActivateCommand("part.surface_jig");
+        std::cout<<"jig panel ready"<<std::endl;
+        auto* output=window.findChild<QComboBox*>("jigOutput");if(!output||!output->isVisible())return false;
+        output->setCurrentIndex(mode);
+        (void)window.ParameterDock().Apply(app::ParameterId::JigThicknessMm,QStringLiteral("0.125"));
+        (void)window.ParameterDock().Apply(app::ParameterId::JigClearanceMm,QStringLiteral("0.025"));
+        const int oldWires=CountOfKind(window,EntityKind::Wire);
+        std::cout<<"jig confirming"<<std::endl;
+        if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        std::cout<<"jig confirmed"<<std::endl;
+        const int parts=mode==1?0:1,wires=CountOfKind(window,EntityKind::Wire);
+        if(!Explain("jig generates requested native solid or independent boundaries",CountOfKind(window,EntityKind::Part)==parts
+            &&(mode==0?wires==oldWires:wires>oldWires)))return false;
+        window.RunCommand("edit.undo");
+        std::cout<<"jig undo ready"<<std::endl;
+        if(CountOfKind(window,EntityKind::Part)!=0||CountOfKind(window,EntityKind::Wire)!=oldWires)return false;
+        window.RunCommand("edit.redo");
+        std::cout<<"jig redo ready"<<std::endl;
+        if(!window.SaveAndReopen(QStringLiteral("jig-output.kcd2"))||!window.RebuildProblems().isEmpty()
+            ||CountOfKind(window,EntityKind::Part)!=parts||CountOfKind(window,EntityKind::Wire)!=wires)return false;
+    }
+    window.ApplyTheme(UiTheme::Normal);return true;
+}
 bool CaseCorrectionThemes(V2MainWindow& window)
 {
     for(const auto theme:{UiTheme::Normal,UiTheme::Windows95}) {
@@ -414,12 +502,19 @@ bool CaseOwnerCorrectedThickness(V2MainWindow& window)
         observed.start();time.restart();amount->setValue(.5);observed.stop();
         std::cout<<"owner corrected reused="<<time.elapsed()<<" ms jobs="<<repeatedJobs<<std::endl;
         if(!Explain("corrected preview reuses checked result without another process",repeatedJobs==0&&time.elapsed()<2000))return false;
+        const int oldWires=CountOfKind(window,EntityKind::Wire);
+        auto* output=window.findChild<QComboBox*>("thickenOutput");if(!output||!output->isVisible())return false;
+        time.restart();repeatedJobs=0;observed.start();
+        for(int mode:{0,1,2})output->setCurrentIndex(mode);
+        observed.stop();std::cout<<"owner output switches="<<time.elapsed()<<" ms jobs="<<repeatedJobs<<std::endl;
+        if(!Explain("owner output choices do not rebuild the native wall",repeatedJobs==0&&time.elapsed()<500))return false;
         const auto stem=placement==ThicknessPlacement::Inside?QStringLiteral("inside"):QStringLiteral("centered");
         QApplication::processEvents();
         const auto* shown=window.findChild<QLabel*>("thickenStatus");
         if(!Explain("owner deviation lines are not clipped",shown&&shown->height()>=shown->heightForWidth(shown->width())))return false;
         if(!directory.isEmpty())window.grab().save(directory+"/corrected-"+stem+"-preview.png");
-        if(!window.ThickenDock().ClickConfirm()||CountOfKind(window,EntityKind::Part)!=parts+1)return false;
+        if(!window.ThickenDock().ClickConfirm()||CountOfKind(window,EntityKind::Part)!=parts+1
+            ||CountOfKind(window,EntityKind::Wire)<=oldWires)return false;
         bool stored=false;
         for(const auto& feature:window.Session().GetDocument().Snapshot().features)
             if(const auto* d=std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition);d&&d->surface==source)
@@ -427,9 +522,11 @@ bool CaseOwnerCorrectedThickness(V2MainWindow& window)
         if(!stored)return false;
         QApplication::processEvents();
         if(!directory.isEmpty())window.grab().save(directory+"/corrected-"+stem+"-result.png");
-        window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Part)!=parts)return false;
+        const int savedWires=CountOfKind(window,EntityKind::Wire);
+        window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Part)!=parts||CountOfKind(window,EntityKind::Wire)!=oldWires)return false;
         window.RunCommand("edit.redo");if(CountOfKind(window,EntityKind::Part)!=parts+1||!window.RebuildProblems().isEmpty())return false;
-        if(!window.SaveAndReopen("owner-corrected-"+stem+".kcd2")||!window.RebuildProblems().isEmpty())return false;
+        if(!window.SaveAndReopen("owner-corrected-"+stem+".kcd2")||!window.RebuildProblems().isEmpty()
+            ||CountOfKind(window,EntityKind::Wire)!=savedWires)return false;
         // Persist a reviewable result outside the temporary test document.
         if(!directory.isEmpty()) {window.SetPathChooser([directory,stem](bool){return directory+"/corrected-"+stem+".kcd2";});window.RunCommand("file.save_as");}
     }
@@ -498,11 +595,41 @@ bool CaseOwnerThickness(V2MainWindow& window)
     return Explain("owner valid solid survives undo redo and saved rebuild",window.RebuildProblems().isEmpty()
         &&window.SaveAndReopen(QStringLiteral("owner-thickness-performance.kcd2"))&&window.RebuildProblems().isEmpty());
 }
+bool CaseOwnerWireOutput(V2MainWindow& window)
+{
+    const auto path=qEnvironmentVariable("KACHACAD_THICKEN_TEST_FILE");
+    QFile file(path);if(!file.open(QIODevice::ReadOnly))return false;const auto original=file.readAll();file.close();
+    if(!window.OpenDocumentFile(path))return false;
+    base::EntityId source;
+    for(const auto& f:window.Session().GetDocument().Snapshot().features)
+        if(const auto* d=std::get_if<domain::CreateGuideSurfaceDefinition>(&f.definition);d&&d->method==5)source=f.outputs.front().entityId;
+    if(source.IsNil())return false;
+    const int parts=CountOfKind(window,EntityKind::Part),wires=CountOfKind(window,EntityKind::Wire);
+    window.SetMode(UiMode::Part);window.Viewport().SetSelection({});window.RunCommand("part.thicken");
+    auto* output=window.findChild<QComboBox*>("thickenOutput");auto* amount=window.findChild<QDoubleSpinBox*>("thickenAmount");
+    if(!output||!amount)return false;
+    output->setCurrentIndex(1);amount->setValue(.5);
+    if(!window.ThickenDock().ClickPlacementCard(ThicknessPlacement::Inside)||!window.ThickenDock().ClickCorrection(true))return false;
+    app::SelectionSet selected;selected.entityIds={source};window.Viewport().SetSelection(selected);
+    if(!window.ThickenDock().ClickConfirm())return false;
+    const int madeWires=CountOfKind(window,EntityKind::Wire);
+    if(!Explain("actual corrected roof wire-only has native curves without a new part",CountOfKind(window,EntityKind::Part)==parts&&madeWires>wires))return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Wire)!=wires)return false;
+    window.RunCommand("edit.redo");
+    if(!window.SaveAndReopen(QStringLiteral("owner-wire-output.kcd2"))||!window.RebuildProblems().isEmpty()
+        ||CountOfKind(window,EntityKind::Wire)!=madeWires||CountOfKind(window,EntityKind::Part)!=parts)return false;
+    const auto directory=qEnvironmentVariable("KACHACAD_THICKEN_TEST_OUTPUT");
+    if(!directory.isEmpty()){window.SetPathChooser([directory](bool){return directory+"/wire-only.kcd2";});window.RunCommand("file.save_as");}
+    if(!file.open(QIODevice::ReadOnly))return false;
+    return Explain("wire-only roof also leaves original KCD bytes unchanged",file.readAll()==original);
+}
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-TH-JIG-OUTPUT all jig outputs themes undo and saved results",CaseJigOutputMatrix},
+        {"HP-TH-OUTPUT all outputs placements to-plane themes and atomic saved results",CaseThickenOutputMatrix},
         {"HP-TH-CORRECT explicit correction buttons and saved native rebuild",CaseCorrectionThemes},
         {"HP-TH-08 editable viewport and coalesced latest thickness preview",CaseInteractiveThicknessChanges},
         {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
@@ -518,6 +645,7 @@ std::vector<SelfTestCase> ThickenCases()
     };
     if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-OWNER actual owner surfaces",CaseOwnerThickness});
     if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-CORRECT-OWNER actual owner corrected inside and centered",CaseOwnerCorrectedThickness});
+    if(qEnvironmentVariableIsSet("KACHACAD_THICKEN_TEST_FILE"))cases.push_back({"HP-TH-CORRECT-OWNER-WIRE actual owner wire-only saved boundaries",CaseOwnerWireOutput});
     return cases;
 }
 

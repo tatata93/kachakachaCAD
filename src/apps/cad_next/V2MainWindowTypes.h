@@ -12,6 +12,7 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 
 #include <QString>
 
@@ -31,6 +32,7 @@ struct V2ThickenPreviewState {
     std::vector<kachakacha::v2::modeling::KernelShapeHandle> built;
     std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> builtEdges;
     std::vector<double> builtThickness;
+    kachakacha::v2::modeling::ShapeMesh builtMesh;
     // 3D選択に映した面の写し。差分を読むための前回値。
     std::vector<kachakacha::v2::base::EntityId> mirror;
     bool mirroring = false;

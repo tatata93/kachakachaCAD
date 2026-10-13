@@ -551,7 +551,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "面に厚みを付けるときの付け方を、外側・中央・内側の順に切り替えます。", false,
             {"AT-EXT-001"}},
-        {"part.thicken_to_plane", "面を平面まで立体に", CommandMode::Instant, "thicken_to", "",
+        {"part.thicken_to_plane", "面を平面まで立体に", CommandMode::Dialog, "thicken_to", "",
             SelectionPredicate::GuideSurfacesAndOneWorkPlane,
             "形状ガイドの面を1つ以上と、相手の作業平面を1つ選んでください。",
             "選んだ面と作業平面の間を埋めて立体にします(面ごとに 1 部品、1 回で戻る)。"

@@ -8,6 +8,7 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/kernel/OcctMassProperties.h"
 #include "kachakacha/kernel/OcctImage.h"
+#include "kachakacha/kernel/OcctIntersectionPartition.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -35,6 +36,7 @@
 #include <Geom_BSplineSurface.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepLib.hxx>
 #include <GProp_GProps.hxx>
 #endif
@@ -380,6 +382,36 @@ KACHA_V2_TEST(thicken_quality, correction_option_keeps_exact_radius_when_possibl
     const auto holeSource=kernel::StoreShape(maker.Face());
     Require(!kernel::detail::CorrectedThicken(holeSource,.3,fabrication::ThicknessPlacement::Inside,{}).HasValue(),"unsupported correction never fills an inner boundary");
     kernel::ReleaseShape(holeSource);
+}
+KACHA_V2_TEST(thicken_quality, intersection_partition_preserves_dense_native_surface_domains_and_source)
+{
+    for(int mode:{0,1,2}) {
+        auto face=TightParabola();
+        auto spline=occ::handle<Geom_BSplineSurface>::DownCast(BRep_Tool::Surface(face));
+        Require(!spline.IsNull(),"native test spline available");
+        for(int i=1;i<80;++i)spline->InsertUKnot(i/80.0,1,1e-12,false);
+        if(mode==1)face.Reverse();
+        if(mode==2){gp_Trsf tr;tr.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.71);
+            tr.SetTranslationPart(gp_Vec(12,-23,34));face=TopoDS::Face(BRepBuilderAPI_Transform(face,tr,true).Shape());}
+        const auto source=kernel::StoreShape(face);const auto original=kernel::CaptureOutputShape(source);
+        // The helper receives a private copy, as it does in production.
+        const auto copy=BRepBuilderAPI_Copy(face,true,false).Shape();
+        const auto split=kernel::detail::PartitionIntersectionFaces(copy);
+        Require(BRepCheck_Analyzer(split).IsValid(),"exact partition has valid parameter topology");
+        int count=0;const auto wanted=BRep_Tool::Surface(face);
+        for(TopExp_Explorer e(split,TopAbs_FACE);e.More();e.Next()) {
+            ++count;const auto f=TopoDS::Face(e.Current());const auto actual=BRep_Tool::Surface(f);
+            double u0,u1,v0,v1;BRepTools::UVBounds(f,u0,u1,v0,v1);
+            for(double a:{0.0,.2,.5,.8,1.0})for(double b:{0.0,.25,.5,.75,1.0}) {
+                const auto u=u0+(u1-u0)*a,v=v0+(v1-v0)*b;
+                test::RequireNear(actual->Value(u,v).Distance(wanted->Value(u,v)),0,1e-9,"native position and global UV preserved");
+            }
+            Require(f.Orientation()==face.Orientation(),"reversed material-side orientation retained");
+        }
+        Require(count>1,"dense exact geometry is partitioned for intersection analysis");
+        Require(kernel::CaptureOutputShape(source).Value()==original.Value(),"analysis never mutates authoritative native source");
+        kernel::ReleaseShape(source);
+    }
 }
 #else
 KACHA_V2_TEST(thicken_quality, missing_kernel_is_reported)

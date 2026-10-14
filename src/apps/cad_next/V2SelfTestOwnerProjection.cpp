@@ -10,6 +10,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include <QApplication>
@@ -33,13 +34,78 @@ using namespace kachakacha::v2;
 class V2ProjectionOwnerExercise {
 public:
     static bool Run(V2MainWindow& window);
+    static bool VerifyLastPart(V2MainWindow& window,double expectedVolume);
 private:
     static base::EntityId Id(const char* suffix){return *base::EntityId::Parse(std::string("00000000-0000-4000-8000-00000000")+suffix);}
     static bool Prepare(V2MainWindow& window,std::vector<base::EntityId>& sources);
     static bool Lights(V2MainWindow& window,const QString& output);
+    static bool LightFaces(V2MainWindow& window,const QString& output);
     static bool SaveLights(V2MainWindow& window,const QString& output);
     static void Frame(V2MainWindow& window,const std::vector<base::EntityId>& sources);
 };
+bool V2ProjectionOwnerExercise::VerifyLastPart(V2MainWindow& window,double expectedVolume) {
+    const auto& entity=window.Session().GetDocument().Snapshot().entities.back();
+    const auto native=window.partShapes_.find(entity.id.ToString());if(native==window.partShapes_.end())return false;
+    const auto checked=kernel::CheckSolidForExport(native->second,.001);
+    if(!checked.HasValue()||!checked.Value().Ok())return false;
+    return std::abs(checked.Value().volumeMm3-expectedVolume)<1e-4;
+}
+bool V2ProjectionOwnerExercise::LightFaces(V2MainWindow& window,const QString& output) {
+    const auto before=window.Session().GetDocument().Snapshot();
+    const int parts=selftest::CountOfKind(window,domain::EntityKind::Part);
+    double expectedVolume=0,actualVolume=0,volumeBudget=0;
+    constexpr double projectionTolerance=.001;
+    auto* tool=V2ProjectionTool::Open(window);
+    for(const auto* id:{"0115","011b","0121","0124","012d","0130"}) {
+        app::SelectionRef ref;ref.entityId=Id(id);if(!tool->AddWire(ref))return false;
+        app::SelectionSet selection;selection.entityIds={ref.entityId};const auto curves=app::SelectedCurves(selection,window.Session().Scene());
+        if(curves.size()!=1||curves.front().Kind()!=geometry::CurveKind::Circle)return false;
+        expectedVolume+=geometry::kPi*curves.front().Radius()*curves.front().Radius()*.5;
+        // Radial-envelope volume budget for this fixture, not a certified global projection-error bound.
+        volumeBudget+=geometry::kPi*(2*curves.front().Radius()*projectionTolerance+projectionTolerance*projectionTolerance)*.5;
+    }
+    for(const auto* id:{"2af9","310c","37d8","3f34"}) {
+        app::SelectionRef ref;ref.entityId=Id(id);ref.kind=app::SelectionElementKind::Face;ref.pickedFaceIndex=0;
+        ref.hitPoint={0,-27,14};if(!tool->AddTarget(ref))return false;
+    }
+    tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(1);
+    tool->findChild<QDoubleSpinBox*>("projectionTolerance")->setValue(projectionTolerance);
+    if(!tool->Preview()){std::cout<<"OWNER lamp face preview "<<window.StatusText().toStdString()<<std::endl;return false;}
+    Frame(window,{});window.grab().save(output+"/lamp-faces-preview.png");
+    if(!tool->Commit())return false;
+    std::vector<base::EntityId> faces;
+    for(const auto& e:window.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::GuideSurface&&std::none_of(before.entities.begin(),before.entities.end(),[&](const auto& old){return old.id==e.id;}))faces.push_back(e.id);
+    std::cout<<"OWNER lamp faces "<<faces.size()<<std::endl;
+    // Two lamps cross a support-face seam: six source circles become eight native patches.
+    if(faces.size()!=8)return false;
+    for(const auto& id:faces) {
+        app::SelectionSet selection;selection.entityIds={id};window.Viewport().SetSelection(selection);
+        window.RunCommand("part.extrude");
+        if(!window.Viewport().ExtrudeHandleShown())return false;
+        window.ExtrudeDock().ChooseDirection(modeling::ExtrudeDirectionMode::CustomXYZ);
+        window.ExtrudeDock().SetCustomDirection({0,-1,0});window.ExtrudeDock().TypeDistanceMm(.5);
+        const int count=selftest::CountOfKind(window,domain::EntityKind::Part);
+        const bool entered=window.HandleToolKey(Qt::Key_Return,nullptr);
+        std::cout<<"OWNER lamp face extrusion "<<id.ToString()<<" "<<entered<<" "<<window.StatusText().toStdString()<<std::endl;
+        if(!entered||selftest::CountOfKind(window,domain::EntityKind::Part)!=count+1){std::cout<<"OWNER unexpected part count"<<std::endl;return false;}
+        const auto& e=window.Session().GetDocument().Snapshot().entities.back();
+        const auto shape=window.partShapes_.find(e.id.ToString());if(shape==window.partShapes_.end()){std::cout<<"OWNER missing committed native shape"<<std::endl;return false;}
+        const auto checked=kernel::CheckSolidForExport(shape->second,.001);
+        if(!checked.HasValue()||!checked.Value().Ok()||checked.Value().volumeMm3<=0){
+            std::cout<<"OWNER solid check "<<checked.FirstMessageJa()<<std::endl;
+            if(checked.HasValue())std::cout<<"OWNER closed "<<checked.Value().closed<<" positive "<<checked.Value().positiveVolume<<" selfFree "<<checked.Value().selfIntersectionFree<<" volume "<<checked.Value().volumeMm3<<std::endl;
+            return false;
+        }
+        actualVolume+=checked.Value().volumeMm3;
+    }
+    std::cout<<"OWNER lamp volume expected "<<expectedVolume<<" actual "<<actualVolume<<" budget "<<volumeBudget<<" mm3"<<std::endl;
+    if(std::abs(actualVolume-expectedVolume)>volumeBudget+1e-5)return false;
+    window.RunCommand("edit.undo");if(selftest::CountOfKind(window,domain::EntityKind::Part)!=parts+7)return false;
+    window.RunCommand("edit.redo");if(selftest::CountOfKind(window,domain::EntityKind::Part)!=parts+8)return false;
+    window.RunCommand("selection.activate");Frame(window,{});window.grab().save(output+"/lamp-faces-extruded.png");
+    return window.SaveAndReopen("owner-lamp-face-extrusion.kcd2")&&selftest::CountOfKind(window,domain::EntityKind::Part)==parts+8;
+}
 bool V2ProjectionOwnerExercise::Lights(V2MainWindow& window,const QString& output) {
     std::vector<modeling::KernelShapeHandle> faces;
     for(const auto* id:{"2af9","310c","37d8","3f34","4748"}) {
@@ -124,7 +190,7 @@ bool V2ProjectionOwnerExercise::Prepare(V2MainWindow& window,std::vector<base::E
 void V2ProjectionOwnerExercise::Frame(V2MainWindow& window,const std::vector<base::EntityId>& sources) {
     app::SelectionSet shown;shown.entityIds=sources;
     for(const auto& e:window.Session().GetDocument().Snapshot().entities)
-        if(e.kind==domain::EntityKind::Part||e.displayName.starts_with("曲面へ投影")||e.displayName.starts_with("投影した窓"))shown.entityIds.push_back(e.id);
+        if(e.kind==domain::EntityKind::Part||e.displayName.starts_with("曲面へ投影")||e.displayName.starts_with("投影した"))shown.entityIds.push_back(e.id);
     window.Viewport().SetSelection(shown);window.Viewport().IsolateSelection();window.Viewport().SetSelection({});
     window.Viewport().SetViewDirection(ViewDirection::Isometric);window.Viewport().FitToDocument();
     for(QTreeWidgetItemIterator row(window.EntityTree());*row;++row) {
@@ -142,6 +208,10 @@ bool V2ProjectionOwnerExercise::Run(V2MainWindow& window) {
     QFile original(path);if(!original.open(QIODevice::ReadOnly))return false;const auto originalBytes=original.readAll();original.close();
     if(!window.OpenDocumentFile(path))return false;
     std::cout<<"OWNER loaded: "<<window.KernelShapeCount()<<" native shapes"<<std::endl;
+    if(!qEnvironmentVariable("KACHACAD_PROJECTION_OWNER_LIGHT_FACES").isEmpty()) {
+        const bool good=LightFaces(window,output);QFile reread(path);
+        return good&&reread.open(QIODevice::ReadOnly)&&reread.readAll()==originalBytes;
+    }
     if(!qEnvironmentVariable("KACHACAD_PROJECTION_OWNER_LIGHTS").isEmpty()) {
         const bool good=Lights(window,output);QFile reread(path);
         return good&&reread.open(QIODevice::ReadOnly)&&reread.readAll()==originalBytes;
@@ -200,8 +270,12 @@ bool V2ProjectionOwnerExercise::Run(V2MainWindow& window) {
     QFile reread(path);return reread.open(QIODevice::ReadOnly)&&reread.readAll()==originalBytes;
 }
 namespace kachakacha::v2::selftest {
+bool VerifyProjectedLampNative(V2MainWindow& window,double expectedVolume) {
+    return V2ProjectionOwnerExercise::VerifyLastPart(window,expectedVolume);
+}
 std::vector<SelfTestCase> OwnerProjectionCases() {
     if(!std::getenv("KACHACAD_PROJECTION_OWNER_INPUT"))return {};
-    return {{std::getenv("KACHACAD_PROJECTION_OWNER_LIGHTS")?"PROJ OWNER actual lamps and doors":"PROJ OWNER actual window face exercise",V2ProjectionOwnerExercise::Run}};
+    return {{std::getenv("KACHACAD_PROJECTION_OWNER_LIGHT_FACES")?"PROJ OWNER six projected lamp faces extrude":
+        (std::getenv("KACHACAD_PROJECTION_OWNER_LIGHTS")?"PROJ OWNER actual lamps and doors":"PROJ OWNER actual window face exercise"),V2ProjectionOwnerExercise::Run}};
 }
 }

@@ -75,9 +75,15 @@ void V2ProjectionTool::BuildUi() {
     targetRows_=new QListWidget(body);targetRows_->setObjectName(QStringLiteral("projectionTargetRows"));targetRows_->setMaximumHeight(100);layout->addWidget(targetRows_);
     button(QStringLiteral("選択行の面を解除"),[this]{const int i=targetRows_->currentRow();if(i>=0){kernel::ReleaseShape(targets_[i].shape);targets_.erase(targets_.begin()+i);RefreshRows();Invalidate();}});
     button(QStringLiteral("左ペインの選択を現在の役割へ追加"),[this]{TakeActiveSelection();});
+    layout->addWidget(MakePanelSectionTitle(body,QStringLiteral("結果")));
     output_=new QComboBox(body);output_->setObjectName(QStringLiteral("projectionOutput"));
     output_->addItems({QStringLiteral("出力: ワイヤーのみ"),QStringLiteral("出力: 面＋ワイヤー（閉領域を選択面へ）")});layout->addWidget(output_);
-    auto* outputHelp=new QLabel(QStringLiteral("面＋ワイヤー: 閉じた平面輪郭を指定方向に投影し、選択したすべてのフェイスの曲率・穴を保ちます。手前判定はワイヤーのみで使用します。"),body);
+    layout->addWidget(new QLabel(QStringLiteral("ワイヤーの残し方"),body));
+    wireForm_=new QComboBox(body);wireForm_->setObjectName(QStringLiteral("projectionWireForm"));
+    wireForm_->addItems({QStringLiteral("投影結果（読み取り専用）"),QStringLiteral("通常ワイヤー（編集可能）")});layout->addWidget(wireForm_);
+    auto* wireHelp=new QLabel(QStringLiteral("通常ワイヤーは投影した位置・曲線の形を保ち、元の線や面から独立して編集できます。"),body);
+    wireHelp->setWordWrap(true);layout->addWidget(wireHelp);
+    auto* outputHelp=new QLabel(QStringLiteral("ライトや窓を押し出す場合は「面＋ワイヤー」を選び、確定後に投影した面を選択します。曲面の形・穴を保ちます。ワイヤーの保存方法を変えても、曲面上の輪郭は平面にはなりません。"),body);
     outputHelp->setWordWrap(true);outputHelp->setProperty("projectionOnlyMode",0);layout->addWidget(outputHelp);
     connect(output_,&QComboBox::currentIndexChanged,this,[this]{hits_->setVisible(mode_->currentIndex()==0&&output_->currentIndex()==0);Invalidate();});
     BuildSettings(layout);

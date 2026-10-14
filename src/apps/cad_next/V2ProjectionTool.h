@@ -46,7 +46,8 @@ private:
     bool PreviewRegions(const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& faces,
         const std::vector<kachakacha::v2::kernel::WireProjectionInput>& inputs,
         const kachakacha::v2::kernel::WireProjectionOptions& options);
-    bool AddRegions(const std::vector<kachakacha::v2::base::EntityId>& inputIds);
+    bool AddRegions(const std::vector<kachakacha::v2::base::EntityId>& inputIds,
+        std::vector<kachakacha::v2::base::EntityId>& faceIds);
     V2MainWindow& window_;
     kachakacha::v2::base::DocumentId documentId_;
     std::uint64_t revision_=0,previewRevision_=0;
@@ -57,7 +58,7 @@ private:
     kachakacha::v2::geometry::Vector3 sourceOrigin_{},targetPoint_{};
     kachakacha::v2::geometry::Vector3 sourceU_{1,0,0},sourceV_{0,1,0};
     int role_=0;
-    QComboBox *mode_,*hits_,*output_;
+    QComboBox *mode_,*hits_,*output_,*wireForm_;
     QDoubleSpinBox *tolerance_,*distance_,*rotation_;
     QLabel *status_, *pickPrompt_;
     QListWidget *wireRows_,*targetRows_;

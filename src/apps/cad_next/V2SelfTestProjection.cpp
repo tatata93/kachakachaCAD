@@ -10,6 +10,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/geometry/WireChain.h"
 #include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -27,6 +28,7 @@
 #include <QBrush>
 #include <cstdlib>
 namespace kachakacha::v2::selftest {
+bool VerifyProjectedLampNative(V2MainWindow& window,double expectedVolume);
 namespace {
 base::EntityId WireId(){return *base::EntityId::Parse("b0000000-0000-4000-8000-000000000001");}
 base::EntityId TargetId(){return *base::EntityId::Parse("b0000000-0000-4000-8000-000000000002");}
@@ -34,9 +36,17 @@ std::vector<geometry::CurveSegment> Square(double z,double size=2) {
     const std::vector<geometry::Vector3> p={{-size,-size,z},{size,-size,z},{size,size,z},{-size,size,z},{-size,-size,z}};
     std::vector<geometry::CurveSegment> curves;for(int i=0;i<4;++i)curves.push_back(geometry::CurveSegment::MakeLine(p[i],p[i+1]).Value());return curves;
 }
-bool Fixture(V2MainWindow& window,bool solid=false) {
+bool Fixture(V2MainWindow& window,bool solid=false,int circle=0) {
     modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;
     modeling::GuideChain chain;chain.role=modeling::ChainRole::OuterBoundary;chain.closed=true;chain.segments=Square(0,8);request.chains={chain};
+    if(circle==2) {
+        request.method=modeling::GuideSurfaceMethod::RuledSections;request.chains.clear();
+        for(int i=0;i<2;++i) {
+            modeling::GuideChain section;section.role=modeling::ChainRole::Section;section.index=i+1;
+            section.segments={geometry::CurveSegment::MakeCircularArc({0,0,i?4.0:-4.0},{0,0,1},{1,0,0},10,-.8,1.6).Value()};
+            request.chains.push_back(section);
+        }
+    }
     const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,{});if(!analysis.HasValue())return false;
     const auto surface=kernel::BuildGuideSurface(request,analysis.Value(),{});if(!surface.HasValue())return false;
     auto handle=surface.Value().handle;
@@ -48,7 +58,9 @@ bool Fixture(V2MainWindow& window,bool solid=false) {
     io::DocumentFile file;file.snapshot=window.Session().GetDocument().Snapshot();
     domain::Feature wire;wire.id=*base::FeatureId::Parse("b0000000-0000-4000-8000-000000000101");wire.type=domain::FeatureType::CreateWire;wire.displayName="投影元";
     domain::CreateWireDefinition definition;definition.segments=Square(10);
-    for(int i=1;i<=4;++i)definition.segmentIds.push_back(*base::SegmentId::Parse("b0000000-0000-4000-8000-00000000020"+std::to_string(i)));
+    if(circle)definition.segments={geometry::CurveSegment::MakeCircle(circle==2?geometry::Vector3{20,0,0}:geometry::Vector3{0,0,10},
+        circle==2?geometry::Vector3{1,0,0}:geometry::Vector3{0,0,1},circle==2?geometry::Vector3{0,1,0}:geometry::Vector3{1,0,0},1).Value()};
+    for(std::size_t i=1;i<=definition.segments.size();++i)definition.segmentIds.push_back(*base::SegmentId::Parse("b0000000-0000-4000-8000-00000000020"+std::to_string(i)));
     wire.definition=definition;domain::Entity w;w.id=WireId();w.kind=domain::EntityKind::Wire;w.createdBy=wire.id;w.displayName=wire.displayName;wire.outputs.push_back({"wire",w.id,w.kind});
     domain::Feature target;target.id=*base::FeatureId::Parse("b0000000-0000-4000-8000-000000000102");target.type=domain::FeatureType::FreezeDerived;target.displayName="投影先";
     domain::FreezeDerivedDefinition frozen;frozen.frozenBrep=bytes.Value();target.definition=frozen;domain::Entity t;
@@ -180,6 +192,48 @@ bool ProjectedProfileExtrudes(V2MainWindow& window) {
     window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
     window.RunCommand("edit.redo");return Explain("PROJ extrusion persists through Undo and save",window.SaveAndReopen("projected-extrusion.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
 }
+bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved) {
+    if(!Fixture(window,false,curved?2:1))return false;
+    const auto before=window.Session().GetDocument().Snapshot();auto* tool=V2ProjectionTool::Open(window);
+    if(!AddGuideInputs(*tool))return false;
+    tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(curved?1:0);
+    tool->findChild<QDoubleSpinBox*>("projectionTolerance")->setValue(.000001);
+    auto* form=tool->findChild<QComboBox*>("projectionWireForm");if(!form||form->count()!=2||form->currentIndex()!=0)return false;
+    if(!tool->Preview())return false;
+    const auto lines=window.Viewport().ToolPreviewFaceCount();form->setCurrentIndex(ordinary?1:0);
+    if(!Explain("PROJ storage choice does not alter preview geometry",window.Viewport().ToolPreviewFaceCount()==lines)||!tool->Commit())return false;
+    const auto snapshot=window.Session().GetDocument().Snapshot();
+    base::EntityId wire,face;
+    for(std::size_t i=before.entities.size();i<snapshot.entities.size();++i) {
+        if(snapshot.entities[i].kind==domain::EntityKind::Wire)wire=snapshot.entities[i].id;
+        if(snapshot.entities[i].kind==domain::EntityKind::GuideSurface)face=snapshot.entities[i].id;
+    }
+    const auto* entity=window.Session().GetDocument().FindEntity(wire);if(!entity)return false;
+    const auto* feature=window.Session().GetDocument().FindFeature(entity->createdBy);if(!feature)return false;
+    if(!Explain("PROJ selected storage and independent dependencies",entity->editPolicy==(ordinary?domain::EditPolicy::Source:domain::EditPolicy::Derived)
+        &&feature->type==(ordinary?domain::FeatureType::CreateWire:domain::FeatureType::ProjectWire)
+        &&(ordinary?feature->inputEntityIds.empty():feature->inputEntityIds.size()==2)))return false;
+    app::SelectionSet selection;selection.entityIds={wire};
+    const auto curves=app::SelectedCurves(selection,window.Session().Scene());
+    if(!Explain("PROJ circle boundary remains closed",geometry::SegmentsFormClosedLoop(curves,snapshot.settings.tolerance)))return false;
+    if(curved) {
+        if(face.IsNil())return false;
+        selection.entityIds={face};
+    } else if(curves.size()!=1)return false;
+    window.RunCommand("selection.activate");window.Viewport().SetSelection(selection);window.ActivateCommand("part.extrude");
+    if(!Explain("PROJ lamp input shows extrusion handle",window.Viewport().ExtrudeHandleShown()))return false;
+    window.ExtrudeDock().ChooseDirection(modeling::ExtrudeDirectionMode::CustomXYZ);
+    window.ExtrudeDock().SetCustomDirection(curved?geometry::Vector3{1,0,0}:geometry::Vector3{0,0,1});
+    window.ExtrudeDock().TypeDistanceMm(.5);
+    if(!Explain("PROJ actual lamp solid committed",window.HandleToolKey(Qt::Key_Return,nullptr)&&CountOfKind(window,domain::EntityKind::Part)==1))return false;
+    if(!Explain("PROJ live native solid has half-mm volume before any rebuild",VerifyProjectedLampNative(window,geometry::kPi*.5)))return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
+    window.RunCommand("edit.redo");if(CountOfKind(window,domain::EntityKind::Part)!=1)return false;
+    if(!window.SaveAndReopen("projected-lamp.kcd2"))return false;
+    const auto* restored=window.Session().GetDocument().FindEntity(wire);
+    return Explain("PROJ lamp solid and wire policy survive saving",CountOfKind(window,domain::EntityKind::Part)==1
+        &&restored&&restored->editPolicy==(ordinary?domain::EditPolicy::Source:domain::EditPolicy::Derived));
+}
 }
 std::vector<SelfTestCase> OwnerProjectionCases();
 std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
@@ -187,6 +241,10 @@ std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"P
     {"PROJ manual direction and one-button reverse",ManualDirectionPreserved},{"PROJ role marks preserve tree and document",RoleMarks},
     {"PROJ direct tree inputs and lifecycle",TreeInput},{"PROJ explicit segments and multiple marks",SegmentMarks},
     {"PROJ native region output and Undo",RegionOutput},{"PROJ source-plane direction default",SourcePlaneDefault},
-    {"PROJ projected wire extrudes and survives save",ProjectedProfileExtrudes}};
+    {"PROJ projected wire extrudes and survives save",ProjectedProfileExtrudes},
+    {"PROJ planar circle projected storage extrusion",[](auto& w){return CircleOutput(w,false,false);}},
+    {"PROJ planar circle ordinary storage extrusion",[](auto& w){return CircleOutput(w,true,false);}},
+    {"PROJ curved lamp projected face extrusion",[](auto& w){return CircleOutput(w,false,true);}},
+    {"PROJ curved lamp ordinary storage face extrusion",[](auto& w){return CircleOutput(w,true,true);}}};
     const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
 }

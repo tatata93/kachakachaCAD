@@ -157,27 +157,39 @@ bool V2ProjectionTool::AddResults() {
     inputIds.erase(std::unique(inputIds.begin(),inputIds.end()),inputIds.end());
     for(const auto& run:result_->wires) {
         domain::Feature feature;feature.id=window_.ids_->NextTyped<base::IdKind::Feature>();
-        feature.type=domain::FeatureType::ProjectWire;feature.inputEntityIds=inputIds;
+        const bool ordinary=wireForm_->currentIndex()==1;
+        feature.type=ordinary?domain::FeatureType::CreateWire:domain::FeatureType::ProjectWire;
+        if(!ordinary)feature.inputEntityIds=inputIds;
         feature.displayName=mode_->currentIndex()==1?"巻き付け投影":"曲面へ投影";
         domain::CreateWireDefinition definition;definition.segments=run;
         for(std::size_t i=0;i<run.size();++i)definition.segmentIds.push_back(window_.ids_->NextTyped<base::IdKind::Segment>());
         feature.definition=definition;domain::Entity entity;entity.id=window_.ids_->NextTyped<base::IdKind::Entity>();
         entity.kind=domain::EntityKind::Wire;entity.createdBy=feature.id;
-        entity.editPolicy=domain::EditPolicy::Derived;
+        entity.editPolicy=ordinary?domain::EditPolicy::Source:domain::EditPolicy::Derived;
         entity.groupId=document.Snapshot().settings.activeGroupId;
         entity.displayName=app::UniqueDisplayName(document.Snapshot(),entity.kind,feature.displayName);
         feature.outputs.push_back({"wire",entity.id,entity.kind});
         const auto added=document.Run(document::AddFeatureCommand(feature,{entity},"曲面へ投影"));
         if(!added.committed){window_.ReportDiagnostics(added.diagnostics);return false;}
     }
-    return AddRegions(inputIds)&&transaction.Commit();
+    std::vector<base::EntityId> faceIds;
+    if(!AddRegions(inputIds,faceIds)||!transaction.Commit())return false;
+    // Only transfer ownership after the document transaction succeeds. CancelInput releases
+    // remaining preview shapes, while the registered faces now belong to the window.
+    for(std::size_t i=0;i<faceIds.size();++i)window_.guideShapes_[faceIds[i].ToString()]=regions_[i];
+    regions_.clear();
+    return true;
 }
 bool V2ProjectionTool::Commit() {
     if(!result_){Preview();return false;}
     if(previewRevision_!=window_.session_->GetDocument().Revision()){Invalidate();return false;}
+    const bool ordinary=wireForm_->currentIndex()==1;
     const int count=static_cast<int>(result_->wires.size()),faceCount=static_cast<int>(regions_.size()),openEnds=result_->openEnds;if(!AddResults())return false;
     CancelInput();revision_=window_.session_->GetDocument().Revision();window_.AdoptCurrentDocument();
     status_->setText(QStringLiteral("%1本を面へ落とし、ワイヤーを生成しました（面 %2枚）。設定を維持して次の投影を続けられます。").arg(count).arg(faceCount));
+    status_->setText(status_->text()+(ordinary?QStringLiteral("\n通常ワイヤーとして位置と曲線を保持しました。編集できます。"):
+        QStringLiteral("\n投影結果として位置と曲線を保持しました。")));
+    if(faceCount)status_->setText(status_->text()+QStringLiteral("\n押し出すには、左ペインの「面」または3Dビューで投影した面を選び「押し出し」を使います。"));
     if(openEnds)status_->setText(status_->text()+QStringLiteral("\n開いた輪郭が含まれます。投影先の面の範囲・穴・深さ差を確認してください。"));
     window_.SetStatus(status_->text());return true;
 }

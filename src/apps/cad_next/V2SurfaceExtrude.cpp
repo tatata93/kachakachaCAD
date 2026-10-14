@@ -107,6 +107,9 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     extrudeDock_->ShowStatusLines({QStringLiteral("曲面の形を保って押し出します。体積 %1 mm3")
         .arg(built.Value().totalVolumeMm3, 0, 'f', 3)}, true);
     if (!confirm) return true;
+    // Adding a part refreshes shelves and can replace the snapshot's preview after
+    // the document revision changes. Keep the actual committing shapes alive.
+    const auto committedPreview = extrudeSnapshot_->nativePreview;
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), "面の押し出し");
     if (!faceProfileSolid_.IsNil()) {
         const auto face = CommitSurfaceExtrudeFace();
@@ -131,7 +134,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
                 part.handle, {}, "面の押し出し", inputs).IsNil()) return true;
     }
     if (!transaction.Commit()) return true;
-    extrudeSnapshot_->nativePreview->parts.clear(); // Committed parts now own these handles.
+    committedPreview->parts.clear(); // Committed parts now own these handles, even after a refresh.
     EndExtrudePreview();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("面を押し出して立体を作りました。"));

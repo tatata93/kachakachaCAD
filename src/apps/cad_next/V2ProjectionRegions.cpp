@@ -31,17 +31,18 @@ bool V2ProjectionTool::PreviewRegions(const std::vector<modeling::KernelShapeHan
     status_->setText(QStringLiteral("面＋ワイヤー: %1面 / 閉輪郭 %2本 / 曲線変換の最大偏差上界 %3 mm。\n選択したフェイスの曲率・穴を維持。Enterで確定。").arg(regions_.size()).arg(result_->wires.size()).arg(result_->maxCurveDeviationMm,0,'g',5));
     confirm_->setEnabled(true);return true;
 }
-bool V2ProjectionTool::AddRegions(const std::vector<base::EntityId>& inputIds) {
+bool V2ProjectionTool::AddRegions(const std::vector<base::EntityId>& inputIds,std::vector<base::EntityId>& faceIds) {
     auto& document=window_.session_->GetDocument();
     for(const auto& region:regions_) {
         const auto bytes=kernel::CaptureOutputShape(region);if(!bytes.HasValue())return false;
         domain::Feature f;f.id=window_.ids_->NextTyped<base::IdKind::Feature>();f.type=domain::FeatureType::FreezeDerived;
-        f.inputEntityIds=inputIds;f.displayName="投影した窓の面";
+        f.inputEntityIds=inputIds;f.displayName="投影した面";
         domain::FreezeDerivedDefinition definition;definition.frozenBrep=bytes.Value();f.definition=definition;
         domain::Entity e;e.id=window_.ids_->NextTyped<base::IdKind::Entity>();e.kind=domain::EntityKind::GuideSurface;
         e.createdBy=f.id;e.editPolicy=domain::EditPolicy::Frozen;e.groupId=document.Snapshot().settings.activeGroupId;
         e.displayName=app::UniqueDisplayName(document.Snapshot(),e.kind,f.displayName);f.outputs.push_back({"face",e.id,e.kind});
         if(!document.Run(document::AddFeatureCommand(f,{e},"窓の面投影")).committed)return false;
+        faceIds.push_back(e.id);
     }
     return true;
 }

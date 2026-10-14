@@ -105,7 +105,7 @@ int main(int argc, char** argv)
     const QString state = ValueAfter(arguments, QStringLiteral("--manual-state"));
     const QString snapshot = ValueAfter(arguments, QStringLiteral("--snapshot"));
 
-    if (arguments.contains(QStringLiteral("--self-test"))) {
+    if (arguments.contains(QStringLiteral("--self-test")) || arguments.contains(QStringLiteral("--self-test-list"))) {
         return kachakacha::v2::selftest::RunSelfTest();
     }
 

@@ -19,6 +19,13 @@
 
 ## レビューの通し方(2026-09-14 以降)
 
+通常のアプリ内開発では主担当が実装・検証・配布を管理する。必要なら読み取り専用の
+調査・検証計画担当と品質・UI確認担当を加え、主担当を含め最大3担当とする。
+小修正は単独で進める。サブ担当には対象版・質問・範囲を限定し、全文履歴を当然には共有しない。
+サブ担当はファイル/Git変更、ビルド・試験・アプリ操作を行わず、主担当が根拠を確認する。
+同一論点を追加根拠なく再調査しない。詳細と検証入口は `docs/development/verification-workflow.md`。
+下記の旧イベント駆動レビュー常駐は別の運用であり、通常開発で自動再開しない。
+
 Codex に「仕事はありますか」と探させません。**PC が本当にビルドしてテストに通ったときだけ、
 PowerShell の常駐が Codex を1回だけ起こします。**
 
@@ -75,6 +82,9 @@ Wire-first V2に触る場合は加えて `docs/v2/README.md` から規範文書�
 原則: **本番環境=Windows実機で検証する。** 必要な開発ツールはローカルPCへ導入してよい(オーナー指示済み)。
 
 - **Windows(本番)**: `.\scripts\check.ps1`(構成+ビルド+テスト)と `kachakacha_cad.exe --self-test` を通す。
+  正式な計時・証拠付き入口は `.\scripts\verify.ps1 -Mode full`。
+  作業ブランチの中間コミットは `-Mode focused` で変更範囲に対応した重点検証を行う。
+  完成候補は全体ゲートと配布版検証を通し、重点検証済みを完成配布版と表示しない。
 - **Linux/クラウド**: `./scripts/check.sh linux-core` が最低ライン(コアのみ)。
   Qt・OCCT・UIに触れる変更は、Windows実機かCIで通るまで「検証済み」と言わない。
 - **main は常にグリーンに保つ。** main への push は CI(`.github/workflows/windows-build.yml`)を起動し、
@@ -119,8 +129,9 @@ grep -c "tool_ ==" src/apps/cad/CadViewport.cpp   # 同 128箇所
 詳細な手順(クラウドからの bundle 受け渡しを含む)は `docs/multi-machine-development.md`。
 
 - 作業開始前に必ず同期する(Windows: `scripts\sync.ps1` / Linux: `./scripts/sync.sh`)。
-- **作業ツリーが dirty のまま新しい作業を始めない。** 誰かの未コミット変更を見つけたら、
-  まず `wip-<PC名>-<日付>` ブランチへ退避コミットして push してから作業する。
+- **他担当の未コミット変更を取り込む、退避コミットする、破棄することは禁止する。**
+  所有者と用途を確認し、必要なら現在の開発ブランチを基点とする分離worktreeで作業する。
+  同期は対象の作業ツリーが安全な場合だけ行い、他担当の変更へautostashやrebaseをかけない。
 - そのPC・環境での作業を終えたら必ずコミットして push する。push できない環境(クラウド)は
   bundle 受け渡し手順で必ずGitHubまで届ける。未pushのまま放置しない。
 - 特定PCの絶対パスをリポジトリへ書かない。依存の場所は `cmake/KachakachaEnvironment.cmake` の

@@ -4,15 +4,18 @@
 //! 「単体では通るのに並べると落ちる」という追いにくい失敗が出る。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestReporting.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QString>
 #include <QStringList>
 
 #include <exception>
+#include <chrono>
 #include <cstdlib>
 #include <string>
 #include <iostream>
@@ -70,83 +73,83 @@ namespace {
 //! 種類ごとのケースを 1 本につなげる。
 [[nodiscard]] std::vector<SelfTestCase> AllCases()
 {
-    std::vector<SelfTestCase> cases = BasicCases();
-    const auto documentOpen = DocumentOpenCases();
+    std::vector<SelfTestCase> cases = WithSuite(BasicCases(), "Basic");
+    const auto documentOpen = WithSuite(DocumentOpenCases(), "DocumentOpen");
     cases.insert(cases.end(), documentOpen.begin(), documentOpen.end());
-    const std::vector<SelfTestCase> menus = MenuCases();
+    const std::vector<SelfTestCase> menus = WithSuite(MenuCases(), "Menu");
     cases.insert(cases.end(), menus.begin(), menus.end());
-    const std::vector<SelfTestCase> input = InputCases();
+    const std::vector<SelfTestCase> input = WithSuite(InputCases(), "Input");
     cases.insert(cases.end(), input.begin(), input.end());
-    const std::vector<SelfTestCase> modeling = ModelingCases();
+    const std::vector<SelfTestCase> modeling = WithSuite(ModelingCases(), "Modeling");
     cases.insert(cases.end(), modeling.begin(), modeling.end());
-    const auto usability=UsabilityCases();cases.insert(cases.end(),usability.begin(),usability.end());
-    const auto images=ImageCases();cases.insert(cases.end(),images.begin(),images.end());
-    const auto emboss=CurvedEmbossCases();cases.insert(cases.end(),emboss.begin(),emboss.end());
-    const auto instructions=InstructionCases();cases.insert(cases.end(),instructions.begin(),instructions.end());
-    for(const auto& group:{InstructionArrowCases(),InstructionSheetCases()})cases.insert(cases.end(),group.begin(),group.end());
-    const std::vector<SelfTestCase> planes = PlaneCases();
+    const auto usability=WithSuite(UsabilityCases(), "Usability");cases.insert(cases.end(),usability.begin(),usability.end());
+    const auto images=WithSuite(ImageCases(), "Image");cases.insert(cases.end(),images.begin(),images.end());
+    const auto emboss=WithSuite(CurvedEmbossCases(), "CurvedEmboss");cases.insert(cases.end(),emboss.begin(),emboss.end());
+    const auto instructions=WithSuite(InstructionCases(), "Instruction");cases.insert(cases.end(),instructions.begin(),instructions.end());
+    for(const auto& group:{WithSuite(InstructionArrowCases(), "InstructionArrow"),WithSuite(InstructionSheetCases(), "InstructionSheet")})cases.insert(cases.end(),group.begin(),group.end());
+    const std::vector<SelfTestCase> planes = WithSuite(PlaneCases(), "Plane");
     cases.insert(cases.end(), planes.begin(), planes.end());
-    const auto dimensions=DimensionCases();cases.insert(cases.end(),dimensions.begin(),dimensions.end());
-    const std::vector<SelfTestCase> drawing = DrawingCases();
+    const auto dimensions=WithSuite(DimensionCases(), "Dimension");cases.insert(cases.end(),dimensions.begin(),dimensions.end());
+    const std::vector<SelfTestCase> drawing = WithSuite(DrawingCases(), "Drawing");
     cases.insert(cases.end(), drawing.begin(), drawing.end());
-    const std::vector<SelfTestCase> edit = EditCases();
+    const std::vector<SelfTestCase> edit = WithSuite(EditCases(), "Edit");
     cases.insert(cases.end(), edit.begin(), edit.end());
-    const std::vector<SelfTestCase> screen = ScreenCases();
-    const std::vector<SelfTestCase> facing = FacingCases();
-    const std::vector<SelfTestCase> groups = GroupCases();
-    const std::vector<SelfTestCase> hoModel = HoModelCases();
-    const std::vector<SelfTestCase> humanPath = HumanPathCases();
+    const std::vector<SelfTestCase> screen = WithSuite(ScreenCases(), "Screen");
+    const std::vector<SelfTestCase> facing = WithSuite(FacingCases(), "Facing");
+    const std::vector<SelfTestCase> groups = WithSuite(GroupCases(), "Group");
+    const std::vector<SelfTestCase> hoModel = WithSuite(HoModelCases(), "HoModel");
+    const std::vector<SelfTestCase> humanPath = WithSuite(HumanPathCases(), "HumanPath");
     cases.insert(cases.end(), humanPath.begin(), humanPath.end());
-    const std::vector<SelfTestCase> humanPathApprox = HumanPathApproxCases();
+    const std::vector<SelfTestCase> humanPathApprox = WithSuite(HumanPathApproxCases(), "HumanPathApprox");
     cases.insert(cases.end(), humanPathApprox.begin(), humanPathApprox.end());
-    const auto output=OutputCases();cases.insert(cases.end(),output.begin(),output.end());
-    const auto faceExtrude=FaceExtrudeCases();cases.insert(cases.end(),faceExtrude.begin(),faceExtrude.end());
-    const auto projection=ProjectionCases();cases.insert(cases.end(),projection.begin(),projection.end());
-    const std::vector<SelfTestCase> humanPathBoolean = HumanPathBooleanCases();
+    const auto output=WithSuite(OutputCases(), "Output");cases.insert(cases.end(),output.begin(),output.end());
+    const auto faceExtrude=WithSuite(FaceExtrudeCases(), "FaceExtrude");cases.insert(cases.end(),faceExtrude.begin(),faceExtrude.end());
+    const auto projection=WithSuite(ProjectionCases(), "Projection");cases.insert(cases.end(),projection.begin(),projection.end());
+    const std::vector<SelfTestCase> humanPathBoolean = WithSuite(HumanPathBooleanCases(), "HumanPathBoolean");
     cases.insert(cases.end(), humanPathBoolean.begin(), humanPathBoolean.end());
-    const std::vector<SelfTestCase> humanPathCorner = HumanPathCornerCases();
+    const std::vector<SelfTestCase> humanPathCorner = WithSuite(HumanPathCornerCases(), "HumanPathCorner");
     cases.insert(cases.end(), humanPathCorner.begin(), humanPathCorner.end());
-    const std::vector<SelfTestCase> ribbon = RibbonCases();
+    const std::vector<SelfTestCase> ribbon = WithSuite(RibbonCases(), "Ribbon");
     cases.insert(cases.end(), ribbon.begin(), ribbon.end());
-    const std::vector<SelfTestCase> explorer = ExplorerCases();
+    const std::vector<SelfTestCase> explorer = WithSuite(ExplorerCases(), "Explorer");
     cases.insert(cases.end(), explorer.begin(), explorer.end());
-    const std::vector<SelfTestCase> statusLine = StatusLineCases();
+    const std::vector<SelfTestCase> statusLine = WithSuite(StatusLineCases(), "StatusLine");
     cases.insert(cases.end(), statusLine.begin(), statusLine.end());
-    const std::vector<SelfTestCase> drawingMethods = DrawingMethodCases();
+    const std::vector<SelfTestCase> drawingMethods = WithSuite(DrawingMethodCases(), "DrawingMethod");
     cases.insert(cases.end(), drawingMethods.begin(), drawingMethods.end());
-    const std::vector<SelfTestCase> partPanel = PartPanelCases();
+    const std::vector<SelfTestCase> partPanel = WithSuite(PartPanelCases(), "PartPanel");
     cases.insert(cases.end(), partPanel.begin(), partPanel.end());
-    const std::vector<SelfTestCase> array = ArrayCases();
+    const std::vector<SelfTestCase> array = WithSuite(ArrayCases(), "Array");
     cases.insert(cases.end(), array.begin(), array.end());
-    const std::vector<SelfTestCase> panelFrame = PanelFrameCases();
+    const std::vector<SelfTestCase> panelFrame = WithSuite(PanelFrameCases(), "PanelFrame");
     cases.insert(cases.end(), panelFrame.begin(), panelFrame.end());
-    const std::vector<SelfTestCase> partPlace = PartPlaceCases();
+    const std::vector<SelfTestCase> partPlace = WithSuite(PartPlaceCases(), "PartPlace");
     cases.insert(cases.end(), partPlace.begin(), partPlace.end());
-    const std::vector<SelfTestCase> solid = SolidCases();
+    const std::vector<SelfTestCase> solid = WithSuite(SolidCases(), "Solid");
     cases.insert(cases.end(), solid.begin(), solid.end());
-    const std::vector<SelfTestCase> edgeFinish = EdgeFinishCases();
+    const std::vector<SelfTestCase> edgeFinish = WithSuite(EdgeFinishCases(), "EdgeFinish");
     cases.insert(cases.end(), edgeFinish.begin(), edgeFinish.end());
-    const std::vector<SelfTestCase> shellSplit = ShellSplitCases();
+    const std::vector<SelfTestCase> shellSplit = WithSuite(ShellSplitCases(), "ShellSplit");
     cases.insert(cases.end(), shellSplit.begin(), shellSplit.end());
-    const std::vector<SelfTestCase> hoverEdit = HoverEditCases();
+    const std::vector<SelfTestCase> hoverEdit = WithSuite(HoverEditCases(), "HoverEdit");
     cases.insert(cases.end(), hoverEdit.begin(), hoverEdit.end());
-    const std::vector<SelfTestCase> generate = GenerateCases();
+    const std::vector<SelfTestCase> generate = WithSuite(GenerateCases(), "Generate");
     cases.insert(cases.end(), generate.begin(), generate.end());
-    const std::vector<SelfTestCase> unfold = UnfoldCases();
+    const std::vector<SelfTestCase> unfold = WithSuite(UnfoldCases(), "Unfold");
     cases.insert(cases.end(), unfold.begin(), unfold.end());
-    const std::vector<SelfTestCase> thicken = ThickenCases();
+    const std::vector<SelfTestCase> thicken = WithSuite(ThickenCases(), "Thicken");
     cases.insert(cases.end(), thicken.begin(), thicken.end());
-    const std::vector<SelfTestCase> surfaceEdit = SurfaceEditCases();
+    const std::vector<SelfTestCase> surfaceEdit = WithSuite(SurfaceEditCases(), "SurfaceEdit");
     cases.insert(cases.end(), surfaceEdit.begin(), surfaceEdit.end());
-    const std::vector<SelfTestCase> surfaceAnalysis = SurfaceAnalysisCases();
+    const std::vector<SelfTestCase> surfaceAnalysis = WithSuite(SurfaceAnalysisCases(), "SurfaceAnalysis");
     cases.insert(cases.end(), surfaceAnalysis.begin(), surfaceAnalysis.end());
-    const std::vector<SelfTestCase> workPlanePreview = WorkPlanePreviewCases();
+    const std::vector<SelfTestCase> workPlanePreview = WithSuite(WorkPlanePreviewCases(), "WorkPlanePreview");
     cases.insert(cases.end(), workPlanePreview.begin(), workPlanePreview.end());
-    const std::vector<SelfTestCase> regressions = RegressionCases();
+    const std::vector<SelfTestCase> regressions = WithSuite(RegressionCases(), "Regression");
     cases.insert(cases.end(), regressions.begin(), regressions.end());
-    const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
-    const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
-    const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();
+    const std::vector<SelfTestCase> promise = WithSuite(ExtrudePromiseCases(), "ExtrudePromise");
+    const std::vector<SelfTestCase> graph = WithSuite(ExtrudeGraphCases(), "ExtrudeGraph");
+    const std::vector<SelfTestCase> approxFlow = WithSuite(ApproximationFlowCases(), "ApproximationFlow");
     cases.insert(cases.end(), screen.begin(), screen.end());
     cases.insert(cases.end(), facing.begin(), facing.end());
     cases.insert(cases.end(), groups.begin(), groups.end());
@@ -154,29 +157,29 @@ namespace {
     cases.insert(cases.end(), graph.begin(), graph.end());
     cases.insert(cases.end(), approxFlow.begin(), approxFlow.end());
     cases.insert(cases.end(), hoModel.begin(), hoModel.end());
-    const std::vector<SelfTestCase> semantics = SemanticStateCases();
+    const std::vector<SelfTestCase> semantics = WithSuite(SemanticStateCases(), "SemanticState");
     cases.insert(cases.end(), semantics.begin(), semantics.end());
-    const std::vector<SelfTestCase> pointer = PointerCases();
+    const std::vector<SelfTestCase> pointer = WithSuite(PointerCases(), "Pointer");
     cases.insert(cases.end(), pointer.begin(), pointer.end());
-    const std::vector<SelfTestCase> guide = GuideCases();
+    const std::vector<SelfTestCase> guide = WithSuite(GuideCases(), "Guide");
     cases.insert(cases.end(), guide.begin(), guide.end());
-    const std::vector<SelfTestCase> fabrication = FabricationCases();
+    const std::vector<SelfTestCase> fabrication = WithSuite(FabricationCases(), "Fabrication");
     cases.insert(cases.end(), fabrication.begin(), fabrication.end());
-    const std::vector<SelfTestCase> partEdit = PartEditCases();
+    const std::vector<SelfTestCase> partEdit = WithSuite(PartEditCases(), "PartEdit");
     cases.insert(cases.end(), partEdit.begin(), partEdit.end());
-    const std::vector<SelfTestCase> responsive = ResponsiveCases();
+    const std::vector<SelfTestCase> responsive = WithSuite(ResponsiveCases(), "Responsive");
     cases.insert(cases.end(), responsive.begin(), responsive.end());
-    const std::vector<SelfTestCase> accuracy = DrawingAccuracyCases();
+    const std::vector<SelfTestCase> accuracy = WithSuite(DrawingAccuracyCases(), "DrawingAccuracy");
     cases.insert(cases.end(), accuracy.begin(), accuracy.end());
-    const std::vector<SelfTestCase> boundaryFill = BoundaryFillCases();
+    const std::vector<SelfTestCase> boundaryFill = WithSuite(BoundaryFillCases(), "BoundaryFill");
     cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
-    const std::vector<SelfTestCase> loopFaces = LoopFacesCases();
+    const std::vector<SelfTestCase> loopFaces = WithSuite(LoopFacesCases(), "LoopFaces");
     cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
-    const auto outlines=ApproxOutlineCases();cases.insert(cases.end(),outlines.begin(),outlines.end());
-    const auto practical=PracticalCases();cases.insert(cases.end(),practical.begin(),practical.end());
-    const auto gptFabrication = GptFabricationCases();
+    const auto outlines=WithSuite(ApproxOutlineCases(), "ApproxOutline");cases.insert(cases.end(),outlines.begin(),outlines.end());
+    const auto practical=WithSuite(PracticalCases(), "Practical");cases.insert(cases.end(),practical.begin(),practical.end());
+    const auto gptFabrication = WithSuite(GptFabricationCases(), "GptFabrication");
     cases.insert(cases.end(), gptFabrication.begin(), gptFabrication.end());
-    const auto gptSurface = GptSurfaceCases();
+    const auto gptSurface = WithSuite(GptSurfaceCases(), "GptSurface");
     cases.insert(cases.end(), gptSurface.begin(), gptSurface.end());
     return cases;
 }
@@ -210,16 +213,27 @@ void Note(const char* what)
 int RunSelfTest()
 {
     const std::vector<SelfTestCase> cases = AllCases();
+    Reporting reporting(cases);
+    if (!reporting.Valid()) {
+        std::cerr << reporting.Error().toUtf8().constData() << '\n';
+        (void)reporting.Save();
+        return 1;
+    }
+    if (reporting.ListOnly()) return reporting.Save() ? 0 : 1;
     int failed = 0;
     int total = 0;
-    const char* filter = std::getenv("KACHACAD_SELF_TEST_FILTER");
     for (const SelfTestCase& item : cases) {
-        if (filter != nullptr && std::string(item.name).find(filter) == std::string::npos) { continue; }
+        if (!reporting.Contains(item.name)) { continue; }
         ++total;
         // 先に名前を出しておく。途中で落ちたとき、どのケースで落ちたかが残る。
         // 落ちると PASS/FAIL のどちらも出ないので、名前が無いと追えない。
         std::cout << "RUN  " << item.name << std::endl;
-        if (RunOneCase(item)) {
+        const auto tick = std::chrono::steady_clock::now();
+        const auto started = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        const bool passed = RunOneCase(item);
+        const double milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tick).count();
+        reporting.Add(item.name, passed, milliseconds, started);
+        if (passed) {
             std::cout << "PASS " << item.name << std::endl;
         } else {
             std::cout << "FAIL " << item.name << std::endl;
@@ -228,7 +242,7 @@ int RunSelfTest()
     }
     std::cout << "cad_next self-test: " << (total - failed) << " passed, " << failed
               << " failed, " << total << " total\n";
-    return failed == 0 && total > 0 ? 0 : 1;
+    return failed == 0 && total > 0 && reporting.Save() ? 0 : 1;
 }
 
 } // namespace kachakacha::v2::selftest

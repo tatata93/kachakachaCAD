@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "scopes": [
+    {
+      "name": "thicken-input-and-ui",
+      "paths": ["src/apps/cad_next/V2Thicken*.cpp", "src/apps/cad_next/V2Thicken*.h", "src/next/kachakacha/app/ThickenInputState.*", "tests_v2/thicken_input_tests.cpp", "src/apps/cad_next/V2SelfTestThicken.cpp"],
+      "required_tests": ["v2_thicken_input_state_tests", "v2_kernel_thicken_quality_tests", "v2_kernel_warped_thicken_tests", "v2_session_tests", "v2_shape_rebuild_tests", "v2_feature_reevaluation_tests"],
+      "ui_suites": ["Thicken", "Input", "Modeling", "Regression", "DocumentOpen", "Basic"]
+    },
+    {
+      "name": "projection-kernel-and-ui",
+      "paths": ["src/apps/cad_next/V2Projection*.cpp", "src/apps/cad_next/V2SelfTestProjection.cpp", "src/next_occt/kachakacha/kernel/Occt*Projection*.cpp", "src/next_occt/kachakacha/kernel/OcctProjection*.h", "tests_v2/kernel_wire_projection_tests.cpp"],
+      "required_tests": ["v2_kernel_wire_projection_tests", "v2_kernel_extrude_tests", "v2_extrude_input_state_tests", "v2_session_tests", "v2_shape_rebuild_tests", "v2_feature_reevaluation_tests"],
+      "ui_suites": ["Projection", "ExtrudePromise", "ExtrudeGraph", "Basic", "Regression"]
+    },
+    {
+      "name": "manual-assets",
+      "paths": ["docs/manual.html", "docs/manual/*"],
+      "required_tests": ["v2_manual_tests", "v2_coverage_tests", "v2_command_catalog_tests", "v2_command_availability_tests", "v2_architecture_tests"],
+      "ui_suites": []
+    }
+  ]
+}

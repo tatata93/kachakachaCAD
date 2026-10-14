@@ -514,7 +514,9 @@ ADR 0028、`public-api-contract.md`、compile testを先に更新する。
 ### 分割とpush
 
 Phaseごとに独立コミットとし、Phase 1以降はSelection、ToolSession、shell、個別機能群をさらに分ける。
-各コミットでbuild、ctest、self-testを緑にしてpushする。途中状態は
+作業ブランチの中間コミットは対応する重点検証を通してpushする。完成候補は必須の
+全体ゲートと配布版自己試験を通す。重点検証を全体検証済みと表示しない。
+正式な入口と証拠の扱いは `docs/development/verification-workflow.md`。途中状態は
 `docs/v2/handover-ui-ux-2026-09-12.md` へ反映する。
 
 ## 19. 複数AIの統合規則

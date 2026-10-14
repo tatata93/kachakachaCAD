@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="830" viewBox="0 0 1400 830"><rect width="1400" height="830" fill="white"/><g font-family="sans-serif" fill="#202c39"><text x="50" y="45" font-size="28">従来の工程</text><text x="750" y="45" font-size="28">変更後の工程</text>
+<rect x="45" y="80" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="119" font-size="21">依頼・広い調査</text>
+<path d="M350 147v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="174" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="213" font-size="21">機能修正・大きな再ビルド</text>
+<path d="M350 241v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="268" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="307" font-size="21">全体検証を開始</text>
+<path d="M350 335v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="362" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="401" font-size="21">遅い段階で整合不良・実モデル不具合を発見</text>
+<path d="M350 429v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="456" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="495" font-size="21">修正して全体検証を再実行</text>
+<path d="M350 523v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="550" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="589" font-size="21">固定の配布先を更新</text>
+<path d="M350 617v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="45" y="644" width="610" height="64" rx="8" fill="#fae8e8" stroke="#8294a6"/><text x="63" y="683" font-size="21">コミット中心の証拠・push</text>
+<rect x="745" y="80" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="119" font-size="21">依頼・実モデル再現・範囲決定</text>
+<path d="M1050 147v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="174" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="213" font-size="21">実装＋必要な読み取り専用調査</text>
+<path d="M1050 241v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="268" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="307" font-size="21">短い整合検査・依存を含む重点検証</text>
+<path d="M1050 335v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="362" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="401" font-size="21">完成候補を固定・ソースと環境を記録</text>
+<path d="M1050 429v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="456" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="495" font-size="21">全件＋実際の配布版を検証</text>
+<path d="M1050 523v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="550" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="589" font-size="21">証拠と生成物の一致を確認</text>
+<path d="M1050 617v23m-7-8 7 8 7-8" fill="none" stroke="#566a7d" stroke-width="3"/>
+<rect x="745" y="644" width="610" height="64" rx="8" fill="#e6f2ff" stroke="#8294a6"/><text x="763" y="683" font-size="21">検証済み版を別フォルダーへ配布・push</text>
+<text x="50" y="785" font-size="20">問題：検査が後ろ、固定出力、再実行が長い</text><text x="750" y="785" font-size="20">全件試験・配布版試験・精度は維持</text></g></svg>

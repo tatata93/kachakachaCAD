@@ -1,0 +1,206 @@
+[
+  {
+    "parallel": 1,
+    "tests": [
+      "v2_harness_tests",
+      "v2_architecture_tests",
+      "v2_scaffold_tests",
+      "v2_command_catalog_tests",
+      "v2_command_availability_tests",
+      "v2_core_ui_wiring_tests",
+      "v2_coverage_tests",
+      "v2_manual_tests",
+      "verification_infrastructure_tests",
+      "v2_thicken_input_state_tests",
+      "v2_feature_reevaluation_tests",
+      "v2_shape_rebuild_tests",
+      "v2_session_tests",
+      "v2_atomic_file_tests",
+      "v2_kernel_wire_projection_tests",
+      "v2_kernel_thicken_quality_tests",
+      "v2_kernel_warped_thicken_tests"
+    ],
+    "result": {
+      "total": 17,
+      "skipped": []
+    },
+    "steps": [
+      {
+        "name": "inventory",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${repo}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--show-only=json-v1"
+        ],
+        "start": "2026-10-14T06:00:47.314944+00:00",
+        "end": "2026-10-14T06:00:47.440608+00:00",
+        "seconds": 0.12524979992303997,
+        "exit_code": 0,
+        "log": "inventory.log"
+      },
+      {
+        "name": "build-1",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "1",
+          "--target",
+          "kachakacha_v2_architecture_tests",
+          "kachakacha_v2_atomic_file_tests",
+          "kachakacha_v2_command_availability_tests",
+          "kachakacha_v2_command_catalog_tests",
+          "kachakacha_v2_core_ui_wiring_tests",
+          "kachakacha_v2_coverage_tests",
+          "kachakacha_v2_feature_reevaluation_tests",
+          "kachakacha_v2_harness_tests",
+          "kachakacha_v2_kernel_thicken_quality_tests",
+          "kachakacha_v2_kernel_warped_thicken_tests",
+          "kachakacha_v2_kernel_wire_projection_tests",
+          "kachakacha_v2_manual_tests",
+          "kachakacha_v2_scaffold_tests",
+          "kachakacha_v2_session_tests",
+          "kachakacha_v2_shape_rebuild_tests",
+          "kachakacha_v2_thicken_input_state_tests"
+        ],
+        "start": "2026-10-14T06:00:47.458559+00:00",
+        "end": "2026-10-14T06:01:12.284219+00:00",
+        "seconds": 24.825883400044404,
+        "exit_code": 0,
+        "log": "build-1.log"
+      },
+      {
+        "name": "comparison",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${repo}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "1",
+          "--output-junit",
+          "${repo}\\out\\verification\\parallel-comparison\\j1\\comparison.xml",
+          "-R",
+          "^(v2_harness_tests|v2_architecture_tests|v2_scaffold_tests|v2_command_catalog_tests|v2_command_availability_tests|v2_core_ui_wiring_tests|v2_coverage_tests|v2_manual_tests|verification_infrastructure_tests|v2_thicken_input_state_tests|v2_feature_reevaluation_tests|v2_shape_rebuild_tests|v2_session_tests|v2_atomic_file_tests|v2_kernel_wire_projection_tests|v2_kernel_thicken_quality_tests|v2_kernel_warped_thicken_tests)$"
+        ],
+        "start": "2026-10-14T06:01:12.285196+00:00",
+        "end": "2026-10-14T06:01:56.836989+00:00",
+        "seconds": 44.552800000063144,
+        "exit_code": 0,
+        "log": "comparison.log"
+      }
+    ]
+  },
+  {
+    "parallel": 2,
+    "tests": [
+      "v2_harness_tests",
+      "v2_architecture_tests",
+      "v2_scaffold_tests",
+      "v2_command_catalog_tests",
+      "v2_command_availability_tests",
+      "v2_core_ui_wiring_tests",
+      "v2_coverage_tests",
+      "v2_manual_tests",
+      "verification_infrastructure_tests",
+      "v2_thicken_input_state_tests",
+      "v2_feature_reevaluation_tests",
+      "v2_shape_rebuild_tests",
+      "v2_session_tests",
+      "v2_atomic_file_tests",
+      "v2_kernel_wire_projection_tests",
+      "v2_kernel_thicken_quality_tests",
+      "v2_kernel_warped_thicken_tests"
+    ],
+    "result": {
+      "total": 17,
+      "skipped": []
+    },
+    "steps": [
+      {
+        "name": "inventory",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${repo}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--show-only=json-v1"
+        ],
+        "start": "2026-10-14T06:01:56.841970+00:00",
+        "end": "2026-10-14T06:01:56.957659+00:00",
+        "seconds": 0.11654910002835095,
+        "exit_code": 0,
+        "log": "inventory.log"
+      },
+      {
+        "name": "build-1",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "2",
+          "--target",
+          "kachakacha_v2_architecture_tests",
+          "kachakacha_v2_atomic_file_tests",
+          "kachakacha_v2_command_availability_tests",
+          "kachakacha_v2_command_catalog_tests",
+          "kachakacha_v2_core_ui_wiring_tests",
+          "kachakacha_v2_coverage_tests",
+          "kachakacha_v2_feature_reevaluation_tests",
+          "kachakacha_v2_harness_tests",
+          "kachakacha_v2_kernel_thicken_quality_tests",
+          "kachakacha_v2_kernel_warped_thicken_tests",
+          "kachakacha_v2_kernel_wire_projection_tests",
+          "kachakacha_v2_manual_tests",
+          "kachakacha_v2_scaffold_tests",
+          "kachakacha_v2_session_tests",
+          "kachakacha_v2_shape_rebuild_tests",
+          "kachakacha_v2_thicken_input_state_tests"
+        ],
+        "start": "2026-10-14T06:01:56.975611+00:00",
+        "end": "2026-10-14T06:02:18.648371+00:00",
+        "seconds": 21.672639399999753,
+        "exit_code": 0,
+        "log": "build-1.log"
+      },
+      {
+        "name": "comparison",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${repo}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "2",
+          "--output-junit",
+          "${repo}\\out\\verification\\parallel-comparison\\j2\\comparison.xml",
+          "-R",
+          "^(v2_harness_tests|v2_architecture_tests|v2_scaffold_tests|v2_command_catalog_tests|v2_command_availability_tests|v2_core_ui_wiring_tests|v2_coverage_tests|v2_manual_tests|verification_infrastructure_tests|v2_thicken_input_state_tests|v2_feature_reevaluation_tests|v2_shape_rebuild_tests|v2_session_tests|v2_atomic_file_tests|v2_kernel_wire_projection_tests|v2_kernel_thicken_quality_tests|v2_kernel_warped_thicken_tests)$"
+        ],
+        "start": "2026-10-14T06:02:18.648371+00:00",
+        "end": "2026-10-14T06:02:50.880060+00:00",
+        "seconds": 32.231899500009604,
+        "exit_code": 0,
+        "log": "comparison.log"
+      }
+    ]
+  }
+]

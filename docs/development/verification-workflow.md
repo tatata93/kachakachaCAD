@@ -35,3 +35,57 @@
 今回は同じPC/構成/並列数/対象で基準と変更後を比較し、キャッシュと負荷条件を記録する。
 工程の並行を単純合算しない。分離不能な時間を内部思考時間と呼ばない。
 実測結果と今後のコマンドは完了時に追記する。
+
+## 正式な入口と証拠
+
+```powershell
+python scripts/verify.py plan
+python scripts/verify.py preflight
+python scripts/verify.py focused
+python scripts/verify.py full
+python scripts/verify.py publish --evidence out/verification/<run-id>/result.json
+python scripts/run-verified.py out/releases/<run-id>
+```
+
+PowerShellは `scripts/verify.ps1 -Mode focused|full`、Linux側は
+`./scripts/verify.sh focused linux-core`。Windowsの `check.ps1 -Preset windows-msvc` は証拠付き全体入口へ委譲する。
+custom generator/build directoryを使う旧check入口は保持する。`check-v2.ps1` のV2→全件の二重実行はなくす。
+`scripts/_QUICK.cmd` は重点入口、`scripts/_GO.cmd` は全体検証後にコミット済み入力をpushする互換入口。
+主担当は自分の変更をコミットしてから使う。自動staging/commit、固定ブランチへの切替を行わない。
+
+重点入口は直近の成功した全体証拠の入力バイト列と比較し、コミット済みの変更も検出する。
+初回、未知・共有変更、環境の変更は全体へ拡張する。`--base` は追加の比較基点であり、検証済み基点との差分を隠さない。
+対応表は `scripts/verification/scopes.json`。必須試験の実在とUI suiteの実在を確認し、対象を勝手に除外しない。
+共通基盤変更のすべてを精密な自動依存解析で最小化するものではなく、不明なら全件へ拡張する保守的な選択である。
+
+短い事前検査は9 CTest。UI配線、コマンド、coverage、manual、構造検査と検証基盤の負の経路を先に調べる。
+UIの `--self-test-list <json>`、`--self-test-cases <json>`、`--self-test-report <json>` が正確な一覧とケース別時間を出す。
+全件は `--self-test --self-test-all`。旧substringフィルターはデバッグ互換に残すが、全件指定には適用しない。
+実モデルの任意試験は明示的な別検証で実施し、既定の全件ゲートへ環境変数から混入させない。
+
+全体では開発版と配布版それぞれの全UI自己試験、すべてのCTest、旧CAD自己試験を保持する。
+実行ID別の `out/verification/` にソースのハッシュ、ツール/コンパイラ/依存設定、CMake設定、実行順、
+予定/実績、終了コード、XMLとUI JSONを保存する。単にコミットIDが一致するだけでは再利用しない。
+`docs/development/` の比較・運用資料とrefactoring-planの完了記録は実行入力のハッシュ対象外であり、
+ソース、scripts、build設定、規範V2文書、manual、samples、legal等は対象に含める。
+
+publishは成功した全体証拠の構造、現在の入力・設定・環境、XML/UI実績、配布物とZIPのハッシュを再検査する。
+別フォルダーへコピーした後もバイト列を照合し、旧配布やバックアップを上書きしない。
+必須Windows配布試験の77/skipを成功としない。Linux/coreのみのゲートはWindows配布の証拠にはしない。
+
+## 資源と互換性
+
+同じビルドツリーの検証は `.verification-lock` で排他する。失敗後に残ったロックは所有PIDと記録を確認し、
+他プロセスのものを自動削除しない。試験プロセスはTEMP、cwd、文書キャッシュを分離し、GUI/配布は資源ロックする。
+配布版は開発用PATH/Qtプラグインへ依存しない環境で試験する。起動確認はビルド先のexeではなく検証済み配布物を使う。
+ケース内はQtとプロセス内キャッシュを共有するため、UIケースを個別に並列実行しない。
+
+ローカルの旧_GO/_QUICKは通常経路を正式入口へ委譲し、旧内容をout/verification/legacy-entry-backupへ保全する。
+歴史的なGit公開フラグの互換処理だけは警告して旧ローカルscriptへ委譲する。正式な手順には必要ない。
+旧gpt-current.pyと旧proof/logは削除しない。旧worktree、版、バックアップ、増分ビルド資産も保全する。
+
+今回の同条件代表ビルド: 無変更2.80→2.90秒(0→0ファイル)、cpp21.17→15.31秒(1→1)、
+共有厚み入力ヘッダー621.23→66.58秒(157→14)。単発のウォーム増分測定であり、全修正の保証ではない。
+同じ17試験の逐次44.55→並列2で32.23秒。主窓ヘッダー自体は引き続き155 TUに波及する。
+自己試験用ターゲットの全面分離は、追加のlink/互換性整理が必要なため今回見送り。
+比較資料は `latency-comparison.html` と別添SVG/CSV/JSON。

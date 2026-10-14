@@ -850,13 +850,18 @@ endif()
 
 if(KACHACAD_BUILD_TESTS)
     # V2の試験。1件失敗しても残りが走る土台(src/next/kachakacha/base/TestHarness.h)を使う。
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME verification_infrastructure_tests
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/tests.py")
     function(kachakacha_add_v2_test name source)
         add_executable(kachakacha_v2_${name} ${source})
         target_link_libraries(kachakacha_v2_${name} PRIVATE kachakacha_v2_core)
         target_compile_definitions(kachakacha_v2_${name}
             PRIVATE KACHACAD_V2_REPO_ROOT="${CMAKE_SOURCE_DIR}")
         kachakacha_apply_test_options(kachakacha_v2_${name})
-        add_test(NAME v2_${name} COMMAND kachakacha_v2_${name})
+        add_test(NAME v2_${name} COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
+            --name v2_${name} -- $<TARGET_FILE:kachakacha_v2_${name}>)
     endfunction()
 
     add_executable(kachakacha_v2_write_sample tools/write_sample/main.cpp)
@@ -1045,10 +1050,14 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
                 NAME v2_${name}
                 COMMAND ${CMAKE_COMMAND} -E env
                     "PATH=${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
+                    ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
+                    --name v2_${name} --
                     $<TARGET_FILE:kachakacha_v2_${name}>
             )
         else()
-            add_test(NAME v2_${name} COMMAND kachakacha_v2_${name})
+            add_test(NAME v2_${name} COMMAND ${Python3_EXECUTABLE}
+                "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
+                --name v2_${name} -- $<TARGET_FILE:kachakacha_v2_${name}>)
         endif()
         set_tests_properties(v2_${name} PROPERTIES TIMEOUT 900)
     endfunction()
@@ -1083,6 +1092,9 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     add_executable(kachakacha_cad_next WIN32
         src/apps/cad_next/main.cpp
         src/apps/cad_next/V2SelfTest.cpp
+        src/apps/cad_next/V2SelfTestReporting.cpp
+        src/apps/cad_next/V2SelfTestReporting.h
+        src/apps/cad_next/V2ThickenPreviewState.h
         src/apps/cad_next/V2SelfTestBasics.cpp
         src/apps/cad_next/V2SelfTestMenu.cpp
         src/apps/cad_next/V2SelfTestInput.cpp
@@ -1389,13 +1401,15 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     if(KACHACAD_BUILD_TESTS)
         add_test(
             NAME v2_cad_next_smoke
-            COMMAND $<TARGET_FILE:kachakacha_cad_next> --self-test
+            COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
+                --name v2_cad_next_smoke -- $<TARGET_FILE:kachakacha_cad_next> --self-test --self-test-all
         )
         # 自己試験は増える一方である(2026-09-14 で 225 件、PC で約 200 秒)。
         # 120 秒のままだと、落ちてもいないのに時間切れで赤くなる。
         # 増えるたびに直すのではなく、余裕を持たせておく。
         set_tests_properties(v2_cad_next_smoke PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            RESOURCE_LOCK cad_gui_package
             TIMEOUT 900
         )
 
@@ -1407,7 +1421,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         if(WIN32)
             add_test(
                 NAME v2_package_zip
-                COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
+                    --name v2_package_zip -- powershell -NoProfile -ExecutionPolicy Bypass
                     -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package-v2.ps1"
                     -BuildDir "$<SHELL_PATH:${CMAKE_BINARY_DIR}>"
                     -Config "$<CONFIG>"
@@ -1416,8 +1431,28 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             )
             set_tests_properties(v2_package_zip PROPERTIES
                 SKIP_RETURN_CODE 77
+                RESOURCE_LOCK cad_gui_package
+                RUN_SERIAL TRUE
                 TIMEOUT 900
             )
         endif()
     endif()
+endif()
+
+# Independent native/core processes have isolated TEMP/cache. Legacy GUI output stays serialized.
+if(KACHACAD_BUILD_TESTS)
+    get_property(kachakacha_registered_tests DIRECTORY PROPERTY TESTS)
+    foreach(test_name IN LISTS kachakacha_registered_tests)
+        if(test_name MATCHES "^v2_kernel_")
+            set_tests_properties(${test_name} PROPERTIES LABELS "v2;kernel")
+        elseif(test_name STREQUAL "v2_cad_next_smoke")
+            set_tests_properties(${test_name} PROPERTIES LABELS "v2;ui")
+        elseif(test_name STREQUAL "v2_package_zip")
+            set_tests_properties(${test_name} PROPERTIES LABELS "v2;package")
+        elseif(test_name MATCHES "^v2_")
+            set_tests_properties(${test_name} PROPERTIES LABELS "v2;core")
+        elseif(NOT test_name STREQUAL "verification_infrastructure_tests")
+            set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK cad_gui_package LABELS "legacy")
+        endif()
+    endforeach()
 endif()

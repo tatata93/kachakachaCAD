@@ -31,6 +31,7 @@ namespace kachakacha::v2::selftest {
 struct SelfTestCase {
     const char* name;
     bool (*body)(V2MainWindow&);
+    const char* suite = nullptr;
 };
 
 //! 落ちたときに、どの見立てが外れたかを言う。

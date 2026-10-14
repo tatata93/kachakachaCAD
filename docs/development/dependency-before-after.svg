@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="500" viewBox="0 0 1400 500">
+<rect width="1400" height="500" fill="white"/><g font-family="sans-serif" font-size="22" fill="#202c39">
+<text x="40" y="40" font-size="28">厚み状態の依存構造：代表範囲の改善</text>
+<rect x="40" y="85" width="600" height="110" rx="8" fill="#fae8e8"/><text x="60" y="125">共通窓ヘッダー → 共通の状態定義</text><text x="60" y="163">厚み入力型・Dock・カーネルを間接公開</text>
+<path d="M340 205v55m-8-10 8 10 8-10" fill="none" stroke="#566a7d" stroke-width="3"/>
+<text x="60" y="300">共有入力ヘッダー変更：157ファイル再コンパイル</text>
+<rect x="730" y="85" width="625" height="110" rx="8" fill="#e6f2ff"/><text x="750" y="125">窓ヘッダーは状態を前方宣言し、単独所有</text><text x="750" y="163">専用状態ヘッダーを所有する4 cppへ限定</text>
+<path d="M1040 205v55m-8-10 8 10 8-10" fill="none" stroke="#566a7d" stroke-width="3"/>
+<text x="750" y="300">同じ共有入力ヘッダー変更：14ファイル</text>
+<text x="40" y="390">残る制約：V2MainWindow.h自体を変更すると、引き続き155 TUに波及する。</text>
+<text x="40" y="440">型の状態・初期値・解放と移譲・公開操作APIを維持。削除した機能やソースファイルはない。</text>
+</g></svg>

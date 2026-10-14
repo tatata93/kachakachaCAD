@@ -18,28 +18,8 @@ if ([string]::IsNullOrWhiteSpace($BuildDir)) {
     }
 }
 
-Write-Host "== configure ($Preset) =="
-cmake --preset $Preset
-if ($LASTEXITCODE -ne 0) { throw "configure failed" }
-
-Write-Host "== build =="
-cmake --build --preset $Preset --parallel
-if ($LASTEXITCODE -ne 0) { throw "build failed" }
-
-Write-Host "== V2 tests registered? =="
-$listing = & ctest --test-dir $BuildDir -C $Config -N -R '^v2_' 2>&1
-$found = ([regex]::Matches(($listing -join "`n"), 'Test\s+#\d+')).Count
-Write-Host "v2 tests found: $found"
-if ($found -eq 0) {
-    throw "no V2 test is registered. check-v2 requires at least one test named v2_*."
-}
-
-Write-Host "== V2 tests =="
-ctest --test-dir $BuildDir -C $Config -R '^v2_' --output-on-failure
-if ($LASTEXITCODE -ne 0) { throw "V2 tests failed" }
-
-Write-Host "== existing tests (must not regress) =="
-ctest --test-dir $BuildDir -C $Config --output-on-failure
-if ($LASTEXITCODE -ne 0) { throw "existing tests failed" }
+Write-Host "== full tests (including all V2 tests, once) =="
+& python (Join-Path $PSScriptRoot "verify.py") full --preset $Preset --config $Config
+if ($LASTEXITCODE -ne 0) { throw "full verification failed" }
 
 Write-Host "check-v2: OK"

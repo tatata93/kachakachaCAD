@@ -6,6 +6,7 @@
 //! 作り直す。分割は平面が部品を通らなければ断り、通れば両側を 2 つの部品にする。
 //! 選ぶのは実際に拾う道(`SelectAt`)だけ。
 #include "V2SelfTest.h"
+#include "V2ExtrudeDock.h"
 
 #include "V2MainWindow.h"
 #include "V2ShellSplitDock.h"
@@ -82,6 +83,7 @@ struct Box3 {
         return EntityId{};
     }
     window.RunCommand("part.extrude");
+    window.ExtrudeDock().TypeDistanceMm(10.0);
     if (!window.HandleToolKey(Qt::Key_Return, nullptr)) {
         return EntityId{};
     }

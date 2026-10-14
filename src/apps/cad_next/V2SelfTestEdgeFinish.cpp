@@ -5,6 +5,7 @@
 //! 状態に出る → Enter で部品になり(元は隠れる)、1 回の取り消しで戻り、開き直しても同じ辺を
 //! 丸め直す。選ぶのは実際に拾う道(`SelectAt`)だけ。
 #include "V2SelfTest.h"
+#include "V2ExtrudeDock.h"
 
 #include "V2EdgeFinishDock.h"
 #include "V2EdgeFinishTool.h"
@@ -19,6 +20,7 @@
 #include <QString>
 
 #include <cmath>
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
@@ -78,6 +80,7 @@ struct Box3 {
         return EntityId{};
     }
     window.RunCommand("part.extrude");
+    window.ExtrudeDock().TypeDistanceMm(10.0);
     if (!window.HandleToolKey(Qt::Key_Return, nullptr)) {
         return EntityId{};
     }
@@ -99,8 +102,17 @@ struct Box3 {
     if (!screen.has_value()) {
         return false;
     }
+    viewport.HoverAt(QPointF(screen->x, screen->y));
     viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
     return true;
+}
+
+double FaceInset(V2MainWindow& window)
+{
+    const auto& view = window.Viewport();
+    const double pickPx = window.Session().GetDocument().Snapshot().settings.tolerance.edgePickPx;
+    // Aim inside the face, beyond the underlying sketch wire's screen-space pick radius.
+    return std::max(3.0, (pickPx + 3.0) * view.VisibleWidthMm() / view.width());
 }
 
 [[nodiscard]] bool Near(double actual, double expected, double relative)
@@ -127,7 +139,7 @@ struct Box3 {
     }
     const double centerX = (box.minimum.x + box.maximum.x) * 0.5;
     // 手前の辺(y = 最小、z = 上)から 3 mm 内側を押す。
-    if (!Explain("上の面を押せる", PressTopFace(window, centerX, box.minimum.y + 3.0, box.maximum.z))
+    if (!Explain("上の面を押せる", PressTopFace(window, centerX, box.minimum.y + FaceInset(window), box.maximum.z))
         || !Explain("部品と辺が 1 本入る", tool.Input().part == source && tool.Input().edges.size() == 1)
         || !Explain("入った辺は上の手前の辺",
             std::abs(tool.Input().edges.front().y - box.minimum.y) < 1.0e-3
@@ -153,7 +165,7 @@ struct Box3 {
         || !Explain("確定後も同じ道具で次の辺を待つ", tool.Active() && tool.Input().edges.empty())) {
         return false;
     }
-    if (!Explain("再起動なしに次の辺を選べる", PressTopFace(window,centerX,box.maximum.y-3.0,box.maximum.z)
+    if (!Explain("再起動なしに次の辺を選べる", PressTopFace(window,centerX,box.maximum.y-FaceInset(window),box.maximum.z)
             && tool.Input().edges.size()==1 && tool.Outcome().available)) return false;
     window.HandleToolKey(Qt::Key_Escape,nullptr);
     window.RunCommand("edit.undo");
@@ -191,13 +203,13 @@ struct Box3 {
                 && dock.SizeLabelJa() == QStringLiteral("距離"))
         || !Explain("距離を 1.5 にできる", dock.TypeSize(1.5))
         || !Explain("手前と奥の辺の近くを押せる",
-            PressTopFace(window, centerX, box.minimum.y + 3.0, top)
-                && PressTopFace(window, centerX, box.maximum.y - 3.0, top))
+            PressTopFace(window, centerX, box.minimum.y + FaceInset(window), top)
+                && PressTopFace(window, centerX, box.maximum.y - FaceInset(window), top))
         || !Explain("辺が 2 本入る", tool.Input().edges.size() == 2)
-        || !Explain("手前をもう一度押せる", PressTopFace(window, centerX, box.minimum.y + 3.0, top))
+        || !Explain("手前をもう一度押せる", PressTopFace(window, centerX, box.minimum.y + FaceInset(window), top))
         || !Explain("押し直した辺は外れる", tool.Input().edges.size() == 1
                 && std::abs(tool.Input().edges.front().y - box.maximum.y) < 1.0e-3)
-        || !Explain("また押すと入る", PressTopFace(window, centerX, box.minimum.y + 3.0, top)
+        || !Explain("また押すと入る", PressTopFace(window, centerX, box.minimum.y + FaceInset(window), top)
                 && tool.Input().edges.size() == 2)) {
         return false;
     }
@@ -226,7 +238,7 @@ bool CaseOutputKinds(V2MainWindow& window)
         auto& dock = *tool.Dock();
         dock.SetOutputMode(mode);
         if (!dock.TypeSize(1.0) || !PressTopFace(window,
-            (box.minimum.x + box.maximum.x) * 0.5, box.minimum.y + 3.0, box.maximum.z)) return false;
+            (box.minimum.x + box.maximum.x) * 0.5, box.minimum.y + FaceInset(window), box.maximum.z)) return false;
         if (!Explain("edge output preview", tool.Outcome().available
             && (window.Viewport().ToolPreviewFaceCount() > 0) == (mode == 0))) return false;
         if (!dock.ClickConfirm()||!Explain("edge tool retained after apply",tool.Active())) return false;

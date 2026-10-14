@@ -26,6 +26,7 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QFileInfo>
 #include <QPointF>
 #include <QPushButton>
 #include <QString>
@@ -657,15 +658,20 @@ using kachakacha::v2::modeling::ToolSettings;
     // V1 の受入例(railway-nose-acceptance.kcd)が「開く」で V2 の文書になる。
     // 読めないもの(投影・板の範囲と開口・治具)は名前を挙げて知らせ、線と平面とロフトは入る。
     QString path;
+    const QString fixtureRoot = qEnvironmentVariable("KACHACAD_SELF_TEST_FIXTURE_DIR");
+    const QString explicitFixture = fixtureRoot + "/railway-nose-acceptance.kcd";
+    if (!fixtureRoot.isEmpty() && QFileInfo::exists(explicitFixture)) {
+        path = explicitFixture;
+    }
     for (const char* candidate : {"examples/railway-nose-acceptance.kcd",
              "../examples/railway-nose-acceptance.kcd",
              "../../examples/railway-nose-acceptance.kcd"}) {
-        if (std::filesystem::exists(candidate)) {
+        if (path.isEmpty() && std::filesystem::exists(candidate)) {
             path = QString::fromUtf8(candidate);
             break;
         }
     }
-    if (!Explain("受入例が見つかる(リポジトリの根で動かす)", !path.isEmpty())) {
+    if (!Explain("受入例が見つかる(隔離実行では試験fixtureを指定)", !path.isEmpty())) {
         return false;
     }
     const int before = window.DiagnosticRowCount();

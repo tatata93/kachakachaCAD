@@ -129,6 +129,27 @@ def ui_cases(run, exe):
     return inventory
 
 
+def baseline_matches(baseline, environment, dependencies, settings):
+    return (baseline.get('environment') == environment
+            and baseline.get('build_environment') == dependencies
+            and baseline.get('settings') == settings)
+
+
+def require_application_coverage(preset, inventory, exe=None, legacy=None):
+    if preset.endswith('-core'):
+        return
+    required = {'v2_cad_next_smoke'}
+    if os.name == 'nt':
+        required.add('v2_package_zip')
+    missing = required - {test['name'] for test in inventory}
+    if missing:
+        raise ValueError('GUI preset requires application/package tests: ' + ', '.join(sorted(missing)))
+    if exe is not None and not exe.is_file():
+        raise ValueError('GUI preset requires application executable')
+    if os.name == 'nt' and legacy is not None and not legacy.is_file():
+        raise ValueError('GUI preset requires legacy executable')
+
+
 def verify(args, directory):
     run = Run(args, directory)
     proof = {'schema': 1, 'mode': args.mode, 'status': 'running', 'start': now(), 'steps': run.steps}
@@ -147,21 +168,24 @@ def verify(args, directory):
         if args.mode != 'plan':
             run.command('configure', ['cmake', '--preset', args.preset])
         inventory = run.inventory(build, config)
+        if args.mode in ('full', 'focused'):
+            require_application_coverage(args.preset, inventory)
         rules = json.loads((ROOT / 'scripts/verification/scopes.json').read_text(encoding='utf-8'))
         plan = select_plan(changed_inputs(args.base), inventory, rules)
         latest = ROOT / 'out/verification/latest-full.json'
+        settings = {'preset': args.preset, 'config': config, 'parallel': args.parallel,
+                    'cache_sha256': digest(build / 'CMakeCache.txt')}
         if args.mode == 'focused' and latest.is_file():
             baseline = json.loads(Path(json.loads(latest.read_text())['evidence']).read_text(encoding='utf-8'))
-            if baseline.get('environment') != proof['environment'] or baseline.get('build_environment') != build_environment(build):
-                plan.update({'effective_full': True, 'reason': 'Verification environment changed'})
+            if not baseline_matches(baseline, proof['environment'], build_environment(build), settings):
+                plan.update({'effective_full': True, 'reason': 'Verification configuration/environment changed'})
         if args.mode == 'full':
             plan['effective_full'] = True
             plan['ctest'] = [t['name'] for t in inventory]
         if args.mode == 'preflight':
             plan.update({'effective_full': False, 'ctest': list(PREFLIGHT), 'ui_suites': []})
         proof['plan'] = plan
-        proof['settings'] = {'preset': args.preset, 'config': config, 'parallel': args.parallel,
-                             'cache_sha256': digest(build / 'CMakeCache.txt')}
+        proof['settings'] = settings
         result_path.write_text(json.dumps(proof, ensure_ascii=False, indent=2), encoding='utf-8')
         if args.mode == 'plan':
             proof['status'] = 'planned'
@@ -183,6 +207,9 @@ def verify(args, directory):
         else:
             run.build(build_targets(inventory, plan['ctest']) + (['kachakacha_cad_next'] if plan['ui_suites'] else []))
         exe = build / config / 'kachakacha_cad_next.exe' if os.name == 'nt' else build / 'kachakacha_cad_next'
+        legacy = build / config / 'kachakacha_cad.exe' if os.name == 'nt' else build / 'kachakacha_cad'
+        if full:
+            require_application_coverage(args.preset, inventory, exe, legacy)
         ui = ui_cases(run, exe) if exe.is_file() and (full or plan['ui_suites']) else []
         names = [t['name'] for t in inventory] if full else plan['ctest']
         proof['expected_ctest'] = names
@@ -207,7 +234,6 @@ def verify(args, directory):
             if len(reports) != (2 if os.name == 'nt' else 1):
                 raise ValueError('Required application/package UI reports missing')
             proof['ui_cases'] = [validate_ui(json.loads(p.read_text(encoding='utf-8')), [c['name'] for c in ui]) for p in reports]
-        legacy = build / config / 'kachakacha_cad.exe' if os.name == 'nt' else build / 'kachakacha_cad'
         if full and ui and os.name == 'nt' and not legacy.is_file():
             raise ValueError('Mandatory legacy self-test executable missing')
         if full and legacy.is_file():

@@ -13,10 +13,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from verification.evidence import source_identity, validate_ctest, validate_proof, validate_ui
 from verification.selection import PREFLIGHT, select_plan
-from verification.runner import Run, child_environment
+from verification.runner import Run, child_environment, baseline_matches, require_application_coverage
 
 
 class VerificationTests(unittest.TestCase):
+    def test_configuration_cache_and_missing_gui_cannot_pass(self):
+        settings = {'preset': 'windows-msvc', 'config': 'Release', 'parallel': 2, 'cache_sha256': 'a'}
+        proof = {'environment': {}, 'build_environment': {}, 'settings': settings}
+        self.assertTrue(baseline_matches(proof, {}, {}, settings))
+        for key, value in [('config', 'Debug'), ('preset', 'windows-core'), ('cache_sha256', 'b'), ('parallel', 3)]:
+            changed = dict(settings); changed[key] = value
+            self.assertFalse(baseline_matches(proof, {}, {}, changed))
+        with self.assertRaises(ValueError): require_application_coverage('windows-msvc', [])
+        require_application_coverage('windows-core', [])
+        inventory = [{'name': n} for n in ('v2_cad_next_smoke', 'v2_package_zip')]
+        with tempfile.TemporaryDirectory() as work:
+            absent = Path(work) / 'absent.exe'
+            with self.assertRaises(ValueError): require_application_coverage('windows-msvc', inventory, absent)
+
     def test_configuration_and_fixture_environment_are_not_silently_reused(self):
         with tempfile.TemporaryDirectory() as work:
             with patch.dict(os.environ, {'KACHACAD_SELF_TEST_FILTER': 'nothing',

@@ -21,7 +21,8 @@ def main():
     work = Path(tempfile.mkdtemp(prefix=args.name + '-', dir=parent))
     env = {k.upper(): v for k, v in os.environ.items()}
     env.update({'TEMP': str(work), 'TMP': str(work), 'TMPDIR': str(work),
-                'KACHACAD_DOCUMENT_CACHE_DIR': str(work / 'document-cache')})
+                'KACHACAD_DOCUMENT_CACHE_DIR': str(work / 'document-cache'),
+                'KACHACAD_SELF_TEST_FIXTURE_DIR': str(Path(__file__).resolve().parents[2] / 'examples')})
     start = time.perf_counter()
     result = subprocess.run(command, cwd=work, env=env)
     (work / 'process.json').write_text(json.dumps({'schema': 1, 'name': args.name,

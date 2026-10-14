@@ -110,11 +110,14 @@ foreach ($name in @("LICENSE", "COPYRIGHT")) {
 }
 
 $previousEnvironment = @{}
-foreach ($key in @('Path', 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QT_QPA_PLATFORM', 'TEMP', 'TMP', 'TMPDIR', 'KACHACAD_DOCUMENT_CACHE_DIR')) {
+foreach ($key in @('Path', 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QT_QPA_PLATFORM', 'TEMP', 'TMP', 'TMPDIR', 'KACHACAD_DOCUMENT_CACHE_DIR', 'KACHACAD_SELF_TEST_FIXTURE_DIR')) {
     $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
 }
 $testRoot = Join-Path (Split-Path $Output -Parent) ("package-runtime-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
+$fixtureRoot = Join-Path $Output 'test-fixtures'
+New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'examples/railway-nose-acceptance.kcd') -Destination $fixtureRoot
 [System.IO.File]::WriteAllText((Join-Path $Output 'qt.conf'), "[Paths]`nPrefix=.`nPlugins=.`n", (New-Object System.Text.UTF8Encoding($false)))
 Push-Location -LiteralPath $Output
 try {
@@ -126,6 +129,7 @@ try {
     $env:TMP = $testRoot
     $env:TMPDIR = $testRoot
     $env:KACHACAD_DOCUMENT_CACHE_DIR = Join-Path $testRoot 'document-cache'
+    $env:KACHACAD_SELF_TEST_FIXTURE_DIR = $fixtureRoot
 
     & $Deployed --version
     if ($LASTEXITCODE -ne 0) { throw "Version check failed" }

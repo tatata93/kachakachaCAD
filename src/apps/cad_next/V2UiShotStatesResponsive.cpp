@@ -5,6 +5,7 @@
 //! 同じにする(帯を押す・道具を持って画面を押す・命令を走らせる)。
 
 #include "V2MainWindow.h"
+#include "kachakacha/app/ThickenInputState.h"
 
 #include "V2FabricationDock.h"
 #include "V2Ribbon.h"

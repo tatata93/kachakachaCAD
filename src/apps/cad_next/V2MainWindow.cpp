@@ -1,5 +1,6 @@
 #include "V2OffsetTool.h"
 #include "V2MainWindow.h"
+#include "V2ThickenPreviewState.h"
 #include "V2GeometryJob.h"
 #include "V2DocumentOpen.h"
 #include "V2ToolBindings.h"
@@ -142,6 +143,7 @@ using v2ui::kToolBindings;
 
 V2MainWindow::V2MainWindow()
 {
+    thicken_ = std::make_unique<V2ThickenPreviewState>();
     ids_ = std::make_unique<DeterministicIdGenerator>(1);
     session_ = std::make_unique<DrawingSession>(DocumentId(ids_->Next()), *ids_);
 
@@ -378,7 +380,7 @@ void V2MainWindow::EndArmedTools()
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
-    if (thicken_.shelfShown) { EndThicken(); }
+    if (thicken_->shelfShown) { EndThicken(); }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
     if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
     if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }

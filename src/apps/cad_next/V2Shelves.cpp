@@ -4,6 +4,8 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2ThickenDock.h"
+#include "V2ThickenPreviewState.h"
 #include "V2SolidOutputPreview.h"
 #include "V2OverlapBrowser.h"
 #include "V2GptSurfaceTool.h"
@@ -280,8 +282,8 @@ void V2MainWindow::BuildOutputShelves()
         RefreshPartDock();
         if (approxShelfShown_ && AdoptFabricationChoice()) { RefreshApproxAll(); }
         // 板厚を数の棚から直したときも、厚みの道具の欄と下見をそろえる。
-        if(const auto amount=ChangedThickenAmount(thicken_,parameterDock_->Values())) {
-            thicken_.input.thicknessMm=*amount;
+        if(const auto amount=ChangedThickenAmount(*thicken_,parameterDock_->Values())) {
+            thicken_->input.thicknessMm=*amount;
             RefreshThickenAll();
         }
     });
@@ -310,12 +312,12 @@ void V2MainWindow::BuildThickenDock()
         [this](const kachakacha::v2::base::EntityId& id) { ChooseThickenTarget(id); });
     thickenDock_->SetThicknessHandler([this](double value) { ApplyThickenThicknessMm(value); });
     thickenDock_->SetOutputHandler([this] {
-        if (thicken_.outcome.available) ShowSolidOutputPreview(*viewport_, thicken_.builtMesh, thickenDock_->OutputMode());
+        if (thicken_->outcome.available) ShowSolidOutputPreview(*viewport_, thicken_->builtMesh, thickenDock_->OutputMode());
         RefreshThickenDock();
     });
     thickenDock_->SetCorrectionHandler([this](bool corrected) {
-        if(thicken_.input.correctOpposite==corrected)return;
-        thicken_.input.correctOpposite=corrected;RefreshThickenAll();
+        if(thicken_->input.correctOpposite==corrected)return;
+        thicken_->input.correctOpposite=corrected;RefreshThickenAll();
     });
     thickenDock_->SetActionHandlers([this] { ConfirmThicken(); },
         [this] {

@@ -112,7 +112,7 @@ std::string V2MainWindow::RunningOperationNameJa() const
 {
     using kachakacha::v2::app::Shelf;
     const bool running = extrudeShelfShown_ || surfaceShelfShown_ || booleanShelfShown_
-        || thicken_.shelfShown || approxShelfShown_ || cornerPreviewShown_
+        || ThickenShelfShown() || approxShelfShown_ || cornerPreviewShown_
         || ShelfShown(Shelf::Array) || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
         || OwnedToolShelf() != Shelf::None;
     if (!running || operationHost_ == nullptr) {

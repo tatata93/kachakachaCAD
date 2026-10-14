@@ -10,6 +10,7 @@
 //! 文書は「どう作ったか」だけを持ち、形は作り直す。
 
 #include "V2MainWindow.h"
+#include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/app/SolidOutputMode.h"
 #include <QComboBox>
 

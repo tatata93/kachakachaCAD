@@ -30,7 +30,7 @@ void V2MainWindow::BeginGptFabrication()
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
-    if (thicken_.shelfShown) { EndThicken(); }
+    if (ThickenShelfShown()) { EndThicken(); }
     if (surfaceEdit_ && surfaceEdit_->Active()) { surfaceEdit_->End(); }
     SelectTool(modeling::DrawingTool::Select); EndOwnedToolsBut(gptFabrication_.get());
     viewport_->SetSelection(selected); gptFabrication_->Begin();

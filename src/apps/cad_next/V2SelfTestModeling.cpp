@@ -6,6 +6,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "kachakacha/app/ThickenInputState.h"
 #include "V2EntityTree.h"
 
 #include "kachakacha/app/CommandCatalog.h"

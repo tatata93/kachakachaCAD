@@ -22,3 +22,7 @@ class V2GptSurfaceTool;
 class V2GptFabricationTool;
 class V2LoopFacesTool;
 
+
+class V2ThickenDock;
+struct V2ThickenPreviewState;
+namespace kachakacha::v2::app { struct ThickenInputState; }

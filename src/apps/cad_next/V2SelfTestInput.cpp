@@ -8,6 +8,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "kachakacha/app/ThickenInputState.h"
 
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ControlPointPick.h"

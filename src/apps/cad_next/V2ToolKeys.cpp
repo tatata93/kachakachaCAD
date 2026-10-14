@@ -19,6 +19,7 @@
 //! (オーナー指示 §9)。
 
 #include "V2MainWindow.h"
+#include "V2ThickenPreviewState.h"
 #include "V2GeometryJob.h"
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
@@ -90,7 +91,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     return (operationHost_ && dynamic_cast<V2OffsetTool*>(operationHost_->TemporaryPage()))
         || !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
-        || thicken_.shelfShown || cornerPreviewShown_
+        || thicken_->shelfShown || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
@@ -177,7 +178,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
     }
-    if (thicken_.shelfShown) {
+    if (thicken_->shelfShown) {
         return HandleThickenToolKey(key, target);
     }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) {
@@ -228,16 +229,16 @@ bool V2MainWindow::HandleThickenToolKey(int key, QObject* target)
     context.inTypingField = IsTypingField(target);
     if (context.inTypingField) {
         // 打ちかけの字を、まず値にする。変わったかどうかは入力の厚みで見る。
-        const double before = thicken_.input.thicknessMm;
+        const double before = thicken_->input.thicknessMm;
         if (auto* spin = dynamic_cast<QAbstractSpinBox*>(target); spin != nullptr) {
             spin->interpretText();
         }
-        context.valueChanged = thicken_.input.thicknessMm != before;
+        context.valueChanged = thicken_->input.thicknessMm != before;
     }
     if (kachakacha::v2::app::ActionForConfirmKey(context) == ToolKeyAction::CommitValueAndWait) {
         SetStatus(QStringLiteral("厚み: %1 mm にしました。"
                                  "下見のとおりでよければ、もう一度 Enter で確定します。")
-                .arg(thicken_.input.thicknessMm));
+                .arg(thicken_->input.thicknessMm));
         return true;
     }
     ConfirmThicken();
@@ -304,7 +305,7 @@ bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
         if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if(V2GeometryJob::Active()) {
         if(event&&event->type()==QEvent::KeyPress&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape
-            &&thicken_.refreshing) {V2GeometryJob::CancelPreview(this);return true;}
+            &&thicken_->refreshing) {V2GeometryJob::CancelPreview(this);return true;}
         if(event&&event->type()==QEvent::KeyPress) {
             const auto key=static_cast<QKeyEvent*>(event)->key();
             if(CommitNumericEntry(target,key))return true;

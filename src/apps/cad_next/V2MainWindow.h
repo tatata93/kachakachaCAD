@@ -16,7 +16,6 @@
 #include "V2ExtrudeDock.h"
 #include "V2SurfaceDock.h"
 #include "V2BooleanDock.h"
-#include "V2ThickenDock.h"
 #include "V2Ribbon.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
@@ -32,7 +31,6 @@
 #include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/BooleanInputState.h"
 #include "kachakacha/app/ShapeRebuild.h"
-#include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/app/ToolRoleLabels.h"
@@ -51,7 +49,6 @@
 #include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctContact.h"
 #include "kachakacha/kernel/OcctExtrude.h"
-#include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
@@ -245,11 +242,8 @@ public:
     [[nodiscard]] V2HoverEditTool& HoverEditTool() { return *hoverEdit_; }
     [[nodiscard]] V2LoopFacesTool& LoopFacesTool() { return *loopFaces_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
-    [[nodiscard]] bool ThickenShelfShown() const noexcept { return thicken_.shelfShown; }
-    [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
-    {
-        return thicken_.input;
-    }
+    [[nodiscard]] bool ThickenShelfShown() const noexcept;
+    [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const;
     //! いまの入力と、おまかせの分類。試験から見る。
     [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
     {
@@ -1038,7 +1032,7 @@ private:
     bool booleanMirroring_ = false;
     V2BooleanDock* booleanDock_ = nullptr;
     //! 「厚み」の道具。面・作り方・相手の平面・下見の形。確定するまで文書へは入らない。
-    V2ThickenPreviewState thicken_;
+    std::unique_ptr<V2ThickenPreviewState> thicken_;
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;

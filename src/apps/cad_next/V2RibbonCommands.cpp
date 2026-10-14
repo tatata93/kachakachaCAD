@@ -6,6 +6,7 @@
 //! 押せない道具は理由を状態行へ出す(「押せるが何も起きない」を作らない)。
 
 #include "V2MainWindow.h"
+#include "kachakacha/app/ThickenInputState.h"
 
 #include "V2MeasureDock.h"
 #include "V2Ribbon.h"
@@ -69,8 +70,8 @@ bool V2MainWindow::IsEditingCommand(std::string_view id) const
     if ((id == "part.extrude" && extrudeShelfShown_)
         || (id == "workplane.create" && ShelfShown(kachakacha::v2::app::Shelf::WorkPlane))
         || (id == "surface.create" && surfaceShelfShown_)
-        || (id == "part.thicken" && thicken_.shelfShown)
-        || (id == "part.thicken_to_plane" && thicken_.shelfShown && thicken_.input.toPlane)
+        || (id == "part.thicken" && ThickenShelfShown())
+        || (id == "part.thicken_to_plane" && ThickenShelfShown() && ThickenInput().toPlane)
         || (id == "fabrication.create" && approxShelfShown_)) return true;
     if (gptSurface_ && gptSurface_->Active() && id == "surface.gpt_create") return true;
     if (gptFabrication_ && gptFabrication_->Active() && id == "fabrication.gpt_create") return true;

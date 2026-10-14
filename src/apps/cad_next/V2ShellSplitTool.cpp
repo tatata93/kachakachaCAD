@@ -67,6 +67,15 @@ V2ShellSplitTool::V2ShellSplitTool(V2MainWindow& window)
     : window_(window)
 {
     dock_ = new V2ShellSplitDock(&window);
+    dock_->armRole = [this](bool faces) {
+        pickingFaces_ = faces; dock_->ShowActiveRole(faces);
+        window_.SetStatus(faces ? QStringLiteral("選択した部品の抜く面を追加します。他の部品は対象になりません。")
+                               : QStringLiteral("部品を選択中。別の部品に替えると抜く面も選び直します。"));
+    };
+    dock_->removeFace = [this](int i) {
+        if (i<0 || i>=static_cast<int>(input_.faces.size())) return;
+        input_.faces.erase(input_.faces.begin()+i); Refresh();
+    };
     dock_->SetOutputHandler([this] {
         if(built_ && input_.method==0)ShowSolidOutputPreview(*window_.viewport_,builtMesh_,dock_->OutputMode());
         RefreshDock();
@@ -139,6 +148,7 @@ void V2ShellSplitTool::Begin(std::string_view commandId)
             break;
         }
     }
+    pickingFaces_ = true; dock_->ShowActiveRole(true);
     active_ = true;
     window_.RefreshRightShelves();
     window_.viewport_->SetToolPickActive(true);
@@ -154,6 +164,7 @@ void V2ShellSplitTool::Begin(std::string_view commandId)
 
 void V2ShellSplitTool::End(bool keepTool)
 {
+    pickingFaces_ = true; dock_->ShowActiveRole(true);
     active_ = keepTool;
     if (keepTool) { input_.part = {}; input_.faces.clear(); }
     if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
@@ -216,6 +227,15 @@ void V2ShellSplitTool::HandleSelectionChanged()
     }
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
         ApplyPick(*pick);
+    } else {
+        for(const auto& id:window_.viewport_->Selection().entityIds) {
+            const auto* entity=window_.session_->GetDocument().FindEntity(id);
+            if(!entity || entity->kind!=EntityKind::Part)continue;
+            if(!pickingFaces_ || input_.part.IsNil()) {
+                const bool previous=pickingFaces_;pickingFaces_=false;ApplyPick(id);pickingFaces_=previous;
+            } else window_.SetStatus(QStringLiteral("辺・フェイスは3Dビューで選んでください。部品を替える場合は①を押します。"));
+            break;
+        }
     }
     MirrorToSelection();   // 受けなかったもの(線など)を選択に残さない。
     Refresh();
@@ -229,8 +249,12 @@ void V2ShellSplitTool::ApplyPick(const EntityId& id)
         window_.SetStatus(Text(LabelOf(input_.method) + ": 部品を押してください。"));
         return;
     }
-    if (input_.method == 1) {
+    if (input_.method == 1 || !pickingFaces_) {
         input_ = kachakacha::v2::app::WithShellSplitPick(input_, id, std::nullopt, std::nullopt);
+        return;
+    }
+    if (!input_.part.IsNil() && input_.part != id) {
+        window_.SetStatus(QStringLiteral("抜く面は選択中の部品から選んでください。部品の変更は①から行います。"));
         return;
     }
     const auto shape = window_.partShapes_.find(id.ToString());
@@ -382,6 +406,10 @@ void V2ShellSplitTool::RefreshSplitPreview(const kachakacha::v2::modeling::Kerne
 
 void V2ShellSplitTool::RefreshDock()
 {
+    if(active_)window_.viewport_->SetToolCandidateFilter([this](const auto& pick) {
+        const auto* entity=window_.session_->GetDocument().FindEntity(pick.entityId);
+        return entity && entity->kind==EntityKind::Part;
+    });
     const bool previewShown = !window_.viewport_->ToolPreview().empty() && outcome_.available;
     std::vector<QString> lines;
     for (const std::string& line :

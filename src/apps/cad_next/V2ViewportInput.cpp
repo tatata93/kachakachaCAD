@@ -191,7 +191,7 @@ kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
 
 std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
 {
-    if (referencePickHandler_) {
+    if (ReferencePickPending()) {
         CancelReferencePick();
         return {kachakacha::v2::app::EscapeStep::CancelPick};
     }
@@ -940,11 +940,14 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
-    if (referencePickHandler_) {
+    if (ReferencePickPending()) {
         std::erase_if(candidates, [this](const auto& c) {
+            if (elementPickFilter_) return !elementPickFilter_(c);
             return c.kind != kachakacha::v2::app::SelectionElementKind::Edge
                 || std::find(referencePickIds_.begin(), referencePickIds_.end(), c.entityId) == referencePickIds_.end();
         });
+    } else if (toolCandidateFilter_) {
+        std::erase_if(candidates, [this](const auto& c) { return !toolCandidateFilter_(c); });
     }
     return SortCandidatesForSlot(std::move(candidates));
 }

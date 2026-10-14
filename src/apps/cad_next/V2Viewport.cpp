@@ -796,7 +796,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     status_ = hover_.messageJa;
     const auto previousRegion = hoveredProfileRegion_;
     hoveredProfileRegion_ = ProfileRegionAt(position);
-    if (referencePickHandler_) hoveredProfileRegion_.reset();
+    if (ReferencePickPending()) hoveredProfileRegion_.reset();
     if (hoveredProfileRegion_.has_value() && !SelectionHasPart() && PickShapeAt(position).has_value()) {
         hoveredProfileRegion_.reset();
     }
@@ -863,6 +863,20 @@ void V2Viewport::SetPendingCommandCallbacks(std::function<void()> confirm,
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
+    if (elementPickHandler_) {
+        for (const auto& ref : selection.ordered) {
+            kachakacha::v2::app::PickCandidate pick;
+            pick.entityId = ref.entityId; pick.kind = ref.kind;
+            pick.pickedFaceIndex = ref.pickedFaceIndex; pick.hitPoint = ref.hitPoint;
+            if (AcceptElementPick(pick)) return;
+        }
+        for (const auto& id : selection.entityIds) {
+            kachakacha::v2::app::PickCandidate pick; pick.entityId = id;
+            if (AcceptElementPick(pick)) return;
+        }
+        return;
+    }
+
     selection_ = std::move(selection);
     ApplyVisibilityFilter();
     if (selectionChangedCallback_) {
@@ -886,12 +900,13 @@ void V2Viewport::PruneSelection()
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
     lastSelectPoint_ = position;
-    if (referencePickHandler_) {
+    if (ReferencePickPending()) {
         RefreshPickCycle(position);
         if ((modifiers & Qt::AltModifier) != 0) AdvanceCandidate(false);
         SyncHoverWithCandidate();
         const auto picked = CurrentCandidate();
-        if (picked) {
+        if (picked && elementPickHandler_) { AcceptElementPick(*picked); }
+        else if (picked) {
             auto handler = std::move(referencePickHandler_);
             referencePickIds_.clear();
             ForgetPickCycle();
@@ -1045,7 +1060,7 @@ void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers 
 
 void V2Viewport::ClickAt(const QPointF& position)
 {
-    if (referencePickHandler_) { SelectAt(position, Qt::NoModifier); return; }
+    if (ReferencePickPending()) { SelectAt(position, Qt::NoModifier); return; }
     if (pickHandler_) {
         // 1回だけ拾う。拾ったら道具へ戻す。押しっぱなしにしない。
         PickedPoint picked;
@@ -1160,7 +1175,7 @@ void V2Viewport::FinishTool()
 
 void V2Viewport::CancelTool()
 {
-    if (referencePickHandler_) { CancelReferencePick(); return; }
+    if (ReferencePickPending()) { CancelReferencePick(); return; }
     if (pickHandler_) {
         CancelPointPick();
         return;

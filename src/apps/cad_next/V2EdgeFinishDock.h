@@ -11,6 +11,7 @@
 //! 何が入るかは core(app/EdgeFinishInputState)が決める。ここは映して押すだけ。
 
 #include "kachakacha/app/EdgeFinishInputState.h"
+#include "V2RoleInput.h"
 
 #include <QDockWidget>
 #include <QString>
@@ -27,6 +28,10 @@ class QPushButton;
 class V2EdgeFinishDock final : public QDockWidget {
 public:
     explicit V2EdgeFinishDock(QWidget* parent);
+    std::function<void(bool)> armRole;
+    void ShowActiveRole(bool edges) { partRole_->arm->setChecked(!edges); edgeRole_->arm->setChecked(edges); }
+    std::function<void(int)> removeEdge;
+
 
     void ShowInput(const kachakacha::v2::app::EdgeFinishInputState& state,
         const QString& partNameJa, const std::vector<QString>& statusLinesJa, bool canConfirm);
@@ -57,6 +62,8 @@ public:
 
 private:
     std::array<QPushButton*, 2> kinds_{};
+    V2RoleInput* partRole_ = nullptr;
+    V2RoleInput* edgeRole_ = nullptr;
     QLabel* partValue_ = nullptr;
     QPushButton* clearPart_ = nullptr;
     QLabel* edgesValue_ = nullptr;

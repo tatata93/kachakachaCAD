@@ -4,6 +4,7 @@
 #include "V2DimensionTool.h"
 #include "kachakacha/document/Dimension.h"
 #include <QApplication>
+#include <QPushButton>
 #include <QWidget>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
@@ -60,6 +61,34 @@ bool DimensionFlow(V2MainWindow& window)
     QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(&viewport,&escape);
     return Explain("Escでも寸法ツールを維持",tool->isVisible() && viewport.KeptDimensionCount()==2);
 }
+bool DimensionRoleReplacement(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto wire=DrawRectangleAtByHand(window,0.3,0.3,0.7,0.7);
+    if(wire.IsNil())return false;
+    std::vector<app::SelectionRef> refs;
+    for(const auto& curve:window.Session().Scene().curves)if(curve.entityId==wire) {
+        app::SelectionRef ref;ref.entityId=wire;ref.segmentId=curve.segmentId;refs.push_back(ref);
+    }
+    if(refs.size()<3)return false;
+    window.Viewport().SetSelection({});window.RunCommand("dimension.open");
+    auto* tool=dynamic_cast<V2DimensionTool*>(window.findChild<QWidget*>(QStringLiteral("dimensionTool")));
+    if(!tool)return false;
+    tool->findChild<QComboBox*>(QStringLiteral("dimensionKind"))->setCurrentIndex(5);
+    tool->findChild<QCheckBox*>(QStringLiteral("dimensionDriving"))->setChecked(false);
+    auto* a=tool->findChild<QPushButton*>(QStringLiteral("dimensionPickRole0"));
+    auto* b=tool->findChild<QPushButton*>(QStringLiteral("dimensionPickRole1"));
+    auto* clear=tool->findChild<QPushButton*>(QStringLiteral("dimensionClearRole0"));
+    if(!a||!b||!clear)return false;
+    b->click();(void)tool->AddTarget(refs[1]);
+    a->click();if(!tool->AddTarget(refs[0]))return false;
+    clear->click();if(!tool->AddTarget(refs[2]))return false;
+    if(!tool->Commit())return false;
+    const auto& dim=window.Session().GetDocument().Snapshot().referenceDimensions.back();
+    return Explain("Bを先に選びAのみ交換してもBを保持する",dim.segments.size()==2
+        &&dim.segments[0].segmentId==*refs[2].segmentId&&dim.segments[1].segmentId==*refs[1].segmentId);
+}
+
 bool DimensionNormal(V2MainWindow& window){window.ApplyTheme(UiTheme::Normal);return DimensionFlow(window);}
 bool DimensionWin95(V2MainWindow& window){window.ApplyTheme(UiTheme::Windows95);return DimensionFlow(window);}
 bool CloseFocusedViewport(V2MainWindow&)
@@ -76,7 +105,7 @@ bool CloseFocusedViewport(V2MainWindow&)
 }
 std::vector<SelfTestCase> DimensionCases()
 {
-    return {{"HP-DIM-01 寸法作成と編集を続ける",&DimensionNormal},{"HP-DIM-02 Win95寸法操作",&DimensionWin95},
+    return {{"HP-DIM-03 role replacement preserves the other input",&DimensionRoleReplacement},{"HP-DIM-01 寸法作成と編集を続ける",&DimensionNormal},{"HP-DIM-02 Win95寸法操作",&DimensionWin95},
         {"HP-LIFE-01 拘束中のビューを持つウインドウを終了できる",&CloseFocusedViewport}};
 }
 }

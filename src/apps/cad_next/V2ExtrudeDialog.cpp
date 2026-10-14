@@ -99,18 +99,26 @@ void V2ExtrudeDialog::BuildExtentRows(
     form->addRow(QStringLiteral("逆側の距離"), secondDistance_);
 
     target_ = new QComboBox(this);
+    if (initial.targetEntityId && !initial.targetFaceBrep.empty())
+        targets_.push_back({*initial.targetEntityId, QStringLiteral("終端フェイス（選択時の形を保持）"), {}, initial.targetParameter, initial.targetFaceBrep});
     for (const auto& choice : targets_) {
         target_->addItem(choice.labelJa);
     }
+    target_->setCurrentIndex(-1);
     if (initial.targetEntityId.has_value()) {
         for (std::size_t i = 0; i < targets_.size(); ++i) {
-            if (targets_[i].entityId == *initial.targetEntityId) {
+            if (targets_[i].entityId == *initial.targetEntityId && targets_[i].parameter == initial.targetParameter
+                && targets_[i].faceBrep == initial.targetFaceBrep) {
                 target_->setCurrentIndex(static_cast<int>(i));
                 break;
             }
         }
     }
     form->addRow(QStringLiteral("届かせる相手"), target_);
+    stopOffset_ = new V2NumericSpinBox(this);
+    stopOffset_->setRange(-100000.0, 100000.0); stopOffset_->setDecimals(3);
+    stopOffset_->setSuffix(QStringLiteral(" mm")); stopOffset_->setValue(initial.targetOffsetMm);
+    form->addRow(QStringLiteral("終端からの距離（＋奥／−手前）"), stopOffset_);
 }
 
 void V2ExtrudeDialog::BuildOutputRows(
@@ -171,6 +179,8 @@ V2ExtrudeDialog::V2ExtrudeDialog(const kachakacha::v2::app::ExtrudeChoice& initi
     const auto refresh = [this] { Refresh(); };
     QObject::connect(direction_, &QComboBox::currentIndexChanged, this, refresh);
     QObject::connect(extent_, &QComboBox::currentIndexChanged, this, refresh);
+    QObject::connect(target_, &QComboBox::currentIndexChanged, this, refresh);
+    QObject::connect(stopOffset_, &QDoubleSpinBox::valueChanged, this, refresh);
     QObject::connect(boolean_, &QComboBox::currentIndexChanged, this, refresh);
     QObject::connect(makePart_, &QCheckBox::toggled, this, refresh);
     QObject::connect(makeEndWire_, &QCheckBox::toggled, this, refresh);
@@ -203,6 +213,7 @@ kachakacha::v2::app::ExtrudeChoice V2ExtrudeDialog::Choice() const
     choice.reversed = reversed_->isChecked();
     choice.distanceMm = distance_->value();
     choice.secondDistanceMm = secondDistance_->value();
+    choice.targetOffsetMm = stopOffset_->value();
     choice.makePart = makePart_->isChecked();
     choice.makeEndProfileWire = makeEndWire_->isChecked();
     choice.makeSideBoundaryWires = makeSideWires_->isChecked();
@@ -212,6 +223,8 @@ kachakacha::v2::app::ExtrudeChoice V2ExtrudeDialog::Choice() const
     if (ExtentUsesTarget(choice.extent) && targetIndex >= 0
         && targetIndex < static_cast<int>(targets_.size())) {
         choice.targetEntityId = targets_[static_cast<std::size_t>(targetIndex)].entityId;
+        choice.targetParameter = targets_[static_cast<std::size_t>(targetIndex)].parameter;
+        choice.targetFaceBrep = targets_[static_cast<std::size_t>(targetIndex)].faceBrep;
     }
     return choice;
 }
@@ -267,6 +280,7 @@ void V2ExtrudeDialog::Refresh()
     distance_->setEnabled(ExtentUsesDistance(choice.extent));
     secondDistance_->setEnabled(ExtentUsesSecondDistance(choice.extent));
     target_->setEnabled(ExtentUsesTarget(choice.extent) && !targets_.empty());
+    stopOffset_->setEnabled(ExtentUsesTarget(choice.extent));
     zeroConfirmed_->setEnabled(!choice.makePart);
     QString reason;
     if (CurrentChoiceIsValid(&reason)) {

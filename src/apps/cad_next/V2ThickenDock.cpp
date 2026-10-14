@@ -45,19 +45,12 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     // 2. 入力。面は何枚でも入る欄なので、「選び直す」だけでよい
     // (2つ以上の欄がある足す・引くと違い、次のクリックの行き先で迷う余地がない)。
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
-    auto* inputRow = new QHBoxLayout();
-    inputRow->addWidget(new QLabel(QStringLiteral("面"), body));
-    surfaceValue_ = new QLabel(body);
-    surfaceValue_->setWordWrap(true);
-    inputRow->addWidget(surfaceValue_, 1);
-    reselect_ = new QPushButton(QStringLiteral("選び直す"), body);
-    QObject::connect(reselect_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && reselectHandler_) {
-            reselectHandler_();
-        }
-    });
-    inputRow->addWidget(reselect_);
-    layout->addLayout(inputRow);
+    surfaceRole_ = new V2RoleInput(body, QStringLiteral("① 厚みを付ける面"));
+    surfaceValue_ = surfaceRole_->value; reselect_ = surfaceRole_->clear;
+    layout->addWidget(surfaceRole_);
+    QObject::connect(reselect_, &QPushButton::clicked, this, [this] { if (reselectHandler_) reselectHandler_(); });
+    QObject::connect(surfaceRole_->arm, &QPushButton::clicked, this, [this] { if (armSurface) armSurface(); });
+    surfaceRole_->removeItem = [this](int i) { if (removeSurface) removeSurface(i); };
 
     BuildPlacementCards(layout);
     BuildCorrectionCards(layout);
@@ -71,11 +64,23 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     thickness_->setDecimals(3);
     thickness_->setSuffix(QStringLiteral(" mm"));
     form->addRow(thicknessLabel_, thickness_);
-    targetLabel_ = MakePanelSectionTitle(body, QStringLiteral("相手の作業平面"));
+    targetLabel_ = MakePanelSectionTitle(body, QStringLiteral("終端の面"));
     target_ = new QComboBox(body);
     target_->setObjectName(QStringLiteral("thickenTarget"));
     form->addRow(targetLabel_, target_);
     layout->addLayout(form);
+    stopRole_ = new V2RoleInput(body, QStringLiteral("② 終端の面"));
+    stopRole_->list->hide(); stopRole_->remove->hide();
+    layout->addWidget(stopRole_);
+    QObject::connect(stopRole_->arm, &QPushButton::clicked, this, [this] { if (armStop) armStop(); });
+    QObject::connect(stopRole_->clear, &QPushButton::clicked, this, [this] { if (targetHandler_) targetHandler_({}); });
+    offset_ = new V2NumericSpinBox(stopRole_); offset_->setRange(-100000,100000);
+    offset_->setDecimals(3); offset_->setSuffix(QStringLiteral(" mm"));
+    offset_->setObjectName(QStringLiteral("thickenStopOffset"));
+    offset_->setToolTip(QStringLiteral("元面の法線に沿って終端をずらします。＋は奥、−は手前。"));
+    stopRole_->layout()->addWidget(new QLabel(QStringLiteral("終端オフセット（＋奥／−手前）"),stopRole_));
+    stopRole_->layout()->addWidget(offset_);
+    QObject::connect(offset_, &QDoubleSpinBox::valueChanged, this, [this](double v) { if (!loading_ && changeOffset) changeOffset(v); });
     QObject::connect(thickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         if (!loading_ && thicknessHandler_) {
             thicknessHandler_(value);
@@ -135,7 +140,7 @@ void V2ThickenDock::BuildPlacementCards(QVBoxLayout* layout)
     outsideCard_->setToolTip(QStringLiteral("元の面を内面として保ち、外へ厚みを付けます。半径5 mmに厚み1 mmなら外面は6 mm。"));
     centeredCard_->setToolTip(QStringLiteral("元の面を中央として、両側へ厚みの半分ずつ付けます。"));
     insideCard_->setToolTip(QStringLiteral("元の面を外面として保ち、内へ厚みを付けます。半径5 mmに厚み1 mmなら内面は4 mm。"));
-    toPlaneCard_ = new QPushButton(QStringLiteral("平面まで"), widget());
+    toPlaneCard_ = new QPushButton(QStringLiteral("面まで"), widget());
     for (QPushButton* card : {outsideCard_, centeredCard_, insideCard_, toPlaneCard_}) {
         card->setCheckable(true);
         cards->addWidget(card);
@@ -210,6 +215,9 @@ void V2ThickenDock::ShowInput(const kachakacha::v2::app::ThickenInputState& stat
     thickness_->setVisible(!state.toPlane);
     targetLabel_->setVisible(state.toPlane);
     target_->setVisible(state.toPlane);
+    stopRole_->setVisible(state.toPlane);
+    offset_->setValue(state.targetOffsetMm);
+    target_->setCurrentIndex(-1);
     if (state.toPlane) {
         for (std::size_t index = 0; index < targets_.size(); ++index) {
             if (targets_[index].entityId == state.targetPlane) {

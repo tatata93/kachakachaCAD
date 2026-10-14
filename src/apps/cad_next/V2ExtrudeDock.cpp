@@ -70,26 +70,22 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     // 1. 入力。**対象と輪郭を別の欄にする**(UI の正本「1. 入力」)。
     // 1本の文字列にしていたので、どちらを選び直すのか読めなかった。
     layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("入力")));
-    auto* targetRow = new QHBoxLayout();
-    targetRow->addWidget(new QLabel(QStringLiteral("足す／引く相手"), body_));
-    targetValue_ = new QLabel(body_);
-    targetValue_->setWordWrap(true);
-    targetRow->addWidget(targetValue_, 1);
-    reselectTarget_ = new QPushButton(QStringLiteral("選び直す"), body_);
-    reselectTarget_->setObjectName(QStringLiteral("extrudePickTarget"));
-    targetRow->addWidget(reselectTarget_);
-    layout->addLayout(targetRow);
-
-    auto* profileRow = new QHBoxLayout();
-    profileValue_ = new QLabel(body_);
-    profileValue_->setWordWrap(true);
-    profileLabel_ = new QLabel(QStringLiteral("輪郭"), body_);
-    profileRow->addWidget(profileLabel_);
-    profileRow->addWidget(profileValue_, 1);
-    reselectProfile_ = new QPushButton(QStringLiteral("選び直す"), body_);
-    reselectProfile_->setObjectName(QStringLiteral("extrudePickProfile"));
-    profileRow->addWidget(reselectProfile_);
-    layout->addLayout(profileRow);
+    targetRole_ = new V2RoleInput(body_, QStringLiteral("② 足す／引く相手"));
+    profileRole_ = new V2RoleInput(body_, QStringLiteral("① 押す面／輪郭"));
+    targetValue_ = targetRole_->value; reselectTarget_ = targetRole_->clear;
+    profileValue_ = profileRole_->value; profileLabel_ = profileRole_->name;
+    reselectProfile_ = profileRole_->clear;
+    profileRole_->arm->setObjectName(QStringLiteral("extrudePickProfile"));
+    targetRole_->arm->setObjectName(QStringLiteral("extrudePickTarget"));
+    layout->addWidget(profileRole_); layout->addWidget(targetRole_);
+    QObject::connect(profileRole_->arm, &QPushButton::clicked, this, [this] {
+        SetActiveInput(false); if (armInput) armInput(false);
+    });
+    QObject::connect(targetRole_->arm, &QPushButton::clicked, this, [this] {
+        SetActiveInput(true); if (armInput) armInput(true);
+    });
+    targetRole_->removeItem = [this](int) { if (reselectTargetHandler_) reselectTargetHandler_(); };
+    profileRole_->removeItem = [this](int index) { if (removeProfile) removeProfile(index); };
 
     // 読み取りの全文は、欄が狭いときのために残す。
     input_ = new QLabel(body_);
@@ -135,9 +131,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     secondDistance_->setSuffix(QStringLiteral(" mm"));
     secondDistance_->setValue(10.0);
     form_->addRow(QStringLiteral("逆側の距離"), secondDistance_);
-    target_ = new QComboBox(body_);
-    target_->setObjectName(QStringLiteral("extrudeStopReference"));
-    form_->addRow(QStringLiteral("終端の面・線・点"), target_);
+    BuildStopRows();
 
     // 方向は 7 通り全部(P-04)。「数値で決める」は x, y, z の欄が生える。
     direction_ = new QComboBox(body_);
@@ -374,7 +368,8 @@ void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
     // 2欄に分けて出す。**どちらを選び直すのかが読める。**
     targetValue_->setText(targetNameJa.isEmpty() ? QStringLiteral("(選んでいません)")
                                                  : targetNameJa);
-    profileLabel_->setText(QStringLiteral("押す面／輪郭"));
+    profileLabel_->setText(QStringLiteral("① 押す面／輪郭"));
+    targetRole_->SetItems(targetNameJa.isEmpty() ? QStringList{} : QStringList{targetNameJa});
     profileValue_->setText(profileNamesJa.isEmpty() ? QStringLiteral("(選んでいません)")
                                                     : profileNamesJa);
     state_->setText(plan.readyToPreview ? QStringLiteral("押し出し — プレビュー可能")
@@ -420,8 +415,8 @@ void V2ExtrudeDock::ApplyRows()
     // 入力前にも役割を指定して選べる。
     reselectTarget_->setVisible(true);
     reselectProfile_->setVisible(true);
-    reselectTarget_->setText(plan_.targetSolid.IsNil() ? QStringLiteral("選ぶ") : QStringLiteral("選び直す"));
-    reselectProfile_->setText(plan_.profiles.empty() ? QStringLiteral("選ぶ") : QStringLiteral("選び直す"));
+    reselectTarget_->setText(QStringLiteral("全解除"));
+    reselectProfile_->setText(QStringLiteral("全解除"));
     // 「状態」の中身は `ShowStatusLines` が持つ(UI の正本「3. 状態」)。
     // ここで書くと、通った道を出したあとに一言で上書きしてしまう。
     if (!ready) {
@@ -470,7 +465,8 @@ void V2ExtrudeDock::ApplyExtentRows()
     form_->setRowVisible(distance_, kachakacha::v2::app::ExtentUsesDistance(extent));
     form_->setRowVisible(secondDistance_,
         kachakacha::v2::app::ExtentUsesSecondDistance(extent));
-    form_->setRowVisible(target_, kachakacha::v2::app::ExtentUsesTarget(extent));
+    form_->setRowVisible(stopRow_, kachakacha::v2::app::ExtentUsesTarget(extent));
+    form_->setRowVisible(stopOffset_, kachakacha::v2::app::ExtentUsesTarget(extent));
     const ExtrudeDirectionMode direction = DirectionMode();
     form_->setRowVisible(customRow_, direction == ExtrudeDirectionMode::CustomXYZ);
     form_->setRowVisible(directionReferenceRow_, direction == ExtrudeDirectionMode::SelectedVector);
@@ -614,17 +610,24 @@ void V2ExtrudeDock::SetTargets(const std::vector<ExtrudeTargetChoice>& targets)
     if (same) {
         return;
     }
-    const int chosenIndex = target_->currentIndex();
+    const auto chosenId = TargetEntityId();
+    const auto chosenParameter = TargetParameter();
+    const auto frozen = TargetFaceBrep();
+    const auto chosenLabel = target_->currentText();
     targets_ = targets;
+    if (chosenId && !frozen.empty()) targets_.push_back({*chosenId, chosenLabel, {}, -1.0, frozen});
     const bool blocked = target_->blockSignals(true);
     target_->clear();
     for (const auto& choice : targets_) {
         target_->addItem(choice.labelJa);
     }
     if (targets_.empty()) {
-        target_->addItem(QStringLiteral("(作業平面がありません。先に作業面を作ってください)"));
+        target_->setPlaceholderText(QStringLiteral("終端の面を選択してください"));
     }
-    if (chosenIndex >= 0 && chosenIndex < target_->count()) target_->setCurrentIndex(chosenIndex);
+    target_->setCurrentIndex(-1);
+    for (int i = 0; chosenId && i < static_cast<int>(targets_.size()); ++i)
+        if (targets_[i].entityId == *chosenId && targets_[i].parameter == chosenParameter
+            && targets_[i].faceBrep == frozen) target_->setCurrentIndex(i);
     target_->blockSignals(blocked);
 }
 
@@ -995,4 +998,62 @@ void V2ExtrudeDock::SetReversed(bool reversed)
 {
     reversed_ = reversed;
     reverse_->setChecked(reversed);
+}
+
+void V2ExtrudeDock::BuildStopRows()
+{
+    stopRow_ = new QWidget(body_);
+    auto* layout = new QVBoxLayout(stopRow_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    target_ = new QComboBox(stopRow_);
+    target_->setObjectName(QStringLiteral("extrudeStopReference"));
+    target_->setPlaceholderText(QStringLiteral("終端の面を選択してください"));
+    layout->addWidget(target_);
+    auto* buttons = new QHBoxLayout();
+    stopPick_ = new QPushButton(QStringLiteral("終端の面を選ぶ"), stopRow_);
+    stopPick_->setObjectName(QStringLiteral("extrudePickStop"));
+    stopPick_->setCheckable(true);
+    auto* clear = new QPushButton(QStringLiteral("解除"), stopRow_);
+    clear->setObjectName(QStringLiteral("extrudeClearStop"));
+    buttons->addWidget(stopPick_, 1); buttons->addWidget(clear);
+    layout->addLayout(buttons);
+    QObject::connect(stopPick_, &QPushButton::clicked, this, [this] { if (stopPickHandler_) stopPickHandler_(); });
+    QObject::connect(clear, &QPushButton::clicked, this, [this] { target_->setCurrentIndex(-1); });
+    form_->addRow(QStringLiteral("終端の面・線・点"), stopRow_);
+    stopOffset_ = new V2NumericSpinBox(body_);
+    stopOffset_->setObjectName(QStringLiteral("extrudeStopOffset"));
+    stopOffset_->setRange(-100000.0, 100000.0);
+    stopOffset_->setDecimals(3); stopOffset_->setSingleStep(0.1);
+    stopOffset_->setSuffix(QStringLiteral(" mm"));
+    stopOffset_->setToolTip(QStringLiteral("押し出し方向へ終端を移動。正は奥、負は手前。0は指定面まで。曲面の法線方向の距離ではありません。"));
+    form_->addRow(QStringLiteral("終端からの距離（＋奥／−手前）"), stopOffset_);
+    QObject::connect(stopOffset_, &QDoubleSpinBox::valueChanged, this, [this] { if (!loading_ && optionHandler_) optionHandler_(); });
+}
+
+void V2ExtrudeDock::SetStopPickHandler(std::function<void()> handler) { stopPickHandler_ = std::move(handler); }
+void V2ExtrudeDock::SetStopPicking(bool active) {
+    stopPick_->setChecked(active);
+    stopPick_->setText(active ? QStringLiteral("終端を選択中…") : QStringLiteral("終端の面を選ぶ"));
+}
+double V2ExtrudeDock::TargetOffsetMm() const { return stopOffset_->value(); }
+void V2ExtrudeDock::SetTargetOffsetMm(double value) {
+    const bool blocked = stopOffset_->blockSignals(true); stopOffset_->setValue(value); stopOffset_->blockSignals(blocked);
+}
+std::string V2ExtrudeDock::TargetFaceBrep() const {
+    const int i = target_->currentIndex();
+    return i >= 0 && i < static_cast<int>(targets_.size()) ? targets_[i].faceBrep : std::string{};
+}
+void V2ExtrudeDock::PickStop(const ExtrudeTargetChoice& choice) {
+    for (int i = 0; i < static_cast<int>(targets_.size()); ++i) {
+        if (targets_[i].entityId == choice.entityId && targets_[i].parameter == choice.parameter
+            && targets_[i].faceBrep == choice.faceBrep) { target_->setCurrentIndex(i); return; }
+    }
+    targets_.push_back(choice); target_->addItem(choice.labelJa);
+    target_->setCurrentIndex(static_cast<int>(targets_.size()) - 1);
+}
+void V2ExtrudeDock::RestoreStop(const kachakacha::v2::app::ExtrudeChoice& choice) {
+    const bool blocked = target_->blockSignals(true);
+    if (!choice.targetEntityId) target_->setCurrentIndex(-1);
+    else PickStop({*choice.targetEntityId, QStringLiteral("終端フェイス（選択時の形を保持）"), {}, choice.targetParameter, choice.targetFaceBrep});
+    target_->blockSignals(blocked); SetTargetOffsetMm(choice.targetOffsetMm);
 }

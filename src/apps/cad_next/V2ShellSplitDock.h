@@ -12,6 +12,7 @@
 
 #include "kachakacha/app/ShellSplitInputState.h"
 #include "V2SolidOutputSelector.h"
+#include "V2RoleInput.h"
 
 #include <QDockWidget>
 #include <QString>
@@ -24,10 +25,15 @@ class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QWidget;
+class QVBoxLayout;
 
 class V2ShellSplitDock final : public QDockWidget {
 public:
     explicit V2ShellSplitDock(QWidget* parent);
+    std::function<void(bool)> armRole;
+    std::function<void(int)> removeFace;
+    void ShowActiveRole(bool faces) { partRole_->arm->setChecked(!faces); faceRole_->arm->setChecked(faces); }
+
 
     void ShowInput(const kachakacha::v2::app::ShellSplitInputState& state,
         const QString& partNameJa, const QString& planeTextJa,
@@ -60,7 +66,10 @@ public:
     [[nodiscard]] int MethodShown() const;
 
 private:
+    void BuildInputRows(QVBoxLayout* layout, QWidget* body);
     std::array<QPushButton*, 2> methods_{};
+    V2RoleInput* partRole_ = nullptr;
+    V2RoleInput* faceRole_ = nullptr;
     QLabel* partValue_ = nullptr;
     QPushButton* clearPart_ = nullptr;
     QWidget* facesRow_ = nullptr;

@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2FaceActions.h"
 #include "V2ImageTool.h"
 #include "V2CurvedEmbossTool.h"
@@ -107,6 +108,7 @@ void V2MainWindow::BeginGptSurface()
 //! 道具の棚を構えてから相手を選ぶ命令。引き受けたらArmCommandは通さない。
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
+    if (IsArrayCommand(id)) { RunArrayCommand(id); return true; }
     if (id == "wire.project_surface" || id == "wire.wrap_project") { V2ProjectionTool::Open(*this,id=="wire.wrap_project"); return true; }
     if (id == "part.curved_emboss") { V2CurvedEmbossTool::Open(*this); return true; } if (id == "image.place") { V2ImageTool::Open(*this); return true; }
     if (V2FaceActions::Run(*this,id)) return true;
@@ -142,11 +144,10 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         else ChooseThickenToPlane();
         return true;
     }
-    const auto endOwnedToolsBut = [this](const void* keep) { EndOwnedToolsBut(keep); };
     // 空の選択でも専用の棚を構え、選択の追加・解除ごとに輪を読み直す。
     if (id == "surface.from_lines") {
         ClearPendingCommand();
-        endOwnedToolsBut(loopFaces_.get());
+        EndOwnedToolsBut(loopFaces_.get());
         const auto selection = viewport_->Selection();
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         viewport_->SetSelection(selection);
@@ -157,21 +158,21 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     // 立体も未選択から構え、3Dで選んだ線を入力へ追加する。
     if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {
         ClearPendingCommand();
-        endOwnedToolsBut(solidTool_.get());
+        EndOwnedToolsBut(solidTool_.get());
         solidTool_->Begin(id);
         return true;
     }
     // 辺の丸め・面取り(P-12)も道具から始める。3D で部品の辺の近くを押す。
     if (edgeFinishTool_ != nullptr && V2EdgeFinishTool::Handles(id)) {
         ClearPendingCommand();
-        endOwnedToolsBut(edgeFinishTool_.get());
+        EndOwnedToolsBut(edgeFinishTool_.get());
         edgeFinishTool_->Begin(id);
         return true;
     }
     // シェル・分割(P-13)も道具から始める。3D で部品(シェルなら開けたい面)を押す。
     if (shellSplitTool_ != nullptr && V2ShellSplitTool::Handles(id)) {
         ClearPendingCommand();
-        endOwnedToolsBut(shellSplitTool_.get());
+        EndOwnedToolsBut(shellSplitTool_.get());
         shellSplitTool_->Begin(id);
         return true;
     }
@@ -379,11 +380,19 @@ void V2MainWindow::RefreshBooleanDock()
     }
     // 相手の名前を並べる(何個でも)。
     std::string tools;
+    QStringList toolNames;
     for (const EntityId& id : booleanInput_.tools) {
+        toolNames.push_back(QString::fromStdString(nameOf(id)));
         tools += (tools.empty() ? "" : " / ") + nameOf(id);
     }
     booleanDock_->ShowInput(booleanInput_, QString::fromStdString(nameOf(booleanInput_.target)),
         QString::fromStdString(tools), lines, booleanBuilt_.has_value());
+    booleanDock_->SetToolItems(toolNames);
+    booleanDock_->removeTool = [this](int row) {
+        if (row < 0 || row >= static_cast<int>(booleanInput_.tools.size())) return;
+        booleanInput_ = kachakacha::v2::app::WithoutBooleanEntries(booleanInput_, {booleanInput_.tools[row]});
+        MirrorBooleanToSelection(); RefreshBooleanAll();
+    };
     ShowToolFooter(booleanShelfShown_
             ? QString::fromStdString(kachakacha::v2::app::BooleanFooterLine(booleanInput_,
                   nameOf(booleanInput_.target), tools, booleanOutcome_, previewShown))

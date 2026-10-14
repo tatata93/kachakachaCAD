@@ -74,6 +74,7 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
         << session_->GetDocument().Revision() << ':' << static_cast<int>(choice.extent) << ':'
         << start << ':' << end << ':' << choice.customDirection.x << ':' << choice.customDirection.y << ':'
         << choice.customDirection.z << ':' << choice.targetParameter << ':'
+        << choice.targetOffsetMm << ':' << choice.targetFaceBrep << ':'
         << (choice.targetEntityId ? choice.targetEntityId->ToString() : "") << ':'
         << tolerance.modelLinearMm << ':' << tolerance.modelAngularRad << ':' << tolerance.numericEpsilon;
     auto& snapshot = *extrudeSnapshot_;

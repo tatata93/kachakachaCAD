@@ -785,6 +785,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctMeshPlanarFaces.cpp
     src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctThickenToFace.cpp
     src/next_occt/kachakacha/kernel/OcctCorrectedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
     src/next_occt/kachakacha/kernel/OcctRevolvedThicken.cpp
@@ -1206,6 +1207,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2OutputPreview.cpp
         src/apps/cad_next/V2OverlapBrowser.cpp
         src/apps/cad_next/V2ThickenCommands.cpp
+        src/apps/cad_next/V2ThickenReferences.cpp
         src/apps/cad_next/V2SolidOutputPreview.cpp
         src/apps/cad_next/V2GeometryJob.cpp
         src/apps/cad_next/V2Calculation.cpp
@@ -1294,6 +1296,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExtrudeDialog.cpp
         src/apps/cad_next/V2ExtrudeDock.cpp
         src/apps/cad_next/V2WorkPlaneDock.cpp
+        src/apps/cad_next/V2WorkPlaneRoleInputs.cpp
+        src/apps/cad_next/V2SelectionRoleInputs.cpp
         src/apps/cad_next/V2WorkPlaneDock.h
         src/apps/cad_next/V2DrawingDock.cpp
         src/apps/cad_next/V2DrawingDock.h

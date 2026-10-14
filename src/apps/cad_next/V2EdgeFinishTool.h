@@ -63,6 +63,7 @@ private:
     V2MainWindow& window_;
     V2EdgeFinishDock* dock_ = nullptr;
     bool active_ = false;
+    bool pickingEdges_ = true;
     bool mirroring_ = false;
     kachakacha::v2::app::EdgeFinishInputState input_;
     kachakacha::v2::app::EdgeFinishOutcome outcome_;

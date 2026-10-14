@@ -1,4 +1,5 @@
 #include "V2NumericSpinBox.h"
+#include "V2RoleInput.h"
 #include "V2DimensionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -19,6 +20,7 @@
 #include <QEvent>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 #include <QSignalBlocker>
 using namespace kachakacha::v2;
@@ -31,6 +33,7 @@ void V2DimensionTool::BuildUi()
     kind_->addItems({QStringLiteral("直線の長さ"),QStringLiteral("水平（作業面U）"),QStringLiteral("垂直（作業面V）"),
         QStringLiteral("半径 R"),QStringLiteral("直径 Ø"),QStringLiteral("2直線の角度"),QStringLiteral("2点間（端点を選択）"),QStringLiteral("2点間の水平（U）"),QStringLiteral("2点間の垂直（V）")});layout->addWidget(kind_);
     auto button=[&](const QString& text,auto action){auto* b=new QPushButton(text,this);layout->addWidget(b);connect(b,&QPushButton::clicked,this,action);};
+    BuildInputRoles(layout);
     button(QStringLiteral("左ペインの選択を取り込む"),[this]{TakeSelection();});
     button(QStringLiteral("対象を選び直す"),[this]{
         dimension_.segments.clear();dimension_.targets.clear();dimension_.anchors.clear();placing_=false;
@@ -99,7 +102,7 @@ bool V2DimensionTool::eventFilter(QObject* object,QEvent* event)
         if(event->type()==QEvent::MouseButtonPress){value_->interpretText();Commit();return true;}
     } else if(event->type()==QEvent::MouseButtonPress) {
         if(const auto id=window_.viewport_->DimensionAt(mouse->position())){Load(*id);return true;}
-        window_.viewport_->SelectAt(mouse->position(),mouse->modifiers());
+        window_.viewport_->RefreshPickCycleAt(mouse->position());
         if(const auto picked=window_.viewport_->CurrentCandidate()) {
             app::SelectionRef ref;ref.entityId=picked->entityId;ref.segmentId=picked->segmentId;
             ref.curveParameter=picked->curveParameter;AddTarget(ref);
@@ -111,4 +114,38 @@ bool V2DimensionTool::eventFilter(QObject* object,QEvent* event)
 void V2DimensionTool::closeEvent(QCloseEvent* event)
 {
     window_.viewport_->SetDimensionPreview({});QWidget::closeEvent(event);
+}
+
+void V2DimensionTool::BuildInputRoles(QVBoxLayout* layout)
+{
+    for(int i=0;i<2;++i) {
+        auto* role=new V2RoleInput(this,QStringLiteral("対象 %1").arg(i==0?QStringLiteral("A"):QStringLiteral("B")));
+        inputRoles_[i]=role;layout->addWidget(role);
+        role->arm->setObjectName(QStringLiteral("dimensionPickRole%1").arg(i));
+        role->clear->setObjectName(QStringLiteral("dimensionClearRole%1").arg(i));
+        connect(role->arm,&QPushButton::clicked,this,[this,i]{
+            activeInput_=i;placing_=false;RefreshInputRoles();
+            status_->setText(QStringLiteral("対象%1の線・端点を選んでください。他の入力は保持します。").arg(i==0?QStringLiteral("A"):QStringLiteral("B")));
+        });
+        connect(role->clear,&QPushButton::clicked,this,[this,i]{
+            if(i<static_cast<int>(dimension_.segments.size()))dimension_.segments[i]={};
+            dimension_.targets.clear();for(const auto& ref:dimension_.segments)dimension_.targets.push_back(ref.entityId);
+            dimension_.anchors.clear();activeInput_=i;placing_=false;
+            window_.viewport_->SetDimensionPreview({});RefreshInputRoles();
+        });
+    }
+}
+void V2DimensionTool::RefreshInputRoles()
+{
+    for(int i=0;i<2;++i) {
+        auto* role=inputRoles_[i];if(!role)continue;
+        role->setVisible(i==0||kind_->currentIndex()>=5);role->arm->setChecked(activeInput_==i);
+        QStringList names;
+        if(i<static_cast<int>(dimension_.segments.size())) {
+            const auto& ref=dimension_.segments[i];
+            if(const auto* e=window_.Session().GetDocument().FindEntity(ref.entityId))
+                names.push_back(QString::fromStdString(e->displayName));
+        }
+        role->SetItems(names);role->value->setText(names.empty()?QStringLiteral("未選択"):names.front());
+    }
 }

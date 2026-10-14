@@ -1,3 +1,4 @@
+#include "V2ExtrudeReferenceState.h"
 #include "V2Calculation.h"
 //! 形をつくるコマンド(V2MainWindow の一部)。押し出し・かご・足す引く・固定。
 //!
@@ -389,8 +390,7 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
         choice.extent = extrudeDock_->ExtentMode();
         choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
         if (kachakacha::v2::app::ExtentUsesTarget(choice.extent)) {
-            choice.targetEntityId = extrudeDock_->TargetEntityId();
-            choice.targetParameter = extrudeDock_->TargetParameter();
+            extrudeDock_->ReadStop(choice);
         }
         if ((choice.direction == ExtrudeDirectionMode::CustomXYZ
                 || choice.direction == ExtrudeDirectionMode::SelectedVector)) {
@@ -604,9 +604,7 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.extentMode = static_cast<int>(choice.extent);
     definition.secondDistanceMm = choice.secondDistanceMm;
-    definition.extentTarget = choice.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget
-        ? choice.targetEntityId : std::nullopt;
-    definition.targetParameter = choice.targetParameter;
+    StoreExtrudeReference(definition, choice);
     definition.booleanMode = static_cast<int>(choice.booleanMode);
     // 足す・引くの相手は「加工する立体」である。開き直したときも同じ相手へ当てる。
     // **ソリッドを作らないなら、足す・引くは起きない**(オーナー指示)。

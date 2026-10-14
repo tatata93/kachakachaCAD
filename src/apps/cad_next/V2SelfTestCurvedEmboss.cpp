@@ -7,6 +7,7 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QPixmap>
 #include <QEvent>
 #include <QPointF>
 #include <QWidget>
@@ -39,9 +40,12 @@ bool CaseCurvedEmboss(V2MainWindow& window)
         QApplication::sendEvent(&window.Viewport(),&click);supportClicked=true;break;
     }
     if(!Explain("support selected in viewport",supportClicked))return false;
+    if(qEnvironmentVariableIsSet("KACHACAD_EXTRUDE_UI_SCREENSHOT")) window.grab().save(qEnvironmentVariable("KACHACAD_EXTRUDE_UI_SCREENSHOT")+QStringLiteral("-emboss.png"));
     bool clicked=false;
     for(const auto& curve:window.Session().Scene().curves)if(curve.entityId==inner){
         const auto screen=window.Viewport().Mapping().Project(curve.segment.Evaluate(0.5));if(!screen)return false;
+        // The compact test viewport has its navigator over the top edge. Pick an unobscured edge.
+        if(screen->y<window.Viewport().height()*0.5)continue;
         const QPointF p(screen->x,screen->y);QMouseEvent click(QEvent::MouseButtonPress,p,p,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
         QApplication::sendEvent(&window.Viewport(),&click);clicked=true;break;
     }

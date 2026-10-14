@@ -71,6 +71,7 @@ private:
     QComboBox* boolean_ = nullptr;
     QComboBox* target_ = nullptr;
     QDoubleSpinBox* distance_ = nullptr;
+    QDoubleSpinBox* stopOffset_ = nullptr;
     QDoubleSpinBox* secondDistance_ = nullptr;
     QCheckBox* reversed_ = nullptr;
     QCheckBox* makePart_ = nullptr;

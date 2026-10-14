@@ -1,3 +1,4 @@
+#include <QStringList>
 //! 押し出しの下見と矢印ハンドル(オーナー指示 2026-09-14 §6・§7)。
 //!
 //! ここまでの押し出しは、命令を押すと窓が出て、そこで全部決めてから作る、
@@ -378,6 +379,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 
 void V2MainWindow::EndExtrudePreview(bool keepTool)
 {
+    extrudeDock_->activeInput.reset();
     viewport_->CancelReferencePick();
     extrudeOutline_.clear();
     extrudeOutlines_.clear();
@@ -413,6 +415,24 @@ void V2MainWindow::EndExtrudePreview(bool keepTool)
 //! 押し出しの棚を出して、読み取りを映す。
 void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan)
 {
+    extrudeDock_->armInput = [this](bool target) {
+        extrudeDock_->activeInput = target;
+        extrudeDock_->SetActiveInput(target);
+        viewport_->CancelReferencePick();
+        viewport_->SetPickSlot(target ? kachakacha::v2::app::ExtrudeSlot::Target
+                                     : kachakacha::v2::app::ExtrudeSlot::Profile);
+        viewport_->SetToolPickActive(true); viewport_->SetProfileRegionPicking(true);
+        SetStatus(target ? QStringLiteral("足す／引く相手を選択中。輪郭と設定は保持します。")
+                         : QStringLiteral("押す面／輪郭を選択中。方向と終端は保持します。"));
+    };
+    extrudeDock_->removeProfile = [this](int index) {
+        const auto current = PlanExtrudeFromSelection();
+        if (index < 0 || index >= static_cast<int>(current.profiles.size())) return;
+        if (facePushPull_) { ReselectExtrudeInput(false); return; }
+        viewport_->SetSelection(kachakacha::v2::app::SelectionWithout(viewport_->Selection(),
+            {current.profiles[static_cast<std::size_t>(index)]}));
+    };
+    extrudeDock_->SetStopPickHandler([this] { BeginExtrudeStopPick(); });
     extrudeDock_->SetDirectionPickHandler([this] {
         if (viewport_->ReferencePickPending()) { viewport_->CancelReferencePick(); return; }
         extrudeDock_->SetDirectionPicking(true);
@@ -458,6 +478,9 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     }
     extrudeDock_->SetDirectionReferences(directions);
     extrudeDock_->ShowPlan(plan, target, profiles);
+    QStringList profileItems;
+    for (const auto& id : plan.profiles) profileItems.push_back(nameOf(id));
+    extrudeDock_->SetProfileItems(profileItems);
     // 棚に、いま効いている向きの決め方を映す。**見えているものが本当に効く。**
     // 映さないでおくと、棚の初期表示と手に持っている値が食い違ったまま動き出す。
     // 棚のふだんの2つで表せない決め方も、棚が3つ目に名前で出す。
@@ -498,7 +521,9 @@ void V2MainWindow::RefreshExtrudePickSlot()
     }
     // **並べ替えだけを動かす。**「道具が動いているか」はここでは触らない。
     // 触ると、構えて待っている間に足せなくなる。
-    viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
+    viewport_->SetPickSlot(extrudeDock_->activeInput.has_value()
+        ? (*extrudeDock_->activeInput ? kachakacha::v2::app::ExtrudeSlot::Target : kachakacha::v2::app::ExtrudeSlot::Profile)
+        : kachakacha::v2::app::NextNeededSlot(state));
 }
 
 //! 下見を出している間に選択が変わった。**写しを作り直して、下見も出し直す。**
@@ -598,7 +623,9 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
     // ずっと「輪郭」に留めておくと、輪郭が入ったあとに相手の立体を押しても
     // その面が輪郭として拾われ、「面と輪郭の両方が選ばれています」で止まる。
     // 足りているなら None。ふだんの拾い方へ戻す。**候補は捨てない。**
-    viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
+    viewport_->SetPickSlot(extrudeDock_->activeInput.has_value()
+        ? (*extrudeDock_->activeInput ? kachakacha::v2::app::ExtrudeSlot::Target : kachakacha::v2::app::ExtrudeSlot::Profile)
+        : kachakacha::v2::app::NextNeededSlot(state));
     // 下見が出ている間は、まだ入力を集めている(§5)。
     // 素のクリックで、役割の違うものを足せるままにする。
     viewport_->SetToolPickActive(true);
@@ -625,8 +652,7 @@ void V2MainWindow::ReselectExtrudeInput(bool target)
         extrudeOutline_.clear();
     }
     extrudeSnapshot_.reset();
-    facePushPull_ = false;
-    ForgetFaceProfile();
+    if (!target) { facePushPull_ = false; ForgetFaceProfile(); }
     viewport_->SetSelection(
         kachakacha::v2::app::SelectionWithout(viewport_->Selection(), removed));
     pendingCommandId_ = "part.extrude";
@@ -653,6 +679,8 @@ void V2MainWindow::RefreshExtrudeFromDock()
     if (kachakacha::v2::app::ExtentUsesTarget(extrudeChoice_.extent)) {
         extrudeChoice_.targetEntityId = extrudeDock_->TargetEntityId();
         extrudeChoice_.targetParameter = extrudeDock_->TargetParameter();
+        extrudeChoice_.targetOffsetMm = extrudeDock_->TargetOffsetMm();
+        extrudeChoice_.targetFaceBrep = extrudeDock_->TargetFaceBrep();
     }
     extrudeChoice_.booleanMode = extrudeDock_->BooleanMode();
     // 向きの欄も読む。読まないと、選んでも何も変わらない。
@@ -713,7 +741,7 @@ void V2MainWindow::EditExtrudeWithDialog()
     const auto plan = PlanExtrudeFromSelection();
     auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles, kachakacha::v2::app::SelectedProfileSeeds(viewport_->Selection()));
     const auto facts = BuildExtrudeFacts(profiles);
-    V2ExtrudeDialog dialog(extrudeChoice_, facts, ExtrudeTargets(), this);
+    V2ExtrudeDialog dialog(extrudeChoice_, facts, ExtrudeStopChoices(), this);
     if (dialog.exec() != QDialog::Accepted) {
         SetStatus(QStringLiteral("押し出し: 詳細をやめました。"));
         return;
@@ -732,7 +760,7 @@ void V2MainWindow::ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& 
     extrudeDock_->ChooseExtent(extrudeChoice_.extent);
     extrudeDock_->SetSecondDistanceMm(extrudeChoice_.secondDistanceMm);
     extrudeDock_->SetTargets(ExtrudeStopChoices());
-    extrudeDock_->ChooseTarget(extrudeChoice_.targetEntityId);
+    extrudeDock_->RestoreStop(extrudeChoice_);
     extrudeDock_->ChooseBoolean(extrudeChoice_.booleanMode);
     extrudeDock_->SetDistanceMm(extrudeChoice_.distanceMm);
     // 終端や曲面を含め、通常の設定変更と同じ下見経路を使う。

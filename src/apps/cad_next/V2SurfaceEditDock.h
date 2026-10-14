@@ -39,6 +39,9 @@ public:
     };
 
     explicit V2SurfaceEditDock(QWidget* parent);
+    std::function<void(int)> armRole;
+    void SetRoleActive(int role);
+
 
     //! いまの入力を映す。カード・一覧・設定・状態を一度に書き直す。
     void ShowInput(const kachakacha::v2::app::SurfaceEditInputState& state,
@@ -47,7 +50,7 @@ public:
 
     void SetOperationHandler(
         std::function<void(kachakacha::v2::app::SurfaceEditOperation)> handler);
-    void SetRemoveHandler(std::function<void(const kachakacha::v2::base::EntityId&)> handler);
+    void SetRemoveHandler(std::function<void(int)> handler);
     void SetClearHandler(std::function<void()> handler);
     //! 設定のどれかを変えた。棚の値を写した入力を渡す(作り方と入力はそのまま)。
     void SetOptionsHandler(
@@ -76,6 +79,8 @@ public:
 private:
     void BuildOperationCards(QVBoxLayout* layout);
     void BuildOptions(QVBoxLayout* layout);
+    void BuildRoleButtons(QVBoxLayout* layout);
+    std::array<QPushButton*, 4> roleButtons_{};
     void EmitOptions();
 
     std::array<QPushButton*, 6> cards_{};
@@ -103,7 +108,7 @@ private:
     std::vector<Entry> shownEntries_;
 
     std::function<void(kachakacha::v2::app::SurfaceEditOperation)> operationHandler_;
-    std::function<void(const kachakacha::v2::base::EntityId&)> removeHandler_;
+    std::function<void(int)> removeHandler_;
     std::function<void()> clearHandler_;
     std::function<void(const kachakacha::v2::app::SurfaceEditInputState&)> optionsHandler_;
     std::function<void()> confirmHandler_;

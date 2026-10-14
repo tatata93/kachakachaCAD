@@ -265,6 +265,9 @@ void V2DrawingDock::SetTool(kachakacha::v2::modeling::DrawingTool tool)
 {
     const bool changed = tool_ != tool;
     tool_ = tool;
+    using Tool=kachakacha::v2::modeling::DrawingTool;
+    if(auto* role=body_->findChild<QWidget*>("transformSelectionRoles"))role->setVisible(
+        tool==Tool::Move||tool==Tool::Copy||tool==Tool::Rotate||tool==Tool::Mirror||tool==Tool::Scale);
     activeTool_->setText(QStringLiteral("使用中: %1").arg(Text(
         kachakacha::v2::modeling::DrawingToolNameJa(tool_))));
     if (changed) {

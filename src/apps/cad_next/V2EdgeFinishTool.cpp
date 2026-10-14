@@ -51,6 +51,11 @@ V2EdgeFinishTool::V2EdgeFinishTool(V2MainWindow& window)
     : window_(window)
 {
     dock_ = new V2EdgeFinishDock(&window);
+    dock_->armRole=[this](bool edges){pickingEdges_=edges;};
+    dock_->removeEdge=[this](int i){
+        if(i<0||i>=static_cast<int>(input_.edges.size()))return;
+        input_.edges.erase(input_.edges.begin()+i);Refresh();
+    };
     dock_->SetOutputHandler([this] { Refresh(); });
     dock_->SetKindHandler([this](int kind) {
         input_.kind = kind;
@@ -121,6 +126,7 @@ void V2EdgeFinishTool::Begin(std::string_view commandId)
             break;
         }
     }
+    pickingEdges_ = true; dock_->ShowActiveRole(true);
     active_ = true;
     window_.RefreshRightShelves();
     window_.viewport_->SetToolPickActive(true);
@@ -134,6 +140,7 @@ void V2EdgeFinishTool::Begin(std::string_view commandId)
 
 void V2EdgeFinishTool::End(bool keepTool)
 {
+    pickingEdges_ = true; dock_->ShowActiveRole(true);
     active_ = keepTool;
     if (keepTool) { input_.part = {}; input_.edges.clear(); }
     built_.reset();
@@ -192,6 +199,15 @@ void V2EdgeFinishTool::HandleSelectionChanged()
     }
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
         ApplyPick(*pick);
+    } else {
+        for(const auto& id:window_.viewport_->Selection().entityIds) {
+            const auto* entity=window_.session_->GetDocument().FindEntity(id);
+            if(!entity || entity->kind!=EntityKind::Part)continue;
+            if(!pickingEdges_ || input_.part.IsNil()) {
+                const bool previous=pickingEdges_;pickingEdges_=false;ApplyPick(id);pickingEdges_=previous;
+            } else window_.SetStatus(QStringLiteral("辺・フェイスは3Dビューで選んでください。部品を替える場合は①を押します。"));
+            break;
+        }
     }
     MirrorToSelection();   // 受けなかったもの(線など)を選択に残さない。
     Refresh();
@@ -204,6 +220,12 @@ void V2EdgeFinishTool::ApplyPick(const EntityId& id)
     if (entity == nullptr || entity->kind != EntityKind::Part) {
         window_.SetStatus(Text(LabelOf(input_.kind) + ": 部品の辺の近くを押してください。"));
         return;
+    }
+    if(!pickingEdges_) {
+        input_=kachakacha::v2::app::WithEdgeFinishPick(input_,id,std::nullopt,JoinMm()); return;
+    }
+    if(!input_.part.IsNil()&&input_.part!=id) {
+        window_.SetStatus(QStringLiteral("選択中の部品の辺を選んでください。部品を替える場合は①を押してください。"));return;
     }
     const auto shape = window_.partShapes_.find(id.ToString());
     const auto hit = window_.viewport_->LastToolPickPoint();
@@ -287,6 +309,10 @@ void V2EdgeFinishTool::RefreshPreview()
 
 void V2EdgeFinishTool::RefreshDock()
 {
+    if(active_)window_.viewport_->SetToolCandidateFilter([this](const auto& pick) {
+        const auto* entity=window_.session_->GetDocument().FindEntity(pick.entityId);
+        return entity && entity->kind==EntityKind::Part;
+    });
     const bool previewShown = !window_.viewport_->ToolPreview().empty() && outcome_.available;
     std::vector<QString> lines;
     for (const std::string& line :

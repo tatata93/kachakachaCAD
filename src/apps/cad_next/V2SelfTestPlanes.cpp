@@ -19,6 +19,8 @@
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QPushButton>
+#include <QPointF>
 
 #include <cmath>
 #include <string>
@@ -286,11 +288,32 @@ void UseDock(V2MainWindow& window)
         CountOfKind(window, kachakacha::v2::domain::EntityKind::WorkPlane) == 3);
 }
 
+bool CaseRolePointsKeepOthers(V2MainWindow& window)
+{
+    UseDock(window);window.RunCommand("file.new");window.RunCommand("workplane.create");
+    auto* dock=window.WorkPlaneDock();if(!dock)return false;
+    WorkPlaneChoice choice;choice.method=WorkPlaneMethod::ThreePoints;
+    choice.threePoints={geometry::Vector3{0,0,0},geometry::Vector3{10,0,0},geometry::Vector3{0,10,0}};
+    dock->SetChoice(choice);
+    auto* pick=window.findChild<QPushButton*>(QStringLiteral("workPlanePickRole1"));
+    if(!Explain("点2の選択ボタンが見える",pick&&pick->isVisible()))return false;
+    pick->click();if(!Explain("点2のクリック待ちになる",window.Viewport().PickPending()))return false;
+    const auto screen=window.Viewport().Mapping().Project({20,0,0});if(!screen)return false;
+    window.Viewport().ClickAt(QPointF(screen->x,screen->y));
+    const auto actual=dock->Choice();
+    if(!Explain("点2だけを指定して点1と点3を保持",(actual.threePoints[0]-choice.threePoints[0]).Length()<1e-8
+        &&(actual.threePoints[2]-choice.threePoints[2]).Length()<1e-8
+        &&(actual.threePoints[1]-choice.threePoints[1]).Length()>1))return false;
+    const int before=CountOfKind(window,domain::EntityKind::WorkPlane);
+    dock->PressCreate();
+    return Explain("役割指定した3点から作業面を作れる",CountOfKind(window,domain::EntityKind::WorkPlane)==before+1);
+}
 } // namespace
 
 std::vector<SelfTestCase> PlaneCases()
 {
     return {
+        {"HP-WP-ROLE point replacement keeps other points",&CaseRolePointsKeepOthers},
         {"一覧の原点に3面と3軸が出て、軸はチェックで消せる", &CaseOriginNodeShowsPlanesAndAxes},
         {"作業平面の棚で位置と向きを数で指定して作れる", &CaseDockMakesPlaneByPointAndNormal},
         {"作業平面の棚でコンボの基準平面から離せる", &CaseDockOffsetsFromComboPlane},

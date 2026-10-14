@@ -31,7 +31,7 @@ V2DimensionTool::V2DimensionTool(V2MainWindow& window):QWidget(&window),window_(
 }
 void V2DimensionTool::Reset()
 {
-    dimension_={};fresh_=true;placing_=false;
+    dimension_={};fresh_=true;placing_=false;activeInput_=-1;
     dimension_.dimensionU=window_.viewport_->WorkPlane().uAxis;
     dimension_.dimensionV=window_.viewport_->WorkPlane().vAxis;
     window_.viewport_->SetDimensionPreview({});
@@ -44,16 +44,21 @@ void V2DimensionTool::UpdateKind()
     dimension_.unit=dimension_.kind=="dim_angle" ? "rad" : "mm";
     value_->setMaximum(dimension_.unit=="rad" ? 180.0 : 1000000.0);
     value_->setSuffix(dimension_.unit=="rad" ? QStringLiteral(" °") : QStringLiteral(" mm"));
-    RefreshPreview();
+    RefreshInputRoles();RefreshPreview();
 }
 bool V2DimensionTool::AddTarget(const app::SelectionRef& ref)
 {
     if(!ref.segmentId){status_->setText(QStringLiteral("寸法を付ける作図線を選んでください。"));return false;}
-    if(placing_){dimension_.segments.clear();dimension_.targets.clear();placing_=false;}
+    if(placing_ && activeInput_<0){dimension_.segments.clear();dimension_.targets.clear();placing_=false;}
     auto& refs=dimension_.segments;
-    if(std::any_of(refs.begin(),refs.end(),[&](const auto& r){return r.entityId==ref.entityId && r.segmentId==*ref.segmentId;}))return false;
+    if(activeInput_<0 && std::any_of(refs.begin(),refs.end(),[&](const auto& r){return r.entityId==ref.entityId && r.segmentId==*ref.segmentId;}))return false;
     const double end=ref.curveParameter.value_or(0.0)<0.5 ? 0.0 : 1.0;
-    refs.push_back({ref.entityId,*ref.segmentId,end,end});dimension_.targets.push_back(ref.entityId);
+    if(activeInput_>=0) {
+        if(refs.size()<=static_cast<std::size_t>(activeInput_))refs.resize(activeInput_+1);
+        refs[activeInput_]={ref.entityId,*ref.segmentId,end,end};activeInput_=-1;
+    } else refs.push_back({ref.entityId,*ref.segmentId,end,end});
+    dimension_.targets.clear();for(const auto& item:refs)dimension_.targets.push_back(item.entityId);
+    RefreshInputRoles();
     const int needed=(kind_->currentIndex()>=5) ? 2 : 1;
     if(static_cast<int>(refs.size())>needed){refs.erase(refs.begin());dimension_.targets.erase(dimension_.targets.begin());}
     if(static_cast<int>(refs.size())==needed) {
@@ -84,6 +89,7 @@ void V2DimensionTool::TakeSelection()
 void V2DimensionTool::RefreshPreview()
 {
     if(loading_ || !status_)return;
+    RefreshInputRoles();
     const auto current=document::EvaluateDimension(window_.session_->GetDocument().Snapshot(),dimension_);
     if(!current.HasValue()){window_.viewport_->SetDimensionPreview({});return;}
     dimension_.anchors=current.Value().anchors;

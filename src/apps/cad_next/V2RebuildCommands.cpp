@@ -1,3 +1,4 @@
+#include "V2ExtrudeReferenceState.h"
 //! 開き直したときに、立体と面を作り直す。
 //!
 //! 実形状(OCCT の形)は文書に持たない。持つと、入力を直したのに形が古いまま、
@@ -95,9 +96,8 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
             choice.customDirection = definition->direction;
             choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
             choice.extent = request.extent;
-            choice.targetEntityId = definition->extentTarget;
+            RestoreExtrudeReference(choice, *definition);
             if (!choice.targetEntityId.has_value() && !definition->targets.empty()) choice.targetEntityId = definition->targets.back();
-            choice.targetParameter = definition->targetParameter;
             auto result = BuildToTarget(choice, request.profiles);
             if (result.HasValue() && request.hasSelectedPart && result.Value().parts.size() == 1) {
                 const auto operation = request.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart
@@ -270,13 +270,22 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
     const auto frame = definition->targetPlane.has_value()
         ? WorkPlaneFrameOf(*definition->targetPlane)
         : std::nullopt;
-    const auto built = frame.has_value()
-        ? kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second, frame->origin,
-              frame->normal, tolerance)
+    kachakacha::v2::modeling::KernelShapeHandle stop;
+    const bool snapshot=!definition->targetFaceBrep.empty();
+    if(snapshot) {
+        const auto restored=kachakacha::v2::kernel::RestoreOutputShape(definition->targetFaceBrep);
+        if(!restored.HasValue()){ReportDiagnostics(restored.Diagnostics());return false;}
+        stop=restored.Value();
+    } else if(definition->targetPlane) {
+        const auto target=guideShapes_.find(definition->targetPlane->ToString());
+        if(target!=guideShapes_.end())stop=target->second;
+    }
+    const auto built = definition->targetPlane.has_value()
+        ? kachakacha::v2::kernel::ThickenSurfaceToFace(found->second,stop,frame,definition->targetOffsetMm,tolerance)
         : kachakacha::v2::kernel::ThickenSurface(found->second, definition->thickness.value,
-              static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(
-                  definition->placement),
+              static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(definition->placement),
               tolerance, definition->correctOpposite);
+    if(snapshot)kachakacha::v2::kernel::ReleaseShape(stop);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
         return false;

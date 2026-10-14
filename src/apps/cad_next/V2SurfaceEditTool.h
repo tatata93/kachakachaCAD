@@ -85,6 +85,7 @@ private:
     V2MainWindow& window_;
     V2SurfaceEditDock* dock_ = nullptr;
     bool active_ = false;
+    int activeRole_ = -1;
     bool mirroring_ = false;
     kachakacha::v2::app::SurfaceEditInputState input_;
     kachakacha::v2::app::SurfaceEditOutcome outcome_;

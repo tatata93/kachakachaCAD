@@ -34,7 +34,7 @@ void V2CurvedEmbossTool::Invalidate()
 void V2CurvedEmbossTool::CancelInput()
 {
     Invalidate();support_={};wires_.clear();
-    if(supportShape_.Valid())kernel::ReleaseShape(supportShape_);supportShape_={};role_=0;
+    if(supportShape_.Valid())kernel::ReleaseShape(supportShape_);supportShape_={};role_=0;RefreshRoles();
     sourceLabel_->setText(QStringLiteral("支持面: 未選択"));wireLabel_->setText(QStringLiteral("輪郭: 0本"));
     window_.viewport_->SetSelection({});status_->setText(QStringLiteral("入力を取り消しました。設定は維持しています。支持面を選んでください。"));
 }
@@ -55,7 +55,7 @@ bool V2CurvedEmbossTool::SetSupport(const app::SelectionRef& ref)
     }else {status_->setText(QStringLiteral("形状ガイドの面か、立体のフェイスを選んでください。"));return false;}
     if(supportShape_.Valid())kernel::ReleaseShape(supportShape_);
     support_=ref.entityId;supportShape_=shape;supportRevision_=window_.session_->GetDocument().Revision();Invalidate();
-    sourceLabel_->setText(QStringLiteral("支持面: ")+QString::fromStdString(entity->displayName));role_=1;
+    sourceLabel_->setText(QStringLiteral("支持面: ")+QString::fromStdString(entity->displayName));role_=1;RefreshRoles();
     status_->setText(QStringLiteral("続けて曲面上の輪郭ワイヤーを選んでください。"));return true;
 }
 bool V2CurvedEmbossTool::AddWire(base::EntityId id)
@@ -64,7 +64,7 @@ bool V2CurvedEmbossTool::AddWire(base::EntityId id)
     if(!entity||entity->kind!=domain::EntityKind::Wire){status_->setText(QStringLiteral("輪郭にはワイヤーを選んでください。"));return false;}
     const auto found=std::find(wires_.begin(),wires_.end(),id);
     if(found==wires_.end())wires_.push_back(id);else wires_.erase(found);
-    Invalidate();wireLabel_->setText(QStringLiteral("輪郭: %1本").arg(wires_.size()));return true;
+    Invalidate();RefreshRoles();wireLabel_->setText(QStringLiteral("輪郭: %1本").arg(wires_.size()));return true;
 }
 bool V2CurvedEmbossTool::CollectBoundary(std::vector<geometry::CurveSegment>& boundary)
 {

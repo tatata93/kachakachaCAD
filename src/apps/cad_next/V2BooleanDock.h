@@ -1,4 +1,5 @@
 #pragma once
+#include "V2RoleInput.h"
 
 //! 「足す・引く・交差」の棚(引継ぎ 2026-09-17 の 4、交差は P-17)。
 //!
@@ -67,7 +68,11 @@ public:
     //! 「状態」に出ている文。
     [[nodiscard]] QString StatusTextJa() const;
 
+    void SetToolItems(const QStringList& names) { toolRole_->SetItems(names); }
+    std::function<void(int)> removeTool;
 private:
+    V2RoleInput* targetRole_ = nullptr;
+    V2RoleInput* toolRole_ = nullptr;
     [[nodiscard]] QPushButton* ArmFor(kachakacha::v2::app::BooleanSlot slot) const;
     [[nodiscard]] QPushButton* ClearFor(kachakacha::v2::app::BooleanSlot slot) const;
     void BuildRows(QVBoxLayout* layout);

@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2NumericSpinBox.h"
 #include "V2ShellSplitDock.h"
 #include "V2PanelFrame.h"
@@ -80,20 +81,7 @@ V2ShellSplitDock::V2ShellSplitDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
-    layout->addWidget(MakeClearRow(body, QStringLiteral("部品"), &partValue_, &clearPart_));
-    facesRow_ = MakeClearRow(body, QStringLiteral("抜く面"), &facesValue_, &clearFaces_);
-    layout->addWidget(facesRow_);
-    QObject::connect(clearPart_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearPartHandler_) {
-            clearPartHandler_();
-        }
-    });
-    QObject::connect(clearFaces_, &QPushButton::clicked, this, [this] {
-        if (!loading_ && clearFacesHandler_) {
-            clearFacesHandler_();
-        }
-    });
+    BuildInputRows(layout, body);
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* methodRow = new QHBoxLayout();
@@ -179,6 +167,10 @@ void V2ShellSplitDock::ShowInput(const kachakacha::v2::app::ShellSplitInputState
     }
     partValue_->setText(state.part.IsNil() ? QStringLiteral("(選んでいません)") : partNameJa);
     clearPart_->setEnabled(!state.part.IsNil());
+    partRole_->SetItems(state.part.IsNil() ? QStringList{} : QStringList{partNameJa});
+    QStringList faces;
+    for (std::size_t i=0; i<state.faces.size(); ++i) faces.push_back(QStringLiteral("抜く面 %1").arg(i+1));
+    faceRole_->SetItems(faces);
     facesRow_->setVisible(!split);
     thicknessRow_->setVisible(!split);
     outputRow_->setVisible(!split);
@@ -287,4 +279,29 @@ bool V2ShellSplitDock::PlaneRowShown() const
 int V2ShellSplitDock::MethodShown() const
 {
     return methods_[1]->isChecked() ? 1 : 0;
+}
+
+void V2ShellSplitDock::BuildInputRows(QVBoxLayout* layout, QWidget* body)
+{
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
+    partRole_ = new V2RoleInput(body, QStringLiteral("① 部品"));
+    faceRole_ = new V2RoleInput(body, QStringLiteral("② 抜く面"));
+    partValue_ = partRole_->value; clearPart_ = partRole_->clear;
+    facesValue_ = faceRole_->value; clearFaces_ = faceRole_->clear; facesRow_ = faceRole_;
+    layout->addWidget(partRole_); layout->addWidget(faceRole_);
+    QObject::connect(partRole_->arm, &QPushButton::clicked, this, [this] { if (armRole) armRole(false); });
+    QObject::connect(faceRole_->arm, &QPushButton::clicked, this, [this] { if (armRole) armRole(true); });
+    partRole_->removeItem = [this](int) { if (clearPartHandler_) clearPartHandler_(); };
+    faceRole_->removeItem = [this](int i) { if (removeFace) removeFace(i); };
+    QObject::connect(clearPart_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearPartHandler_) {
+            clearPartHandler_();
+        }
+    });
+    QObject::connect(clearFaces_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearFacesHandler_) {
+            clearFacesHandler_();
+        }
+    });
+
 }

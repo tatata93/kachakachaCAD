@@ -20,6 +20,7 @@
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 
 #include "V2ExtrudeTargetChoice.h"
+#include "V2RoleInput.h"
 
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -41,6 +42,17 @@ class QWidget;
 class V2ExtrudeDock final : public QDockWidget {
 public:
     explicit V2ExtrudeDock(QWidget* parent);
+    void ReadStop(kachakacha::v2::app::ExtrudeChoice& choice) const {
+        choice.targetEntityId = TargetEntityId();
+        choice.targetParameter = TargetParameter();
+        choice.targetOffsetMm = TargetOffsetMm();
+        choice.targetFaceBrep = TargetFaceBrep();
+    }
+    void SetProfileItems(const QStringList& names) { profileRole_->SetItems(names); }
+    void SetActiveInput(bool target) { targetRole_->arm->setChecked(target); profileRole_->arm->setChecked(!target); }
+    std::optional<bool> activeInput;
+    std::function<void(bool)> armInput;
+    std::function<void(int)> removeProfile;
 
     //! CADが選択をどう読んだかを映す。読み方が変わるたびに呼ぶ。
     void ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan, const QString& targetNameJa,
@@ -76,6 +88,14 @@ public:
     void SetSecondDistanceMm(double value);
     //! 「選んだ面まで」の相手に出せる作業平面。棚を出すときに文書から渡す。
     void SetTargets(const std::vector<ExtrudeTargetChoice>& targets);
+    void BuildStopRows();
+    void SetStopPickHandler(std::function<void()> handler);
+    void SetStopPicking(bool active);
+    void PickStop(const ExtrudeTargetChoice& target);
+    double TargetOffsetMm() const;
+    void SetTargetOffsetMm(double value);
+    std::string TargetFaceBrep() const;
+    void RestoreStop(const kachakacha::v2::app::ExtrudeChoice& choice);
     void SetDirectionReferences(const std::vector<ExtrudeTargetChoice>& references);
     void BuildDirectionReferenceRow();
     void SetDirectionPickHandler(std::function<void()> handler);
@@ -165,6 +185,10 @@ private:
     QDoubleSpinBox* distance_ = nullptr;
     QDoubleSpinBox* secondDistance_ = nullptr;
     QComboBox* target_ = nullptr;
+    QWidget* stopRow_ = nullptr;
+    QPushButton* stopPick_ = nullptr;
+    QDoubleSpinBox* stopOffset_ = nullptr;
+    std::function<void()> stopPickHandler_;
     std::vector<ExtrudeTargetChoice> targets_;
     //! 核に無い From(開始面)とテーパー。押せない形で理由を出す。
     QLabel* fromValue_ = nullptr;
@@ -191,6 +215,8 @@ private:
     class QCheckBox* outEndWire_ = nullptr;
     class QCheckBox* outSideWires_ = nullptr;
     QPushButton* reselectTarget_ = nullptr;
+    V2RoleInput* targetRole_ = nullptr;
+    V2RoleInput* profileRole_ = nullptr;
     QPushButton* reselectProfile_ = nullptr;
     QLabel* result_ = nullptr;
     QPushButton* details_ = nullptr;

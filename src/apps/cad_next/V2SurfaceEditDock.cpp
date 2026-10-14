@@ -70,6 +70,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     // 2. 入力。欄の名前と入れたものを 1 行ずつ。3D で押すと入り、押し直すと外れる。
     auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("入力(3D で押すと入り、押し直すと外れます)"));
     layout->addWidget(inputTitle);
+    BuildRoleButtons(layout);
     entries_ = new QTreeWidget(body);
     entries_->setColumnCount(2);
     entries_->setHeaderLabels(QStringList{QStringLiteral("欄"), QStringLiteral("入れたもの")});
@@ -88,7 +89,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
             || row >= static_cast<int>(shownEntries_.size())) {
             return;
         }
-        removeHandler_(shownEntries_[static_cast<std::size_t>(row)].id);
+        removeHandler_(row);
     });
     QObject::connect(clear_, &QPushButton::clicked, this, [this] {
         if (!loading_ && clearHandler_) {
@@ -229,6 +230,14 @@ void V2SurfaceEditDock::ShowInput(const kachakacha::v2::app::SurfaceEditInputSta
 {
     loading_ = true;
     shown_ = state;
+    const auto roles = kachakacha::v2::app::SurfaceEditSlotsFor(state.operation);
+    for (int i=0; i<4; ++i) {
+        const bool visible = i<2 ? roles.edges>0 : i==2 ? roles.surfacesMaximum>0 : roles.wiresMaximum>0;
+        roleButtons_[i]->setVisible(visible);
+        const QString title = i<2 ? Text(kachakacha::v2::app::SurfaceEdgeSlotNameJa(state.operation,i))
+                                   : i==2 ? QStringLiteral("対象面") : QStringLiteral("投影する線");
+        roleButtons_[i]->setText(title + (roleButtons_[i]->isChecked() ? QStringLiteral("：選択中") : QStringLiteral("を選ぶ")));
+    }
     shownEntries_ = entries;
     const auto& operations = kachakacha::v2::app::SurfaceEditOperations();
     for (std::size_t index = 0; index < operations.size() && index < cards_.size(); ++index) {
@@ -284,7 +293,7 @@ void V2SurfaceEditDock::SetOperationHandler(std::function<void(SurfaceEditOperat
 }
 
 void V2SurfaceEditDock::SetRemoveHandler(
-    std::function<void(const kachakacha::v2::base::EntityId&)> handler)
+    std::function<void(int)> handler)
 {
     removeHandler_ = std::move(handler);
 }
@@ -411,4 +420,20 @@ bool V2SurfaceEditDock::ContinuityRowShown(bool second) const
 bool V2SurfaceEditDock::ConfirmEnabled() const
 {
     return confirm_->isEnabled();
+}
+
+void V2SurfaceEditDock::BuildRoleButtons(QVBoxLayout* layout)
+{
+    for (int i=0; i<4; ++i) {
+        auto* button = new QPushButton(this); button->setCheckable(true);
+        button->setObjectName(QStringLiteral("surfaceEditRole%1").arg(i));
+        roleButtons_[i] = button; layout->addWidget(button);
+        QObject::connect(button, &QPushButton::clicked, this, [this,i] {
+            SetRoleActive(i); if (armRole) armRole(i);
+        });
+    }
+}
+void V2SurfaceEditDock::SetRoleActive(int role)
+{
+    for(int i=0;i<4;++i) roleButtons_[i]->setChecked(i==role);
 }

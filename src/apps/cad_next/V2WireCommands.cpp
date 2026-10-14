@@ -1,3 +1,4 @@
+#include "V2SelectionRoleInputs.h"
 #include "kachakacha/app/PlaneFocus.h"
 #include "V2OffsetTool.h"
 #include "kachakacha/document/Dimension.h"
@@ -450,6 +451,7 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
 
 void V2MainWindow::RefreshCornerDock()
 {
+    RefreshSelectionRoleInputs(*this);
     if (cornerDock_ == nullptr || viewport_ == nullptr || parameterDock_ == nullptr) {
         return;
     }

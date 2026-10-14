@@ -1,4 +1,8 @@
 #include "V2NumericSpinBox.h"
+#include "V2RoleInput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include <algorithm>
+#include <QStringList>
 #include "V2CurvedEmbossTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -28,7 +32,7 @@ V2CurvedEmbossTool* V2CurvedEmbossTool::Open(V2MainWindow& window)
     window.operationHost_->SetShelves({}); window.viewport_->SetSelection(selection);
     auto* tool=new V2CurvedEmbossTool(window);
     window.operationHost_->ShowTemporaryPage(tool,QStringLiteral("曲面押し出し（近似）"));
-    tool->TakeSelection(); return tool;
+    tool->role_=-1;tool->TakeSelection();tool->role_=tool->support_.IsNil()?0:1;tool->RefreshRoles();return tool;
 }
 V2CurvedEmbossTool::V2CurvedEmbossTool(V2MainWindow& window):QWidget(&window),window_(window),
     documentId_(window.Session().GetDocument().Snapshot().id)
@@ -42,11 +46,24 @@ void V2CurvedEmbossTool::BuildUi()
     auto* body=new QWidget(scroll);auto* layout=new QVBoxLayout(body);scroll->setWidget(body);outer->addWidget(scroll);
     auto button=[&](const QString& text,auto action){auto* b=new QPushButton(text,body);layout->addWidget(b);connect(b,&QPushButton::clicked,this,action);return b;};
     layout->addWidget(MakePanelSectionTitle(body,QStringLiteral("対象")));
-    sourceLabel_=new QLabel(QStringLiteral("支持面: 未選択"),body);sourceLabel_->setWordWrap(true);layout->addWidget(sourceLabel_);
-    button(QStringLiteral("支持面を選ぶ"),[this]{role_=0;status_->setText(QStringLiteral("3Dビューで支持面をクリックしてください。"));});
-    wireLabel_=new QLabel(QStringLiteral("輪郭: 0本"),body);layout->addWidget(wireLabel_);
-    button(QStringLiteral("輪郭を追加・解除"),[this]{role_=1;status_->setText(QStringLiteral("曲面上のワイヤーをクリックしてください。もう一度押すと外れます。"));});
-    button(QStringLiteral("左ペインの選択を取り込む"),[this]{TakeSelection();});
+    supportRole_=new V2RoleInput(body,QStringLiteral("① 支持面"));
+    wireRole_=new V2RoleInput(body,QStringLiteral("② 押し出す輪郭"));
+    sourceLabel_=supportRole_->value;wireLabel_=wireRole_->value;
+    layout->addWidget(supportRole_);layout->addWidget(wireRole_);
+    connect(supportRole_->arm,&QPushButton::clicked,this,[this]{role_=0;RefreshRoles();});
+    connect(wireRole_->arm,&QPushButton::clicked,this,[this]{role_=1;RefreshRoles();});
+    const auto clearSupport=[this]{
+        if(supportShape_.Valid())kernel::ReleaseShape(supportShape_);
+        supportShape_={};support_={};Invalidate();RefreshRoles();
+    };
+    connect(supportRole_->clear,&QPushButton::clicked,this,clearSupport);
+    supportRole_->removeItem=[clearSupport](int){clearSupport();};
+    connect(wireRole_->clear,&QPushButton::clicked,this,[this]{wires_.clear();Invalidate();RefreshRoles();});
+    wireRole_->removeItem=[this](int row){
+        if(row<0||row>=static_cast<int>(wires_.size()))return;
+        wires_.erase(wires_.begin()+row);Invalidate();RefreshRoles();
+    };
+    button(QStringLiteral("左ペインの選択を現在の役割へ追加"),[this]{TakeSelection();});
     BuildSettings(layout);
     status_=new QLabel(QStringLiteral("支持面と、その上の閉じたワイヤーを指定してください。"),this);status_->setWordWrap(true);outer->addWidget(status_);
     button(QStringLiteral("プレビューを更新"),[this]{Preview();});layout->addStretch();
@@ -82,16 +99,21 @@ void V2CurvedEmbossTool::BuildSettings(QVBoxLayout* layout)
 void V2CurvedEmbossTool::TakeSelection()
 {
     const auto selection=window_.viewport_->Selection();
+    const int activeRole=role_;
+    const auto accept=[&](const app::SelectionRef& ref){
+        const auto* e=window_.session_->GetDocument().FindEntity(ref.entityId);if(!e)return;
+        if(e->kind==domain::EntityKind::Wire){
+            if(activeRole!=0 && std::find(wires_.begin(),wires_.end(),ref.entityId)==wires_.end())AddWire(ref.entityId);
+        }else if(activeRole!=1)SetSupport(ref);
+    };
     for (const auto& ref:selection.ordered) {
-        const auto* entity=window_.session_->GetDocument().FindEntity(ref.entityId);
-        if (entity && entity->kind==domain::EntityKind::Wire) AddWire(ref.entityId); else SetSupport(ref);
+        accept(ref);
     }
-    if (!selection.ordered.empty()) return;
-    for (const auto& id:selection.entityIds) {
-        const auto* entity=window_.session_->GetDocument().FindEntity(id);
-        if (entity && entity->kind==domain::EntityKind::Wire) AddWire(id);
-        else { app::SelectionRef ref;ref.entityId=id;SetSupport(ref); }
+    if (selection.ordered.empty()) for (const auto& id:selection.entityIds) {
+        app::SelectionRef ref;ref.entityId=id;accept(ref);
     }
+    if(activeRole>=0)role_=activeRole;
+    RefreshRoles();
 }
 bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
 {
@@ -105,7 +127,7 @@ bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
     if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
-    window_.viewport_->SelectAt(mouse->position(),mouse->modifiers());
+    window_.viewport_->RefreshPickCycleAt(mouse->position());
     const auto picked=window_.viewport_->CurrentCandidate();if(!picked)return true;
     if(role_==1)AddWire(picked->entityId);
     else {app::SelectionRef ref;ref.entityId=picked->entityId;ref.kind=picked->kind;
@@ -115,4 +137,26 @@ bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
 void V2CurvedEmbossTool::closeEvent(QCloseEvent* event)
 {
     setObjectName({});window_.viewport_->HideToolPreview();QWidget::closeEvent(event);
+}
+
+void V2CurvedEmbossTool::RefreshRoles()
+{
+    const int role = role_;
+    auto* session = window_.session_.get();
+    window_.viewport_->SetToolCandidateFilter([session,role](const app::PickCandidate& pick) {
+        const auto* entity = session->GetDocument().FindEntity(pick.entityId);
+        if (!entity) return false;
+        if (role == 1) return entity->kind == domain::EntityKind::Wire;
+        return entity->kind == domain::EntityKind::GuideSurface
+            || (entity->kind == domain::EntityKind::Part && pick.pickedFaceIndex.has_value());
+    });
+    const auto name=[this](const base::EntityId& id){
+        const auto* e=window_.Session().GetDocument().FindEntity(id);
+        return e?QString::fromStdString(e->displayName):QStringLiteral("未選択");
+    };
+    supportRole_->arm->setChecked(role_==0);wireRole_->arm->setChecked(role_==1);
+    supportRole_->SetItems(support_.IsNil()?QStringList{}:QStringList{name(support_)});
+    QStringList wires;for(const auto& id:wires_)wires.push_back(name(id));wireRole_->SetItems(wires);
+    sourceLabel_->setText(support_.IsNil()?QStringLiteral("未選択"):name(support_));
+    wireLabel_->setText(QStringLiteral("%1本").arg(wires_.size()));
 }

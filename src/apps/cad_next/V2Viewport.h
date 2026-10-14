@@ -148,8 +148,11 @@ public:
     // Pick a reference without changing the source selection of the active tool.
     void BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> ids,
         std::function<void(std::optional<kachakacha::v2::base::EntityId>)> handler);
+    void BeginElementPick(std::function<bool(const kachakacha::v2::app::PickCandidate&)> filter,
+        std::function<void(std::optional<kachakacha::v2::app::PickCandidate>)> handler);
+    bool AcceptElementPick(const kachakacha::v2::app::PickCandidate& candidate);
     void CancelReferencePick();
-    bool ReferencePickPending() const { return static_cast<bool>(referencePickHandler_); }
+    bool ReferencePickPending() const { return static_cast<bool>(referencePickHandler_) || static_cast<bool>(elementPickHandler_); }
 
     //! 見え方の設定(AT-UIX-010)。形は変えない。
     void SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
@@ -413,7 +416,13 @@ public:
     //! 素のクリックで役割の違うものを **足す** かどうかに使う。
     //! 一緒にすると、輪郭が入った時点で足せなくなり、
     //! 相手の立体を押した瞬間に輪郭が消える。
-    void SetToolPickActive(bool active) noexcept { toolPickActive_ = active; }
+    void SetToolPickActive(bool active) noexcept {
+        toolPickActive_ = active;
+        if (!active) toolCandidateFilter_ = {};
+    }
+    void SetToolCandidateFilter(std::function<bool(const kachakacha::v2::app::PickCandidate&)> filter) {
+        toolCandidateFilter_ = std::move(filter); ForgetPickCycle();
+    }
     [[nodiscard]] bool ToolPickActive() const noexcept { return toolPickActive_; }
     //! 道具が「押すたびに入れる/外す」で入力を集めるか(面を作る)。
     //!
@@ -1042,6 +1051,9 @@ private:
     std::function<void(const PickedPoint&)> pickHandler_;
     std::vector<kachakacha::v2::base::EntityId> referencePickIds_;
     std::function<void(std::optional<kachakacha::v2::base::EntityId>)> referencePickHandler_;
+    std::function<bool(const kachakacha::v2::app::PickCandidate&)> elementPickFilter_;
+    std::function<bool(const kachakacha::v2::app::PickCandidate&)> toolCandidateFilter_;
+    std::function<void(std::optional<kachakacha::v2::app::PickCandidate>)> elementPickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;
     kachakacha::v2::view::Quaternion orientation_{};
     kachakacha::v2::view::ViewCubeDrag cubeDrag_;

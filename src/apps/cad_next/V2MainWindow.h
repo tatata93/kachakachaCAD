@@ -878,6 +878,8 @@ private:
     void ReselectThicken();
     void ChooseThickenPlacement(kachakacha::v2::fabrication::ThicknessPlacement value);
     void ChooseThickenToPlane();
+    void BindThickenInputs();
+    void BeginThickenStopPick();
     void ChooseThickenTarget(const kachakacha::v2::base::EntityId& planeId);
     void ApplyThickenThicknessMm(double value);
     void EndThicken(bool keepTool = false);
@@ -1271,6 +1273,7 @@ public:
     bool HandleSurfaceExtrude(bool confirm);
     bool PrepareSurfaceExtrudeSource(kachakacha::v2::app::ExtrudePlan& plan);
     kachakacha::v2::base::EntityId CommitSurfaceExtrudeFace();
+    void BeginExtrudeStopPick();
     kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> SurfaceExtrudePreview(const kachakacha::v2::app::ExtrudeChoice& choice,
         kachakacha::v2::modeling::KernelShapeHandle source, double start, double end);
     bool HandleTargetExtrude(bool confirm);

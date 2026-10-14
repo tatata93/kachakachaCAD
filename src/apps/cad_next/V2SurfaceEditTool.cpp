@@ -45,9 +45,18 @@ V2SurfaceEditTool::V2SurfaceEditTool(V2MainWindow& window)
     : window_(window)
 {
     dock_ = new V2SurfaceEditDock(&window);
+    dock_->armRole = [this](int role) { activeRole_ = role; RefreshDock(); };
     dock_->SetOperationHandler([this](SurfaceEditOperation operation) { Choose(operation); });
-    dock_->SetRemoveHandler([this](const EntityId& id) {
-        input_ = kachakacha::v2::app::WithoutSurfaceEditEntry(input_, id);
+    dock_->SetRemoveHandler([this](int row) {
+        if (row < 0) return;
+        if (!input_.edges.empty()) {
+            if (row < static_cast<int>(input_.edges.size())) input_.edges[row] = {};
+        } else if (row < static_cast<int>(input_.surfaces.size())) {
+            input_.surfaces.erase(input_.surfaces.begin()+row);
+        } else {
+            row -= static_cast<int>(input_.surfaces.size());
+            if (row < static_cast<int>(input_.wires.size())) input_.wires.erase(input_.wires.begin()+row);
+        }
         MirrorToSelection();
         Refresh();
     });
@@ -94,6 +103,7 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
         Choose(operation);
         return;
     }
+    activeRole_ = -1;
     input_ = kachakacha::v2::app::SurfaceEditInputState{};
     input_.operation = operation;
     active_ = true;
@@ -132,6 +142,7 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
 
 void V2SurfaceEditTool::Choose(SurfaceEditOperation operation)
 {
+    activeRole_ = -1; dock_->SetRoleActive(-1);
     input_ = kachakacha::v2::app::WithSurfaceEditOperation(input_, operation);
     MirrorToSelection();
     Refresh();
@@ -166,6 +177,7 @@ void V2SurfaceEditTool::MirrorToSelection()
 {
     kachakacha::v2::app::SelectionSet mirrored;
     const auto add = [&mirrored](const EntityId& id) {
+        if (id.IsNil()) return;
         if (std::find(mirrored.entityIds.begin(), mirrored.entityIds.end(), id)
             != mirrored.entityIds.end()) {
             return;
@@ -196,6 +208,14 @@ void V2SurfaceEditTool::HandleSelectionChanged()
     }
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
         ApplyPick(*pick);
+    } else if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges == 0) {
+        const auto selection = window_.viewport_->Selection().entityIds;
+        for (const auto& id : selection) {
+            if (std::find(input_.surfaces.begin(),input_.surfaces.end(),id)==input_.surfaces.end()
+                && std::find(input_.wires.begin(),input_.wires.end(),id)==input_.wires.end()) ApplyPick(id);
+        }
+    } else {
+        window_.SetStatus(QStringLiteral("縁は3Dビューで選んでください。面だけの一覧選択では縁を特定できません。"));
     }
     MirrorToSelection();   // 受けなかったもの(部品など)を選択に残さない。
     Refresh();
@@ -208,12 +228,14 @@ void V2SurfaceEditTool::ApplyPick(const EntityId& id)
         return;
     }
     if (entity->kind == EntityKind::Wire) {
+        if (activeRole_ >= 0 && activeRole_ != 3) return;
         input_ = kachakacha::v2::app::WithSurfaceEditWirePick(input_, id);
         return;
     }
     if (entity->kind != EntityKind::GuideSurface) {
         return;
     }
+    if (activeRole_ == 3) return;
     // 押した点(選択の最後に入ったその物の当たり)から、一番近い縁を決める。
     kachakacha::v2::geometry::Vector3 hit{};
     for (const auto& ref : window_.viewport_->Selection().ordered) {
@@ -233,12 +255,23 @@ void V2SurfaceEditTool::ApplyPick(const EntityId& id)
             }
         }
     }
-    input_ = kachakacha::v2::app::WithSurfaceEditSurfacePick(input_, id, hit, edge);
+    if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges > 0) {
+        input_.edges.resize(2);
+        int slot = activeRole_;
+        if (slot < 0 || slot > 1) {
+            slot = input_.edges[0].surface.IsNil() ? 0 : 1;
+            for (int i=0; i<2; ++i) if (input_.edges[i].surface == id) slot = i;
+        }
+        auto& selected = input_.edges[slot];
+        if (selected.surface == id && selected.edgeIndex == edge) selected = {};
+        else selected = {id, edge, hit};
+    } else input_ = kachakacha::v2::app::WithSurfaceEditSurfacePick(input_, id, hit, edge);
 }
 
 std::string V2SurfaceEditTool::NameOf(const EntityId& id) const
 {
-    const auto* entity = id.IsNil() ? nullptr : window_.session_->GetDocument().FindEntity(id);
+    if (id.IsNil()) return "未選択";
+    const auto* entity = window_.session_->GetDocument().FindEntity(id);
     return entity != nullptr && !entity->displayName.empty() ? entity->displayName
                                                               : std::string("名前のないもの");
 }
@@ -455,6 +488,14 @@ std::vector<kachakacha::v2::modeling::KernelShapeHandle> V2SurfaceEditTool::Prev
 
 void V2SurfaceEditTool::RefreshDock()
 {
+    if (active_) window_.viewport_->SetToolCandidateFilter([this](const auto& pick) {
+        const auto* entity = window_.session_->GetDocument().FindEntity(pick.entityId);
+        if (!entity) return false;
+        const auto requirements = kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation);
+        if (entity->kind == EntityKind::GuideSurface) return activeRole_ != 3;
+        return entity->kind == EntityKind::Wire && requirements.wiresMaximum > 0
+            && (activeRole_ < 0 || activeRole_ == 3);
+    });
     std::vector<V2SurfaceEditDock::Entry> entries;
     std::vector<kachakacha::v2::app::ToolRoleLabel> labels;
     for (std::size_t index = 0; index < input_.edges.size(); ++index) {
@@ -463,7 +504,7 @@ void V2SurfaceEditTool::RefreshDock()
         const std::string edge = pick.edgeIndex >= 0
             ? " の縁 " + std::to_string(pick.edgeIndex + 1) : " (縁が未定)";
         entries.push_back({Text(slot), Text(NameOf(pick.surface) + edge), pick.surface});
-        labels.push_back({pick.surface, slot});
+        if (!pick.surface.IsNil()) labels.push_back({pick.surface, slot});
     }
     const bool onto = input_.operation == SurfaceEditOperation::CurveOnSurface;
     for (std::size_t index = 0; index < input_.surfaces.size(); ++index) {

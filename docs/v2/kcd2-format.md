@@ -471,6 +471,12 @@ indexは1始まりで、同role内一意。配列順はUI表順。
 `profiles` に形状ガイドUUIDを指定した場合は曲面BRepそのものを一定方向へ押し出す。
 詳細は `ui-redesign/EXTRUDE_EXTENSIONS.md`。
 
+2026-10-15 拡張: `targetOffsetMm`（既定0）は押し出し方向に沿った終端の平行移動量。
+`targetFaceBrep`（既定空文字列）はソリッドから選んだ終端フェイスの厳密BRepを保持する。
+非空の場合は選択時の形を再生成に使い、変動する面番号で再選択しない。
+`extentTarget` は元部品のUUIDを保持する。通常のガイド面はUUIDで追従し、外周・穴を維持する。
+仕様は `ui-redesign/ROLE_SELECTION_AND_END_FACES.md`。
+
 
 ```json
 {
@@ -1015,3 +1021,10 @@ Extrudeの `profileSeeds` は明示的に選択した区画の内点XYZ配列。
 `ThickenSurface.definition.correctOpposite` は任意の真偽値。省略値falseは既存の厳密な一定厚み。
 trueはADR 0031の補正方式を明示的に選択した履歴で、再構築でも同じ方式を使う。
 `targetPlane` がある場合はこの値を使わない。表示用メッシュを形状の正本として保存しない。
+
+### 厚みの終端面（2026-10-15）
+
+`ThickenSurface.definition.targetPlane` は互換性のためキー名を維持し、作業平面またはガイド面、
+保存フェイスの元部品のUUIDを持つ。`targetOffsetMm`（既定0）と `targetFaceBrep`（既定空文字列）は
+Extrudeと同じ終端移動・選択時形状保持を表す。平らな元面の法線方向へ終端まで立体化する。
+曲がった元面を一定方向へ伸ばす用途には押し出しを使う。終端が無効なら通常厚みへ黙って置き換えない。

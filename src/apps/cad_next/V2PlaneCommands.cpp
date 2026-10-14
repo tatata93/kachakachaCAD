@@ -9,6 +9,7 @@
 //! 間隔・副点・基準・色は右の「グリッド」の棚(V1 と同じ欄)で決める。
 
 #include "V2MainWindow.h"
+#include "V2WorkPlaneRoleInputs.h"
 
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/WorkPlaneOptions.h"
@@ -449,6 +450,12 @@ kachakacha::v2::app::WorkPlaneFacts V2MainWindow::BuildWorkPlaneFacts() const
             ++facts.edges;
         }
     }
+    if(workPlaneDock_ && ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)) {
+        const auto materials=CollectWorkPlaneMaterials(workPlaneDock_->Choice());
+        facts.points=static_cast<int>(materials.points.size());
+        facts.edges=static_cast<int>(materials.edges.size());
+        facts.planes=static_cast<int>(materials.selectedPlanes.size());
+    }
     return facts;
 }
 
@@ -492,6 +499,7 @@ kachakacha::v2::app::WorkPlaneMaterials V2MainWindow::CollectWorkPlaneMaterials(
     if (choice.secondPlaneId.has_value()) {
         materials.secondPlane = WorkPlaneFrameOf(*choice.secondPlaneId);
     }
+    ApplyWorkPlaneRoleInputs(workPlaneDock_,choice,materials);
     return materials;
 }
 

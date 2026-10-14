@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2NumericSpinBox.h"
 #include "V2SolidDock.h"
 #include "V2PanelFrame.h"
@@ -121,30 +122,20 @@ void V2SolidDock::BuildInputs(QVBoxLayout* layout)
 
 void V2SolidDock::BuildSlotRow(QVBoxLayout* layout, SlotRow& row, SolidSlot slot)
 {
-    auto* line = new QHBoxLayout();
-    row.name = new QLabel(widget());
-    line->addWidget(row.name);
-    row.value = new QLabel(widget());
-    row.value->setWordWrap(true);
-    line->addWidget(row.value, 1);
-    row.arm = new QPushButton(QStringLiteral("ここへ選ぶ"), widget());
-    row.arm->setCheckable(true);
-    row.clear = new QPushButton(QStringLiteral("解除"), widget());
-    // 2 段目の欄は作り方で中身(回転軸 / 経路)が替わる。押したときの欄は、そのとき読む。
+    row.role = new V2RoleInput(widget(), {});
+    row.name = row.role->name; row.value = row.role->value;
+    row.arm = row.role->arm; row.clear = row.role->clear;
     const bool second = &row == &second_;
     QObject::connect(row.arm, &QPushButton::clicked, this, [this, slot, second] {
-        if (!loading_ && activateHandler_) {
-            activateHandler_(second ? secondSlot_ : slot);
-        }
+        if (!loading_ && activateHandler_) activateHandler_(second ? secondSlot_ : slot);
     });
     QObject::connect(row.clear, &QPushButton::clicked, this, [this, slot, second] {
-        if (!loading_ && clearHandler_) {
-            clearHandler_(second ? secondSlot_ : slot);
-        }
+        if (!loading_ && clearHandler_) clearHandler_(second ? secondSlot_ : slot);
     });
-    line->addWidget(row.arm);
-    line->addWidget(row.clear);
-    layout->addLayout(line);
+    row.role->removeItem = [this, slot, second](int index) {
+        if (removeItem) removeItem(second ? secondSlot_ : slot, index);
+    };
+    layout->addWidget(row.role);
 }
 
 //! 3. 設定。角度(回転体)・姿勢(スイープ)・操作と相手。
@@ -264,6 +255,7 @@ void V2SolidDock::ShowSlots(const kachakacha::v2::app::SolidInputState& state,
     profile_.clear->setEnabled(!state.profiles.empty());
 
     const bool hasSecond = state.method != SolidMethod::Loft;
+    second_.role->setVisible(hasSecond);
     secondSlot_ = state.method == SolidMethod::Sweep ? SolidSlot::Path : SolidSlot::Axis;
     const bool secondFilled = secondSlot_ == SolidSlot::Axis ? !state.axis.IsNil() : !state.path.empty();
     for (QWidget* widget : {static_cast<QWidget*>(second_.name), static_cast<QWidget*>(second_.value),
@@ -277,6 +269,7 @@ void V2SolidDock::ShowSlots(const kachakacha::v2::app::SolidInputState& state,
 
     // 相手は足す・引くのときだけ。新しい部品のときは欄ごと隠す(要らない欄を置かない)。
     const bool hasTarget = state.booleanMode != 0;
+    target_.role->setVisible(hasTarget);
     for (QWidget* widget : {static_cast<QWidget*>(target_.name), static_cast<QWidget*>(target_.value),
              static_cast<QWidget*>(target_.arm), static_cast<QWidget*>(target_.clear)}) {
         widget->setVisible(hasTarget);
@@ -425,4 +418,8 @@ QString V2SolidDock::StatusTextJa() const
 bool V2SolidDock::ConfirmEnabled() const
 {
     return confirm_ != nullptr && confirm_->isEnabled();
+}
+
+void V2SolidDock::SetRoleItems(SolidSlot slot, const QStringList& names) {
+    const auto* row = RowFor(slot); if (row) row->role->SetItems(names);
 }

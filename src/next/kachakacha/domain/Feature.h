@@ -249,6 +249,8 @@ struct ExtrudeDefinition {
     double secondDistanceMm = 0.0;
     std::optional<EntityId> extentTarget;
     double targetParameter = -1.0;
+    double targetOffsetMm = 0.0; // signed distance along extrusion direction
+    std::string targetFaceBrep; // selected face snapshot; never a transient face index
     int booleanMode = 0;
     std::vector<EntityId> targets;
 };
@@ -281,6 +283,8 @@ struct ThickenSurfaceDefinition {
     bool correctOpposite = false;
     //! 「任意の面まで」のときの相手の作業平面。あれば thickness と placement は使わない。
     std::optional<EntityId> targetPlane;
+    double targetOffsetMm = 0.0;
+    std::string targetFaceBrep;
 };
 
 //! 部品の配置(P-18)。元の部品の形に剛体の変換を掛けた新しい部品を作る。

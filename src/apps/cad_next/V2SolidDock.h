@@ -1,4 +1,5 @@
 #pragma once
+#include "V2RoleInput.h"
 
 //! 「立体を作る」の棚(回転体・ロフト立体・スイープ、matrix P-08/P-09)。
 //!
@@ -84,8 +85,11 @@ public:
     //! 確定が押せるか。
     [[nodiscard]] bool ConfirmEnabled() const;
 
+    void SetRoleItems(kachakacha::v2::app::SolidSlot slot, const QStringList& names);
+    std::function<void(kachakacha::v2::app::SolidSlot, int)> removeItem;
 private:
     struct SlotRow {
+        V2RoleInput* role = nullptr;
         QLabel* name = nullptr;
         QLabel* value = nullptr;
         QPushButton* arm = nullptr;

@@ -1,5 +1,6 @@
 #include "V2NumericSpinBox.h"
 #include "V2WorkPlaneDock.h"
+#include "V2WorkPlaneRoleInputs.h"
 #include "V2PanelFrame.h"
 
 #include <QCheckBox>
@@ -211,6 +212,7 @@ QComboBox* V2WorkPlaneDock::AddPlaneRow(const QString& label)
 
 void V2WorkPlaneDock::ApplyVisibility()
 {
+    SyncWorkPlaneRoleInputs(*this);
     const RowUse use = RowUseOf(Choice().method);
     // 使わない欄は出さない。出したままにすると、入れた値が効くのか分からない。
     const auto show = [this](QWidget* field, bool on) {
@@ -241,6 +243,7 @@ void V2WorkPlaneDock::ApplyVisibility()
 
 void V2WorkPlaneDock::RefreshNeeds()
 {
+    SyncWorkPlaneRoleInputs(*this);
     const WorkPlaneChoice choice = Choice();
     selectionLabel_->setText(QStringLiteral("いまの選択: 平面 %1・点 %2・線 %3")
             .arg(facts_.planes)

@@ -63,6 +63,7 @@ using domain::FeatureType;
         && left->targets == right->targets && left->extentMode == right->extentMode
         && left->secondDistanceMm == right->secondDistanceMm
         && left->extentTarget == right->extentTarget && left->targetParameter == right->targetParameter
+        && left->targetOffsetMm == right->targetOffsetMm && left->targetFaceBrep == right->targetFaceBrep
         && left->booleanMode == right->booleanMode && SameValue(left->distance, right->distance)
         && left->direction.x == right->direction.x && left->direction.y == right->direction.y
         && left->direction.z == right->direction.z;

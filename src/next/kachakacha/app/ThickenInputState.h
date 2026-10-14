@@ -32,6 +32,8 @@ struct ThickenInputState {
     bool correctOpposite = false;
     //! 「平面まで」の相手の作業平面。toPlane のときだけ使う。
     base::EntityId targetPlane;
+    double targetOffsetMm = 0.0;
+    std::string targetFaceBrep;
     //! 厚み(mm)。ParameterId::ThickenThicknessMmと同じ値を持つ。
     //! 「平面まで」のときは使わない(相手との距離で厚みが決まる)。
     double thicknessMm = 0.0;

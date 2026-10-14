@@ -33,6 +33,10 @@ bool V2MainWindow::IsArrayCommand(std::string_view id)
 
 void V2MainWindow::RunArrayCommand(std::string_view id)
 {
+    const auto selected = viewport_->Selection();
+    EndArmedTools(); ClearPendingCommand();
+    SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport_->SetSelection(selected);
     if (id == "wire.array_linear" || id == "part.array_linear") {
         RunLinearArray();
         return;
@@ -45,7 +49,7 @@ void V2MainWindow::RunArrayCommand(std::string_view id)
 void V2MainWindow::RunLinearArray()
 {
     const auto selected = viewport_->Selection().entityIds;
-    if (selected.empty()) {
+    if (selected.empty() && arrayChooser_) {
         SetStatus(QStringLiteral("直線に並べる: 先に並べる線か部品を選んでください。"));
         return;
     }
@@ -71,7 +75,7 @@ void V2MainWindow::RunLinearArray()
 void V2MainWindow::RunCircularArray()
 {
     const auto selected = viewport_->Selection().entityIds;
-    if (selected.empty()) {
+    if (selected.empty() && arrayChooser_) {
         SetStatus(QStringLiteral("円に並べる: 先に並べる線か部品を選んでください。"));
         return;
     }

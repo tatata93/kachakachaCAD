@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2BooleanDock.h"
 #include "V2PanelFrame.h"
 
@@ -96,34 +97,23 @@ void V2BooleanDock::BuildRows(QVBoxLayout* layout)
     // 2. 入力。土台 / 相手。欄ごとに「ここへ選ぶ」と「解除」。
     // 3D の次のクリックがどの欄へ入るかは、押された形の「ここへ選ぶ」でいつも見えている。
     layout->addWidget(MakePanelSectionTitle(widget(), QStringLiteral("入力")));
-    const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
-                         QPushButton** clear, BooleanSlot slot) {
-        auto* line = new QHBoxLayout();
-        auto* label = new QLabel(name, widget());
-        if (slot == BooleanSlot::Target) targetLabel_ = label;
-        line->addWidget(label);
-        *value = new QLabel(widget());
-        (*value)->setWordWrap(true);
-        line->addWidget(*value, 1);
-        *arm = new QPushButton(QStringLiteral("ここへ選ぶ"), widget());
-        (*arm)->setCheckable(true);
-        QObject::connect(*arm, &QPushButton::clicked, this, [this, slot] {
-            if (!loading_ && activateHandler_) {
-                activateHandler_(slot);
-            }
+    const auto row = [this, layout](const QString& title, BooleanSlot slot) {
+        auto* role = new V2RoleInput(widget(), title); layout->addWidget(role);
+        QObject::connect(role->arm, &QPushButton::clicked, this, [this, slot] {
+            if (!loading_ && activateHandler_) activateHandler_(slot);
         });
-        line->addWidget(*arm);
-        *clear = new QPushButton(QStringLiteral("解除"), widget());
-        QObject::connect(*clear, &QPushButton::clicked, this, [this, slot] {
-            if (!loading_ && clearHandler_) {
-                clearHandler_(slot);
-            }
+        QObject::connect(role->clear, &QPushButton::clicked, this, [this, slot] {
+            if (!loading_ && clearHandler_) clearHandler_(slot);
         });
-        line->addWidget(*clear);
-        layout->addLayout(line);
+        return role;
     };
-    row(QStringLiteral("土台"), &targetValue_, &armTarget_, &clearTarget_, BooleanSlot::Target);
-    row(QStringLiteral("相手"), &toolValue_, &armTool_, &clearTool_, BooleanSlot::Tool);
+    targetRole_ = row(QStringLiteral("① 土台の立体"), BooleanSlot::Target);
+    toolRole_ = row(QStringLiteral("② 相手の立体"), BooleanSlot::Tool);
+    targetLabel_ = targetRole_->name; targetValue_ = targetRole_->value;
+    armTarget_ = targetRole_->arm; clearTarget_ = targetRole_->clear;
+    toolValue_ = toolRole_->value; armTool_ = toolRole_->arm; clearTool_ = toolRole_->clear;
+    targetRole_->removeItem = [this](int) { if (clearHandler_) clearHandler_(BooleanSlot::Target); };
+    toolRole_->removeItem = [this](int row) { if (removeTool) removeTool(row); };
 }
 
 void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& state,
@@ -142,6 +132,7 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
     const BooleanSlot next = kachakacha::v2::app::NextBooleanSlot(state);
     armTarget_->setChecked(next == BooleanSlot::Target);
     armTool_->setChecked(next == BooleanSlot::Tool);
+    targetRole_->SetItems(state.target.IsNil() ? QStringList{} : QStringList{targetNameJa});
     clearTarget_->setEnabled(!state.target.IsNil());
     clearTool_->setEnabled(!state.tools.empty());
     QString status;

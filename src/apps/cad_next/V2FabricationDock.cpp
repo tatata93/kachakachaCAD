@@ -278,6 +278,7 @@ void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
     const std::vector<QString>& candidateLinesJa, int selectedCandidate, bool canConfirm, bool active)
 {
     loading_ = true;
+    if(auto* role=parentWidget()->findChild<QWidget*>("approxSelectionRoles"))role->setVisible(active);
     sourcesJa_ = sourcesJa;
     if (sourcesValue_ != nullptr) {
         sourcesValue_->setText(sourcesJa.isEmpty()

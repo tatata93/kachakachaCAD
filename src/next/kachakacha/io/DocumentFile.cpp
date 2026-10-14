@@ -302,6 +302,8 @@ void WriteDimensionExtras(JsonObject& object, const ReferenceDimension& dim)
         definition["secondDistanceMm"] = JsonValue::Number(extrude->secondDistanceMm);
         definition["extentTarget"] = WriteOptionalId(extrude->extentTarget);
         definition["targetParameter"] = JsonValue::Number(extrude->targetParameter);
+        if (extrude->targetOffsetMm != 0.0) definition["targetOffsetMm"] = JsonValue::Number(extrude->targetOffsetMm);
+        if (!extrude->targetFaceBrep.empty()) definition["targetFaceBrep"] = JsonValue::String(extrude->targetFaceBrep);
         definition["booleanMode"] = JsonValue::Number(
             static_cast<double>(extrude->booleanMode));
         definition["targets"] = WriteIdArray(extrude->targets);
@@ -378,6 +380,8 @@ void WriteDimensionExtras(JsonObject& object, const ReferenceDimension& dim)
         }
     } else if (const auto* thicken =
                    std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition)) {
+        if (thicken->targetOffsetMm != 0.0) definition["targetOffsetMm"] = JsonValue::Number(thicken->targetOffsetMm);
+        if (!thicken->targetFaceBrep.empty()) definition["targetFaceBrep"] = JsonValue::String(thicken->targetFaceBrep);
         definition["surface"] = WriteId(thicken->surface);
         definition["thickness"] = WriteExpression(thicken->thickness);
         definition["placement"] = JsonValue::Number(static_cast<double>(thicken->placement));

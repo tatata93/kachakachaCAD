@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2NumericSpinBox.h"
 #include "V2EdgeFinishDock.h"
 #include "V2PanelFrame.h"
@@ -45,24 +46,21 @@ V2EdgeFinishDock::V2EdgeFinishDock(QWidget* parent)
     layout->setSpacing(4);
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
-    const auto row = [this, body, layout](const QString& name, QLabel** value, QPushButton** clear,
-                         std::function<void()>* handler) {
-        auto* line = new QHBoxLayout();
-        line->addWidget(new QLabel(name, body));
-        *value = new QLabel(body);
-        (*value)->setWordWrap(true);
-        line->addWidget(*value, 1);
-        *clear = new QPushButton(QStringLiteral("解除"), body);
-        QObject::connect(*clear, &QPushButton::clicked, this, [this, handler] {
-            if (!loading_ && *handler) {
-                (*handler)();
-            }
-        });
-        line->addWidget(*clear);
-        layout->addLayout(line);
-    };
-    row(QStringLiteral("部品"), &partValue_, &clearPart_, &clearPartHandler_);
-    row(QStringLiteral("辺"), &edgesValue_, &clearEdges_, &clearEdgesHandler_);
+    partRole_ = new V2RoleInput(body,QStringLiteral("① 部品"));
+    edgeRole_ = new V2RoleInput(body,QStringLiteral("② 丸める／面取りする辺"));
+    partValue_=partRole_->value;clearPart_=partRole_->clear;
+    edgesValue_=edgeRole_->value;clearEdges_=edgeRole_->clear;
+    layout->addWidget(partRole_);layout->addWidget(edgeRole_);
+    QObject::connect(clearPart_,&QPushButton::clicked,this,[this]{if(clearPartHandler_)clearPartHandler_();});
+    QObject::connect(clearEdges_,&QPushButton::clicked,this,[this]{if(clearEdgesHandler_)clearEdgesHandler_();});
+    QObject::connect(partRole_->arm,&QPushButton::clicked,this,[this]{
+        partRole_->arm->setChecked(true);edgeRole_->arm->setChecked(false);if(armRole)armRole(false);
+    });
+    QObject::connect(edgeRole_->arm,&QPushButton::clicked,this,[this]{
+        partRole_->arm->setChecked(false);edgeRole_->arm->setChecked(true);if(armRole)armRole(true);
+    });
+    partRole_->removeItem=[this](int){if(clearPartHandler_)clearPartHandler_();};
+    edgeRole_->removeItem=[this](int i){if(removeEdge)removeEdge(i);};
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
     auto* kindRow = new QHBoxLayout();
@@ -138,6 +136,10 @@ void V2EdgeFinishDock::ShowInput(const kachakacha::v2::app::EdgeFinishInputState
     edgesValue_->setText(state.edges.empty() ? QStringLiteral("(選んでいません)")
                                              : QStringLiteral("%1 本").arg(static_cast<int>(state.edges.size())));
     clearEdges_->setEnabled(!state.edges.empty());
+    partRole_->SetItems(state.part.IsNil()?QStringList{}:QStringList{partNameJa});
+    QStringList edges;
+    for(std::size_t i=0;i<state.edges.size();++i) edges.push_back(QStringLiteral("辺 %1").arg(i+1));
+    edgeRole_->SetItems(edges);
     sizeLabel_->setText(Text(kachakacha::v2::app::EdgeFinishSizeNameJa(state.kind)));
     size_->setValue(state.sizeMm);
     QString status;

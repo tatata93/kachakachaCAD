@@ -611,6 +611,8 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.secondDistanceMm = loader.NumberOr(definition, "secondDistanceMm", 0.0);
         made.extentTarget = loader.ParseOptionalId<EntityId>(definition.Find("extentTarget"), where + ".extentTarget");
         made.targetParameter = loader.NumberOr(definition, "targetParameter", -1.0);
+        made.targetOffsetMm = loader.NumberOr(definition, "targetOffsetMm", 0.0);
+        if (definition.Find("targetFaceBrep")) made.targetFaceBrep = loader.String(definition, "targetFaceBrep", where);
         made.targets = ReadIdArray(loader, definition, "targets", where);
         feature.definition = std::move(made);
         break;
@@ -684,6 +686,9 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
     }
     case FeatureType::ThickenSurface: {
         domain::ThickenSurfaceDefinition made;
+        made.targetOffsetMm = loader.NumberOr(definition, "targetOffsetMm", 0.0);
+        if (const auto* face = definition.Find("targetFaceBrep"); face && face->Type()==JsonType::String)
+            made.targetFaceBrep = face->AsString();
         if (const JsonValue* one = definition.Find("surface");
             one != nullptr && one->Type() == JsonType::String) {
             const auto parsed = EntityId::Parse(one->AsString());

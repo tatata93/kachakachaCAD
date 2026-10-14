@@ -7,6 +7,17 @@
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <gp_Pln.hxx>
+#include <Geom_BezierSurface.hxx>
+#include <TColgp_Array2OfPnt.hxx>
+#include <TopoDS_Wire.hxx>
+#endif
 
 #include <cmath>
 #include <string>
@@ -753,6 +764,109 @@ KACHA_V2_TEST(kernel_extrude, BezierDiscGetsACompletedGeometricExportCheck)
     RequireNear(checked.Value().volumeMm3,built.Value().totalVolumeMm3,1e-8,"Analysis preserves source volume");
     ClearShapeCache();
 }
+KACHA_V2_TEST(kernel_extrude, TerminalFaceOffsetsPreserveExactVolume)
+{
+    for (double offset : {-2.0, 0.0, 3.0}) {
+        ClearShapeCache();
+        auto request = BasicRequest();
+        request.customDirection = {0,0,1};
+        request.targetKind = ExtrudeTargetKind::Plane;
+        request.targetPlane.origin = {0,0,10};
+        request.targetPlane.normal = {0,0,1};
+        const auto made = kachakacha::v2::kernel::BuildExtrudeToFace(request, {}, {}, Tolerance(), offset);
+        Require(made.HasValue(), "Positive and negative stop offsets build");
+        RequireNear(made.Value().totalVolumeMm3, 800.0 * (10.0 + offset), 1e-5, "Exact cap position");
+    }
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, TerminalFaceHoleBetweenSamplesIsRejected)
+{
+    ClearShapeCache();
+    BRepBuilderAPI_MakeFace stop(gp_Pln(gp_Pnt(0,0,10), gp_Dir(0,0,1)), -1, 41, -1, 21);
+    BRepBuilderAPI_MakePolygon hole;
+    hole.Add(gp_Pnt(7.11,8.21,10)); hole.Add(gp_Pnt(7.11,8.23,10));
+    hole.Add(gp_Pnt(7.13,8.23,10)); hole.Add(gp_Pnt(7.13,8.21,10)); hole.Close();
+    stop.Add(hole.Wire());
+    auto request = BasicRequest(); request.customDirection = {0,0,1};
+    const auto made = kachakacha::v2::kernel::BuildExtrudeToFace(request, {},
+        kachakacha::v2::kernel::StoreShape(stop.Shape()), Tolerance());
+    Require(!made.HasValue(), "A tiny missing area must not become a filled cap");
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, TerminalFaceBehindSourceIsRejected)
+{
+    auto request = BasicRequest(); request.customDirection = {0,0,1};
+    request.targetKind = ExtrudeTargetKind::Plane;
+    request.targetPlane.origin = {0,0,10}; request.targetPlane.normal = {0,0,1};
+    const auto made = kachakacha::v2::kernel::BuildExtrudeToFace(request, {}, {}, Tolerance(), -11);
+    Require(!made.HasValue(), "A negative offset beyond the starting face cannot extrude forward");
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, ThickenStopPlaneDoesNotDependOnItsOrigin)
+{
+    using namespace kachakacha::v2::kernel;
+    for (const Vector3 origin : {Vector3{0,0,10}, Vector3{-100,0,-90}}) {
+        ClearShapeCache();
+        BRepBuilderAPI_MakeFace source(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),0,2,0,2);
+        const auto handle=StoreShape(source.Shape());
+        WorkPlaneFrame plane;plane.origin=origin;plane.normal={-1,0,1};
+        const auto made=ThickenSurfaceToFace(handle,{},plane,-0.5,Tolerance());
+        Require(made.HasValue(),"Equivalent tilted terminal planes reach the same side");
+        RequireNear(made.Value().volumeMm3,42.0,1e-5,"Volume under z=x+9.5 for 2x2 base");
+    }
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, ThickenFiniteStopWithOffsetAndReverse)
+{
+    using namespace kachakacha::v2::kernel;
+    for(double sign:{-1.0,1.0}) for(double offset:{-0.125,0.0,0.25}) {
+        ClearShapeCache();
+        BRepBuilderAPI_MakeFace source(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),0,2,0,2);
+        BRepBuilderAPI_MakeFace stop(gp_Pln(gp_Pnt(0,0,sign*3),gp_Dir(0,0,1)),-1,3,-1,3);
+        const auto made=ThickenSurfaceToFace(StoreShape(source.Shape()),StoreShape(stop.Shape()),{},offset,Tolerance());
+        Require(made.HasValue(),"Finite planar surfaces support both directions and fractional offsets");
+        RequireNear(made.Value().volumeMm3,4*(3+offset),1e-5,"Normal direction offset reaches exact cap");
+        const auto checked=CheckSolidForExport(made.Value().handle,Tolerance().modelLinearMm);
+        Require(checked.HasValue()&&checked.Value().Ok(),"Result is a valid closed manufacturing solid");
+    }
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, FiniteTiltedStopDirectionUsesIntersection)
+{
+    using namespace kachakacha::v2::kernel;
+    ClearShapeCache();
+    BRepBuilderAPI_MakeFace source(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),-0.5,0.5,-0.5,0.5);
+    BRepBuilderAPI_MakePolygon boundary;
+    boundary.Add(gp_Pnt(-100,-1,-90));boundary.Add(gp_Pnt(1,-1,11));
+    boundary.Add(gp_Pnt(1,1,11));boundary.Add(gp_Pnt(-100,1,-90));boundary.Close();
+    BRepBuilderAPI_MakeFace stop(boundary.Wire());
+    const auto made=ThickenSurfaceToFace(StoreShape(source.Shape()),StoreShape(stop.Shape()),{},0,Tolerance());
+    Require(made.HasValue(),"Off-center finite tilted face chooses positive intersection, not centroid direction");
+    RequireNear(made.Value().volumeMm3,10,1e-5,"Finite tilted stop covers unit square at mean height 10");
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, CurvedStopExtremaBetweenSourceMeshSamples)
+{
+    using namespace kachakacha::v2::kernel;
+    ClearShapeCache();
+    BRepBuilderAPI_MakeFace source(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),0,1,0,1);
+    TColgp_Array2OfPnt poles(1,9,1,2);
+    for(int i=1;i<=9;++i)for(int j=1;j<=2;++j)poles.SetValue(i,j,gp_Pnt((i-1)/8.0,j-1,1+(i==5?500:0)));
+    Handle(Geom_BezierSurface) surface=new Geom_BezierSurface(poles);
+    BRepBuilderAPI_MakeFace stop(surface,0,1,0,1,1e-8);
+    ExtrudeRequest request;request.customDirection={0,0,1};
+    const auto made=BuildExtrudeToFace(request,StoreShape(source.Shape()),StoreShape(stop.Shape()),Tolerance());
+    Require(made.HasValue(),"A high stop between mesh ray samples builds the complete curved cap");
+    RequireNear(made.Value().totalVolumeMm3,1+500.0/9.0,0.001,"Exact integral of degree-eight Bernstein cap, no artificial flat truncation");
+    ClearShapeCache();
+}
+
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_extrude_tests")

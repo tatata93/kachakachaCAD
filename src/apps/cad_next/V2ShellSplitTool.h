@@ -77,6 +77,7 @@ private:
     V2MainWindow& window_;
     V2ShellSplitDock* dock_ = nullptr;
     bool active_ = false;
+    bool pickingFaces_ = true;
     bool mirroring_ = false;
     kachakacha::v2::app::ShellSplitInputState input_;
     kachakacha::v2::app::ShellSplitOutcome outcome_;

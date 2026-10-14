@@ -227,7 +227,7 @@ SurfaceEditInputState WithSurfaceEditOperation(const SurfaceEditInputState& stat
     // 縁 ↔ 面。入れたものは消さない(使えるところへ移す)。
     std::vector<base::EntityId> surfaces = state.surfaces;
     for (const SurfaceEdgePick& pick : state.edges) {
-        if (!Contains(surfaces, pick.surface)) {
+        if (!pick.surface.IsNil() && !Contains(surfaces, pick.surface)) {
             surfaces.push_back(pick.surface);
         }
     }

@@ -9,6 +9,7 @@ class QComboBox;
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
+class V2RoleInput;
 class V2CurvedEmbossTool final : public QWidget {
 public:
     static V2CurvedEmbossTool* Open(V2MainWindow& window);
@@ -25,6 +26,7 @@ protected:
 private:
     void BuildUi();
     void BuildSettings(QVBoxLayout* layout);
+    void RefreshRoles();
     void TakeSelection();
     void Invalidate();
     bool CollectBoundary(std::vector<kachakacha::v2::geometry::CurveSegment>& boundary);
@@ -36,6 +38,7 @@ private:
     std::optional<kachakacha::v2::kernel::CurvedEmbossResult> built_;
     std::uint64_t supportRevision_ = 0;
     int role_ = 0;
+    V2RoleInput *supportRole_ = nullptr, *wireRole_ = nullptr;
     QDoubleSpinBox *height_, *draft_, *tilt_, *heading_, *tolerance_;
     QPushButton *draftEnabled_, *tiltEnabled_, *confirm_;
     QComboBox *output_, *operation_;

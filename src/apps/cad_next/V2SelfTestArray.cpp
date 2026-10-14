@@ -14,6 +14,8 @@
 #include "kachakacha/geometry/Vector3.h"
 
 #include <QPointF>
+#include <QPushButton>
+#include <QWidget>
 #include <QString>
 
 #include <string>
@@ -111,11 +113,50 @@ void DrawOneLine(V2MainWindow& window)
         CountOfKind(window, EntityKind::Wire) == before);
 }
 
+bool CaseArrayToolFirstRole(V2MainWindow& window)
+{
+    window.RunCommand("file.new");window.SetArrayChooser(nullptr);DrawOneLine(window);
+    window.Viewport().SetSelection({});window.RunCommand("wire.array_linear");
+    if(!Explain("対象なしで配列ツールを開ける",window.ShelfShown(Shelf::Array)))return false;
+    auto* role=window.findChild<QWidget*>("arraySelectionRoles");
+    auto* pick=role?role->findChild<QPushButton*>("selectionRolePick0"):nullptr;
+    if(!Explain("配列の対象選択ボタンがある",pick&&pick->isVisible()))return false;
+    pick->click();
+    if(!Explain("対象だけをクリックで追加できる",ClickOnAnyCurve(window,Qt::NoModifier)
+        &&window.Viewport().Selection().entityIds.size()==1))return false;
+    window.ArrayDock().SetCountTyped(2);if(!window.ArrayDock().ClickConfirm())return false;
+    return Explain("対象を後から選んで配列を確定できる",CountOfKind(window,EntityKind::Wire)==2);
+}
+
+bool CaseCornerRolesRetainOther(V2MainWindow& window)
+{
+    window.RunCommand("file.new");DrawOneLine(window);DrawOneLine(window);
+    std::vector<base::EntityId> ids;
+    for(const auto& entity:window.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==EntityKind::Wire)ids.push_back(entity.id);
+    if(ids.size()!=2)return false;
+    window.Viewport().SetSelection({});window.RunCommand("wire.fillet");
+    auto* role=window.findChild<QWidget*>("cornerSelectionRoles");if(!role)return false;
+    auto* a=role->findChild<QPushButton*>("selectionRolePick0");
+    auto* b=role->findChild<QPushButton*>("selectionRolePick1");
+    auto* clear=role->findChild<QPushButton*>("selectionRoleClear0");
+    if(!a||!b||!clear||!a->isVisible())return false;
+    b->click();app::SelectionSet selected;selected.entityIds={ids[1]};window.Viewport().SetSelection(selected);
+    a->click();selected.entityIds={ids[0]};window.Viewport().SetSelection(selected);
+    if(!Explain("Bから選んでもA/Bの役割順を維持",window.Viewport().Selection().entityIds==ids))return false;
+    clear->click();
+    if(!Explain("Aの解除でBを保持",window.Viewport().Selection().entityIds==std::vector<base::EntityId>{ids[1]}))return false;
+    a->click();selected.entityIds={ids[0]};window.Viewport().SetSelection(selected);
+    return Explain("Aを選び直してもBを保持",window.Viewport().Selection().entityIds==ids);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ArrayCases()
 {
     return {
+        {"HP-AR-03 tool first explicit source role",CaseArrayToolFirstRole},
+        {"HP-CA-ROLE reverse order and clear retain other",CaseCornerRolesRetainOther},
         {"HP-AR-01 配列の棚で個数を決めて確定すると並び、1回の取り消しで戻る",
             CaseLinearArrayShelfPlacesCopies},
         {"HP-AR-02 配列の棚は Esc で何も作らずに引っ込む", CaseArrayShelfEscCancels},

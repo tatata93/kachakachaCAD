@@ -14,6 +14,7 @@
 
 #include "V2ExtrudeTargetChoice.h"
 #include "V2SolidOutputSelector.h"
+#include "V2RoleInput.h"
 
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/base/Ids.h"
@@ -35,6 +36,13 @@ class QVBoxLayout;
 class V2ThickenDock final : public QDockWidget {
 public:
     explicit V2ThickenDock(QWidget* parent);
+    std::function<void()> armSurface, armStop;
+    std::function<void(int)> removeSurface;
+    std::function<void(double)> changeOffset;
+    void SetSurfaceItems(const QStringList& names) { surfaceRole_->SetItems(names); }
+    void ShowStop(const QString& name) { stopRole_->value->setText(name); }
+    void SetPickingStop(bool active) { stopRole_->arm->setChecked(active); surfaceRole_->arm->setChecked(!active); }
+
 
     //! いまの入力を映す。欄・カード・厚み・状態を一度に書き直す。
     void ShowInput(const kachakacha::v2::app::ThickenInputState& state,
@@ -85,6 +93,9 @@ private:
     void BuildPlacementCards(QVBoxLayout* layout);
     void BuildCorrectionCards(QVBoxLayout* layout);
 
+    V2RoleInput* surfaceRole_ = nullptr;
+    V2RoleInput* stopRole_ = nullptr;
+    QDoubleSpinBox* offset_ = nullptr;
     QLabel* surfaceValue_ = nullptr;
     QPushButton* reselect_ = nullptr;
     QPushButton* outsideCard_ = nullptr;

@@ -18,6 +18,8 @@
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
+#include "kachakacha/modeling/WorkPlane.h"
+#include <optional>
 
 namespace kachakacha::v2::kernel {
 
@@ -63,5 +65,10 @@ struct ThickenedSolid {
 [[nodiscard]] base::Result<ThickenedSolid> ThickenSurfaceToPlane(
     modeling::KernelShapeHandle sourceShape, const geometry::Vector3& planeOrigin,
     const geometry::Vector3& planeNormal, const geometry::GeometryTolerance& tolerance);
+
+[[nodiscard]] base::Result<ThickenedSolid> ThickenSurfaceToFace(
+    modeling::KernelShapeHandle sourceShape, modeling::KernelShapeHandle targetShape,
+    const std::optional<modeling::WorkPlaneFrame>& targetPlane, double offsetMm,
+    const geometry::GeometryTolerance& tolerance);
 
 } // namespace kachakacha::v2::kernel

@@ -3,7 +3,9 @@
 #include "kachakacha/document/Dimension.h"
 #include "kachakacha/app/Selection.h"
 class V2MainWindow;
+class V2RoleInput;
 class QComboBox;
+class QVBoxLayout;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
@@ -22,6 +24,10 @@ protected:
     void closeEvent(QCloseEvent*) override;
 private:
     void BuildUi();
+    void BuildInputRoles(QVBoxLayout* layout);
+    void RefreshInputRoles();
+    V2RoleInput* inputRoles_[2]{};
+    int activeInput_=-1;
     void TakeSelection();
     void RefreshList();
     void UpdateKind();

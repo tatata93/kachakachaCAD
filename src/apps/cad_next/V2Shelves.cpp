@@ -4,6 +4,8 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2WorkPlaneRoleInputs.h"
+#include "V2SelectionRoleInputs.h"
 #include "V2ThickenDock.h"
 #include "V2ThickenPreviewState.h"
 #include "V2SolidOutputPreview.h"
@@ -47,6 +49,7 @@ void V2MainWindow::BuildEditingShelves()
     editDock_->hide();
     // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
     cornerDock_ = new V2CornerDock(this);
+    InstallSelectionRoleInputs(*this,*cornerDock_,true);
     cornerDock_->SetRunHandler([this](const char* command) {
         if (std::string_view(command) == "wire.fillet" || std::string_view(command) == "wire.chamfer") {
             if (!HandleCornerToolKey(Qt::Key_Return)) RunWireEditCommand(command);
@@ -56,6 +59,7 @@ void V2MainWindow::BuildEditingShelves()
     cornerDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
     fabricationDock_ = new V2FabricationDock(this);
+    InstallSelectionRoleInputs(*this,*fabricationDock_,3);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
     fabricationDock_->SetChoiceChangedHandler([this] {
         if (!AdoptFabricationChoice()) { return; }
@@ -104,6 +108,7 @@ void V2MainWindow::BuildEditingShelves()
 
     // 配列の棚(指示書 D-23)。wire.array_linear/circular が構えている間だけ出す。
     arrayDock_ = new V2ArrayDock(this);
+    InstallSelectionRoleInputs(*this,*arrayDock_,false);
     arrayDock_->SetActionHandlers([this] { ConfirmArray(); },
         [this] {
             HandleToolKey(Qt::Key_Escape, nullptr);
@@ -131,9 +136,11 @@ void V2MainWindow::BuildRightShelves()
     workPlaneDock_->SetCancelHandler([this] { HandleWorkPlaneToolKey(Qt::Key_Escape, nullptr); });
     // 欄が変わるたびに、作る前の平面を3Dへ下見として出す(D-24)。
     workPlaneDock_->SetChangedHandler([this] { RefreshWorkPlanePreview(); });
+    InstallWorkPlaneRoleInputs(*this,*workPlaneDock_,[this] { RefreshWorkPlaneDock(); RefreshWorkPlanePreview(); });
 
     // 作図の棚(V1 の「作図」タブ)。円弧の作り方・補助線・指定点・数値で線を作る。
     drawingDock_ = new V2DrawingDock(this);
+    InstallSelectionRoleInputs(*this,*drawingDock_,2);
     drawingDock_->SetSettingsHandler(
         [this](const kachakacha::v2::modeling::ToolSettings& settings) {
             ApplyToolSettings(settings);

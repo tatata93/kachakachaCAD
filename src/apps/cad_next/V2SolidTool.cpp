@@ -1,3 +1,4 @@
+#include <QStringList>
 #include "V2Calculation.h"
 //! 「立体を作る」の道具。V2SolidTool.h の頭の注記を見よ。
 
@@ -107,6 +108,16 @@ V2SolidTool::V2SolidTool(V2MainWindow& window)
             + std::string(kachakacha::v2::app::SolidSlotNameJa(slot, input_.method))
             + "」へ入ります。"));
     });
+    dock_->removeItem = [this](SolidSlot slot, int index) {
+        std::vector<EntityId> entries;
+        if (slot == SolidSlot::Profiles) entries = input_.profiles;
+        else if (slot == SolidSlot::Path) entries = input_.path;
+        else if (slot == SolidSlot::Axis && !input_.axis.IsNil()) entries = {input_.axis};
+        else if (slot == SolidSlot::Target && !input_.target.IsNil()) entries = {input_.target};
+        if (index < 0 || index >= static_cast<int>(entries.size())) return;
+        input_ = kachakacha::v2::app::WithoutSolidEntries(input_, {entries[index]});
+        MirrorToSelection(); Refresh();
+    };
     dock_->SetClearHandler([this](SolidSlot slot) {
         input_ = kachakacha::v2::app::WithSolidSlotCleared(input_, slot);
         MirrorToSelection();
@@ -480,6 +491,13 @@ void V2SolidTool::RefreshDock()
                                                                     : NameOf(input_.axis);
     dock_->ShowInput(input_, Text(profiles), Text(second), Text(NameOf(input_.target)), lines,
         built_.has_value());
+    const auto names = [this](const std::vector<EntityId>& ids) {
+        QStringList list; for (const auto& id : ids) if (!id.IsNil()) list.push_back(Text(NameOf(id))); return list;
+    };
+    dock_->SetRoleItems(SolidSlot::Profiles, names(input_.profiles));
+    dock_->SetRoleItems(SolidSlot::Axis, names({input_.axis}));
+    dock_->SetRoleItems(SolidSlot::Path, names(input_.path));
+    dock_->SetRoleItems(SolidSlot::Target, names({input_.target}));
     window_.ShowToolFooter(active_
             ? Text(kachakacha::v2::app::SolidFooterLine(input_, profiles, second, outcome_,
                   previewShown))

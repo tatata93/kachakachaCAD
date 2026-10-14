@@ -6,9 +6,12 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
 #include <QString>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeStopChoices() const
 {
@@ -85,10 +88,10 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
     request.customDirection = choice.customDirection;
     request.reversed = choice.reversed;
     modeling::KernelShapeHandle target;
-    if (choice.targetEntityId.has_value()) {
+    if (choice.targetEntityId.has_value() && choice.targetFaceBrep.empty()) {
         const auto plane = ExtrudeStopPlane(*choice.targetEntityId,
             choice.customDirection * (choice.reversed ? -1.0 : 1.0), choice.targetParameter);
-        if (plane.has_value()) {
+        if (plane.has_value() && guideShapes_.find(choice.targetEntityId->ToString()) == guideShapes_.end()) {
             request.targetKind = modeling::ExtrudeTargetKind::Plane;
             request.targetPlane = *plane;
         } else {
@@ -101,9 +104,16 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
             if (found != guideShapes_.end()) target = found->second;
         }
     }
-    return V2Calculation::Call(nullptr, "選んだ終端までの押し出しを計算しています…",
+    if (!choice.targetFaceBrep.empty()) {
+        const auto restored = kernel::RestoreOutputShape(choice.targetFaceBrep);
+        if (!restored.HasValue()) return base::Result<kernel::ExtrudeBuildResult>::Failure(restored.Diagnostics());
+        target = restored.Value();
+    }
+    const auto result = V2Calculation::Call(nullptr, "選んだ終端までの押し出しを計算しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrudeToFace(values...); }, request, source, target,
-        session_->GetDocument().Snapshot().settings.tolerance);
+        session_->GetDocument().Snapshot().settings.tolerance, choice.targetOffsetMm);
+    if (!choice.targetFaceBrep.empty()) kernel::ReleaseShape(target);
+    return result;
 }
 
 bool V2MainWindow::HandleTargetExtrude(bool confirm)
@@ -120,6 +130,8 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
     choice.extent = modeling::ExtrudeExtentMode::ToTarget;
     choice.targetEntityId = extrudeDock_->TargetEntityId();
     choice.targetParameter = extrudeDock_->TargetParameter();
+    choice.targetOffsetMm = extrudeDock_->TargetOffsetMm();
+    choice.targetFaceBrep = extrudeDock_->TargetFaceBrep();
     choice.booleanMode = extrudeDock_->BooleanMode();
     choice.hasSelectedPart = !plan.targetSolid.IsNil();
     const auto output = extrudeDock_->Outputs();
@@ -137,8 +149,18 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         refuse(QStringLiteral("面・線・点までの押し出しは出力を「ソリッド / 面」にしてください。独立ワイヤーは未対応です。"));
         return true;
     }
+    auto temporary = std::shared_ptr<std::vector<modeling::KernelShapeHandle>>(
+        new std::vector<modeling::KernelShapeHandle>, [this](auto* handles) {
+            for(const auto& handle:*handles) {
+                const bool retained=std::any_of(partShapes_.begin(),partShapes_.end(),
+                    [&](const auto& entry){return entry.second.value==handle.value;});
+                if(!retained)kernel::ReleaseShape(handle);
+            }
+            delete handles;
+        });
     auto built = BuildToTarget(choice, extrudeSnapshot_->profiles);
     if (!built.HasValue()) { refuse(QString::fromStdString(built.FirstSummaryJa())); return true; }
+    for(const auto& part:built.Value().parts)temporary->push_back(part.handle);
     if (choice.booleanMode != modeling::ExtrudeBooleanMode::NewPart) {
         const auto target = partShapes_.find(plan.targetSolid.ToString());
         if (target == partShapes_.end() || built.Value().parts.size() != 1) {
@@ -150,6 +172,7 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         [](const auto&... values) { return kachakacha::v2::kernel::BuildBoolean(values...); }, operation, target->second, built.Value().parts[0].handle,
             session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
         if (!combined.HasValue()) { refuse(QString::fromStdString(combined.FirstSummaryJa())); return true; }
+        temporary->push_back(combined.Value().handle);
         auto updated = built.Value();
         updated.parts[0].handle = combined.Value().handle;
         updated.parts[0].volumeMm3 = combined.Value().volumeMm3;
@@ -172,4 +195,38 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         CommitExtrude(choice, plan, analysis, built.Value());
     }
     return true;
+}
+
+void V2MainWindow::BeginExtrudeStopPick()
+{
+    using namespace kachakacha::v2;
+    if (viewport_->ReferencePickPending()) viewport_->CancelReferencePick();
+    extrudeDock_->SetStopPicking(true);
+    viewport_->BeginElementPick([this](const app::PickCandidate& pick) {
+        const auto* entity = session_->GetDocument().FindEntity(pick.entityId);
+        if (!entity) return false;
+        if (entity->kind == domain::EntityKind::Part)
+            return pick.kind == app::SelectionElementKind::Face && pick.pickedFaceIndex.has_value();
+        return entity->kind == domain::EntityKind::GuideSurface || WorkPlaneFrameOf(pick.entityId).has_value();
+    }, [this](std::optional<app::PickCandidate> pick) {
+        extrudeDock_->SetStopPicking(false);
+        if (!pick) { SetStatus(QStringLiteral("終端の選択をやめました。元の入力は保持しています。")); return; }
+        const auto* entity = session_->GetDocument().FindEntity(pick->entityId);
+        if (!entity) return;
+        ExtrudeTargetChoice choice{pick->entityId, QString::fromStdString(entity->displayName)};
+        if (entity->kind == domain::EntityKind::Part) {
+            const auto shape = partShapes_.find(pick->entityId.ToString());
+            if (shape == partShapes_.end() || !pick->pickedFaceIndex) return;
+            const auto face = kernel::OutputFace(shape->second, *pick->pickedFaceIndex);
+            if (!face.HasValue()) { ReportDiagnostics(face.Diagnostics()); return; }
+            const auto brep = kernel::CaptureOutputShape(face.Value());
+            kernel::ReleaseShape(face.Value());
+            if (!brep.HasValue()) { ReportDiagnostics(brep.Diagnostics()); return; }
+            choice.faceBrep = brep.Value();
+            choice.labelJa += QStringLiteral("：フェイス%1（選択時の形を保持）").arg(*pick->pickedFaceIndex + 1);
+        }
+        extrudeDock_->PickStop(choice);
+        SetStatus(QStringLiteral("終端を設定しました。＋は奥、−は手前へ終端をずらします。"));
+    });
+    SetStatus(QStringLiteral("終端の面を選択中：3Dのフェイス／面、または左ペインの面／作業平面を選んでください。"));
 }

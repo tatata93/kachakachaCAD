@@ -1,3 +1,4 @@
+#include "V2ExtrudeReferenceState.h"
 #include "V2Calculation.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
@@ -95,6 +96,8 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     choice.reversed = false;
     choice.targetEntityId = extrudeDock_->TargetEntityId();
     choice.targetParameter = extrudeDock_->TargetParameter();
+    choice.targetOffsetMm = extrudeDock_->TargetOffsetMm();
+    choice.targetFaceBrep = extrudeDock_->TargetFaceBrep();
     choice.extent = extrudeDock_->ExtentMode();
     const auto built = SurfaceExtrudePreview(choice, found->second, offsets.first, offsets.second);
     if (!built.HasValue()) {
@@ -125,11 +128,8 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         definition.extentMode = static_cast<int>(extrudeDock_->ExtentMode());
         definition.secondDistanceMm = extrudeDock_->SecondDistanceMm();
         auto inputs = plan.profiles;
-        if (extrudeDock_->ExtentMode() == ExtrudeExtentMode::ToTarget) {
-            definition.extentTarget = choice.targetEntityId;
-            definition.targetParameter = choice.targetParameter;
-            if (choice.targetEntityId.has_value()) inputs.push_back(*choice.targetEntityId);
-        }
+        StoreExtrudeReference(definition, choice);
+        if (definition.extentTarget) inputs.push_back(*definition.extentTarget);
         if (AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude, definition,
                 part.handle, {}, "面の押し出し", inputs).IsNil()) return true;
     }
@@ -151,8 +151,7 @@ bool V2MainWindow::RebuildSurfaceExtrude(const ExtrudeDefinition& definition,
     choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
     choice.customDirection = definition.direction;
     choice.extent = static_cast<ExtrudeExtentMode>(definition.extentMode);
-    choice.targetEntityId = definition.extentTarget;
-    choice.targetParameter = definition.targetParameter;
+    RestoreExtrudeReference(choice, definition);
     const auto result = choice.extent == ExtrudeExtentMode::ToTarget ? BuildToTarget(choice, {}, found->second)
         : V2Calculation::Call(nullptr, "面の押し出しを計算しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildSurfaceExtrude(values...); }, found->second,

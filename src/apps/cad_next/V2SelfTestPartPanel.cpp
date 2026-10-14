@@ -17,6 +17,8 @@
 
 #include <QString>
 #include <QComboBox>
+#include <QPushButton>
+#include <QDoubleSpinBox>
 #include <QPointF>
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -268,7 +270,7 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
 }
 
 
-[[nodiscard]] bool CaseExtrudeStopsAtCurvedFace(V2MainWindow& window)
+[[nodiscard]] bool CheckExtrudeStopsAtCurvedFace(V2MainWindow& window, double offset, bool direct)
 {
     using namespace kachakacha::v2;
     if (!MakeCurvedGuide(window)) return false;
@@ -288,8 +290,31 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
     (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);
     auto* target = window.findChild<QComboBox*>(QStringLiteral("extrudeStopReference"));
     if (target == nullptr) return false;
-    for (int i = 0; i < target->count(); ++i) {
-        if (target->itemText(i).contains(QStringLiteral("（面まで）"))) { target->setCurrentIndex(i); break; }
+    if(direct) {
+        auto* button=window.findChild<QPushButton*>(QStringLiteral("extrudePickStop"));
+        if(!button || !button->isVisible())return false;
+        const auto before=window.Viewport().Selection().entityIds;
+        button->click();
+        std::optional<QPointF> stopPoint;
+        kachakacha::v2::base::EntityId stopId;
+        for(const auto& shape:window.Viewport().ShapeViews()) {
+            if(!shape.surface || shape.mesh.triangles.empty())continue;
+            const auto& t=shape.mesh.triangles.front();
+            const auto screen=window.Viewport().Mapping().Project((t.points[0]+t.points[1]+t.points[2])*(1.0/3.0));
+            if(screen){stopPoint=QPointF(screen->x,screen->y);stopId=shape.entityId;break;}
+        }
+        if(!stopPoint)return false;
+        window.Viewport().SelectAt(*stopPoint,Qt::NoModifier);
+        if(!Explain("3Dで終端面を選択できる",dock.TargetEntityId()==stopId))return false;
+        if(!Explain("終端の選択が押す輪郭を置き換えない",window.Viewport().Selection().entityIds==before))return false;
+        auto* amount=window.findChild<QDoubleSpinBox*>(QStringLiteral("extrudeStopOffset"));
+        if(!amount || !amount->isVisible())return false;
+        amount->setValue(offset);
+        if(!Explain("終端オフセットが作る形へ届く",window.ExtrudeChoice().targetOffsetMm==offset))return false;
+    } else {
+        for (int i = 0; i < target->count(); ++i) {
+            if (target->itemText(i).contains(QStringLiteral("（面まで）"))) { target->setCurrentIndex(i); break; }
+        }
     }
     if (!Explain("曲面で止まる実形状の下見", !window.Viewport().ExtrudePreviewFaces().empty())) return false;
     dock.PressConfirm();
@@ -297,11 +322,48 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
     if (!window.SaveAndReopen(QStringLiteral("extrude-curved-stop.kcd2"))) return false;
     for (const auto& shape : window.Viewport().ShapeViews()) {
         if (!shape.surface) return Explain("再生成した終端に曲がりが残る", shape.mesh.closed
-            && std::abs(shape.mesh.minimum.z + 5.0) < 1.0e-4 && shape.mesh.maximum.z > 3.5);
+            && std::abs(shape.mesh.minimum.z + 5.0) < 1.0e-4 && shape.mesh.maximum.z > 3.5+offset && shape.mesh.maximum.z < 4.0+offset);
     }
     return false;
 }
 
+bool CaseSolidFaceTerminalOffset(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    if(!ArmExtrude(window))return false;
+    auto& dock=window.ExtrudeDock();
+    (void)dock.PickExtent(ExtrudeExtentMode::Distance);
+    (void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
+    dock.SetDistanceMm(20);window.RefreshExtrudeFromDock();dock.PressConfirm();
+    if(!Explain("終端に使う立体を作れる",CountOfKind(window,domain::EntityKind::Part)==1))return false;
+    std::vector<geometry::CurveSegment> curves;
+    const std::vector<geometry::Vector3> points{{-5,-5,-5},{5,-5,-5},{5,5,-5},{-5,5,-5}};
+    for(std::size_t i=0;i<points.size();++i)curves.push_back(geometry::CurveSegment::MakeLine(points[i],points[(i+1)%points.size()]).Value());
+    const auto added=window.Session().AddWire(curves,false,"フェイス終端の輪郭");
+    if(!added.committed||!RefreshFixture(window))return false;
+    app::SelectionSet selected;selected.entityIds=added.createdEntityIds;window.Viewport().SetSelection(selected);
+    window.RunCommand("part.extrude");(void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
+    (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);
+    auto* pick=window.findChild<QPushButton*>("extrudePickStop");if(!pick)return false;pick->click();
+    const auto point=window.Viewport().Mapping().Project({15,0,20});if(!point)return false;
+    window.Viewport().SelectAt(QPointF(point->x,point->y),Qt::NoModifier);
+    if(!Explain("3Dクリックで立体のフェイスを終端に保持",!dock.TargetFaceBrep().empty()
+        &&window.Viewport().Selection().entityIds==selected.entityIds))return false;
+    auto* offset=window.findChild<QDoubleSpinBox*>("extrudeStopOffset");if(!offset)return false;offset->setValue(-0.5);
+    if(!Explain("フェイスの手前0.5mmの下見",!window.Viewport().ExtrudePreviewFaces().empty()))return false;
+    dock.PressConfirm();
+    if(!Explain("フェイスまでの立体を確定",CountOfKind(window,domain::EntityKind::Part)==2))return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=1)return false;
+    window.RunCommand("edit.redo");if(CountOfKind(window,domain::EntityKind::Part)!=2)return false;
+    if(!window.SaveAndReopen(QStringLiteral("extrude-solid-face-offset.kcd2")))return false;
+    for(const auto& shape:window.Viewport().ShapeViews())if(!shape.surface&&shape.mesh.minimum.z < -4.0)
+        return Explain("保存後も元面-5から終端19.5までの閉じた立体",shape.mesh.closed
+            &&std::abs(shape.mesh.minimum.z+5)<1e-5&&std::abs(shape.mesh.maximum.z-19.5)<1e-5);
+    return false;
+}
+
+bool CaseExtrudeStopsAtCurvedFace(V2MainWindow& window) {return CheckExtrudeStopsAtCurvedFace(window,0,false);}
+bool CaseExtrudeDirectStopOffset(V2MainWindow& window) {return CheckExtrudeStopsAtCurvedFace(window,-0.5,true);}
 } // namespace
 
 static bool CaseEscapeRetainsExtrudeSettings(V2MainWindow& window)
@@ -331,6 +393,8 @@ static bool CaseEscapeRetainsExtrudeSettings(V2MainWindow& window)
 std::vector<SelfTestCase> PartPanelCases()
 {
     return {
+        {"HP-PA-09 solid face terminal offset undo save",CaseSolidFaceTerminalOffset},
+        {"HP-PA-08 direct surface stop and negative offset survive save", CaseExtrudeDirectStopOffset},
         {"HP-PA-07 Esc retains extrude settings and next profile can commit", CaseEscapeRetainsExtrudeSettings},
         {"HP-PA-06 任意曲面を終端として押し出し、保存・再生成", CaseExtrudeStopsAtCurvedFace},
         {"HP-PA-03 ツール先行で輪郭を選び、非対称と反転を保存後も維持", CaseExtrudeToolFirstAfterDrawing},

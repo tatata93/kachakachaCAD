@@ -8,5 +8,6 @@ namespace kachakacha::v2::kernel {
     double startMm, double endMm, const geometry::GeometryTolerance& tolerance);
 [[nodiscard]] base::Result<ExtrudeBuildResult> BuildExtrudeToFace(
     const modeling::ExtrudeRequest& request, modeling::KernelShapeHandle source,
-    modeling::KernelShapeHandle target, const geometry::GeometryTolerance& tolerance);
+    modeling::KernelShapeHandle target, const geometry::GeometryTolerance& tolerance,
+    double targetOffsetMm = 0.0);
 } // namespace kachakacha::v2::kernel

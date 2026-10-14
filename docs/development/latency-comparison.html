@@ -43,7 +43,7 @@ docs/development/（手順と比較資料）</pre></td></tr></table>
 <tr><td>V2MainWindowTypes.h等の旧ヘッダー</td><td>他の型に必要なので存続。削除したのは厚み状態の旧定義と不要なinclude辺。状態定義は専用ファイルへ移動</td></tr>
 <tr><td>古いworktree・配布版・バックアップ・増分ビルド</td><td>削除しない。所有者と用途を保全</td></tr>
 <tr><td>実際に削除したソースファイル</td><td>なし。容量を理由とする削除や機能・試験の削除もなし</td></tr></table>
-<h2>7. 検証結果と限界</h2><p>全体検証は実施前。測定と重点検証の結果のみ。</p><p>基盤の負の経路を7単体試験で検査。実アプリでも空・未知・重複選択を拒否。整合チェック9件が成功。ユーザー実モデルの厚み操作・値変更・再利用が成功し、原本SHA256不変。これらを全体検証と区別する。</p>
+<h2>7. 検証結果と限界</h2><p>全体状態: passed。CTest 193件、UI [461, 461]件。開始 2026-10-14T07:56:27.747175+00:00、終了 2026-10-14T08:16:03.880865+00:00。検証ソース 49e9684c2e413e441f8d1324a64619ed708901bc。</p><p>基盤の負の経路を8単体試験で検査。実アプリでも空・未知・重複選択を拒否。整合チェック9件が成功。ユーザー実モデルの厚み操作・値変更・再利用が成功し、原本SHA256不変。これらを全体検証と区別する。</p>
 <p>全体GUI試験2回は残る。主ウィンドウの共通ヘッダーの波及も残る。代表的小修正の依頼開始から検証済み配布版までの30分達成は未評価で、次の通常開発で測る。今回の整備時間やコメントだけの重点検証試行を、実際の機能修正の待ち時間と呼ばない。</p>
 <h2>8. 今後のコマンド</h2><pre>python scripts/verify.py plan
 python scripts/verify.py preflight
@@ -52,4 +52,11 @@ python scripts/verify.py full
 python scripts/verify.py publish --evidence out/verification/&lt;実行ID&gt;/result.json
 python scripts/run-verified.py out/releases/&lt;実行ID&gt;
 ./scripts/verify.sh focused linux-core</pre><p>初回・未知変更・検証環境の変更では全体へ拡張。重点検証は途中確認であり配布証拠にはならない。コミット済み入力の全体検証後にGit pushする場合はfull --push。図のSVGと数値CSVは発表資料へそのまま転用できる。</p>
-<h2>添付データ</h2><p><a href="build-measurements.csv">ビルド比較CSV</a> ／ <a href="build-measurements.json">ビルド比較JSON</a> ／ <a href="parallel-measurements.json">並列比較JSON</a> ／ <a href="verification-workflow.md">正式な手順</a></p></html>
+<h2>添付データ</h2><p><a href="build-measurements.csv">ビルド比較CSV</a> ／ <a href="build-measurements.json">ビルド比較JSON</a> ／ <a href="parallel-measurements.json">並列比較JSON</a> ／ <a href="verification-workflow.md">正式な手順</a></p><h2>9. 最終受入と今回見つかった問題</h2>
+<p>全体ゲートは 1176.13秒（約19分36秒）。CTest 193件、開発版GUI 461件、配布版GUI 461件、旧アプリ自己試験が成功。開始・終了は下表のJST。全体ゲート自体が従来より速くなったとする同条件測定ではない。</p>
+<table><tr><th>工程</th><th>開始</th><th>終了</th><th>秒</th><th>終了コード</th></tr><tr><td>doctor</td><td>2026-10-14 16:56:28 JST</td><td>2026-10-14 16:56:29 JST</td><td>0.95</td><td>0</td></tr><tr><td>configure</td><td>2026-10-14 16:56:29 JST</td><td>2026-10-14 16:56:41 JST</td><td>11.19</td><td>0</td></tr><tr><td>inventory</td><td>2026-10-14 16:56:41 JST</td><td>2026-10-14 16:56:41 JST</td><td>0.14</td><td>0</td></tr><tr><td>build-3</td><td>2026-10-14 16:56:41 JST</td><td>2026-10-14 16:56:51 JST</td><td>10.58</td><td>0</td></tr><tr><td>preflight</td><td>2026-10-14 16:56:51 JST</td><td>2026-10-14 16:56:55 JST</td><td>3.97</td><td>0</td></tr><tr><td>build-5</td><td>2026-10-14 16:56:55 JST</td><td>2026-10-14 16:57:23 JST</td><td>28.21</td><td>0</td></tr><tr><td>ui-inventory</td><td>2026-10-14 16:57:23 JST</td><td>2026-10-14 16:57:24 JST</td><td>0.12</td><td>0</td></tr><tr><td>tests</td><td>2026-10-14 16:57:24 JST</td><td>2026-10-14 17:15:50 JST</td><td>1105.95</td><td>0</td></tr><tr><td>legacy-self-test</td><td>2026-10-14 17:15:50 JST</td><td>2026-10-14 17:16:02 JST</td><td>12.09</td><td>0</td></tr></table>
+<p>重点入口の受入実験はCTest 15件・GUI 128件に限定され、成功。コメントを一時追加した同じコミットでも内容変更を検出し、元のバイト列へ復元。重点証拠による配布は拒否。所要220.25秒は実際の機能修正の待ち時間ではない。</p>
+<p>最初の全体試験は旧KCD試験の相対パス依存で開発版・配布版の各1ケースが失敗した。試験は削除せず、fixtureの明示と配布同梱で修正し、全体を再実行した。レビューで見つかった設定/キャッシュ変更時の重点検証漏れと、GUI版でコアだけが成功する条件も修正し、異常系試験へ追加した。</p>
+<p>Windows用GUIプラットフォームで配布版のサンプル読込と画面生成を確認し、画像を確認済み。日本語パスのfixture読込も成功。ユーザー実モデルの原本は不変。検証済み配布物のバイト列も維持している。</p>
+<p>Git候補版までのファイル一覧は追加24・変更30・削除0。ローカル互換入口と最終資料追加は一覧の範囲外。<a href="file-changes.csv">変更一覧CSV</a> / <a href="file-changes.json">変更一覧JSON</a> / <a href="verification-results.json">受入結果JSON</a> / <a href="verification-timeline.csv">全体工程の時刻CSV</a>。</p>
+<p>このHTMLのブラウザ目視確認はアプリのローカルURLポリシーで拒否され未実施。HTMLの構造、参照ファイル、SVGのXMLは確認済み。初期比較の生成器出力へ最終受入記録を追記した資料なので、make_comparison.pyの再生成時にはこの最終記録も保持する。</p></html>

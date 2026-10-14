@@ -1,0 +1,228 @@
+{
+  "baseline": "2732c5fcd51490c57ed6f276038071c0c0f43e84",
+  "candidate": "49e9684c2e413e441f8d1324a64619ed708901bc",
+  "counts": {
+    "A": 24,
+    "M": 30,
+    "D": 0
+  },
+  "files": [
+    {
+      "status": "M",
+      "path": "AGENTS.md"
+    },
+    {
+      "status": "M",
+      "path": "CMakeLists.txt"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/build-measurements.csv"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/build-measurements.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/dependency-before-after.svg"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/latency-comparison.html"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/parallel-measurements.json"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/verification-workflow.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/development/workflow-before-after.svg"
+    },
+    {
+      "status": "M",
+      "path": "docs/multi-machine-development.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/refactoring-plan.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/v2/implementation-work-packages.md"
+    },
+    {
+      "status": "A",
+      "path": "scripts/_GO.cmd"
+    },
+    {
+      "status": "A",
+      "path": "scripts/_QUICK.cmd"
+    },
+    {
+      "status": "M",
+      "path": "scripts/check-v2.ps1"
+    },
+    {
+      "status": "M",
+      "path": "scripts/check.ps1"
+    },
+    {
+      "status": "M",
+      "path": "scripts/package-v2.ps1"
+    },
+    {
+      "status": "A",
+      "path": "scripts/run-verified.py"
+    },
+    {
+      "status": "M",
+      "path": "scripts/sync.ps1"
+    },
+    {
+      "status": "M",
+      "path": "scripts/sync.sh"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/benchmark.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/evidence.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/isolated_test.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/make_comparison.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/runner.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/scopes.json"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/selection.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verification/tests.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verify.ps1"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verify.py"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verify.sh"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2BooleanCommands.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2GptFabricationIntegration.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2MainWindow.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2MainWindow.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2MainWindowTypes.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2PartCommands.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2RibbonCommands.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2SelfTest.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2SelfTest.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2SelfTestDrawing.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2SelfTestInput.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2SelfTestModeling.cpp"
+    },
+    {
+      "status": "A",
+      "path": "src/apps/cad_next/V2SelfTestReporting.cpp"
+    },
+    {
+      "status": "A",
+      "path": "src/apps/cad_next/V2SelfTestReporting.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2Shelves.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2StatusLine.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2ThickenCommands.cpp"
+    },
+    {
+      "status": "A",
+      "path": "src/apps/cad_next/V2ThickenPreviewState.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2ToolKeys.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2UiShotStatesResponsive.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2ViewCommands.cpp"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/V2WindowForward.h"
+    },
+    {
+      "status": "M",
+      "path": "src/apps/cad_next/main.cpp"
+    }
+  ],
+  "note": "候補49e9684c2までのGit管理対象。ローカル互換入口は別表。後続の比較資料・完了記録更新は含まない。"
+}

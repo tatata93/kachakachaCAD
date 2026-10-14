@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-14",
+  "candidate_commit": "49e9684c2e413e441f8d1324a64619ed708901bc",
+  "source_sha256": "5b228d7a2acfc07f3f4ba5d28bb8bceff8f66253672259025abe9e13239bcd74",
+  "full": {
+    "status": "passed",
+    "start": "2026-10-14 16:56:27 JST",
+    "end": "2026-10-14 17:16:03 JST",
+    "wall_seconds": 1176.13369,
+    "preflight": {
+      "total": 9,
+      "skipped": []
+    },
+    "ctest": {
+      "total": 193,
+      "skipped": []
+    },
+    "ui_cases": [
+      461,
+      461
+    ],
+    "steps": [
+      {
+        "name": "doctor",
+        "seconds": 0.95038840000052,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:28 JST",
+        "end": "2026-10-14 16:56:29 JST"
+      },
+      {
+        "name": "configure",
+        "seconds": 11.192797500058077,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:29 JST",
+        "end": "2026-10-14 16:56:41 JST"
+      },
+      {
+        "name": "inventory",
+        "seconds": 0.13830530003178865,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:41 JST",
+        "end": "2026-10-14 16:56:41 JST"
+      },
+      {
+        "name": "build-3",
+        "seconds": 10.582834600005299,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:41 JST",
+        "end": "2026-10-14 16:56:51 JST"
+      },
+      {
+        "name": "preflight",
+        "seconds": 3.9670165999559686,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:51 JST",
+        "end": "2026-10-14 16:56:55 JST"
+      },
+      {
+        "name": "build-5",
+        "seconds": 28.211580300005153,
+        "exit_code": 0,
+        "start": "2026-10-14 16:56:55 JST",
+        "end": "2026-10-14 16:57:23 JST"
+      },
+      {
+        "name": "ui-inventory",
+        "seconds": 0.12052330002188683,
+        "exit_code": 0,
+        "start": "2026-10-14 16:57:23 JST",
+        "end": "2026-10-14 16:57:24 JST"
+      },
+      {
+        "name": "tests",
+        "seconds": 1105.9462660000427,
+        "exit_code": 0,
+        "start": "2026-10-14 16:57:24 JST",
+        "end": "2026-10-14 17:15:50 JST"
+      },
+      {
+        "name": "legacy-self-test",
+        "seconds": 12.0949544000905,
+        "exit_code": 0,
+        "start": "2026-10-14 17:15:50 JST",
+        "end": "2026-10-14 17:16:02 JST"
+      }
+    ]
+  },
+  "focused_entry_experiment": {
+    "status": "passed",
+    "wall_seconds": 220.252573,
+    "ctest": {
+      "total": 15,
+      "skipped": []
+    },
+    "ui_cases": 128,
+    "publication_refused": true,
+    "source_bytes_restored": true,
+    "note": "コメントだけの選択検証。機能修正の待ち時間測定ではない。"
+  },
+  "first_full_attempt": {
+    "status": "failed",
+    "start": "2026-10-14 15:26:38 JST",
+    "end": "2026-10-14 15:46:14 JST",
+    "wall_seconds": 1175.533431,
+    "failed_ctest": [
+      "v2_cad_next_smoke",
+      "v2_package_zip"
+    ],
+    "reason": "隔離cwdから旧KCDサンプルの相対パスが見つからない。fixtureを明示し、配布に同梱して修正。"
+  },
+  "infrastructure_negative_tests": 8,
+  "unicode_fixture_cases": 1,
+  "owner_model_case": {
+    "name": "HP-TH-OWNER actual owner surfaces",
+    "passed": true,
+    "original_sha256_unchanged": "29D51805E0257826BC12EDD7C7C79694B1783A22D09C21A37C64AFA457FD20DF"
+  },
+  "launch": {
+    "platform": "windows",
+    "sample_open_snapshot_exit": 0,
+    "snapshot_reviewed": true,
+    "release_files_unchanged": true,
+    "note": "Hidden起動のMainWindowHandle=0は成功判定に使わず、Windowsプラットフォームでのサンプル読込・画面生成も確認。"
+  },
+  "limitations": [
+    "小修正の30分達成は未測定",
+    "共有窓ヘッダーの155 TU波及は残る",
+    "自己試験runnerの全面分離は後続",
+    "全体GUI・配布GUIの2回は維持",
+    "ローカルHTMLのブラウザ表示はURLポリシーで拒否。HTML/SVG構造は確認、ブラウザ目視は未実施。"
+  ]
+}

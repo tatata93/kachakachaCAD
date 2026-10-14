@@ -172,6 +172,7 @@ void V2Viewport::DiscardHoverState()
 
 void V2Viewport::OnToolChanged()
 {
+    CancelReferencePick();
     if (cursorPanel_.active) {
         CloseCursorInput();
     }

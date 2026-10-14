@@ -160,6 +160,7 @@ void V2Viewport::OnSceneReplaced()
 void V2Viewport::SetPalette(const ViewportPalette& palette)
 {
     palette_ = palette;
+    RefreshFaceRolePieces();
     update();
 }
 
@@ -793,7 +794,9 @@ void V2Viewport::HoverAt(const QPointF& position)
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     const auto snapTime=hoverTimer.nsecsElapsed();
     status_ = hover_.messageJa;
+    const auto previousRegion = hoveredProfileRegion_;
     hoveredProfileRegion_ = ProfileRegionAt(position);
+    if (referencePickHandler_) hoveredProfileRegion_.reset();
     if (hoveredProfileRegion_.has_value() && !SelectionHasPart() && PickShapeAt(position).has_value()) {
         hoveredProfileRegion_.reset();
     }
@@ -810,6 +813,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
     RefreshPickCycle(position);
     SyncHoverWithCandidate();
+    if (previousRegion != hoveredProfileRegion_) RefreshFaceRolePieces();
     if (cursorPanel_.active) {
         // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
         const auto point = hover_.position; // Use the same snapped/constrained point as the preview.
@@ -882,6 +886,20 @@ void V2Viewport::PruneSelection()
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
     lastSelectPoint_ = position;
+    if (referencePickHandler_) {
+        RefreshPickCycle(position);
+        if ((modifiers & Qt::AltModifier) != 0) AdvanceCandidate(false);
+        SyncHoverWithCandidate();
+        const auto picked = CurrentCandidate();
+        if (picked) {
+            auto handler = std::move(referencePickHandler_);
+            referencePickIds_.clear();
+            ForgetPickCycle();
+            handler(picked->entityId);
+        }
+        update();
+        return;
+    }
     if (ToggleProfileRegionAt(position)) {
         return;
     }
@@ -1027,6 +1045,7 @@ void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers 
 
 void V2Viewport::ClickAt(const QPointF& position)
 {
+    if (referencePickHandler_) { SelectAt(position, Qt::NoModifier); return; }
     if (pickHandler_) {
         // 1回だけ拾う。拾ったら道具へ戻す。押しっぱなしにしない。
         PickedPoint picked;
@@ -1141,6 +1160,7 @@ void V2Viewport::FinishTool()
 
 void V2Viewport::CancelTool()
 {
+    if (referencePickHandler_) { CancelReferencePick(); return; }
     if (pickHandler_) {
         CancelPointPick();
         return;
@@ -1184,6 +1204,11 @@ void V2Viewport::keyReleaseEvent(QKeyEvent* event)
 
 bool V2Viewport::event(QEvent* event)
 {
+    if (event->type() == QEvent::Leave) {
+        hoveredProfileRegion_.reset();
+        ForgetPickCycle();
+        update();
+    }
     if (cursorPanel_.active && event->type() == QEvent::ShortcutOverride) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace) {

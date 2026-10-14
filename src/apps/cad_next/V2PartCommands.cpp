@@ -462,6 +462,9 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
 //! 出ている下見のとおりに作る。
 void V2MainWindow::ConfirmExtrude()
 {
+    if (extrudeShelfShown_ && !extrudeDock_->DirectionReady()) {
+        RefreshExtrudeFromDock(); return;
+    }
     if (HandleSurfaceExtrude(true) || HandleTargetExtrude(true)) return;
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
     using kachakacha::v2::modeling::ExtrudeRequest;

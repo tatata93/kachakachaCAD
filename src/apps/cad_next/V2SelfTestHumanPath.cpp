@@ -238,12 +238,10 @@ namespace {
                 && std::abs(movedMm - window.Viewport().ExtrudeHandleDistanceMm()) < 1.0e-6)) {
         return false;
     }
-    // 押し始めの距離が、輪郭に対して見える大きさであること。
-    // 0.5mm のままだと、100mm の輪郭では線の太さと区別できない。
-    if (!Explain((std::string("押し始めの距離が見える大きさ(")
-                     + std::to_string(window.Viewport().ExtrudeHandleDistanceMm())
-                     + "mm)").c_str(),
-            window.Viewport().ExtrudeHandleDistanceMm() >= 1.0)) {
+    // 輪郭の大きさで指定距離を変えない。薄い部材も入力値のまま下見する。
+    if (!Explain("押し始めの距離は設定値を維持する",
+            std::abs(window.Viewport().ExtrudeHandleDistanceMm() - kachakacha::v2::app::ParameterValueOf(
+                window.ParameterDock().Values(), kachakacha::v2::app::ParameterId::ExtrudeDistance)) < 1.0e-9)) {
         return false;
     }
     window.RunCommand("part.extrude");   // 確定

@@ -120,6 +120,13 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    if (viewport_ && viewport_->ReferencePickPending()) {
+        if (key == Qt::Key_Escape) { viewport_->CancelReferencePick(); return true; }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            SetStatus(QStringLiteral("押し出し: 方向の直線をクリックしてください。"));
+            return true;
+        }
+    }
     if (CommitNumericEntry(target,key)) return true;
     if (V2OffsetTool::Key(*this,key)) return true;
     if (viewport_ == nullptr) {

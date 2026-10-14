@@ -14,6 +14,9 @@ std::optional<QColor> V2Viewport::SegmentRoleColorOf(
 std::optional<QColor> V2Viewport::FaceRoleColorOf(
     const kachakacha::v2::base::EntityId& id, std::size_t faceIndex) const
 {
+    if (profileRegionPicking_ && !referencePickHandler_ && !hoveredProfileRegion_
+        && id == hoveredEntityId_ && hoveredFaceIndex_ == faceIndex)
+        return SemanticColor(kachakacha::v2::app::SemanticState::Hover);
     for (const auto& role : faceRoleColors_) {
         if (role.entityId == id && (!role.faceIndex || *role.faceIndex == faceIndex)) return role.color;
     }
@@ -22,13 +25,18 @@ std::optional<QColor> V2Viewport::FaceRoleColorOf(
 
 void V2Viewport::SetFaceRoleColors(std::vector<FaceRoleColor> colors)
 {
-    if (colors.empty() && faceRoleColors_.empty()) return;
     faceRoleColors_ = std::move(colors);
+    RefreshFaceRolePieces();
+}
+
+void V2Viewport::RefreshFaceRolePieces()
+{
     roleShapePieces_.clear();
     // Split display triangles once when inputs change, never on every frame.
     // CPU picking and the native topology retain their original face indices.
     for (const auto& shape : shapeViews_) {
-        if (std::none_of(faceRoleColors_.begin(), faceRoleColors_.end(),
+        if (!(profileRegionPicking_ && hoveredFaceIndex_ && shape.entityId == hoveredEntityId_)
+            && std::none_of(faceRoleColors_.begin(), faceRoleColors_.end(),
             [&](const auto& role) { return role.entityId == shape.entityId; })) continue;
         std::vector<RoleShapePiece> pieces;
         pieces.push_back({shape.entityId, {}, {}});
@@ -47,5 +55,26 @@ void V2Viewport::SetFaceRoleColors(std::vector<FaceRoleColor> colors)
         }
     }
     ++shapeViewRevision_;
+    update();
+}
+
+void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> ids,
+    std::function<void(std::optional<kachakacha::v2::base::EntityId>)> handler)
+{
+    CancelReferencePick();
+    referencePickIds_ = std::move(ids);
+    referencePickHandler_ = std::move(handler);
+    hoveredProfileRegion_.reset();
+    ForgetPickCycle();
+    update();
+}
+
+void V2Viewport::CancelReferencePick()
+{
+    if (!referencePickHandler_) return;
+    auto handler = std::move(referencePickHandler_);
+    referencePickIds_.clear();
+    ForgetPickCycle();
+    handler(std::nullopt);
     update();
 }

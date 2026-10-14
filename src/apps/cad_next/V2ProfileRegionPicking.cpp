@@ -83,6 +83,7 @@ void V2Viewport::SetProfileRegionPicking(bool active, bool wiresFirst)
         return;
     }
     profileRegionPicking_ = active;
+    RefreshFaceRolePieces();
     hoveredProfileRegion_.reset();
     if (active) {
         RebuildProfileRegions();
@@ -191,6 +192,7 @@ bool V2Viewport::SelectionHasPart() const
 
 bool V2Viewport::ToggleProfileRegionAt(const QPointF& position)
 {
+    if (toolPickActive_ && pickSlot_ == kachakacha::v2::app::ExtrudeSlot::Target) return false;
     // 塗った立体と未選択の輪郭が重なるとき、最初のクリックは対象立体を取る。
     // 対象が決まった後は、同じ場所でも輪郭領域を取れる。
     if (!SelectionHasPart() && PickShapeAt(position).has_value()) {

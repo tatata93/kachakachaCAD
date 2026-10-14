@@ -679,7 +679,7 @@ void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
 {
     ++shapeViewRevision_;
     shapeViews_ = std::move(shapes);
-    if (!faceRoleColors_.empty()) SetFaceRoleColors(faceRoleColors_);
+    RefreshFaceRolePieces();
     // 当たり判定へ渡す網を作り直す。カーソルが動くたびに三角形を写さないため、
     // ここで1度だけ並べておく。並びは shapeViews_ と同じ(索引で引き当てる)。
     pickMeshes_.clear();

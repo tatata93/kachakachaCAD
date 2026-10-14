@@ -142,34 +142,17 @@ void V2MainWindow::BeginExtrudePreview()
     // 覚える前に向きを聞くと、前の輪郭の平面で答えてしまう。
     extrudeOutline_ = outline;
 
-    // 輪郭の差し渡し。押し始めの距離が見える大きさかを決めるのに使う。
-    Vector3 lowest = outline.front();
-    Vector3 highest = outline.front();
-    for (const Vector3& point : outline) {
-        lowest = Vector3{std::min(lowest.x, point.x), std::min(lowest.y, point.y),
-            std::min(lowest.z, point.z)};
-        highest = Vector3{std::max(highest.x, point.x), std::max(highest.y, point.y),
-            std::max(highest.z, point.z)};
-    }
-    const double spanMm = (highest - lowest).Length();
-
     ExtrudeHandle handle;
     handle.origin = center;
     // 向きは1か所(ExtrudeDirectionNow)から取る。矢印・下見・確定を必ず揃える。
     handle.direction = ExtrudeDirectionNow();
-    // 距離は覚えている値。ただし輪郭に対して細すぎると下見が見えないので、
-    // そのときだけ見える値へ寄せる(core が決める)。
-    const double suggested = kachakacha::v2::app::SuggestExtrudeDistanceMm(
-        ExtrudeDistanceMm(), spanMm);
-    if (suggested != ExtrudeDistanceMm()) {
-        parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeLengthMm,
-            QString::number(suggested, 'f', 2));
-    }
-    handle.distanceMm = suggested;
+    // Keep the requested distance, including thin parts, when a source is selected.
+    handle.distanceMm = ExtrudeDistanceMm();
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
     viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
     ShowExtrudeShelf(plan);
+    if (!extrudeDock_->DirectionReady()) RefreshExtrudeFromDock();
     // 違う平面の輪郭は平面ごとに別の押し出しになる。確定する前に言う(黙って分けない)。
     QString planes;
     if (!facePushPull_) {
@@ -210,7 +193,7 @@ Vector3 V2MainWindow::ExtrudeDirectionNow() const
 //! (Codex P1-EXTRUDE-R4 B1)。
 Vector3 V2MainWindow::ExtrudeBaseDirectionNow() const
 {
-    // 面の押し引きは押す面が向きを決める。棚も窓も効かない(欄も隠してある)。
+    // 面に垂直を選んだ場合だけ、フェイスの法線を使う。
     if (facePushPull_ && extrudeChoice_.direction == ExtrudeDirectionMode::ProfileNormal) {
         return faceNormal_;
     }
@@ -379,13 +362,11 @@ std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewFaces(double dista
 
 void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 {
-    if (!viewport_->ExtrudeHandleShown()) {
-        return;
-    }
     // 右の欄も同じ値にする。片方だけ動くと、どちらが本当か分からなくなる。
     extrudeDock_->SetDistanceMm(distanceMm);
     parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
-        QString::number(distanceMm, 'f', 2));
+        QString::number(distanceMm, 'f', 3));
+    if (!viewport_->ExtrudeHandleShown()) return;
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();
     handle.direction = viewport_->ExtrudeHandleDirection();
@@ -397,6 +378,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 
 void V2MainWindow::EndExtrudePreview(bool keepTool)
 {
+    viewport_->CancelReferencePick();
     extrudeOutline_.clear();
     extrudeOutlines_.clear();
     // 留め置いた写しも捨てる。次の押し出しが前の入力で作られないように。
@@ -431,6 +413,18 @@ void V2MainWindow::EndExtrudePreview(bool keepTool)
 //! 押し出しの棚を出して、読み取りを映す。
 void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan)
 {
+    extrudeDock_->SetDirectionPickHandler([this] {
+        if (viewport_->ReferencePickPending()) { viewport_->CancelReferencePick(); return; }
+        extrudeDock_->SetDirectionPicking(true);
+        viewport_->BeginReferencePick(extrudeDock_->DirectionReferenceIds(), [this](auto id) {
+            extrudeDock_->SetDirectionPicking(false);
+            if (id) extrudeDock_->ChooseDirectionReference(*id);
+            SetStatus(id ? QStringLiteral("押し出し: 方向の直線を設定しました。元の面・輪郭は保持しています。")
+                         : QStringLiteral("押し出し: 方向線の選択をやめました。"));
+        });
+        SetStatus(QStringLiteral("押し出し: 方向に使う直線をクリックしてください。Escで方向選択だけを取消。"));
+    });
+
     const auto& document = session_->GetDocument();
     const auto nameOf = [&document](const kachakacha::v2::base::EntityId& id) {
         const auto* entity = document.FindEntity(id);
@@ -468,7 +462,8 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     // 映さないでおくと、棚の初期表示と手に持っている値が食い違ったまま動き出す。
     // 棚のふだんの2つで表せない決め方も、棚が3つ目に名前で出す。
     extrudeDock_->ChooseDirection(extrudeChoice_.direction);
-    extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleDistanceMm());
+    extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleShown()
+        ? viewport_->ExtrudeHandleDistanceMm() : ExtrudeDistanceMm());
     // 出力の欄に、いま作ろうとしているものを映す。
     kachakacha::v2::app::ExtrudeOutputs outputs;
     outputs.body = extrudeChoice_.makePart;
@@ -588,7 +583,9 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
         lines.push_back(QString::fromStdString(line));
     }
     // 作るものが1つも無いなら確定させない。理由は上の行に出ている。
-    extrudeDock_->ShowStatusLines(lines, plan.readyToPreview && state.outputs.Any());
+    if (!extrudeDock_->DirectionReady())
+        lines.push_back(QStringLiteral("方向の直線を選択するか、0ではない方向を指定してください。"));
+    extrudeDock_->ShowStatusLines(lines, plan.readyToPreview && state.outputs.Any() && extrudeDock_->DirectionReady());
     // 「選んだ面まで」の相手(作業平面)は文書から。棚だけで全部決められるように。
     extrudeDock_->SetTargets(ExtrudeStopChoices());
     // 3D の中にも、いまの役割を出す(§7)。棚の名前だけでは、
@@ -614,19 +611,12 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
 //! 「対象を選び直す」で輪郭まで消えたら、二度手間になる。
 void V2MainWindow::ReselectExtrudeInput(bool target)
 {
+    viewport_->CancelReferencePick();
     const auto plan = PlanExtrudeFromSelection();
     std::vector<kachakacha::v2::base::EntityId> removed;
     if (target) {
-        if (plan.targetSolid.IsNil()) {
-            SetStatus(QStringLiteral("押し出し: 外せる対象がありません。"));
-            return;
-        }
-        removed.push_back(plan.targetSolid);
+        if (!plan.targetSolid.IsNil()) removed.push_back(plan.targetSolid);
     } else {
-        if (plan.profiles.empty()) {
-            SetStatus(QStringLiteral("押し出し: 外せる輪郭がありません。"));
-            return;
-        }
         removed = plan.profiles;
     }
     // 下見は前の入力で作ったものである。入力が変わるので必ず消す。
@@ -636,6 +626,7 @@ void V2MainWindow::ReselectExtrudeInput(bool target)
     }
     extrudeSnapshot_.reset();
     facePushPull_ = false;
+    ForgetFaceProfile();
     viewport_->SetSelection(
         kachakacha::v2::app::SelectionWithout(viewport_->Selection(), removed));
     pendingCommandId_ = "part.extrude";
@@ -645,19 +636,16 @@ void V2MainWindow::ReselectExtrudeInput(bool target)
     // 消すと、いま何を選び直しているのかが画面から消える。
     const auto after = PlanExtrudeFromSelection();
     ShowExtrudeShelf(after);
-    SetStatus(QStringLiteral("押し出し: %1を外しました。%2")
-            .arg(target ? QStringLiteral("対象") : QStringLiteral("輪郭"),
-                QString::fromStdString(after.needsJa.empty()
-                        ? std::string("選び直したら、もう一度押し出してください。")
-                        : after.needsJa)));
+    viewport_->SetPickSlot(target ? kachakacha::v2::app::ExtrudeSlot::Target
+                                 : kachakacha::v2::app::ExtrudeSlot::Profile);
+    const auto cleared = removed.empty() ? QString() : QStringLiteral("選択を外しました。");
+    SetStatus(cleared + (target ? QStringLiteral("押し出し: 足す／引く相手の立体を選んでください。")
+                     : QStringLiteral("押し出し: 押す面または閉じた輪郭を選んでください。")));
 }
 
 //! 棚の欄が変わった。向きと距離を取り直して、下見を作り直す。
 void V2MainWindow::RefreshExtrudeFromDock()
 {
-    if (!viewport_->ExtrudeHandleShown()) {
-        return;
-    }
     extrudeChoice_.reversed = extrudeDock_->Reversed();
     // 範囲は棚の 5 通りをそのまま。逆側の距離と相手の面も棚から(指示書 P-02)。
     extrudeChoice_.extent = extrudeDock_->ExtentMode();
@@ -681,6 +669,12 @@ void V2MainWindow::RefreshExtrudeFromDock()
     extrudeChoice_.makeStartProfileWire = outputs.startWire;
     extrudeChoice_.makeEndProfileWire = outputs.endWire;
     extrudeChoice_.makeSideBoundaryWires = outputs.sideWires;
+    if (extrudeChoice_.direction != ExtrudeDirectionMode::SelectedVector)
+        viewport_->CancelReferencePick();
+    if (!viewport_->ExtrudeHandleShown()) {
+        RefreshExtrudeStatus(PlanExtrudeFromSelection());
+        return;
+    }
     if (!extrudeDock_->DirectionReady()) {
         kachakacha::v2::app::ExtrudeHandle handle{viewport_->ExtrudeHandleOrigin(), {}, extrudeDock_->DistanceMm()};
         viewport_->ShowExtrudeHandle(handle, {});

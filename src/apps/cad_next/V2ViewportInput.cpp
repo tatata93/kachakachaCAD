@@ -191,6 +191,10 @@ kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
 
 std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
 {
+    if (referencePickHandler_) {
+        CancelReferencePick();
+        return {kachakacha::v2::app::EscapeStep::CancelPick};
+    }
     kachakacha::v2::app::EscapeContext context;
     context.draggingGadget = gadgetDrag_.has_value();
     context.draggingCube = cubeDrag_.active;
@@ -936,6 +940,12 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
+    if (referencePickHandler_) {
+        std::erase_if(candidates, [this](const auto& c) {
+            return c.kind != kachakacha::v2::app::SelectionElementKind::Edge
+                || std::find(referencePickIds_.begin(), referencePickIds_.end(), c.entityId) == referencePickIds_.end();
+        });
+    }
     return SortCandidatesForSlot(std::move(candidates));
 }
 
@@ -986,8 +996,10 @@ std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::AsSolidIfProfileTa
         existing.kind = ref.kind;
         already.push_back(PickedKindOf(existing));
     }
-    if (!kachakacha::v2::app::FacePickMeansItsSolid(toolPickActive_, PickedKindOf(*picked),
-            already)) {
+    const auto* entity = session_->GetDocument().FindEntity(picked->entityId);
+    const bool target = toolPickActive_ && pickSlot_ == kachakacha::v2::app::ExtrudeSlot::Target
+        && entity && entity->kind == kachakacha::v2::domain::EntityKind::Part;
+    if (!target && !kachakacha::v2::app::FacePickMeansItsSolid(toolPickActive_, PickedKindOf(*picked), already)) {
         return picked;
     }
     kachakacha::v2::app::PickCandidate solid = *picked;
@@ -1125,6 +1137,7 @@ void V2Viewport::ForgetPickCycle()
 {
     cycle_ = PickCycle{};
     hoverOffPlane_ = false;
+    SyncHoverWithCandidate();
 }
 
 //! いまカーソルの下にあるものが「見えているのに掴めない」か(§5.1 の禁止対象)。
@@ -1168,10 +1181,15 @@ void V2Viewport::SyncHoverWithCandidate()
     const auto current = CurrentCandidate();
     const auto previous = hoveredEntityId_;
     const auto previousSegment = hoveredSegmentId_;
+    const auto previousFace = hoveredFaceIndex_;
     hoveredEntityId_ = current.has_value() ? current->entityId
                                            : kachakacha::v2::base::EntityId{};
     hoveredSegmentId_ = current.has_value() ? current->segmentId
                                             : kachakacha::v2::base::SegmentId{};
+    hoveredFaceIndex_ = current ? current->pickedFaceIndex : std::nullopt;
+    if (previous != hoveredEntityId_ || previousFace != hoveredFaceIndex_) {
+        if (previousFace || hoveredFaceIndex_) RefreshFaceRolePieces();
+    }
     if (previous != hoveredEntityId_ || previousSegment != hoveredSegmentId_) {
         RefreshCursorShape();
     }
@@ -1320,7 +1338,7 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     }
     // 押し出しの矢印は、選択より先に見る。矢印の上を押したら掴む。
     // 後に回すと、矢印の下にある線が選び直されて、矢印が消える。
-    if (BeginExtrudeDrag(event->position())) {
+    if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) {
         return;
     }
     kachakacha::v2::view::AxisArrowModifier modifier =
@@ -1332,6 +1350,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     }
     // 順は PressViewNavigator が持っている。ここで書き写さない。
     if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
+        return;
+    }
+    if (ReferencePickPending()) {
+        SelectAt(event->position(), event->modifiers());
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

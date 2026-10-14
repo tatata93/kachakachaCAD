@@ -62,7 +62,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     state_->setWordWrap(true);
     layout->addWidget(state_);
     auto* note = new QLabel(QStringLiteral(
-        "選んだものを読み取りました。違うときは各欄の「選び直す」を押してください。"),
+        "押す面・閉じた輪郭を選び、方向と距離を設定します。"),
         body_);
     note->setWordWrap(true);
     layout->addWidget(note);
@@ -71,11 +71,12 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     // 1本の文字列にしていたので、どちらを選び直すのか読めなかった。
     layout->addWidget(MakePanelSectionTitle(body_, QStringLiteral("入力")));
     auto* targetRow = new QHBoxLayout();
-    targetRow->addWidget(new QLabel(QStringLiteral("対象"), body_));
+    targetRow->addWidget(new QLabel(QStringLiteral("足す／引く相手"), body_));
     targetValue_ = new QLabel(body_);
     targetValue_->setWordWrap(true);
     targetRow->addWidget(targetValue_, 1);
     reselectTarget_ = new QPushButton(QStringLiteral("選び直す"), body_);
+    reselectTarget_->setObjectName(QStringLiteral("extrudePickTarget"));
     targetRow->addWidget(reselectTarget_);
     layout->addLayout(targetRow);
 
@@ -86,6 +87,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     profileRow->addWidget(profileLabel_);
     profileRow->addWidget(profileValue_, 1);
     reselectProfile_ = new QPushButton(QStringLiteral("選び直す"), body_);
+    reselectProfile_->setObjectName(QStringLiteral("extrudePickProfile"));
     profileRow->addWidget(reselectProfile_);
     layout->addLayout(profileRow);
 
@@ -106,6 +108,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setSpacing(3);
     distance_ = new V2NumericSpinBox(body_);
+    distance_->setObjectName(QStringLiteral("extrudeDistance"));
     distance_->setRange(-100000.0, 100000.0);
     distance_->setDecimals(3);
     distance_->setSingleStep(1.0);
@@ -138,6 +141,7 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
 
     // 方向は 7 通り全部(P-04)。「数値で決める」は x, y, z の欄が生える。
     direction_ = new QComboBox(body_);
+    direction_->setObjectName(QStringLiteral("extrudeDirection"));
     for (const auto mode : kachakacha::v2::app::ExtrudeDirections()) {
         direction_->addItem(Text(kachakacha::v2::app::ExtrudeDirectionNameJa(mode)));
     }
@@ -178,8 +182,6 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     }
     form_->addRow(QStringLiteral("操作"), boolean_);
 
-    // 出力プリセットと、その中身の4項目(UI の正本「2. 結果」)。
-    // **見た目だけの欄ではない。**選んだとおりの物が文書に出来る。
     outputPreset_ = new QComboBox(body_);
     for (const auto preset : kachakacha::v2::app::ExtrudeOutputPresets()) {
         outputPreset_->addItem(QString::fromUtf8(
@@ -372,12 +374,11 @@ void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
     // 2欄に分けて出す。**どちらを選び直すのかが読める。**
     targetValue_->setText(targetNameJa.isEmpty() ? QStringLiteral("(選んでいません)")
                                                  : targetNameJa);
-    profileLabel_->setText(plan.profileIsFace ? QStringLiteral("面")
-                                              : QStringLiteral("輪郭"));
+    profileLabel_->setText(QStringLiteral("押す面／輪郭"));
     profileValue_->setText(profileNamesJa.isEmpty() ? QStringLiteral("(選んでいません)")
                                                     : profileNamesJa);
     state_->setText(plan.readyToPreview ? QStringLiteral("押し出し — プレビュー可能")
-                                        : QStringLiteral("押し出し — 入力が足りません"));
+                                        : QStringLiteral("押し出し — 面・輪郭を選択"));
     // 既定の操作を当てるのは **入力が変わったときだけ** である(R1 B4)。
     // 棚を出し直すたびに当て直すと、人が選んだ「足す/引く/新しい部品」が
     // 黙って戻る。入力が同じなら、選んだままにしておく。
@@ -408,18 +409,19 @@ void V2ExtrudeDock::ApplyRows()
     form_->setRowVisible(boolean_, hasTarget);
     const bool ready = plan_.readyToPreview;
     // 面を選んだ場合も、法線・任意方向・直線方向を選び分ける。
-    form_->setRowVisible(direction_, ready);
-    form_->setRowVisible(reverse_, ready);
-    form_->setRowVisible(extent_, ready);
-    form_->setRowVisible(fromValue_, ready);
-    form_->setRowVisible(taper_, ready);
+    form_->setRowVisible(direction_, true);
+    form_->setRowVisible(reverse_, true);
+    form_->setRowVisible(extent_, true);
+    form_->setRowVisible(fromValue_, false);
+    form_->setRowVisible(taper_, false);
     ApplyExtentRows();
     confirm_->setEnabled(ready);
     details_->setEnabled(ready);
-    // 外せる物があるときだけ出す。読み取っていない物の「選び直す」を出すと、
-    // 押しても何も起きないボタンになる。
-    reselectTarget_->setVisible(!plan_.targetSolid.IsNil());
-    reselectProfile_->setVisible(!plan_.profiles.empty());
+    // 入力前にも役割を指定して選べる。
+    reselectTarget_->setVisible(true);
+    reselectProfile_->setVisible(true);
+    reselectTarget_->setText(plan_.targetSolid.IsNil() ? QStringLiteral("選ぶ") : QStringLiteral("選び直す"));
+    reselectProfile_->setText(plan_.profiles.empty() ? QStringLiteral("選ぶ") : QStringLiteral("選び直す"));
     // 「状態」の中身は `ShowStatusLines` が持つ(UI の正本「3. 状態」)。
     // ここで書くと、通った道を出したあとに一言で上書きしてしまう。
     if (!ready) {
@@ -464,15 +466,14 @@ void V2ExtrudeDock::ApplyExtentRows()
     if (form_ == nullptr || distance_ == nullptr) {
         return;
     }
-    const bool ready = plan_.readyToPreview;
     const ExtrudeExtentMode extent = ExtentMode();
-    form_->setRowVisible(distance_, ready && kachakacha::v2::app::ExtentUsesDistance(extent));
+    form_->setRowVisible(distance_, kachakacha::v2::app::ExtentUsesDistance(extent));
     form_->setRowVisible(secondDistance_,
-        ready && kachakacha::v2::app::ExtentUsesSecondDistance(extent));
-    form_->setRowVisible(target_, ready && kachakacha::v2::app::ExtentUsesTarget(extent));
+        kachakacha::v2::app::ExtentUsesSecondDistance(extent));
+    form_->setRowVisible(target_, kachakacha::v2::app::ExtentUsesTarget(extent));
     const ExtrudeDirectionMode direction = DirectionMode();
-    form_->setRowVisible(customRow_, ready && direction == ExtrudeDirectionMode::CustomXYZ);
-    form_->setRowVisible(directionReference_, ready && direction == ExtrudeDirectionMode::SelectedVector);
+    form_->setRowVisible(customRow_, direction == ExtrudeDirectionMode::CustomXYZ);
+    form_->setRowVisible(directionReferenceRow_, direction == ExtrudeDirectionMode::SelectedVector);
 }
 
 //! 棚で選んでいる向きの決め方。7 通り全部を名前で出している(P-04)。
@@ -911,13 +912,54 @@ void V2ExtrudeDock::ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode m
 
 void V2ExtrudeDock::BuildDirectionReferenceRow()
 {
-    directionReference_ = new QComboBox(body_);
+    directionReferenceRow_ = new QWidget(body_);
+    auto* row = new QHBoxLayout(directionReferenceRow_);
+    row->setContentsMargins(0, 0, 0, 0);
+    directionReference_ = new QComboBox(directionReferenceRow_);
+    directionReference_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     directionReference_->setObjectName(QStringLiteral("extrudeDirectionReference"));
     directionReference_->addItem(QStringLiteral("方向に使う直線を選択"));
-    form_->addRow(QStringLiteral("方向の直線"), directionReference_);
+    row->addWidget(directionReference_, 1);
+    directionPick_ = new QPushButton(QStringLiteral("3Dで選ぶ"), directionReferenceRow_);
+    directionPick_->setObjectName(QStringLiteral("extrudePickDirection"));
+    directionPick_->setCheckable(true);
+    row->addWidget(directionPick_);
+    form_->addRow(QStringLiteral("方向の直線"), directionReferenceRow_);
+    QObject::connect(directionPick_, &QPushButton::clicked, this, [this] {
+        if (directionPickHandler_) directionPickHandler_();
+    });
     QObject::connect(directionReference_, &QComboBox::currentIndexChanged, this, [this] {
         if (!loading_ && optionHandler_) optionHandler_();
     });
+}
+
+void V2ExtrudeDock::SetDirectionPickHandler(std::function<void()> handler)
+{
+    directionPickHandler_ = std::move(handler);
+}
+
+void V2ExtrudeDock::SetDirectionPicking(bool active)
+{
+    directionPick_->setChecked(active);
+    directionPick_->setText(active ? QStringLiteral("選択中…") : QStringLiteral("3Dで選ぶ"));
+}
+
+std::vector<kachakacha::v2::base::EntityId> V2ExtrudeDock::DirectionReferenceIds() const
+{
+    std::vector<kachakacha::v2::base::EntityId> result;
+    for (const auto& reference : directionReferences_) result.push_back(reference.entityId);
+    return result;
+}
+
+bool V2ExtrudeDock::ChooseDirectionReference(kachakacha::v2::base::EntityId id)
+{
+    for (std::size_t i = 0; i < directionReferences_.size(); ++i) {
+        if (directionReferences_[i].entityId == id) {
+            directionReference_->setCurrentIndex(static_cast<int>(i + 1));
+            return true;
+        }
+    }
+    return false;
 }
 
 void V2ExtrudeDock::SetDirectionReferences(const std::vector<ExtrudeTargetChoice>& references)

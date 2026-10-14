@@ -78,6 +78,10 @@ public:
     void SetTargets(const std::vector<ExtrudeTargetChoice>& targets);
     void SetDirectionReferences(const std::vector<ExtrudeTargetChoice>& references);
     void BuildDirectionReferenceRow();
+    void SetDirectionPickHandler(std::function<void()> handler);
+    void SetDirectionPicking(bool active);
+    bool ChooseDirectionReference(kachakacha::v2::base::EntityId id);
+    std::vector<kachakacha::v2::base::EntityId> DirectionReferenceIds() const;
     //! いま選んでいる相手。無ければ値を持たない。
     [[nodiscard]] std::optional<kachakacha::v2::base::EntityId> TargetEntityId() const;
     void ChooseTarget(const std::optional<kachakacha::v2::base::EntityId>& id);
@@ -167,6 +171,9 @@ private:
     QDoubleSpinBox* taper_ = nullptr;
     QComboBox* direction_ = nullptr;
     QComboBox* directionReference_ = nullptr;
+    QWidget* directionReferenceRow_ = nullptr;
+    QPushButton* directionPick_ = nullptr;
+    std::function<void()> directionPickHandler_;
     std::vector<ExtrudeTargetChoice> directionReferences_;
     //! 「数値で決める」の向き(x, y, z)。
     QWidget* customRow_ = nullptr;

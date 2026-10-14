@@ -77,6 +77,7 @@ void V2MainWindow::ClearPendingCommand()
     // ただし下見が出ている間は、押し出しが続いているので戻さない。
     if (pendingCommandId_ == "part.extrude" && viewport_ != nullptr
         && !viewport_->ExtrudeHandleShown()) {
+        viewport_->CancelReferencePick();
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
         viewport_->SetToolPickActive(false);
         viewport_->SetProfileRegionPicking(false);

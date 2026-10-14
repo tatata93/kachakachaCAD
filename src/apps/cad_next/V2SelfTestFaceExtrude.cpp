@@ -11,6 +11,8 @@
 #include "kachakacha/kernel/OcctShellSplit.h"
 #include <QApplication>
 #include <QDialog>
+#include <QDoubleSpinBox>
+#include <QComboBox>
 #include <QObject>
 #include <QPointF>
 #include <QPushButton>
@@ -18,6 +20,9 @@
 #include <QTemporaryDir>
 #include <QString>
 #include <chrono>
+#include <algorithm>
+#include <cmath>
+#include <iostream>
 #include <thread>
 
 namespace kachakacha::v2::selftest {
@@ -156,9 +161,140 @@ bool CaseSplitCancellation(V2MainWindow& window) {
     kernel::ReleaseShape(solid.Value().parts[0].handle);
     return Explain("分割の取消で両側の立体を解放", seen && !result.HasValue() && clean);
 }
+
+bool CaseExtrudeToolFirstSettings(V2MainWindow& window) {
+    auto& viewport = window.Viewport();
+    auto& dock = window.ExtrudeDock();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetViewCenter({}); viewport.SetVisibleWidthMm(60);
+    const auto circle = geometry::CurveSegment::MakeCircle({0,0,0}, {0,0,1}, {1,0,0}, 5);
+    const auto line = geometry::CurveSegment::MakeLine({15,0,0}, {20,0,5});
+    if (!circle.HasValue() || !line.HasValue()) return false;
+    if (!window.Session().AddWire({circle.Value()}, false, "押す円").committed) return false;
+    const auto added = window.Session().AddWire({line.Value()}, false, "方向線");
+    if (!added.committed) return false;
+    viewport.SetSelection({}); window.RunCommand("part.extrude");
+    const auto* distance = window.findChild<QDoubleSpinBox*>("extrudeDistance");
+    const auto* direction = window.findChild<QComboBox*>("extrudeDirection");
+    if (!Explain("未選択でも距離・方向・入力ボタンが表示される", distance && !distance->isHidden()
+        && direction && !direction->isHidden() && dock.ReselectProfileShown())) return false;
+    dock.TypeDistanceMm(0.125);
+    dock.PickDirection(modeling::ExtrudeDirectionMode::SelectedVector);
+    auto* button = window.findChild<QPushButton*>("extrudePickDirection");
+    if (!button || button->isHidden()) return false;
+    button->click(); window.SelectTool(modeling::DrawingTool::Line);
+    if (!Explain("別ツールで方向選択を解除", !viewport.ReferencePickPending())) return false;
+    window.RunCommand("part.extrude");
+    button->click();
+    if (!Explain("方向選択だけEscで取消", viewport.ReferencePickPending()
+        && window.HandleToolKey(Qt::Key_Escape, nullptr) && !viewport.ReferencePickPending()
+        && viewport.Selection().entityIds.empty())) return false;
+    button->click(); viewport.SelectAt({-100,-100}, Qt::NoModifier);
+    if (!Explain("空振りでも方向線の入力待ちを保つ", viewport.ReferencePickPending())) return false;
+    const auto hit = viewport.Mapping().Project({17.5,0,2.5}); if (!hit) return false;
+    viewport.HoverAt({hit->x, hit->y});
+    if (!Explain("方向線だけが候補になる", viewport.CurrentCandidate()
+        && viewport.CurrentCandidate()->entityId == added.createdEntityIds.front())) return false;
+    viewport.SelectAt({hit->x, hit->y}, Qt::NoModifier);
+    if (!Explain("方向線が輪郭に混ざらない", viewport.Selection().entityIds.empty() && dock.DirectionReady())) return false;
+    const auto center = viewport.Mapping().Project({0,0,0}); if (!center) return false;
+    viewport.SelectAt({center->x,center->y}, Qt::NoModifier);
+    if (!viewport.ExtrudeHandleShown()) std::cerr << "Extrusion source selection: "
+        << viewport.Selection().entityIds.size() << "; " << window.StatusText().toStdString() << '\n';
+    if (!Explain("対象選択で下見を表示", viewport.ExtrudeHandleShown())) return false;
+    if (!Explain("対象選択後も小数距離を維持", std::abs(viewport.ExtrudeHandleDistanceMm() - 0.125) < 1e-9)) return false;
+    if (!Explain("対象選択後も方向を維持", std::abs(viewport.ExtrudeHandleDirection().x - std::sqrt(0.5)) < 1e-9)) return false;
+    const auto snapshot = window.Session().GetDocument().Snapshot();
+    dock.PressConfirm();
+    if (!Explain("指定した方向へ実際に立体を作れる", CountOfKind(window, domain::EntityKind::Part) == 1)) return false;
+    window.RunCommand("edit.undo");
+    return Explain("1回のUndoで元の線だけへ戻る", window.Session().GetDocument().Snapshot().features.size() == snapshot.features.size());
+}
+
+bool CaseExtrudeFaceDirectionPick(V2MainWindow& window) {
+    if (!ImportCurvedPart(window)) return false;
+    const auto line = geometry::CurveSegment::MakeLine({20,20,0}, {25,25,5});
+    if (!line.HasValue() || !window.Session().AddWire({line.Value()}, false, "斜め方向").committed
+        || !PickCurvedFace(window)) return false;
+    auto& viewport = window.Viewport(); auto& dock = window.ExtrudeDock();
+    const auto source = viewport.Selection();
+    dock.TypeDistanceMm(0.125);
+    dock.PickDirection(modeling::ExtrudeDirectionMode::SelectedVector);
+    const auto before = window.Session().GetDocument().Snapshot().features.size();
+    window.HandleToolKey(Qt::Key_Return, nullptr);
+    if (!Explain("方向未選択ではEnterでも確定しない", before == window.Session().GetDocument().Snapshot().features.size())) return false;
+    auto* button = window.findChild<QPushButton*>("extrudePickDirection"); if (!button) return false;
+    button->click();
+    const auto hit = viewport.Mapping().Project({22.5,22.5,2.5}); if (!hit) return false;
+    viewport.SelectAt({hit->x,hit->y}, Qt::NoModifier);
+    if (!Explain("方向線を選んでも元の曲面フェイスが残る", viewport.Selection().entityIds == source.entityIds
+        && viewport.Selection().ordered.front().pickedFaceIndex == source.ordered.front().pickedFaceIndex
+        && dock.DirectionReady())) return false;
+    button->click(); window.HandleToolKey(Qt::Key_Escape, nullptr);
+    if (!Explain("方向再選択の取消でも面・設定を保持", viewport.Selection().entityIds == source.entityIds
+        && dock.DirectionReady() && dock.DistanceMm() == 0.125)) return false;
+    dock.PressConfirm();
+    return Explain("方向線に沿って曲面フェイスを押し出せる", CountOfKind(window, domain::EntityKind::Part) == 2);
+}
+
+bool CaseExtrudeTargetFirst(V2MainWindow& window) {
+    if (!ImportCurvedPart(window)) return false;
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    viewport.SetViewCenter({7,7,10}); viewport.SetVisibleWidthMm(50);
+    window.RunCommand("part.extrude"); window.ExtrudeDock().PressReselectTarget();
+    const auto views = viewport.ShapeViews();
+    for (const auto& view : views) for (const auto& triangle : view.mesh.triangles) {
+        const auto point = viewport.Mapping().Project((triangle.points[0]+triangle.points[1]+triangle.points[2])*(1.0/3));
+        if (!point) continue;
+        viewport.HoverAt({point->x,point->y});
+        const auto pick = viewport.CurrentCandidate();
+        if (!pick || !pick->pickedFaceIndex) continue;
+        viewport.SelectAt({point->x,point->y}, Qt::NoModifier);
+        const auto plan = window.PlanExtrudeFromSelection();
+        return Explain("相手の立体を先に指定しても押す面に混ざらない",
+            !plan.targetSolid.IsNil() && plan.profiles.empty() && !viewport.ExtrudeHandleShown());
+    }
+    return false;
+}
+
+bool CaseExtrudeFaceHover(V2MainWindow& window) {
+    if (!ImportCurvedPart(window)) return false;
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    viewport.SetViewCenter({7,7,10}); viewport.SetVisibleWidthMm(50);
+    viewport.SetSelection({}); window.RunCommand("part.extrude");
+    std::vector<std::size_t> seen;
+    const auto views = viewport.ShapeViews();
+    for (const auto& view : views) for (const auto& triangle : view.mesh.triangles) {
+        const auto point = viewport.Mapping().Project((triangle.points[0]+triangle.points[1]+triangle.points[2])*(1.0/3));
+        if (!point) continue;
+        viewport.HoverAt({point->x,point->y});
+        const auto pick = viewport.CurrentCandidate();
+        if (!pick || !pick->pickedFaceIndex) continue;
+        const auto face = *pick->pickedFaceIndex;
+        if (!Explain("候補の面だけHover色で塗る", viewport.FaceRoleColorOf(pick->entityId, face)
+            == viewport.SemanticColor(app::SemanticState::Hover))) return false;
+        for (auto other : seen) if (other != face && viewport.FaceRoleColorOf(pick->entityId, other)) return false;
+        if (std::find(seen.begin(), seen.end(), face) == seen.end()) seen.push_back(face);
+        if (seen.size() >= 2) {
+            const auto path = qEnvironmentVariable("KACHACAD_EXTRUDE_UI_SCREENSHOT");
+            if (!path.isEmpty()) { QApplication::processEvents(); window.grab().save(path); }
+            viewport.HoverAt({-100,-100});
+            if (!Explain("空所へ移動すると面色を解除", !viewport.FaceRoleColorOf(pick->entityId, face))) return false;
+            window.EndExtrudePreview();
+            return true;
+        }
+    }
+    return Explain("異なる2つのフェイスでホバーを確認", false);
+}
 }
 std::vector<SelfTestCase> FaceExtrudeCases() {
-    return {{"HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存", CaseNativeFace},
+    return {{"HP-EX-UI tool first settings and direction pick", CaseExtrudeToolFirstSettings},
+        {"HP-EX-UI target solid first", CaseExtrudeTargetFirst},
+        {"HP-EX-UI face and direction independent", CaseExtrudeFaceDirectionPick},
+        {"HP-EX-UI hovered face fill", CaseExtrudeFaceHover},
+        {"HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存", CaseNativeFace},
         {"HP-EX-LINE 曲面フェイスから線まで・保存再計算", CaseNativeFaceToLine},
         {"HP-CALC-01 計算バー・GUI応答・取消・形状の解放", CaseProgressCancellation},
         {"HP-CALC-02 分割取消で両側の内部形状を解放", CaseSplitCancellation}};

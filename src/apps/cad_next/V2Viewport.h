@@ -145,6 +145,11 @@ public:
     [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_); }
     //! 拾うのをやめる。Esc で呼ぶ。
     void CancelPointPick();
+    // Pick a reference without changing the source selection of the active tool.
+    void BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> ids,
+        std::function<void(std::optional<kachakacha::v2::base::EntityId>)> handler);
+    void CancelReferencePick();
+    bool ReferencePickPending() const { return static_cast<bool>(referencePickHandler_); }
 
     //! 見え方の設定(AT-UIX-010)。形は変えない。
     void SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
@@ -1035,6 +1040,8 @@ private:
     kachakacha::v2::app::PointerGestureTracker rightGesture_;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
+    std::vector<kachakacha::v2::base::EntityId> referencePickIds_;
+    std::function<void(std::optional<kachakacha::v2::base::EntityId>)> referencePickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;
     kachakacha::v2::view::Quaternion orientation_{};
     kachakacha::v2::view::ViewCubeDrag cubeDrag_;
@@ -1076,6 +1083,8 @@ private:
     //! カーソルの下の線。押さなくても「どれに当たるか」が見えるようにする。
     kachakacha::v2::base::EntityId hoveredEntityId_;
     kachakacha::v2::base::SegmentId hoveredSegmentId_;
+    std::optional<std::size_t> hoveredFaceIndex_;
+    void RefreshFaceRolePieces();
     //! 直前に選んだカーソルが作図用の十字だったか。
     bool drawingCursor_ = false;
     //! 作図中に、作業平面の外の線の上にいる。押しても掴めない。

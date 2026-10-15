@@ -1000,6 +1000,7 @@ struct BoxSelectFixture {
     if (!Explain("画面に形が出ている", window.Viewport().ShapeViewCount() == 1)) {
         return false;
     }
+    window.RunCommand("selection.activate"); // Inspect solid picking, not extrusion profile regions.
     auto& viewport = window.Viewport();
     viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
     // 矩形の真ん中(線の上ではないところ)を押す。

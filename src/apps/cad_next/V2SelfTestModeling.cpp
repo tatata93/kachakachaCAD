@@ -301,6 +301,7 @@ namespace {
     const int wiresBefore = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
 
     // 面を1枚選ぶ。番号は網の面の並びと同じ(OcctTessellate と OcctFaceQuery で揃えてある)。
+    window.RunCommand("selection.activate"); // This case tests selection-first face push/pull.
     auto& viewport = window.Viewport();
     kachakacha::v2::app::SelectionSet faceSelection;
     kachakacha::v2::app::SelectionRef face;

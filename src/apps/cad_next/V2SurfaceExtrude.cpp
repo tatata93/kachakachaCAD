@@ -137,6 +137,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     committedPreview->parts.clear(); // Committed parts now own these handles, even after a refresh.
     EndExtrudePreview();
     AdoptCurrentDocument();
+    EndExtrudePreview(true);
     SetStatus(QStringLiteral("面を押し出して立体を作りました。"));
     return true;
 }

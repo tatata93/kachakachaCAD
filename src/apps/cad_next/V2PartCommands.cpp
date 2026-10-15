@@ -565,6 +565,7 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     // 戻ったあとの文書から作り直す。
     AdoptCurrentDocument();
     RebuildKernelShapes();
+    if (kept) EndExtrudePreview(true);
     if (!kept) {
         SetStatus(QStringLiteral("押し出し: 途中で作れなかったので、"
                                  "押す前の状態へ戻しました。"));
@@ -744,6 +745,7 @@ bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoi
     extrudeStartLoops_.clear();
     AdoptCurrentDocument();
     RebuildKernelShapes();
+    if (kept) EndExtrudePreview(true);
     SetStatus(!kept ? QStringLiteral("押し出し: 途中で作れなかったので、押す前の状態へ戻しました。")
             : QStringLiteral("押し出し: 違う平面の輪郭を、平面 %1 組に分けて押し出しました(%2)。"
                              "1 回の元に戻すで全部消えます。")

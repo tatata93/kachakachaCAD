@@ -379,6 +379,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 
 void V2MainWindow::EndExtrudePreview(bool keepTool)
 {
+    viewport_->CancelBoxSelect();
     extrudeDock_->activeInput.reset();
     viewport_->CancelReferencePick();
     extrudeOutline_.clear();

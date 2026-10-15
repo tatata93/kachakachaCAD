@@ -11,6 +11,8 @@
 #include "kachakacha/kernel/OcctShellSplit.h"
 #include <QApplication>
 #include <QDialog>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
@@ -92,6 +94,8 @@ bool CaseNativeFace(V2MainWindow& window) {
     if (!Explain("Enterでフェイスを押し出せる", window.HandleToolKey(Qt::Key_Return, nullptr)
         && CountOfKind(window, domain::EntityKind::Part) == 2)) return false;
     if (!Explain("曲面フェイスをネイティブ面として保存", CountOfKind(window, domain::EntityKind::GuideSurface) == 1)) return false;
+    if (!Explain("フェイス確定後も押し出し入力待ち", window.Viewport().ToolPickActive()
+        && window.Viewport().ProfileRegionPicking() && !window.Viewport().ExtrudeHandleShown())) return false;
     window.RunCommand("edit.undo");
     if (!Explain("1回のUndoで入力面も戻る", window.Session().GetDocument().Snapshot().features.size() == before.features.size())) return false;
     window.RunCommand("edit.redo");
@@ -279,6 +283,7 @@ bool CaseEndCapDistance(V2MainWindow& window) {
     const auto before=window.Session().GetDocument().Snapshot().features.size();
     dock.PressConfirm();
     if(!Explain("傾いた終端で実際に確定",CountOfKind(window,domain::EntityKind::Part)==1))return false;
+    if(!Explain("終端指定の確定後も入力待ち",viewport.ToolPickActive()&&viewport.ProfileRegionPicking()))return false;
     const auto snapshot=window.Session().GetDocument().Snapshot();bool recorded=false;
     for(const auto& f:snapshot.features)if(const auto* e=std::get_if<domain::ExtrudeDefinition>(&f.definition))
         recorded=e->endCap.mode==modeling::EndCapMode::Angle&&std::abs(e->endCap.tiltRad-geometry::kPi/12)<1e-9;
@@ -295,6 +300,40 @@ bool CaseEndCapNativeFace(V2MainWindow& window) {
     dock.PressConfirm();
     return Explain("曲面フェイスも独立角度の終端で保存・再生成",CountOfKind(window,domain::EntityKind::Part)==2
         &&window.SaveAndReopen("end-cap-native.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==2);
+}
+bool CaseExtrudeRepeatWithoutBox(V2MainWindow& window) {
+    auto& viewport=window.Viewport();auto& dock=window.ExtrudeDock();
+    std::vector<base::EntityId> ids;
+    for(double x:{0.0,10.0}) {
+        const auto circle=geometry::CurveSegment::MakeCircle({x,0,0},{0,0,1},{1,0,0},2);
+        if(!circle.HasValue())return false;
+        const auto added=window.Session().AddWire({circle.Value()},false,"連続押し出し");
+        if(!added.committed)return false;ids.push_back(added.createdEntityIds.front());
+    }
+    viewport.SetSelection({});window.RunCommand("part.extrude");
+    for(std::size_t i=0;i<ids.size();++i) {
+        app::SelectionSet selected;selected.entityIds={ids[i]};viewport.SetSelection(selected);
+        if(!Explain("再起動せず次の輪郭を下見",viewport.ExtrudeHandleShown()))return false;
+        dock.TypeDistanceMm(3);
+        // Simulate a mouse release consumed by the calculation dialog.
+        viewport.BeginBoxSelect({20,20},Qt::NoModifier);dock.PressConfirm();
+        if(!Explain("確定後は押し出し入力待ちで矩形を残さない",viewport.ToolPickActive()
+            &&viewport.ProfileRegionPicking()&&!viewport.ExtrudeHandleShown()&&!viewport.BoxSelecting()
+            &&viewport.Selection().entityIds.empty()&&CountOfKind(window,domain::EntityKind::Part)==i+1))return false;
+    }
+    viewport.BeginBoxSelect({20,20},Qt::NoModifier);
+    QMouseEvent held(QEvent::MouseMove,QPointF(60,60),QPointF(60,60),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+    QApplication::sendEvent(&viewport,&held);
+    if(!Explain("押している間の範囲選択は維持",viewport.BoxSelecting()&&viewport.BoxSelectKind().has_value()))return false;
+    QMouseEvent released(QEvent::MouseMove,QPointF(80,80),QPointF(80,80),Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(&viewport,&released);
+    if(!Explain("離すイベント欠落後もドラッグが残らない",!viewport.BoxSelecting()&&viewport.Selection().entityIds.empty()))return false;
+    window.HandleToolKey(Qt::Key_Escape,nullptr);
+    if(!viewport.ToolPickActive())return false;
+    window.RunCommand("selection.activate");
+    if(!Explain("明示的な選択ツールへの切替は可能",!viewport.ToolPickActive()))return false;
+    window.RunCommand("part.extrude");window.SelectTool(modeling::DrawingTool::Rectangle);
+    return Explain("作図への切替でも押し出しを終了",!viewport.ToolPickActive()&&!viewport.ProfileRegionPicking());
 }
 bool CaseExtrudeFaceHover(V2MainWindow& window) {
     if (!ImportCurvedPart(window)) return false;
@@ -328,7 +367,8 @@ bool CaseExtrudeFaceHover(V2MainWindow& window) {
 }
 }
 std::vector<SelfTestCase> FaceExtrudeCases() {
-    return {{"HP-EX-CAP distance orientation Undo save",CaseEndCapDistance},
+    return {{"HP-EX-REPEAT commit and lost mouse release",CaseExtrudeRepeatWithoutBox},
+        {"HP-EX-CAP distance orientation Undo save",CaseEndCapDistance},
         {"HP-EX-CAP native face orientation save",CaseEndCapNativeFace},
         {"HP-EX-UI tool first settings and direction pick", CaseExtrudeToolFirstSettings},
         {"HP-EX-UI target solid first", CaseExtrudeTargetFirst},

@@ -1227,6 +1227,8 @@ bool V2Viewport::CycleCandidate(bool backward)
 
 void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 {
+    // A modal preview can consume the release; never continue a box without its button.
+    if (boxSelect_.active && !(event->buttons() & Qt::LeftButton)) CancelBoxSelect();
     // Shift はマウスの便りにも乗っているので、作図拘束へ反映する。
     // 一時スナップ解除の S は修飾キーではないため、キーイベントで保持する。
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);

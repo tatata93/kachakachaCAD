@@ -250,9 +250,10 @@ namespace {
             CountOfKind(window, EntityKind::Part) == 1)) {
         return false;
     }
-    // 終わったら棚は元へ戻ること。出したままだと、いま何をしているのか読めない。
-    return Explain("確定したら押し出しの棚は引っ込む",
-        !window.ShelfShown(Shelf::Extrude));
+    // 確定後も道具を維持し、古い下見を消して次の輪郭を待つ。
+    return Explain("確定後も押し出しの棚で次の入力を待つ",
+        window.ShelfShown(Shelf::Extrude) && window.Viewport().ToolPickActive()
+            && !window.Viewport().ExtrudeHandleShown());
 }
 
 //! HP-UI-01。押し出しの最中、棚は出続ける。下見を作り直しても消えない。
@@ -329,7 +330,7 @@ namespace {
     if (!Explain("引いた線をもう一度拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    // 押し出しは継続中なので、次の輪郭を拾えば下見へ進む。
     if (!Explain("もう一度矢印が出る", window.Viewport().ExtrudeHandleShown())) {
         return false;
     }

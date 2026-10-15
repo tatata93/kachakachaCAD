@@ -1062,6 +1062,10 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
+    if (extrudeShelfShown_ || viewport_->ExtrudeHandleShown()) {
+        ClearPendingCommand();
+        EndExtrudePreview();
+    }
     if (partDock_ != nullptr) partDock_->EndTool();
     if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
     if (gptFabrication_ != nullptr && gptFabrication_->Active()) { gptFabrication_->End(); }

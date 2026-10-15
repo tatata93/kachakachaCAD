@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>正面と側面の2枚からパノラミック窓を投影する</title>
+<style>body{max-width:1100px;margin:32px auto;padding:0 24px;font:17px/1.8 sans-serif;color:#182431;background:#f5f7fa}h1,h2{line-height:1.4}section{background:white;padding:24px;margin:24px 0;border-radius:12px}img{width:100%;height:auto;border:1px solid #b8c2cc}figure{margin:20px 0}figcaption{color:#485868;font-size:15px}strong{color:#12627c}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:10px;text-align:left}code{background:#eef1f4;padding:2px 5px}.note{border-left:4px solid #bd8018;padding-left:18px}a{color:#075e9d}</style></head><body>
+<p><a href="../manual.html#curved-wire-projection">全機能マニュアルへ戻る</a></p>
+<h1>正面と側面の2枚から<br>パノラミック窓を投影する</h1>
+<p>正面の窓形状と側面へ回り込む部分を別々の作図面に描き、それぞれ異なる方向から車体へ投影します。この例では、正面・角のR・側面の3面をまたぐ<strong>1つの閉じた通常ワイヤー</strong>を作ります。</p>
+<p>画像はWindows版の実画面です。自動UI試験で右ペインの方向ボタン、プレビュー、確定、Undo／Redo、保存・再読込を実行しました。模式図や生成画像ではありません。</p>
+<section><h2>1. 車体と2枚の作図面を用意する</h2>
+<p>先に投影先となる車体の面またはソリッドを作ります。次に正面の手前と側面の外側へ作図面を置き、それぞれで窓の外周の一部を描きます。この例の単位はmmです。</p>
+<table><tr><th>作図面</th><th>位置と描く範囲</th><th>投影方向</th></tr><tr><td>正面作図面</td><td>Y＝−5。窓の上辺・下辺・左端。X＝−4〜5、Z＝−1〜1。</td><td>＋Y（0, 1, 0）</td></tr><tr><td>側面作図面</td><td>X＝10。窓の上辺・下辺・奥端。Y＝5〜10、Z＝−1〜1。</td><td>−X（−1, 0, 0）</td></tr></table>
+<p class="note">各作図を四角く閉じません。2つの開いた外周を、投影後に合わせて1周にします。つなぎ目に余計な縦線を描くと、その線も投影されます。車体や座標の向きが違うモデルでは、方向をそのモデルに合わせて変えてください。</p>
+<figure><a href="images/v2-panorama-01-two-planes.png"><img src="images/v2-panorama-01-two-planes.png" alt="正面と側面の作図面、2本の窓外周、角が丸い車体の3面"></a><figcaption>試験用の小さな車体。正面からRへ投影する外周と、側面へ投影する外周を分けています。</figcaption></figure>
+</section>
+<section><h2>2. 元ワイヤーを入れ、正面側の方向を設定する</h2>
+<ol><li>「作図 → 編集 → 面へ投影」を選びます。</li><li>「①元ワイヤーを選ぶ」で正面側と側面側の外周を追加します。3Dビューまたは左ペインで選べます。</li><li>右ペインの元ワイヤー一覧で<strong>正面側の行だけ</strong>を選びます。右ペイン内を下へスクロールし、設定欄の「Y方向」を押します。この例では＋Yが車体へ向かう方向です。</li></ol>
+<figure><a href="images/v2-panorama-02-front-direction.png"><img src="images/v2-panorama-02-front-direction.png" alt="投影元の正面側の行を選びY方向を指定した画面"></a><figcaption>方向設定は選択した行へ適用します。行を選ばない状態では全入力へ適用されるため、行を確認してください。</figcaption></figure>
+</section>
+<section><h2>3. 側面側の方向を別に設定する</h2>
+<p>一覧で<strong>側面側の行だけ</strong>を選び、右ペイン内を下へスクロールして「X方向」→「方向を反転」を押します。正面側は＋Yのまま、側面側だけ−Xになります。各行に表示される方向を確認します。「作業平面の法線方向」でも設定できますが、そのときの作業平面と正負を確認してください。</p>
+<figure><a href="images/v2-panorama-03-side-direction.png"><img src="images/v2-panorama-03-side-direction.png" alt="側面側のワイヤー行にマイナスXの投影方向を設定した画面"></a><figcaption>2枚の図面を同じ方向へ投影しないことがポイントです。</figcaption></figure>
+</section>
+<section><h2>4. 投影先を選び、つながりを確認する</h2>
+<ol><li>「②投影先を選ぶ」を押し、車体の正面・R・側面を追加します。ソリッドなら必要なフェイスを選びます。</li><li>出力を「ワイヤーのみ」、ワイヤー形式を「通常ワイヤー」に設定します。読み取り専用で残したい場合は、もう一方の投影ワイヤー形式を選びます。こちらも投影時点の結果を保持し、元の形を変更しても自動再投影しません。</li><li>「プレビューを更新」を押します。紫が投影元、緑が投影先です。窓の上下がRを回り込み、側面の上下へつながることを確認します。</li></ol>
+<figure><a href="images/v2-panorama-04-preview.png"><img src="images/v2-panorama-04-preview.png" alt="正面・角のR・側面の3面に窓外周を投影したプレビュー"></a><figcaption>この例では開いた外周2本から閉輪郭1本ができます。</figcaption></figure>
+<p class="note">離れた端点を勝手につなぐ機能ではありません。正面側と側面側の端が、投影後に同じ位置へ届くように描きます。輪郭が開いていたら、向き・投影先の不足・接続端点を修正してください。許容誤差を大きくして隙間を隠す手順ではありません。</p>
+</section>
+<section><h2>5. 確定して保存する</h2>
+<p>「確定」またはEnterで生成します。通常ワイヤーは投影位置に残る独立した編集対象です。曲面上の輪郭なので、通常ワイヤーにしても平面へ平らにはなりません。元の作図や車体は保持します。Ctrl+Zで生成を戻せます。</p>
+<figure><a href="images/v2-panorama-05-result.png"><img src="images/v2-panorama-05-result.png" alt="3面をまたぐ閉じた窓輪郭を確定し選択した結果"></a><figcaption>生成結果。窓の閉じ方と、正面・円柱状のR・側面からのずれを独立した標本で検査しました。</figcaption></figure>
+<p><a href="samples/panorama-input.kcd2">操作練習用の入力モデル</a> ／ <a href="samples/panorama-result.kcd2">確定済みモデル</a></p>
+</section>
+<section><h2>この手順の範囲と、ライトを押し出すときの出力</h2>
+<p>この手順は窓の<strong>外周ワイヤー</strong>を生成します。車体への穴開けやガラスの面生成は別の操作です。「面＋ワイヤー」での投影は、それぞれの投影元が閉じた平面輪郭であることが必要です。この例の開いた正面・側面の2本から、窓の面まで一括生成する操作には対応していません。</p>
+<p>押し出しの「出力プリセット」では「ソリッドのみ」「ワイヤーのみ」「ワイヤー＋ソリッド」を選べます。開始側の輪郭・押し出し先の輪郭・側面ワイヤーは個別にオン／オフできます。曲面入力や「選んだ面まで」でも使用でき、斜めに切られた終端の実際の輪郭を出力します。円を斜めに切った楕円など、通常の円で表せない曲線は許容偏差内の滑らかな曲線で保持します。</p>
+<p>ワイヤーだけでは立体や穴はできません。足す・引くで立体を加工するときは「ソリッド／面」も有効にしてください。</p>
+</section></body></html>

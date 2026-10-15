@@ -555,16 +555,17 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
     const kachakacha::v2::kernel::ExtrudeBuildResult& built)
 {
+    // Document adoption notifies selection listeners. It must not start a new
+    // extrusion while this transaction is committing the already validated one.
+    viewport_->HideExtrudeHandle();
     const bool kept = CommitExtrudeAtomically(choice, plan, analysis, built);
     ForgetFaceProfile();
-    // **どの道で抜けても、ここを必ず通る。**
-    //
-    // 覚えている形と場面は、文書の写しでしかない。途中で失敗して文書が戻ったのに
-    // 写しだけが新しいままだと、文書に無い立体や辺が画面と書き出しに残る
-    // (Codex P1-EXTRUDE-R3 B2)。だから通っても通らなくても、
-    // 戻ったあとの文書から作り直す。
+    // Successful adoption already owns the validated native shapes. Rebuilding
+    // every unrelated feature here is both redundant and very expensive.
+    // A rolled-back transaction still requires a complete cache reconciliation.
     AdoptCurrentDocument();
-    RebuildKernelShapes();
+    if (!kept) RebuildKernelShapes();
+    else RefreshPartEdges();
     if (kept) EndExtrudePreview(true);
     if (!kept) {
         SetStatus(QStringLiteral("押し出し: 途中で作れなかったので、"
@@ -793,6 +794,10 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
               session_->GetDocument().Snapshot().settings.tolerance)
         : std::vector<std::vector<EntityId>>{};
     for (std::size_t index = 0; index < partCount; ++index) {
+        if (extrudeSnapshot_) {
+            const auto mesh = extrudeSnapshot_->nativePreviewMeshes.find(built.parts[index].handle.value);
+            if (mesh != extrudeSnapshot_->nativePreviewMeshes.end()) shapeMeshes_[mesh->first] = mesh->second;
+        }
         auto copy = definition;
         std::vector<EntityId> partInputs = inputs;
         if (perPart.size() == partCount) {
@@ -810,6 +815,8 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
             return false;   // 1つでも入らなければ、全体を無かったことにする。
         }
         adoptedExtrudeParts_.push_back(made);
+        if (built.endProfileWires.size() == partCount)
+            partFlatBoundary_[made.ToString()] = built.endProfileWires[index];
         if (index == 0) {
             partId = made;
         }
@@ -825,7 +832,7 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     // 開始側の輪郭。**押す前の輪郭を写した、新しいワイヤーである。**
     // 元のワイヤーを作り変えて代用しない(オーナー指示)。
     if (choice.makeStartProfileWire) {
-        for (const auto& loop : extrudeStartLoops_) {
+        for (const auto& loop : built.startProfileWires.empty() ? extrudeStartLoops_ : built.startProfileWires) {
             if (AddPlainWire(loop, "押し出し元の輪郭").IsNil()) {
                 return false;
             }

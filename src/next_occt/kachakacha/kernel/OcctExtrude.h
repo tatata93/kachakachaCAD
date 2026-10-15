@@ -36,6 +36,8 @@ struct ExtrudedPart {
 
 struct ExtrudeBuildResult {
     std::vector<ExtrudedPart> parts;
+    //! Native surface extrusion start boundaries, including inner loops.
+    std::vector<std::vector<geometry::CurveSegment>> startProfileWires;
     //! 押し出し先の輪郭ワイヤー。曲線の種類を保つ。
     std::vector<std::vector<geometry::CurveSegment>> endProfileWires;
     //! 側面の境界ワイヤー。

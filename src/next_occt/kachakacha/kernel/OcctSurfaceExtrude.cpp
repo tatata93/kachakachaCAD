@@ -1,8 +1,10 @@
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include <cmath>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctExtrudeWires.h"
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -13,6 +15,7 @@
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Shape.hxx>
@@ -45,14 +48,19 @@ Result<ExtrudeBuildResult> BuildSurfaceExtrude(KernelShapeHandle source,
         gp_Trsf shift;
         shift.SetTranslation(ToVector(unit * startMm));
         TopoDS_Shape combined;
+        TopTools_MapOfShape starts, ends;
         for (TopExp_Explorer faces(shape, TopAbs_FACE); faces.More(); faces.Next()) {
             const TopoDS_Shape first = BRepBuilderAPI_Transform(faces.Current(), shift, true).Shape();
             BRepPrimAPI_MakePrism prism(first, ToVector(unit * (endMm - startMm)), true, true);
             if (!prism.IsDone()) return Out::Failure(MakeError("EXT-008", "面を押し出せませんでした。", {}));
+            starts.Add(prism.FirstShape());
+            ends.Add(prism.LastShape());
             if (combined.IsNull()) combined = prism.Shape();
             else {
                 BRepAlgoAPI_Fuse fuse(combined, prism.Shape());
                 if (!fuse.IsDone()) return Out::Failure(MakeError("EXT-008", "面の継ぎ目を接合できません。", {}));
+                starts = detail::FollowFaces(fuse, starts);
+                ends = detail::FollowFaces(fuse, ends);
                 combined = fuse.Shape();
             }
         }
@@ -73,6 +81,11 @@ Result<ExtrudeBuildResult> BuildSurfaceExtrude(KernelShapeHandle source,
                 return Out::Failure(MakeError("EXT-007", "この方向では面に体積が付きません。", {}));
             }
             ExtrudedPart part;
+            const auto wires = detail::ExtrudeWires(solid, starts, ends, tolerance.modelLinearMm, part, result);
+            if (!wires.HasValue()) {
+                for (const auto& made : result.parts) ReleaseShape(made.handle);
+                return Out::Failure(wires.Diagnostics());
+            }
             part.handle = StoreShape(solid);
             part.volumeMm3 = volume;
             for (TopExp_Explorer face(solid, TopAbs_FACE); face.More(); face.Next()) ++part.faceCount;

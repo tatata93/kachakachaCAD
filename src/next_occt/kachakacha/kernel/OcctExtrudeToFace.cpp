@@ -7,6 +7,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctExtrudeWires.h"
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRep_Tool.hxx>
@@ -25,6 +26,7 @@
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Face.hxx>
@@ -188,10 +190,19 @@ Out Trim(const ExtrudeBuildResult& extended, const TopoDS_Face& target, const Ve
         if (!cut.IsDone() || !BRepCheck_Analyzer(cut.Shape()).IsValid()) {
             return Out::Failure(MakeError("EXT-008", "終端面で閉じた立体を作れません。", {}));
         }
+        TopTools_MapOfShape starts, ends;
+        std::size_t index = 0;
+        for (TopExp_Explorer faces(solid, TopAbs_FACE); faces.More(); faces.Next(), ++index)
+            if (index < part.faceKeys.size() && part.faceKeys[index] == "start") starts.Add(faces.Current());
+        for (TopExp_Explorer faces(half.Solid(), TopAbs_FACE); faces.More(); faces.Next()) ends.Add(faces.Current());
+        starts = detail::FollowFaces(cut, starts);
+        ends = detail::FollowFaces(cut, ends);
         for (TopExp_Explorer solids(cut.Shape(), TopAbs_SOLID); solids.More(); solids.Next()) {
             GProp_GProps volume;
             detail::VolumeProperties(solids.Current(), volume);
             ExtrudedPart made;
+            const auto wires = detail::ExtrudeWires(solids.Current(), starts, ends, tolerance, made, result);
+            if (!wires.HasValue()) return Out::Failure(wires.Diagnostics());
             made.handle = StoreShape(solids.Current());
             created.handles.push_back(made.handle);
             made.volumeMm3 = std::abs(volume.Mass());

@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <optional>
 #include <memory>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,6 +45,7 @@ struct V2ExtrudeSnapshot {
     bool facePushPull = false;
     std::shared_ptr<kachakacha::v2::kernel::ExtrudeBuildResult> nativePreview;
     std::string nativePreviewKey;
+    std::map<std::uint64_t, kachakacha::v2::modeling::ShapeMesh> nativePreviewMeshes;
 };
 
 //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

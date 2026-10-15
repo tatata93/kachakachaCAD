@@ -1242,6 +1242,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ProjectionRegions.cpp
         src/apps/cad_next/V2FaceRoleColors.cpp
         src/apps/cad_next/V2SelfTestProjection.cpp
+        src/apps/cad_next/V2SelfTestPanoramaProjection.cpp
         src/apps/cad_next/V2SelfTestOwnerProjection.cpp
         src/apps/cad_next/V2SelfTestCurvedEmboss.cpp
         src/apps/cad_next/V2ShellSplitDock.cpp

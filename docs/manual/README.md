@@ -23,6 +23,15 @@
 
 ## 目次
 
+正面と側面の2枚から窓を投影する手順は、[パノラミック窓の画像付き手順書](panorama-projection.html)にあります。
+下記は同手順のWindows自動UI試験で撮影した画像です。
+
+![2枚の作図面と車体](images/v2-panorama-01-two-planes.png)
+![正面側の投影方向](images/v2-panorama-02-front-direction.png)
+![側面側の投影方向](images/v2-panorama-03-side-direction.png)
+![3面へ投影したプレビュー](images/v2-panorama-04-preview.png)
+![閉じた窓外周の生成結果](images/v2-panorama-05-result.png)
+
 1. [はじめに](#1-はじめに)
 2. [画面の見かた](#2-画面の見かた)
 3. [5つのモード](#3-5つのモード)
@@ -500,6 +509,14 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 画面の大きさを決めるには `--size 1366x768` を足します。
 
 画面を出さずに一通り触って確かめるには `--self-test` と打ちます。
+
+`panorama-01-two-planes`、`panorama-02-front-direction`、`panorama-03-side-direction`、
+`panorama-04-preview`、`panorama-05-result` は
+`PROJ panorama two workplanes per-row directions` 自己試験のWindows実画面です。
+`KACHACAD_PANORAMA_GUIDE_OUTPUT` に出力先を指定し、同ケースを実行すると
+`01-two-planes.png`〜`05-result.png` と入力・結果のKCD2を保存します。
+マニュアルへ登録するときは画像名の先頭に `v2-panorama-` を付けます。
+これらは `--manual-state` の引数ではありません。
 
 `dome-preview` と `dome-result` は `HP-LF-115-DOME` 自己試験で保存したWindows実画面です。
 `dome-both` は `HP-LF-115-DOME-BOTH` の両区画一括設定・確定後の実画面です。

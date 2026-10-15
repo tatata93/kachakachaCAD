@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
 #include "kachakacha/kernel/OcctShellSplit.h"
+#include "kachakacha/geometry/WireChain.h"
 #include <QApplication>
 #include <QDialog>
 #include <QEvent>
@@ -295,6 +296,37 @@ bool CaseEndCapDistance(V2MainWindow& window) {
     window.RunCommand("edit.redo");
     return Explain("角度を保持して保存・再生成",window.SaveAndReopen("end-cap-distance.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
 }
+bool CaseTargetWireOutputs(V2MainWindow& window, int output) {
+    const auto circle=geometry::CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},2).Value();
+    const auto stop=geometry::CurveSegment::MakeLine({-5,0,10},{5,0,12}).Value();
+    const auto source=window.Session().AddWire({circle},false,"押す円");
+    const auto target=window.Session().AddWire({stop},false,"終端の傾き");
+    if(!source.committed||!target.committed)return false;
+    app::SelectionSet selected;selected.entityIds=source.createdEntityIds;
+    window.Viewport().SetSelection(selected);window.RunCommand("part.extrude");
+    app::ExtrudeChoice choice;choice.extent=modeling::ExtrudeExtentMode::ToTarget;
+    choice.direction=modeling::ExtrudeDirectionMode::CustomXYZ;choice.customDirection={0,0,1};
+    choice.targetEntityId=target.createdEntityIds.front();window.ApplyExtrudeChoice(choice);
+    window.ExtrudeDock().ShowOutputs({output==1,output!=2,true,output!=2});
+    window.ExtrudeDock().PressConfirm();
+    const int parts=output==1?1:0, minimum=output==2?3:4;
+    if(!Explain("HP-EX selected wire and body output",CountOfKind(window,domain::EntityKind::Part)==parts
+        &&CountOfKind(window,domain::EntityKind::Wire)>=minimum))return false;
+    int ends=0;
+    for(const auto& e:window.Session().GetDocument().Snapshot().entities) {
+        if(e.kind!=domain::EntityKind::Wire||e.displayName.find("押し出し先の輪郭")==std::string::npos)continue;
+        app::SelectionSet pick;pick.entityIds={e.id};const auto curves=app::SelectedCurves(pick,window.Session().Scene());
+        if(!geometry::SegmentsFormClosedLoop(curves,{}))return false;
+        for(const auto& c:curves)for(int i=0;i<=32;++i){auto p=c.Evaluate(i/32.0);if(std::abs(p.z-(11+.2*p.x))>.001)return false;}
+        ++ends;
+    }
+    if(ends!=1||!window.Viewport().ToolPickActive())return false;
+    const int wires=CountOfKind(window,domain::EntityKind::Wire);
+    window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Wire)!=2||CountOfKind(window,domain::EntityKind::Part)!=0)return false;
+    window.RunCommand("edit.redo");
+    return window.SaveAndReopen("target-wire-outputs.kcd2")&&CountOfKind(window,domain::EntityKind::Wire)==wires
+        &&CountOfKind(window,domain::EntityKind::Part)==parts;
+}
 bool CaseEndCapNativeFace(V2MainWindow& window) {
     if(!ImportCurvedPart(window)||!PickCurvedFace(window))return false;
     auto& dock=window.ExtrudeDock();dock.TypeDistanceMm(20);
@@ -370,7 +402,10 @@ bool CaseExtrudeFaceHover(V2MainWindow& window) {
 }
 }
 std::vector<SelfTestCase> FaceExtrudeCases() {
-    return {{"HP-EX-REPEAT commit and lost mouse release",CaseExtrudeRepeatWithoutBox},
+    return {{"HP-EX-WIRES stop wire only Undo save",[](auto& w){return CaseTargetWireOutputs(w,0);}},
+        {"HP-EX-WIRES stop wire plus solid Undo save",[](auto& w){return CaseTargetWireOutputs(w,1);}},
+        {"HP-EX-WIRES stop end-only Undo save",[](auto& w){return CaseTargetWireOutputs(w,2);}},
+        {"HP-EX-REPEAT commit and lost mouse release",CaseExtrudeRepeatWithoutBox},
         {"HP-EX-CAP distance orientation Undo save",CaseEndCapDistance},
         {"HP-EX-CAP native face orientation save",CaseEndCapNativeFace},
         {"HP-EX-UI tool first settings and direction pick", CaseExtrudeToolFirstSettings},

@@ -116,12 +116,18 @@ base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,doubl
     try {
         double first,last;auto curve=BRep_Tool::Curve(edge,first,last);if(curve.IsNull())throw Standard_Failure("Missing boundary curve");
         auto basis=curve;while(basis->IsKind(STANDARD_TYPE(Geom_TrimmedCurve)))basis=occ::handle<Geom_TrimmedCurve>::DownCast(basis)->BasisCurve();
-        if(!basis->IsKind(STANDARD_TYPE(Geom_BSplineCurve))&&!basis->IsKind(STANDARD_TYPE(Geom_BezierCurve))) {
-            const auto single=FromEdge(edge,tolerance);if(!single.HasValue())return Out::Failure(single.Diagnostics());
-            BoundedBoundaryCurves out;out.curves={single.Value()};return Out::Success(std::move(out));
+        const bool analytic=!basis->IsKind(STANDARD_TYPE(Geom_BSplineCurve))&&!basis->IsKind(STANDARD_TYPE(Geom_BezierCurve));
+        if(analytic) {
+            const auto single=FromEdge(edge,tolerance);
+            if(single.HasValue()) {BoundedBoundaryCurves out;out.curves={single.Value()};return Out::Success(std::move(out));}
         }
         if(!std::isfinite(tolerance)||tolerance<=0)throw Standard_Failure("Invalid boundary tolerance");
-        const auto spline=GeomConvert::CurveToBSplineCurve(basis);
+        // Oblique caps of a circular extrusion are ellipses. Convert the bounded
+        // native conic before fitting; its spline parameter is not the angle.
+        const auto spline=analytic
+            ? GeomConvert::CurveToBSplineCurve(new Geom_TrimmedCurve(curve,first,last))
+            : GeomConvert::CurveToBSplineCurve(basis);
+        if(analytic) {first=spline->FirstParameter();last=spline->LastParameter();}
         GeomConvert_BSplineCurveToBezierCurve split(spline,first,last,1e-12);
         NCollection_Array1<double> knots(1,split.NbArcs()+1);split.Knots(knots);
         std::vector<Piece> pieces;for(int i=1;i<=split.NbArcs();++i)pieces.push_back({knots(i),knots(i+1),split.Arc(i)});

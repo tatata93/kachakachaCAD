@@ -1,4 +1,5 @@
 #include "V2ExtrudeReferenceState.h"
+#include "V2ExtrudeWirePreview.h"
 #include "V2Calculation.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
@@ -23,20 +24,52 @@ std::pair<double, double> Offsets(int mode, double distance, double second)
     return {0.0, distance};
 }
 
-void ShowBuilt(V2Viewport& viewport, const kachakacha::v2::kernel::ExtrudeBuildResult& built,
-    const kachakacha::v2::app::ExtrudeHandle& handle)
+kachakacha::v2::app::ExtrudeChoice ReadSurfaceChoice(V2ExtrudeDock& dock,
+    kachakacha::v2::app::ExtrudeChoice choice, const Vector3& direction)
+{
+    const auto outputs = dock.Outputs();
+    choice.makePart = outputs.body;
+    choice.makeStartProfileWire = outputs.startWire;
+    choice.makeEndProfileWire = outputs.endWire;
+    choice.makeSideBoundaryWires = outputs.sideWires;
+    choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
+    choice.customDirection = direction;
+    choice.reversed = false;
+    dock.ReadStop(choice);
+    choice.extent = dock.ExtentMode();
+    choice.endCap = dock.EndCap();
+    choice.distanceMm = dock.DistanceMm();
+    choice.secondDistanceMm = dock.SecondDistanceMm();
+    return choice;
+}
+
+bool ShowBuilt(V2Viewport& viewport, V2ExtrudeDock& dock, const kachakacha::v2::kernel::ExtrudeBuildResult& built,
+    const kachakacha::v2::app::ExtrudeHandle& handle,
+    std::map<std::uint64_t, kachakacha::v2::modeling::ShapeMesh>& cache,
+    bool showBody, bool start, bool end, bool sides)
 {
     std::vector<std::vector<Vector3>> edges, faces;
     for (const auto& part : built.parts) {
-        const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(part.handle);
-        if (!mesh.HasValue()) continue;
-        edges.insert(edges.end(), mesh.Value().edges.begin(), mesh.Value().edges.end());
-        for (const auto& triangle : mesh.Value().triangles) {
+        if (cache.find(part.handle.value) == cache.end()) {
+            const auto mesh = V2Calculation::Call(nullptr, "押し出しの表示を準備しています…",
+                [](auto value) { return kachakacha::v2::kernel::BuildShapeMesh(value); }, part.handle);
+            if (!mesh.HasValue()) {
+                viewport.SetExtrudePreviewFaces({});
+                dock.ShowStatusLines({QStringLiteral("表示の準備を中止したか、表示形状を作れませんでした。再プレビューしてください。")}, false);
+                return false;
+            }
+            cache.emplace(part.handle.value, mesh.Value());
+        }
+        const auto& mesh = cache.at(part.handle.value);
+        edges.insert(edges.end(), mesh.edges.begin(), mesh.edges.end());
+        if (showBody) for (const auto& triangle : mesh.triangles) {
             faces.push_back({triangle.points[0], triangle.points[1], triangle.points[2]});
         }
     }
+    if (!showBody) edges = ExtrudeWirePreview(built, start, end, sides);
     viewport.ShowExtrudeHandle(handle, std::move(edges));
     viewport.SetExtrudePreviewFaces(std::move(faces));
+    return true;
 }
 } // namespace
 
@@ -76,10 +109,10 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         return true;
     }
     const auto outputs = extrudeDock_->Outputs();
-    if (!outputs.body || outputs.startWire || outputs.endWire || outputs.sideWires) {
+    if (!outputs.body && !outputs.startWire && !outputs.endWire && !outputs.sideWires) {
         viewport_->ShowExtrudeHandle(handle, {});
         viewport_->SetExtrudePreviewFaces({});
-        extrudeDock_->ShowStatusLines({QStringLiteral("曲面の押し出しは出力を「ソリッド / 面」にしてください。独立ワイヤー出力は未対応です。")}, false);
+        extrudeDock_->ShowStatusLines({QStringLiteral("作るものを1つ以上選んでください。")}, false);
         return true;
     }
     if (extrudeDock_->ExtentMode() == ExtrudeExtentMode::ThroughAll) {
@@ -90,15 +123,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     }
     const auto offsets = Offsets(static_cast<int>(extrudeDock_->ExtentMode()),
         handle.distanceMm, extrudeDock_->SecondDistanceMm());
-    auto choice = extrudeChoice_;
-    choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-    choice.customDirection = handle.direction;
-    choice.reversed = false;
-    extrudeDock_->ReadStop(choice);
-    choice.extent = extrudeDock_->ExtentMode();
-    choice.endCap = extrudeDock_->EndCap();
-    choice.distanceMm = handle.distanceMm;
-    choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
+    const auto choice = ReadSurfaceChoice(*extrudeDock_, extrudeChoice_, handle.direction);
     const auto built = SurfaceExtrudePreview(choice, found->second, offsets.first, offsets.second);
     if (!built.HasValue()) {
         viewport_->ShowExtrudeHandle(handle, {});
@@ -106,39 +131,47 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         extrudeDock_->ShowStatusLines({QString::fromStdString(built.FirstSummaryJa())}, false);
         return true;
     }
-    ShowBuilt(*viewport_, built.Value(), handle);
+    if (!ShowBuilt(*viewport_, *extrudeDock_, built.Value(), handle, extrudeSnapshot_->nativePreviewMeshes,
+            outputs.body, outputs.startWire, outputs.endWire, outputs.sideWires)) return true;
     extrudeDock_->ShowStatusLines({QStringLiteral("指定した終端で押し出します。体積 %1 mm3")
         .arg(built.Value().totalVolumeMm3, 0, 'f', 3)}, true);
     if (!confirm) return true;
-    // Adding a part refreshes shelves and can replace the snapshot's preview after
-    // the document revision changes. Keep the actual committing shapes alive.
+    // Retain the result across shelf updates, and stop selection callbacks from
+    // rebuilding it with every document revision made by this transaction.
     const auto committedPreview = extrudeSnapshot_->nativePreview;
-    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), "面の押し出し");
-    if (!faceProfileSolid_.IsNil()) {
-        const auto face = CommitSurfaceExtrudeFace();
-        if (face.IsNil()) return true;
-        plan.profiles = {face};
+    viewport_->HideExtrudeHandle();
+    bool kept = false;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), "面の押し出し");
+        bool ready = true;
+        if (outputs.body && !faceProfileSolid_.IsNil()) {
+            const auto face = CommitSurfaceExtrudeFace();
+            ready = !face.IsNil();
+            if (ready) plan.profiles = {face};
+        }
+        if (ready) {
+            ExtrudeDefinition definition;
+            definition.profiles = plan.profiles;
+            definition.direction = handle.direction;
+            definition.distance.value = handle.distanceMm;
+            definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
+            definition.extentMode = static_cast<int>(choice.extent);
+            definition.secondDistanceMm = choice.secondDistanceMm;
+            StoreExtrudeReference(definition, choice);
+            auto inputs = plan.profiles;
+            if (definition.extentTarget) inputs.push_back(*definition.extentTarget);
+            kept = AdoptExtrudeResult(choice, definition, built.Value(), {}, inputs) && transaction.Commit();
+        }
     }
-    for (const auto& part : built.Value().parts) {
-        ExtrudeDefinition definition;
-        definition.profiles = plan.profiles;
-        definition.direction = handle.direction;
-        definition.distance.value = handle.distanceMm;
-        definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
-        definition.extentMode = static_cast<int>(extrudeDock_->ExtentMode());
-        definition.secondDistanceMm = extrudeDock_->SecondDistanceMm();
-        auto inputs = plan.profiles;
-        StoreExtrudeReference(definition, choice);
-        if (definition.extentTarget) inputs.push_back(*definition.extentTarget);
-        if (AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude, definition,
-                part.handle, {}, "面の押し出し", inputs).IsNil()) return true;
-    }
-    if (!transaction.Commit()) return true;
-    committedPreview->parts.clear(); // Committed parts now own these handles, even after a refresh.
+    if (kept && outputs.body) committedPreview->parts.clear(); // Document owns adopted handles.
     EndExtrudePreview();
     AdoptCurrentDocument();
+    if (kept) RefreshPartEdges();
+    if (!kept) {
+        RebuildKernelShapes();
+        SetStatus(QStringLiteral("押し出しを確定できなかったため、変更を戻しました。"));
+    }
     EndExtrudePreview(true);
-    SetStatus(QStringLiteral("面を押し出して立体を作りました。"));
     return true;
 }
 

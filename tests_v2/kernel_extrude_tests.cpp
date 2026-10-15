@@ -4,6 +4,7 @@
 // 合わなければ BuildExtrude が KER-E002 で断る。ここではその両方を確かめる。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
@@ -948,6 +949,42 @@ KACHA_V2_TEST(kernel_extrude, IndependentEndCapUsesOffsetBeforeReachTest)
     Require(made.HasValue(),made.FirstSummaryJa());RequireNear(made.Value().totalVolumeMm3,16,1e-5,"Offset brings stop forward before coverage test");
     ClearShapeCache();
 }
+KACHA_V2_TEST(kernel_extrude, NativeCapWiresMatchSolidAndPreserveClosedLoops)
+{
+    using namespace kachakacha::v2::kernel;
+    for (bool ring : {false, true}) for (bool tilted : {false, true}) {
+        auto request = BasicRequest();
+        request.profiles = {Circle({0,0,0}, 2)};
+        if (ring) request.profiles.push_back(Circle({0,0,0}, 1));
+        request.customDirection = {0,0,1}; request.extent = ExtrudeExtentMode::ToTarget;
+        request.targetKind = ExtrudeTargetKind::Plane;
+        request.targetPlane.origin = {0,0,10}; request.targetPlane.normal = tilted ? Vector3{-.3,0,1} : Vector3{0,0,1};
+        const auto made = BuildExtrudeToFace(request, {}, {}, Tolerance());
+        Require(made.HasValue(), made.FirstSummaryJa());
+        const auto& value = made.Value();
+        Require(value.startProfileWires.size() == (ring ? 2 : 1), "Each source loop retained");
+        Require(value.endProfileWires.size() == (ring ? 2 : 1), "Each cap loop retained including holes");
+        for (const auto* loops : {&value.startProfileWires, &value.endProfileWires}) {
+            for (const auto& loop : *loops) {
+                Require(kachakacha::v2::geometry::SegmentsFormClosedLoop(loop, Tolerance()), "Native cap ordered and closed");
+                for (const auto& curve : loop) for (int i=0;i<=32;++i) {
+                    const auto p=curve.Evaluate(i/32.0);
+                    const auto gap=DistanceToShapeSurface(value.parts.front().handle,p);
+                    Require(gap.HasValue() && gap.Value() <= Tolerance().modelLinearMm*1.01, "Wire lies on final native body");
+                    if (loops == &value.endProfileWires)
+                        RequireNear(p.z,10+(tilted?.3*p.x:0),Tolerance().modelLinearMm,"End wire on selected plane, not extended prism");
+                }
+            }
+        }
+        if (!tilted) Require(value.endProfileWires.front().front().Kind()==kachakacha::v2::geometry::CurveKind::Circle,"Circular cap stays circle");
+        for (const auto& run : value.sideBoundaryWires) for (const auto& c : run) {
+            Require(std::min(c.StartPoint().z,c.EndPoint().z)<.001,"Side reaches start");
+            Require(std::max(c.StartPoint().z,c.EndPoint().z)>9,"Side reaches actual stop");
+        }
+        ClearShapeCache();
+    }
+}
+
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_extrude_tests")

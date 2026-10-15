@@ -16,6 +16,8 @@
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QLabel>
+#include <QListWidget>
+#include <QDir>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
@@ -192,7 +194,7 @@ bool ProjectedProfileExtrudes(V2MainWindow& window) {
     window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
     window.RunCommand("edit.redo");return Explain("PROJ extrusion persists through Undo and save",window.SaveAndReopen("projected-extrusion.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
 }
-bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved) {
+bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=-1) {
     if(!Fixture(window,false,curved?2:1))return false;
     const auto before=window.Session().GetDocument().Snapshot();auto* tool=V2ProjectionTool::Open(window);
     if(!AddGuideInputs(*tool))return false;
@@ -224,7 +226,19 @@ bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved) {
     if(!Explain("PROJ lamp input shows extrusion handle",window.Viewport().ExtrudeHandleShown()))return false;
     window.ExtrudeDock().ChooseDirection(modeling::ExtrudeDirectionMode::CustomXYZ);
     window.ExtrudeDock().SetCustomDirection(curved?geometry::Vector3{1,0,0}:geometry::Vector3{0,0,1});
+    if(wireOutput>=0) window.ExtrudeDock().ShowOutputs({wireOutput==1,true,true,true});
     window.ExtrudeDock().TypeDistanceMm(.5);
+    const int beforeWires=CountOfKind(window,domain::EntityKind::Wire);
+    if(wireOutput>=0) {
+        if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        const int madeWires=CountOfKind(window,domain::EntityKind::Wire)-beforeWires;
+        if(!Explain("PROJ native selected outputs",CountOfKind(window,domain::EntityKind::Part)==wireOutput&&madeWires>=2))return false;
+        window.RunCommand("edit.undo");
+        if(CountOfKind(window,domain::EntityKind::Part)!=0||CountOfKind(window,domain::EntityKind::Wire)!=beforeWires)return false;
+        window.RunCommand("edit.redo");
+        return window.SaveAndReopen("projected-lamp-wires.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==wireOutput
+            &&CountOfKind(window,domain::EntityKind::Wire)==beforeWires+madeWires;
+    }
     if(!Explain("PROJ actual lamp solid committed",window.HandleToolKey(Qt::Key_Return,nullptr)&&CountOfKind(window,domain::EntityKind::Part)==1))return false;
     if(!Explain("PROJ live native solid has half-mm volume before any rebuild",VerifyProjectedLampNative(window,geometry::kPi*.5)))return false;
     window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
@@ -236,6 +250,7 @@ bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved) {
 }
 }
 std::vector<SelfTestCase> OwnerProjectionCases();
+bool PanoramaTwoPlanes(V2MainWindow& window);
 std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
     {"PROJ preselection",Preselection},{"PROJ solid face viewport click",SolidFaceClick},{"PROJ wrap closest fractional numeric retry",WrapClosestAndFraction},
     {"PROJ manual direction and one-button reverse",ManualDirectionPreserved},{"PROJ role marks preserve tree and document",RoleMarks},
@@ -246,5 +261,8 @@ std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"P
     {"PROJ planar circle ordinary storage extrusion",[](auto& w){return CircleOutput(w,true,false);}},
     {"PROJ curved lamp projected face extrusion",[](auto& w){return CircleOutput(w,false,true);}},
     {"PROJ curved lamp ordinary storage face extrusion",[](auto& w){return CircleOutput(w,true,true);}}};
+    cases.push_back({"PROJ panorama two workplanes per-row directions",PanoramaTwoPlanes});
+    cases.push_back({"PROJ curved lamp wires only Undo save",[](auto& w){return CircleOutput(w,true,true,0);}});
+    cases.push_back({"PROJ curved lamp wires and solid Undo save",[](auto& w){return CircleOutput(w,true,true,1);}});
     const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
 }

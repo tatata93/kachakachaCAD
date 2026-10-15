@@ -84,8 +84,9 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
     const auto key = encoded.str();
     if (snapshot.nativePreview && snapshot.nativePreviewKey == key) return Out::Success(*snapshot.nativePreview);
     snapshot.nativePreview.reset(); snapshot.nativePreviewKey.clear();
+    snapshot.nativePreviewMeshes.clear();
     auto built = (choice.extent == modeling::ExtrudeExtentMode::ToTarget || choice.endCap.Planar())
-        ? BuildToTarget(choice, {}, source)
+        ? BuildToTarget(choice, snapshot.profiles, source)
         : V2Calculation::Call(this, "面の押し出しを計算しています…",
             [](const auto&... values) { return kernel::BuildSurfaceExtrude(values...); },
             source, choice.customDirection, start, end, tolerance);

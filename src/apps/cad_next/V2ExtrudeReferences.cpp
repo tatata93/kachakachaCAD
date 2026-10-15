@@ -1,4 +1,5 @@
 #include "V2Calculation.h"
+#include "V2ExtrudeWirePreview.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
 #include "V2Viewport.h"
@@ -12,6 +13,15 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+
+namespace {
+template<class Shapes>
+bool ContainsHandle(const Shapes& shapes, kachakacha::v2::modeling::KernelShapeHandle handle)
+{
+    return std::any_of(shapes.begin(), shapes.end(),
+        [&](const auto& entry) { return entry.second.value == handle.value; });
+}
+}
 
 std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeStopChoices() const
 {
@@ -148,23 +158,29 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         refuse(QStringLiteral("方向に使う直線、または0ではない方向を指定してください。"));
         return true;
     }
-    if (!output.body || output.startWire || output.endWire || output.sideWires) {
-        refuse(QStringLiteral("面・線・点までの押し出しは出力を「ソリッド / 面」にしてください。独立ワイヤーは未対応です。"));
+    if (!output.body && !output.startWire && !output.endWire && !output.sideWires) {
+        refuse(QStringLiteral("作るものを1つ以上選んでください。"));
         return true;
     }
+    choice.makePart = output.body;
+    choice.makeStartProfileWire = output.startWire;
+    choice.makeEndProfileWire = output.endWire;
+    choice.makeSideBoundaryWires = output.sideWires;
+    auto built = SurfaceExtrudePreview(choice, {}, choice.distanceMm, choice.secondDistanceMm);
+    if (!built.HasValue()) { refuse(QString::fromStdString(built.FirstSummaryJa())); return true; }
+    const auto retainedPreview = extrudeSnapshot_->nativePreview;
+    // Boolean output is separately owned; the unmodified preview remains cached.
     auto temporary = std::shared_ptr<std::vector<modeling::KernelShapeHandle>>(
         new std::vector<modeling::KernelShapeHandle>, [this](auto* handles) {
-            for(const auto& handle:*handles) {
-                const bool retained=std::any_of(partShapes_.begin(),partShapes_.end(),
-                    [&](const auto& entry){return entry.second.value==handle.value;});
-                if(!retained)kernel::ReleaseShape(handle);
+            for (const auto& handle : *handles) {
+                if (!ContainsHandle(partShapes_, handle)) {
+                    if (extrudeSnapshot_) extrudeSnapshot_->nativePreviewMeshes.erase(handle.value);
+                    kernel::ReleaseShape(handle);
+                }
             }
             delete handles;
         });
-    auto built = BuildToTarget(choice, extrudeSnapshot_->profiles);
-    if (!built.HasValue()) { refuse(QString::fromStdString(built.FirstSummaryJa())); return true; }
-    for(const auto& part:built.Value().parts)temporary->push_back(part.handle);
-    if (choice.booleanMode != modeling::ExtrudeBooleanMode::NewPart) {
+    if (choice.makePart && choice.booleanMode != modeling::ExtrudeBooleanMode::NewPart) {
         const auto target = partShapes_.find(plan.targetSolid.ToString());
         if (target == partShapes_.end() || built.Value().parts.size() != 1) {
             refuse(QStringLiteral("足す・引く相手の立体と1つの輪郭を指定してください。")); return true;
@@ -183,12 +199,19 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
     }
     std::vector<std::vector<geometry::Vector3>> edges, faces;
     for (const auto& part : built.Value().parts) {
-        const auto mesh = kernel::BuildShapeMesh(part.handle);
-        if (!mesh.HasValue()) { refuse(QString::fromStdString(mesh.FirstSummaryJa())); return true; }
-        edges.insert(edges.end(), mesh.Value().edges.begin(), mesh.Value().edges.end());
-        for (const auto& t : mesh.Value().triangles) faces.push_back({t.points[0], t.points[1], t.points[2]});
+        auto& cache = extrudeSnapshot_->nativePreviewMeshes;
+        if (cache.find(part.handle.value) == cache.end()) {
+            const auto mesh = V2Calculation::Call(nullptr, "押し出しの表示を準備しています…",
+                [](auto value) { return kernel::BuildShapeMesh(value); }, part.handle);
+            if (!mesh.HasValue()) { refuse(QString::fromStdString(mesh.FirstSummaryJa())); return true; }
+            cache.emplace(part.handle.value, mesh.Value());
+        }
+        const auto& mesh = cache.at(part.handle.value);
+        edges.insert(edges.end(), mesh.edges.begin(), mesh.edges.end());
+        if (output.body) for (const auto& t : mesh.triangles) faces.push_back({t.points[0], t.points[1], t.points[2]});
     }
     app::ExtrudeHandle handle{viewport_->ExtrudeHandleOrigin(), choice.customDirection, extrudeDock_->DistanceMm()};
+    if (!output.body) edges = ExtrudeWirePreview(built.Value(), output.startWire, output.endWire, output.sideWires);
     viewport_->ShowExtrudeHandle(handle, std::move(edges));
     viewport_->SetExtrudePreviewFaces(std::move(faces));
     extrudeDock_->ShowStatusLines({QStringLiteral("指定した終端で止めます。この形で確定できます。")}, true);
@@ -196,6 +219,11 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
         modeling::ExtrudeAnalysis analysis;
         analysis.direction = choice.customDirection;
         CommitExtrude(choice, plan, analysis, built.Value());
+        // Transfer only handles actually adopted by the committed document.
+        auto& parts = retainedPreview->parts;
+        parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& part) {
+            return ContainsHandle(partShapes_, part.handle);
+        }), parts.end());
     }
     return true;
 }

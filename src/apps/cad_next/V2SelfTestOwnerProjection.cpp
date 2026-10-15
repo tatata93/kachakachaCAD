@@ -15,6 +15,8 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include <QApplication>
+#include <QElapsedTimer>
+#include "kachakacha/kernel/OcctExtrude.h"
 #include <QComboBox>
 #include <QFile>
 #include <QIODevice>
@@ -96,12 +98,21 @@ bool V2ProjectionOwnerExercise::LightEndCap(V2MainWindow& window,const QString& 
         ||window.ExtrudeDock().TargetEntityId()!=Id("4748")||window.Viewport().Selection().entityIds!=selected.entityIds) {
         std::cout<<"OWNER central face mouse pick failed clicked="<<clicked<<" pending="<<window.Viewport().ReferencePickPending()<<std::endl;return false;
     }
+    window.ExtrudeDock().ShowOutputs({true,true,true,true});
+    window.RefreshExtrudeFromDock();
+    if(!window.extrudeSnapshot_||!window.extrudeSnapshot_->nativePreview)return false;
+    const auto committedHandle=window.extrudeSnapshot_->nativePreview->parts.front().handle;
+    const int beforeWires=selftest::CountOfKind(window,domain::EntityKind::Wire);
     const int before=selftest::CountOfKind(window,domain::EntityKind::Part);
     QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-preview.png");
-    window.ExtrudeDock().PressConfirm();
+    QElapsedTimer clock;clock.start();window.ExtrudeDock().PressConfirm();
+    std::cout<<"OWNER confirmation elapsed_ms="<<clock.elapsed()<<std::endl;
+    if(selftest::CountOfKind(window,domain::EntityKind::Wire)<=beforeWires+1)return false;
     if(selftest::CountOfKind(window,domain::EntityKind::Part)!=before+1){std::cout<<window.StatusText().toStdString()<<std::endl;return false;}
-    const auto& entity=window.Session().GetDocument().Snapshot().entities.back();
-    const auto shape=window.partShapes_.find(entity.id.ToString());if(shape==window.partShapes_.end())return false;
+    base::EntityId partId;
+    for(const auto& [id,handle]:window.partShapes_)if(handle.value==committedHandle.value)partId=*base::EntityId::Parse(id);
+    if(!selftest::Explain("OWNER confirm reuses preview native shape without rebuild",!partId.IsNil()))return false;
+    const auto shape=window.partShapes_.find(partId.ToString());if(shape==window.partShapes_.end())return false;
     const auto checked=kernel::CheckSolidForExport(shape->second,.001);
     const auto count=kernel::ShapeFaceCount(shape->second);bool aligned=false;
     if(!checked.HasValue()||!checked.Value().Ok()||!count.HasValue())return false;
@@ -114,7 +125,7 @@ bool V2ProjectionOwnerExercise::LightEndCap(V2MainWindow& window,const QString& 
     if(!aligned)return false;
     std::cout<<"OWNER cap verified: closed export solid, central-plane end within .001 mm, volume "<<checked.Value().volumeMm3<<std::endl;
     window.RunCommand("selection.activate");Frame(window,{});window.grab().save(output+"/lamp-central-plane-result.png");
-    app::SelectionSet detail;detail.entityIds={entity.id};window.Viewport().SetSelection(detail);
+    app::SelectionSet detail;detail.entityIds={partId};window.Viewport().SetSelection(detail);
     window.Viewport().IsolateSelection();window.Viewport().FitToDocument();window.Viewport().SetSelection({});
     window.SetStatus(QStringLiteral("実モデルのライト：中央面まで押し出し。閉ソリッド・終端の同一平面を0.001 mm以内で確認。"));
     QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-detail.png");

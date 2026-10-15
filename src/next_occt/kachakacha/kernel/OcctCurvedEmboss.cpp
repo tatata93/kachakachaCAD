@@ -27,6 +27,8 @@
 #include <Geom2d_BSplineCurve.hxx>
 #include <GeomProjLib.hxx>
 #include <Geom_OffsetSurface.hxx>
+#include <Geom_Plane.hxx>
+#include <gp_Pln.hxx>
 #include <Geom_Line.hxx>
 #include <GProp_GProps.hxx>
 #include <ShapeFix_Face.hxx>
@@ -104,7 +106,7 @@ struct BoundaryMapper {
     gp_Pnt2d Map(const occ::handle<Geom2d_Curve>& curve, double t, double traversal) const
     {
         gp_Pnt2d uv; gp_Vec2d derivative; curve->D1(t, uv, derivative);
-        if (options.draftRad == 0 && options.tiltRad == 0) return uv;
+        if (options.draftRad == 0 && options.tiltRad == 0 && !options.endCap.Planar()) return uv;
         gp_Pnt p; gp_Vec du, dv; base->D1(uv.X(), uv.Y(), p, du, dv);
         gp_Vec n = du.Crossed(dv); Require(n.Magnitude() > 1e-12, "曲面の法線が定まりません。");
         n.Normalize(); n *= normalSign;
@@ -177,6 +179,18 @@ TopEdge MapEdge(const TopoDS_Edge& edge, const TopoDS_Face& face, const Boundary
     }
     throw std::runtime_error("上面の輪郭が許容偏差に収まりません。角度や高さを小さくしてください。");
 }
+void SetTopPlane(BoundaryMapper& mapper, const TopoDS_Face& bottom)
+{
+    const auto& cap=mapper.options.endCap;
+    if(!cap.Planar())return;
+    Require(cap.referenceNormal.IsFinite() && std::isfinite(cap.tiltRad) && std::isfinite(cap.headingRad), "終端面の向きが不正です。");
+    Require(cap.mode!=modeling::EndCapMode::Reference || cap.referenceNormal.Length()>1e-9, "終端の向きの基準面を選んでください。");
+    double u0,u1,v0,v1;BRepTools::UVBounds(bottom,u0,u1,v0,v1);
+    gp_Pnt point;gp_Vec du,dv;mapper.base->D1((u0+u1)*.5,(v0+v1)*.5,point,du,dv);
+    gp_Vec n=du.Crossed(dv);Require(n.Magnitude()>1e-12,"輪郭中心の法線が定まりません。");n.Normalize();n*=mapper.normalSign;
+    const auto normal=modeling::EndCapNormal(cap,{n.X(),n.Y(),n.Z()});
+    mapper.top=new Geom_Plane(gp_Pln(point.Translated(n*mapper.options.heightMm),gp_Dir(ToVector(normal))));
+}
 CurvedEmbossResult Build(const TopoDS_Face& source, const std::vector<geometry::CurveSegment>& boundary,
     const CurvedEmbossOptions& options)
 {
@@ -184,6 +198,7 @@ CurvedEmbossResult Build(const TopoDS_Face& source, const std::vector<geometry::
     BoundaryMapper mapper; mapper.base=BRep_Tool::Surface(bottom); mapper.options=options;
     mapper.normalSign=bottom.Orientation()==TopAbs_REVERSED ? -1 : 1;
     mapper.top=new Geom_OffsetSurface(mapper.base,options.heightMm*mapper.normalSign);
+    SetTopPlane(mapper,bottom);
     BRepBuilderAPI_MakeWire topWire;
     BRepBuilderAPI_Sewing sewing(options.toleranceMm);
     sewing.Add(bottom); double error=0;

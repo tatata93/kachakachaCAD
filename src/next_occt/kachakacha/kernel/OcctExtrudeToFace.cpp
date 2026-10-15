@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include <algorithm>
 #include <cmath>
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -208,7 +209,7 @@ Out Trim(const ExtrudeBuildResult& extended, const TopoDS_Face& target, const Ve
 #endif
 
 Out BuildExtrudeToFace(const ExtrudeRequest& request, KernelShapeHandle source,
-    KernelShapeHandle target, const GeometryTolerance& tolerance, double targetOffsetMm)
+    KernelShapeHandle target, const GeometryTolerance& tolerance, double targetOffsetMm, bool extendTargetPlane)
 {
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
@@ -226,6 +227,12 @@ Out BuildExtrudeToFace(const ExtrudeRequest& request, KernelShapeHandle source,
         if (!std::isfinite(targetOffsetMm)) return Out::Failure(MakeError("EXT-003", "終端オフセットが不正です。", {}));
         auto targetFace = StopFace(request, target);
         if (!targetFace.HasValue()) return Out::Failure(targetFace.Diagnostics());
+        if (extendTargetPlane) {
+            BRepAdaptor_Surface surface(targetFace.Value());
+            if (surface.GetType()!=GeomAbs_Plane) return Out::Failure(MakeError("EXT-003",
+                "延長できる終端は平面です。曲面はそのまま使うか、作業平面を指定してください。", {}));
+            targetFace = Result<TopoDS_Face>::Success(BRepBuilderAPI_MakeFace(surface.Plane()).Face());
+        }
         const auto mesh = BuildShapeMesh(source);
         if (!mesh.HasValue() || mesh.Value().triangles.empty()) return Out::Failure(MakeError("EXT-008", "押し出す面がありません。", {}));
         const Vector3 direction = geometry::Normalized(request.customDirection, 1.0e-12)
@@ -250,8 +257,86 @@ Out BuildExtrudeToFace(const ExtrudeRequest& request, KernelShapeHandle source,
         return Out::Failure(MakeError("EXT-008", "終端面まで押し出せませんでした。", {}));
     }
 #else
-    (void)request; (void)source; (void)target; (void)tolerance; (void)targetOffsetMm;
+    (void)request; (void)source; (void)target; (void)tolerance; (void)targetOffsetMm; (void)extendTargetPlane;
     return Out::Failure(MakeError("KER-E005", "幾何カーネルが必要です。", {}));
 #endif
 }
+
+Out BuildExtrudeEndCap(const ExtrudeRequest& original, KernelShapeHandle source,
+    KernelShapeHandle target, const GeometryTolerance& tolerance, double offset,
+    const modeling::ExtrudeEndCap& cap)
+{
+    if (cap.mode==modeling::EndCapMode::Natural)
+        return BuildExtrudeToFace(original,source,target,tolerance,offset,cap.extendTargetPlane);
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {
+        if (cap.mode<modeling::EndCapMode::Natural || cap.mode>modeling::EndCapMode::Angle
+            || !std::isfinite(cap.tiltRad) || !std::isfinite(cap.headingRad)
+            || (cap.mode==modeling::EndCapMode::Reference && (!cap.referenceNormal.IsFinite() || cap.referenceNormal.Length()<1e-9)))
+            return Out::Failure(MakeError("EXT-003","終端面の向きが未指定または不正です。",{}));
+        TemporaryShapes temporary;TopoDS_Shape shape;
+        if (!LookupShape(source,shape)) {
+            const auto made=ProfileSource(original,tolerance);if(!made.HasValue())return Out::Failure(made.Diagnostics());
+            source=made.Value();temporary.handles.push_back(source);LookupShape(source,shape);
+        }
+        Bnd_Box box;BRepBndLib::AddOptimal(shape,box,false,true);
+        if(box.IsVoid()||box.IsOpen())return Out::Failure(MakeError("EXT-008","押し出す面の範囲が不正です。",{}));
+        double x0,y0,z0,x1,y1,z1;box.Get(x0,y0,z0,x1,y1,z1);
+        const Vector3 center{(x0+x1)*.5,(y0+y1)*.5,(z0+z1)*.5};
+        const auto pose=FacePoseNear(source,0,center,tolerance);
+        if(!pose.HasValue())return Out::Failure(pose.Diagnostics());
+        const auto direction=geometry::Normalized(original.customDirection,1e-12)*(original.reversed?-1.0:1.0);
+        if(!direction.IsFinite()||direction.Length()<.5)return Out::Failure(MakeError("EXT-007","押し出す方向を指定してください。",{}));
+        double start=0,end=original.distanceMm;
+        if(original.extent==modeling::ExtrudeExtentMode::SymmetricDistance){start=-end*.5;end*=.5;}
+        if(original.extent==modeling::ExtrudeExtentMode::TwoDistances)start=-original.secondDistanceMm;
+        if(original.extent==modeling::ExtrudeExtentMode::ThroughAll)
+            return Out::Failure(MakeError("EXT-003","貫通切削には終端面がありません。面まで、または距離を選んでください。",{}));
+        if(original.extent==modeling::ExtrudeExtentMode::ToTarget) {
+            auto stop=StopFace(original,target);if(!stop.HasValue())return Out::Failure(stop.Diagnostics());
+            if(cap.extendTargetPlane) {
+                BRepAdaptor_Surface surface(stop.Value());
+                if(surface.GetType()!=GeomAbs_Plane)return Out::Failure(MakeError("EXT-003","終端の延長は平面だけに使用できます。",{}));
+                stop=Result<TopoDS_Face>::Success(BRepBuilderAPI_MakeFace(surface.Plane()).Face());
+            }
+            if(!std::isfinite(offset))return Out::Failure(MakeError("EXT-003","終端オフセットが不正です。",{}));
+            if(offset!=0) {
+                gp_Trsf shift;shift.SetTranslation(ToVector(direction*offset));
+                stop=Result<TopoDS_Face>::Success(TopoDS::Face(BRepBuilderAPI_Transform(stop.Value(),shift,true).Shape()));
+            }
+            const auto sourceMesh=BuildShapeMesh(source);
+            if(!sourceMesh.HasValue())return Out::Failure(sourceMesh.Diagnostics());
+            if(!cap.extendTargetPlane) {
+                const auto coverage=Reach(sourceMesh.Value(),stop.Value(),direction,tolerance.modelLinearMm);
+                if(!coverage.HasValue())return Out::Failure(coverage.Diagnostics());
+            }
+            BRepBuilderAPI_MakeFace support(BRep_Tool::Surface(stop.Value()),tolerance.modelLinearMm);
+            if(!support.IsDone())return Out::Failure(MakeError("EXT-003","終端の支持面を取得できません。",{}));
+            IntCurvesFace_ShapeIntersector ray;ray.Load(support.Face(),tolerance.modelLinearMm);
+            ray.Perform(gp_Lin(ToPoint(center),gp_Dir(ToVector(direction))),-1e8,1e8);
+            if(!ray.IsDone()||ray.NbPnt()==0)return Out::Failure(MakeError("EXT-003",
+                "輪郭中心から終端面に届きません。平面を延長する設定と押し出し方向を確認してください。",{}));
+            end=1e100;for(int i=1;i<=ray.NbPnt();++i)if(ray.WParameter(i)>tolerance.modelLinearMm)
+                end=std::min(end,ray.WParameter(i));
+        }
+        if(!std::isfinite(end)||end>=1e99||end-start<=tolerance.modelLinearMm)
+            return Out::Failure(MakeError("EXT-003","終端は押し出す方向の先に指定してください。",{}));
+        if(cap.mode==modeling::EndCapMode::Source)return BuildSurfaceExtrude(source,direction,start,end,tolerance);
+        const auto normal=modeling::EndCapNormal(cap,pose.Value().normal);
+        if(std::abs(geometry::Dot(direction,normal))<1e-8)
+            return Out::Failure(MakeError("EXT-003","押し出し方向が終端面と平行で、交差しません。",{}));
+        auto request=original;request.targetKind=modeling::ExtrudeTargetKind::Plane;
+        request.targetPlane.origin=center+direction*end;request.targetPlane.normal=normal;
+        if(start!=0) {
+            gp_Trsf shift;shift.SetTranslation(ToVector(direction*start));
+            source=StoreShape(BRepBuilderAPI_Transform(shape,shift,true).Shape());temporary.handles.push_back(source);
+        }
+        return BuildExtrudeToFace(request,source,{},tolerance,0,false);
+    }catch(const Standard_Failure& e){return Out::Failure(MakeError("EXT-008","指定した終端面を作れません。",e.GetMessageString()));}
+#else
+    (void)original;(void)source;(void)target;(void)tolerance;(void)offset;(void)cap;
+    return Out::Failure(MakeError("KER-E005","幾何カーネルが必要です。",{}));
+#endif
+}
+
 } // namespace kachakacha::v2::kernel

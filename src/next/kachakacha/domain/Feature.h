@@ -1,4 +1,5 @@
 #pragma once
+#include "kachakacha/modeling/ExtrudeEndCap.h"
 
 //! Feature DAG。文書の正本はこちらで、Entityは識別と表示だけを持つ。
 //! methodごとにFeature typeを増やさない(architecture-and-data.md §7)。
@@ -248,6 +249,7 @@ struct ExtrudeDefinition {
     int extentMode = 0;
     double secondDistanceMm = 0.0;
     std::optional<EntityId> extentTarget;
+    modeling::ExtrudeEndCap endCap;
     double targetParameter = -1.0;
     double targetOffsetMm = 0.0; // signed distance along extrusion direction
     std::string targetFaceBrep; // selected face snapshot; never a transient face index

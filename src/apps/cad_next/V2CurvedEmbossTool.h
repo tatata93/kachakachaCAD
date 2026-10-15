@@ -10,6 +10,7 @@ class QLabel;
 class QPushButton;
 class QVBoxLayout;
 class V2RoleInput;
+class V2EndCapInput;
 class V2CurvedEmbossTool final : public QWidget {
 public:
     static V2CurvedEmbossTool* Open(V2MainWindow& window);
@@ -37,6 +38,7 @@ private:
     std::vector<kachakacha::v2::base::EntityId> wires_;
     std::optional<kachakacha::v2::kernel::CurvedEmbossResult> built_;
     std::uint64_t supportRevision_ = 0;
+    V2EndCapInput* endCap_;
     int role_ = 0;
     V2RoleInput *supportRole_ = nullptr, *wireRole_ = nullptr;
     QDoubleSpinBox *height_, *draft_, *tilt_, *heading_, *tolerance_;

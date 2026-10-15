@@ -99,5 +99,19 @@ KACHA_V2_TEST(curved_emboss, rejects_off_surface_and_open) {
     Require(!kernel::BuildCurvedEmboss(kernel::StoreShape(face),{circle.Value()},{}).HasValue(),"off-surface rejected");
     Require(!kernel::BuildCurvedEmboss(kernel::StoreShape(face),{line.Value()},{}).HasValue(),"open wire rejected");
 }
+
+KACHA_V2_TEST(curved_emboss, cylinder_with_planar_end_cap) {
+    occ::handle<Geom_CylindricalSurface> surface=new Geom_CylindricalSurface(gp_Ax3(),20);
+    const auto face=BRepBuilderAPI_MakeFace(surface,-.5,.5,-10,10,1e-7).Face();
+    const auto patch=BRepBuilderAPI_MakeFace(surface,-.15,.15,-2,2,1e-7).Face();
+    const auto boundary=kernel::FromWire(BRepTools::OuterWire(patch),1e-6);Require(boundary.HasValue(),"boundary");
+    kernel::CurvedEmbossOptions options;options.heightMm=2;options.toleranceMm=.001;
+    options.endCap.mode=modeling::EndCapMode::Reference;options.endCap.referenceNormal={1,0,0};
+    const auto made=kernel::BuildCurvedEmboss(kernel::StoreShape(face),boundary.Value(),options);
+    Require(made.HasValue(),made.FirstSummaryJa()+made.FirstDiagnostic().detailsJa);
+    const auto mesh=kernel::BuildShapeMesh(made.Value().handle);Require(mesh.HasValue(),"mesh");
+    RequireNear(mesh.Value().maximum.x,22,.002,"Cap lies on x=22 while source remains cylindrical");
+    Require(made.Value().volumeMm3>48&&made.Value().volumeMm3<60,"Plausible curved-source/flat-end volume");
+}
 #endif
 KACHA_V2_TEST_MAIN("curved_emboss_tests")

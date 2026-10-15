@@ -610,6 +610,11 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.booleanMode = static_cast<int>(loader.NumberOr(definition, "booleanMode", 0.0));
         made.secondDistanceMm = loader.NumberOr(definition, "secondDistanceMm", 0.0);
         made.extentTarget = loader.ParseOptionalId<EntityId>(definition.Find("extentTarget"), where + ".extentTarget");
+        made.endCap.mode = static_cast<modeling::EndCapMode>(static_cast<int>(loader.NumberOr(definition, "endCapMode", 0)));
+        if (definition.Find("endCapNormal")) made.endCap.referenceNormal = loader.ReadVector(definition, "endCapNormal", where);
+        made.endCap.tiltRad = loader.NumberOr(definition, "endCapTilt", 0);
+        made.endCap.headingRad = loader.NumberOr(definition, "endCapHeading", 0);
+        made.endCap.extendTargetPlane = loader.NumberOr(definition, "extendTargetPlane", 0) != 0;
         made.targetParameter = loader.NumberOr(definition, "targetParameter", -1.0);
         made.targetOffsetMm = loader.NumberOr(definition, "targetOffsetMm", 0.0);
         if (definition.Find("targetFaceBrep")) made.targetFaceBrep = loader.String(definition, "targetFaceBrep", where);

@@ -85,6 +85,7 @@ enum class UiTheme {
 
 class V2MainWindow final : public QMainWindow {
     friend class V2DocumentOpen;
+    friend class V2EndCapInput;
     friend class V2SurfaceEditTool;       // 面の編集の道具(状態と手順は向こうが持つ)
     friend class V2SurfaceAnalysisTool;   // 面の解析の道具(同じ)
     friend class V2SolidTool;             // 立体を作る(回転体・ロフト立体・スイープ。同じ)

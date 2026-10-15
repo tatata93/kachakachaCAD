@@ -302,6 +302,14 @@ void WriteDimensionExtras(JsonObject& object, const ReferenceDimension& dim)
         definition["secondDistanceMm"] = JsonValue::Number(extrude->secondDistanceMm);
         definition["extentTarget"] = WriteOptionalId(extrude->extentTarget);
         definition["targetParameter"] = JsonValue::Number(extrude->targetParameter);
+        if (!(extrude->endCap == modeling::ExtrudeEndCap{})) {
+            const auto& cap = extrude->endCap;
+            definition["endCapMode"] = JsonValue::Number(static_cast<int>(cap.mode));
+            definition["endCapNormal"] = WriteVector(cap.referenceNormal);
+            definition["endCapTilt"] = JsonValue::Number(cap.tiltRad);
+            definition["endCapHeading"] = JsonValue::Number(cap.headingRad);
+            definition["extendTargetPlane"] = JsonValue::Number(cap.extendTargetPlane ? 1 : 0);
+        }
         if (extrude->targetOffsetMm != 0.0) definition["targetOffsetMm"] = JsonValue::Number(extrude->targetOffsetMm);
         if (!extrude->targetFaceBrep.empty()) definition["targetFaceBrep"] = JsonValue::String(extrude->targetFaceBrep);
         definition["booleanMode"] = JsonValue::Number(

@@ -13,6 +13,7 @@
 #include <QDialog>
 #include <QDoubleSpinBox>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QObject>
 #include <QPointF>
 #include <QPushButton>
@@ -258,6 +259,43 @@ bool CaseExtrudeTargetFirst(V2MainWindow& window) {
     return false;
 }
 
+
+bool CaseEndCapDistance(V2MainWindow& window) {
+    auto& viewport=window.Viewport();auto& dock=window.ExtrudeDock();
+    viewport.SetViewDirection(ViewDirection::Top);viewport.SetViewCenter({});viewport.SetVisibleWidthMm(60);
+    const auto circle=geometry::CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},2);
+    if(!circle.HasValue())return false;
+    const auto added=window.Session().AddWire({circle.Value()},false,"終端角度の円");if(!added.committed)return false;
+    app::SelectionSet selected;selected.entityIds=added.createdEntityIds;viewport.SetSelection(selected);window.RunCommand("part.extrude");
+    if(!viewport.ExtrudeHandleShown())return false;
+    dock.TypeDistanceMm(10);
+    auto* mode=window.findChild<QComboBox*>("endCapMode");auto* tilt=window.findChild<QDoubleSpinBox*>("endCapTilt");
+    auto* pick=window.findChild<QPushButton*>("endCapPick");if(!mode||!tilt||!pick)return false;
+    mode->setCurrentIndex(2);pick->click();
+    if(!Explain("終端向きの選択は独立して取消可能",viewport.ReferencePickPending()
+        &&window.HandleToolKey(Qt::Key_Escape,nullptr)&&!viewport.ReferencePickPending()
+        &&viewport.Selection().entityIds==selected.entityIds))return false;
+    mode->setCurrentIndex(3);tilt->setValue(15);
+    const auto before=window.Session().GetDocument().Snapshot().features.size();
+    dock.PressConfirm();
+    if(!Explain("傾いた終端で実際に確定",CountOfKind(window,domain::EntityKind::Part)==1))return false;
+    const auto snapshot=window.Session().GetDocument().Snapshot();bool recorded=false;
+    for(const auto& f:snapshot.features)if(const auto* e=std::get_if<domain::ExtrudeDefinition>(&f.definition))
+        recorded=e->endCap.mode==modeling::EndCapMode::Angle&&std::abs(e->endCap.tiltRad-geometry::kPi/12)<1e-9;
+    if(!Explain("終端角度をフィーチャーに記録",recorded))return false;
+    window.RunCommand("edit.undo");if(window.Session().GetDocument().Snapshot().features.size()!=before)return false;
+    window.RunCommand("edit.redo");
+    return Explain("角度を保持して保存・再生成",window.SaveAndReopen("end-cap-distance.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
+}
+bool CaseEndCapNativeFace(V2MainWindow& window) {
+    if(!ImportCurvedPart(window)||!PickCurvedFace(window))return false;
+    auto& dock=window.ExtrudeDock();dock.TypeDistanceMm(20);
+    auto* mode=window.findChild<QComboBox*>("endCapMode");auto* tilt=window.findChild<QDoubleSpinBox*>("endCapTilt");
+    if(!mode||!tilt)return false;mode->setCurrentIndex(3);tilt->setValue(5);
+    dock.PressConfirm();
+    return Explain("曲面フェイスも独立角度の終端で保存・再生成",CountOfKind(window,domain::EntityKind::Part)==2
+        &&window.SaveAndReopen("end-cap-native.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==2);
+}
 bool CaseExtrudeFaceHover(V2MainWindow& window) {
     if (!ImportCurvedPart(window)) return false;
     auto& viewport = window.Viewport();
@@ -290,7 +328,9 @@ bool CaseExtrudeFaceHover(V2MainWindow& window) {
 }
 }
 std::vector<SelfTestCase> FaceExtrudeCases() {
-    return {{"HP-EX-UI tool first settings and direction pick", CaseExtrudeToolFirstSettings},
+    return {{"HP-EX-CAP distance orientation Undo save",CaseEndCapDistance},
+        {"HP-EX-CAP native face orientation save",CaseEndCapNativeFace},
+        {"HP-EX-UI tool first settings and direction pick", CaseExtrudeToolFirstSettings},
         {"HP-EX-UI target solid first", CaseExtrudeTargetFirst},
         {"HP-EX-UI face and direction independent", CaseExtrudeFaceDirectionPick},
         {"HP-EX-UI hovered face fill", CaseExtrudeFaceHover},

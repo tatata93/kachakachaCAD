@@ -88,7 +88,7 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
     request.customDirection = choice.customDirection;
     request.reversed = choice.reversed;
     modeling::KernelShapeHandle target;
-    if (choice.targetEntityId.has_value() && choice.targetFaceBrep.empty()) {
+    if (choice.extent == modeling::ExtrudeExtentMode::ToTarget && choice.targetEntityId.has_value() && choice.targetFaceBrep.empty()) {
         const auto plane = ExtrudeStopPlane(*choice.targetEntityId,
             choice.customDirection * (choice.reversed ? -1.0 : 1.0), choice.targetParameter);
         if (plane.has_value() && guideShapes_.find(choice.targetEntityId->ToString()) == guideShapes_.end()) {
@@ -104,15 +104,15 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult> V2MainW
             if (found != guideShapes_.end()) target = found->second;
         }
     }
-    if (!choice.targetFaceBrep.empty()) {
+    if (choice.extent == modeling::ExtrudeExtentMode::ToTarget && !choice.targetFaceBrep.empty()) {
         const auto restored = kernel::RestoreOutputShape(choice.targetFaceBrep);
         if (!restored.HasValue()) return base::Result<kernel::ExtrudeBuildResult>::Failure(restored.Diagnostics());
         target = restored.Value();
     }
     const auto result = V2Calculation::Call(nullptr, "選んだ終端までの押し出しを計算しています…",
-        [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrudeToFace(values...); }, request, source, target,
-        session_->GetDocument().Snapshot().settings.tolerance, choice.targetOffsetMm);
-    if (!choice.targetFaceBrep.empty()) kernel::ReleaseShape(target);
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildExtrudeEndCap(values...); }, request, source, target,
+        session_->GetDocument().Snapshot().settings.tolerance, choice.targetOffsetMm, choice.endCap);
+    if (choice.extent == modeling::ExtrudeExtentMode::ToTarget && !choice.targetFaceBrep.empty()) kernel::ReleaseShape(target);
     return result;
 }
 
@@ -120,14 +120,17 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
 {
     using namespace kachakacha::v2;
     if (!extrudeSnapshot_.has_value() || !viewport_->ExtrudeHandleShown()
-        || extrudeDock_->ExtentMode() != modeling::ExtrudeExtentMode::ToTarget) return false;
+        || (extrudeDock_->ExtentMode() != modeling::ExtrudeExtentMode::ToTarget && !extrudeDock_->EndCap().Planar())) return false;
     const auto plan = extrudeSnapshot_->plan;
     if (plan.kind == app::ExtrudeInputKind::FaceOnly) return false;
     app::ExtrudeChoice choice = extrudeChoice_;
     choice.direction = modeling::ExtrudeDirectionMode::CustomXYZ;
     choice.customDirection = ExtrudeDirectionNow();
     choice.reversed = false;
-    choice.extent = modeling::ExtrudeExtentMode::ToTarget;
+    choice.extent = extrudeDock_->ExtentMode();
+    choice.distanceMm = extrudeDock_->DistanceMm();
+    choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
+    choice.endCap = extrudeDock_->EndCap();
     choice.targetEntityId = extrudeDock_->TargetEntityId();
     choice.targetParameter = extrudeDock_->TargetParameter();
     choice.targetOffsetMm = extrudeDock_->TargetOffsetMm();
@@ -188,7 +191,7 @@ bool V2MainWindow::HandleTargetExtrude(bool confirm)
     app::ExtrudeHandle handle{viewport_->ExtrudeHandleOrigin(), choice.customDirection, extrudeDock_->DistanceMm()};
     viewport_->ShowExtrudeHandle(handle, std::move(edges));
     viewport_->SetExtrudePreviewFaces(std::move(faces));
-    extrudeDock_->ShowStatusLines({QStringLiteral("選んだ終端の形で止めます。この形で確定できます。")}, true);
+    extrudeDock_->ShowStatusLines({QStringLiteral("指定した終端で止めます。この形で確定できます。")}, true);
     if (confirm) {
         modeling::ExtrudeAnalysis analysis;
         analysis.direction = choice.customDirection;

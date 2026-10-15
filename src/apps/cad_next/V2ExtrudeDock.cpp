@@ -1,4 +1,5 @@
 #include "V2NumericSpinBox.h"
+#include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
 #include "V2PanelFrame.h"
 
@@ -132,6 +133,9 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     secondDistance_->setValue(10.0);
     form_->addRow(QStringLiteral("逆側の距離"), secondDistance_);
     BuildStopRows();
+    endCap_ = new V2EndCapInput(dynamic_cast<V2MainWindow*>(parentWidget()), body_);
+    endCap_->changed = [this] { if (!loading_ && optionHandler_) optionHandler_(); };
+    form_->addRow(endCap_);
 
     // 方向は 7 通り全部(P-04)。「数値で決める」は x, y, z の欄が生える。
     direction_ = new QComboBox(body_);
@@ -458,6 +462,7 @@ void V2ExtrudeDock::TypeDistanceMm(double value)
 //! 効かない欄を出したままにすると「選んだのに効かない」になる。
 void V2ExtrudeDock::ApplyExtentRows()
 {
+    if (endCap_) endCap_->SetExtentVisible(ExtentMode() == ExtrudeExtentMode::ToTarget);
     if (form_ == nullptr || distance_ == nullptr) {
         return;
     }
@@ -1052,6 +1057,7 @@ void V2ExtrudeDock::PickStop(const ExtrudeTargetChoice& choice) {
     target_->setCurrentIndex(static_cast<int>(targets_.size()) - 1);
 }
 void V2ExtrudeDock::RestoreStop(const kachakacha::v2::app::ExtrudeChoice& choice) {
+    endCap_->SetOptions(choice.endCap);
     const bool blocked = target_->blockSignals(true);
     if (!choice.targetEntityId) target_->setCurrentIndex(-1);
     else PickStop({*choice.targetEntityId, QStringLiteral("終端フェイス（選択時の形を保持）"), {}, choice.targetParameter, choice.targetFaceBrep});

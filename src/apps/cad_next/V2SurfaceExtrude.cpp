@@ -94,11 +94,11 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
     choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
     choice.customDirection = handle.direction;
     choice.reversed = false;
-    choice.targetEntityId = extrudeDock_->TargetEntityId();
-    choice.targetParameter = extrudeDock_->TargetParameter();
-    choice.targetOffsetMm = extrudeDock_->TargetOffsetMm();
-    choice.targetFaceBrep = extrudeDock_->TargetFaceBrep();
+    extrudeDock_->ReadStop(choice);
     choice.extent = extrudeDock_->ExtentMode();
+    choice.endCap = extrudeDock_->EndCap();
+    choice.distanceMm = handle.distanceMm;
+    choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
     const auto built = SurfaceExtrudePreview(choice, found->second, offsets.first, offsets.second);
     if (!built.HasValue()) {
         viewport_->ShowExtrudeHandle(handle, {});
@@ -107,7 +107,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         return true;
     }
     ShowBuilt(*viewport_, built.Value(), handle);
-    extrudeDock_->ShowStatusLines({QStringLiteral("曲面の形を保って押し出します。体積 %1 mm3")
+    extrudeDock_->ShowStatusLines({QStringLiteral("指定した終端で押し出します。体積 %1 mm3")
         .arg(built.Value().totalVolumeMm3, 0, 'f', 3)}, true);
     if (!confirm) return true;
     // Adding a part refreshes shelves and can replace the snapshot's preview after
@@ -152,7 +152,9 @@ bool V2MainWindow::RebuildSurfaceExtrude(const ExtrudeDefinition& definition,
     choice.customDirection = definition.direction;
     choice.extent = static_cast<ExtrudeExtentMode>(definition.extentMode);
     RestoreExtrudeReference(choice, definition);
-    const auto result = choice.extent == ExtrudeExtentMode::ToTarget ? BuildToTarget(choice, {}, found->second)
+    choice.distanceMm = definition.distance.value;
+    choice.secondDistanceMm = definition.secondDistanceMm;
+    const auto result = (choice.extent == ExtrudeExtentMode::ToTarget || choice.endCap.Planar()) ? BuildToTarget(choice, {}, found->second)
         : V2Calculation::Call(nullptr, "面の押し出しを計算しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildSurfaceExtrude(values...); }, found->second,
               definition.direction, offsets.first, offsets.second,

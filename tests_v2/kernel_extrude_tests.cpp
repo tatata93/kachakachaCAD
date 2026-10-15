@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -17,6 +18,7 @@
 #include <Geom_BezierSurface.hxx>
 #include <TColgp_Array2OfPnt.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopoDS_Face.hxx>
 #endif
 
 #include <cmath>
@@ -867,6 +869,85 @@ KACHA_V2_TEST(kernel_extrude, CurvedStopExtremaBetweenSourceMeshSamples)
     ClearShapeCache();
 }
 
+
+KACHA_V2_TEST(kernel_extrude, HeadlightReachesExtendedCentralPlane)
+{
+    using namespace kachakacha::v2::kernel;
+    auto request=BasicRequest();request.profiles={Circle({30,0,0},2)};
+    request.customDirection={0,0,1};request.extent=ExtrudeExtentMode::ToTarget;
+    const auto stop=StoreShape(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0,0,10),gp_Dir(-.1,0,1)),-2,2,-2,2).Face());
+    Require(!BuildExtrudeToFace(request,{},stop,Tolerance()).HasValue(),"Finite central face does not cover lateral light");
+    kachakacha::v2::modeling::ExtrudeEndCap cap;cap.extendTargetPlane=true;
+    const auto made=BuildExtrudeEndCap(request,{},stop,Tolerance(),.25,cap);
+    Require(made.HasValue(),made.FirstSummaryJa());
+    RequireNear(made.Value().totalVolumeMm3,4*kPi*13.25,1e-5,"Light ends on z=10+.1x+.25, not at the central face centroid");
+    const auto checked=CheckSolidForExport(made.Value().parts.front().handle,1e-6);
+    Require(checked.HasValue()&&checked.Value().Ok(),"Light is a closed exportable solid");
+    ClearShapeCache();
+}
+KACHA_V2_TEST(kernel_extrude, EndCapOrientationIndependentOfDistanceAndStop)
+{
+    using namespace kachakacha::v2::kernel;
+    using namespace kachakacha::v2::modeling;
+    for(auto extent:{ExtrudeExtentMode::Distance,ExtrudeExtentMode::SymmetricDistance,ExtrudeExtentMode::TwoDistances,ExtrudeExtentMode::ToTarget})
+    for(double sign:{-1.0,1.0}) {
+        auto request=BasicRequest();request.profiles={Rectangle(-2,-1,2,1)};
+        request.customDirection={0,0,sign};request.distanceMm=10;request.secondDistanceMm=3;request.extent=extent;
+        request.targetKind=ExtrudeTargetKind::Plane;request.targetPlane.origin={0,0,sign*10};request.targetPlane.normal={0,.2,1};
+        ExtrudeEndCap cap;cap.mode=EndCapMode::Reference;cap.referenceNormal={-.3,0,1};
+        const auto made=BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap);Require(made.HasValue(),made.FirstSummaryJa());
+        RequireNear(made.Value().totalVolumeMm3,extent==ExtrudeExtentMode::TwoDistances?104:80,1e-5,"Mean distance unchanged by cap tilt");
+        const auto checked=CheckSolidForExport(made.Value().parts.front().handle,1e-6);
+        Require(checked.HasValue()&&checked.Value().Ok(),"Tilted cap stays closed with positive volume");
+        ClearShapeCache();
+    }
+}
+KACHA_V2_TEST(kernel_extrude, EndCapSourceAndAngleAndInvalidInputs)
+{
+    using namespace kachakacha::v2::kernel;using namespace kachakacha::v2::modeling;
+    auto request=BasicRequest();request.profiles={Rectangle(-2,-1,2,1)};request.customDirection={0,0,1};request.distanceMm=10;
+    request.extent=ExtrudeExtentMode::ToTarget;request.targetKind=ExtrudeTargetKind::Plane;
+    request.targetPlane.origin={0,0,10};request.targetPlane.normal={-.5,0,1};
+    ExtrudeEndCap cap;cap.mode=EndCapMode::Source;
+    auto made=BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap);Require(made.HasValue(),made.FirstSummaryJa());
+    auto mesh=BuildShapeMesh(made.Value().parts[0].handle);Require(mesh.HasValue(),"source cap mesh");
+    RequireNear(mesh.Value().maximum.z,10,1e-5,"Source orientation remains horizontal even with tilted stop");
+    request.extent=ExtrudeExtentMode::Distance;cap.mode=EndCapMode::Angle;cap.tiltRad=.2;
+    made=BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap);Require(made.HasValue(),made.FirstSummaryJa());
+    mesh=BuildShapeMesh(made.Value().parts[0].handle);Require(mesh.HasValue()&&mesh.Value().maximum.z>10.1,"Angle changes actual cap geometry");
+    cap.mode=EndCapMode::Reference;cap.referenceNormal={1,0,0};
+    Require(!BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap).HasValue(),"Parallel cap rejected");
+    cap.referenceNormal={};Require(!BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap).HasValue(),"Missing reference rejected");
+    cap.referenceNormal={10,0,1};request.distanceMm=.1;
+    Require(!BuildExtrudeEndCap(request,{},{},Tolerance(),0,cap).HasValue(),"Cap crossing source rejected");
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, RingCapAnchorMayLieInHole)
+{
+    using namespace kachakacha::v2::kernel;using namespace kachakacha::v2::modeling;
+    auto request=BasicRequest();request.profiles={Rectangle(-2,-2,2,2),Rectangle(-1,-1,1,1)};
+    request.customDirection={0,0,1};request.extent=ExtrudeExtentMode::ToTarget;
+    BRepBuilderAPI_MakeFace stop(gp_Pln(gp_Pnt(0,0,10),gp_Dir(0,0,1)),-3,3,-3,3);
+    BRepBuilderAPI_MakePolygon hole;hole.Add(gp_Pnt(-.5,-.5,10));hole.Add(gp_Pnt(-.5,.5,10));
+    hole.Add(gp_Pnt(.5,.5,10));hole.Add(gp_Pnt(.5,-.5,10));hole.Close();stop.Add(hole.Wire());
+    ExtrudeEndCap cap;cap.mode=EndCapMode::Reference;cap.referenceNormal={.1,0,1};
+    const auto made=BuildExtrudeEndCap(request,{},StoreShape(stop.Face()),Tolerance(),0,cap);
+    Require(made.HasValue(),made.FirstSummaryJa());RequireNear(made.Value().totalVolumeMm3,120,1e-5,"Material reaches stop although bounding-box center lies in hole");
+    ClearShapeCache();
+}
+
+KACHA_V2_TEST(kernel_extrude, IndependentEndCapUsesOffsetBeforeReachTest)
+{
+    using namespace kachakacha::v2::kernel;using namespace kachakacha::v2::modeling;
+    auto request=BasicRequest();request.profiles={Rectangle(-2,-1,2,1)};request.customDirection={0,0,1};
+    request.extent=ExtrudeExtentMode::ToTarget;request.targetKind=ExtrudeTargetKind::Plane;
+    request.targetPlane.origin={0,0,-1};request.targetPlane.normal={0,0,1};
+    ExtrudeEndCap cap;cap.mode=EndCapMode::Reference;cap.referenceNormal={.1,0,1};
+    const auto made=BuildExtrudeEndCap(request,{},{},Tolerance(),3,cap);
+    Require(made.HasValue(),made.FirstSummaryJa());RequireNear(made.Value().totalVolumeMm3,16,1e-5,"Offset brings stop forward before coverage test");
+    ClearShapeCache();
+}
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_extrude_tests")

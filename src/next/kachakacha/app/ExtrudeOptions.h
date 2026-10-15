@@ -1,4 +1,5 @@
 #pragma once
+#include "kachakacha/modeling/ExtrudeEndCap.h"
 
 //! 押し出しで利用者が決めることを、1か所にまとめる(fabrication は工程3、ここは工程2)。
 //!
@@ -41,6 +42,7 @@ struct ExtrudeChoice {
     double secondDistanceMm = 0.5;
     //! ToTarget の相手。作業平面か、部品の面の代わりに使う平面。
     std::optional<base::EntityId> targetEntityId;
+    modeling::ExtrudeEndCap endCap;
     double targetParameter = -1.0;
     double targetOffsetMm = 0.0; // signed distance along extrusion direction
     std::string targetFaceBrep; // selected face snapshot; never a transient face index

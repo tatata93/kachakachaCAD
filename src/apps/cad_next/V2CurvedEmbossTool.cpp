@@ -1,4 +1,5 @@
 #include "V2Calculation.h"
+#include "V2EndCapInput.h"
 #include "V2CurvedEmbossTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -91,6 +92,7 @@ bool V2CurvedEmbossTool::Preview()
     std::vector<geometry::CurveSegment> boundary;if(!CollectBoundary(boundary))return false;
     constexpr double rad=3.141592653589793/180;
     kernel::CurvedEmbossOptions options;options.heightMm=height_->value();options.toleranceMm=tolerance_->value();
+    options.endCap=endCap_->Options();
     options.draftRad=draftEnabled_->isChecked()?draft_->value()*rad:0;
     options.tiltRad=tiltEnabled_->isChecked()?tilt_->value()*rad:0;
     const auto frame=window_.viewport_->WorkPlane();
@@ -121,9 +123,10 @@ bool V2CurvedEmbossTool::Commit()
     if(!Preview())return false;
     // Rebuilding can process deferred deletion of this panel. Capture values
     // before changing the document or replacing the page; never read it afterwards.
-    const auto restore=[height=height_->value(),draft=draft_->value(),tilt=tilt_->value(),
+    const auto restore=[endCap=endCap_->Options(),height=height_->value(),draft=draft_->value(),tilt=tilt_->value(),
         heading=heading_->value(),tolerance=tolerance_->value(),draftEnabled=draftEnabled_->isChecked(),
         tiltEnabled=tiltEnabled_->isChecked(),output=output_->currentIndex(),operation=operation_->currentIndex()](V2CurvedEmbossTool& next) {
+        next.endCap_->SetOptions(endCap);
         next.height_->setValue(height);next.draft_->setValue(draft);next.tilt_->setValue(tilt);
         next.heading_->setValue(heading);next.tolerance_->setValue(tolerance);
         next.draftEnabled_->setChecked(draftEnabled);next.tiltEnabled_->setChecked(tiltEnabled);

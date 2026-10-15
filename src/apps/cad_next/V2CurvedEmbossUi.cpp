@@ -1,4 +1,5 @@
 #include "V2NumericSpinBox.h"
+#include "V2EndCapInput.h"
 #include "V2RoleInput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <algorithm>
@@ -89,6 +90,8 @@ void V2CurvedEmbossTool::BuildSettings(QVBoxLayout* layout)
     connect(draftEnabled_,&QPushButton::toggled,this,[this](bool on){draft_->setEnabled(on);Invalidate();});
     connect(tiltEnabled_,&QPushButton::toggled,this,[this](bool on){tilt_->setEnabled(on);heading_->setEnabled(on);Invalidate();});
     tolerance_=field(QStringLiteral("輪郭の許容偏差（近似）"),"embossTolerance",0.0001,1,0.01,QStringLiteral(" mm"));
+    endCap_=new V2EndCapInput(&window_,this);endCap_->SetExtentVisible(false);layout->addWidget(endCap_);
+    endCap_->changed=[this]{Invalidate();};
     operation_=new QComboBox(this);operation_->addItems({QStringLiteral("新しい立体"),QStringLiteral("支持面の立体に足す")});layout->addWidget(operation_);
     output_=new QComboBox(this);output_->setObjectName(QStringLiteral("embossOutput"));
     output_->addItems({QStringLiteral("面＋ワイヤー（立体）"),QStringLiteral("ワイヤーのみ"),QStringLiteral("立体のみ")});layout->addWidget(output_);
@@ -117,7 +120,7 @@ void V2CurvedEmbossTool::TakeSelection()
 }
 bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
 {
-    if (!isVisible()) return false;
+    if (!isVisible() || window_.viewport_->ReferencePickPending()) return false;
     if (event->type()==QEvent::KeyPress) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window())return false;
         const auto key=static_cast<QKeyEvent*>(event)->key();

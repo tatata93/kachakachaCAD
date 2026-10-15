@@ -8,6 +8,7 @@
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
@@ -40,6 +41,7 @@ private:
     static bool Prepare(V2MainWindow& window,std::vector<base::EntityId>& sources);
     static bool Lights(V2MainWindow& window,const QString& output);
     static bool LightFaces(V2MainWindow& window,const QString& output);
+    static bool LightEndCap(V2MainWindow& window,const QString& output,base::EntityId face);
     static bool SaveLights(V2MainWindow& window,const QString& output);
     static void Frame(V2MainWindow& window,const std::vector<base::EntityId>& sources);
 };
@@ -50,6 +52,42 @@ bool V2ProjectionOwnerExercise::VerifyLastPart(V2MainWindow& window,double expec
     if(!checked.HasValue()||!checked.Value().Ok())return false;
     return std::abs(checked.Value().volumeMm3-expectedVolume)<1e-4;
 }
+
+bool V2ProjectionOwnerExercise::LightEndCap(V2MainWindow& window,const QString& output,base::EntityId source) {
+    const auto target=kernel::OutputFace(window.partShapes_.at(Id("4748").ToString()),0);
+    if(!target.HasValue())return false;
+    const auto pose=kernel::FacePoseNear(target.Value(),0,{0,-30,20},{});
+    const auto bytes=kernel::CaptureOutputShape(target.Value());kernel::ReleaseShape(target.Value());
+    if(!pose.HasValue()||!pose.Value().planar||!bytes.HasValue())return false;
+    app::SelectionSet selected;selected.entityIds={source};window.Viewport().SetSelection(selected);window.RunCommand("part.extrude");
+    const auto center=window.Viewport().ExtrudeHandleOrigin();
+    const double sign=pose.Value().point.y<center.y?-1:1;
+    std::cout<<"OWNER cap: source "<<center.x<<","<<center.y<<","<<center.z<<" target "
+        <<pose.Value().point.x<<","<<pose.Value().point.y<<","<<pose.Value().point.z<<std::endl;
+    app::ExtrudeChoice choice;choice.direction=modeling::ExtrudeDirectionMode::CustomXYZ;choice.customDirection={0,sign,0};
+    choice.extent=modeling::ExtrudeExtentMode::ToTarget;choice.targetEntityId=Id("4748");choice.targetFaceBrep=bytes.Value();
+    choice.endCap.extendTargetPlane=true;window.ApplyExtrudeChoice(choice);
+    const int before=selftest::CountOfKind(window,domain::EntityKind::Part);
+    QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-preview.png");
+    window.ExtrudeDock().PressConfirm();
+    if(selftest::CountOfKind(window,domain::EntityKind::Part)!=before+1){std::cout<<window.StatusText().toStdString()<<std::endl;return false;}
+    const auto& entity=window.Session().GetDocument().Snapshot().entities.back();
+    const auto shape=window.partShapes_.find(entity.id.ToString());if(shape==window.partShapes_.end())return false;
+    const auto checked=kernel::CheckSolidForExport(shape->second,.001);
+    const auto count=kernel::ShapeFaceCount(shape->second);bool aligned=false;
+    if(!checked.HasValue()||!checked.Value().Ok()||!count.HasValue())return false;
+    for(std::size_t i=0;i<count.Value();++i) {
+        const auto face=kernel::FacePoseNear(shape->second,i,center,{});if(!face.HasValue()||!face.Value().planar)continue;
+        const double cosine=std::abs(geometry::Dot(face.Value().normal,pose.Value().normal));
+        const double distance=std::abs(geometry::Dot(face.Value().point-pose.Value().point,pose.Value().normal));
+        aligned=aligned||(cosine>1-1e-8&&distance<.001);
+    }
+    if(!aligned)return false;
+    std::cout<<"OWNER cap verified: closed export solid, central-plane end within .001 mm, volume "<<checked.Value().volumeMm3<<std::endl;
+    window.RunCommand("selection.activate");Frame(window,{});window.grab().save(output+"/lamp-central-plane-result.png");
+    return window.SaveAndReopen("owner-lamp-central-plane.kcd2")&&selftest::CountOfKind(window,domain::EntityKind::Part)==before+1;
+}
+
 bool V2ProjectionOwnerExercise::LightFaces(V2MainWindow& window,const QString& output) {
     const auto before=window.Session().GetDocument().Snapshot();
     const int parts=selftest::CountOfKind(window,domain::EntityKind::Part);
@@ -79,6 +117,7 @@ bool V2ProjectionOwnerExercise::LightFaces(V2MainWindow& window,const QString& o
     std::cout<<"OWNER lamp faces "<<faces.size()<<std::endl;
     // Two lamps cross a support-face seam: six source circles become eight native patches.
     if(faces.size()!=8)return false;
+    if(!qEnvironmentVariable("KACHACAD_PROJECTION_OWNER_ENDCAP").isEmpty())return LightEndCap(window,output,faces.front());
     for(const auto& id:faces) {
         app::SelectionSet selection;selection.entityIds={id};window.Viewport().SetSelection(selection);
         window.RunCommand("part.extrude");

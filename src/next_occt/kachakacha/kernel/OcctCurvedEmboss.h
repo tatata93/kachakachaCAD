@@ -1,8 +1,10 @@
 #pragma once
+#include "kachakacha/modeling/ExtrudeEndCap.h"
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/geometry/CurveSegment.h"
 namespace kachakacha::v2::kernel {
 struct CurvedEmbossOptions {
+    modeling::ExtrudeEndCap endCap;
     double heightMm = 1.0;
     double draftRad = 0.0;
     double tiltRad = 0.0;

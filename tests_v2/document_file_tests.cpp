@@ -1223,6 +1223,9 @@ KACHA_V2_TEST(document_file, extrusion_region_seeds_round_trip)
     definition.profiles = {file.snapshot.entities[2].id};
     definition.profileSeeds = {{1.25, 2.5, 0}, {3, 4, 5}};
     definition.targetOffsetMm = -0.125;
+    definition.endCap.mode = kachakacha::v2::modeling::EndCapMode::Reference;
+    definition.endCap.referenceNormal = {0.2, 0.3, 1};
+    definition.endCap.extendTargetPlane = true;
     definition.targetFaceBrep = "BRep payload\nretained exactly";
     feature.definition = definition;
     const auto read = ReadDocumentJson(WriteDocumentJson(file));
@@ -1231,7 +1234,7 @@ KACHA_V2_TEST(document_file, extrusion_region_seeds_round_trip)
         &read.Value().snapshot.features[3].definition);
     Require(restored && restored->profileSeeds == definition.profileSeeds,
         "区画の内点を保持する");
-    Require(restored && restored->targetOffsetMm == definition.targetOffsetMm
+    Require(restored && restored->endCap == definition.endCap && restored->targetOffsetMm == definition.targetOffsetMm
         && restored->targetFaceBrep == definition.targetFaceBrep, "Terminal snapshot and signed offset round trip");
 }
 

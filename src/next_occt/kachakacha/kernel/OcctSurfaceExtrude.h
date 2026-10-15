@@ -1,4 +1,5 @@
 #pragma once
+#include "kachakacha/modeling/ExtrudeEndCap.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 
 namespace kachakacha::v2::kernel {
@@ -9,5 +10,9 @@ namespace kachakacha::v2::kernel {
 [[nodiscard]] base::Result<ExtrudeBuildResult> BuildExtrudeToFace(
     const modeling::ExtrudeRequest& request, modeling::KernelShapeHandle source,
     modeling::KernelShapeHandle target, const geometry::GeometryTolerance& tolerance,
-    double targetOffsetMm = 0.0);
+    double targetOffsetMm = 0.0, bool extendTargetPlane = false);
+[[nodiscard]] base::Result<ExtrudeBuildResult> BuildExtrudeEndCap(
+    const modeling::ExtrudeRequest& request, modeling::KernelShapeHandle source,
+    modeling::KernelShapeHandle target, const geometry::GeometryTolerance& tolerance,
+    double targetOffsetMm, const modeling::ExtrudeEndCap& cap);
 } // namespace kachakacha::v2::kernel

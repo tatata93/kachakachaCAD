@@ -672,6 +672,7 @@ void V2MainWindow::ReselectExtrudeInput(bool target)
 //! 棚の欄が変わった。向きと距離を取り直して、下見を作り直す。
 void V2MainWindow::RefreshExtrudeFromDock()
 {
+    extrudeChoice_.endCap = extrudeDock_->EndCap();
     extrudeChoice_.reversed = extrudeDock_->Reversed();
     // 範囲は棚の 5 通りをそのまま。逆側の距離と相手の面も棚から(指示書 P-02)。
     extrudeChoice_.extent = extrudeDock_->ExtentMode();
@@ -746,7 +747,8 @@ void V2MainWindow::EditExtrudeWithDialog()
         SetStatus(QStringLiteral("押し出し: 詳細をやめました。"));
         return;
     }
-    ApplyExtrudeChoice(dialog.Choice());
+    auto chosen=dialog.Choice(); chosen.endCap=extrudeChoice_.endCap;
+    ApplyExtrudeChoice(chosen);
 }
 
 //! 窓が答えたひと組を、棚と矢印と下見へ映す。**作らない。**

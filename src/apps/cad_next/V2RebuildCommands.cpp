@@ -91,11 +91,12 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
         request.hasSelectedPart = true;
     }
     const auto built = [&]() {
-        if (request.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget) {
+        if (request.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget || definition->endCap.Planar()) {
             kachakacha::v2::app::ExtrudeChoice choice;
             choice.customDirection = definition->direction;
             choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
             choice.extent = request.extent;
+            choice.distanceMm = request.distanceMm; choice.secondDistanceMm = request.secondDistanceMm;
             RestoreExtrudeReference(choice, *definition);
             if (!choice.targetEntityId.has_value() && !definition->targets.empty()) choice.targetEntityId = definition->targets.back();
             auto result = BuildToTarget(choice, request.profiles);

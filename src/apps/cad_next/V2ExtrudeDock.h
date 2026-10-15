@@ -21,6 +21,7 @@
 
 #include "V2ExtrudeTargetChoice.h"
 #include "V2RoleInput.h"
+#include "V2EndCapInput.h"
 
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -42,7 +43,9 @@ class QWidget;
 class V2ExtrudeDock final : public QDockWidget {
 public:
     explicit V2ExtrudeDock(QWidget* parent);
+    kachakacha::v2::modeling::ExtrudeEndCap EndCap() const { return endCap_->Options(); }
     void ReadStop(kachakacha::v2::app::ExtrudeChoice& choice) const {
+        choice.endCap = endCap_->Options();
         choice.targetEntityId = TargetEntityId();
         choice.targetParameter = TargetParameter();
         choice.targetOffsetMm = TargetOffsetMm();
@@ -171,6 +174,7 @@ private:
     //! 「2. 結果」の欄を組み立てる。
     void BuildOptionRows(class QVBoxLayout* layout);
 
+    V2EndCapInput* endCap_ = nullptr;
     QWidget* body_ = nullptr;
     //! 見出しの下に出す、いまの様子(「プレビュー可能」など)。
     QLabel* state_ = nullptr;

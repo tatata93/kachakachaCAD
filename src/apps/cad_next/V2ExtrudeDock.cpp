@@ -462,6 +462,13 @@ void V2ExtrudeDock::TypeDistanceMm(double value)
 //! 効かない欄を出したままにすると「選んだのに効かない」になる。
 void V2ExtrudeDock::ApplyExtentRows()
 {
+    // Cancel only the picker whose mode is being left, also for blocked-signal restores.
+    if (directionPick_ && directionPick_->isChecked()
+        && DirectionMode() != ExtrudeDirectionMode::SelectedVector && directionPickHandler_)
+        directionPickHandler_();
+    if (stopPick_ && stopPick_->isChecked()
+        && ExtentMode() != ExtrudeExtentMode::ToTarget && stopPickHandler_)
+        stopPickHandler_();
     if (endCap_) endCap_->SetExtentVisible(ExtentMode() == ExtrudeExtentMode::ToTarget);
     if (form_ == nullptr || distance_ == nullptr) {
         return;
@@ -1007,15 +1014,19 @@ void V2ExtrudeDock::SetReversed(bool reversed)
 
 void V2ExtrudeDock::BuildStopRows()
 {
+    form_->setRowWrapPolicy(QFormLayout::WrapLongRows);
     stopRow_ = new QWidget(body_);
     auto* layout = new QVBoxLayout(stopRow_);
     layout->setContentsMargins(0, 0, 0, 0);
     target_ = new QComboBox(stopRow_);
+    layout->addWidget(new QLabel(QStringLiteral("③ 終端の面・線・点"), stopRow_));
+    target_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    target_->setMinimumContentsLength(12);
     target_->setObjectName(QStringLiteral("extrudeStopReference"));
     target_->setPlaceholderText(QStringLiteral("終端の面を選択してください"));
     layout->addWidget(target_);
     auto* buttons = new QHBoxLayout();
-    stopPick_ = new QPushButton(QStringLiteral("終端の面を選ぶ"), stopRow_);
+    stopPick_ = new QPushButton(QStringLiteral("3Dビューで終端面を選ぶ"), stopRow_);
     stopPick_->setObjectName(QStringLiteral("extrudePickStop"));
     stopPick_->setCheckable(true);
     auto* clear = new QPushButton(QStringLiteral("解除"), stopRow_);
@@ -1024,21 +1035,21 @@ void V2ExtrudeDock::BuildStopRows()
     layout->addLayout(buttons);
     QObject::connect(stopPick_, &QPushButton::clicked, this, [this] { if (stopPickHandler_) stopPickHandler_(); });
     QObject::connect(clear, &QPushButton::clicked, this, [this] { target_->setCurrentIndex(-1); });
-    form_->addRow(QStringLiteral("終端の面・線・点"), stopRow_);
+    form_->addRow(stopRow_);
     stopOffset_ = new V2NumericSpinBox(body_);
     stopOffset_->setObjectName(QStringLiteral("extrudeStopOffset"));
     stopOffset_->setRange(-100000.0, 100000.0);
     stopOffset_->setDecimals(3); stopOffset_->setSingleStep(0.1);
     stopOffset_->setSuffix(QStringLiteral(" mm"));
     stopOffset_->setToolTip(QStringLiteral("押し出し方向へ終端を移動。正は奥、負は手前。0は指定面まで。曲面の法線方向の距離ではありません。"));
-    form_->addRow(QStringLiteral("終端からの距離（＋奥／−手前）"), stopOffset_);
+    form_->addRow(QStringLiteral("終端オフセット"), stopOffset_);
     QObject::connect(stopOffset_, &QDoubleSpinBox::valueChanged, this, [this] { if (!loading_ && optionHandler_) optionHandler_(); });
 }
 
 void V2ExtrudeDock::SetStopPickHandler(std::function<void()> handler) { stopPickHandler_ = std::move(handler); }
 void V2ExtrudeDock::SetStopPicking(bool active) {
     stopPick_->setChecked(active);
-    stopPick_->setText(active ? QStringLiteral("終端を選択中…") : QStringLiteral("終端の面を選ぶ"));
+    stopPick_->setText(active ? QStringLiteral("3Dの面をクリック…") : QStringLiteral("3Dビューで終端面を選ぶ"));
 }
 double V2ExtrudeDock::TargetOffsetMm() const { return stopOffset_->value(); }
 void V2ExtrudeDock::SetTargetOffsetMm(double value) {

@@ -25,7 +25,8 @@ V2EndCapInput::V2EndCapInput(V2MainWindow* window,QWidget* parent):QWidget(paren
     mode_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);mode_->setMinimumContentsLength(10);
     mode_->setToolTip(QStringLiteral("自動：距離指定では元面に合わせ、面まででは終端面に合わせます。曲面押し出しの元面指定は法線方向のオフセット曲面です。"));
     layout->addWidget(mode_);
-    pick_=new QPushButton(QStringLiteral("向きの基準面を選ぶ"),this);
+    pick_=new QPushButton(QStringLiteral("3Dビューで向きの基準面を選ぶ"),this);
+    pick_->setCheckable(true);
     pick_->setObjectName(QStringLiteral("endCapPick"));layout->addWidget(pick_);
     reference_=new QLabel(this);reference_->setWordWrap(true);layout->addWidget(reference_);
     tilt_=new V2NumericSpinBox(this);heading_=new V2NumericSpinBox(this);
@@ -60,6 +61,7 @@ void V2EndCapInput::SetExtentVisible(bool visible) { extend_->setVisible(visible
 void V2EndCapInput::Refresh()
 {
     const bool reference=mode_->currentIndex()==2, angle=mode_->currentIndex()==3;
+    if (!reference && pick_->isChecked() && window_) window_->Viewport().CancelReferencePick();
     pick_->setVisible(reference);pick_->setEnabled(window_!=nullptr);reference_->setVisible(reference);
     reference_->setText(normal_.Length()>1e-9?QStringLiteral("選択時の向きを保持（位置は参照しません）"):QStringLiteral("向きの基準面が未選択です"));
     tilt_->setVisible(angle);heading_->setVisible(angle);
@@ -68,6 +70,7 @@ void V2EndCapInput::Pick()
 {
     if(!window_)return;
     auto& w=*window_;if(w.viewport_->ReferencePickPending())w.viewport_->CancelReferencePick();
+    pick_->setChecked(true);pick_->setText(QStringLiteral("3Dの基準面をクリック…"));
     QPointer<V2EndCapInput> self(this);
     w.viewport_->BeginElementPick([self](const app::PickCandidate& pick){
         if(!self)return false;auto& w=*self->window_;
@@ -75,7 +78,9 @@ void V2EndCapInput::Pick()
         return e&&(e->kind==domain::EntityKind::GuideSurface||w.WorkPlaneFrameOf(pick.entityId).has_value()
             ||(e->kind==domain::EntityKind::Part&&pick.pickedFaceIndex.has_value()));
     },[self](std::optional<app::PickCandidate> pick){
-        if(!self||!pick)return;auto& w=*self->window_;
+        if(!self)return;auto& w=*self->window_;
+        self->pick_->setChecked(false);self->pick_->setText(QStringLiteral("3Dビューで向きの基準面を選ぶ"));
+        if(!pick){w.SetStatus(QStringLiteral("向きの基準面の選択を取り消しました。元の面・設定は保持しています。"));return;}
         if(const auto frame=w.WorkPlaneFrameOf(pick->entityId))self->normal_=frame->normal;
         else {
             modeling::KernelShapeHandle shape;std::size_t index=pick->pickedFaceIndex.value_or(0);

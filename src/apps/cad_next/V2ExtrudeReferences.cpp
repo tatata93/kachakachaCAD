@@ -204,6 +204,7 @@ void V2MainWindow::BeginExtrudeStopPick()
 {
     using namespace kachakacha::v2;
     if (viewport_->ReferencePickPending()) viewport_->CancelReferencePick();
+    if (extrudeDock_->ExtentMode() != modeling::ExtrudeExtentMode::ToTarget) return;
     extrudeDock_->SetStopPicking(true);
     viewport_->BeginElementPick([this](const app::PickCandidate& pick) {
         const auto* entity = session_->GetDocument().FindEntity(pick.entityId);

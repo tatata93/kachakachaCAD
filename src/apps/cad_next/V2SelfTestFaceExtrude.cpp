@@ -187,6 +187,9 @@ bool CaseExtrudeToolFirstSettings(V2MainWindow& window) {
     dock.PickDirection(modeling::ExtrudeDirectionMode::SelectedVector);
     auto* button = window.findChild<QPushButton*>("extrudePickDirection");
     if (!button || button->isHidden()) return false;
+    button->click();dock.ChooseDirection(modeling::ExtrudeDirectionMode::WorldZ);
+    if (!Explain("詳細からの方向変更でも隠れた線選択を残さない", !viewport.ReferencePickPending())) return false;
+    dock.PickDirection(modeling::ExtrudeDirectionMode::SelectedVector);
     button->click(); window.SelectTool(modeling::DrawingTool::Line);
     if (!Explain("別ツールで方向選択を解除", !viewport.ReferencePickPending())) return false;
     window.RunCommand("part.extrude");

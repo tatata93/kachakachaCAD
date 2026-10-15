@@ -20,6 +20,9 @@
 #include <QPushButton>
 #include <QDoubleSpinBox>
 #include <QPointF>
+#include <QApplication>
+#include <QEvent>
+#include <QMouseEvent>
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -345,11 +348,37 @@ bool CaseSolidFaceTerminalOffset(V2MainWindow& window)
     window.RunCommand("part.extrude");(void)dock.PickDirection(ExtrudeDirectionMode::WorldZ);
     (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);
     auto* pick=window.findChild<QPushButton*>("extrudePickStop");if(!pick)return false;pick->click();
+    (void)dock.PickExtent(ExtrudeExtentMode::Distance);
+    if(!Explain("面までをやめたら隠れた終端選択を残さない",!window.Viewport().ReferencePickPending()))return false;
+    (void)dock.PickExtent(ExtrudeExtentMode::ToTarget);pick->click();
+    auto* offset=window.findChild<QDoubleSpinBox*>("extrudeStopOffset");if(!offset)return false;
+    offset->setValue(-0.5);
+    if(!Explain("終端オフセットを調整しても面選択を維持",window.Viewport().ReferencePickPending()))return false;
     const auto point=window.Viewport().Mapping().Project({15,0,20});if(!point)return false;
-    window.Viewport().SelectAt(QPointF(point->x,point->y),Qt::NoModifier);
+    const QPointF screen(point->x,point->y);
+    QMouseEvent move(QEvent::MouseMove,screen,screen,Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress,screen,screen,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease,screen,screen,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(&window.Viewport(),&move);
+    QApplication::sendEvent(&window.Viewport(),&press);
+    QApplication::sendEvent(&window.Viewport(),&release);
     if(!Explain("3Dクリックで立体のフェイスを終端に保持",!dock.TargetFaceBrep().empty()
         &&window.Viewport().Selection().entityIds==selected.entityIds))return false;
-    auto* offset=window.findChild<QDoubleSpinBox*>("extrudeStopOffset");if(!offset)return false;offset->setValue(-0.5);
+    auto* capMode=window.findChild<QComboBox*>("endCapMode");
+    auto* capPick=window.findChild<QPushButton*>("endCapPick");if(!capMode||!capPick)return false;
+    capMode->setCurrentIndex(2);capPick->click();
+    capMode->setCurrentIndex(0);
+    if(!Explain("自動の向きへ戻すと基準面選択を解除",!window.Viewport().ReferencePickPending()))return false;
+    capMode->setCurrentIndex(2);capPick->click();
+    offset->setValue(-0.25);offset->setValue(-0.5);
+    if(!Explain("向きの基準面も設定変更で選択解除されない",window.Viewport().ReferencePickPending()
+        &&capPick->isChecked()))return false;
+    QApplication::sendEvent(&window.Viewport(),&move);
+    QApplication::sendEvent(&window.Viewport(),&press);
+    QApplication::sendEvent(&window.Viewport(),&release);
+    if(!Explain("マウスで終端の向きを選び元の輪郭を保持",!window.Viewport().ReferencePickPending()
+        &&!capPick->isChecked()&&std::abs(dock.EndCap().referenceNormal.z)>0.999
+        &&window.Viewport().Selection().entityIds==selected.entityIds))return false;
     if(!Explain("フェイスの手前0.5mmの下見",!window.Viewport().ExtrudePreviewFaces().empty()))return false;
     dock.PressConfirm();
     if(!Explain("フェイスまでの立体を確定",CountOfKind(window,domain::EntityKind::Part)==2))return false;

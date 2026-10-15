@@ -123,7 +123,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     if (viewport_ && viewport_->ReferencePickPending()) {
         if (key == Qt::Key_Escape) { viewport_->CancelReferencePick(); return true; }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            SetStatus(QStringLiteral("押し出し: 方向の直線をクリックしてください。"));
+            SetStatus(QStringLiteral("参照を選択中です。3Dビューで強調された対象をクリックしてください。Tabで候補切替、Escで選択だけ取消。"));
             return true;
         }
     }

@@ -25,6 +25,9 @@
 #include <QTreeWidgetItem>
 #include <QTreeWidgetItemIterator>
 #include <QPushButton>
+#include <QMouseEvent>
+#include <QEvent>
+#include <QPointF>
 #include <QPixmap>
 #include <QString>
 #include <iostream>
@@ -65,8 +68,34 @@ bool V2ProjectionOwnerExercise::LightEndCap(V2MainWindow& window,const QString& 
     std::cout<<"OWNER cap: source "<<center.x<<","<<center.y<<","<<center.z<<" target "
         <<pose.Value().point.x<<","<<pose.Value().point.y<<","<<pose.Value().point.z<<std::endl;
     app::ExtrudeChoice choice;choice.direction=modeling::ExtrudeDirectionMode::CustomXYZ;choice.customDirection={0,sign,0};
-    choice.extent=modeling::ExtrudeExtentMode::ToTarget;choice.targetEntityId=Id("4748");choice.targetFaceBrep=bytes.Value();
+    choice.extent=modeling::ExtrudeExtentMode::ToTarget;
     choice.endCap.extendTargetPlane=true;window.ApplyExtrudeChoice(choice);
+    auto* pick=window.findChild<QPushButton*>("extrudePickStop");if(!pick)return false;
+    pick->click();if(!window.Viewport().ReferencePickPending())return false;
+    bool clicked=false;
+    for(const auto& view:window.Viewport().ShapeViews()) {
+        if(view.entityId!=Id("4748"))continue;
+        for(const auto& triangle:view.mesh.triangles) {
+            if(triangle.faceIndex!=0)continue;
+            const auto screen=window.Viewport().Mapping().Project((triangle.points[0]+triangle.points[1]+triangle.points[2])*(1.0/3));
+            if(!screen)continue;const QPointF point(screen->x,screen->y);
+            if(!window.Viewport().rect().contains(point.toPoint()))continue;
+            QMouseEvent move(QEvent::MouseMove,point,point,Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+            QApplication::sendEvent(&window.Viewport(),&move);
+            const auto hit=window.Viewport().CurrentCandidate();
+            if(!hit||hit->entityId!=Id("4748")||hit->pickedFaceIndex!=0)continue;
+            QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-pick.png");
+            QMouseEvent press(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+            QApplication::sendEvent(&window.Viewport(),&press);QApplication::sendEvent(&window.Viewport(),&release);
+            clicked=true;break;
+        }
+        break;
+    }
+    if(!clicked||window.Viewport().ReferencePickPending()||window.ExtrudeDock().TargetFaceBrep().empty()
+        ||window.ExtrudeDock().TargetEntityId()!=Id("4748")||window.Viewport().Selection().entityIds!=selected.entityIds) {
+        std::cout<<"OWNER central face mouse pick failed clicked="<<clicked<<" pending="<<window.Viewport().ReferencePickPending()<<std::endl;return false;
+    }
     const int before=selftest::CountOfKind(window,domain::EntityKind::Part);
     QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-preview.png");
     window.ExtrudeDock().PressConfirm();
@@ -85,6 +114,10 @@ bool V2ProjectionOwnerExercise::LightEndCap(V2MainWindow& window,const QString& 
     if(!aligned)return false;
     std::cout<<"OWNER cap verified: closed export solid, central-plane end within .001 mm, volume "<<checked.Value().volumeMm3<<std::endl;
     window.RunCommand("selection.activate");Frame(window,{});window.grab().save(output+"/lamp-central-plane-result.png");
+    app::SelectionSet detail;detail.entityIds={entity.id};window.Viewport().SetSelection(detail);
+    window.Viewport().IsolateSelection();window.Viewport().FitToDocument();window.Viewport().SetSelection({});
+    window.SetStatus(QStringLiteral("実モデルのライト：中央面まで押し出し。閉ソリッド・終端の同一平面を0.001 mm以内で確認。"));
+    QApplication::processEvents();window.grab().save(output+"/lamp-central-plane-detail.png");
     return window.SaveAndReopen("owner-lamp-central-plane.kcd2")&&selftest::CountOfKind(window,domain::EntityKind::Part)==before+1;
 }
 

@@ -699,8 +699,6 @@ void V2MainWindow::RefreshExtrudeFromDock()
     extrudeChoice_.makeStartProfileWire = outputs.startWire;
     extrudeChoice_.makeEndProfileWire = outputs.endWire;
     extrudeChoice_.makeSideBoundaryWires = outputs.sideWires;
-    if (extrudeChoice_.direction != ExtrudeDirectionMode::SelectedVector)
-        viewport_->CancelReferencePick();
     if (!viewport_->ExtrudeHandleShown()) {
         RefreshExtrudeStatus(PlanExtrudeFromSelection());
         return;

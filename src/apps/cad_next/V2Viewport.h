@@ -199,7 +199,7 @@ public:
     //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
     std::vector<kachakacha::v2::app::PickCandidate> ImageCandidatesAt(const QPointF&) const;
     void SetShapeViews(std::vector<ShapeView> shapes);
-    void SetImageViews(std::vector<V2ImageView> images) { imageViews_=std::move(images); setProperty("imageDocumentRevision", {}); update(); }
+    void SetImageViews(std::vector<V2ImageView> images) { imageViews_=std::move(images); ++imageViewRevision_; setProperty("imageDocumentRevision", {}); update(); }
     const std::vector<V2ImageView>& ImageViews() const { return imageViews_; }
     //! いま出している形。「選択に正対」が、立体の広がりを知るために読む。
     [[nodiscard]] const std::vector<ShapeView>& ShapeViews() const noexcept
@@ -212,6 +212,8 @@ public:
     }
     //! 出ている形の三角形の合計。試験で「本当に描く物があるか」を見る。
     [[nodiscard]] int ShapeTriangleCount() const noexcept;
+    struct InteractionMetrics { std::uint64_t meshTraversals=0, facePartitions=0, rasterizations=0; };
+    [[nodiscard]] InteractionMetrics InteractionCounts() const { return interactionMetrics_; }
     //! いま作図用の十字カーソルを出しているか。試験から見る。
     //! カーソルの形そのものは Qt が持っていて読み出せないので、選んだ結果を覚える。
     [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
@@ -825,6 +827,13 @@ private:
     bool EditCursorFieldForKey(int key);
     mutable V2GpuRenderer gpuRenderer_;
     std::uint64_t shapeViewRevision_ = 0;
+    std::uint64_t imageViewRevision_ = 0, analysisViewRevision_ = 0;
+    mutable InteractionMetrics interactionMetrics_;
+    mutable QImage smoothRaster_;
+    mutable std::vector<std::uint64_t> smoothRasterKey_;
+    // Scoped to one HoverAt call. Never reused across edits, clicks or camera changes.
+    mutable bool hoverPickReuse_ = false;
+    mutable std::optional<std::vector<kachakacha::v2::app::PickCandidate>> hoverShapeCandidates_;
     bool DrawGpuShapes(QPainter& painter) const;
     void RebuildMapping();
     void DrawGrid(QPainter& painter) const;
@@ -1127,9 +1136,10 @@ private:
     std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> roleColors_;
     std::vector<FaceRoleColor> faceRoleColors_;
     std::vector<SegmentRoleColor> segmentRoleColors_;
-    struct RoleShapePiece { kachakacha::v2::base::EntityId entityId;
-        kachakacha::v2::modeling::ShapeMesh mesh; QColor color; };
-    std::vector<RoleShapePiece> roleShapePieces_;
+    struct RoleShapePiece { kachakacha::v2::modeling::ShapeMesh mesh;
+        std::size_t faceIndex=kachakacha::v2::modeling::kNoFaceIndex; };
+    std::vector<std::vector<RoleShapePiece>> roleShapePieces_;
+    std::optional<std::uint64_t> facePiecesRevision_;
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;

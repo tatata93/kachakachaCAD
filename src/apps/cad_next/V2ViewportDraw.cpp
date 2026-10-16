@@ -677,6 +677,7 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 
 void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
 {
+    hoverShapeCandidates_.reset();
     ++shapeViewRevision_;
     shapeViews_ = std::move(shapes);
     RefreshFaceRolePieces();

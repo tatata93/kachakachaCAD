@@ -19,6 +19,7 @@ using kachakacha::v2::geometry::Vector3;
 void V2Viewport::SetAnalysisViews(std::vector<AnalysisView> views)
 {
     analysisViews_ = std::move(views);
+    ++analysisViewRevision_;
     update();
 }
 

@@ -25,6 +25,9 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QImage>
+#include <QColor>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -164,6 +167,73 @@ bool Cache(V2MainWindow& w) {
     return Explain("bad cache falls back to full reconstruction and leaves source intact",rebuilt&&!hit&&w.KernelShapeCount()==1
         &&V2DocumentCache::Read(original.Value()).has_value()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
 }
+void InteractionTiming(V2MainWindow& w,const char* label,ViewDirection direction=ViewDirection::Top) {
+    auto& v=w.Viewport();w.resize(1500,950);QApplication::processEvents();
+    v.SetViewDirection(direction);v.SetViewCenter({0,0,0});v.SetVisibleWidthMm(35);
+    QImage image(v.size(),QImage::Format_ARGB32);
+    for(bool profiles:{false,true}) {
+        v.SetProfileRegionPicking(profiles);v.render(&image);
+        std::vector<double> hover,paint;
+        for(int i=0;i<24;++i) {
+            QElapsedTimer timer;timer.start();
+            v.HoverAt({v.width()*(.35+.012*i),v.height()*.5});
+            hover.push_back(timer.nsecsElapsed()/1e6);timer.restart();v.render(&image);
+            paint.push_back(timer.nsecsElapsed()/1e6);
+        }
+        for(auto* values:{&hover,&paint})std::sort(values->begin(),values->end());
+        std::cout<<"interaction "<<label<<" profiles="<<profiles
+            <<" triangles="<<v.ShapeTriangleCount()<<" hover median/p95 ms="<<hover[12]<<"/"<<hover[22]
+            <<" paint median/p95 ms="<<paint[12]<<"/"<<paint[22]<<std::endl;
+    }
+    v.SetProfileRegionPicking(false);
+}
+bool Interaction(V2MainWindow& w) {
+    w.RunCommand("file.new");w.RunCommand("selection.activate");
+    modeling::ShapeMesh mesh;mesh.faceCount=4;
+    for(int y=0;y<100;++y)for(int x=0;x<100;++x) {
+        const double a=-10+x*.2,b=-10+y*.2;
+        for(auto points:{std::array<geometry::Vector3,3>{{{a,b,0},{a+.2,b,0},{a+.2,b+.2,0}}},
+            std::array<geometry::Vector3,3>{{{a,b,0},{a+.2,b+.2,0},{a,b+.2,0}}}}) {
+            modeling::MeshTriangle triangle;triangle.points=points;triangle.normal={0,0,1};
+            triangle.faceIndex=x/25;mesh.triangles.push_back(triangle);
+        }
+    }
+    modeling::RefreshBounds(mesh);base::DeterministicIdGenerator ids(910000);
+    const auto id=ids.NextTyped<base::IdKind::Entity>();
+    w.Viewport().SetShapeViews({{id,mesh,true}});
+    InteractionTiming(w,"dense GPU");
+    // An image forces the existing depth-composited software path.
+    w.Viewport().SetImageViews({V2ImageView{}});InteractionTiming(w,"dense image path");
+    w.Viewport().SetImageViews({});w.Viewport().SetShapeViews({});
+    V2Viewport v(w.Session());v.resize(900,600);v.SetShapeViews({{id,std::move(mesh),true}});
+    v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(30);v.SetProfileRegionPicking(true);
+    v.SetImageViews({V2ImageView{}});QImage first(v.size(),QImage::Format_ARGB32),second=first;
+    v.HoverAt({420,300});v.render(&first);const auto initial=v.InteractionCounts();
+    v.render(&second);const bool identical=first==second;
+    v.HoverAt({425,300});v.render(&second);const auto reused=v.InteractionCounts();
+    if(!Explain("unchanged face reuses exact raster and immutable partitions",identical
+        &&initial.rasterizations==reused.rasterizations&&initial.facePartitions==reused.facePartitions
+        &&reused.meshTraversals==initial.meshTraversals+1))return false;
+    v.HoverAt({600,300});v.render(&second);
+    if(!Explain("face hover changes color without repartitioning geometry",first!=second
+        &&v.InteractionCounts().facePartitions==initial.facePartitions))return false;
+    const auto invalidates=[&](auto change){const auto before=v.InteractionCounts().rasterizations;
+        change();v.render(&second);return v.InteractionCounts().rasterizations==before+1;};
+    if(!Explain("camera, roles, images and analysis invalidate software layer",invalidates([&]{v.SetVisibleWidthMm(31);})
+        &&invalidates([&]{v.SetFaceRoleColors({{id,0,QColor(Qt::red)}});})
+        &&invalidates([&]{v.SetImageViews({V2ImageView{}});})
+        &&invalidates([&]{v.SetAnalysisViews({});})))return false;
+    V2ImageView image;image.image={1,1,{0xff00ff00u},1};
+    modeling::ImageTriangle triangle;triangle.mesh.points={geometry::Vector3{-8,-8,1},{8,-8,1},{0,8,1}};
+    triangle.mesh.normal={0,0,1};image.triangles={triangle};
+    v.SetImageViews({image});v.render(&first);image.image.pixels[0]=0xffff0000u;
+    v.SetImageViews({image});v.render(&second);
+    if(!Explain("replacement pasted image updates rendered pixels",first!=second))return false;
+    auto display=v.DisplaySettingsNow();display.shapesVisible=false;
+    if(!Explain("shape visibility invalidates raster",invalidates([&]{v.SetDisplaySettings(display);})))return false;
+    display.shapesVisible=true;v.SetDisplaySettings(display);v.SetImageViews({});v.SetShapeViews({});
+    return true;
+}
 bool OwnerRead(V2MainWindow& w) {
     CacheScope scope;const auto path=qEnvironmentVariable("KACHACAD_OWNER_OPEN_FILE");
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
@@ -171,6 +241,10 @@ bool OwnerRead(V2MainWindow& w) {
     const auto snapshot=Snapshot(w);const auto count=w.KernelShapeCount();
     time.restart();if(!w.OpenDocumentFile(path))return false;const auto warm=time.elapsed();
     std::cout<<"owner KCD read cold="<<cold<<" ms, reused="<<warm<<" ms, shapes="<<count<<std::endl;
+    if(qEnvironmentVariableIsSet("KACHACAD_INTERACTION_TIMING")) {
+        InteractionTiming(w,"owner model");InteractionTiming(w,"owner front",ViewDirection::Front);
+        InteractionTiming(w,"owner isometric",ViewDirection::Isometric);
+    }
     return Explain("owner read cache keeps native geometry, history and source bytes",Snapshot(w)==snapshot&&w.KernelShapeCount()==count
         &&w.RebuildProblems().isEmpty()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
 }
@@ -181,6 +255,7 @@ std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-03 invalid rebuilt geometry preserves original document",Failure},
     {"HP-OPEN-04 prepared open preserves metadata and unknown archive entries",Metadata},
     {"HP-OPEN-05 unsupported warped history preserves the old document",Unsupported},
-    {"HP-OPEN-06 saved native cache, invalidation and corruption recovery",Cache}};
+    {"HP-OPEN-06 saved native cache, invalidation and corruption recovery",Cache},
+    {"HP-PERF-01 dense face hover and image compositing",Interaction}};
     if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}
 }

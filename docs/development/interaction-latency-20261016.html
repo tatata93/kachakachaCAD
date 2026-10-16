@@ -1,0 +1,32 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>操作応答の調査・修正 2026-10-16</title>
+<style>body{font:16px/1.75 "Yu Gothic UI",sans-serif;max-width:1100px;margin:32px auto;padding:0 24px;color:#243444}table{border-collapse:collapse;width:100%}th,td{border:1px solid #b5c2cc;padding:10px;text-align:left;vertical-align:top}code{background:#edf1f4}.status{background:#fff3d8;padding:14px}h1,h2{line-height:1.4}</style>
+<h1>操作応答の調査・修正</h1>
+<p class="status" id="status">Windows全体ゲート成功。検証済み配布版を作成し、本体・配布版とも全UI試験を通過。</p>
+<p>対象はマウス移動時のスナップ・選択・面ハイライトと描画。幾何の精度、元の円弧形式、面の表示品質、保存形式は変えない。段階候補は完成版として配布せず、全体ゲートを通過したファイルだけを配布する。</p>
+<h2>原因と修正</h2>
+<table><tr><th>原因</th><th>変更</th><th>保持する動作</th></tr>
+<tr><td>画面上でほぼ直線となる円弧を、何千回もの区間分割で探索していた。実モデルの円弧に1本約5msかかる例を検出。</td><td>平行投影で円または直線状に写る円弧に、解析的な最近点計算を追加。円弧の両端、掃引内の候補、直線投影の折返し点を評価。</td><td>負の掃引、角度ゼロをまたぐ円弧に対応。一般の楕円・透視投影は既存の保証付き探索を使用。大きな角度・拡大による丸め誤差が懸念される場合も既存探索へ戻す。1e-4pxの精度契約を緩和しない。</td></tr>
+<tr><td>輪郭入力中に同じマウス位置で面の光線判定を二重実行。</td><td>一つのHoverAt呼出し内だけで同じ位置の結果を共有。輪郭候補が空なら輪郭の判定を即終了。</td><td>別の位置・クリック・編集・視点変更に結果を持ち越さない。候補順・奥の面の選択を維持。</td></tr>
+<tr><td>面のハイライトを変えるたびに三角形をコピーし、全形状をGPUへ転送し直していた。</td><td>形状更新時に面番号別の表示区画を一度だけ作り、色は描画時に決める。</td><td>元の面番号とネイティブ形状を維持。選択色・役割色・面のハイライトを更新。</td></tr>
+<tr><td>画像を含む場合、毎フレームCPUで全形状・画像を深度合成。</td><td>形状・画像・解析・視点・表示状態が同じなら合成済み画像を再利用。</td><td>画像差替え、表示切替、選択、面色、解析、ウィンドウ寸法、視点が変われば更新。カーソルや作図プレビューは別に描画。</td></tr>
+<tr><td>平面輪郭にも空間輪郭用の投影パス・面積計算を追加していた。</td><td>空間輪郭だけで必要な投影・面積計算を行う。</td><td>平面と空間の輪郭の優先順位、内部クリックを維持。</td></tr></table>
+<h2>同条件の前後計測</h2>
+<p>同じWindows PC、Release構成、Windows Qt、1500×950の主ウィンドウ、同じ24点のマウス経路。前は4ead2982eの製品コードに計測用自己試験だけを追加した候補。後は今回の修正候補。初回読込とウォーム再読込の時間は下表に混ぜない。中央値は24点の上側中央（13番目）、p95は23番目を使う。描画は明示的なrender呼出しで、OSの画面提示周期を含まない。</p>
+<table><tr><th>場面・処理</th><th>変更前 中央値 / p95 (ms)</th><th>変更後 中央値 / p95 (ms)</th></tr>
+<tr><td>115面.kcd2、20形状・115,730三角形、上面・通常のマウス移動</td><td>106.306 / 160.100</td><td>10.320 / 17.512</td></tr>
+<tr><td>同モデル、上面・輪郭入力中のマウス移動</td><td>106.967 / 148.236</td><td>10.616 / 16.764</td></tr>
+<tr><td>20,000三角形、画像合成経路の描画（通常）</td><td>31.601 / 32.957</td><td>4.490 / 6.364</td></tr>
+<tr><td>20,000三角形、画像合成経路の描画（輪郭入力）</td><td>31.896 / 34.487</td><td>4.751 / 31.894</td></tr></table>
+<p>面をまたいで色が変わるフレームは合成し直すため、画像経路のp95には約32msが残る。測定した経路の改善であり、全機能・全モデルを同じ比率で高速化したという意味ではない。初回の幾何再構築、一般楕円の探索、解析面の描画は別の費用として残る。</p>
+<p>速度と引き換えに、表示用の面別区画とビューポート1枚分の合成画像をメモリへ保持する。カメラごとの画像を無制限に蓄積するキャッシュではなく、次の表示状態で入れ替える。編集用の正本はネイティブ形状・曲線のまま保つ。</p>
+<p id="other-views">丸め誤差の保護とキャッシュの位置確認を加えた最終候補でも、上面の通常マウス移動10.560 / 16.932ms、輪郭入力10.835 / 16.821msを確認。正面の通常マウス移動0.706 / 0.931ms、等角表示1.218 / 1.560ms。正面・等角の変更前比較はしていないため、これらの削減率は示さない。画面に対する面の重なりとマウス経路によって拾う曲線数が異なる。</p>
+<h2>検証</h2>
+<p>スナップ60/60、選択44/44。追加試験では、正負の掃引、角度の折返し、ほぼ直線／傾いた楕円、大きな開始角と拡大、狭い取得半径での拒否を確認。画面試験では、同じ面のラスタ再利用、面をまたぐ色の変更、三角形区画の再構築が増えないこと、画像の色の差替え、視点・表示・役割色・解析変更の無効化を確認する。</p>
+<p>事前検査でQt型の明示的include漏れ2箇所を検出して修正。仮の試験コマンドでターゲット名の指定誤りも修正。試験の削除、許容誤差の緩和は行っていない。実モデルは読取のみとし、元ファイルのバイト列の保持を検証する。</p>
+<p id="full-result">全体実行ID：<code>interaction-latency-full2-20261016</code>。CTest 194/194、本体UI 493/493、配布版UI 493/493、旧版本体の自己試験が成功。CTest実時間1,319.06秒（約22分）。配布版検査648.46秒、本体UI620.50秒。これらは一部並列であり、単純合算を待ち時間とはしない。ソース・設定・環境・実行ファイル・DLL・ZIPの対応を照合して配布する。</p>
+<p><a href="../../out/releases/interaction-latency-full2-20261016/package/kachakacha_cad_next.exe">検証済みアプリ</a> ／ <a href="../../out/releases/interaction-latency-full2-20261016/package.zip">配布ZIP</a> ／ <a href="../../out/verification/interaction-latency-full2-20261016/result.json">全体検証証拠</a>。起動用コマンドは <code>python scripts/run-verified.py out/releases/interaction-latency-full2-20261016</code>。起動中の旧版は自動終了・差し替えしない。</p>
+<h2>ファイル構成</h2>
+<p>表示側は既存のV2ProfileRegionPicking.cpp、V2FaceRoleColors.cpp、V2SurfaceRendering.cpp、V2Viewport関連に実装。円弧の解析経路は既存のgeometry/CurveIntersection.cpp、数値試験はtests_v2/snap_tests.cpp。実画面・計測試験はV2SelfTestDocumentOpen.cppへ追加。削除したファイル、依存ライブラリの追加、KCD形式の変更はない。旧配布版とモデルを保全する。</p>
+<p>再現用の任意計測はKACHACAD_OWNER_OPEN_FILEでモデルを指定し、KACHACAD_INTERACTION_TIMING=1としてHP-OPEN-OWNERを実行する。通常の全件試験に個人ファイルのパスは埋め込まない。ログはout/interaction-before.log、interaction-after.log、interaction-final-measure.log。性能値は厳密な時間閾値で合否にせず、キャッシュの正しさと計算回数を自動判定する。</p>
+</html>

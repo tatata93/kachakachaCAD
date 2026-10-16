@@ -4,14 +4,37 @@
 #include <QColor>
 #include <QPainter>
 #include <QRect>
+#include <QPoint>
 #include <algorithm>
+#include <bit>
 
 void V2Viewport::DrawSmoothShapes(QPainter& painter) const
 {
     if (DrawGpuShapes(painter)) return;
     using namespace kachakacha::v2;
-    view::SurfaceRaster raster(width(), height());
+    // Exact display-state key, no geometry hash and no cursor position. A cursor
+    // move inside the same face must not rerasterize an unchanged CAD/image layer.
+    std::vector<std::uint64_t> key={shapeViewRevision_,imageViewRevision_,analysisViewRevision_,
+        std::uint64_t(width()),std::uint64_t(height()),std::uint64_t(display_.shapesVisible),
+        palette_.background.rgba(),SemanticColor(app::SemanticState::Selected).rgba(),
+        SemanticColor(app::SemanticState::Hover).rgba()};
+    for(double value:mapping_.matrix)key.push_back(std::bit_cast<std::uint64_t>(value));
     const auto forward = view::ForwardOf(orientation_);
+    for(double value:{forward.x,forward.y,forward.z})key.push_back(std::bit_cast<std::uint64_t>(value));
+    for(const auto& shape:shapeViews_) {
+        key.push_back(EntityShown(shape.entityId));key.push_back(app::IsSelected(selection_,shape.entityId));
+        key.push_back(shape.entityId==hoveredEntityId_);
+        for(const auto& piece:roleShapePieces_[&shape-shapeViews_.data()]) {
+            const auto color=FaceRoleColorOf(shape.entityId,piece.faceIndex);
+            key.push_back(color?std::uint64_t(color->rgba()):0);
+        }
+    }
+    for(const auto& image:imageViews_)key.push_back(EntityShown(image.entityId));
+    if(key==smoothRasterKey_&&!smoothRaster_.isNull()) {
+        painter.drawImage(QPoint(0,0),smoothRaster_);return;
+    }
+    ++interactionMetrics_.rasterizations;
+    view::SurfaceRaster raster(width(), height());
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) {
         if(!EntityShown(shape.entityId))continue;
         const auto* analysis = AnalysisFor(shape.entityId);
@@ -50,6 +73,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
         std::copy_n(start, width(), reinterpret_cast<std::uint32_t*>(image.scanLine(y)));
     }
     painter.drawImage(QRect(0, 0, width(), height()), image);
+    smoothRaster_=std::move(image);smoothRasterKey_=std::move(key);
 }
 
 bool V2Viewport::DrawGpuShapes(QPainter& painter) const
@@ -64,14 +88,11 @@ bool V2Viewport::DrawGpuShapes(QPainter& painter) const
         if(selected)edge=SemanticColor(kachakacha::v2::app::SemanticState::Selected).darker(125);
         else if(hovered)edge=SemanticColor(kachakacha::v2::app::SemanticState::Hover);
         const unsigned fill=shape.surface?(selected?0xb0d2e8:0x91bed9):(selected?0xc8d4df:0xb2bcc7);
-        bool split = false;
-        for (const auto& piece : roleShapePieces_) if (piece.entityId == shape.entityId) {
-            items.push_back({&piece.mesh,piece.color.isValid() ? piece.color.rgb()&0xffffffu : fill,
+        for (const auto& piece : roleShapePieces_[&shape-shapeViews_.data()]) {
+            const auto color=FaceRoleColorOf(shape.entityId,piece.faceIndex);
+            items.push_back({&piece.mesh,color ? color->rgb()&0xffffffu : fill,
                 edge.rgb()&0xffffffu,display_.shapesVisible&&EntityShown(shape.entityId),selected||hovered});
-            split = true;
         }
-        if (!split) items.push_back({&shape.mesh,fill,edge.rgb()&0xffffffu,
-            display_.shapesVisible&&EntityShown(shape.entityId),selected||hovered});
     }
     const bool native=gpuRenderer_.PaintingFrame();
     if(native)painter.beginNativePainting();

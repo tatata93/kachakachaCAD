@@ -148,6 +148,7 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
 //! 消しておいて、次にポインタが動いたときに出し直す。
 void V2Viewport::OnSceneReplaced()
 {
+    hoverShapeCandidates_.reset();
     if(isolationActive_&&!IsolationActive())ClearIsolation();
     // 条件を付けない。場面が替わったら前の場面の一時表示は全部捨てる、という
     // 決めごとにする。「リングが出ているときだけ」にすると、位置や案内文だけが
@@ -240,6 +241,7 @@ ScreenMapping V2Viewport::Mapping() const
 
 void V2Viewport::RebuildMapping()
 {
+    hoverShapeCandidates_.reset();
     mapping_ = MakeOrthographicMapping(center_, kachakacha::v2::view::ForwardOf(orientation_),
         kachakacha::v2::view::UpOf(orientation_), visibleWidthMm_, std::max(1, width()),
         std::max(1, height()));
@@ -789,12 +791,12 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
 
 void V2Viewport::HoverAt(const QPointF& position)
 {
+    hoverShapeCandidates_.reset();hoverPickReuse_=true;
     QElapsedTimer hoverTimer;hoverTimer.start();
     cursorPosition_ = position;
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     const auto snapTime=hoverTimer.nsecsElapsed();
     status_ = hover_.messageJa;
-    const auto previousRegion = hoveredProfileRegion_;
     hoveredProfileRegion_ = ProfileRegionAt(position);
     if (ReferencePickPending()) hoveredProfileRegion_.reset();
     if (hoveredProfileRegion_.has_value()) {
@@ -810,7 +812,6 @@ void V2Viewport::HoverAt(const QPointF& position)
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
     RefreshPickCycle(position);
     SyncHoverWithCandidate();
-    if (previousRegion != hoveredProfileRegion_) RefreshFaceRolePieces();
     if (cursorPanel_.active) {
         // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
         const auto point = hover_.position; // Use the same snapped/constrained point as the preview.
@@ -834,6 +835,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     RefreshCursorShape();
     update();
     NotifyHoverChanged();
+    hoverPickReuse_=false;hoverShapeCandidates_.reset();
     if(qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"hover stages ms %.3f %.3f %.3f\n",snapTime/1e6,(pickTime-snapTime)/1e6,(hoverTimer.nsecsElapsed()-pickTime)/1e6);
 }
 

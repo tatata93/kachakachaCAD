@@ -2,6 +2,7 @@
 #include <QColor>
 #include <algorithm>
 #include <utility>
+#include <map>
 void V2Viewport::SetSegmentRoleColors(std::vector<SegmentRoleColor> colors) {
     segmentRoleColors_=std::move(colors);update();
 }
@@ -31,30 +32,28 @@ void V2Viewport::SetFaceRoleColors(std::vector<FaceRoleColor> colors)
 
 void V2Viewport::RefreshFaceRolePieces()
 {
+    // Face partitions depend on geometry only. Hover and role changes supply colors
+    // at draw time, without copying triangles or invalidating the GPU buffers.
+    if (facePiecesRevision_ == shapeViewRevision_) { update(); return; }
     roleShapePieces_.clear();
-    // Split display triangles once when inputs change, never on every frame.
-    // CPU picking and the native topology retain their original face indices.
     for (const auto& shape : shapeViews_) {
-        if (!((profileRegionPicking_ || elementPickHandler_) && hoveredFaceIndex_ && shape.entityId == hoveredEntityId_)
-            && std::none_of(faceRoleColors_.begin(), faceRoleColors_.end(),
-            [&](const auto& role) { return role.entityId == shape.entityId; })) continue;
         std::vector<RoleShapePiece> pieces;
-        pieces.push_back({shape.entityId, {}, {}});
-        pieces.front().mesh.edges = shape.mesh.edges;
+        std::map<std::size_t,std::size_t> indices;
         for (const auto& triangle : shape.mesh.triangles) {
-            const auto color = FaceRoleColorOf(shape.entityId, triangle.faceIndex).value_or(QColor{});
-            auto piece = std::find_if(pieces.begin(), pieces.end(),
-                [&](const auto& value) { return value.color == color; });
-            if (piece == pieces.end()) { pieces.push_back({shape.entityId, {}, color}); piece = pieces.end()-1; }
-            piece->mesh.triangles.push_back(triangle);
+            const auto [entry,inserted]=indices.emplace(triangle.faceIndex,pieces.size());
+            if(inserted)pieces.push_back({{},triangle.faceIndex});
+            pieces[entry->second].mesh.triangles.push_back(triangle);
         }
+        if(pieces.empty())pieces.push_back({});
+        pieces.front().mesh.edges=shape.mesh.edges;
         for (auto& piece : pieces) {
             piece.mesh.closed = shape.mesh.closed;
             kachakacha::v2::modeling::RefreshBounds(piece.mesh);
-            roleShapePieces_.push_back(std::move(piece));
         }
+        roleShapePieces_.push_back(std::move(pieces));
     }
-    ++shapeViewRevision_;
+    facePiecesRevision_=shapeViewRevision_;
+    ++interactionMetrics_.facePartitions;
     update();
 }
 

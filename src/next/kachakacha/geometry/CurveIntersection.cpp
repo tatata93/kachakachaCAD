@@ -419,6 +419,51 @@ std::optional<CurveScreenApproach> CircleApproach(const CurveSegment& curve,
     return CurveScreenApproach{ScreenDistance(*screen,pointer),t,point};
 }
 
+// Exact candidates for orthographic arcs that project to a circle or a line.
+// General ellipses and perspective retain the guaranteed hull search below.
+std::optional<CurveScreenApproach> SimpleArcApproach(const CurveSegment& curve,
+    const ScreenMapping& mapping,const ScreenPoint& pointer)
+{
+    if(curve.Kind()!=CurveKind::CircularArc || mapping.matrix[12]!=0
+        ||mapping.matrix[13]!=0||mapping.matrix[14]!=0)return {};
+    const auto center=mapping.Project(curve.Center());
+    const auto a=mapping.Project(curve.Center()+curve.ReferenceDirection()*curve.Radius());
+    const auto b=mapping.Project(curve.Center()+Cross(curve.Normal(),curve.ReferenceDirection())*curve.Radius());
+    if(!center||!a||!b)return {};
+    const double ax=a->x-center->x,ay=a->y-center->y,bx=b->x-center->x,by=b->y-center->y;
+    const double aa=ax*ax+ay*ay,bb=bx*bx+by*by,ab=ax*bx+ay*by;
+    const double size=std::sqrt(std::max(aa,bb));
+    if(!(size>1e-12))return {};
+    const double start=curve.StartAngleRad(),sweep=curve.SweepAngleRad();
+    if(size*std::numeric_limits<double>::epsilon()
+        *std::max({1.,std::abs(start),std::abs(sweep)})*64>kCurveScreenApproachTolerancePx*.001)return {};
+    std::vector<double> angles;
+    const double px=pointer.x-center->x,py=pointer.y-center->y;
+    // Absolute screen-space roundoff bound is much smaller than the 1e-4 px
+    // approach contract, including when the model is zoomed very far in.
+    if((std::abs(aa-bb)+2*std::abs(ab))/size<1e-9) {
+        angles.push_back(std::atan2(px*bx+py*by,px*ax+py*ay));
+    } else if(std::abs(ax*by-ay*bx)/size<1e-9) {
+        const double ux=(aa>=bb?ax:bx)/size,uy=(aa>=bb?ay:by)/size;
+        const double ca=ax*ux+ay*uy,cb=bx*ux+by*uy;
+        const double phase=std::atan2(cb,ca),radius=std::hypot(ca,cb);
+        const double angle=std::acos(std::clamp((px*ux+py*uy)/radius,-1.0,1.0));
+        angles={phase+angle,phase-angle,phase,phase+kPi};
+    } else return {};
+    CurveScreenApproach best{std::numeric_limits<double>::infinity(),0,{}};
+    const auto consider=[&](double t){const auto point=curve.Evaluate(t);const auto q=mapping.Project(point);
+        if(q){const double distance=ScreenDistance(*q,pointer);
+            if(distance<best.distancePx)best={distance,t,point};}};
+    consider(0);consider(1);
+    const double low=std::min(start,start+sweep),high=std::max(start,start+sweep);
+    for(double angle:angles) {
+        const double turns=std::ceil((low-angle)/(2*kPi));
+        const double candidate=angle+turns*(2*kPi);
+        if(candidate<=high+1e-12)consider(std::clamp((candidate-start)/sweep,0.0,1.0));
+    }
+    return best;
+}
+
 //! クリップ座標の w(視点からの奥行きに比例する)。平行投影では一定。
 [[nodiscard]] double ClipW(const ScreenMapping& mapping, const Vector3& world)
 {
@@ -625,6 +670,8 @@ std::optional<CurveScreenApproach> ApproachToCurveOnScreen(const CurveSegment& s
     }
     if(const auto circle=CircleApproach(segment,mapping,pointer))
         return circle->distancePx<=maximumDistancePx?circle:std::nullopt;
+    if(const auto arc=SimpleArcApproach(segment,mapping,pointer))
+        return arc->distancePx<=maximumDistancePx?arc:std::nullopt;
     // 上限側: 実際に曲線上の点を写して測った距離のうち、いちばん近いもの。
     CurveScreenApproach best{std::numeric_limits<double>::infinity(), 0.0, Vector3{}};
     double bestSpanWidth = 1.0;

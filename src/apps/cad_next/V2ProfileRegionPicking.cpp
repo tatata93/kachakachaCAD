@@ -123,7 +123,7 @@ void V2Viewport::RebuildProfileRegions()
 
 std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) const
 {
-    if (!profileRegionPicking_) {
+    if (!profileRegionPicking_ || profileRegions_.empty()) {
         return std::nullopt;
     }
     // 面を作る: 線の上を押したら、その線 1 本だけを入れる/外す。縁の線を押すたびに
@@ -159,7 +159,7 @@ std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) 
         if (!point.has_value() && !curved) {
             continue;
         }
-        QPainterPath spatial;AddBoundary(spatial,*this,region.outer);
+        QPainterPath spatial;if(curved)AddBoundary(spatial,*this,region.outer);
         bool taken = (curved ? spatial.contains(position) : kachakacha::v2::app::ProfileRegionContains(region, *point, tolerance))
             || BoundaryNearScreen(region.outer, mapping_, position, edgePickPx);
         for (const auto& hole : region.holes) {
@@ -171,7 +171,7 @@ std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) 
         // A spatial loop has no picking plane. A least-squares plane can be
         // parallel to the view even when its projected interior is visible.
         const double distance = Dot((curved ? region.plane.origin : *point) - ray->origin, ray->direction);
-        const auto polygon=spatial.toFillPolygon();double area=0;
+        const auto polygon=curved?spatial.toFillPolygon():QPolygonF{};double area=0;
         for(int i=0;i<polygon.size();++i)area+=polygon[i].x()*polygon[(i+1)%polygon.size()].y()-polygon[i].y()*polygon[(i+1)%polygon.size()].x();
         area=std::abs(area);
         const bool previousSpatial=result&&profileRegions_[*result].plane.maximumDeviationMm>session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;

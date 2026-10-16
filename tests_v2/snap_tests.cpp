@@ -1400,3 +1400,29 @@ KACHA_V2_TEST(snap, line_closest_point_and_intersection_preserve_perspective)
     Require(cross.size()==1&&cross[0].real,"one exact intersection");
     RequireNear(cross[0].position.Length(),0,1e-9,"intersection at origin");
 }
+
+KACHA_V2_TEST(snap, arc_screen_closest_keeps_sweep_and_edge_on_extrema)
+{
+    using namespace kachakacha::v2::geometry;
+    for(const double start:{-.3,5.9})for(const double sweep:{.8,-2.6,5.8,-5.8}) {
+        const auto arc=CurveSegment::MakeCircularArc({2,-3,1},{0,0,1},{1,0,0},13,start,sweep).Value();
+        for(const auto forward:std::vector<Vector3>{{0,0,-1},{1,0,0},{1,.3,0},{1,0,-1e-12},{1,0,-1e-10},{1,0,-.01}}) {
+            const auto map=MakeOrthographicMapping({2,-3,1},forward,{0,1,0},40,900,700);
+            for(const ScreenPoint pointer:std::vector<ScreenPoint>{{450,350},{500,352},{700,200},{200,500}}) {
+                const auto result=ApproachToCurveOnScreen(arc,map,pointer,2000);
+                Require(result.has_value(),"arc approach available");
+                double sampled=1e9;
+                for(int i=0;i<=12000;++i)sampled=std::min(sampled,ScreenDistance(*map.Project(arc.Evaluate(i/12000.)),pointer));
+                Require(result->distancePx<=sampled+kCurveScreenApproachTolerancePx,"arc minimum matches dense sweep reference");
+                Require(result->parameter>=0&&result->parameter<=1,"closest belongs to trimmed arc");
+                RequireNear((result->point-arc.Evaluate(result->parameter)).Length(),0,1e-10,"analytic point retains native arc");
+                if(result->distancePx>.02)Require(!ApproachToCurveOnScreen(arc,map,pointer,result->distancePx-.01),"smaller pick radius rejects");
+            }
+        }
+    }
+    const auto extreme=CurveSegment::MakeCircularArc({0,0,0},{0,0,1},{1,0,0},13,10000,.7).Value();
+    const auto zoom=MakeOrthographicMapping(extreme.Evaluate(.37),{0,0,-1},{0,1,0},.1,900,700);
+    const auto at=*zoom.Project(extreme.Evaluate(.37));
+    const auto hit=ApproachToCurveOnScreen(extreme,zoom,at,2);
+    Require(hit&&hit->distancePx<=kCurveScreenApproachTolerancePx,"large angle and zoom retain precise fallback");
+}

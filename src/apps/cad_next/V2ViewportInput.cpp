@@ -712,12 +712,14 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
     if (pickMeshes_.empty() || !display_.shapesVisible) {
         return candidates;
     }
+    if(hoverPickReuse_&&position==cursorPosition_&&hoverShapeCandidates_)return *hoverShapeCandidates_;
     const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
     if (!ray.has_value()) {
         return candidates;
     }
     // 面ごとに1つ拾う。面を選べないと、押し引き(EX-02)が始められない。
     // 三角形ごとに出すと、1枚の面が何十もの候補になって Tab が回らない。
+    ++interactionMetrics_.meshTraversals;
     const auto hits = kachakacha::v2::modeling::CollectFaceHits(pickMeshes_, ray->origin,
         ray->direction);
     candidates.reserve(hits.size());
@@ -743,6 +745,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
         candidate.distancePx = hit.distanceMm;
         candidates.push_back(candidate);
     }
+    if(hoverPickReuse_&&position==cursorPosition_)hoverShapeCandidates_=candidates;
     return candidates;
 }
 
@@ -1138,6 +1141,7 @@ void V2Viewport::RefreshPickCycle(const QPointF& position)
 
 void V2Viewport::ForgetPickCycle()
 {
+    hoverShapeCandidates_.reset();
     cycle_ = PickCycle{};
     hoverOffPlane_ = false;
     SyncHoverWithCandidate();

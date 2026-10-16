@@ -45,6 +45,8 @@
 #include <QEvent>
 #include <QChar>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QScopeGuard>
 #include <iostream>
 
 namespace kachakacha::v2::selftest {
@@ -628,11 +630,43 @@ bool CaseOwnerWireOutput(V2MainWindow& window)
     if(!file.open(QIODevice::ReadOnly))return false;
     return Explain("wire-only roof also leaves original KCD bytes unchanged",file.readAll()==original);
 }
+
+bool CaseIndependentThicken(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    for(const int mode:{0,2}){
+        if(!ArmThickenOnFreshSurface(w))return false;
+        auto* independent=w.findChild<QCheckBox*>(QStringLiteral("thickenIndependent"));
+        auto* output=w.findChild<QComboBox*>(QStringLiteral("thickenOutput"));if(!independent||!output)return false;
+        auto reset=qScopeGuard([&]{independent->setChecked(false);});independent->setChecked(true);output->setCurrentIndex(mode);
+        if(!ClickOnAnyGuideSurface(w))return false;const auto source=w.ThickenInput().surfaces.front();
+        if(!w.ThickenDock().ClickConfirm())return false;
+        base::EntityId part;std::string brep;
+        for(const auto& entity:w.Session().GetDocument().Snapshot().entities)if(entity.kind==EntityKind::Part){part=entity.id;
+            const auto* feature=w.Session().GetDocument().FindFeature(entity.createdBy);
+            const auto* frozen=feature?std::get_if<domain::FreezeDerivedDefinition>(&feature->definition):nullptr;
+            if(!Explain("independent thickness has a saved BRep and no source dependency",frozen&&!frozen->frozenBrep.empty()&&feature->inputEntityIds.empty()&&entity.editPolicy==domain::EditPolicy::Frozen))return false;
+            brep=frozen->frozenBrep;
+        }
+        if(part.IsNil())return false;
+        w.RunCommand("edit.undo");if(w.Session().GetDocument().FindEntity(part))return false;
+        w.RunCommand("edit.redo");if(!w.SaveAndReopen("independent-thickness.kcd2")||!w.RebuildProblems().isEmpty())return false;
+        app::SelectionSet pick;pick.entityIds={source};w.Viewport().SetSelection(pick);w.RunCommand("edit.delete");
+        const auto* entity=w.Session().GetDocument().FindEntity(part);
+        if(!Explain("source surface can be removed without removing independent part",entity&&!w.Session().GetDocument().FindEntity(source)))return false;
+        const auto* feature=w.Session().GetDocument().FindFeature(entity->createdBy);
+        if(std::get<domain::FreezeDerivedDefinition>(feature->definition).frozenBrep!=brep)return false;
+        w.RunCommand("edit.undo");if(!w.Session().GetDocument().FindEntity(source))return false;
+        w.RunCommand("edit.redo");if(!w.SaveAndReopen("independent-thickness-source-deleted.kcd2")||!w.RebuildProblems().isEmpty()||!w.Session().GetDocument().FindEntity(part))return false;
+    }
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ThickenCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-TH-INDEPENDENT frozen solid and boundary survive source deletion and save",CaseIndependentThicken},
         {"HP-TH-JIG-OUTPUT all jig outputs themes undo and saved results",CaseJigOutputMatrix},
         {"HP-TH-OUTPUT all outputs placements to-plane themes and atomic saved results",CaseThickenOutputMatrix},
         {"HP-TH-CORRECT explicit correction buttons and saved native rebuild",CaseCorrectionThemes},

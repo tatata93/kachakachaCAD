@@ -15,6 +15,7 @@ std::optional<QColor> V2Viewport::SegmentRoleColorOf(
 std::optional<QColor> V2Viewport::FaceRoleColorOf(
     const kachakacha::v2::base::EntityId& id, std::size_t faceIndex) const
 {
+    if(DeletionPreviewContains(id)) return QColor(235,65,55);
     if (((profileRegionPicking_ && !referencePickHandler_) || elementPickHandler_) && !hoveredProfileRegion_
         && id == hoveredEntityId_ && hoveredFaceIndex_ == faceIndex)
         return SemanticColor(kachakacha::v2::app::SemanticState::Hover);

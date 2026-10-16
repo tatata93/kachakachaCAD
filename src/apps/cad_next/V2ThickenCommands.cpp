@@ -28,6 +28,10 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QString>
+#include <QCheckBox>
+#include <QScopeGuard>
+#include "kachakacha/app/ExplorerModel.h"
+#include "kachakacha/document/Commands.h"
 #include <QScopedValueRollback>
 
 #include <algorithm>
@@ -403,6 +407,10 @@ void V2MainWindow::ConfirmThicken()
     const auto edges = thicken_->builtEdges;
     const auto thickness = thicken_->builtThickness;
     const auto outputMode = thickenDock_->OutputMode();
+    const auto* choice=findChild<QCheckBox*>(QStringLiteral("thickenIndependent"));
+    const bool independent=choice&&choice->isChecked();
+    std::vector<std::string> independentParts;
+    auto cleanup=qScopeGuard([&]{for(const auto& id:independentParts){partShapes_.erase(id);partEdges_.erase(id);}});
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
         kachakacha::v2::domain::ThickenSurfaceDefinition definition;
@@ -423,7 +431,21 @@ void V2MainWindow::ConfirmThicken()
             if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());return;}
             for(const auto& wire:wires.Value())if(AddPlainWire(wire,"厚みの境界").IsNil())return;
         }
-        if(kachakacha::v2::app::IncludesSolid(outputMode)) {
+        if(kachakacha::v2::app::IncludesSolid(outputMode)&&independent) {
+            using namespace kachakacha::v2;
+            const auto brep=kernel::CaptureOutputShape(built[index]);
+            if(!brep.HasValue()){ReportDiagnostics(brep.Diagnostics());return;}
+            domain::Feature feature;feature.id=ids_->NextTyped<base::IdKind::Feature>();feature.type=domain::FeatureType::FreezeDerived;
+            domain::FreezeDerivedDefinition frozen;frozen.frozenBrep=brep.Value();feature.definition=std::move(frozen);feature.displayName=std::string(label)+"（独立）";
+            domain::Entity entity;entity.id=ids_->NextTyped<base::IdKind::Entity>();entity.createdBy=feature.id;
+            entity.kind=domain::EntityKind::Part;entity.editPolicy=domain::EditPolicy::Frozen;
+            entity.groupId=session_->GetDocument().Snapshot().settings.activeGroupId;
+            entity.displayName=app::UniqueDisplayName(session_->GetDocument().Snapshot(),entity.kind,feature.displayName);
+            feature.outputs.push_back({"part",entity.id,entity.kind});
+            const auto added=session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},label));
+            if(!added.committed){ReportDiagnostics(added.diagnostics);return;}
+            const auto key=entity.id.ToString();partShapes_[key]=built[index];partEdges_[key]=edges[index];independentParts.push_back(key);
+        } else if(kachakacha::v2::app::IncludesSolid(outputMode)) {
             std::vector<EntityId> inputs{surfaces[index]};
             if(toPlane)inputs.push_back(thicken_->input.targetPlane);
             const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
@@ -436,6 +458,7 @@ void V2MainWindow::ConfirmThicken()
         AdoptCurrentDocument();
         return;
     }
+    cleanup.dismiss();
     // Committed parts now own these handles; cancelling only owns previews.
     if(kachakacha::v2::app::IncludesSolid(outputMode))thicken_->built.clear();
     EndThicken();

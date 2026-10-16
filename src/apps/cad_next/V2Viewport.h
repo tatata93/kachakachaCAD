@@ -199,6 +199,12 @@ public:
     //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
     std::vector<kachakacha::v2::app::PickCandidate> ImageCandidatesAt(const QPointF&) const;
     void SetShapeViews(std::vector<ShapeView> shapes);
+    void SetSectionView(bool enabled, bool reverse = false);
+    bool SectionViewActive() const noexcept { return sectionView_; }
+    void SetGridOnTop(bool enabled) { gridOnTop_=enabled; update(); }
+    void SetDeletionPreview(std::vector<kachakacha::v2::base::EntityId> ids);
+    bool DeletionPreviewContains(kachakacha::v2::base::EntityId id) const;
+
     void SetImageViews(std::vector<V2ImageView> images) { imageViews_=std::move(images); ++imageViewRevision_; setProperty("imageDocumentRevision", {}); update(); }
     const std::vector<V2ImageView>& ImageViews() const { return imageViews_; }
     //! いま出している形。「選択に正対」が、立体の広がりを知るために読む。
@@ -1096,6 +1102,13 @@ private:
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     std::vector<WorkPlaneView> workPlaneViews_;
     std::vector<ShapeView> shapeViews_;
+    std::vector<ShapeView> originalShapeViews_;
+    bool sectionView_=false, sectionReverse_=false, gridOnTop_=true;
+    double sectionSign_=1.0;
+    void RebuildSectionViews();
+    std::vector<kachakacha::v2::base::EntityId> deletionPreview_;
+    std::optional<kachakacha::v2::modeling::SnapScene> beforeDeletionPreview_;
+
     std::vector<V2ImageView> imageViews_;
     std::vector<AnalysisView> analysisViews_;
     //! 当たり判定へ渡す網だけを並べたもの。SetShapeViews で作り直す。

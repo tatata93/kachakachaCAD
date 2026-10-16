@@ -4,6 +4,8 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include <QCheckBox>
+#include <QDoubleSpinBox>
 #include "V2WorkPlaneRoleInputs.h"
 #include "V2SelectionRoleInputs.h"
 #include "V2ThickenDock.h"
@@ -132,6 +134,14 @@ void V2MainWindow::BuildRightShelves()
     // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
     workPlaneDock_ = new V2WorkPlaneDock(this);
+    auto* section=workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("sectionView"));
+    auto* reverse=workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("reverseSection"));
+    connect(section,&QCheckBox::toggled,viewport_,[this,reverse](bool enabled){viewport_->SetSectionView(enabled,reverse->isChecked());});
+    connect(reverse,&QCheckBox::toggled,viewport_,[this,section](bool reversed){viewport_->SetSectionView(section->isChecked(),reversed);});
+    connect(workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("gridOnTop")),&QCheckBox::toggled,viewport_,&V2Viewport::SetGridOnTop);
+    connect(workPlaneDock_->findChild<QDoubleSpinBox*>(QStringLiteral("sectionOffset")),&QDoubleSpinBox::valueChanged,viewport_,[this,section,reverse](double value){
+        viewport_->setProperty("sectionOffsetMm",value);viewport_->SetSectionView(section->isChecked(),reverse->isChecked());
+    });
     workPlaneDock_->SetCreateHandler([this] { HandleWorkPlaneToolKey(Qt::Key_Return, nullptr); });
     workPlaneDock_->SetCancelHandler([this] { HandleWorkPlaneToolKey(Qt::Key_Escape, nullptr); });
     // 欄が変わるたびに、作る前の平面を3Dへ下見として出す(D-24)。

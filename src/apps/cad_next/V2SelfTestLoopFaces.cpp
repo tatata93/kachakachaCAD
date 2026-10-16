@@ -10,6 +10,7 @@
 //! 選ぶのは実際に画面へ引く道(ClickAt / HoverAt)だけ。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestDeleteDialog.h"
 
 #include "V2DrawingDock.h"
 #include "V2FabricationDock.h"
@@ -608,7 +609,7 @@ void SelectAllWires(V2MainWindow& window)
     one.entityIds.push_back(first);
     window.Viewport().SetSelection(one);
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
-    window.RunCommand("edit.delete");
+    if(!DeleteWithConfirmation(window,false))return false;
     if (!Explain("面に使われている線は消えない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
         || !Explain((std::string("状態行に「使っている」の理由が出る(") + window.StatusText().toStdString() + ")").c_str(),
             window.StatusText().contains(QStringLiteral("使っている")))) {

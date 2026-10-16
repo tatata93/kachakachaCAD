@@ -931,6 +931,10 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    if(sectionView_)std::erase_if(candidates,[this](const auto& c){
+        const auto* e=session_->GetDocument().FindEntity(c.entityId);
+        return e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface);
+    }); // Section faces use clipped meshes; original native edges must not reappear on hover.
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
         std::erase_if(candidates, [](const auto& c) {
             return c.kind != kachakacha::v2::app::SelectionElementKind::Edge;

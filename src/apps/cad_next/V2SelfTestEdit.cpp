@@ -1,3 +1,6 @@
+#include <QApplication>
+#include <QDialog>
+#include <QEvent>
 //! 編集の棚(V1 の「選択内容の数値編集」)のケース。
 //!
 //! 直線の点を打ち直す、長さと平面内角度で終点を置き直す、円の半径を変える、
@@ -5,6 +8,7 @@
 //! ここでは「棚を通って文書が変わり、一度で戻せるか」を見る。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestDeleteDialog.h"
 
 #include "V2CornerDock.h"
 #include "V2DrawingDock.h"
@@ -22,6 +26,11 @@
 
 #include <QPointF>
 #include <QString>
+#include <QCheckBox>
+#include <QKeyEvent>
+#include <QListWidget>
+#include <QDir>
+#include <QDoubleSpinBox>
 
 #include <cmath>
 #include <algorithm>
@@ -491,18 +500,123 @@ bool CaseDeleteGuards(V2MainWindow& w) {
     dependent.outputs={{"point",point.id,point.kind}};
     if(!w.Session().GetDocument().Run(document::AddFeatureCommand(dependent,{point},"依存点")).committed)return false;
     ref.segmentId=c.segmentId;selected.ordered={ref};w.Viewport().SetSelection(selected);
-    const auto used=w.Session().GetDocument().Revision();w.RunCommand("edit.delete");
+    const auto used=w.Session().GetDocument().Revision();if(!DeleteWithConfirmation(w,false))return false;
     if(!Explain("used wire deletion refuses without creating an Undo entry",w.Session().GetDocument().Revision()==used&&w.Session().Scene().curves.size()==1))return false;
     w.RunCommand("edit.undo");if(w.Session().GetDocument().FindEntity(point.id))return false;
     w.Viewport().SetSelection(selected);w.RunCommand("edit.delete");
     if(!w.Session().Scene().curves.empty())return false;
     w.RunCommand("edit.undo");w.RunCommand("edit.redo");return w.Session().Scene().curves.empty();
 }
+
+bool CaseDependentDeletePreview(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,app::DirectWireKind::PlanarLine,{{-30,0,0},{30,0,0}},0,QStringLiteral("削除元")))return false;
+    const auto curve=w.Session().Scene().curves.back();base::DeterministicIdGenerator ids(940000);
+    const auto addPoint=[&](base::EntityId input,const char* name){
+        domain::Feature feature;feature.id=ids.NextTyped<base::IdKind::Feature>();feature.type=domain::FeatureType::CreatePoint;
+        feature.displayName=name;feature.inputEntityIds={input};feature.definition=domain::CreatePointDefinition{};
+        domain::Entity point;point.id=ids.NextTyped<base::IdKind::Entity>();point.createdBy=feature.id;point.kind=EntityKind::Point;point.displayName=name;
+        feature.outputs={{"point",point.id,point.kind}};
+        if(!w.Session().GetDocument().Run(document::AddFeatureCommand(feature,{point},name)).committed)return base::EntityId{};
+        return point.id;
+    };
+    const auto p=addPoint(curve.entityId,"依存点A"),q=addPoint(p,"依存点B");if(p.IsNil()||q.IsNil())return false;
+    document::ReferenceDimension dimension;dimension.id=ids.NextTyped<base::IdKind::Dimension>();dimension.label="削除対象寸法";
+    dimension.targets={curve.entityId};dimension.segments={{curve.entityId,curve.segmentId}};dimension.kind="length";dimension.unit="mm";
+    if(!w.Session().GetDocument().Run(document::AddReferenceDimensionCommand(dimension)).committed)return false;
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({p},domain::Visibility::Hidden)).committed)return false;
+    auto& v=w.Viewport();const auto pixel=v.Mapping().Project(curve.segment.Evaluate(.5));if(!pixel)return false;
+    w.RunCommand("selection.activate");v.SelectAt({pixel->x,pixel->y},Qt::NoModifier);
+    const auto revision=w.Session().GetDocument().Revision();bool highlighted=false,listed=false;
+    const auto inspect=[&](QDialog* dialog){highlighted=v.DeletionPreviewContains(curve.entityId)&&v.DeletionPreviewContains(p)&&v.DeletionPreviewContains(q);
+        auto* list=dialog->findChild<QListWidget*>();listed=list&&list->count()==4;
+        if(!qEnvironmentVariable("KACHACAD_DELETE_SCREENSHOT_DIR").isEmpty()){
+            QDir dir(qEnvironmentVariable("KACHACAD_DELETE_SCREENSHOT_DIR"));dir.mkpath(".");w.grab().save(dir.filePath("delete-preview.png"));dialog->grab().save(dir.filePath("delete-dialog.png"));}
+    };
+    if(!DeleteWithConfirmation(w,false,inspect)||!highlighted||!listed||w.Session().GetDocument().Revision()!=revision||v.DeletionPreviewContains(p))return false;
+    if(w.Session().GetDocument().FindEntity(p)->visibility!=domain::Visibility::Hidden)return false;
+    if(!DeleteWithConfirmation(w,true,inspect)||w.Session().GetDocument().FindEntity(curve.entityId)||w.Session().GetDocument().FindEntity(q)||!w.Session().GetDocument().Snapshot().referenceDimensions.empty())return false;
+    w.RunCommand("edit.undo");if(!w.Session().GetDocument().FindEntity(curve.entityId)||!w.Session().GetDocument().FindEntity(q)||w.Session().GetDocument().Snapshot().referenceDimensions.size()!=1)return false;
+    w.RunCommand("edit.redo");return !w.Session().GetDocument().FindEntity(q)&&w.SaveAndReopen("cascade-delete.kcd2");
+}
+
+bool CaseDeleteKeyRouting(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,app::DirectWireKind::PlanarLine,{{-30,20,0},{30,20,0}},0,QStringLiteral("Deleteキー")))return false;
+    const auto curve=w.Session().Scene().curves.back();auto& v=w.Viewport();
+    w.SelectTool(modeling::DrawingTool::Line);const auto start=v.Mapping().Project({0,0,0});if(!start)return false;v.ClickAt({start->x,start->y});
+    const auto hit=v.Mapping().Project(curve.segment.Evaluate(.5));if(!hit)return false;v.SelectAt({hit->x,hit->y},Qt::NoModifier);
+    QKeyEvent shortcut(QEvent::ShortcutOverride,Qt::Key_Delete,Qt::NoModifier);shortcut.ignore();QApplication::sendEvent(&v,&shortcut);
+    if(!Explain("untyped cursor panel must not swallow selection Delete",!shortcut.isAccepted()))return false;
+    // QApplication's shortcut dispatch is supplied by Qt's key event path, not RunCommand.
+    v.setFocus();w.activateWindow();QApplication::processEvents();
+    QKeyEvent press(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);QApplication::sendEvent(&v,&press);
+    return Explain("Delete key reaches the selected wire",w.Session().GetDocument().FindEntity(curve.entityId)==nullptr);
+}
+
+bool CaseSectionDisplay(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);
+    auto plane=v.WorkPlane();plane.origin={0,0,0};plane.normal={0,0,1};v.SetWorkPlane(plane);
+    base::DeterministicIdGenerator ids(960000);V2Viewport::ShapeView shape;shape.entityId=ids.NextTyped<base::IdKind::Entity>();
+    modeling::MeshTriangle triangle;triangle.points={geometry::Vector3{-20,-20,-10},geometry::Vector3{20,-20,10},geometry::Vector3{0,20,-10}};
+    triangle.normal=geometry::Normalized(geometry::Cross(triangle.points[1]-triangle.points[0],triangle.points[2]-triangle.points[0]));triangle.vertexNormals={triangle.normal,triangle.normal,triangle.normal};triangle.faceIndex=3;
+    shape.mesh.triangles={triangle};shape.mesh.edges={{triangle.points[0],triangle.points[1],triangle.points[2]}};shape.mesh.isoLines=shape.mesh.edges;shape.mesh.faceCount=4;
+    const auto revision=w.Session().GetDocument().Revision();v.SetShapeViews({shape});
+    auto* section=w.findChild<QCheckBox*>(QStringLiteral("sectionView"));
+    auto* reverse=w.findChild<QCheckBox*>(QStringLiteral("reverseSection"));if(!section||!reverse)return false;
+    section->setChecked(true);
+    const auto valid=[&](double sign){return !v.ShapeViews().front().mesh.triangles.empty()&&std::all_of(v.ShapeViews().front().mesh.triangles.begin(),v.ShapeViews().front().mesh.triangles.end(),[&](const auto& t){return t.faceIndex==3&&std::all_of(t.points.begin(),t.points.end(),[&](auto p){return sign*p.z<=1e-9;});});};
+    if(!Explain("section enabled and retains back half",v.SectionViewActive()&&valid(1)))return false;reverse->setChecked(true);if(!Explain("reversed section retains opposite half",valid(-1)))return false;
+    section->setChecked(false);if(!Explain("section off restores exact original triangle",v.ShapeViews().front().mesh.triangles.size()==1&&v.ShapeViews().front().mesh.triangles.front().points==triangle.points))return false;
+    return w.Session().GetDocument().Revision()==revision;
+}
+
+bool CaseDependentPartialWire(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
+    const auto curves=w.Session().Scene().curves;w.RunCommand("part.extrude");w.ConfirmExtrude();
+    if(CountOfKind(w,EntityKind::Part)!=1)return false;
+    w.RunCommand("selection.activate");const auto at=w.Viewport().Mapping().Project(curves.front().segment.Evaluate(.5));if(!at)return false;
+    w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);bool highlighted=false;
+    if(!DeleteWithConfirmation(w,true,[&](QDialog*){for(const auto& shape:w.Viewport().ShapeViews())if(w.Viewport().DeletionPreviewContains(shape.entityId)&&w.Viewport().FaceRoleColorOf(shape.entityId,0))highlighted=true;}))return false;
+    if(!Explain("dependent solid is removed but unselected source edges remain",highlighted&&CountOfKind(w,EntityKind::Part)==0&&w.Session().Scene().curves.size()==3))return false;
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Part)!=1)return false;
+    w.RunCommand("edit.redo");return CountOfKind(w,EntityKind::Part)==0&&w.SaveAndReopen("delete-source-edge-and-solid.kcd2");
+}
+
+bool CaseOwnerSectionDisplay(V2MainWindow& w) {
+    if(!w.OpenDocumentFile(qEnvironmentVariable("KACHACAD_SECTION_OWNER_FILE")))return false;
+    w.resize(1440,900);QApplication::processEvents();
+    kachakacha::v2::app::SelectionSet selected;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.displayName=="作業面7")selected.entityIds={e.id};
+    if(selected.entityIds.empty())return false;
+    w.Viewport().SetSelection(selected);w.RunCommand("workplane.set_active");w.RunCommand("view.align_workplane");w.Viewport().FitToDocument();
+    const auto revision=w.Session().GetDocument().Revision();const int count=w.Viewport().ShapeTriangleCount();
+    double lo=1e30,hi=-1e30;const auto plane=w.Viewport().WorkPlane();
+    for(const auto& shape:w.Viewport().ShapeViews())for(const auto& t:shape.mesh.triangles)for(const auto& p:t.points){const double d=kachakacha::v2::geometry::Dot(p-plane.origin,plane.normal);lo=std::min(lo,d);hi=std::max(hi,d);}
+    w.Viewport().setProperty("sectionOffsetMm",(lo+hi)*.5);
+    w.SetWorkPlaneChooser({});w.RunCommand("workplane.create");
+    w.findChild<QDoubleSpinBox*>(QStringLiteral("sectionOffset"))->setValue((lo+hi)*.5);
+    QDir dir(qEnvironmentVariable("KACHACAD_DELETE_SCREENSHOT_DIR"));dir.mkpath(".");
+    w.Viewport().SetGridOnTop(false);w.grab().save(dir.filePath("115-before.png"));
+    w.Viewport().SetGridOnTop(true);w.Viewport().SetSectionView(true);w.grab().save(dir.filePath("115-section.png"));
+    const int clipped=w.Viewport().ShapeTriangleCount();w.Viewport().SetSectionView(true,true);w.grab().save(dir.filePath("115-section-reverse.png"));
+    w.Viewport().SetSectionView(false);w.grab().save(dir.filePath("115-grid-overlay.png"));
+    Note(("owner mesh counts original="+std::to_string(count)+" clipped="+std::to_string(clipped)).c_str());
+    return Explain("owner model section changes only displayed geometry",clipped>0&&clipped!=count&&w.Viewport().ShapeTriangleCount()==count&&w.Session().GetDocument().Revision()==revision);
+}
 } // namespace
 
 std::vector<SelfTestCase> EditCases()
 {
-    return {
+    std::vector<SelfTestCase> cases={
+        {"HP-DEL-10 source edge deletion removes dependent solid after confirmation",CaseDependentPartialWire},
+        {"HP-DEL-08 dependent deletion shows preview and supports cancel Undo Redo",CaseDependentDeletePreview},
+        {"HP-DEL-09 actual Delete key bypasses untyped cursor panel",CaseDeleteKeyRouting},
+        {"HP-SECTION-01 workplane section clips triangles and restores geometry",CaseSectionDisplay},
         {"HP-UI-DEFAULT startup uses Win95 appearance",[](V2MainWindow& w){return w.Theme()==UiTheme::Windows95;}},
         {"HP-DEL-01 delete Undo Redo and drawing history remain independent",CaseDeleteHistory},
         {"HP-DEL-02 individual rounded wire segment deletion",[](auto& w){return CaseDeleteRoundedSegment(w);}},
@@ -517,6 +631,8 @@ std::vector<SelfTestCase> EditCases()
         {"編集の棚で円の半径を変えられる", &CaseEditDockChangesCircleRadius},
         {"編集の棚で作業平面を動かし原点面は断る", &CaseEditDockMovesWorkPlaneAndRefusesOrigin},
     };
+    if(!qEnvironmentVariable("KACHACAD_SECTION_OWNER_FILE").isEmpty())cases.push_back({"OWNER-SECTION 115 workplane7 display and grid",CaseOwnerSectionDisplay});
+    return cases;
 }
 
 } // namespace kachakacha::v2::selftest

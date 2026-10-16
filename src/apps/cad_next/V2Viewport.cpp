@@ -196,6 +196,7 @@ void V2Viewport::SetSelectionFrame(
 void V2Viewport::SetWorkPlane(const WorkPlaneFrame& plane)
 {
     workPlane_ = plane;
+    if(sectionView_) RebuildSectionViews();
     kachakacha::v2::modeling::SnapScene scene = session_->Scene();
     scene.workPlane.active = true;
     scene.workPlane.origin = plane.origin;
@@ -746,7 +747,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     const auto draw=[&](QPainter& painter) {
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), palette_.background);
-    DrawGrid(painter);
+    if(!gridOnTop_) DrawGrid(painter);
     const auto gridOnly=paintTimer.nsecsElapsed();
     DrawWorkPlane(painter);
     const auto planesOnly=paintTimer.nsecsElapsed();
@@ -756,6 +757,9 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     const auto gridTime=paintTimer.nsecsElapsed();
     if(trace)std::fprintf(stderr,"underlay ms %.3f %.3f %.3f\n",gridOnly/1e6,(planesOnly-gridOnly)/1e6,(gridTime-planesOnly)/1e6);
     DrawShapes(painter);
+    const auto beforeOverlayGrid=paintTimer.nsecsElapsed();
+    if(gridOnTop_) DrawGrid(painter);
+    if(trace)std::fprintf(stderr,"overlay grid ms %.3f section %d\n",(paintTimer.nsecsElapsed()-beforeOverlayGrid)/1e6,int(sectionView_));
     const auto shapeTime=paintTimer.nsecsElapsed();
     DrawProfileRegions(painter);
     DrawToolPreviewFaces(painter);
@@ -1225,7 +1229,9 @@ bool V2Viewport::event(QEvent* event)
     }
     if (cursorPanel_.active && event->type() == QEvent::ShortcutOverride) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
-        if (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace) {
+        if ((keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)
+            && !(keyEvent->key() == Qt::Key_Delete && !selection_.entityIds.empty()
+                && !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_))) {
             event->accept();
             return true;
         }
@@ -1238,7 +1244,8 @@ bool V2Viewport::EditCursorFieldForKey(int key)
     if (!cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
         return false;
     }
-    if (key == Qt::Key_Backspace && !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)) return false;
+    if (!kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)
+        && (key == Qt::Key_Backspace || !selection_.entityIds.empty())) return false;
     const std::size_t at = cursorPanel_.focusedIndex;
     if (at < cursorPanel_.states.size()) {
         QString edited = QString::fromStdString(cursorPanel_.states[at].text);

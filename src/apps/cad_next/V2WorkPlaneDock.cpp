@@ -65,6 +65,19 @@ struct RowUse {
     return use;
 }
 
+void AddSectionControls(QWidget* body,QVBoxLayout* layout,QFormLayout* form)
+{
+    auto* section=new QCheckBox(QStringLiteral("作業面で断面表示（手前を切る）"),body);
+    section->setObjectName(QStringLiteral("sectionView"));layout->addWidget(section);
+    auto* reverse=new QCheckBox(QStringLiteral("切る側を反転"),body);
+    reverse->setObjectName(QStringLiteral("reverseSection"));layout->addWidget(reverse);
+    auto* grid=new QCheckBox(QStringLiteral("グリッドを形状の手前に表示"),body);
+    grid->setObjectName(QStringLiteral("gridOnTop"));grid->setChecked(true);layout->addWidget(grid);
+    auto* offset=new V2NumericSpinBox(body);offset->setObjectName(QStringLiteral("sectionOffset"));
+    offset->setRange(-100000,100000);offset->setDecimals(3);offset->setSuffix(QStringLiteral(" mm"));
+    form->addRow(QStringLiteral("断面位置オフセット"),offset);
+}
+
 } // namespace
 
 V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
@@ -79,6 +92,7 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setSpacing(3);
 
+    AddSectionControls(body_,layout,form_);
     name_ = new QLineEdit(body_);
     name_->setPlaceholderText(QStringLiteral("空なら作業面1、作業面2…"));
     form_->addRow(QStringLiteral("名前"), name_);

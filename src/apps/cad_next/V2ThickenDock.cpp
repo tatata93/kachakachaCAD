@@ -3,6 +3,7 @@
 #include "V2PanelFrame.h"
 
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -100,6 +101,10 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("生成対象")));
     output_ = new V2SolidOutputSelector(body, "thickenOutput");
     layout->addWidget(output_);
+    auto* independent=new QCheckBox(QStringLiteral("元の面に依存させない（独立した部品）"),body);
+    independent->setObjectName(QStringLiteral("thickenIndependent"));
+    independent->setToolTip(QStringLiteral("作成時点の形状を固定します。元の面を変更・削除しても追従しません。境界ワイヤーは常に独立です。"));
+    layout->addWidget(independent);
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
     status_->setObjectName(QStringLiteral("thickenStatus"));

@@ -82,7 +82,7 @@ void V2MainWindow::RefreshShapeViews()
                 keep.emplace(entry.second.value,shapeMeshes_.at(entry.second.value));
             // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
-                || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)
+                || (!viewport_->DeletionPreviewContains(entity->id) && !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity))
                 || std::find(sources.begin(), sources.end(), entity->id) != sources.end()) {
                 continue;
             }

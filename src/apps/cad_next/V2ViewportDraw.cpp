@@ -65,6 +65,9 @@ void V2Viewport::DrawGrid(QPainter& painter) const
         return;
     }
 
+    // Grid paths contain independent open lines; never inherit a surface fill brush.
+    painter.save();
+    painter.setBrush(Qt::NoBrush);
     const auto drawSet = [&](double spacingMm, const QColor& color) {
         if (spacingMm * pixelsPerMm < 6.0) {
             return;
@@ -112,6 +115,7 @@ void V2Viewport::DrawGrid(QPainter& painter) const
         }
         drawSet(majorMm, palette_.gridMajor);
     }
+    painter.restore();
 }
 
 //! 画面の四隅を作業平面へ戻して、見えている範囲を UV(グリッド原点から mm)で測る。
@@ -348,6 +352,8 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     std::unordered_set<kachakacha::v2::base::EntityId> meshed;
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);
     for (const auto& curve : scene.curves) {
+        if(sectionView_){const auto* e=session_->GetDocument().FindEntity(curve.entityId);
+            if(e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface))continue;}
         const SemanticState state = CurveStateOf(curve.entityId, curve.segmentId);
         const bool plain = state == SemanticState::Default;
         // 派生稜線の二重描画と、描かない曲線の標本化を避ける。
@@ -674,24 +680,6 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
         QStringLiteral("%1 mm").arg(chosen, 0, 'g', 4));
 }
 
-
-void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
-{
-    hoverShapeCandidates_.reset();
-    ++shapeViewRevision_;
-    shapeViews_ = std::move(shapes);
-    RefreshFaceRolePieces();
-    // 当たり判定へ渡す網を作り直す。カーソルが動くたびに三角形を写さないため、
-    // ここで1度だけ並べておく。並びは shapeViews_ と同じ(索引で引き当てる)。
-    pickMeshes_.clear();
-    pickMeshes_.reserve(shapeViews_.size());
-    for (const ShapeView& shape : shapeViews_) {
-        pickMeshes_.push_back(shape.mesh);
-    }
-    // 形が入れ替わったので、覚えていた候補は捨てる。
-    ForgetPickCycle();
-    update();
-}
 
 int V2Viewport::ShapeTriangleCount() const noexcept
 {

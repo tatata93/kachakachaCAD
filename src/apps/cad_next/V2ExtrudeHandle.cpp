@@ -249,6 +249,7 @@ void V2Viewport::SetRoleColors(
 
 std::optional<QColor> V2Viewport::RoleColorOf(const kachakacha::v2::base::EntityId& id) const
 {
+    if(DeletionPreviewContains(id)) return QColor(235,65,55);
     for (const auto& [entity, color] : roleColors_) {
         if (entity == id) {
             return color;

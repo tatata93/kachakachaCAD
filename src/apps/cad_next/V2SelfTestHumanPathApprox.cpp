@@ -6,6 +6,7 @@
 //! 選ぶのは実際に拾う道(`SelectAt`)だけ。ID の注入も、見えない widget を叩くこともしない。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestDeleteDialog.h"
 
 #include "V2FabricationDock.h"
 #include "V2MainWindow.h"
@@ -293,7 +294,7 @@ using kachakacha::v2::domain::EntityKind;
             window.CommandEnabled("edit.delete", &reason))) {
         return false;
     }
-    window.RunCommand("edit.delete");
+    if(wireFree)window.RunCommand("edit.delete");else if(!DeleteWithConfirmation(window,false))return false;
     if (!wireFree) {
         return Explain((std::string(how) + ": 面に使われている線は「使っている」と断られる(削除の道へ届く)").c_str(),
             CountOfKind(window, EntityKind::Wire) == wiresBefore

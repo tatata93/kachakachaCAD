@@ -91,6 +91,12 @@ void Reporting::Add(const char* name, bool passed, double milliseconds, const QS
         {QStringLiteral("status"), passed ? QStringLiteral("passed") : QStringLiteral("failed")},
         {QStringLiteral("duration_ms"), milliseconds}, {QStringLiteral("start"), started},
         {QStringLiteral("end"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)}});
+    // A timeout must retain completed case timings without treating a partial run as success.
+    if(!path_.isEmpty()) {
+        QFile progress(path_+QStringLiteral(".progress.jsonl"));
+        if(progress.open(QIODevice::WriteOnly|QIODevice::Append))
+            progress.write(QJsonDocument(results_.last().toObject()).toJson(QJsonDocument::Compact)+'\n');
+    }
 }
 
 bool Reporting::Save() const

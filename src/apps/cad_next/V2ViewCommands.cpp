@@ -27,6 +27,7 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 
 #include <algorithm>
+#include <set>
 
 #include "kachakacha/document/Commands.h"
 
@@ -223,6 +224,43 @@ void V2MainWindow::DeleteSelected()
         const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr || entity->createdBy.IsNil()) {
             continue;
+        }
+        // A viewport edge selection is not a whole-wire selection. Rounded and
+        // polyline wires share one feature, so retain every unselected segment UUID.
+        if(entity->kind==kachakacha::v2::domain::EntityKind::Wire) {
+            std::set<kachakacha::v2::base::SegmentId> cuts;bool whole=false,bad=false;
+            for(const auto& ref:selection.ordered)if(ref.entityId==id) {
+                if(ref.kind==kachakacha::v2::app::SelectionElementKind::Object)whole=true;
+                else if(ref.kind==kachakacha::v2::app::SelectionElementKind::Edge&&ref.segmentId&&!ref.segmentId->IsNil())cuts.insert(*ref.segmentId);
+                else bad=true;
+            }
+            if(!whole&&(!cuts.empty()||bad)) {
+                const auto* feature=session_->GetDocument().FindFeature(entity->createdBy);
+                const auto* wire=feature?std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&feature->definition):nullptr;
+                const auto refuse=[&](const QString& why){++refused;if(reason.isEmpty())reason=why;};
+                if(bad||!wire||entity->editPolicy==kachakacha::v2::domain::EditPolicy::Derived
+                    ||feature->outputs.size()!=1||feature->outputs.front().entityId!=id
+                    ||wire->segments.size()!=wire->segmentIds.size()
+                    ||std::set<kachakacha::v2::base::SegmentId>(wire->segmentIds.begin(),wire->segmentIds.end()).size()!=wire->segmentIds.size()
+                    ||std::any_of(wire->segmentIds.begin(),wire->segmentIds.end(),[](auto segment){return segment.IsNil();})
+                    ||std::any_of(cuts.begin(),cuts.end(),[&](auto segment){return std::find(wire->segmentIds.begin(),wire->segmentIds.end(),segment)==wire->segmentIds.end();})) {
+                    refuse(QStringLiteral("線分の選択が古いか、直接編集できないワイヤーです。選び直すか現在状態を固定してください。"));continue;
+                }
+                const auto& snapshot=session_->GetDocument().Snapshot();
+                const bool used=std::any_of(snapshot.features.begin(),snapshot.features.end(),[&](const auto& f){return std::find(f.inputEntityIds.begin(),f.inputEntityIds.end(),id)!=f.inputEntityIds.end();})
+                    ||std::any_of(snapshot.referenceDimensions.begin(),snapshot.referenceDimensions.end(),[&](const auto& d){return std::any_of(d.segments.begin(),d.segments.end(),[&](const auto& s){return s.entityId==id&&cuts.contains(s.segmentId);});});
+                if(used){refuse(QStringLiteral("この線を使っている形状や寸法があるため削除できません。先に参照する要素を外してください。"));continue;}
+                auto kept=*wire;kept.segments.clear();kept.segmentIds.clear();
+                for(std::size_t i=0;i<wire->segments.size();++i)if(!cuts.contains(wire->segmentIds[i])) {
+                    kept.segments.push_back(wire->segments[i]);kept.segmentIds.push_back(wire->segmentIds[i]);
+                }
+                if(!kept.segments.empty()) {
+                    const auto result=session_->GetDocument().Run(kachakacha::v2::document::UpdateFeatureDefinitionCommand(
+                        feature->id,std::move(kept),feature->inputEntityIds,"選択した線分を削除"));
+                    if(result.committed)++removed;else {++refused;if(reason.isEmpty()&&!result.diagnostics.empty())reason=QString::fromStdString(result.diagnostics.front().summaryJa);}
+                    continue;
+                }
+            }
         }
         if (std::find(done.begin(), done.end(), entity->createdBy) != done.end()) {
             continue;

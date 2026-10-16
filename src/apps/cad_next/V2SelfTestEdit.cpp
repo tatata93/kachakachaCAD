@@ -18,11 +18,13 @@
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/EntityEdit.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/document/Commands.h"
 
 #include <QPointF>
 #include <QString>
 
 #include <cmath>
+#include <algorithm>
 #include <string>
 
 namespace kachakacha::v2::selftest {
@@ -382,11 +384,133 @@ using kachakacha::v2::geometry::Vector3;
             && window.StatusText().contains(QStringLiteral("GEO-E021")));
 }
 
+bool CaseDeleteHistory(V2MainWindow& w) {
+    w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,kachakacha::v2::app::DirectWireKind::PlanarLine,{{0,0,0},{40,0,0}},0,QStringLiteral("A")))return false;
+    const auto a=w.Viewport().Selection().entityIds.front();
+    bool consistent=true;
+    const auto present=[&](auto id){const bool document=w.Session().GetDocument().FindEntity(id)!=nullptr;
+        const bool scene=std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& c){return c.entityId==id;});
+        consistent=consistent&&(document==scene);return document;};
+    w.RunCommand("edit.delete");if(present(a))return false;
+    for(int i=0;i<3;++i){w.RunCommand("edit.undo");if(!present(a))return false;w.RunCommand("edit.redo");if(present(a))return false;}
+    if(!MakeAndSelectWire(w,kachakacha::v2::app::DirectWireKind::PlanarLine,{{0,20,0},{40,20,0}},0,QStringLiteral("B")))return false;
+    const auto b=w.Viewport().Selection().entityIds.front();w.RunCommand("edit.undo");
+    if(!Explain("undo of new drawing keeps earlier deletion",!present(a)&&!present(b)))return false;
+    w.RunCommand("edit.undo");if(!present(a))return false;
+    w.RunCommand("edit.redo");w.RunCommand("edit.redo");
+    return Explain("delete and new drawing have independent redo entries",!present(a)&&present(b)&&w.SaveAndReopen("delete-draw-history.kcd2")&&!present(a)&&present(b)&&consistent);
+}
+bool CaseDeleteRoundedSegment(V2MainWindow& w,int mode=0) {
+    w.RunCommand("file.new");
+    auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(200);
+    w.SelectTool(kachakacha::v2::modeling::DrawingTool::Polyline);
+    for(const auto point:std::vector<Vector3>{{-30,0,0},{0,0,0},{0,30,0}}) {
+        const auto at=v.Mapping().Project(point);if(!at)return false;v.ClickAt({at->x,at->y});
+    }
+    v.FinishTool();w.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    v.SetSelection(kachakacha::v2::app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),EntityKind::Wire));
+    w.CornerDock().SetFillet(true);w.CornerDock().SetSizeMm(5);w.CornerDock().SetOnlyVertex(true,1);w.CornerDock().PressCorner();
+    w.RunCommand("selection.activate");w.Viewport().SetSelection({});
+    const auto curves=w.Session().Scene().curves;
+    if(curves.size()!=3)return false;
+    auto target=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return (c.segment.Kind()==kachakacha::v2::geometry::CurveKind::CircularArc)==(mode==1);});
+    if(target==curves.end())return false;
+    const auto at=w.Viewport().Mapping().Project(target->segment.Evaluate(.5));if(!at)return false;
+    w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);
+    std::vector<kachakacha::v2::base::SegmentId> deleted={target->segmentId};
+    if(mode==2) {
+        const auto other=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return c.segmentId!=target->segmentId;});
+        const auto pixel=v.Mapping().Project(other->segment.Evaluate(.5));if(!pixel)return false;
+        v.SelectAt({pixel->x,pixel->y},Qt::ControlModifier);deleted.push_back(other->segmentId);
+    }
+    w.RunCommand("edit.delete");
+    const auto survivors=[&]{const auto& scene=w.Session().Scene().curves;
+        return scene.size()==3-deleted.size()&&std::none_of(scene.begin(),scene.end(),[&](const auto& c){return std::find(deleted.begin(),deleted.end(),c.segmentId)!=deleted.end();})
+            &&std::all_of(scene.begin(),scene.end(),[&](const auto& c){return std::any_of(curves.begin(),curves.end(),[&](const auto& old){return old.segmentId==c.segmentId;});});};
+    if(!Explain("deleting straight edge retains rounded arc and other edge IDs",survivors()))return false;
+    if(!Explain("deleted segment is removed from selection too",v.Selection().entityIds.empty()))return false;
+    w.RunCommand("edit.undo");if(w.Session().Scene().curves.size()!=3)return false;
+    w.RunCommand("edit.redo");if(!survivors()||!w.SaveAndReopen("delete-rounded-segment.kcd2")||!survivors())return false;
+    kachakacha::v2::app::SelectionSet whole;whole.entityIds={curves.front().entityId};v.SetSelection(whole);
+    w.RunCommand("edit.delete");if(!w.Session().Scene().curves.empty())return false;
+    w.RunCommand("edit.undo");return survivors();
+}
+bool CaseNativeEdgesHistory(V2MainWindow& w) {
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
+    w.RunCommand("part.extrude");if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    w.RunCommand("selection.activate");
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");
+    const auto before=w.Session().Scene().curves;
+    if(!Explain("native part has snap edges after redo",std::any_of(before.begin(),before.end(),[&](const auto& c){
+        const auto* e=w.Session().GetDocument().FindEntity(c.entityId);return e&&e->kind==EntityKind::Part;})))return false;
+    w.RunCommand("view.show_all");w.RunCommand("view.show_all");
+    if(!Explain("native edge refresh is idempotent",before.size()==w.Session().Scene().curves.size()))return false;
+    for(std::size_t i=0;i<before.size();++i)if(before[i].segmentId!=w.Session().Scene().curves[i].segmentId)return false;
+    if(!MakeAndSelectWire(w,kachakacha::v2::app::DirectWireKind::PlanarLine,{{-60,-20,0},{-30,-20,0}},0,QStringLiteral("独立")))return false;
+    w.RunCommand("edit.undo");
+    const auto after=w.Session().Scene().curves;
+    if(!Explain("unrelated drawing Undo retains native edge UUIDs",before.size()==after.size()
+        &&std::all_of(before.begin(),before.end(),[&](const auto& c){return std::any_of(after.begin(),after.end(),[&](const auto& next){return c.segmentId==next.segmentId;});})))return false;
+    kachakacha::v2::base::EntityId part;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==EntityKind::Part)part=e.id;
+    kachakacha::v2::app::SelectionSet selected;selected.entityIds={part};w.Viewport().SetSelection(selected);
+    w.RunCommand("view.hide_selected");
+    if(std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& c){return c.entityId==part;}))return false;
+    w.RunCommand("edit.undo");w.Viewport().SetSelection(selected);w.RunCommand("edit.delete");
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");
+    if(!MakeAndSelectWire(w,kachakacha::v2::app::DirectWireKind::PlanarLine,{{-60,-20,0},{-30,-20,0}},0,QStringLiteral("追加")))return false;
+    w.RunCommand("edit.undo");
+    return Explain("deleted native edges never resurrect as undeletable scene curves",std::all_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),
+        [&](const auto& c){return c.entityId!=part&&w.Session().GetDocument().FindEntity(c.entityId);})&&w.SaveAndReopen("delete-native-edges.kcd2"));
+}
+bool CasePendingDrawingUndo(V2MainWindow& w) {
+    w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,kachakacha::v2::app::DirectWireKind::PlanarLine,{{0,0,0},{40,0,0}},0,QStringLiteral("元")))return false;
+    w.RunCommand("edit.delete");const auto revision=w.Session().GetDocument().Revision();
+    w.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);auto& v=w.Viewport();
+    const auto start=v.Mapping().Project({0,20,0});if(!start)return false;v.ClickAt({start->x,start->y});
+    if(w.Session().PlacedPointCount()!=1)return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("unfinished drawing Undo returns input point without undoing earlier deletion",w.Session().PlacedPointCount()==0
+        &&w.Session().GetDocument().Revision()==revision&&CountOfKind(w,EntityKind::Wire)==0&&w.Session().Scene().curves.empty()))return false;
+    w.RunCommand("edit.redo");return CountOfKind(w,EntityKind::Wire)==0&&w.Session().Scene().curves.empty();
+}
+bool CaseDeleteGuards(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,app::DirectWireKind::PlanarLine,{{0,0,0},{40,0,0}},0,QStringLiteral("元")))return false;
+    const auto c=w.Session().Scene().curves.back();base::DeterministicIdGenerator ids(920000);
+    app::SelectionSet selected;selected.entityIds={c.entityId};app::SelectionRef ref;
+    ref.entityId=c.entityId;ref.kind=app::SelectionElementKind::Edge;ref.segmentId=ids.NextTyped<base::IdKind::Segment>();selected.ordered={ref};
+    w.Viewport().SetSelection(selected);const auto before=w.Session().GetDocument().Revision();w.RunCommand("edit.delete");
+    if(!Explain("stale segment never falls back to deleting its whole wire",w.Session().GetDocument().Revision()==before&&w.Session().Scene().curves.size()==1))return false;
+    domain::Feature dependent;dependent.id=ids.NextTyped<base::IdKind::Feature>();dependent.type=domain::FeatureType::CreatePoint;
+    dependent.displayName="依存点";dependent.inputEntityIds={c.entityId};dependent.definition=domain::CreatePointDefinition{};
+    domain::Entity point;point.id=ids.NextTyped<base::IdKind::Entity>();point.createdBy=dependent.id;point.kind=EntityKind::Point;
+    dependent.outputs={{"point",point.id,point.kind}};
+    if(!w.Session().GetDocument().Run(document::AddFeatureCommand(dependent,{point},"依存点")).committed)return false;
+    ref.segmentId=c.segmentId;selected.ordered={ref};w.Viewport().SetSelection(selected);
+    const auto used=w.Session().GetDocument().Revision();w.RunCommand("edit.delete");
+    if(!Explain("used wire deletion refuses without creating an Undo entry",w.Session().GetDocument().Revision()==used&&w.Session().Scene().curves.size()==1))return false;
+    w.RunCommand("edit.undo");if(w.Session().GetDocument().FindEntity(point.id))return false;
+    w.Viewport().SetSelection(selected);w.RunCommand("edit.delete");
+    if(!w.Session().Scene().curves.empty())return false;
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");return w.Session().Scene().curves.empty();
+}
 } // namespace
 
 std::vector<SelfTestCase> EditCases()
 {
     return {
+        {"HP-UI-DEFAULT startup uses Win95 appearance",[](V2MainWindow& w){return w.Theme()==UiTheme::Windows95;}},
+        {"HP-DEL-01 delete Undo Redo and drawing history remain independent",CaseDeleteHistory},
+        {"HP-DEL-02 individual rounded wire segment deletion",[](auto& w){return CaseDeleteRoundedSegment(w);}},
+        {"HP-DEL-04 delete arc preserves straight segments",[](auto& w){return CaseDeleteRoundedSegment(w,1);}},
+        {"HP-DEL-05 multiple segments delete together",[](auto& w){return CaseDeleteRoundedSegment(w,2);}},
+        {"HP-DEL-06 unfinished drawing Undo keeps earlier deletion",CasePendingDrawingUndo},
+        {"HP-DEL-07 stale and dependent segment deletion refuses safely",CaseDeleteGuards},
+        {"HP-DEL-03 native edges never duplicate or resurrect",CaseNativeEdgesHistory},
         {"HP-CN-06 面取りの棚で非対称の切戻しと残す側と頂点番号が効く", &CaseCornerDockAsymmetricChamferAndKeepSides},
         {"編集の棚で直線の点と長さ・角度を直せる", &CaseEditDockRewritesLinePoints},
         {"戻すと画面の線も消えやり直すと戻る", &CaseUndoRedrawsScene},

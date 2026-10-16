@@ -286,6 +286,8 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    const auto selectedEdges = window.Viewport().Selection().ordered;
+    const auto curvesBefore = window.Session().Scene().curves.size();
     QString reason;
     if (!Explain((std::string(how) + ": 削除が押せる(" + reason.toStdString() + ")").c_str(),
             window.CommandEnabled("edit.delete", &reason))) {
@@ -297,8 +299,16 @@ using kachakacha::v2::domain::EntityKind;
             CountOfKind(window, EntityKind::Wire) == wiresBefore
                 && window.StatusText().contains(QStringLiteral("使っている")));
     }
-    return Explain((std::string(how) + ": 線が消える").c_str(),
-        CountOfKind(window, EntityKind::Wire) == wiresBefore - 1);
+    // 3D のクリックはワイヤ全体ではなく辺を選ぶ。多辺ワイヤは残りの辺を保持する。
+    bool removed = !selectedEdges.empty();
+    for (const auto& ref : selectedEdges) {
+        for (const auto& curve : window.Session().Scene().curves) {
+            if (curve.entityId == ref.entityId && curve.segmentId == ref.segmentId) removed = false;
+        }
+    }
+    return Explain((std::string(how) + ": 選んだ辺だけ消え、残りの線は保持される").c_str(),
+        removed && window.Session().Scene().curves.size() + selectedEdges.size() == curvesBefore
+            && CountOfKind(window, EntityKind::Wire) >= wiresBefore - 1);
 }
 
 //! HP-AP-06。オーナー報告(2026-09-26)「面を削除した後などに線を消したり選択したりできない」。

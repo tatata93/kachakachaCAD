@@ -148,14 +148,18 @@ std::string ShapeInputs(const kachakacha::v2::document::DocumentSnapshot& snapsh
 
 void V2MainWindow::RunHistoryCommand(bool undo)
 {
+    if(undo&&viewport_->StepBackInputPoint())return;
     const auto oldGeometry=ShapeInputs(session_->GetDocument().Snapshot());
     const bool hadErrors=!rebuildProblems_.isEmpty();
-    const bool moved = undo ? session_->Undo() : session_->Redo();
+    // Keep the pre-history native edge identities until AdoptCurrentDocument
+    // replaces overlays. The standalone session rebuilds only document geometry.
+    const bool moved = undo ? session_->GetDocument().Undo() : session_->GetDocument().Redo();
     if (!moved) {
         SetStatus(undo ? QStringLiteral("戻せる操作がありません。")
                        : QStringLiteral("やり直せる操作がありません。"));
         return;
     }
+    session_->CancelTool();
     // 文書だけ戻して場面を作り直さないと、消したはずの線が画面に残り、
     // 立体も古いままになる。文書が変わったあとの後始末を全部通す。
     //

@@ -195,8 +195,8 @@ public:
     //! 1点戻す。
     bool UndoLastPoint();
 
-    [[nodiscard]] bool Undo() { return document_.Undo(); }
-    [[nodiscard]] bool Redo() { return document_.Redo(); }
+    [[nodiscard]] bool Undo();
+    [[nodiscard]] bool Redo();
 
 private:
     //! 場面が入れ替わったことを、生きている聞き手だけへ知らせる。

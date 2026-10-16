@@ -200,7 +200,7 @@ V2MainWindow::V2MainWindow()
     // 選ぶことができない(オーナー指摘 2026-09-11)。
     SelectTool(kachakacha::v2::app::ToolAfterModeChange());
     SetMode(UiMode::Drawing);
-    ApplyTheme(UiTheme::Normal);
+    ApplyTheme(UiTheme::Windows95);
     setWindowTitle(QStringLiteral("kachakachaCAD %1")
             .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
     resize(1180, 760);

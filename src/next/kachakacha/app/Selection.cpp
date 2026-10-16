@@ -546,6 +546,12 @@ SelectionSet PruneSelection(const SelectionSet& selection,
     std::vector<SelectionRef> kept;
     for (const auto& ref : EffectiveRefs(selection)) {
         if (HasEntity(snapshot, ref.entityId)) {
+            const auto entity=std::find_if(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& e){return e.id==ref.entityId;});
+            const auto feature=std::find_if(snapshot.features.begin(),snapshot.features.end(),[&](const auto& f){return f.id==entity->createdBy;});
+            if(ref.segmentId&&feature!=snapshot.features.end()) {
+                if(const auto* wire=std::get_if<domain::CreateWireDefinition>(&feature->definition);wire&&!wire->segmentIds.empty()
+                    &&std::find(wire->segmentIds.begin(),wire->segmentIds.end(),*ref.segmentId)==wire->segmentIds.end())continue;
+            }
             kept.push_back(ref);
         }
     }

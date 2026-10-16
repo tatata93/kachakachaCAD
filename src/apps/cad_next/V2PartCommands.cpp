@@ -22,6 +22,7 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include "kachakacha/app/SceneBuilder.h"
+#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/geometry/WireChain.h"
@@ -1002,7 +1003,13 @@ void V2MainWindow::RefreshPartEdges()
 {
     // 部品の辺を場面へ足す。立体そのものはまだ描かないので、輪郭で見せる。
     // 描いていないものを「描いた」と言わないため、辺は補助線として出す。
-    auto scene = session_->Scene();
+    const auto previous=session_->Scene();
+    const auto& snapshot=session_->GetDocument().Snapshot();
+    auto scene=kachakacha::v2::app::RebuildSceneKeepingView(previous,snapshot,*ids_);
+    const auto same=[](const CurveSegment& a,const CurveSegment& b){return a.Kind()==b.Kind()
+        &&a.ControlPoints()==b.ControlPoints()&&a.Center()==b.Center()&&a.Normal()==b.Normal()
+        &&a.ReferenceDirection()==b.ReferenceDirection()&&a.Radius()==b.Radius()
+        &&a.StartAngleRad()==b.StartAngleRad()&&a.SweepAngleRad()==b.SweepAngleRad();};
     const auto append = [&](const std::map<std::string,
                              std::vector<CurveSegment>>& edges) {
         for (const auto& entry : edges) {
@@ -1010,9 +1017,19 @@ void V2MainWindow::RefreshPartEdges()
             if (!id.has_value()) {
                 continue;
             }
+            const auto* entity=session_->GetDocument().FindEntity(*id);
+            const auto* feature=entity?session_->GetDocument().FindFeature(entity->createdBy):nullptr;
+            if(!entity||!feature||!feature->enabled||!kachakacha::v2::app::EntityEffectivelyVisible(snapshot,*entity)
+                ||(entity->kind!=kachakacha::v2::domain::EntityKind::Part
+                    &&entity->kind!=kachakacha::v2::domain::EntityKind::GuideSurface))continue;
+            std::vector<const SnapCurve*> old;
+            for(const auto& c:previous.curves)if(c.entityId==*id)old.push_back(&c);
+            std::size_t index=0;
             for (const auto& segment : entry.second) {
+                const auto segmentId=index<old.size()&&same(old[index]->segment,segment)?old[index]->segmentId
+                    :ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>();++index;
                 scene.curves.push_back(kachakacha::v2::modeling::SnapCurve{*id,
-                    ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>(), segment,
+                    segmentId, segment,
                     false});
             }
         }

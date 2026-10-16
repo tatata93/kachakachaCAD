@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include "kachakacha/app/PlaneFocus.h"
+#include "kachakacha/app/SceneBuilder.h"
 
 namespace kachakacha::v2::app {
 
@@ -89,6 +90,17 @@ void DrawingSession::SetScene(SnapScene scene)
     scene_ = std::move(scene);
     snapHysteresis_.Reset();
     NotifySceneChanged();
+}
+
+bool DrawingSession::Undo()
+{
+    if(!document_.Undo())return false;
+    CancelTool();SetScene(RebuildSceneKeepingView(scene_,document_.Snapshot(),*ids_));return true;
+}
+bool DrawingSession::Redo()
+{
+    if(!document_.Redo())return false;
+    CancelTool();SetScene(RebuildSceneKeepingView(scene_,document_.Snapshot(),*ids_));return true;
 }
 
 DrawingSession::SceneChangedConnection DrawingSession::OnSceneChanged(

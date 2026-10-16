@@ -595,11 +595,14 @@ namespace {
         return false;
     }
     auto& viewport = window.Viewport();
-    // 画面の真ん中では、カーソルの右下に出る。
-    const double midX = viewport.width() * 0.4;
-    const double midY = viewport.height() * 0.4;
+    // Win95 の狭いビューでも右下にパネルを置ける位置で確かめる。
+    const double midX = viewport.width() * 0.25;
+    const double midY = viewport.height() * 0.25;
     viewport.HoverAt(QPointF(midX, midY));
     const QRectF middle = viewport.CursorPanelRect();
+    std::cout << "  cursor panel viewport=" << viewport.width() << 'x' << viewport.height()
+              << " panel=" << middle.x() << ',' << middle.y() << ',' << middle.width()
+              << ',' << middle.height() << std::endl;
     if (middle.left() < midX || middle.top() < midY) {
         return false;
     }

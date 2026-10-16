@@ -841,8 +841,7 @@ void V2MainWindow::RemoveConsumedWires(
 void V2MainWindow::AdoptCurrentDocument()
 {
     // 文書が変わったので、場面を作り直して選択を掃除する。
-    session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
-        session_->GetDocument().Snapshot(), *ids_));
+    RefreshPartEdges(); // Rebuild document wires and replace native-edge overlays together.
     viewport_->PruneSelection();
     // 拾っていた物が消えた道具(近似・面を作る)は解く(消したあと・取り消しのあと)。
     EndToolsWhoseInputsVanished();

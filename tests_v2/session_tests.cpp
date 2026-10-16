@@ -215,8 +215,10 @@ KACHA_V2_TEST(session, 文書のUndoで線が消える)
     RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 1, "1本ある");
     Require(fixture.session.Undo(), "取り消せること");
     RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 0, "消えたこと");
+    RequireCount(fixture.session.Scene().curves.size(),0,"Undo removes snap and drawing scene geometry too");
     Require(fixture.session.Redo(), "やり直せること");
     RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 1, "戻ったこと");
+    RequireCount(fixture.session.Scene().curves.size(),1,"Redo restores scene exactly once");
 }
 
 KACHA_V2_TEST(session, 途中経過が見える)

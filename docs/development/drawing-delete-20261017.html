@@ -1,0 +1,17 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><title>作図の削除・履歴修正</title>
+<style>body{font:16px/1.7 system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 24px;color:#202c39}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd6df;padding:10px;text-align:left}th{background:#eef3f7}code{overflow-wrap:anywhere}</style>
+<h1>作図の削除・Undo／Redoの修正</h1><p>2026-10-17。線を削除して描き直す操作を対象に、文書・表示・スナップ・履歴の整合性を修正。</p>
+<h2>変更前と変更後</h2><table><tr><th>箇所</th><th>確認した問題</th><th>修正</th></tr>
+<tr><td>直線・丸めた角の削除</td><td>辺を選んでも作成フィーチャー全体を削除し、接続する直線と円弧まで消えた。修正前のUI試験で再現。</td><td>3Dビューで選んだ辺だけ削除。Ctrlで複数選択して1回のUndo。残る辺のUUIDと属性を保持。左ペインでワイヤ全体を選べば全体を削除。</td></tr>
+<tr><td>履歴と場面</td><td>DrawingSession単体のUndo／Redoが文書しか更新せず、表示・スナップ用場面が古かった。修正前のコア試験で再現。単純な1本線のUI操作だけでは再現しなかった。</td><td>単体セッションの履歴操作でも場面を再構築。アプリではネイティブ形状の辺IDを保持して統合更新。</td></tr>
+<tr><td>描きかけのCtrl+Z</td><td>入力点より先にモデル履歴へ進み、以前削除した線を復活させ得た。</td><td>入力中は最後の入力点を戻し、入力点がなければモデル履歴へ進む。既存の操作仕様と一致。</td></tr>
+<tr><td>立体・面の補助辺</td><td>コード調査で、キャッシュの辺を追加する処理が削除・表示状態を確認せず、重複や古い辺を残し得る経路を確認。</td><td>文書から場面を再構築し、有効・表示中の形状だけ追加。同じ形状の辺IDを保持。非表示・削除・Undo／Redo・再描画を試験。</td></tr>
+<tr><td>古い選択・参照</td><td>削除済みの辺参照や参照中のワイヤの一部削除で、別の要素を壊す危険。</td><td>古い選択を除外。古い参照を全体削除に置き換えない。面などの入力や寸法が使う線は理由を示して拒否。</td></tr>
+<tr><td>初期表示</td><td>ユーザー指定。</td><td>起動時はWin95。通常表示への切替も保持。</td></tr></table>
+<h2>操作</h2><p>線または円弧の途中をクリックしてDeleteすると、その辺だけ消えます。Ctrlを押して複数の辺を選択できます。ワイヤ全体は左ペインで選択してください。Ctrl+Zで取り消し、Ctrl+Yでやり直します。描きかけの場合、Ctrl+Zはまず入力点を取り消します。</p>
+<h2>検証</h2><p id="verification">Windows全体ゲート成功：CTest 194/194、開発版UI 501/501、配布版UI 501/501、旧版自己試験成功。全体ゲートは2026-10-17 01:30:27〜01:50:29（JST）、約20分02秒。検証済み配布物を同一バイト列で公開。</p>
+<p>追加した8件は、直線・円弧・複数辺・全体削除、履歴の反復、未完了入力、古い選択、参照中の拒否、ネイティブ辺の表示保持、保存・再読込、起動テーマを確認。コアのセッション履歴34件、選択44件が成功。関連UI152件では旧試験の前提2件を発見し修正：Win95の狭いビューでパネルが左へ避ける正常動作、および辺を削除しても残るワイヤの保持。画面内配置と残存辺の検証を維持し、2件の再実行は成功。</p>
+<h2>ファイル構成</h2><p>既存のViewCommands・EditCommands・PartCommands・WireCommandsおよびDrawingSession・Selectionへ修正を集約し、既存のUI・コア試験にケースを追加。新しい公開APIや依存ライブラリは追加していない。不要ファイル・削除ファイルなし。手順と初期表示を説明書とUI仕様へ反映。</p>
+<p>証拠：<a href="../../out/verification/drawing-delete-full-20261017/result.json">全体検証JSON</a>。実行コマンド：<code>python scripts/verify.py full --parallel 2 --run-id drawing-delete-full-20261017</code>。</p>
+<p><a href="../../out/releases/drawing-delete-full-20261017/package/kachakacha_cad_next.exe">検証済みアプリ</a> ／ <a href="../../out/releases/drawing-delete-full-20261017/package.zip">配布ZIP</a>。起動コマンド：<code>python scripts/run-verified.py out/releases/drawing-delete-full-20261017</code>。</p>
+</html>

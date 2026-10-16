@@ -863,6 +863,8 @@ private:
     void ConfirmBoolean();
     bool RefreshContactPreview();
     bool ConfirmContact();
+    bool RefreshMixedTrimPreview();
+    bool ConfirmMixedTrim();
     void SwapContactInputs();
     bool PickContactRegion(const QPointF& point);
     void ShowOverlapBrowser();

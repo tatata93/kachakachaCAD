@@ -1,3 +1,4 @@
+#include "kachakacha/kernel/OcctSurfaceRegion.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
@@ -827,6 +828,9 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
     KernelShapeHandle sourceShape)
 {
+    if(request.method==GuideSurfaceMethod::BoundaryFill && std::any_of(request.chains.begin(),request.chains.end(),
+        [](const auto& c){return c.role==modeling::ChainRole::HoleBoundary||c.role==modeling::ChainRole::SourceSurface;}))
+        return BuildSurfaceWithHoles(request,tolerance);
     if (analysis.method != request.method) {
         return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceUnsupportedMethod,
             "調べたときと作り方が食い違っています。", {}));

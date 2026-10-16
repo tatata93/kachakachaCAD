@@ -29,6 +29,18 @@ void V2BooleanDock::BuildContactRows(QVBoxLayout* layout)
     layout->addWidget(contactWire_);
     layout->addWidget(contactHint_);
     layout->addWidget(contactRegions_);
+    for(auto entry:{std::pair{"trimTargetScope",&trimTargetScope_},std::pair{"trimToolScope",&trimToolScope_}}) {
+        auto* scope=new QComboBox(widget());*entry.second=scope;scope->setObjectName(entry.first);
+        const auto role=entry.second==&trimTargetScope_?QStringLiteral("対象"):QStringLiteral("切断要素");
+        scope->addItems({role+QStringLiteral(": 全体"),role+QStringLiteral(": 選択したフェイスだけ")});layout->addWidget(scope);
+        QObject::connect(scope,&QComboBox::currentIndexChanged,this,[this]{if(!loading_&&contactUpdate_)contactUpdate_();});
+    }
+    auto* direction=new QComboBox(widget());cutDirection_=direction;direction->setObjectName("trimCutDirection");
+    direction->addItems({QStringLiteral("切断方向: 作業平面の法線"),QStringLiteral("切断方向: X"),
+        QStringLiteral("切断方向: Y"),QStringLiteral("切断方向: Z")});
+    direction->setToolTip(QStringLiteral("ソリッドをワイヤーで切る場合はこの方向へ両側に貫通する切断面を作ります。点の場合は、この法線の平面で切ります。"));
+    layout->addWidget(direction);
+    QObject::connect(direction,&QComboBox::currentIndexChanged,this,[this]{if(!loading_&&contactUpdate_)contactUpdate_();});
     QObject::connect(swap_, &QPushButton::clicked, this, [this] { if (contactSwap_) contactSwap_(); });
     QObject::connect(contactWire_, &QCheckBox::toggled, this, [this] {
         if (!loading_ && contactUpdate_) contactUpdate_();
@@ -56,8 +68,12 @@ void V2BooleanDock::ShowContactOptions(BooleanKind kind)
     add_->setVisible(!contact);
     cut_->setVisible(!contact);
     intersect_->setVisible(!contact);
-    operationTitle_->setVisible(!contact);
-    targetLabel_->setText(contact ? (wire ? QStringLiteral("対象") : QStringLiteral("加工する部品")) : QStringLiteral("土台"));
+    operationTitle_->setVisible(true);
+    targetLabel_->setText(contact ? QStringLiteral("① 加工する対象") : QStringLiteral("① 土台の立体"));
+    toolRole_->name->setText(kind==BooleanKind::SplitOverlap?QStringLiteral("② 切断する面・線・点など"):QStringLiteral("② 相手の立体"));
+    if(cutDirection_)cutDirection_->setVisible(kind==BooleanKind::SplitOverlap);
+    if(trimTargetScope_)trimTargetScope_->setVisible(kind==BooleanKind::SplitOverlap);
+    if(trimToolScope_)trimToolScope_->setVisible(kind==BooleanKind::SplitOverlap);
     swap_->setVisible(contact);
     contactWire_->setVisible(contact && !wire);
     contactRegions_->setVisible(contact);
@@ -66,7 +82,7 @@ void V2BooleanDock::ShowContactOptions(BooleanKind kind)
         ? QStringLiteral("作る境界にチェック。元の部品は両方残ります。ワイヤーは独立コピーです。")
         : kind == BooleanKind::TrimOverlap
             ? QStringLiteral("重なりごとに削る側を選びます。A=対象、B=相手。塗りは選択領域、線は完成形です。")
-            : QStringLiteral("残す領域にチェック。相手の部品は残ります。外すとプレビューから消えます。"));
+            : QStringLiteral("残す区画にチェック。対象: ソリッド・面・ワイヤー。切断要素: ソリッド・面・ワイヤー・平面・点。相手は残ります。"));
     setWindowTitle(QString::fromUtf8(kachakacha::v2::app::BooleanOperationLabelJa(kind).data()));
 }
 
@@ -123,6 +139,10 @@ std::vector<int> V2BooleanDock::ContactRemovals() const
 }
 int V2BooleanDock::ContactRegionIndex() const { return contactRegions_->currentRow(); }
 void V2BooleanDock::SelectContactRegion(int index) { contactRegions_->setCurrentRow(index); }
+void V2BooleanDock::ToggleContactRegion(int index) {
+    if(index<0||index>=contactRegions_->count())return;
+    auto* item=contactRegions_->item(index);item->setCheckState(item->checkState()==Qt::Checked?Qt::Unchecked:Qt::Checked);
+}
 
 void V2BooleanDock::SetContactRemoval(int index, int removal)
 {

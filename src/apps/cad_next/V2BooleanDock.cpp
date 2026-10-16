@@ -3,6 +3,7 @@
 #include "V2PanelFrame.h"
 
 #include <QDockWidget>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
@@ -43,6 +44,20 @@ V2BooleanDock::V2BooleanDock(QWidget* parent)
     // 1. 作り方(足す・引く)。押して切り替える。押された形が、いまの作り方(正本の methods)。
     operationTitle_ = MakePanelSectionTitle(body, QStringLiteral("作り方"));
     layout->addWidget(operationTitle_);
+    auto* mode=new QComboBox(body);mode->setObjectName("solidTrimMode");
+    operationMode_=mode;
+    using Kind=kachakacha::v2::app::BooleanKind;
+    for(const auto& entry:std::vector<std::pair<QString,Kind>>{
+        {QStringLiteral("足す"),Kind::Add},{QStringLiteral("引く（相手全体で削る）"),Kind::Cut},
+        {QStringLiteral("交差部分だけ残す"),Kind::Intersect},
+        {QStringLiteral("ソリッドトリム（重なりごとに削る）"),Kind::TrimOverlap},
+        {QStringLiteral("トリム・分割（残す区画を選ぶ）"),Kind::SplitOverlap},
+        {QStringLiteral("交線ワイヤーだけ作る"),Kind::ContactWire}})
+        mode->addItem(entry.first,static_cast<int>(entry.second));
+    layout->addWidget(mode);
+    QObject::connect(mode,&QComboBox::currentIndexChanged,this,[this,mode](int index){
+        if(!loading_ && operationHandler_)operationHandler_(static_cast<Kind>(mode->itemData(index).toInt()));
+    });
     auto* operations = new QHBoxLayout();
     add_ = new QPushButton(QStringLiteral("足す"), body);
     cut_ = new QPushButton(QStringLiteral("引く"), body);
@@ -122,6 +137,7 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
 {
     loading_ = true;
     ShowContactOptions(state.kind);
+    operationMode_->setCurrentIndex(operationMode_->findData(static_cast<int>(state.kind)));
     swap_->setEnabled(!state.target.IsNil() && state.tools.size() == 1);
     add_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Add);
     cut_->setChecked(state.kind == kachakacha::v2::app::BooleanKind::Cut);

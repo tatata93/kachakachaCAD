@@ -1,6 +1,7 @@
 #pragma once
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 #include <QString>
 #include <functional>
 #include <map>
@@ -12,6 +13,7 @@ struct V2PreparedDocument {
     std::string archive;
     std::map<std::string, std::string> parts, guides;
     Curves partEdges, flatBoundaries, guideEdges;
+    std::map<std::string, kachakacha::v2::modeling::ShapeMesh> meshes;
     std::map<std::string, kachakacha::v2::fabrication::SurfacePatchSamples> samples;
     std::map<std::string, kachakacha::v2::app::FabricationEvaluation> fabrication;
     kachakacha::v2::modeling::GuideTable guideTable;

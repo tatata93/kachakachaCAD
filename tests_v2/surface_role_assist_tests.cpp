@@ -336,4 +336,20 @@ KACHA_V2_TEST(role_assist, unresolved_wire_is_kept_in_input_slots)
         "右ペインへ書き戻しても全入力が残る");
 }
 
+KACHA_V2_TEST(role_assist,spatial_outer_hole_and_island_keep_even_depth_regions)
+{
+    DeterministicIdGenerator ids{920};
+    const auto loop=[&](double size) {
+        // Four corners deliberately do not share a plane.
+        return Wire(ids,{{-size,-size,size*.2},{size,-size,-size*.2},{size,size,size*.2},
+            {-size,size,-size*.2},{-size,-size,size*.2}});
+    };
+    const auto plan=kachakacha::v2::app::PlanSurfaceNetwork({loop(10),loop(6),loop(2)},Tolerance());
+    Require(plan.tables.size()==2&&plan.unusedSegments.empty(),"outer region and inner island are separate surfaces");
+    int holes=0;
+    for(const auto& table:plan.tables)for(const auto& row:table.rows)
+        if(row.role==kachakacha::v2::modeling::ChainRole::HoleBoundary)++holes;
+    Require(holes==1,"island inside a hole is not subtracted a second time");
+}
+
 KACHA_V2_TEST_MAIN("surface_role_assist_tests")

@@ -65,7 +65,9 @@ const std::vector<RoleCardinality>& SurfaceCardinality(GuideSurfaceMethod method
         Role(ChainRole::BoundarySide, 1, kAny, false, false, "",
             "つながった線をまとめて 1 つの外周にする"),
         Role(ChainRole::GuideU, 0, kAny, false, false, "",
-            "すべての通る線を面が通る")};
+            "すべての通る線を面が通る"),
+        Role(ChainRole::HoleBoundary, 0, kAny),
+        Role(ChainRole::SourceSurface, 0, 1)};
     // 離した面: 元の面 1〜任意。1 つずつ別の面を作る。
     static const std::vector<RoleCardinality> offset{
         Role(ChainRole::SourceSurface, 1, kAny, false, false, "",

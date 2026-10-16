@@ -103,8 +103,11 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
     auto plan=kachakacha::v2::app::PlanExtrude(facts, solids, profiles, profilesAreFaces);
     if(!plan.readyToPreview&&!wireIds.empty()) {
         const auto curves=kachakacha::v2::app::SelectedCurves(selection,session_->Scene());
-        if(kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,document.Snapshot().settings.tolerance))
-            plan.needsJa="輪郭は閉じていますが、同一平面にありません。「曲面押し出し」で支持面と輪郭を指定してください。";
+        if(kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,document.Snapshot().settings.tolerance)) {
+            plan.kind=kachakacha::v2::app::ExtrudeInputKind::FaceOnly;
+            plan.profiles=wireIds;plan.profileIsFace=true;plan.readyToPreview=true;
+            plan.needsJa="面上の閉輪郭を一定方向へ押し出します。";
+        }
     }
     return plan;
 }

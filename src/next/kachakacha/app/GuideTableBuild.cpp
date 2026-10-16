@@ -103,7 +103,8 @@ namespace {
     }
     if (role == ChainRole::SourceSurface) {
         const auto* entity = document.FindEntity(chain.segments.front().entityId);
-        if (entity == nullptr || entity->kind != EntityKind::GuideSurface) {
+        if (entity == nullptr || (entity->kind != EntityKind::GuideSurface
+            && !(table.method==GuideSurfaceMethod::BoundaryFill&&entity->kind==EntityKind::Part))) {
             return Result<GuideTable>::Failure(MakeError("GEO-R002",
                 "保存した作り方が指す元の面が、文書にありません。", where));
         }

@@ -3,6 +3,7 @@
 #include "V2MainWindow.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -34,6 +35,15 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
     if(!guides.HasValue())return base::Result<V2PreparedDocument>::Failure(guides.Diagnostics());
     data.partEdges=w.partEdges_;data.flatBoundaries=w.partFlatBoundary_;data.guideEdges=w.guideEdges_;
     data.samples=w.guideSamples_;data.fabrication=w.fabricationModels_;data.guideTable=w.guideTable_;
+    for(const auto* shapes:{&w.partShapes_,&w.guideShapes_})for(const auto& [id,handle]:*shapes) {
+        const auto cached=w.shapeMeshes_.find(handle.value);
+        if(cached!=w.shapeMeshes_.end())data.meshes[id]=cached->second;
+        else {
+            const auto mesh=kernel::BuildShapeMesh(handle,0.0,shapes==&w.guideShapes_?8:0);
+            if(!mesh.HasValue())return base::Result<V2PreparedDocument>::Failure(mesh.Diagnostics());
+            data.meshes[id]=mesh.Value();
+        }
+    }
     return base::Result<V2PreparedDocument>::Success(std::move(data));
 }
 void V2DocumentOpen::CacheSaved(V2MainWindow& w,const std::string& archive) {

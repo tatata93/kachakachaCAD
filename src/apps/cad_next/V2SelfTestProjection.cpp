@@ -10,6 +10,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/geometry/WireChain.h"
 #include <QApplication>
 #include <QComboBox>
@@ -26,6 +27,7 @@
 #include <QTemporaryDir>
 #include <QString>
 #include <QWidget>
+#include <algorithm>
 #include <QTreeWidgetItem>
 #include <QBrush>
 #include <cstdlib>
@@ -194,11 +196,11 @@ bool ProjectedProfileExtrudes(V2MainWindow& window) {
     window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Part)!=0)return false;
     window.RunCommand("edit.redo");return Explain("PROJ extrusion persists through Undo and save",window.SaveAndReopen("projected-extrusion.kcd2")&&CountOfKind(window,domain::EntityKind::Part)==1);
 }
-bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=-1) {
+bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=-1,bool insidePick=false) {
     if(!Fixture(window,false,curved?2:1))return false;
     const auto before=window.Session().GetDocument().Snapshot();auto* tool=V2ProjectionTool::Open(window);
     if(!AddGuideInputs(*tool))return false;
-    tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(curved?1:0);
+    tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(curved&&!insidePick?1:0);
     tool->findChild<QDoubleSpinBox*>("projectionTolerance")->setValue(.000001);
     auto* form=tool->findChild<QComboBox*>("projectionWireForm");if(!form||form->count()!=2||form->currentIndex()!=0)return false;
     if(!tool->Preview())return false;
@@ -218,11 +220,22 @@ bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=
     app::SelectionSet selection;selection.entityIds={wire};
     const auto curves=app::SelectedCurves(selection,window.Session().Scene());
     if(!Explain("PROJ circle boundary remains closed",geometry::SegmentsFormClosedLoop(curves,snapshot.settings.tolerance)))return false;
-    if(curved) {
+    if(curved&&!insidePick) {
         if(face.IsNil())return false;
         selection.entityIds={face};
-    } else if(curves.size()!=1)return false;
+    } else if(!curved&&curves.size()!=1)return false;
     window.RunCommand("selection.activate");window.Viewport().SetSelection(selection);window.ActivateCommand("part.extrude");
+    if(insidePick) {
+        window.Viewport().IsolateSelection();
+        window.HandleToolKey(Qt::Key_Escape,nullptr);window.Viewport().SetSelection({});window.ActivateCommand("part.extrude");
+        geometry::Vector3 center{};int count=0;
+        for(const auto& c:curves)for(int i=0;i<32;++i){center=center+c.Evaluate(i/32.0);++count;}
+        center=center*(1.0/count);window.Viewport().SetViewDirection(ViewDirection::Right);window.Viewport().FitToDocument();
+        const auto at=window.Viewport().Mapping().Project(center);if(!at)return false;
+        window.Viewport().SelectAt(QPointF(at->x,at->y),Qt::NoModifier);
+        if(!Explain("PROJ curved wire selected by clicking its interior",std::find(window.Viewport().Selection().entityIds.begin(),
+            window.Viewport().Selection().entityIds.end(),wire)!=window.Viewport().Selection().entityIds.end()))return false;
+    }
     if(!Explain("PROJ lamp input shows extrusion handle",window.Viewport().ExtrudeHandleShown()))return false;
     window.ExtrudeDock().ChooseDirection(modeling::ExtrudeDirectionMode::CustomXYZ);
     window.ExtrudeDock().SetCustomDirection(curved?geometry::Vector3{1,0,0}:geometry::Vector3{0,0,1});
@@ -248,6 +261,52 @@ bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=
     return Explain("PROJ lamp solid and wire policy survive saving",CountOfKind(window,domain::EntityKind::Part)==1
         &&restored&&restored->editPolicy==(ordinary?domain::EditPolicy::Source:domain::EditPolicy::Derived));
 }
+bool CurvedWindowHole(V2MainWindow& window) {
+    if(!Fixture(window,false,2))return false;
+    const auto file=window.Session().GetDocument().Snapshot();modeling::KernelShapeHandle support;
+    for(const auto& f:file.features)if(const auto* frozen=std::get_if<domain::FreezeDerivedDefinition>(&f.definition)) {
+        const auto shape=kernel::RestoreOutputShape(frozen->frozenBrep);if(shape.HasValue())support=shape.Value();
+    }
+    if(!support.Valid())return false;
+    const auto outer=kernel::OutputEdges(support,.000001);kernel::ReleaseShape(support);if(!outer.HasValue())return false;
+    auto* tool=V2ProjectionTool::Open(window);if(!AddGuideInputs(*tool)||!tool->Preview()||!tool->Commit())return false;
+    const auto windowWire=window.Session().GetDocument().Snapshot().entities.back().id;
+    const auto boundary=window.Session().AddWire(outer.Value(),false,"車体外周");if(!boundary.committed)return false;
+    window.RunCommand("selection.activate");app::SelectionSet selection;selection.entityIds={boundary.createdEntityIds.front(),windowWire};
+    window.Viewport().SetSelection(selection);const int before=CountOfKind(window,domain::EntityKind::GuideSurface);
+    window.RunCommand("surface.create");if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    if(!Explain("PROJ curved outer and window wires form a surface with a hole",CountOfKind(window,domain::EntityKind::GuideSurface)==before+1))return false;
+    const auto result=window.Session().GetDocument().Snapshot().entities.back().id;
+    bool hasHole=true,hasMaterial=false;
+    for(const auto& shape:window.Viewport().ShapeViews())if(shape.entityId==result)for(const auto& triangle:shape.mesh.triangles) {
+        hasHole=hasHole&&!modeling::RayHitsTriangle({20,0,0},{-1,0,0},triangle).has_value();
+        hasMaterial=hasMaterial||modeling::RayHitsTriangle({20,3,0},{-1,0,0},triangle).has_value();
+    }
+    if(!Explain("PROJ window center is empty while surrounding curved body remains",hasHole&&hasMaterial))return false;
+    window.resize(1500,950);selection.entityIds={result};window.Viewport().SetSelection(selection);window.Viewport().IsolateSelection();
+    window.Viewport().SetSelection({});window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    window.Viewport().SetViewCenter({9,0,0});window.Viewport().SetVisibleWidthMm(22);
+    const auto output=qEnvironmentVariable("KACHACAD_SOLID_TRIM_GUIDE_OUTPUT");
+    if(!output.isEmpty()){QDir().mkpath(output);QApplication::processEvents();window.grab().save(output+"/curved-window-hole.png");}
+    window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::GuideSurface)!=before)return false;
+    window.RunCommand("edit.redo");return window.SaveAndReopen("curved-window-hole.kcd2")&&window.RebuildProblems().isEmpty();
+}
+bool ExplicitPlanarInterior(V2MainWindow& window) {
+    if(!Fixture(window,true,1))return false;
+    window.RunCommand("selection.activate");window.Viewport().SetSelection({});
+    window.Viewport().SetViewDirection(ViewDirection::Top);window.Viewport().SetViewCenter({0,0,2});window.Viewport().SetVisibleWidthMm(22);
+    window.RunCommand("part.extrude");
+    auto* pick=window.findChild<QPushButton*>("extrudePickProfile");
+    if(!pick||!pick->isVisible())return false;pick->click();
+    const auto at=window.Viewport().Mapping().Project({0,0,10});if(!at)return false;
+    window.Viewport().SelectAt(QPointF(at->x,at->y),Qt::NoModifier);
+    const auto& selected=window.Viewport().Selection().entityIds;
+    if(!Explain("PROJ explicit profile role picks planar interior over a solid",selected.size()==1&&selected.front()==WireId()
+        &&window.Viewport().ExtrudeHandleShown()))return false;
+    window.ExtrudeDock().ChooseDirection(modeling::ExtrudeDirectionMode::WorldZ);window.ExtrudeDock().TypeDistanceMm(.5);
+    return Explain("PROJ explicit planar profile creates a separate solid",window.HandleToolKey(Qt::Key_Return,nullptr)
+        &&CountOfKind(window,domain::EntityKind::Part)==2);
+}
 }
 std::vector<SelfTestCase> OwnerProjectionCases();
 bool PanoramaTwoPlanes(V2MainWindow& window);
@@ -264,5 +323,9 @@ std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"P
     cases.push_back({"PROJ panorama two workplanes per-row directions",PanoramaTwoPlanes});
     cases.push_back({"PROJ curved lamp wires only Undo save",[](auto& w){return CircleOutput(w,true,true,0);}});
     cases.push_back({"PROJ curved lamp wires and solid Undo save",[](auto& w){return CircleOutput(w,true,true,1);}});
+    cases.push_back({"PROJ curved ordinary wire interior click extrusion",[](auto& w){return CircleOutput(w,true,true,-1,true);}});
+    cases.push_back({"PROJ curved projected wire interior click extrusion",[](auto& w){return CircleOutput(w,false,true,-1,true);}});
+    cases.push_back({"PROJ curved body outer wire with window hole Undo save",CurvedWindowHole});
+    cases.push_back({"PROJ explicit planar profile interior over a solid",ExplicitPlanarInterior});
     const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
 }

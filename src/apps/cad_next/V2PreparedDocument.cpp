@@ -99,8 +99,16 @@ void Fields(Archive& a,modeling::GuideTableRow& v) {
 void Fields(Archive& a,modeling::GuideTable& v) {
     a.Values(v.method,v.rows,v.offsetDistanceMm,v.revolveAxisPoint,v.revolveAxisDirection,v.revolveAngleRad,v.lockSectionOrder,v.fourEdgeStyle);
 }
+void Fields(Archive& a,modeling::MeshTriangle& v) {
+    for(auto& p:v.points)a.Values(p);
+    a.Values(v.normal,v.faceIndex);
+    for(auto& n:v.vertexNormals)a.Values(n);
+}
+void Fields(Archive& a,modeling::ShapeMesh& v) {
+    a.Values(v.triangles,v.edges,v.isoLines,v.minimum,v.maximum,v.closed,v.faceCount);
+}
 void Fields(Archive& a,V2PreparedDocument& v) {
-    a.Values(v.archive,v.parts,v.guides,v.partEdges,v.flatBoundaries,v.guideEdges,v.samples,v.fabrication,v.guideTable);
+    a.Values(v.archive,v.parts,v.guides,v.partEdges,v.flatBoundaries,v.guideEdges,v.samples,v.fabrication,v.guideTable,v.meshes);
 }
 template<class... T> void Archive::Values(T&... values){(Field(values),...);}
 template<class T> void Archive::Field(T& v) {
@@ -139,7 +147,7 @@ template<class T> void Archive::Field(T& v) {
 bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDocument& data) {
     try {
         QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
-        Archive stream(&file,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=1;
+        Archive stream(&file,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=2;
         stream.Values(magic,version,id,data);stream.Check();return file.commit();
     }catch(...){return false;}
 }
@@ -149,7 +157,7 @@ kachakacha::v2::base::Result<V2PreparedDocument> ReadPreparedDocument(const QStr
     try {
         QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>1024LL*1024*1024)throw std::runtime_error("Cannot read calculation result");
         Archive stream(&file,true,pulse);std::string magic,id;int version=0;stream.Values(magic,version,id);
-        if(magic!="kachakacha-prepared-document"||version!=1||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
+        if(magic!="kachakacha-prepared-document"||version!=2||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
         V2PreparedDocument data;stream.Values(data);stream.Check();if(!file.atEnd())throw std::runtime_error("Unexpected result tail");
         return Result::Success(std::move(data));
     }catch(const std::exception& e) {

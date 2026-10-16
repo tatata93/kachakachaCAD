@@ -192,11 +192,16 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
         // (核が「支持面の形が見つかりません」と言って断る)。
         auto filled = request.Value();
         for (auto& chain : filled.chains) {
-            if (chain.supportSurfaceId.IsNil()) {
+            const auto supportId=chain.role==ChainRole::SourceSurface?chain.sourceEntityId:chain.supportSurfaceId;
+            if (supportId.IsNil()) {
                 continue;
             }
-            const auto found = guideShapes_.find(chain.supportSurfaceId.ToString());
+            const auto found = guideShapes_.find(supportId.ToString());
             chain.supportShapeHandle = found == guideShapes_.end() ? 0 : found->second.value;
+            if(!chain.supportShapeHandle) {
+                const auto part=partShapes_.find(supportId.ToString());
+                if(part!=partShapes_.end())chain.supportShapeHandle=part->second.value;
+            }
         }
         request = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideSurfaceRequest>::Success(
             std::move(filled));
@@ -270,6 +275,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
     feature.type = FeatureType::CreateGuideSurface;
     feature.displayName = label;
     feature.inputEntityIds = inputs;
+    for(const auto& row:table.rows)if(!row.supportSurfaceId.IsNil()
+        && std::find(feature.inputEntityIds.begin(),feature.inputEntityIds.end(),row.supportSurfaceId)==feature.inputEntityIds.end())
+        feature.inputEntityIds.push_back(row.supportSurfaceId);
     // 元ワイヤーと役割と向きを覚える。空のまま保存していたので、
     // 開き直しても面を作り直せなかった。写し方は core に1つだけ置く。
     auto sourceScene = kachakacha::v2::app::BuildSceneFromDocument(

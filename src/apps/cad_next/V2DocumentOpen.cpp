@@ -94,6 +94,11 @@ bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
         w.partEdges_=std::move(prepared.data.partEdges);w.partFlatBoundary_=std::move(prepared.data.flatBoundaries);
         w.guideEdges_=std::move(prepared.data.guideEdges);w.guideSamples_=std::move(prepared.data.samples);
         w.fabricationModels_=std::move(prepared.data.fabrication);w.guideTable_=std::move(prepared.data.guideTable);
+        w.shapeMeshes_.clear();
+        for(const auto* shapes:{&w.partShapes_,&w.guideShapes_})for(const auto& [id,handle]:*shapes) {
+            const auto mesh=prepared.data.meshes.find(id);
+            if(mesh!=prepared.data.meshes.end())w.shapeMeshes_.emplace(handle.value,std::move(mesh->second));
+        }
         w.rebuildProblems_.clear();Release(oldParts,oldGuides);
         w.RefreshGuideTable();w.RefreshFabricationView();
     }))return false;

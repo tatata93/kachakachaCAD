@@ -46,6 +46,10 @@ void FilterProfileRegions(std::vector<ProfileRegion>& regions,
     const modeling::SnapScene& scene, const std::vector<base::EntityId>& entityIds,
     const geometry::GeometryTolerance& tolerance);
 
+//! Closed spatial wire boundaries for surface region picking. Does not imply a planar face.
+[[nodiscard]] std::vector<ProfileBoundary> DetectSpatialBoundaries(
+    const modeling::SnapScene& scene, const geometry::GeometryTolerance& tolerance);
+
 //! 3D点を領域平面へ落として内外を調べる。穴の中はfalse。
 [[nodiscard]] bool ProfileRegionContains(const ProfileRegion& region,
     const geometry::Vector3& point, double planeToleranceMm);

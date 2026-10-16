@@ -17,6 +17,9 @@ bool Execute(const QWidget* parent, const char* title, const std::function<void(
 
 // Only newly built results are discarded. Input handles are never released.
 template<class T> void Discard(const T& value) {
+    if constexpr (requires { value.ownedShapes; }) {
+        if (value.ownedShapes) return; // The result owns and releases its preview shapes.
+    }
     if constexpr (requires { value.handle.Valid(); }) {
         if (value.handle.Valid()) kachakacha::v2::kernel::ReleaseShape(value.handle);
     }

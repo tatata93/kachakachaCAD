@@ -339,6 +339,31 @@ std::vector<ProfileRegion> DetectProfileRegions(const modeling::SnapScene& scene
     return RegionsFromLoops(ClosedLoops(scene, &entityIds, tolerance), tolerance);
 }
 
+std::vector<ProfileBoundary> DetectSpatialBoundaries(const modeling::SnapScene& scene,
+    const geometry::GeometryTolerance& tolerance)
+{
+    std::vector<ProfileBoundary> result;
+    std::vector<SnapCurve> curves;
+    for(const auto& c:scene.curves)if(!c.construction)curves.push_back(c);
+    base::DeterministicIdGenerator localIds{78129};
+    for(auto& c:curves)if(c.segmentId.IsNil())c.segmentId=localIds.NextTyped<base::IdKind::Segment>();
+    // Prefer each complete wire; otherwise connect separate entities at real 3D endpoints.
+    std::vector<base::EntityId> ids;
+    for(const auto& c:curves)if(!SameEntity(ids,c.entityId))ids.push_back(c.entityId);
+    std::vector<base::EntityId> complete;
+    for(const auto id:ids) {
+        std::vector<SnapCurve> own;
+        for(const auto& c:curves)if(c.entityId==id)own.push_back(c);
+        auto boundary=MakeBoundary(own,tolerance);
+        if(boundary){result.push_back(std::move(*boundary));complete.push_back(id);}
+    }
+    curves.erase(std::remove_if(curves.begin(),curves.end(),[&](const auto& c){return SameEntity(complete,c.entityId);}),curves.end());
+    for(const auto& component:ConnectedComponents(std::move(curves),tolerance.interactiveJoinMm)) {
+        auto boundary=MakeBoundary(component,tolerance);if(boundary)result.push_back(std::move(*boundary));
+    }
+    return result;
+}
+
 bool ProfileRegionContains(const ProfileRegion& region, const Vector3& point,
     double planeToleranceMm)
 {

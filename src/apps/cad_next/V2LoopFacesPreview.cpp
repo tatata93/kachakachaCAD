@@ -75,6 +75,7 @@ void V2LoopFacesTool::BuildSurfacePreview()
     previewPending_=false;
     dock_->SetProgressText(QStringLiteral("面を計算中…"));
     auto handles=window_.guideShapes_;
+    handles.insert(window_.partShapes_.begin(),window_.partShapes_.end());
     PreviewShapes temporary;
     base::DeterministicIdGenerator ids{9271};
     std::vector<base::EntityId> builtIds(plan_->faces.size());
@@ -98,7 +99,7 @@ void V2LoopFacesTool::BuildSurfacePreview()
             if (request.HasValue()) {
                 auto filled=request.Value();
                 for (auto& chain:filled.chains) {
-                    const auto found=handles.find(chain.supportSurfaceId.ToString());
+                    const auto found=handles.find((chain.role==modeling::ChainRole::SourceSurface?chain.sourceEntityId:chain.supportSurfaceId).ToString());
                     if (found!=handles.end()) chain.supportShapeHandle=found->second.value;
                 }
                 const auto analysis=modeling::AnalyzeGuideSurfaceRequest(filled,ToleranceNow());

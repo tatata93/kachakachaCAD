@@ -124,7 +124,8 @@ bool V2MainWindow::CommitFaceProfileWires(
 void V2MainWindow::ForgetFaceProfile()
 {
     const auto preview = guideShapes_.find(faceProfileSolid_.ToString());
-    if (preview != guideShapes_.end() && partShapes_.contains(faceProfileSolid_.ToString())) {
+    const auto* entity=session_->GetDocument().FindEntity(faceProfileSolid_);
+    if (preview != guideShapes_.end() && (!entity || entity->kind != kachakacha::v2::domain::EntityKind::GuideSurface)) {
         kachakacha::v2::kernel::ReleaseShape(preview->second);
         guideShapes_.erase(preview);
     }

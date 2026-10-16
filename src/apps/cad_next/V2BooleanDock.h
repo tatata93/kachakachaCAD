@@ -22,6 +22,7 @@
 class QCheckBox;
 class QListWidget;
 class QLabel;
+class QComboBox;
 class QPushButton;
 class QVBoxLayout;
 
@@ -41,6 +42,7 @@ public:
     [[nodiscard]] std::vector<int> ContactRemovals() const;
     [[nodiscard]] int ContactRegionIndex() const;
     void SelectContactRegion(int index);
+    void ToggleContactRegion(int index);
     void SetContactRemoval(int index, int removal);
     //! 足す / 引く / 交差を押した。
     void SetOperationHandler(std::function<void(kachakacha::v2::app::BooleanKind)> handler);
@@ -82,6 +84,10 @@ private:
     QListWidget* contactRegions_ = nullptr;
     QPushButton* swap_ = nullptr;
     QLabel* operationTitle_ = nullptr;
+    QComboBox* operationMode_ = nullptr;
+    QComboBox* cutDirection_ = nullptr;
+    QComboBox* trimTargetScope_ = nullptr;
+    QComboBox* trimToolScope_ = nullptr;
     QLabel* targetLabel_ = nullptr;
     QLabel* contactHint_ = nullptr;
     QString contactKey_;

@@ -773,6 +773,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctSurfaceAnalysis.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctSurfaceRegion.cpp
     src/next_occt/kachakacha/kernel/OcctCurvedEmboss.cpp
     src/next_occt/kachakacha/kernel/OcctExtrudeToFace.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
@@ -799,6 +800,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctImage.cpp
     src/next_occt/kachakacha/kernel/OcctOutput.cpp
     src/next_occt/kachakacha/kernel/OcctContact.cpp
+    src/next_occt/kachakacha/kernel/OcctRegionSplit.cpp
     src/next_occt/kachakacha/kernel/OcctLocalTrim.cpp
     src/next_occt/kachakacha/kernel/OcctTransform.cpp
     src/next_occt/kachakacha/kernel/OcctSolid.cpp
@@ -1074,6 +1076,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
     kachakacha_add_v2_kernel_test(curved_emboss_tests tests_v2/curved_emboss_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_boolean_tests tests_v2/kernel_boolean_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_region_split_tests tests_v2/kernel_region_split_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_place_tests tests_v2/kernel_place_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_solid_tests tests_v2/kernel_solid_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_thicken_quality_tests tests_v2/kernel_thicken_quality_tests.cpp)
@@ -1197,6 +1200,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ImageViews.cpp
         src/apps/cad_next/V2FaceActions.cpp
         src/apps/cad_next/V2ContactCommands.cpp
+        src/apps/cad_next/V2MixedTrim.cpp
         src/apps/cad_next/V2ContactOptions.cpp
         src/apps/cad_next/V2SelfTestOutput.cpp
         src/apps/cad_next/V2OutputElements.cpp

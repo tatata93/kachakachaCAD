@@ -43,6 +43,8 @@
 #include "V2CornerDock.h"
 
 #include <QString>
+#include <QVariant>
+#include <QComboBox>
 
 #include <algorithm>
 #include <string>
@@ -64,6 +66,10 @@ namespace {
         }
     }
     return out;
+}
+bool AcceptTrimEntity(kachakacha::v2::app::BooleanKind mode,EntityKind kind) {
+    return kind==EntityKind::Part || (mode==kachakacha::v2::app::BooleanKind::SplitOverlap
+        && (kind==EntityKind::GuideSurface||kind==EntityKind::Wire||kind==EntityKind::Point||kind==EntityKind::WorkPlane));
 }
 
 } // namespace
@@ -242,13 +248,18 @@ void V2MainWindow::RunBooleanTool(kachakacha::v2::app::BooleanKind kind)
     // 選んであった部品は、選んだ順に土台・相手へ入れる(選んでから押す道も残す)。
     booleanInput_ = kachakacha::v2::app::BooleanInputState{};
     booleanInput_.kind = kind;
+    for(const auto name:{"trimTargetScope","trimToolScope"})if(auto* scope=findChild<QComboBox*>(name)) {
+        const bool blocked=scope->blockSignals(true);scope->setCurrentIndex(0);scope->blockSignals(blocked);
+    }
     const auto& document = session_->GetDocument();
     for (const EntityId& id : viewport_->Selection().entityIds) {
         const auto* entity = document.FindEntity(id);
-        if (entity != nullptr && entity->kind == EntityKind::Part) {
+        if (entity != nullptr && AcceptTrimEntity(kind,entity->kind)) {
             booleanInput_ = kachakacha::v2::app::WithBooleanPick(booleanInput_, id);
         }
     }
+    for(const auto& ref:viewport_->Selection().ordered)if(ref.pickedFaceIndex)
+        booleanDock_->setProperty(("trimFace_"+ref.entityId.ToString()).c_str(),static_cast<int>(*ref.pickedFaceIndex));
     booleanShelfShown_ = true;
     RefreshRightShelves();
     viewport_->SetToolPickActive(true);
@@ -271,6 +282,8 @@ void V2MainWindow::MirrorBooleanToSelection()
     for (const EntityId& id : booleanMirror_) {
         kachakacha::v2::app::SelectionRef ref;
         ref.entityId = id;
+        const auto face=booleanDock_->property(("trimFace_"+id.ToString()).c_str());
+        if(face.isValid()) {ref.kind=kachakacha::v2::app::SelectionElementKind::Face;ref.pickedFaceIndex=face.toUInt();}
         mirrored.ordered.push_back(ref);
     }
     booleanMirroring_ = true;
@@ -289,9 +302,14 @@ void V2MainWindow::RefreshBooleanForSelectionChange()
     const auto removed = Missing(booleanMirror_, now);
     const auto& document = session_->GetDocument();
     bool changed = false;
+    for(const auto& ref:viewport_->Selection().ordered)if(ref.pickedFaceIndex) {
+        const auto key="trimFace_"+ref.entityId.ToString();const auto value=static_cast<int>(*ref.pickedFaceIndex);
+        changed=changed||booleanDock_->property(key.c_str())!=QVariant(value);
+        booleanDock_->setProperty(key.c_str(),value);
+    }
     for (const EntityId& id : added) {
         const auto* entity = document.FindEntity(id);
-        if (entity != nullptr && entity->kind == EntityKind::Part) {
+        if (entity != nullptr && AcceptTrimEntity(booleanInput_.kind,entity->kind)) {
             booleanInput_ = kachakacha::v2::app::WithBooleanPick(booleanInput_, id);
             changed = true;
         }

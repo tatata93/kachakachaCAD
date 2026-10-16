@@ -2,7 +2,11 @@
 #include "kachakacha/kernel/OcctWireProjection.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctSurfaceRegion.h"
+#include "kachakacha/kernel/OcctSurfaceExtrude.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include <cmath>
 #include <functional>
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -108,6 +112,86 @@ KACHA_V2_TEST(projection, BranchesDoNotCreateArbitraryChain) {
     auto face=Plane();const auto r=kernel::ProjectNativeWires({face.h},
         {{{Line({-2,0,3},{0,0,3}),Line({0,0,3},{2,0,3}),Line({0,0,3},{0,2,3})},{0,0,-1}}},Options());
     Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==3,"branch remains explicit separate arms");
+}
+KACHA_V2_TEST(projection, RoundedPanoramaAndSpatialRegion) {
+    Owned front(BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(gp_Pnt(),gp_Dir(0,-1,0),gp_Dir(1,0,0))),-8,0,-5,5).Face());
+    Owned radius(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(gp_Pnt(0,5,0),gp_Dir(0,0,1)),5),-geometry::kPi/2,0,-5,5).Face());
+    Owned side(BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(gp_Pnt(5,0,0),gp_Dir(1,0,0),gp_Dir(0,1,0))),5,14,-5,5).Face());
+    const auto arc=[](geometry::Vector3 center,geometry::Vector3 normal,geometry::Vector3 ref,double a){
+        return geometry::CurveSegment::MakeCircularArc(center,normal,ref,.25,a,geometry::kPi/2).Value();};
+    const std::vector<geometry::CurveSegment> a={Line({5,-5,1},{-3.75,-5,1}),arc({-3.75,-5,.75},{0,-1,0},{1,0,0},geometry::kPi/2),
+        Line({-4,-5,.75},{-4,-5,-.75}),arc({-3.75,-5,-.75},{0,-1,0},{1,0,0},geometry::kPi),Line({-3.75,-5,-1},{5,-5,-1})};
+    const std::vector<geometry::CurveSegment> b={Line({10,5,-1},{10,9.75,-1}),arc({10,9.75,-.75},{1,0,0},{0,1,0},-geometry::kPi/2),
+        Line({10,10,-.75},{10,10,.75}),arc({10,9.75,.75},{1,0,0},{0,1,0},0),Line({10,9.75,1},{10,5,1})};
+    const auto projected=kernel::ProjectNativeWires({front.h,radius.h,side.h},{{a,{0,1,0}},{b,{-1,0,0}}},Options());
+    Require(projected.HasValue(),projected.FirstMessageJa());
+    Require(projected.Value().wires.size()==1&&projected.Value().openEnds==0,"rounded panorama closes over three faces");
+    for(const auto& source:{a[1],a[3],b[1],b[3]})for(int i=0;i<=32;++i){auto p=source.Evaluate(i/32.0);if(p.x==10)p.x=5;else p.y=0;
+        double error=1e100;for(const auto& c:projected.Value().wires.front())error=std::min(error,c.ClosestPoint(p).distance);
+        Require(error<.002,"all four rounded corners survive projection");}
+    const auto patch=kernel::TrimSurfaceRegion({front.h,radius.h,side.h},projected.Value().wires,{});
+    Require(patch.HasValue(),patch.FirstMessageJa());
+    const auto solid=kernel::BuildSurfaceExtrude(patch.Value(),{1,-1,0},0,1,{});
+    Require(solid.HasValue(),solid.FirstMessageJa());Require(solid.Value().totalVolumeMm3>1,"uniform straight extrusion across three faces");
+    for(const auto& part:solid.Value().parts)kernel::ReleaseShape(part.handle);
+    kernel::ReleaseShape(patch.Value());
+}
+KACHA_V2_TEST(projection, SurfaceRegionHolesAndInvalidBoundary) {
+    auto plane=Plane();auto outer=ClosedSquare(0);
+    const auto hole=geometry::CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},.5).Value();
+    const auto patch=kernel::TrimSurfaceRegion({plane.h},{outer,{hole}},{});
+    Require(patch.HasValue(),patch.FirstMessageJa());
+    const auto solid=kernel::BuildSurfaceExtrude(patch.Value(),{0,0,1},0,2,{});
+    Require(solid.HasValue(),solid.FirstMessageJa());
+    Require(std::abs(solid.Value().totalVolumeMm3-2*(16-geometry::kPi*.25))<1e-5,"window is a true hole in the extruded solid");
+    for(const auto& part:solid.Value().parts)kernel::ReleaseShape(part.handle);
+    kernel::ReleaseShape(patch.Value());
+    Require(!kernel::TrimSurfaceRegion({plane.h},{ClosedSquare(1)},{}).HasValue(),"off-surface boundary cannot silently project");
+    outer.pop_back();Require(!kernel::TrimSurfaceRegion({plane.h},{outer},{}).HasValue(),"open boundary cannot create a face");
+}
+KACHA_V2_TEST(projection, SurfaceHoleSourceSeparateFromContinuityAndReportsDeviation) {
+    auto plane=Plane();modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::BoundaryFill;
+    modeling::GuideChain outer;outer.role=modeling::ChainRole::BoundarySide;outer.closed=true;outer.segments=ClosedSquare(0);
+    // A continuity support is not the surface to cut from.
+    auto other=Plane(20);outer.supportShapeHandle=other.h.value;request.chains.push_back(outer);
+    modeling::GuideChain hole;hole.role=modeling::ChainRole::HoleBoundary;hole.closed=true;
+    hole.segments={geometry::CurveSegment::MakeCircle({0,0,0},{0,0,1},{1,0,0},.5).Value()};request.chains.push_back(hole);
+    auto made=kernel::BuildSurfaceWithHoles(request,{});Require(made.HasValue(),made.FirstMessageJa());kernel::ReleaseShape(made.Value().handle);
+    modeling::GuideChain source;source.role=modeling::ChainRole::SourceSurface;source.supportShapeHandle=plane.h.value;
+    request.chains.push_back(source);
+    request.chains[0].segments=ClosedSquare(.0001);
+    request.chains[1].segments={geometry::CurveSegment::MakeCircle({0,0,.0001},{0,0,1},{1,0,0},.5).Value()};
+    made=kernel::BuildSurfaceWithHoles(request,{});Require(made.HasValue(),made.FirstMessageJa());
+    Require(!made.Diagnostics().empty()&&made.Value().maximumDeviationMm>=.000099&&made.Value().rmsDeviationMm>=.000099,
+        "boundary approximation warning, maximum and RMS retained");
+    kernel::ReleaseShape(made.Value().handle);
+    request.chains.back().supportShapeHandle=0;
+    Require(!kernel::BuildSurfaceWithHoles(request,{}).HasValue(),"missing explicit source cannot silently refill");
+}
+KACHA_V2_TEST(projection, SurfaceRegionOrderAndInteriorPatches) {
+    std::vector<modeling::KernelShapeHandle> patches;
+    for(int x=-2;x<2;++x)for(int y=-2;y<2;++y)
+        patches.push_back(kernel::StoreShape(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(),gp_Dir(0,0,1)),x,x+1,y,y+1).Face()));
+    auto outer=ClosedSquare(0);std::swap(outer[0],outer[2]);
+    outer[1]=geometry::ReverseCurve(outer[1]).Value();
+    const auto region=kernel::TrimSurfaceRegion(patches,{outer},{});
+    Require(region.HasValue(),region.FirstMessageJa());
+    const auto solid=kernel::BuildSurfaceExtrude(region.Value(),{0,0,1},0,1,{});
+    Require(solid.HasValue(),solid.FirstMessageJa());
+    Require(std::abs(solid.Value().totalVolumeMm3-16)<1e-5,"interior patches retained, shuffled and reversed edges accepted");
+    for(const auto& part:solid.Value().parts)kernel::ReleaseShape(part.handle);
+    kernel::ReleaseShape(region.Value());for(auto patch:patches)kernel::ReleaseShape(patch);
+}
+KACHA_V2_TEST(projection, SurfaceRegionNeverIncludesCylinderRear) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),0,geometry::kPi*2,-10,10).Face());
+    const auto circle=geometry::CurveSegment::MakeCircle({20,0,0},{1,0,0},{0,1,0},2).Value();
+    const auto projected=kernel::ProjectNativeWires({cylinder.h},{{{circle},{-1,0,0}}},Options());
+    Require(projected.HasValue(),projected.FirstMessageJa());
+    const auto patch=kernel::TrimSurfaceRegion({cylinder.h},projected.Value().wires,{},Options().toleranceMm);
+    Require(patch.HasValue(),patch.FirstMessageJa());
+    const auto mesh=kernel::BuildShapeMesh(patch.Value());Require(mesh.HasValue(),mesh.FirstMessageJa());
+    Require(mesh.Value().minimum.x>9,"front-only window never generates the opposite patch");
+    kernel::ReleaseShape(patch.Value());
 }
 KACHA_V2_TEST(projection, ObliqueProjectionKeepsNearestFaceAndSourceParameter) {
     auto first=Plane(10),second=Plane(20);

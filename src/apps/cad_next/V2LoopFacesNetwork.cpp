@@ -1,4 +1,7 @@
 #include "V2LoopFacesTool.h"
+#include "V2MainWindow.h"
+#include "kachakacha/kernel/OcctSurfaceRegion.h"
+#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include <algorithm>
@@ -21,6 +24,32 @@ bool V2LoopFacesTool::TryNetworkPlan()
     });
     if (!compound&&!holes) return false;
     networkTables_ = std::move(network.tables);
+    // An existing native support preserves the actual body surface under a
+    // projected window. Refilling only the outer boundary can change that shape.
+    for(auto& table:networkTables_) {
+        if(table.method!=modeling::GuideSurfaceMethod::BoundaryFill)continue;
+        std::vector<std::vector<geometry::CurveSegment>> loops(1);
+        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::BoundarySide)
+            loops.front().insert(loops.front().end(),row.segments.begin(),row.segments.end());
+        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
+        if(loops.size()<2)continue;
+        const auto& snapshot=window_.session_->GetDocument().Snapshot();
+        bool found=false;
+        for(const auto* shapes:{&window_.guideShapes_,&window_.partShapes_}) {
+            for(const auto& [key,handle]:*shapes) {
+                const auto id=base::EntityId::Parse(key);if(!id)continue;
+                const auto* entity=window_.session_->GetDocument().FindEntity(*id);
+                if(!entity||(entity->kind!=domain::EntityKind::Part&&entity->kind!=domain::EntityKind::GuideSurface)
+                    ||!app::EntityEffectivelyVisible(snapshot,*entity))continue;
+                const auto cut=kernel::TrimSurfaceRegion({handle},loops,tolerance,tolerance.interactiveJoinMm);
+                if(!cut.HasValue())continue;
+                kernel::ReleaseShape(cut.Value());
+                modeling::GuideTableRow source;source.role=modeling::ChainRole::SourceSurface;
+                source.sourceWireIds={*id};source.sourceLabels={entity->displayName};table.rows.push_back(source);found=true;break;
+            }
+            if(found)break;
+        }
+    }
     for (const auto& selection : selections_) {
         const auto count = std::count_if(network.unusedSegments.begin(), network.unusedSegments.end(),
             [&](const auto& part) { return part.sourceWireId == selection.sourceWireId; });

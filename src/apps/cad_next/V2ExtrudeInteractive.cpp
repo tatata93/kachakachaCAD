@@ -379,6 +379,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 
 void V2MainWindow::EndExtrudePreview(bool keepTool)
 {
+    viewport_->setProperty("explicitProfilePicking",false);
     viewport_->CancelBoxSelect();
     extrudeDock_->activeInput.reset();
     viewport_->CancelReferencePick();
@@ -416,7 +417,9 @@ void V2MainWindow::EndExtrudePreview(bool keepTool)
 //! 押し出しの棚を出して、読み取りを映す。
 void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan)
 {
+    viewport_->setProperty("explicitProfilePicking",extrudeDock_->activeInput.has_value()&&!*extrudeDock_->activeInput);
     extrudeDock_->armInput = [this](bool target) {
+        viewport_->setProperty("explicitProfilePicking",!target);
         extrudeDock_->activeInput = target;
         extrudeDock_->SetActiveInput(target);
         viewport_->CancelReferencePick();

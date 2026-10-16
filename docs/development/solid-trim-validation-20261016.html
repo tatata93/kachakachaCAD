@@ -1,0 +1,34 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>曲面輪郭・区画トリムの実装と検証記録 2026-10-16</title>
+<style>body{font:16px/1.7 "Yu Gothic UI",sans-serif;max-width:1100px;margin:32px auto;padding:0 24px;color:#243444}table{border-collapse:collapse;width:100%;margin:20px 0}th,td{border:1px solid #b5c2cc;padding:10px;vertical-align:top;text-align:left}code{background:#edf1f4}img{max-width:100%;height:auto}h1,h2{line-height:1.4}.status{background:#fff3d8;padding:14px}</style>
+<h1>曲面輪郭・区画トリムの実装と検証記録</h1>
+<p>2026-10-16。ユーザーの通常配布版は、全体ゲートを通した成果物だけを更新する。段階ごとのビルドは開発用であり、完成版として配布しない。</p>
+<p class="status" id="status">検証済み配布版を作成済み。Windows全体ゲート、配布版、本体UI、旧版本体の自己試験がすべて成功。</p>
+<h2>変更した動作</h2>
+<table><tr><th>操作</th><th>以前の問題と変更後</th></tr>
+<tr><td>曲面上の輪郭から押し出す</td><td>平面輪郭の判定だけでは選べなかった。空間の閉輪郭の内部をクリックでき、支持面上の領域を切り出して一定方向へ押し出す。元の曲面を平らに置き換えない。</td></tr>
+<tr><td>窓を除いた面を作る</td><td>非平面の外周と穴を面入力として扱う。既存面の形を保持するSourceSurfaceと、G1/G2接続先の隣接面を分離した。穴の中の島は別の面にする。</td></tr>
+<tr><td>交点まで区画を削る</td><td>既存のめり込み除去と分割を同じペインのモードとして利用できる。ソリッド・面・ワイヤーを、面・平面・線・点で区切り、残す区画を選ぶ。点は切断位置に用いる。</td></tr>
+<tr><td>ソリッドの一つのフェイスを使う</td><td>対象側・切断要素側で全体／選択フェイスを指定できる。フェイスを対象にした結果は独立した面として保存する。</td></tr>
+<tr><td>切断ワイヤーを残す</td><td>実際に切ったBRepの交線から通常ワイヤーを生成する。円・円弧を不要な折れ線にしない。結果の区画と境界線の生成を同じUndo単位にする。</td></tr>
+<tr><td>選び直し・プレビュー</td><td>選択だけ変えた際には同じ分割結果を再利用する。取消・更新時には未採用のネイティブ形状を解放する。表示に失敗した区画は確定させない。</td></tr>
+<tr><td>モデル再読込・Undo</td><td>検証されたネイティブ形状キャッシュへ表示メッシュも保存し、隠した形状のメッシュも維持する。形状の入力定義に影響しないUndoでは幾何の再構築を省く。入力が変わった場合や再構築エラーがある場合は再計算する。</td></tr></table>
+<h2>実モデルの計時</h2>
+<p>ユーザーの <code>115面.kcd2</code>（20ネイティブ形状）を読み、同じ内容・履歴・ファイルのバイト列を確認した。初回54,150 ms、同一プロセスでキャッシュを利用した再読込1,877 ms。これは今回の初回／再利用の比較であり、旧版と同条件で比較した削減率ではない。初回の幾何計算には引き続き時間がかかる。</p>
+<p>キャッシュには元ファイル・実行ファイル・カーネルDLLの識別を用いる。元のKCDにキャッシュ用データを書き込まない。元データ変更・キャッシュ破損は再構築へ戻す。専用試験では三角形、フェイス番号、法線、曲線、境界箱も照合した。</p>
+<h2>重点試験</h2>
+<table><tr><th>試験群</th><th>結果・確認内容</th></tr>
+<tr><td>kernel_wire_projection_tests</td><td>40/40。3面をまたぐ丸め付き輪郭、同一方向への立体化、穴、逆順・順不同の線、16個の支持面、円柱の裏側を混入させないこと、欠けた支持面、最大ずれと警告の継承など。</td></tr>
+<tr><td>kernel_region_split_tests</td><td>7/7。ソリッド＋平面、窓輪郭の貫通切断、面の継ぎ目を越える区画、ワイヤー＋点、交差なし・不正許容差、円形の切断境界、共有プレビュー破棄時の解放。体積・面積・長さの保存を確認。</td></tr>
+<tr><td>kernel_surface_tests / surface_role_assist_tests</td><td>61/61、15/15。既存の面生成、分岐・T接続・空間曲線網に加え、非平面の外周→穴→島を確認。</td></tr>
+<tr><td>画面操作の重点選択</td><td>43/43。投影、内部クリックによる押し出し、穴付き曲面、トリムのモード、境界線、取消、Undo/Redo、保存・再読込、キャッシュ。さらに平面ソリッドの選択・面押し引き・移動・ミラー・Boolean出力の回帰と、明示した輪郭入力による平面内部クリックを確認。画像の構図と閉ソリッドのフェイス数の追加確認も成功。</td></tr>
+<tr><td>実モデルの読込</td><td>1/1。115面.kcd2の初回・再利用時間、履歴・形状数・元ファイルの保持。</td></tr></table>
+<h2>全体ゲート</h2><p id="full-result">実行ID <code>solid-trim-full4-20261016</code>。CTest 194/194、本体UI 492/492、配布版UI 492/492、旧版本体の自己試験が成功。CTest実時間1,319.26秒（約22分）。配布版検査642.72秒、本体UI626.37秒。これらは一部並列のため合計を待ち時間とはしない。ソース、設定、環境、実行ファイル・DLL・ZIPの識別を照合して公開処理も成功した。</p>
+<p><a href="../../out/releases/solid-trim-full4-20261016/package/">検証済み配布フォルダー</a> ／ <a href="../../out/releases/solid-trim-full4-20261016/package.zip">配布ZIP</a> ／ <a href="../../out/verification/solid-trim-full4-20261016/result.json">全体検証証拠</a>。起動は <code>python scripts/run-verified.py out/releases/solid-trim-full4-20261016</code>。既に起動中の旧版を自動終了・差し替えはしない。</p>
+<p>事前チェックで新しい説明書画像の参照一覧・撮影名の登録漏れを検出し、修正した。続く全体試験では既存UIの8件の失敗を検出した。輪郭内部の選択を常に優先したことと、対象ソリッドのエッジまで輪郭入力へ混入したことが原因だった。入力欄と対象の種類による選択優先順位、輪郭入力の抽出を修正し、失敗した操作を含む43件の重点試験を通した。失敗候補は配布していない。試験の削除や成功扱いへの変更はしていない。</p>
+<h2>追加した主なファイル</h2>
+<table><tr><th>配置</th><th>役割</th></tr><tr><td>src/next_occt/kachakacha/kernel/OcctSurfaceRegion.*</td><td>ネイティブ支持面から外周・穴の領域を切り出す。</td></tr><tr><td>src/next_occt/kachakacha/kernel/OcctRegionSplit.*</td><td>各次元の対象を区切り、接続した区画と実際の境界を返す。</td></tr><tr><td>src/apps/cad_next/V2MixedTrim.cpp</td><td>役割別の入力、区画プレビュー、確定と所有権の移譲。</td></tr><tr><td>tests_v2/kernel_region_split_tests.cpp</td><td>混在した種類・次元の分割と負の入力の試験。</td></tr><tr><td>docs/manual/solid-trim.html、images/v2-trim-*.png</td><td>実画面5枚を使った操作説明。</td></tr></table>
+<p>削除したファイルはない。以前の配布、ユーザーモデル、バックアップ、増分ビルド資産は削除していない。KCDの既存SourceSurface役割と固定BRepを利用し、新しい点・ワイヤーの所有モデルは導入していない。表示キャッシュだけは一時転送形式を版2へ更新した。</p>
+<h2>確認できる範囲</h2><p>試験した形状・組合せと、すべての将来形状への保証は区別する。開いた輪郭、点自体の切削、内側が一意に決まらない折返し、交差しない工具は理由付きで拒否する。面・線を用いた区画トリムは固定された独立形状であり、元の工具変更に自動追従する履歴型の切断ではない。</p>
+<p><a href="../manual/solid-trim.html">画像付き手順書</a> ／ <a href="../manual/panorama-projection.html">正面・側面の作図面から投影する手順</a></p>
+</html>

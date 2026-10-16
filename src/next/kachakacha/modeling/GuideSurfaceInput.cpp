@@ -638,6 +638,14 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
 Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceRequest& request,
     const GeometryTolerance& tolerance)
 {
+    if(request.method==GuideSurfaceMethod::BoundaryFill && std::any_of(request.chains.begin(),request.chains.end(),
+        [](const auto& c){return c.role==ChainRole::HoleBoundary||c.role==ChainRole::SourceSurface;})) {
+        auto outer=request;
+        outer.chains.erase(std::remove_if(outer.chains.begin(),outer.chains.end(),[](const auto& c){return c.role==ChainRole::HoleBoundary||c.role==ChainRole::SourceSurface;}),outer.chains.end());
+        for(const auto& chain:request.chains)if(chain.role==ChainRole::HoleBoundary && !chain.closed)
+            return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,"穴の輪郭を閉じてください。",{}));
+        return AnalyzeGuideSurfaceRequest(outer,tolerance);
+    }
     std::vector<Diagnostic> errors = CheckIndices(request);
     if (request.chains.empty()) {
         errors.push_back(MakeError(kBadInput, "入力がありません。", {}));

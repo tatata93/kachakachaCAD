@@ -11,6 +11,10 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/WireFacts.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/io/DocumentFile.h"
+#include "kachakacha/app/ShapeRebuild.h"
+#include <set>
+#include <algorithm>
 
 #include <QString>
 
@@ -117,8 +121,35 @@ void V2MainWindow::ClearMeasurement()
     SetStatus(QStringLiteral("測定を消しました。"));
 }
 
+namespace {
+// Compare the complete transitive source definitions, never a revision number.
+// Independent sketch/visibility/annotation Undo needs no native recalculation.
+std::string ShapeInputs(const kachakacha::v2::document::DocumentSnapshot& snapshot) {
+    using namespace kachakacha::v2;
+    std::set<base::FeatureId> needed;
+    for(const auto& step:app::PlanShapeRebuild(snapshot))needed.insert(step.featureId);
+    bool changed=true;
+    while(changed) {
+        changed=false;
+        for(const auto& f:snapshot.features)if(needed.contains(f.id))for(const auto id:f.inputEntityIds) {
+            const auto e=std::find_if(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& x){return x.id==id;});
+            if(e!=snapshot.entities.end())changed=needed.insert(e->createdBy).second||changed;
+        }
+    }
+    io::DocumentFile file;file.snapshot.id=snapshot.id;file.snapshot.settings.tolerance=snapshot.settings.tolerance;
+    for(const auto& f:snapshot.features)if(needed.contains(f.id))file.snapshot.features.push_back(f);
+    for(auto e:snapshot.entities)if(needed.contains(e.createdBy)) {
+        e.visibility=domain::Visibility::Visible;e.groupId.reset();e.displayName.clear();file.snapshot.entities.push_back(e);
+    }
+    for(const auto id:snapshot.evaluationOrder)if(needed.contains(id))file.snapshot.evaluationOrder.push_back(id);
+    return io::WriteDocumentJson(file);
+}
+}
+
 void V2MainWindow::RunHistoryCommand(bool undo)
 {
+    const auto oldGeometry=ShapeInputs(session_->GetDocument().Snapshot());
+    const bool hadErrors=!rebuildProblems_.isEmpty();
     const bool moved = undo ? session_->Undo() : session_->Redo();
     if (!moved) {
         SetStatus(undo ? QStringLiteral("戻せる操作がありません。")
@@ -132,7 +163,8 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     // 取り消したはずの近似モデルが数のうえでは残り、
     // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
-    RebuildKernelShapes();
+    if(hadErrors || oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot()))RebuildKernelShapes();
+    else RefreshPartEdges();
     // 作り直せなかった形があれば、その知らせを「元に戻しました」で上書きしない。
     const QString problems = rebuildProblems_.isEmpty()
         ? QString()

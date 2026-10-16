@@ -1,6 +1,7 @@
 #include "V2Calculation.h"
 #include <QPointF>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QString>
 #include "V2MainWindow.h"
 #include "V2OverlapBrowser.h"
@@ -81,6 +82,14 @@ bool V2MainWindow::RefreshContactPreview()
         status.push_back(QStringLiteral("対象Aと相手Bを1つずつ選んでください。複数の相手は一覧から組を選びます。"));
         contactBase_.reset(); finish(false); return true;
     }
+    if(booleanInput_.kind==app::BooleanKind::SplitOverlap) {
+        const auto* target=session_->GetDocument().FindEntity(booleanInput_.target);
+        const auto* tool=session_->GetDocument().FindEntity(booleanInput_.tools.front());
+        const auto faceOnly=[&](const char* name){const auto* combo=findChild<QComboBox*>(name);return combo&&combo->currentIndex()==1;};
+        if(target&&tool&&(target->kind!=domain::EntityKind::Part||tool->kind!=domain::EntityKind::Part
+            ||faceOnly("trimTargetScope")||faceOnly("trimToolScope")))
+            return RefreshMixedTrimPreview();
+    }
     const auto a=partShapes_.find(booleanInput_.target.ToString()), b=partShapes_.find(booleanInput_.tools[0].ToString());
     if (a==partShapes_.end() || b==partShapes_.end()) { status.push_back(QStringLiteral("部品の実形状がありません。")); finish(false); return true; }
     const bool wire=booleanInput_.kind==app::BooleanKind::ContactWire, trim=booleanInput_.kind==app::BooleanKind::TrimOverlap;
@@ -117,6 +126,7 @@ bool V2MainWindow::ConfirmContact()
     using namespace kachakacha::v2;
     if (!IsContact(booleanInput_.kind)) return false;
     if (!contactBuilt_.has_value()) { RefreshContactPreview(); return true; }
+    if(contactBuilt_->frozen)return ConfirmMixedTrim();
     const auto built=*contactBuilt_; const auto input=booleanInput_;
     const auto chosen=booleanDock_->ContactRegions(); const auto masks=booleanDock_->ContactRemovals();
     const bool wire=input.kind==app::BooleanKind::ContactWire, trim=input.kind==app::BooleanKind::TrimOverlap;
@@ -160,7 +170,7 @@ void V2MainWindow::SwapContactInputs()
 bool V2MainWindow::PickContactRegion(const QPointF& point)
 {
     using namespace kachakacha::v2;
-    if (!booleanShelfShown_ || booleanInput_.kind!=app::BooleanKind::TrimOverlap
+    if (!booleanShelfShown_ || (booleanInput_.kind!=app::BooleanKind::TrimOverlap&&booleanInput_.kind!=app::BooleanKind::SplitOverlap)
         || !contactBase_.has_value() || booleanInput_.activeSlot.has_value()) return false;
     const auto ray=viewport_->Mapping().RayThrough({point.x(),point.y()});
     if (!ray.has_value()) return false;
@@ -174,7 +184,9 @@ bool V2MainWindow::PickContactRegion(const QPointF& point)
         }
     }
     if (best<0) return false;
-    booleanDock_->SelectContactRegion(best); return true;
+    if(booleanInput_.kind==app::BooleanKind::SplitOverlap)booleanDock_->ToggleContactRegion(best);
+    else booleanDock_->SelectContactRegion(best);
+    return true;
 }
 
 void V2MainWindow::ShowOverlapBrowser()

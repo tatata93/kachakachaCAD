@@ -797,9 +797,6 @@ void V2Viewport::HoverAt(const QPointF& position)
     const auto previousRegion = hoveredProfileRegion_;
     hoveredProfileRegion_ = ProfileRegionAt(position);
     if (ReferencePickPending()) hoveredProfileRegion_.reset();
-    if (hoveredProfileRegion_.has_value() && !SelectionHasPart() && PickShapeAt(position).has_value()) {
-        hoveredProfileRegion_.reset();
-    }
     if (hoveredProfileRegion_.has_value()) {
         status_ = ProfileRegionSelected(*hoveredProfileRegion_)
             ? "選択済みの輪郭領域です。クリックすると入力から外します。"

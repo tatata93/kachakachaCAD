@@ -77,6 +77,9 @@ void V2MainWindow::RefreshShapeViews()
             }
             const auto foundEntity = entities.find(entry.first);
             const auto* entity = foundEntity == entities.end() ? nullptr : foundEntity->second;
+            // Hidden geometry remains live: visibility changes must not discard its mesh.
+            if(entity && shapeMeshes_.contains(entry.second.value))
+                keep.emplace(entry.second.value,shapeMeshes_.at(entry.second.value));
             // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
                 || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)

@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2DocumentOpen.h"
 #include "V2DocumentCache.h"
+#include "V2Viewport.h"
 #include "V2GeometryJob.h"
 #include "V2HeavyJobFixture.h"
 #include "V2ThickenDock.h"
@@ -9,6 +10,7 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 #include <QApplication>
 #include <QByteArray>
 #include <QDir>
@@ -123,6 +125,15 @@ struct CacheScope {
     CacheScope(){qputenv("KACHACAD_DOCUMENT_CACHE_DIR",folder.path().toUtf8());}
     ~CacheScope(){if(previous.isNull())qunsetenv("KACHACAD_DOCUMENT_CACHE_DIR");else qputenv("KACHACAD_DOCUMENT_CACHE_DIR",previous);}
 };
+bool SameMesh(const modeling::ShapeMesh& a,const modeling::ShapeMesh& b) {
+    if(a.edges!=b.edges||a.isoLines!=b.isoLines||a.minimum!=b.minimum||a.maximum!=b.maximum
+        ||a.closed!=b.closed||a.faceCount!=b.faceCount||a.triangles.size()!=b.triangles.size())return false;
+    for(std::size_t i=0;i<a.triangles.size();++i) {
+        const auto& x=a.triangles[i];const auto& y=b.triangles[i];
+        if(x.points!=y.points||x.normal!=y.normal||x.vertexNormals!=y.vertexNormals||x.faceIndex!=y.faceIndex)return false;
+    }
+    return true;
+}
 bool Cache(V2MainWindow& w) {
     CacheScope scope;if(!scope.folder.isValid())return false;
     w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
@@ -130,7 +141,9 @@ bool Cache(V2MainWindow& w) {
     const auto path=scope.folder.filePath("model.kcd2");
     w.SetPathChooser([path](bool){return path;});w.RunCommand("file.save_as");
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
-    if(!Explain("saving seeds a complete calculation cache",V2DocumentCache::Read(original.Value()).has_value()))return false;
+    const auto cached=V2DocumentCache::Read(original.Value());
+    if(!Explain("saving seeds a complete calculation and display mesh cache",cached&&cached->meshes.size()==1
+        &&w.Viewport().ShapeViews().size()==1&&SameMesh(cached->meshes.begin()->second,w.Viewport().ShapeViews().front().mesh)))return false;
     auto changed=V2DocumentOpen::FileForSave(w);changed.metadata.description="different file bytes";
     const auto bytes=io::SaveDocument(changed);
     if(!Explain("any source byte change invalidates cached result",bytes.HasValue()&&!V2DocumentCache::Read(bytes.Value())))return false;
@@ -140,6 +153,8 @@ bool Cache(V2MainWindow& w) {
     QElapsedTimer elapsed;elapsed.start();timer.start();const bool opened=w.OpenDocumentFile(path);timer.stop();
     std::cout<<"cached saved document open="<<elapsed.elapsed()<<" ms\n";
     if(!Explain("cache restores exact native shape with editable history",opened&&hit&&w.KernelShapeCount()==1&&w.RebuildProblems().isEmpty()))return false;
+    if(!Explain("warm open restores all display triangles, face indices, normals and curves",w.Viewport().ShapeViews().size()==1
+        &&SameMesh(cached->meshes.begin()->second,w.Viewport().ShapeViews().front().mesh)))return false;
     const auto cachePath=scope.folder.filePath(V2DocumentCache::Key(original.Value())+".bin");
     QFile corrupted(cachePath);if(!corrupted.open(QIODevice::ReadWrite)||!corrupted.seek(corrupted.size()-1))return false;
     const char byte=char(corrupted.read(1).at(0)^0x7f);corrupted.seek(corrupted.size()-1);corrupted.write(&byte,1);corrupted.close();

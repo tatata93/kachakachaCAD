@@ -508,6 +508,135 @@ using kachakacha::v2::domain::EntityKind;
     return window.SaveAndReopen(QStringLiteral("contact-split.kcd2"))&&VisiblePartCount(window)==2;
 }
 
+[[nodiscard]] bool CaseSolidTrimModes(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    EntityId a,b;if(!ContactFixture(window,a,b))return false;
+    const auto output=qEnvironmentVariable("KACHACAD_SOLID_TRIM_GUIDE_OUTPUT");
+    const auto capture=[&](const char* name){if(!output.isEmpty()){
+        QDir().mkpath(output);QApplication::processEvents();window.grab().save(output+"/"+name);}};
+    window.resize(1500,950);window.Viewport().SetViewDirection(ViewDirection::Top);window.Viewport().FitToDocument();
+    window.Viewport().SetSelection({});
+    window.RunCommand("part.trim_overlap");capture("01-start.png");
+    const auto click=[&](geometry::Vector3 p){const auto q=window.Viewport().Mapping().Project(p);if(!q)return false;
+        window.Viewport().SelectAt(QPointF(q->x,q->y),Qt::NoModifier);return true;};
+    if(!click({1,2,4})||!click({5,7,4}))return false;
+    auto* mode=window.findChild<QComboBox*>("solidTrimMode");
+    auto* regions=window.findChild<QListWidget*>("contactRegions");
+    auto* wire=window.findChild<QCheckBox*>("contactWireAlso");
+    if(!Explain("TRIM mode and two intersections visible",mode&&mode->isVisible()&&regions&&regions->count()==2&&wire))return false;
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);window.Viewport().FitToDocument();capture("02-select-solids.png");
+    const auto choose=[&](app::BooleanKind kind){mode->setCurrentIndex(mode->findData(static_cast<int>(kind)));QApplication::processEvents();};
+    choose(app::BooleanKind::SplitOverlap);
+    if(!Explain("TRIM switching keeps both inputs",regions->count()>=4))return false;
+    capture("03-split-mode.png");choose(app::BooleanKind::TrimOverlap);
+    if(regions->count()!=2)return false;
+    auto* second=regions->itemWidget(regions->item(1))->findChild<QComboBox*>();
+    second->setCurrentIndex(0);wire->setChecked(true);capture("04-remove-one-keep-wire.png");
+    const int beforeWires=CountOfKind(window,EntityKind::Wire);
+    if(!window.BooleanDock().ClickConfirm())return false;
+    window.RunCommand("selection.activate");window.Viewport().SetSelection({});capture("05-result.png");
+    // Removing one full-width overlap splits that leg into two connected solids.
+    if(!Explain("TRIM removes only chosen overlap and retains boundary wires",VisiblePartCount(window)==3
+        &&CountOfKind(window,EntityKind::Wire)>beforeWires))return false;
+    window.RunCommand("edit.undo");
+    if(!Explain("TRIM one Undo restores parts and removes generated wires",CountOfKind(window,EntityKind::Part)==2
+        &&CountOfKind(window,EntityKind::Wire)==beforeWires))return false;
+    window.RunCommand("edit.redo");
+    return window.SaveAndReopen(QStringLiteral("solid-trim-modes.kcd2"))&&VisiblePartCount(window)==3&&window.RebuildProblems().isEmpty();
+}
+
+bool CaseMixedTrim(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto source=window.Session().AddWire(ContactRectangle(0,0,10,8,0),false,"対象輪郭");
+    if(!source.committed)return false;
+    app::SelectionSet selected;selected.entityIds=source.createdEntityIds;window.Viewport().SetSelection(selected);
+    window.RunCommand("surface.create");if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    EntityId surface;
+    for(const auto& e:window.Session().GetDocument().Snapshot().entities)if(e.kind==EntityKind::GuideSurface)surface=e.id;
+    const auto line=geometry::CurveSegment::MakeLine({0,3,0},{10,3,0}).Value();
+    const auto tool=window.Session().AddWire({line},false,"切断線");if(!tool.committed)return false;
+    const int count=CountOfKind(window,EntityKind::GuideSurface);
+    selected.entityIds={surface,tool.createdEntityIds.front()};window.Viewport().SetSelection(selected);
+    window.RunCommand("part.split_overlap");
+    auto* regions=window.findChild<QListWidget*>("contactRegions");
+    if(!Explain("surface and wire produce two selectable regions",regions&&regions->count()==2))return false;
+    const auto shapes=kernel::CachedShapeCount();
+    for(int i=0;i<6;++i)regions->item(1)->setCheckState(i%2?Qt::Unchecked:Qt::Checked);
+    if(!Explain("changing selected regions reuses native preview",kernel::CachedShapeCount()==shapes))return false;
+    if(!window.BooleanDock().ClickConfirm())return false;
+    if(!Explain("selected surface region committed",CountOfKind(window,EntityKind::GuideSurface)==count+1))return false;
+    window.RunCommand("edit.undo");
+    if(CountOfKind(window,EntityKind::GuideSurface)!=count)return false;
+    window.RunCommand("edit.redo");
+    return Explain("surface trim save/reopen and Undo/Redo",window.SaveAndReopen("surface-region-trim.kcd2")
+        &&CountOfKind(window,EntityKind::GuideSurface)==count+1&&window.RebuildProblems().isEmpty());
+}
+
+bool CaseWindowWireTrim(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto output=qEnvironmentVariable("KACHACAD_SOLID_TRIM_GUIDE_OUTPUT");
+    const auto capture=[&](const char* name){if(!output.isEmpty()){QDir().mkpath(output);QApplication::processEvents();window.grab().save(output+"/"+name);}};
+    const auto part=PolygonPart(window,{{0,0,0},{10,0,0},{10,8,0},{0,8,0}},"車体");
+    const auto source=window.Session().AddWire(ContactRectangle(2,2,8,6,0),false,"窓輪郭");
+    if(part.IsNil()||!source.committed)return false;
+    window.resize(1500,950);window.Viewport().SetViewDirection(ViewDirection::Isometric);
+    window.Viewport().SetViewCenter({5,4,2});window.Viewport().SetVisibleWidthMm(22);capture("window-01-input.png");
+    app::SelectionSet selection;selection.entityIds={part,source.createdEntityIds.front()};window.Viewport().SetSelection(selection);
+    window.RunCommand("part.split_overlap");
+    auto* regions=window.findChild<QListWidget*>("contactRegions");
+    auto* wire=window.findChild<QCheckBox*>("contactWireAlso");
+    auto* direction=window.findChild<QComboBox*>("trimCutDirection");
+    if(!regions||!wire||!direction||!direction->isVisible())return false;
+    direction->setCurrentIndex(3);wire->setChecked(true);
+    if(!Explain("closed window wire partitions the solid",regions->count()==2))return false;
+    capture("window-02-regions.png");
+    // Keep the larger body region; remove the window plug.
+    for(int i=0;i<regions->count();++i) {
+        const auto name=regions->item(i)->text();
+        regions->item(i)->setCheckState(name.contains("224")?Qt::Checked:Qt::Unchecked);
+    }
+    const int before=CountOfKind(window,EntityKind::Wire);
+    capture("window-03-keep-body.png");
+    if(!window.BooleanDock().ClickConfirm())return false;
+    if(!Explain("window cut retains independent cut boundary",VisiblePartCount(window)==1&&CountOfKind(window,EntityKind::Wire)>before))return false;
+    window.RunCommand("edit.undo");
+    if(VisiblePartCount(window)!=1||CountOfKind(window,EntityKind::Part)!=1||CountOfKind(window,EntityKind::Wire)!=before)return false;
+    window.RunCommand("edit.redo");
+    if(!window.SaveAndReopen("window-wire-trim.kcd2")||VisiblePartCount(window)!=1||!window.RebuildProblems().isEmpty())return false;
+    bool closed=false;for(const auto& view:window.Viewport().ShapeViews())if(!view.surface)
+        closed=closed||(view.mesh.closed&&view.mesh.faceCount==10&&!view.mesh.triangles.empty());
+    if(!Explain("window cut is a closed ten-face solid after reopening",closed))return false;
+    window.RunCommand("selection.activate");window.Viewport().SetSelection({});
+    window.Viewport().SetViewDirection(ViewDirection::Isometric);window.Viewport().SetViewCenter({5,4,2});
+    window.Viewport().SetVisibleWidthMm(22);capture("window-04-result.png");return true;
+}
+
+bool CaseSingleFaceTrim(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto part=PolygonPart(window,{{0,0,0},{10,0,0},{10,8,0},{0,8,0}},"元の部品");
+    const auto line=window.Session().AddWire({geometry::CurveSegment::MakeLine({0,3,4},{10,3,4}).Value()},false,"切断線");
+    if(part.IsNil()||!line.committed)return false;
+    app::SelectionRef face;face.entityId=part;face.kind=app::SelectionElementKind::Face;
+    for(const auto& view:window.Viewport().ShapeViews())if(view.entityId==part)
+        for(const auto& tri:view.mesh.triangles)if(tri.normal.z>.9){face.pickedFaceIndex=tri.faceIndex;break;}
+    if(!face.pickedFaceIndex)return false;
+    app::SelectionSet selected;selected.entityIds={part,line.createdEntityIds.front()};selected.ordered={face};
+    window.Viewport().SetSelection(selected);window.RunCommand("part.split_overlap");
+    auto* scope=window.findChild<QComboBox*>("trimTargetScope");if(!scope||!scope->isVisible())return false;
+    scope->setCurrentIndex(1);
+    if(auto* direction=window.findChild<QComboBox*>("trimCutDirection"))direction->setCurrentIndex(1);
+    auto* regions=window.findChild<QListWidget*>("contactRegions");
+    if(!Explain("picked solid face is split as a surface",regions&&regions->count()==2))return false;
+    regions->item(1)->setCheckState(Qt::Unchecked);
+    if(!window.BooleanDock().ClickConfirm())return false;
+    return Explain("trimmed face is an independent surface and reopens",CountOfKind(window,EntityKind::GuideSurface)==1
+        &&window.SaveAndReopen("single-face-trim.kcd2")&&window.RebuildProblems().isEmpty());
+}
+
 //! 実際のマウスイベントでツールからフェイスを拾い、平面と近似入力へ進める。
 [[nodiscard]] bool CaseFaceToolFirst(V2MainWindow& window)
 {
@@ -616,9 +745,13 @@ bool CaseCancelRunningBoolean(V2MainWindow& window)
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-CT-07 surface and wire trim, cached regions and saved Undo",CaseMixedTrim},
+        {"HP-CT-08 window wire cuts solid and retains boundaries",CaseWindowWireTrim},
+        {"HP-CT-09 single picked solid face trims as an independent surface",CaseSingleFaceTrim},
         {"HP-BO-05 running job cancellation and saved retry",CaseCancelRunningBoolean},
         {"HP-BO-04 boolean preview release, cancel and retry",CaseBooleanPreviewOwnership},
         {"HP-FA-01 フェイスから作図と近似", CaseFaceToolFirst},
+        {"HP-CT-06 ソリッドトリムのモード切替と境界ワイヤー保持", CaseSolidTrimModes},
         {"HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成", CaseContactViewportCancelAndWire},
         {"HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持", CaseContactTouchAndCircle},
         {"HP-CT-04 分割領域を選択して生成し保存再生成", CaseContactSplitSelection},

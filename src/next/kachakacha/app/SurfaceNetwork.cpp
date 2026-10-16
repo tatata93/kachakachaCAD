@@ -102,6 +102,61 @@ SurfaceNetworkPlan PlanarHoles(const std::vector<modeling::SnapCurve>& curves,
     return result;
 }
 
+SurfaceNetworkPlan SpatialHoles(const std::vector<modeling::SnapCurve>& curves,
+    const geometry::GeometryTolerance& tolerance)
+{
+    modeling::SnapScene scene;scene.curves=curves;
+    const auto boundaries=DetectSpatialBoundaries(scene,tolerance);
+    if(boundaries.size()<2)return {};
+    for(std::size_t outer=0;outer<boundaries.size();++outer) {
+        auto fit=geometry::FitPlane(boundaries[outer].sampled);
+        if(!fit.valid || fit.maximumDeviationMm<=tolerance.modelLinearMm)continue;
+        geometry::Vector3 area{};const auto& points=boundaries[outer].sampled;
+        for(std::size_t i=0;i<points.size();++i)area=area+geometry::Cross(points[i]-fit.origin,points[(i+1)%points.size()]-fit.origin);
+        if(area.Length()<=tolerance.modelLinearMm*tolerance.modelLinearMm)continue;
+        fit.normal=geometry::Normalized(area);
+        const auto frame=geometry::MakeFrame(fit);
+        const auto polygon=geometry::ProjectToFrame(boundaries[outer].sampled,frame);
+        bool contains=true;
+        for(std::size_t hole=0;hole<boundaries.size();++hole)if(hole!=outer)
+            for(const auto& p:geometry::ProjectToFrame(boundaries[hole].sampled,frame))
+                contains=contains&&geometry::ContainsPoint(polygon,p);
+        if(!contains)continue;
+        std::vector<std::vector<bool>> inside(boundaries.size(),std::vector<bool>(boundaries.size(),false));
+        std::vector<int> depth(boundaries.size(),0);
+        for(std::size_t i=0;i<boundaries.size();++i)for(std::size_t j=0;j<boundaries.size();++j)if(i!=j) {
+            const auto parent=geometry::ProjectToFrame(boundaries[j].sampled,frame);
+            const auto child=geometry::ProjectToFrame(boundaries[i].sampled,frame);
+            inside[i][j]=std::all_of(child.begin(),child.end(),[&](const auto& p){return geometry::ContainsPoint(parent,p);});
+            if(inside[i][j])++depth[i];
+        }
+        const auto append=[&](modeling::GuideTable& table,std::size_t i,modeling::ChainRole role) {
+            modeling::GuideTableRow row;row.role=role;row.segments=boundaries[i].segments;
+            row.sourceWireIds=boundaries[i].entityIds;row.sourceLabels.assign(row.sourceWireIds.size(),"境界");
+            table.rows.push_back(std::move(row));
+        };
+        SurfaceNetworkPlan result;
+        for(std::size_t island=0;island<boundaries.size();++island)if(depth[island]%2==0) {
+            modeling::GuideTable table;table.method=modeling::GuideSurfaceMethod::BoundaryFill;
+            append(table,island,modeling::ChainRole::BoundarySide);
+            for(std::size_t hole=0;hole<boundaries.size();++hole)
+                if(inside[hole][island]&&depth[hole]==depth[island]+1)append(table,hole,modeling::ChainRole::HoleBoundary);
+            result.tables.push_back(std::move(table));
+        }
+        for(const auto& curve:curves) {
+            const bool used=std::any_of(boundaries.begin(),boundaries.end(),[&](const auto& boundary){
+                if(std::find(boundary.entityIds.begin(),boundary.entityIds.end(),curve.entityId)==boundary.entityIds.end())return false;
+                return std::any_of(boundary.segments.begin(),boundary.segments.end(),[&](const auto& segment){
+                    return SameSegment(curve.segment,segment,tolerance.modelLinearMm);
+                });
+            });
+            if(!used)result.unusedSegments.push_back({curve.entityId,"境界に使わない線",{curve.segment}});
+        }
+        return result;
+    }
+    return {};
+}
+
 bool IndependentCycle(std::vector<bool> cycle, std::vector<std::vector<bool>>& basis)
 {
     for (std::size_t i = 0; i < cycle.size(); ++i) {
@@ -119,6 +174,9 @@ SurfaceNetworkPlan PlanSurfaceNetwork(const std::vector<RoleWire>& wires,
     std::vector<modeling::SnapCurve> curves;
     for (const auto& wire : wires)
         for (const auto& segment : wire.segments) curves.push_back({wire.id, {}, segment});
+    // Closed independent outer/hole wires do not require the bounded cycle search.
+    auto spatial=SpatialHoles(curves,tolerance);
+    if(!spatial.tables.empty())return spatial;
     // Keep the bounded cycle solver bounded before intersection work as well.
     if (curves.size() > 24) return {};
     std::vector<modeling::GuideTableSelection> duplicates;
@@ -132,6 +190,7 @@ SurfaceNetworkPlan PlanSurfaceNetwork(const std::vector<RoleWire>& wires,
     }
     const auto pieces = detail::SplitProfileNetwork(unique, tolerance);
     auto holes=PlanarHoles(pieces,tolerance);
+    if(holes.tables.empty())holes=SpatialHoles(pieces,tolerance);
     if(!holes.tables.empty()){
         holes.unusedSegments.insert(holes.unusedSegments.end(),duplicates.begin(),duplicates.end());
         return holes;

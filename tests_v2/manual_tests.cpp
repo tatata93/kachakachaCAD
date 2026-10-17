@@ -444,4 +444,21 @@ KACHA_V2_TEST(manual, HTML版が指す図と鉄道見本がある)
     Require(std::filesystem::file_size(sample, code) > 1000, "見本に中身がある");
 }
 
+KACHA_V2_TEST(manual, 全ツールに固有の図付き手順がある)
+{
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        const std::string id(command.id);
+        const auto page = ReadFile(RepoRoot() / "docs/manual/tools" / (id + ".html"));
+        Require(page.find("data-procedure=\"" + id + "\"") != std::string::npos, "固有の番号手順: " + id);
+        for (const auto* section : {"準備", "操作手順", "結果を確認", "取消・やり直し", "進めない場合"})
+            Require(page.find(section) != std::string::npos, "必要な手順節: " + id);
+        Require(page.find("<li>") != std::string::npos, "操作が番号付き: " + id);
+        const auto diagram = RepoRoot() / "docs/manual/tool-diagrams" / (id + ".svg");
+        const auto icon = RepoRoot() / "docs/manual/tool-icons" / (id + ".png");
+        Require(std::filesystem::exists(diagram) && std::filesystem::file_size(diagram) > 100, "模式図がある: " + id);
+        Require(std::filesystem::exists(icon) && std::filesystem::file_size(icon) > 100, "操作図がある: " + id);
+        Require(page.find("模式図") != std::string::npos, "模式図を実画面と混同しない: " + id);
+    }
+}
+
 KACHA_V2_TEST_MAIN("manual_tests")

@@ -88,7 +88,7 @@ KACHA_V2_TEST(shell_split_state, 命令と一行と状態が作り方を言う)
             && ShellSplitMethodForCommand("part.split", method) && method == 1
             && !ShellSplitMethodForCommand("part.fillet", method),
         "命令の名前から作り方");
-    Require(ShellSplitMethodNameJa(0) == "シェル" && ShellSplitMethodNameJa(1) == "分割", "作り方の名前");
+    Require(ShellSplitMethodNameJa(0) == "中空化" && ShellSplitMethodNameJa(1) == "分割", "作り方の名前");
 
     ShellSplitInputState shell;
     shell.thicknessMm = 2.0;
@@ -99,7 +99,7 @@ KACHA_V2_TEST(shell_split_state, 命令と一行と状態が作り方を言う)
     outcome.previousVolumeMm3 = 24000.0;
     outcome.volumeMm3 = 7872.0;
     const auto footer = ShellSplitFooterLine(shell, "箱", outcome, true);
-    Require(footer == "シェル: PART=箱 / FACES=1 / T 2.000 mm / VOLUME=7872.0000 mm3 / Preview only",
+    Require(footer == "中空化: PART=箱 / FACES=1 / T 2.000 mm / VOLUME=7872.0000 mm3 / Preview only",
         "シェルの一行: " + footer);
     Require(AnyLineHas(ShellSplitStatusLinesJa(shell, outcome, true), "24000.0000 mm3 → 7872.0000 mm3"),
         "状態に体積の変わり方が出る");

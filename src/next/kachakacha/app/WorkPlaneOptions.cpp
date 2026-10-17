@@ -126,6 +126,8 @@ Result<modeling::WorkPlaneRequest> BuildWorkPlaneRequest(const WorkPlaneChoice& 
     request.normal = choice.normal;
     request.uHint = choice.uAxis;
     request.curveParameter = choice.curveParameter;
+    // A normal plane is defined for a straight edge too; curvature is not an input requirement.
+    request.useCurvatureNormal = false;
     request.points = materials.points;
     request.edges = materials.edges;
     // 基準平面: コンボ > 選択の1つ目。相手の平面: コンボ > 選択の2つ目。

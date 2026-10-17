@@ -201,9 +201,9 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
     continuityTitle_ = new QLabel(QStringLiteral("連続"), widget());
     edge->addWidget(continuityTitle_);
     continuity_ = new QComboBox(widget());
-    continuity_->addItem(QStringLiteral("G0 位置"));
-    continuity_->addItem(QStringLiteral("G1 接線"));
-    continuity_->addItem(QStringLiteral("G2 曲率"));
+    continuity_->addItem(QStringLiteral("位置のみ（G0）"));
+    continuity_->addItem(QStringLiteral("接線まで滑らか（G1）"));
+    continuity_->addItem(QStringLiteral("曲がり方まで滑らか（G2）"));
     continuity_->setToolTip(QStringLiteral("隣の面とのつながり方。G1/G2 は隣の面(支持面)が要ります"));
     edge->addWidget(continuity_);
     pickSupport_ = new QPushButton(QStringLiteral("支持面を選ぶ"), widget());

@@ -72,28 +72,20 @@ bool AcceptTrimEntity(kachakacha::v2::app::BooleanKind mode,EntityKind kind) {
         && (kind==EntityKind::GuideSurface||kind==EntityKind::Wire||kind==EntityKind::Point||kind==EntityKind::WorkPlane));
 }
 
+bool OpenTemporaryTool(V2MainWindow& window,std::string_view id)
+{
+    if (id == "wire.project_surface" || id == "wire.wrap_project") { V2ProjectionTool::Open(window,id=="wire.wrap_project"); return true; }
+    if (id == "part.curved_emboss") { V2CurvedEmbossTool::Open(window); return true; } if (id == "image.place") { V2ImageTool::Open(window); return true; }
+    if (V2FaceActions::Run(window,id)) return true;
+    if (id == "export.selection" || id == "export.kcd" || id == "output.copy" || id == "export.stl" || id == "export.step") { V2OutputTool::Open(window,id=="export.stl"?0:id=="export.step"?1:id=="output.copy"?3:2); return true; }
+    return false;
+}
+
 } // namespace
 
 //! 自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割・面にする)は 1 つだけ構える。
 //! 別の道具を押したら、構えていた道具はやめる(棚が前の道具のまま残り、押しが両方へ入るため)。
-void V2MainWindow::EndOwnedToolsBut(const void* keep)
-{
-    if (gptFabrication_ != nullptr && gptFabrication_.get() != keep) { gptFabrication_->End(); }
-    if (gptSurface_ != nullptr && gptSurface_.get() != keep) { gptSurface_->End(); }
-    if (solidTool_ != nullptr && solidTool_.get() != keep && solidTool_->Active()) {
-        solidTool_->End();
-    }
-    if (edgeFinishTool_ != nullptr && edgeFinishTool_.get() != keep && edgeFinishTool_->Active()) {
-        edgeFinishTool_->End();
-    }
-    if (shellSplitTool_ != nullptr && shellSplitTool_.get() != keep && shellSplitTool_->Active()) {
-        shellSplitTool_->End();
-    }
-    if (loopFaces_ != nullptr && loopFaces_.get() != keep
-        && (loopFaces_->Active() || loopFaces_->HasRecent())) {
-        loopFaces_->End();
-    }
-}
+
 
 //! 選択済みの線を保持して、GPT版の独立した面生成を構える。
 void V2MainWindow::BeginGptSurface()
@@ -115,10 +107,7 @@ void V2MainWindow::BeginGptSurface()
 bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
 {
     if (IsArrayCommand(id)) { RunArrayCommand(id); return true; }
-    if (id == "wire.project_surface" || id == "wire.wrap_project") { V2ProjectionTool::Open(*this,id=="wire.wrap_project"); return true; }
-    if (id == "part.curved_emboss") { V2CurvedEmbossTool::Open(*this); return true; } if (id == "image.place") { V2ImageTool::Open(*this); return true; }
-    if (V2FaceActions::Run(*this,id)) return true;
-    if (id == "export.selection" || id == "export.kcd" || id == "output.copy" || id == "export.stl" || id == "export.step") { V2OutputTool::Open(*this,id=="export.stl"?0:id=="export.step"?1:id=="output.copy"?3:2); return true; }
+    if (OpenTemporaryTool(*this,id)) return true;
     if (id == "part.overlap_inspect") { EndArmedTools(); ShowOverlapBrowser(); return true; }
     if (id == "part.extrude" && !extrudeShelfShown_) {
         EndArmedTools();
@@ -185,6 +174,7 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     // 面の編集も道具から始める。何も選んでいなくても棚が出て、3D で面・縁・線を押せる。
     if (surfaceEdit_ != nullptr && surfaceEdit_->Handles(id)) {
         ClearPendingCommand();
+        EndOwnedToolsBut(surfaceEdit_.get());
         surfaceEdit_->Begin(id);
         return true;
     }

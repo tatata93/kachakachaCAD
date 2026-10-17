@@ -30,10 +30,10 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::SurfaceAnalysis: return "面の解析";
     case Shelf::Solid:      return "立体を作る";
     case Shelf::EdgeFinish: return "辺の丸め・面取り";
-    case Shelf::ShellSplit:   return "シェル・分割";
+    case Shelf::ShellSplit:   return "中空化・分割";
     case Shelf::LoopFaces:    return "面にする";
     case Shelf::GptFabrication: return "製作近似 GPT版";
-    case Shelf::GptSurface: return "面生成 GPT版";
+    case Shelf::GptSurface: return "曲線から近似面";
     }
     return "なし";
 }

@@ -47,7 +47,7 @@ std::string_view SurfaceEditLabelJa(SurfaceEditOperation operation) noexcept
     case SurfaceEditOperation::Bridge:         return "面をつなぐ";
     case SurfaceEditOperation::Refit:          return "面を整える";
     case SurfaceEditOperation::Mirror:         return "対称に写す";
-    case SurfaceEditOperation::IsoCurve:       return "U/V 線を取り出す";
+    case SurfaceEditOperation::IsoCurve:       return "面の縦横線を取り出す";
     case SurfaceEditOperation::CurveOnSurface: return "面へ投影";
     }
     return "面の編集";

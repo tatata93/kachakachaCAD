@@ -4,6 +4,7 @@
 //! 「単体では通るのに並べると落ちる」という追いにくい失敗が出る。
 
 #include "V2SelfTest.h"
+#include "V2ToolEvidence.h"
 #include "V2SelfTestReporting.h"
 
 #include "V2MainWindow.h"
@@ -60,7 +61,10 @@ namespace {
     window.show();
     QApplication::processEvents();
     try {
-        return item.body(window);
+        V2ToolEvidence::BeginCase(item.name);
+        const bool passed=item.body(window);
+        V2ToolEvidence::EndCase(window,passed);
+        return passed;
     } catch (const std::exception& error) {
         std::cout << "  例外: " << error.what() << std::endl;
         return false;
@@ -242,7 +246,8 @@ int RunSelfTest()
     }
     std::cout << "cad_next self-test: " << (total - failed) << " passed, " << failed
               << " failed, " << total << " total\n";
-    return failed == 0 && total > 0 && reporting.Save() ? 0 : 1;
+    const bool saved = reporting.Save(); // Failed runs still need a complete report for diagnosis.
+    return failed == 0 && total > 0 && saved ? 0 : 1;
 }
 
 } // namespace kachakacha::v2::selftest

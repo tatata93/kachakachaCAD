@@ -675,3 +675,15 @@ Escは入力だけを取消してツールと設定を維持します。元形�
 ![グリッドを手前に表示](images/v2-section-grid.png)
 
 `section-115`、`section-grid`、`delete-confirm`、`delete-preview` は実操作試験の画像名で、`--manual-state` の引数ではありません。
+
+## 全ツールの図付き具体例
+
+入口は `../manual.html` の全コマンド一覧です。各項目から `tools/<command-id>.html` の準備、番号手順、設定、期待結果、取消、失敗時の案内へ進めます。共有ID内の方式は別の具体例として掲載しています。
+
+- 編集元: `tool_recipes.py`（コマンド別）、`tool_variants.py`（方式別）、`chapters.html`、`illustrated-workflows.html`、`command-notes.json`。
+- 生成: `python docs/manual/build_manual.py`。整合確認: 同コマンドに `--check`。
+- `tool-diagrams/` は説明用模式図、`tool-icons/` は製品の実際の操作アイコンです。模式図は形状精度の検証画像ではありません。
+- `tool-screens/` はWindows UI試験で取得した画面です。`tool-evidence.json` が試験名・時刻・実行ファイルのSHA256を保持します。コマンド直後の入力待ちや下見も含み、確定形状の証拠と混同しません。
+- `tool-test-coverage.json` でコマンドごとの呼出しケースを確認できます。全コマンド到達試験と、有効な幾何入力を用いた機能試験は別です。
+
+未対応の方式は成功例にせず、制限と代替操作を明記します。保存形式のIDと、ユーザー向けの表示名を混同しないでください。

@@ -34,7 +34,7 @@ QAction* ToolProxy(QAction* source, const QString& label, QWidget* parent, std::
     const auto sync = [source, action] {
         action->setCheckable(source->isCheckable());
         action->setChecked(source->isChecked());
-        action->setEnabled(source->isEnabled());
+        action->setEnabled(source->property("toolAvailable").isValid()?source->property("toolAvailable").toBool():source->isEnabled());
         action->setToolTip(source->toolTip());
     };
     sync();
@@ -158,15 +158,16 @@ void V2Ribbon::RebuildTools()
     // 正本の道具を先に、「その他」(正本に無い既存の道具)を後ろに。
     for (const bool extra : {false, true}) {
         for (const RibbonTool& tool : categories[static_cast<std::size_t>(current_)].tools) {
+            if(tool.Blocked())continue;
             if (tool.extra != extra) {
                 continue;
             }
             auto* button = new QToolButton(toolRow_);
             button->setObjectName(QStringLiteral("ribbonTool"));
             button->setAutoRaise(false);
-            button->setMinimumHeight(32);
+            button->setMinimumHeight(54);
         button->setFocusPolicy(Qt::StrongFocus);
-            button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
             ToolEntry entry;
             entry.button = button;
             entry.tool = tool;
@@ -201,9 +202,9 @@ void V2Ribbon::RebuildTools()
                     });
                 }
             }
-            action->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(-1)));
+            action->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(tool.measureMode.value_or(-1))));
             button->setDefaultAction(action);
-            button->setIconSize(QSize(24,24));
+            button->setIconSize(QSize(32,32));
             button->setAccessibleName(Text(tool.labelJa));
             button->setText(Text(tool.labelJa));   // 台帳の名前ではなく正本の言葉を出す
             if (tool.Blocked()) {

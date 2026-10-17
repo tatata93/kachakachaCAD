@@ -28,6 +28,7 @@
 #include <QDir>
 #include <QPixmap>
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> ToolContractCases();
 namespace {
 base::EntityId Line(V2MainWindow& w,double y) {
     w.SelectTool(modeling::DrawingTool::Line);
@@ -214,5 +215,5 @@ bool GpuParity(V2MainWindow&) {
 }
 
 }
-std::vector<SelfTestCase> UsabilityCases(){return {{"HP-UX-04 permanent grid and plane wire display controls",&QuickDisplay},{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
+std::vector<SelfTestCase> UsabilityCases(){auto cases=ToolContractCases(); const std::vector<SelfTestCase> existing{{"HP-UX-04 permanent grid and plane wire display controls",&QuickDisplay},{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};cases.insert(cases.end(),existing.begin(),existing.end());return cases;}
 }

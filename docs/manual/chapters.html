@@ -49,11 +49,11 @@
       </section>
 <section id="workplane" class="search-section">
         <p>上部の作図面名の隣にある<b>平面内／3D作図</b>で、新規作図の範囲を切り替えます。初期値の<b>平面内</b>では、斜めから見ても選択中の作図面に描き、別の奥行きの点へ吸着しません。面外の数値座標は理由を表示して拒否します。<b>3D作図</b>では奥行きの異なる点にも吸着でき、直線のカーソル数値入力は3D差分を使います。範囲の切替、または平面内作図中の作図面変更は入力途中の点を取り消します。確定済みの形は移動しません。編集・測定の対象はこの切替で制限しません。</p>
-        <h2>作業平面</h2><p><b>作業平面を作る</b>では次の12通りを選べます。選んだ幾何が足りない場合は作成せず、必要な選択を表示します。</p>
+        <h2>作業平面</h2><p><b>作業平面を作る</b>では標準面・平行・中間・角度・3点・2辺・直角・数値指定を使えます。選んだ幾何が足りない場合は作成せず、必要な選択を表示します。</p>
         <table class="compact"><thead><tr><th>分類</th><th>作り方</th><th>指定</th></tr></thead><tbody>
           <tr><td>基準</td><td>標準面</td><td>XY、YZ、ZX</td></tr><tr><td>平行</td><td>平面から離す</td><td>元平面、距離</td></tr><tr><td>平行</td><td>点を通り平行</td><td>点、元平面</td></tr><tr><td>中間</td><td>2面の中間</td><td>平行な2平面</td></tr>
-          <tr><td>中心</td><td>円筒の中心</td><td>円筒面</td></tr><tr><td>角度</td><td>辺まわりに角度</td><td>平面、直線、角度</td></tr><tr><td>点</td><td>3点を通る</td><td>一直線でない3点</td></tr><tr><td>辺</td><td>2辺を含む</td><td>同一平面上の2辺</td></tr>
-          <tr><td>接線</td><td>辺を通り接する</td><td>曲面、その上の辺</td></tr><tr><td>接線</td><td>点を通り接する</td><td>曲面上の点</td></tr><tr><td>垂直</td><td>点で曲線に直角</td><td>曲線上の点、曲率法線の使用</td></tr><tr><td>数値</td><td>位置と向きを数値指定</td><td>原点、法線、平面内X、名前</td></tr>
+          <tr><td>中心</td><td>円筒の中心</td><td>支持面入力が未接続のため選択不可</td></tr><tr><td>角度</td><td>辺まわりに角度</td><td>平面、直線、角度</td></tr><tr><td>点</td><td>3点を通る</td><td>一直線でない3点</td></tr><tr><td>辺</td><td>2辺を含む</td><td>同一平面上の2辺</td></tr>
+          <tr><td>接線</td><td>辺を通り接する</td><td>支持面入力が未接続のため選択不可</td></tr><tr><td>接線</td><td>点を通り接する</td><td>支持面入力が未接続のため選択不可</td></tr><tr><td>垂直</td><td>点で曲線に直角</td><td>直線または曲線、線上位置</td></tr><tr><td>数値</td><td>位置と向きを数値指定</td><td>原点、法線、平面内X、名前</td></tr>
         </tbody></table><p>作成後は<b>数値で編集</b>で原点、法線、平面内X方向を直せます。法線とX方向が平行、法線がゼロなどの不正値は受け付けません。</p>
       </section>
 <section id="wire-edit" class="search-section">
@@ -99,9 +99,9 @@
       </section>
 <section id="export" class="search-section">
         <h2>保存と出力</h2><p>先に<b>何を出すか</b>を選びます。画面に見えているだけでは出力対象になりません。出力前検査が失敗した場合、壊れたファイルを成功扱いしません。</p>
-        <table><thead><tr><th>何を出すか</th><th>使える形式</th></tr></thead><tbody><tr><td>見えている部品</td><td>STL / STEP</td></tr><tr><td>選択した部品</td><td>STL / STEP</td></tr><tr><td>選択した製作部材</td><td>STL / STEP</td></tr><tr><td>現在の型紙</td><td>SVG / DXF / 1:1 PDF</td></tr><tr><td>選択したワイヤー</td><td>DXF</td></tr><tr><td>選択したもの</td><td>KCD2</td></tr><tr><td>プロジェクト全体</td><td>KCD2</td></tr></tbody></table>
+        <table><thead><tr><th>何を出すか</th><th>使える形式</th></tr></thead><tbody><tr><td>見えている部品</td><td>STL / STEP</td></tr><tr><td>選択した部品</td><td>STL / STEP</td></tr><tr><td>選択した製作部材</td><td>STL / STEP</td></tr><tr><td>現在の型紙</td><td>SVG / DXF / 1:1 PDF</td></tr><tr><td>選択したワイヤー</td><td>STEP / DXF / KCD2</td></tr><tr><td>選択したもの</td><td>KCD2</td></tr><tr><td>プロジェクト全体</td><td>KCD2</td></tr></tbody></table>
         <figure><img src="manual/images/v2-export.png" alt="出力パネル"><figcaption>対象、形式、許容差を明示して出力。STLは部品形状から生成します。</figcaption></figure>
-        <ul><li><b>STEP:</b> B-Rep形状を他CADへ。選択部品だけに対応。</li><li><b>STL:</b> 3Dプリント用。正の体積を持つ部品を三角形化。</li><li><b>PDF:</b> 型紙を1:1で印刷。プリンタ側の「用紙に合わせる」は切る。</li><li><b>SVG/DXF:</b> カッター、レーザー、別CADへ型紙線を渡す。</li><li><b>KCD2:</b> 全体または選択要素を編集可能なV2文書として保存。</li></ul>
+        <ul><li><b>STEP:</b> B-Rep形状を他CADへ。部品・面・ワイヤーを対象として選択出力。</li><li><b>STL:</b> 3Dプリント用。正の体積を持つ部品を三角形化。</li><li><b>PDF:</b> 型紙を1:1で印刷。プリンタ側の「用紙に合わせる」は切る。</li><li><b>SVG/DXF:</b> カッター、レーザー、別CADへ型紙線を渡す。</li><li><b>KCD2:</b> 全体または選択要素を編集可能なV2文書として保存。</li></ul>
       </section>
 <section id="railway" class="search-section">
         <h2>流線形鉄道車両前面の実用試験</h2><p>同梱の <code>samples/streamlined-railway-nose-1-87.kcd2</code> は、ER1 / 初期ER2の丸形前頭部を参考にした1/87の試験体です。車両全体ではなく、複数断面ロフト、窓開口、前照灯開口、厚み、製作近似を一度に確認する短い前頭部です。</p>

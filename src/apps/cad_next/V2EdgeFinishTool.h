@@ -27,6 +27,7 @@ class V2MainWindow;
 class V2EdgeFinishTool final {
 public:
     explicit V2EdgeFinishTool(V2MainWindow& window);
+    ~V2EdgeFinishTool();
 
     [[nodiscard]] V2EdgeFinishDock* Dock() const noexcept { return dock_; }
     [[nodiscard]] bool Active() const noexcept { return active_; }

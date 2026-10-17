@@ -320,6 +320,9 @@ bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
         }
         return QMainWindow::eventFilter(target,event);
     }
+    if(auto* widget=qobject_cast<QWidget*>(target);widget&&widget->window()!=this)
+        return QMainWindow::eventFilter(target,event);
+    if(QApplication::activeModalWidget())return QMainWindow::eventFilter(target,event);
     if (event != nullptr && event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
         if (HandleToolKey(key->key(), target)) {

@@ -33,7 +33,7 @@ using namespace kachakacha::v2;
 
 V2GptSurfaceTool::V2GptSurfaceTool(V2MainWindow& window) : window_(window)
 {
-    dock_ = new QDockWidget(QStringLiteral("面生成 GPT版"), &window);
+    dock_ = new QDockWidget(QStringLiteral("曲線から近似面"), &window);
     dock_->setObjectName(QStringLiteral("gptSurfaceDock"));
     auto* panel = new QWidget(dock_);
     dock_->setWidget(panel);
@@ -140,7 +140,7 @@ void V2GptSurfaceTool::Begin()
     window_.viewport_->SetToolPickToggle(true);
     Add(selected, false);
     window_.RefreshRightShelves();
-    window_.ShowToolFooter(QStringLiteral("面生成 GPT版 / 線を追加してプレビュー / Escで取消"));
+    window_.ShowToolFooter(QStringLiteral("曲線から近似面 / 線を追加してプレビュー / Escで取消"));
 }
 
 void V2GptSurfaceTool::End(bool keepTool)
@@ -363,7 +363,7 @@ void V2GptSurfaceTool::Confirm()
     domain::Feature feature;
     feature.id = window_.ids_->NextTyped<base::IdKind::Feature>();
     feature.type = domain::FeatureType::CreateGuideSurface;
-    feature.displayName = "面生成 GPT版";
+    feature.displayName = "曲線から近似面";
     feature.definition = definition_;
     for (const auto& chain : definition_.chains) {
         for (const auto& ref : chain.segments) {
@@ -375,17 +375,17 @@ void V2GptSurfaceTool::Confirm()
     domain::Entity entity;
     entity.id = window_.ids_->NextTyped<base::IdKind::Entity>();
     entity.kind = domain::EntityKind::GuideSurface;
-    entity.displayName = app::UniqueDisplayName(document.Snapshot(), entity.kind, "面（GPT版）");
+    entity.displayName = app::UniqueDisplayName(document.Snapshot(), entity.kind, "面（曲線から近似）");
     entity.createdBy = feature.id;
     entity.groupId = document.Snapshot().settings.activeGroupId;
     feature.outputs.push_back({"surface", entity.id, entity.kind});
-    const auto added = document.Run(document::AddFeatureCommand(feature, {entity}, "面生成 GPT版"));
+    const auto added = document.Run(document::AddFeatureCommand(feature, {entity}, "曲線から近似面"));
     if (!added.committed) { window_.ReportDiagnostics(added.diagnostics); return; }
     Store(entity.id, *preview_);
     preview_.reset(); // 文書側へ所有権を渡したため解放しない。
     End();
     window_.AdoptCurrentDocument();
-    window_.SetStatus(QStringLiteral("GPT版の面を作りました。元のワイヤーはそのままです。"));
+    window_.SetStatus(QStringLiteral("曲線から近似面を作りました。元のワイヤーはそのままです。"));
 }
 
 bool V2GptSurfaceTool::HandleKey(int key)

@@ -648,10 +648,11 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
     geometry::Vector3 center;
     for (const auto& shape : viewport.ShapeViews()) if (shape.entityId == part)
         center = (shape.mesh.minimum + shape.mesh.maximum) * 0.5;
-    const auto screen = viewport.Mapping().Project(center);
-    if (!screen) return false;
-    const QPointF point(screen->x,screen->y);
     const auto click = [&] {
+        QApplication::processEvents(); // The new shelf can change the viewport size.
+        const auto screen = viewport.Mapping().Project(center);
+        if (!screen) return;
+        const QPointF point(screen->x,screen->y);
         QMouseEvent press(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
         QApplication::sendEvent(&viewport,&press);
         QMouseEvent release(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
@@ -659,7 +660,7 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
     };
     viewport.SetSelection({}); window.RunCommand("workplane.from_face"); click();
     const auto* plane = window.Session().GetDocument().FindEntity(window.ActiveWorkPlaneId());
-    if (!Explain("HP-FA フェイスから作業面1を作る", plane && plane->displayName == "作業面1"
+    if (!Explain((std::string("HP-FA フェイスから作業面1を作る: ")+window.StatusText().toStdString()+" planes="+std::to_string(CountOfKind(window,EntityKind::WorkPlane))).c_str(), plane && plane->displayName == "作業面1"
             && CountOfKind(window,EntityKind::WorkPlane) == 4)) return false;
     window.SelectTool(modeling::DrawingTool::Select);
     for (const auto command : {"fabrication.from_face"}) {

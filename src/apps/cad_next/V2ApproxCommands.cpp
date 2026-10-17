@@ -1,4 +1,5 @@
 #include "V2Calculation.h"
+#include <QVariant>
 //! 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。
 //!
 //! これまでの近似は「選んでから押す」しかなく、押した瞬間に文書へ入っていた。
@@ -196,7 +197,8 @@ void V2MainWindow::RefreshApproxDock()
     } else if(chosen<approxOutcomes_.size() && approxOutcomes_[chosen].evaluated) {
         status += QStringLiteral("\n")+QString::fromStdString(approxOutcomes_[chosen].refusalJa);
     }
-    fabricationDock_->SetMessage(status);
+    const auto refusal=fabricationDock_->property("approxInputRefusal").toString();
+    fabricationDock_->SetMessage(refusal.isEmpty()?status:refusal+QStringLiteral("\n")+status);
     ShowToolFooter(approxShelfShown_
             ? QString::fromStdString(kachakacha::v2::app::ApproxFooterLine(approxInput_,
                   approxOutcomes_, canConfirm))
@@ -231,6 +233,7 @@ void V2MainWindow::MirrorApproxSourcesToSelection()
 //! 入力が変わった。作り直し、下見と棚を出し直す。
 void V2MainWindow::RefreshApproxAll()
 {
+    fabricationDock_->setProperty("approxInputRefusal",QString());
     if (!AdoptFabricationChoice()) { return; }
     EvaluateApproxCandidates();
     ShowApproxPreview();
@@ -274,6 +277,7 @@ void V2MainWindow::RefreshApproxForSelectionChange()
                                                "(線から面を作るなら、先に 作図 → 面作成 → 面にする)。");
             SetStatus(why);
             if (fabricationDock_ != nullptr) {
+                fabricationDock_->setProperty("approxInputRefusal",why);
                 fabricationDock_->SetMessage(why);
             }
         }
@@ -369,6 +373,7 @@ void V2MainWindow::ClearApproxSources()
 //! やめる。文書は始める前とまったく同じ。
 void V2MainWindow::EndApprox(bool keepTool)
 {
+    if(fabricationDock_)fabricationDock_->setProperty("approxInputRefusal",QString());
     approxShelfShown_ = keepTool;
     approxOutcomes_.clear();
     approxEvaluations_.clear();

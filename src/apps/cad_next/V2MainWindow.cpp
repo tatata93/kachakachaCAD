@@ -1,4 +1,5 @@
 #include "V2OffsetTool.h"
+#include "V2ToolEvidence.h"
 #include "V2MainWindow.h"
 #include "V2ThickenPreviewState.h"
 #include "V2GeometryJob.h"
@@ -373,32 +374,7 @@ void V2MainWindow::SetMode(UiMode mode)
 
 //! 3D で対象を拾う道具を全部解く(面を作る・近似・足す引く・厚み・面の編集・持ち主のある道具)。
 //! 文書の入れ替え・モードの切り替え・拾っていた物が消えたときに呼ぶ。選んでいるものは触らない。
-void V2MainWindow::EndArmedTools()
-{
-    if (partDock_ != nullptr) partDock_->EndTool();
-    if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
-    if (surfaceShelfShown_) { EndSurfacePreview(); }
-    if (approxShelfShown_) { EndApprox(); }
-    if (booleanShelfShown_) { EndBoolean(); }
-    if (thicken_->shelfShown) { EndThicken(); }
-    if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) { surfaceEdit_->End(); }
-    if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
-    if (edgeFinishTool_ != nullptr && edgeFinishTool_->Active()) { edgeFinishTool_->End(); }
-    if (shellSplitTool_ != nullptr && shellSplitTool_->Active()) { shellSplitTool_->End(); }
-    if (hoverEdit_ != nullptr) { hoverEdit_->Clear(); }
-    if (gptFabrication_ != nullptr) { gptFabrication_->End(); }
-    if (gptSurface_ != nullptr) { gptSurface_->End(); }
-    if (loopFaces_ != nullptr) { loopFaces_->End(); }
-    if (viewport_ != nullptr) {
-        // 道具が消し忘れた札・下見・拾いの構えを念のため全部消す。
-        viewport_->HideToolPreview();
-        viewport_->HideToolRoleLabels();
-        viewport_->SetRoleColors({});   // 境界辺などの紫の色分けも残さない(オーナー報告 2026-09-28)
-        viewport_->SetToolPickActive(false);
-        viewport_->SetToolPickToggle(false);
-    }
-    ShowToolFooter(QString());
-}
+
 
 //! 拾っていた物(面を作るの線、近似の面)が文書から消えたら、その道具を解く。
 //! 消したあとや取り消しのあとに、無い物を指したまま構えていると線が選べなくなる。
@@ -437,34 +413,7 @@ int V2MainWindow::VisibleCommandCount() const
     return count;
 }
 
-void V2MainWindow::RefreshCommandVisibility()
-{
-    for (const auto& entry : commandActions_) {
-        const bool visible = CommandVisibleInMode(entry.first, mode_);
-        entry.second->setVisible(visible);
-        QString reason;
-        const bool ready = CommandEnabled(entry.first, &reason);
-        const CommandDescriptor* command = FindCommand(entry.first);
-        const bool canSelectTarget = command != nullptr
-            && kachakacha::v2::app::PredicateCanBeSatisfiedBySelection(
-                command->predicate);
-        const bool enabled = ready || canSelectTarget;
-        entry.second->setProperty("toolAvailable",enabled);
-        entry.second->setEnabled(enabled);
-        entry.second->setToolTip(command ? QString::fromUtf8(std::string(command->operationGuideJa).c_str()) : QString());
-        if (!ready && !reason.isEmpty()) {
-            // 対象不足なら入口は有効のまま、選ぶ対象をツールチップで示す。
-            const QString suffix = canSelectTarget
-                ? QStringLiteral(" 道具を開始してから対象を選べます。")
-                : QString();
-            entry.second->setToolTip(reason + suffix);
-        }
-    }
-    // 固有の作図道具は作図モードだけ。ほかのモードは台帳 QAction の専用列を使う。
-    for (QAction* action : toolActions_) {
-        action->setVisible(mode_ == UiMode::Drawing);
-    }
-}
+
 
 bool V2MainWindow::IsToolBoundCommand(std::string_view id)
 {
@@ -931,23 +880,7 @@ double V2MainWindow::CornerSizeMm() const
         kachakacha::v2::app::ParameterId::CornerSize);
 }
 
-kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
-{
-    kachakacha::v2::app::ExternalCounts external;
-    // 部材も型紙も文書には入らない。画面が覚えているので、そこから渡す。
-    external.fabricationModels = static_cast<int>(fabricationModels_.size());
-    external.fabricationPanels = static_cast<int>(fabricationPanels_.size());
-    external.patterns = static_cast<int>(patternPages_.size());
-    // 役割表も画面が持つ。行を選んでいるかで、行に効くコマンドが押せるかが決まる。
-    external.guideRows = static_cast<int>(guideTable_.rows.size());
-    external.selectedGuideRows = CurrentGuideRow().has_value() ? 1 : 0;
-    const kachakacha::v2::app::SelectionSet empty;
-    return kachakacha::v2::app::BuildSelectionFacts(
-        viewport_ == nullptr ? empty : viewport_->Selection(),
-        session_->GetDocument().Snapshot(), session_->Scene(),
-        session_->GetDocument().Snapshot().settings.tolerance, external,
-        session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
-}
+
 
 //! 手順の「選んでいる数」は画面が数え直さず、選択の側から取る(RefreshExportCounts と同じ)。
 //! 数えないままだと、線を引いても「線を1本以上描いてください」が消えなかった
@@ -1062,14 +995,7 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
-    if (extrudeShelfShown_ || viewport_->ExtrudeHandleShown()) {
-        ClearPendingCommand();
-        EndExtrudePreview();
-    }
-    if (partDock_ != nullptr) partDock_->EndTool();
-    if (fabricationDock_ != nullptr) fabricationDock_->EndTool();
-    if (gptFabrication_ != nullptr && gptFabrication_->Active()) { gptFabrication_->End(); }
-    if (gptSurface_ != nullptr && gptSurface_->Active()) { gptSurface_->End(); }
+    EndArmedTools();
     RememberToolForMeasure(tool);   // 測定へ持ち替えるなら、いまの道具を戻り先に(C-16)
     session_->SelectTool(tool);
     // 道具を替えたら、見せているだけの案は捨てる。
@@ -1194,25 +1120,7 @@ QAction* V2MainWindow::ActionFor(std::string_view id) const
     return nullptr;
 }
 
-bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
-{
-    const CommandDescriptor* command = FindCommand(id);
-    if (command == nullptr) {
-        if (reasonOut != nullptr) {
-            *reasonOut = QStringLiteral("知らないコマンドです。");
-        }
-        return false;
-    }
-    // 判断は core にある。ここで数えると、画面を出さないと確かめられなくなる。
-    const bool ok = id == "part.extrude" ? PlanExtrudeFromSelection().readyToPreview
-        : kachakacha::v2::app::SelectionSatisfies(command->predicate,
-        BuildFactsForCommands());
-    if (!ok && reasonOut != nullptr) {
-        *reasonOut = QString::fromUtf8(
-            std::string(command->predicateFailureJa).c_str());
-    }
-    return ok;
-}
+
 
 bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 {
@@ -1249,6 +1157,7 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 
 void V2MainWindow::RunCommand(std::string_view id)
 {
+    V2ToolEvidence::Command evidence(*this,id);
     if(V2GeometryJob::Active()&&id.substr(0,5)!="view.")return;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {

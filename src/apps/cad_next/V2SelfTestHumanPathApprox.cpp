@@ -19,7 +19,9 @@
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/domain/Feature.h"
 
+#include <QApplication>
 #include <QPointF>
+#include <QVariant>
 #include <QString>
 
 #include <cstddef>
@@ -54,6 +56,33 @@ using kachakacha::v2::domain::EntityKind;
         }
         viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
         return true;
+    }
+    return false;
+}
+
+//! 面の境界と重なるワイヤは、利用者と同じ候補切替(Tab)で区別してクリックする。
+[[nodiscard]] bool PressActualWire(V2MainWindow& window)
+{
+    QApplication::processEvents();
+    auto& viewport = window.Viewport();
+    const auto curves = window.Session().Scene().curves;
+    for (const auto& curve : curves) {
+        const auto* entity = window.Session().GetDocument().FindEntity(curve.entityId);
+        if (!entity || entity->kind != EntityKind::Wire) continue;
+        const auto screen = viewport.Mapping().Project(curve.segment.Evaluate(0.5));
+        if (!screen) continue;
+        const QPointF point(screen->x, screen->y);
+        viewport.HoverAt(point);
+        const auto count = viewport.CandidateCount();
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto candidate = viewport.CurrentCandidate();
+            if (candidate && candidate->entityId == curve.entityId
+                && candidate->segmentId == curve.segmentId) {
+                viewport.SelectAt(point, Qt::NoModifier);
+                return true;
+            }
+            viewport.CycleCandidate(false);
+        }
     }
     return false;
 }
@@ -283,7 +312,7 @@ using kachakacha::v2::domain::EntityKind;
         || !Explain((std::string(how) + ": 一番下の一行から 近似 が消える").c_str(),
             !window.ToolFooterTextJa().contains(QStringLiteral("近似")))
         || !Explain((std::string(how) + ": 線を押すと選べる").c_str(),
-            ClickOnAnyCurve(window, Qt::NoModifier))) {
+            PressActualWire(window))) {
         return false;
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
@@ -322,7 +351,7 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     // 構えている間に線を押しても、線は選択に残らない(面と立体しか受けない。対象の面は残る)。
-    (void)ClickOnAnyCurve(window, Qt::NoModifier);
+    if (!Explain("重なった面境界から候補切替で元のワイヤを押せる", PressActualWire(window))) return false;
     if (!Explain("構えている間は線を押しても線は選ばれない(面と立体しか受けない)",
             CountSelectedOfKind(window, EntityKind::Wire) == 0 && window.ApproxShelfShown())
         || !Explain((std::string("線を押したら、なぜ受けないかを棚が言う(")
@@ -330,6 +359,10 @@ using kachakacha::v2::domain::EntityKind;
             window.FabricationDock().MessageText().contains(QStringLiteral("線は対象にできません")))) {
         return false;
     }
+    window.RefreshFabricationDock();
+    if(!Explain("対象を拒否した理由は通常の棚更新でも残る",window.FabricationDock().MessageText().contains(QStringLiteral("線は対象にできません"))))return false;
+    window.RunCommand("fabrication.preview_update");
+    if(!Explain("明示的な再計算で入力拒否の案内を解除する",!window.FabricationDock().MessageText().contains(QStringLiteral("線は対象にできません"))&&window.ApproxShelfShown()))return false;
     // 面を左の一覧などから選んで Del(3D で押すと対象から外れるだけなので、選択を直接入れる)。
     kachakacha::v2::app::SelectionSet one;
     for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {

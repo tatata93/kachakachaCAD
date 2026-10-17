@@ -1,0 +1,1178 @@
+{
+  "derived.freeze": {
+    "case": "固定しても元は残る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:44.052Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "dimension.open": {
+    "case": "HP-DIM-03 role replacement preserves the other input",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:21.413Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.arc": {
+    "case": "HP-RS-01 5 つの撮影の場面が作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:20.766Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.bezier": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:50.879Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.circle": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:50.565Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.line": {
+    "case": "HP-FA-01 フェイスから作図と近似",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:27.639Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.point": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:49.933Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.polyline": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:50.249Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.rectangle": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:50.407Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "draw.spline": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:51.033Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "edit.delete": {
+    "case": "HP-LF-09 削除は面・作業平面にも効き、使われている線と原点の平面は理由を言って断る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:49.875Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "edit.numeric": {
+    "case": "編集の棚で直線の点と長さ・角度を直せる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:44.434Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "edit.redo": {
+    "case": "HP-AP-08 面を 2 枚作って片方を近似しても、もう片方の面は 3D に残る(逆向きの辺でも作り直せる)",
+    "case_result": "passed",
+    "at": "2026-10-17T08:33:00.158Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "edit.undo": {
+    "case": "HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚でき、面に格子が乗る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:51.686Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "entity.rename": {
+    "case": "表示の段に数字のキーがある",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:07.764Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.dxf": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.920Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.kcd": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.340Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.pdf_1to1": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:06.039Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.selection": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.222Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.step": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.681Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.stl": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.571Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.svg": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.801Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "export.validate": {
+    "case": "押し出した部品は出せると言える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:43.360Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.assign_relief_cut": {
+    "case": "閉じていない線は折り線になる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:45.131Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.assign_role": {
+    "case": "PROJ 曲面へ落とした窓が帯の型紙に開く",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:19.326Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.create": {
+    "case": "HP-AP-05 atama の面 2 枚を選んで 近似 を押すだけで縦割り 4 部材 × 2(角のレールつき)、横割りも選べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:53.845Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.create_pattern": {
+    "case": "面→展開→型紙→PDFまで通る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:41.848Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.edit_part": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:04.484Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.freeze_flat": {
+    "case": "HP-GN-02 Flat 0% は線を作り、近似モデルは残り、1回の取り消しで線が全部消える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:43.266Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.freeze_output": {
+    "case": "HOの見本の曲げ固定と非対応厚みの安全な拒否",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:41.861Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.freeze_state": {
+    "case": "HP-GEN-04 選択部材の0・37・100%生成形状",
+    "case_result": "passed",
+    "at": "2026-10-17T08:34:10.686Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.freeze_target": {
+    "case": "HP-GN-01 生成の作り方カードは 現在/Flat/Target で、Target 100% は固定物を作る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:42.077Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.freeze_wires": {
+    "case": "HOの見本の曲げ固定と非対応厚みの安全な拒否",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:46.113Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.from_face": {
+    "case": "HP-FA-01 フェイスから作図と近似",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:27.771Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.merge_parts": {
+    "case": "部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻り位置も選べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:30.510Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.preview_update": {
+    "case": "HP-GPT-F06 取消と設定変更から近似をやり直す",
+    "case_result": "passed",
+    "at": "2026-10-17T08:33:53.214Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.set_assembly": {
+    "case": "HOの見本で曲げ具合を0から100まで動かせる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:40.920Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.set_connection_scope": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:03.839Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.set_method": {
+    "case": "何も無いところから面を作り、方式を見比べて近似できる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:24.464Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.set_unfold_base": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:04.912Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "fabrication.split_part": {
+    "case": "部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻り位置も選べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:30.087Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "file.new": {
+    "case": "HP-GPT-01 外周・下見・確定・Undo/Redo・保存再読込",
+    "case_result": "passed",
+    "at": "2026-10-17T08:34:12.579Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "file.open": {
+    "case": "HP-OPEN-01 Escape cancels saved vessel history with an armed editor and preserves Undo",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:41.264Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "file.save": {
+    "case": "HP-OPEN-01 Escape cancels saved vessel history with an armed editor and preserves Undo",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:41.591Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "file.save_as": {
+    "case": "GR グループ各階層のカテゴリと子孫選択",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:07.601Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "grid.edit": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:55.229Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "grid.move_origin": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:55.398Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "group.create": {
+    "case": "HP-RS-01 5 つの撮影の場面が作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:22.179Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "group.dissolve": {
+    "case": "GR グループを解いても中身は消えない",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:10.248Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "group.rename": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:49.657Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "group.set_active": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:49.295Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.add_row": {
+    "case": "役割表から平面を作り開き直しても戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:07.045Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.append_row": {
+    "case": "役割表から平面を作り開き直しても戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:07.149Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.build": {
+    "case": "役割表から平面を作り開き直しても戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:07.447Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.clear": {
+    "case": "表の行に効くコマンドは行を選んでから",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:08.611Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.revolve": {
+    "case": "回転体は選んだ断面を全部回し最後の直線を軸にする",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:06.363Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.row_down": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:57.538Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.row_remove": {
+    "case": "表の行に効くコマンドは行を選んでから",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:08.505Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.row_reverse": {
+    "case": "役割表から平面を作り開き直しても戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:07.273Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.row_up": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:57.414Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "guide.set_method": {
+    "case": "役割表から平面を作り開き直しても戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:06.934Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "help.copy_diagnostics": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:53.588Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "image.place": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:45.954Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.arrow": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:14.044Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.capture": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:12.760Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.duplicate": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:14.705Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.image": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:44.815Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.insert_image": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:42.338Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.model_file": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:44.552Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.move": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:14.554Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.new_page": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:42.524Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.open": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:44.304Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.paper": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:41.994Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.pdf": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:45.066Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.place_scene": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:42.167Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.remove": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:43.839Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.save": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:44.083Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.scene_editor": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:41.653Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.sheet_editor": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:41.826Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "instructions.text": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:14.233Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "measure.open": {
+    "case": "HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:27.080Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "output.copy": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:05.459Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.array_circular": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:02.525Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.array_linear": {
+    "case": "HP-PL-03 部品のパターンは配列の棚で個数ぶん並び1回で戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:23.577Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.boolean_add": {
+    "case": "HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:28.467Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.boolean_cut": {
+    "case": "足し引きは部品を2つ要る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:35.569Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.boolean_intersect": {
+    "case": "HP-BO-03 交差は重なりだけを残す部品になり1回で戻り開き直しても作り直せる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:46.764Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.chamfer": {
+    "case": "HP-FL-02 面取りは辺を何本でも押して選び押し直すと外れ距離で落とす",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:29.843Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.contact_wire": {
+    "case": "HP-CT-01 接触境界ワイヤーのみ生成し元の両部品を保持",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:40.258Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.copy": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:01.835Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.curved_emboss": {
+    "case": "HP-EMB-01 curved emboss selection preview outputs undo",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:10.909Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.extrude": {
+    "case": "HP-HEAVY 非表示の押し出し輪郭を開き直す",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:35.755Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.fillet": {
+    "case": "HP-TOOLS preview shape ownership stays bounded",
+    "case_result": "passed",
+    "at": "2026-10-17T08:25:56.249Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.from_wire_cage": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:00.561Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.loft_solid": {
+    "case": "HP-SO-03 ロフト立体は高さ違いの断面を押した順に通しガイド付きは理由つきで押せない",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:26.036Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.mirror": {
+    "case": "HP-PL-02 部品のミラーは線の向こうに同じ大きさで写し元は残す",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:22.965Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.move": {
+    "case": "HP-PL-01 部品の移動は2点の分だけ動き元は隠れ1回で戻り開き直しても同じ場所",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:21.747Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.overlap_inspect": {
+    "case": "HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:34.921Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.revolve": {
+    "case": "HP-SO-04 回転体は軸が輪郭を横切れば断り足すでは相手を押して確定で相手が隠れ1回で戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:26.798Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.rotate": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:02.158Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.shell": {
+    "case": "HP-SH-OUTPUT all output kinds themes preview undo and saved boundaries",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:30.867Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.split": {
+    "case": "HP-SH-02 分割は作業平面が部品を通らなければ断りずらすと両側を2つの部品にする",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:39.324Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.split_overlap": {
+    "case": "HP-CT-04 分割領域を選択して生成し保存再生成",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:37.690Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.surface_jig": {
+    "case": "RG-15 治具は道具と対象を選んだ後に確定する",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:49.577Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.sweep": {
+    "case": "HP-SO-02 スイープは輪郭と経路を押すとまっすぐな経路で面積×長さの立体になる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:25.409Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.thicken": {
+    "case": "面に厚みを付けて立体にできる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:37.460Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.thicken_to_plane": {
+    "case": "面を平面まで立体にできる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:39.123Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.thickness_placement": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:22:00.310Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "part.trim_overlap": {
+    "case": "HP-CT-06 ソリッドトリムのモード切替と境界ワイヤー保持",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:31.403Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "selection.activate": {
+    "case": "HP-CT-06 ソリッドトリムのモード切替と境界ワイヤー保持",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:32.178Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "snap.toggle": {
+    "case": "端点に吸着する",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:38.655Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.bridge": {
+    "case": "HP-SE-01 面を2枚作り、向かい合う縁を押して G1 でつなぎ、取り消しで消える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:42.311Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.create": {
+    "case": "PROJ curved body outer wire with window hole Undo save",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:13.848Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.from_lines": {
+    "case": "HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚でき、面に格子が乗る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:50.550Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.gpt_create": {
+    "case": "HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",
+    "case_result": "passed",
+    "at": "2026-10-17T08:33:32.797Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.iso_curves": {
+    "case": "HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:43.277Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.match": {
+    "case": "HP-SE-03 隣り合う面の縁を押して G1 で合わせ、元の面は残り、取り消しで消える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:44.913Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.mirror": {
+    "case": "HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:43.800Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "surface.refit": {
+    "case": "HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:43.633Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "tools.search": {
+    "case": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:14.388Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.align_selection": {
+    "case": "HOの見本で作業平面と面へ正対できる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:38.875Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.align_selection_back": {
+    "case": "立体の面へ正対できる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:06.087Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.align_workplane": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:48.175Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.analysis_zebra": {
+    "case": "HP-SA-01 面の解析の棚でゼブラ・ガウス曲率・U/V 線・境目・ずれを切り替え、平面はほぼ可展",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:46.780Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.display_settings": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:48.291Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.fit_all": {
+    "case": "HP-PA-04 曲面を後から選び、直線方向に押し出して保存・再生成",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:13.985Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.fit_selection": {
+    "case": "HP-UX-02 persistent local view picking snapping restore",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:05.708Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.hide_selected": {
+    "case": "HP-HEAVY 非表示の押し出し輪郭を開き直す",
+    "case_result": "passed",
+    "at": "2026-10-17T08:31:36.475Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.isolate": {
+    "case": "HP-UX-02 persistent local view picking snapping restore",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:05.591Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.number_settings": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:48.407Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.restore_isolation": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:45.793Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.show_all": {
+    "case": "隠した形は画面からも消える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:56.589Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.stage_all": {
+    "case": "表示の段に数字のキーがある",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:07.443Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.stage_no_construction": {
+    "case": "表示の段に数字のキーがある",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:07.546Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.stage_no_grid": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:48.855Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.stage_selection_only": {
+    "case": "表示の段に数字のキーがある",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:07.655Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "view.surface_analysis": {
+    "case": "HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:29.566Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.array_circular": {
+    "case": "一周に並べても最後が元に重ならない",
+    "case_result": "passed",
+    "at": "2026-10-17T08:30:58.046Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.array_linear": {
+    "case": "HP-AR-01 配列の棚で個数を決めて確定すると並び、1回の取り消しで戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:19.120Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.center_points": {
+    "case": "形から中心や端点に点を作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:31.689Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.chamfer": {
+    "case": "HP-CN-01 面取りは道具 → A → B → 下見 → Enter、押し直すと外れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:52.088Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.clear_datum": {
+    "case": "交点に点と基準線が効く",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:31.133Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.coincident": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:52.545Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.copy": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:51.837Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.corner_chamfer": {
+    "case": "角の加工は何本選んでも線ごとに作り1回で戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:29.472Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.corner_fillet": {
+    "case": "角の加工でポリラインの角が落ちて丸まる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:28.906Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.curvature": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:52.789Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.extend": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:51.377Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.fillet": {
+    "case": "HP-CN-09 full-length R1 corner",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:48.167Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.intersection_points": {
+    "case": "交点に点と基準線が効く",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:30.841Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.join": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:52.425Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.key_points": {
+    "case": "形から中心や端点に点を作れる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:31.858Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.meet_lines": {
+    "case": "オフセットは元を残し2線を交点まで合わせる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:30.289Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.mirror": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:51.992Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.move": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:51.680Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.offset": {
+    "case": "オフセットは元を残し2線を交点まで合わせる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:30.116Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.project": {
+    "case": "投影は元の線を残す",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:33.376Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.project_surface": {
+    "case": "PROJ 曲面へ落とした窓が帯の型紙に開く",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:18.975Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.rotate": {
+    "case": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:21:52.147Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.scale": {
+    "case": "HP-DM-10 スケールは倍率でも基準の2点でも線の大きさを変え1回で戻る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:29:03.344Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.set_datum": {
+    "case": "交点に点と基準線が効く",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:31.011Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.split": {
+    "case": "分割で線が増える",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:11.545Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.tangent": {
+    "case": "そろっていない接線接続は断る",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:17.149Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.trim": {
+    "case": "トリムは道具を持つだけでEscでやめられる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:33.989Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.wrap_project": {
+    "case": "PROJ 回り込み投影は1面から開始できる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:32:09.309Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "workplane.create": {
+    "case": "HP-IMG-02 curved projection and wrapping",
+    "case_result": "passed",
+    "at": "2026-10-17T08:26:08.548Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "workplane.from_face": {
+    "case": "HP-FA-01 フェイスから作図と近似",
+    "case_result": "passed",
+    "at": "2026-10-17T08:28:27.488Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "workplane.set_active": {
+    "case": "作業平面を作って作業中にできる",
+    "case_result": "passed",
+    "at": "2026-10-17T08:23:08.714Z",
+    "phase": "command returned; not proof of committed geometry",
+    "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  }
+}

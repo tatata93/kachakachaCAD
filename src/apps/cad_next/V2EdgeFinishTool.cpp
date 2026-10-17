@@ -1,3 +1,4 @@
+#include <QScopedValueRollback>
 #include "V2Calculation.h"
 //! 「辺の丸め・面取り」の道具。V2EdgeFinishTool.h の頭の注記を見よ。
 
@@ -95,6 +96,11 @@ double V2EdgeFinishTool::JoinMm() const
     return std::max(tolerance.interactiveJoinMm, 1.0e-4);
 }
 
+V2EdgeFinishTool::~V2EdgeFinishTool()
+{
+    if (built_) kachakacha::v2::kernel::ReleaseShape(*built_);
+}
+
 void V2EdgeFinishTool::Begin(std::string_view commandId)
 {
     int kind = 0;
@@ -143,6 +149,7 @@ void V2EdgeFinishTool::End(bool keepTool)
     pickingEdges_ = true; dock_->ShowActiveRole(true);
     active_ = keepTool;
     if (keepTool) { input_.part = {}; input_.edges.clear(); }
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
     built_.reset();
     outcome_ = kachakacha::v2::app::EdgeFinishOutcome{};
     if (window_.viewport_ != nullptr) {
@@ -258,6 +265,7 @@ void V2EdgeFinishTool::Refresh()
 void V2EdgeFinishTool::RefreshPreview()
 {
     outcome_ = kachakacha::v2::app::EdgeFinishOutcome{};
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
     built_.reset();
     window_.viewport_->HideToolPreview();
     const auto shape = input_.part.IsNil() ? window_.partShapes_.end()
@@ -352,6 +360,7 @@ void V2EdgeFinishTool::Confirm()
     definition.size.expression = std::to_string(input_.sizeMm);
     definition.size.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.edgeMidpoints = input_.edges;
+    QScopedValueRollback<bool> confirming(mirroring_, true);
     const auto handle = *built_;
     const auto outcome = outcome_;
     const EntityId source = input_.part;
@@ -375,6 +384,7 @@ void V2EdgeFinishTool::Confirm()
         return;
     }
     const bool wiresOnly = dock_->OutputMode() == 1;
+    if(!wiresOnly)built_.reset(); // The committed part owns the preview.
     End(true);
     window_.AdoptCurrentDocument();
     if (wiresOnly) { window_.SetStatus(Text(label + ": 境界ワイヤーを生成しました。元の立体は変更していません。")); return; }

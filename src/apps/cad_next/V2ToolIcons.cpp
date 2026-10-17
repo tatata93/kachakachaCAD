@@ -1,5 +1,6 @@
 #include <QIcon>
 #include "V2ToolIcons.h"
+#include "V2ToolIllustrations.h"
 #include <QApplication>
 #include <QIconEngine>
 #include <QPainter>
@@ -27,6 +28,31 @@ void Arrow(QPainter& p,double x,double y,double a,double b){
     Line(p,a,b,a-4*std::cos(t-.5),b-4*std::sin(t-.5));Line(p,a,b,a-4*std::cos(t+.5),b-4*std::sin(t+.5));
 }
 std::string Kind(std::string_view id,std::string_view label){
+    if(id=="file.new"||id=="instructions.new_page")return "file-new";
+    if(id=="file.open"||id=="instructions.open"||id=="instructions.model_file")return "file-open";
+    if(id=="file.save"||id=="file.save_as"||id=="instructions.save")return "file-save";
+    if(id=="edit.undo")return "undo";
+    if(id=="edit.redo")return "redo";
+    if(id=="edit.delete"||id=="instructions.remove")return "delete";
+    if(id.starts_with("group."))return std::string(id);
+    if(id=="view.hide_selected")return "hide";
+    if(id=="view.show_all")return "show";
+    if(id=="derived.freeze")return "freeze";
+    if(id.starts_with("guide.row_")||id=="guide.add_row"||id=="guide.append_row"||id=="guide.clear")return std::string(id);
+    if(id=="part.boolean_add")return "boolean-add";
+    if(id=="part.boolean_cut")return "boolean-cut";
+    if(id=="part.boolean_intersect")return "boolean-common";
+    if(id=="part.shell")return "shell";
+    if(id=="part.revolve")return "revolve-solid";
+    if(id=="guide.revolve")return "revolve-surface";
+    if(id=="wire.project_surface")return "project-surface";
+    if(id=="wire.wrap_project")return "wrap-project";
+    if(id=="part.curved_emboss")return "curved-emboss";
+    if(id=="instructions.scene_editor")return "scene-editor";
+    if(id=="instructions.sheet_editor")return "sheet-editor";
+    if(id=="instructions.paper")return "paper-size";
+    if(id=="instructions.place_scene")return "place-scene";
+    if(id=="instructions.insert_image")return "image";
     if(id=="instructions.arrow")return "arrow";
     if(id=="instructions.text")return "text";
     if(id=="instructions.capture")return "image";
@@ -125,7 +151,7 @@ public:
         const auto palette=QApplication::palette();const auto group=mode==QIcon::Disabled?QPalette::Disabled:QPalette::Active;
         QPen pen(palette.color(group,QPalette::ButtonText),1.7);pen.setCapStyle(Qt::RoundCap);pen.setJoinStyle(Qt::RoundJoin);
         painter->setPen(pen);painter->setBrush(Qt::NoBrush);
-        if(!Basic(*painter,kind,variant)&&!Edit(*painter,kind))Other(*painter,kind,variant);
+        if(!PaintToolIllustration(*painter,kind,variant)&&!Basic(*painter,kind,variant)&&!Edit(*painter,kind))Other(*painter,kind,variant);
         painter->restore();
     }
     QPixmap pixmap(const QSize& size,QIcon::Mode mode,QIcon::State state) override{

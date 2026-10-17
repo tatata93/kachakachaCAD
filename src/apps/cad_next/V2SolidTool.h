@@ -32,6 +32,7 @@ class V2MainWindow;
 class V2SolidTool final {
 public:
     explicit V2SolidTool(V2MainWindow& window);
+    ~V2SolidTool();
 
     [[nodiscard]] V2SolidDock* Dock() const noexcept { return dock_; }
     [[nodiscard]] bool Active() const noexcept { return active_; }

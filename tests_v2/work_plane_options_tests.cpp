@@ -176,4 +176,18 @@ KACHA_V2_TEST(work_plane_options, 多く選んでいても作れる)
         "多い分には作れる");
 }
 
+KACHA_V2_TEST(work_plane_options, 直線でも直角な作業面を作れる)
+{
+    using namespace kachakacha::v2;
+    app::WorkPlaneChoice choice;choice.method=WorkPlaneMethod::NormalToCurveAtPoint;choice.curveParameter=0.5;
+    app::WorkPlaneMaterials materials;
+    materials.edges.push_back(geometry::CurveSegment::MakeLine({0,0,0},{0,0,10}).Value());
+    const auto request=app::BuildWorkPlaneRequest(choice,materials);
+    Require(request.HasValue(), "UI inputs produce a normal-plane request");
+    const auto frame=modeling::BuildWorkPlane(request.Value(),geometry::GeometryTolerance{});
+    Require(frame.HasValue(), "straight lines need no curvature normal");
+    Require((frame.Value().origin-geometry::Vector3{0,0,5}).Length()<1e-9, "midpoint origin");
+    Require(std::abs(frame.Value().normal.z)>1-1e-9, "normal follows the line");
+}
+
 KACHA_V2_TEST_MAIN("work_plane_options_tests")

@@ -534,15 +534,15 @@ void CheckRailOrder(const Topology& topology, const Ladder& ladder, Scenario& sc
         return guides > 0 ? "ガイド付きロフト(ガイド" + Count(guides) + ")"
             : centerline  ? std::string("中心線ロフト")
                           : std::string("ロフト");
-    case GuideSurfaceMethod::RuledSections:     return "ルールド";
+    case GuideSurfaceMethod::RuledSections:     return "2本を直線でつなぐ";
     case GuideSurfaceMethod::PlanarBoundary:    return "平面";
     case GuideSurfaceMethod::BoundaryFill:      return "境界面";
     case GuideSurfaceMethod::FourEdgePatch:     return "四辺面";
     case GuideSurfaceMethod::GordonNetwork:     return "曲線網(近似)";
     case GuideSurfaceMethod::CurveNetworkExact: return "曲線網(Gordon)";
     case GuideSurfaceMethod::GuidedLoft:        return "案内付きロフト";
-    case GuideSurfaceMethod::OffsetGuide:       return "離した面";
-    case GuideSurfaceMethod::Revolve:           return "回転体";
+    case GuideSurfaceMethod::OffsetGuide:       return "オフセット面";
+    case GuideSurfaceMethod::Revolve:           return "回転面";
     }
     return "面";
 }

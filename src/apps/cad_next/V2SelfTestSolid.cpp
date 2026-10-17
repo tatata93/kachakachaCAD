@@ -1,3 +1,4 @@
+#include "kachakacha/kernel/OcctGuideSurface.h"
 //! 立体を作るの人の道(HP-SO、matrix P-08/P-09)。
 //!
 //! 帯の 回転体 / ロフト立体 / スイープ を押す → 何も選んでいなくても棚が出る →
@@ -489,6 +490,12 @@ struct Box3 {
         || !Explain("箱を画面で押せる", PressPart(window, box))
         || !Explain("部品は相手に入る", tool.Input().target == box)
         || !PreviewReady(window, "足す")
+        || !Explain("Boolean再下見が中間形状を残さない", [&] {
+            const auto count=kachakacha::v2::kernel::CachedShapeCount();
+            for(int i=0;i<3;++i)if(!dock.ClickBoolean(1)||!tool.Outcome().available
+                ||kachakacha::v2::kernel::CachedShapeCount()!=count)return false;
+            return true;
+        }())
         || !Explain((std::string("足した体積は回転体より大きい(") + std::to_string(tool.Outcome().volumeMm3)
                         + " > " + std::to_string(ringVolume) + ")").c_str(),
             tool.Outcome().volumeMm3 > ringVolume + 1.0)

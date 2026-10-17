@@ -35,7 +35,7 @@ namespace {
 
 std::string_view ShellSplitMethodNameJa(int method) noexcept
 {
-    return method == 1 ? "分割" : "シェル";
+    return method == 1 ? "分割" : "中空化";
 }
 
 bool ShellSplitMethodForCommand(std::string_view commandId, int& method) noexcept

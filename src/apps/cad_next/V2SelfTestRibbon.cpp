@@ -20,6 +20,7 @@
 #include <QString>
 
 #include <string>
+#include <algorithm>
 #include <vector>
 
 namespace kachakacha::v2::selftest {
@@ -60,21 +61,12 @@ using kachakacha::v2::modeling::DrawingTool;
 {
     window.SetMode(UiMode::Drawing);
     auto& ribbon = window.Ribbon();
-    // スケールは作れるようになった(D-22)ので本物の道具。押せない形の見本は、文書に種類の無い楕円。
-    if (!Explain("「変形」を押せる", ribbon.ClickCategory(QStringLiteral("変形")))
-        || !Explain("作れるようになったスケールは押せる", ribbon.ToolEnabled(QStringLiteral("スケール")))
-        || !Explain("「曲線」を押せる", ribbon.ClickCategory(QStringLiteral("曲線")))
-        || !Explain("「楕円」は押せない形", !ribbon.ToolEnabled(QStringLiteral("楕円")))
-        || !Explain("理由が付いている",
-            ribbon.ToolTip(QStringLiteral("楕円")).contains(QStringLiteral("まだ")))) {
-        return false;
-    }
-    const DrawingTool before = window.Session().CurrentTool();
-    const bool pressed = ribbon.ClickTool(QStringLiteral("楕円"));
-    return Explain("押しても押したことにならない", !pressed)
-        && Explain("道具は変わらない", window.Session().CurrentTool() == before)
-        && Explain("状態行に理由が出る",
-            window.StatusText().contains(QStringLiteral("楕円")));
+    if(!ribbon.ClickCategory(QStringLiteral("曲線")))return false;
+    const auto labels=ribbon.ToolLabels();
+    return Explain("unsupported placeholders are absent from executable tools",
+        std::find(labels.begin(),labels.end(),QStringLiteral("楕円"))==labels.end()
+        &&!ribbon.ClickTool(QStringLiteral("楕円")));
+
 }
 
 //! HP-RB-03。モードを変えると帯が入れ替わり、面作成は作り方つきで「面を作る」へ入る。

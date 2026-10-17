@@ -952,7 +952,7 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
         ModeForTogglePick(picked, ModeForToolPick(picked, mode))));
-    ReportSelectionCount();
+    if(!toolPickActive_)ReportSelectionCount();
 }
 
 std::vector<int> V2Viewport::FoldBandsAt(const QPointF& position) const

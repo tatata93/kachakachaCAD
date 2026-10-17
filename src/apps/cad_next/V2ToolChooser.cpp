@@ -44,10 +44,10 @@ void V2OperationPanelHost::SetToolMode(UiMode mode) {
         group->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Maximum);
         auto* grid=new QGridLayout(group);grid->setAlignment(Qt::AlignTop);int index=0;
         for(bool extra:{false,true})for(const auto& tool:category.tools){
-            if(tool.extra!=extra)continue;
-            auto* button=new QPushButton(Text(tool.labelJa),group);button->setObjectName(QStringLiteral("toolChoice"));button->setMinimumHeight(36);
-            button->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(-1)));
-            button->setIconSize(QSize(24,24));button->setAccessibleName(Text(tool.labelJa));
+            if(tool.Blocked()||tool.extra!=extra)continue;
+            auto* button=new QPushButton(Text(tool.labelJa),group);button->setObjectName(QStringLiteral("toolChoice"));button->setMinimumHeight(44);
+            button->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(tool.measureMode.value_or(-1))));
+            button->setIconSize(QSize(32,32));button->setAccessibleName(Text(tool.labelJa));
             button->setProperty("commandId",Text(tool.commandId));
             const auto* command=FindCommand(tool.commandId);const QString guide=command?Text(command->operationGuideJa):Text(tool.blockedReasonJa);
             auto* action=actionLookup_?actionLookup_(tool.commandId):nullptr;

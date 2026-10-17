@@ -100,7 +100,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             {"AT-DOC-005"}},
         {"edit.delete", "削除", CommandMode::Instant, "delete", "Del",
             SelectionPredicate::OneOrMoreDeletable, "消すものを1つ以上選んでください。",
-            "選んだもの(線・面・作業平面・部品・近似モデル・生成物)を消します。原点の平面と、下流があるものは、理由を出して断ります。", true,
+            "選んだもの(線・面・作業平面・部品・近似モデル・生成物)を消します。参照先がある場合は削除一覧と3D表示で確認します。原点の平面は削除できません。", true,
             {"AT-DOC-005"}},
         {"view.hide_selected", "選択を隠す", CommandMode::Instant, "hide", "Ctrl+H",
             SelectionPredicate::OneOrMoreHideable, "線・部品・面のどれかを選んでください。",
@@ -383,7 +383,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
         // 中では今までの GuideTable をそのまま使う。
         // 線から面(オーナー決定 2026-09-22): 線を選ぶだけで、閉じた輪を全部面にする。
         // 「面を作る」の入口 1 つの方針に、迷わない近道を **足す**(置き換えない)。
-        {"surface.gpt_create", "GPT版", CommandMode::Tool, "surface", "",
+        {"surface.gpt_create", "曲線から近似面", CommandMode::Tool, "surface", "",
             SelectionPredicate::Always, "ワイヤーを追加してください。",
             "外周と内側の線から近似面を張る、または複数断面を一覧順につなぎます。"
             "プレビューで全入力線の最大・RMS偏差を確認し、Enterで確定、Escで取消します。",
@@ -402,7 +402,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "選んだものから面を作ります。作り方は選択内容から薦めますが、"
             "右の棚でいつでも変えられます。方式を変えても入れたものは消えません。",
             true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-008", "AT-UIX-007"}},
-        {"guide.revolve", "回転体", CommandMode::Instant, "guide_revolve", "",
+        {"guide.revolve", "回転面", CommandMode::Instant, "guide_revolve", "",
             SelectionPredicate::TwoOrMoreWires,
             "断面の線(何本でも)と、最後に軸の直線を選んでください。",
             "最後に選んだ直線を軸に、ほかの線(断面。何本でも)を「回転体の角度」だけ回した"
@@ -428,7 +428,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "面を対称面(車体の中心など)に写し、境目で面が折れていないかを測ります。何枚でも写せます。",
             true, {"AT-SRF-008"}},
-        {"surface.iso_curves", "U/V 線を取り出す", CommandMode::Dialog, "surface_iso", "",
+        {"surface.iso_curves", "面の縦横線を取り出す", CommandMode::Dialog, "surface_iso", "",
             SelectionPredicate::Always, "",
             "面の U 方向・V 方向の線を、ふつうの線として取り出します。分割線や特徴線の元にできます。",
             true, {"AT-SRF-009"}},
@@ -522,7 +522,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "両側に同じ距離で落とした立体を実際に作って下見に出し、Enter で確定します"
             "(元の部品は隠します)。", true,
             {"AT-FIN-001"}},
-        {"part.shell", "シェル(面を抜いて肉厚を残す)", CommandMode::Dialog, "shell_part", "",
+        {"part.shell", "中空化（面を開けて厚みを残す）", CommandMode::Dialog, "shell_part", "",
             SelectionPredicate::OneOrMoreParts, "部品を1つ以上選んでください。",
             "道具から始められます。3Dで部品の開けたい面を押すと、その面が入ります(何枚でも。"
             "押し直すと外れます)。内側へ肉厚だけ残した立体を実際に作って下見に出し、Enter で"
@@ -628,8 +628,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "平らな部材の上の線だけ。閉じた線は開口にしてください。", true,
             {"AT-FAB-006"}},
         {"fabrication.preview_update", "プレビュー更新", CommandMode::Instant, "fab_update", "",
-            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
-            "元の部品の変更を製作モデルへ反映します。", true,
+            SelectionPredicate::HasDocument, "文書がありません。",
+            "近似の対象と現在の設定で下見を更新します。未開始なら近似ツールを開き、元の面か部品を指定します。確定するまで文書は変更しません。", true,
             {"AT-PER-001"}},
         {"fabrication.create_pattern", "型紙を作る", CommandMode::Dialog, "pattern", "",
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
@@ -648,7 +648,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "freeze_output", "", SelectionPredicate::Always, "",
             "「現在状態を固定」で作るものを、ワイヤーのみ・部品のみ・両方の順に切り替えます。",
             false, {"AT-FAB-011"}},
-        {"fabrication.set_connection_scope", "接続スコープ", CommandMode::Instant,
+        {"fabrication.set_connection_scope", "形に追従する線", CommandMode::Instant,
             "connection", "", SelectionPredicate::OneOrMoreWires,
             "ワイヤーを1つ以上選んでください。",
             "選んだ線を、近似の実形状へ寄せた「_接続」の線にします。元の線は変えません。",

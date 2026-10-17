@@ -4,6 +4,7 @@
 #include "V2PanelFrame.h"
 
 #include <QCheckBox>
+#include <QStandardItemModel>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
@@ -100,6 +101,12 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     method_ = new QComboBox(body_);
     for (const auto method : WorkPlaneMethods()) {
         method_->addItem(Text(kachakacha::v2::modeling::WorkPlaneMethodNameJa(method)));
+        if (method == WorkPlaneMethod::CylinderAxis || method == WorkPlaneMethod::TangentThroughPoint
+            || method == WorkPlaneMethod::TangentThroughEdge) {
+            auto* item = static_cast<QStandardItemModel*>(method_->model())->item(method_->count()-1);
+            item->setEnabled(false);
+            item->setToolTip(QStringLiteral("支持面を指定する入力が未対応です。フェイスで作図、または位置と向きの数値指定を使ってください。"));
+        }
     }
     form_->addRow(QStringLiteral("作り方"), method_);
 

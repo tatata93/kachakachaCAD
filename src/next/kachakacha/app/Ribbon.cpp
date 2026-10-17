@@ -81,16 +81,16 @@ const std::vector<RibbonCategory>& DrawingCategories()
         {"surface", "面作成",
             // 2026-09-22: 「ガイド付きロフト」は「ロフト面」へ統合(ガイド 0〜任意)。
             // 互換の入口は面の棚の「その他」に残す。空いた場所へ「四辺面」。
-            {Tool("GPT版", "surface.gpt_create"), Tool("面にする", "surface.from_lines"), Surface("平面", kPlanar), Surface("ルールド面", kRuled),
+            {Tool("曲線から近似面", "surface.gpt_create"), Tool("面にする", "surface.from_lines"), Surface("平面", kPlanar), Surface("2本を直線でつなぐ", kRuled),
                 Surface("ロフト面", kLoft),
                 Surface("境界面", kBoundaryFill), Surface("四辺面", kFourEdgePatch),
-                Surface("曲線網", kGordon), Surface("離した面", kOffsetGuide, true),
+                Surface("曲線網", kGordon), Surface("オフセット面", kOffsetGuide, true),
                 Extra("回転面", "guide.revolve"),
                 // 面の編集(プロンプト additional_surface_tools)。正本のカテゴリは増やさず、
                 // 面作成の後ろ(「その他」)に置く。面を作ったあとに直す・つなぐ道具。
                 Extra("面を合わせる", "surface.match"), Extra("面をつなぐ", "surface.bridge"),
                 Extra("面を整える", "surface.refit"), Extra("対称に写す", "surface.mirror"),
-                Extra("U/V 線", "surface.iso_curves"),
+                Extra("面の縦横線", "surface.iso_curves"),
                 // 面の解析(プロンプト surface_analysis)。作りながら見るので面作成に並べる。
                 Extra("面の解析", "view.surface_analysis"), Extra("ゼブラ", "view.analysis_zebra")}},
         {"note", "注記",
@@ -118,11 +118,9 @@ const std::vector<RibbonCategory>& PartCategories()
         {"shape", "形状編集",
             // 辺の丸め・面取り(P-12)、シェル・分割(P-13)。道具から始め、3D で部品を押す。
             {Tool("フィレット", "part.fillet"), Tool("面取り", "part.chamfer"),
-                Tool("シェル", "part.shell"), Tool("分割", "part.split"),
-                Tool("結合", "part.boolean_add")}},
+                Tool("中空化", "part.shell"), Tool("分割", "part.split")}},
         {"face", "面編集",
             {Tool("フェイスで作図", "workplane.from_face"), Tool("フェイスを近似", "fabrication.from_face"),
-                Tool("押し引き", "part.extrude"),
                 Blocked("面オフセット", "面オフセットはまだできません(核に面を動かす道がありません)"),
                 Blocked("面削除", "面削除はまだできません"),
                 Blocked("面置換", "面置換はまだできません")}},
@@ -146,7 +144,6 @@ const std::vector<RibbonCategory>& FabricationCategories()
         {"edit", "部材編集",
             {Tool("近似部品編集", "fabrication.edit_part"), Tool("分割", "fabrication.split_part"),
                 Tool("結合", "fabrication.merge_parts"), Tool("切れ目", "fabrication.assign_relief_cut"),
-                Tool("半径編集", "fabrication.edit_part"),
                 Extra("開口 / 折り線", "fabrication.assign_role"),
                 Extra("接続する部材の範囲", "fabrication.set_connection_scope")}},
         {"bend", "曲げ・展開",

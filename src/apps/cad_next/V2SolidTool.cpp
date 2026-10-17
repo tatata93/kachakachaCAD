@@ -1,3 +1,4 @@
+#include <QScopedValueRollback>
 #include <QStringList>
 #include "V2Calculation.h"
 //! 「立体を作る」の道具。V2SolidTool.h の頭の注記を見よ。
@@ -137,6 +138,11 @@ bool V2SolidTool::Handles(std::string_view commandId)
     return kachakacha::v2::app::SolidMethodForCommand(commandId, method);
 }
 
+V2SolidTool::~V2SolidTool()
+{
+    if (built_) kachakacha::v2::kernel::ReleaseShape(*built_);
+}
+
 void V2SolidTool::Begin(std::string_view commandId)
 {
     SolidMethod method = SolidMethod::Revolve;
@@ -191,6 +197,7 @@ void V2SolidTool::End(bool keepTool)
 {
     active_ = keepTool;
     if (keepTool) { input_.profiles.clear(); input_.axis = {}; input_.path.clear(); input_.target = {}; input_.activeSlot.reset(); }
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
     built_.reset();
     outcome_ = kachakacha::v2::app::SolidPreviewOutcome{};
     mirror_.clear();
@@ -425,6 +432,10 @@ SolidResult V2SolidTool::Build(const CreateSolidDefinition& definition) const
     if (!made.HasValue() || definition.booleanMode == 0) {
         return made;
     }
+    struct IntermediateShape {
+        kachakacha::v2::modeling::KernelShapeHandle handle;
+        ~IntermediateShape() { kachakacha::v2::kernel::ReleaseShape(handle); }
+    } intermediate{made.Value().handle};
     // 足す・引く。相手は窓が覚えている部品の形(作り直しでは評価順で先に出来ている)。
     const auto target = definition.targets.empty()
         ? window_.partShapes_.end()
@@ -456,6 +467,7 @@ void V2SolidTool::Refresh()
 void V2SolidTool::RefreshPreview()
 {
     outcome_ = kachakacha::v2::app::SolidPreviewOutcome{};
+    if(built_)kachakacha::v2::kernel::ReleaseShape(*built_);
     built_.reset();
     window_.viewport_->HideToolPreview();
     if (!kachakacha::v2::app::SolidReady(input_)) {
@@ -545,6 +557,7 @@ void V2SolidTool::Confirm()
     }
     used.insert(used.end(), definition.path.begin(), definition.path.end());
     used.insert(used.end(), definition.targets.begin(), definition.targets.end());
+    QScopedValueRollback<bool> confirming(mirroring_, true);
     const auto handle = *built_;
     const double volume = outcome_.volumeMm3;
     auto& document = window_.session_->GetDocument();
@@ -567,6 +580,7 @@ void V2SolidTool::Confirm()
     if (!transaction.Commit()) {
         return;
     }
+    built_.reset(); // The committed part now owns this handle.
     End();
     window_.AdoptCurrentDocument();
     window_.SetStatus(QStringLiteral("%1: 部品を作りました(体積 %2 mm3)。1 回の取り消しで戻ります。")

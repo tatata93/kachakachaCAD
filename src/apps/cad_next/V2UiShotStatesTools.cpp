@@ -7,6 +7,7 @@
 #include "V2MainWindow.h"
 
 #include "V2EdgeFinishDock.h"
+#include "V2ExtrudeDock.h"
 #include "V2EdgeFinishTool.h"
 #include "V2Ribbon.h"
 #include "V2ShellSplitDock.h"
@@ -112,6 +113,7 @@ struct ShotBox {
         return std::nullopt;
     }
     window.RunCommand("part.extrude");
+    window.ExtrudeDock().TypeDistanceMm(10.0);
     if (!window.HandleToolKey(Qt::Key_Return, nullptr)) {
         return std::nullopt;
     }

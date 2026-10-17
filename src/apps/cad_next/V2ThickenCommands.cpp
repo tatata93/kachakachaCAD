@@ -61,6 +61,7 @@ void V2MainWindow::RunThickenTool(bool toPlane)
         ConfirmThicken();
         return;
     }
+    EndArmedTools();
     // 選んであった形状ガイドの面は、そのまま欄へ入れる(選んでから押す道も残す)。
     thicken_->input = kachakacha::v2::app::ThickenInputState{};
     thicken_->input.toPlane = toPlane;

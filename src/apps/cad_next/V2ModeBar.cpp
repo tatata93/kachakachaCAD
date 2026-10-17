@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2QuickDisplayControls.h"
 
 #include <QAction>
 #include <QComboBox>
@@ -71,11 +72,17 @@ void V2MainWindow::BuildModeBar()
     modeBar_->addWidget(groupCombo_);
     QObject::connect(groupCombo_, &QComboBox::currentIndexChanged, this,
         [this](int index) { ActivateGroupByComboIndex(index); });
+    // Keep these controls out of the mode bar overflow menu, including wide fonts.
+    addToolBarBreak();
+    auto* displayBar=addToolBar(QStringLiteral("表示切替"));
+    displayBar->setObjectName(QStringLiteral("quickDisplayBar"));
+    displayBar->setMovable(false);
     if (QAction* snap = ActionFor("snap.toggle"); snap != nullptr) {
         snap->setCheckable(true);
         snap->setChecked(snapEnabled_);
-        modeBar_->addAction(snap);
+        displayBar->addAction(snap);
     }
+    InstallQuickDisplayControls(*viewport_,*displayBar,*session_);
     addToolBarBreak();
 }
 

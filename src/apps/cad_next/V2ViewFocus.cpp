@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2QuickDisplayControls.h"
 #include <QPushButton>
 #include <QPointer>
 #include <QString>
@@ -10,6 +11,7 @@ bool V2Viewport::IsolationActive() const {
 }
 bool V2Viewport::EntityShown(base::EntityId id) const {
     if(DeletionPreviewContains(id))return true;
+    if(!id.IsNil()&&!PlaneWireDisplayAllows(*this,id))return false;
     if(id.IsNil())return true; // Tool previews are not document entities yet.
     if(IsolationActive()&&std::find(isolationExcluded_.begin(),isolationExcluded_.end(),id)!=isolationExcluded_.end())return false;
     return !display_.selectionOnly||app::IsSelected(selection_,id);
@@ -35,7 +37,7 @@ void V2Viewport::ClearIsolation() {
 }
 
 void V2Viewport::ApplyVisibilityFilter() {
-    if(!sectionView_&&!IsolationActive()&&!display_.selectionOnly){session_->SetSnapEntityFilter({});return;}
+    if(!PlaneWireDisplayActive(*this)&&!sectionView_&&!IsolationActive()&&!display_.selectionOnly){session_->SetSnapEntityFilter({});return;}
     QPointer<V2Viewport> alive(this);
     session_->SetSnapEntityFilter([alive](base::EntityId id){
         if(!alive)return true;

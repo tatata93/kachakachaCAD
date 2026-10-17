@@ -4,6 +4,7 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2QuickDisplayControls.h"
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include "V2WorkPlaneRoleInputs.h"
@@ -138,6 +139,7 @@ void V2MainWindow::BuildRightShelves()
     auto* reverse=workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("reverseSection"));
     connect(section,&QCheckBox::toggled,viewport_,[this,reverse](bool enabled){viewport_->SetSectionView(enabled,reverse->isChecked());});
     connect(reverse,&QCheckBox::toggled,viewport_,[this,section](bool reversed){viewport_->SetSectionView(section->isChecked(),reversed);});
+    BindQuickGridControl(*viewport_,*workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("gridOnTop")));
     connect(workPlaneDock_->findChild<QCheckBox*>(QStringLiteral("gridOnTop")),&QCheckBox::toggled,viewport_,&V2Viewport::SetGridOnTop);
     connect(workPlaneDock_->findChild<QDoubleSpinBox*>(QStringLiteral("sectionOffset")),&QDoubleSpinBox::valueChanged,viewport_,[this,section,reverse](double value){
         viewport_->setProperty("sectionOffsetMm",value);viewport_->SetSectionView(section->isChecked(),reverse->isChecked());

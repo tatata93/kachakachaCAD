@@ -1,4 +1,8 @@
 #include "V2SelfTest.h"
+#include "V2QuickDisplayControls.h"
+#include "kachakacha/document/Commands.h"
+#include "kachakacha/app/SceneBuilder.h"
+#include <QToolBar>
 #include "V2Ribbon.h"
 #include "V2ToolIcons.h"
 #include <QToolButton>
@@ -32,6 +36,57 @@ base::EntityId Line(V2MainWindow& w,double y) {
     w.SelectTool(modeling::DrawingTool::Select);base::EntityId id;
     for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Wire)id=e.id;
     return id;
+}
+bool QuickDisplay(V2MainWindow& w) {
+    auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);
+    base::RandomIdGenerator ids;
+    const auto add=[&](std::vector<geometry::CurveSegment> curves,const char* name){
+        domain::Feature f;f.id=ids.NextTyped<base::IdKind::Feature>();f.type=domain::FeatureType::CreateWire;
+        domain::CreateWireDefinition d;d.segments=std::move(curves);for(const auto& c:d.segments){(void)c;d.segmentIds.push_back(ids.NextTyped<base::IdKind::Segment>());}f.definition=d;
+        domain::Entity e;e.id=ids.NextTyped<base::IdKind::Entity>();e.kind=domain::EntityKind::Wire;e.createdBy=f.id;e.displayName=name;
+        f.outputs={{"wire",e.id,e.kind}};
+        if(!w.Session().GetDocument().Run(document::AddFeatureCommand(f,{e},name)).committed)return base::EntityId{};
+        return e.id;
+    };
+    const auto a=add({geometry::CurveSegment::MakeLine({-20,10,0},{20,10,0}).Value()},"平面内");
+    const auto b=add({geometry::CurveSegment::MakeCircle({0,40,5},{0,0,1},{1,0,0},5).Value()},"平行別面");
+    const auto c=add({geometry::CurveSegment::MakeCubicBezier({{-20,-20,0},{-10,-20,5},{10,-20,-5},{20,-20,0}}).Value()},"途中で面外");
+    const auto d=add({geometry::CurveSegment::MakeLine({0,-20,0},{0,20,0}).Value()},"複数面共通");
+    const auto mixed=add({geometry::CurveSegment::MakeLine({-10,0,0},{10,0,0}).Value(),geometry::CurveSegment::MakeLine({10,0,0},{10,0,5}).Value()},"立体ワイヤー");
+    if(a.IsNil()||b.IsNil()||c.IsNil()||d.IsNil()||mixed.IsNil())return false;
+    auto* grid=w.findChild<QToolButton*>("quickGridOnTop");auto* only=w.findChild<QToolButton*>("quickPlaneWiresOnly");
+    auto* check=w.findChild<QCheckBox*>("gridOnTop");if(!grid||!only||!check)return false;
+    w.Session().SetScene(app::RebuildSceneKeepingView(w.Session().Scene(),w.Session().GetDocument().Snapshot(),ids));
+    const auto revision=w.Session().GetDocument().Revision();
+    for(auto theme:{UiTheme::Normal,UiTheme::Windows95})for(int width:{1000,1280}){
+        w.ApplyTheme(theme);w.resize(width,800);
+        for(auto mode:app::AllUiModes()){w.SetMode(mode);QApplication::processEvents();
+            if(!Explain("quick display buttons remain visible",grid->isVisible()&&only->isVisible()&&grid->visibleRegion().boundingRect()==grid->rect()&&only->visibleRegion().boundingRect()==only->rect())){w.grab().save("out/quick-display-overflow.png");return false;}}
+    }
+    grid->click();if(!Explain("toolbar grid synchronizes dock",!check->isChecked()))return false;
+    check->click();if(!Explain("dock grid synchronizes toolbar",grid->isChecked()))return false;
+    w.SetMode(app::UiMode::Drawing);only->click();
+    if(!Explain("geometric plane visibility excludes off-plane and mixed wire",v.EntityShown(a)&&v.EntityShown(d)&&!v.EntityShown(b)&&!v.EntityShown(c)&&!v.EntityShown(mixed)))return false;
+    const auto point=v.Mapping().Project({0,45,5});if(!point)return false;
+    const auto snap=w.Session().PeekHover(*point).snap;
+    if(!Explain("hidden wire is not a snap target",!snap||snap->entityId!=b))return false;
+    v.SelectAt({point->x,point->y},Qt::NoModifier);if(!Explain("hidden wire cannot be selected",!app::IsSelected(v.Selection(),b)))return false;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities)if(entity.kind!=domain::EntityKind::Wire&&entity.kind!=domain::EntityKind::Point&&v.EntityShown(entity.id))return false;
+    auto plane=v.WorkPlane();plane.origin={0,0,5};v.SetWorkPlane(plane);
+    if(!Explain("offset plane updates filter",v.EntityShown(b)&&!v.EntityShown(a)))return false;
+    plane.origin={0,0,0};plane.normal={1,0,0};plane.uAxis={0,1,0};plane.vAxis={0,0,1};v.SetWorkPlane(plane);
+    if(!Explain("rotated plane uses geometric containment",v.EntityShown(d)&&!v.EntityShown(a)&&!v.EntityShown(b)))return false;
+    plane.normal={0,0,1};plane.uAxis={1,0,0};plane.vAxis={0,1,0};v.SetWorkPlane(plane);
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({d},domain::Visibility::Hidden)).committed)return false;
+    w.Session().SetScene(app::RebuildSceneKeepingView(w.Session().Scene(),w.Session().GetDocument().Snapshot(),ids));
+    only->click();
+    if(!Explain("toggle restores visible entities without changing hidden flag",v.EntityShown(a)&&v.EntityShown(b)&&w.Session().GetDocument().FindEntity(d)->visibility==domain::Visibility::Hidden))return false;
+    const bool unchanged=w.Session().GetDocument().Revision()==revision+1;
+    if(!w.Session().Undo())return false;only->click();if(!Explain("scene replacement updates cache after Undo",v.EntityShown(d)))return false;
+    if(!w.Session().Redo())return false;only->click();
+    if(!qEnvironmentVariable("KACHACAD_QUICK_DISPLAY_SHOTS").isEmpty()){
+        QDir dir(qEnvironmentVariable("KACHACAD_QUICK_DISPLAY_SHOTS"));dir.mkpath(".");only->click();w.grab().save(dir.filePath("plane-wires.png"));only->click();w.grab().save(dir.filePath("all-geometry.png"));}
+    return Explain("display controls never enter document undo history",unchanged);
 }
 bool Search(V2MainWindow& w) {
     w.Viewport().SetViewDirection(ViewDirection::Top);const auto id=Line(w,10);if(id.IsNil())return false;
@@ -159,5 +214,5 @@ bool GpuParity(V2MainWindow&) {
 }
 
 }
-std::vector<SelfTestCase> UsabilityCases(){return {{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
+std::vector<SelfTestCase> UsabilityCases(){return {{"HP-UX-04 permanent grid and plane wire display controls",&QuickDisplay},{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};}
 }

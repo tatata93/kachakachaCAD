@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2QuickDisplayControls.h"
 
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/GrabToMove.h"
@@ -148,6 +149,7 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
 //! 消しておいて、次にポインタが動いたときに出し直す。
 void V2Viewport::OnSceneReplaced()
 {
+    RefreshPlaneWireDisplay(*this);
     hoverShapeCandidates_.reset();
     if(isolationActive_&&!IsolationActive())ClearIsolation();
     // 条件を付けない。場面が替わったら前の場面の一時表示は全部捨てる、という

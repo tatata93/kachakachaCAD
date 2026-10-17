@@ -11,6 +11,7 @@
 #include "V2MainWindow.h"
 
 #include "V2CornerDock.h"
+#include "V2CornerSelection.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
@@ -35,7 +36,10 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
 {
     kachakacha::v2::domain::TransformWireDefinition definition;
     const V2CornerChoice choice = cornerDock_->Choice();
-    definition.method = choice.fillet ? WireTransformMethod::Fillet : WireTransformMethod::Chamfer;
+    definition.method = choice.polyline
+        ? (choice.fillet ? WireTransformMethod::CornerFillet : WireTransformMethod::CornerChamfer)
+        : (choice.fillet ? WireTransformMethod::Fillet : WireTransformMethod::Chamfer);
+    definition.cornerIndex = choice.onlyVertex ? choice.vertexIndex : -1;
     const double size = CornerSizeMm();
     definition.scalarArgument.value = size;
     definition.scalarArgument.expression = std::to_string(size);
@@ -64,10 +68,18 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
 //! 線が2本以上選ばれているか。道具は問わない(選んでから押す道も残す)。
 bool V2MainWindow::CornerPairSelected(std::vector<EntityId>* wires) const
 {
-    const auto& selection = viewport_->Selection();
-    const auto curves = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
-    if (wires != nullptr) *wires = selection.entityIds;
-    return curves.size() >= 2;
+    const auto selection = CornerWireSelection(viewport_->Selection(), session_->GetDocument(), false);
+    const auto curves = cornerDock_->Choice().polyline
+        ? kachakacha::v2::app::SelectedWholeCurves(selection, session_->Scene())
+        : kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    if (wires != nullptr) {
+        wires->clear();
+        for (const auto& id : selection.entityIds) {
+            const auto* entity = session_->GetDocument().FindEntity(id);
+            if (entity && entity->kind == EntityKind::Wire) wires->push_back(id);
+        }
+    }
+    return !selection.entityIds.empty() && curves.size() >= 2;
 }
 
 //! 下見を出し直す。道具を持っていなければ、自分が出したものだけ片づける。
@@ -88,15 +100,35 @@ void V2MainWindow::RefreshCornerPreview()
         }
         return;
     }
-    const auto& selection = viewport_->Selection();
-    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    const auto selection = CornerWireSelection(viewport_->Selection(), session_->GetDocument(), false);
+    const bool polyline = cornerDock_->Choice().polyline;
+    const auto inputs = polyline
+        ? kachakacha::v2::app::SelectedWholeCurves(selection, session_->Scene())
+        : kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     const auto definition = CornerDefinitionFromDock();
-    const auto computed = kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
-    const QString label = definition.method == WireTransformMethod::Fillet
+    const auto computed = [&] {
+        if (!polyline) return kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+        auto oneWire = [&](EntityId id) {
+            kachakacha::v2::app::SelectionSet one;
+            one.entityIds.push_back(id);
+            return kachakacha::v2::document::EvaluateWireTransform(definition,
+                kachakacha::v2::app::SelectedWholeCurves(one, session_->Scene()));
+        };
+        auto combined = oneWire(wires.front());
+        if (!combined.HasValue()) return combined;
+        auto segments = combined.Value();
+        for (std::size_t i = 1; i < wires.size(); ++i) {
+            const auto next = oneWire(wires[i]);
+            if (!next.HasValue()) return next;
+            segments.insert(segments.end(), next.Value().begin(), next.Value().end());
+        }
+        return decltype(combined)::Success(std::move(segments));
+    }();
+    const QString label = cornerDock_->Choice().fillet
         ? QStringLiteral("R丸め")
         : QStringLiteral("C面取り");
     cornerPreviewShown_ = true;
-    if(inputs.size()<=2) ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
+    if(!polyline && inputs.size()<=2) ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
         kachakacha::v2::app::ToolRoleLabel{wires.back(), "B"}});
     else viewport_->HideToolRoleLabels();
     QString footer = QStringLiteral("%1: A=%2 / B=%3 / SIZE=%4 mm")
@@ -121,7 +153,7 @@ void V2MainWindow::RefreshCornerPreview()
 //! Enter / Esc。下見が出ているときだけ引き受ける。
 bool V2MainWindow::HandleCornerToolKey(int key)
 {
-    if (!cornerPreviewShown_) {
+    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
         return false;
     }
     if (key == Qt::Key_Escape) {
@@ -136,7 +168,10 @@ bool V2MainWindow::HandleCornerToolKey(int key)
     }
     // 確定は従来の命令そのもの。下見と同じ定義(CornerDefinitionFromDock)で作る。
     const auto revision = session_->GetDocument().Revision();
-    RunWireEditCommand(cornerDock_->Choice().fillet ? "wire.fillet" : "wire.chamfer");
+    const auto choice = cornerDock_->Choice();
+    RunWireEditCommand(choice.polyline
+        ? (choice.fillet ? "wire.corner_fillet" : "wire.corner_chamfer")
+        : (choice.fillet ? "wire.fillet" : "wire.chamfer"));
     if (session_->GetDocument().Revision() != revision) {
         const QString done = StatusText();
         viewport_->CancelTool();

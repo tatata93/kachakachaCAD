@@ -16,16 +16,84 @@
 #include "V2MainWindow.h"
 
 #include "V2Viewport.h"
+#include "V2OperationPanelHost.h"
+#include "V2RoleInput.h"
+#include <QDockWidget>
+#include <QLabel>
+#include <QObject>
+#include <QPushButton>
+#include <QStringList>
+#include <QWidget>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 #include "kachakacha/app/ToolTargeting.h"
 
 #include <QString>
 
 #include <string>
+#include <algorithm>
 
 using kachakacha::v2::app::PendingAction;
 using kachakacha::v2::app::PendingCommandAction;
 using kachakacha::v2::app::PredicateCanBeSatisfiedBySelection;
+
+namespace {
+constexpr auto pendingPageName = "pendingTargetPage";
+void ShowPendingTargets(V2MainWindow& window, V2OperationPanelHost& host,
+    const kachakacha::v2::app::CommandDescriptor& command, bool satisfied)
+{
+    auto* page = host.TemporaryPage();
+    if (!page || page->objectName() != pendingPageName) {
+        page = new QWidget(&host);
+        page->setObjectName(pendingPageName);
+        auto* layout = new QVBoxLayout(page);
+        auto* hint = new QLabel(QString::fromUtf8(std::string(command.predicateFailureJa).c_str())
+            + QStringLiteral("。3Dビューまたは左ペインから順に選んでください。"), page);
+        hint->setWordWrap(true); layout->addWidget(hint);
+        auto* role = new V2RoleInput(page, QStringLiteral("加工する対象（選択順）"));
+        role->setObjectName(QStringLiteral("pendingTargetRole"));
+        layout->addWidget(role);
+        role->removeItem = [&window](int row) {
+            auto selection = window.Viewport().Selection();
+            if (row < 0 || row >= static_cast<int>(selection.entityIds.size())) return;
+            const auto id = selection.entityIds[row];
+            std::erase(selection.entityIds, id);
+            std::erase_if(selection.ordered, [id](const auto& ref) { return ref.entityId == id; });
+            window.Viewport().SetSelection(std::move(selection));
+        };
+        QObject::connect(role->arm, &QPushButton::clicked, page, [&window] {
+            window.Viewport().setFocus();
+        });
+        QObject::connect(role->clear, &QPushButton::clicked, page, [&window] {
+            window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+        });
+        layout->addStretch(1);
+        auto* actions = new QHBoxLayout;
+        auto* cancel = new QPushButton(QStringLiteral("取消 Esc"), page);
+        auto* confirm = new QPushButton(QStringLiteral("確定 Enter"), page);
+        confirm->setObjectName(QStringLiteral("pendingTargetConfirm"));
+        actions->addWidget(cancel); actions->addWidget(confirm); layout->addLayout(actions);
+        QObject::connect(cancel, &QPushButton::clicked, page, [&window] {
+            window.HandleToolKey(Qt::Key_Escape, nullptr);
+        });
+        QObject::connect(confirm, &QPushButton::clicked, page, [&window] {
+            window.ConfirmPendingCommand();
+        });
+        host.ShowTemporaryPage(page, QString::fromUtf8(std::string(command.labelJa).c_str()));
+    }
+    QStringList names;
+    for (const auto& id : window.Viewport().Selection().entityIds)
+        if (const auto* entity = window.Session().GetDocument().FindEntity(id))
+            names.push_back(QString::fromStdString(entity->displayName));
+    for (auto* widget : page->findChildren<QWidget*>())
+        if (auto* role = dynamic_cast<V2RoleInput*>(widget)) {
+            role->value->setText(names.empty() ? QStringLiteral("未選択") : names.join(QStringLiteral("、")));
+            role->SetItems(names);
+        }
+    page->findChild<QPushButton*>(QStringLiteral("pendingTargetConfirm"))->setEnabled(satisfied);
+}
+}
 
 bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
 {
@@ -43,10 +111,9 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         return true;
     }
     // A shelf command must stop the old drawing tool before collecting its targets.
-    if (command->mode != kachakacha::v2::app::CommandMode::Tool
-        && session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+    // Dedicated surface/extrusion tools already own the input shelf and picking state.
+    if (id != "part.extrude" && id != "surface.create")
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-    }
     // 選べば満たせる。構えて待つ。
     pendingCommandId_ = std::string(id);
     if (IsFabricationCommand(id) || IsFreezeCommand(id)) FocusFabricationStageFor(id);
@@ -63,6 +130,13 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         viewport_->SetToolPickActive(true);
         // 線の上を押せば線 1 本、線の無い内側を押せば輪郭をまとめて拾う。
         viewport_->SetProfileRegionPicking(true, true);
+    }
+    if (id != "part.extrude" && id != "surface.create" && operationHost_
+        && !IsFabricationCommand(id) && !IsFreezeCommand(id) && !partDock_->ToolActive()) {
+        viewport_->SetToolPickActive(true);
+        viewport_->SetToolPickToggle(true);
+        ShowPendingTargets(*this, *operationHost_, *command, false);
+        operationDock_->show(); operationDock_->raise();
     }
     SetStatus(QStringLiteral("%1: %2(選ぶと続きます。Esc でやめます)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
@@ -89,7 +163,15 @@ void V2MainWindow::ClearPendingCommand()
         viewport_->SetToolPickActive(false);
         viewport_->SetProfileRegionPicking(false);
     }
+    const bool genericPage = !pendingCommandId_.empty() && operationHost_ && operationHost_->TemporaryPage()
+        && operationHost_->TemporaryPage()->objectName() == pendingPageName;
+    if (genericPage) {
+        operationHost_->ClearTemporaryPage();
+        viewport_->SetToolPickActive(false);
+        viewport_->SetToolPickToggle(false);
+    }
     pendingCommandId_.clear();
+    if (genericPage) RefreshRightShelves();
 }
 
 QString V2MainWindow::PendingCommandLabel() const
@@ -120,6 +202,9 @@ void V2MainWindow::RefreshPendingCommand(bool confirmed)
     }
     QString reason;
     const bool satisfied = CommandEnabled(pendingCommandId_, &reason);
+    if (pendingCommandId_ != "part.extrude" && pendingCommandId_ != "surface.create" && operationHost_
+        && !IsFabricationCommand(pendingCommandId_) && !IsFreezeCommand(pendingCommandId_) && !partDock_->ToolActive())
+        ShowPendingTargets(*this, *operationHost_, *command, satisfied);
     if (partDock_ != nullptr && partDock_->ToolActive() && !confirmed) {
         SetStatus(satisfied ? QStringLiteral("対象を選びました。条件を確認して下端で確定してください。") : reason);
         return;

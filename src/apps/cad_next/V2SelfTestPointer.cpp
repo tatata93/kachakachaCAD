@@ -13,6 +13,7 @@
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2OperationPanelHost.h"
 
 #include "kachakacha/app/DiagnosticReport.h"
 #include "kachakacha/app/PointerCursor.h"
@@ -963,12 +964,51 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     window.ActivateCommand("part.extrude");
     if (!Explain("menu and toolbar activation preserve extrusion preview", window.Viewport().ExtrudeHandleShown()
         && before == window.Session().GetDocument().Snapshot().revision)) return false;
+    window.ActivateCommand("view.display_settings");
+    window.ActivateCommand("part.extrude");
+    if (!Explain("reclick restores extrusion pane without confirming", window.OperationHost().CurrentShelf()
+        == kachakacha::v2::app::Shelf::Extrude && window.OperationHost().CurrentPage()->isVisible()
+        && before == window.Session().GetDocument().Snapshot().revision)) return false;
     QMenu menu(&window); window.BuildSelectMenu(menu, {});
     auto* apply = menu.findChild<QAction*>(QStringLiteral("toolApply"));
     if (!Explain("context menu offers explicit apply", apply != nullptr)) return false;
     apply->trigger();
-    return Explain("explicit apply creates a solid", CountOfKind(window,
-        kachakacha::v2::domain::EntityKind::Part) == 1);
+    if (!Explain("explicit apply creates a solid", CountOfKind(window,
+        kachakacha::v2::domain::EntityKind::Part) == 1)) return false;
+    const auto revision = window.Session().GetDocument().Revision();
+    for (const char* id : {"wire.corner_fillet", "wire.corner_chamfer", "wire.fillet", "wire.chamfer"}) {
+        window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Part));
+        window.ActivateCommand(id);
+        if (!Explain("wire corner tool ignores solid boundary overlays safely", !window.CornerPreviewShown()
+            && window.Session().GetDocument().Revision() == revision)) return false;
+        window.HandleToolKey(Qt::Key_Escape, nullptr);
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseSurfaceButtonsRestorePane(V2MainWindow& window)
+{
+    using kachakacha::v2::app::Shelf;
+    window.RunCommand("file.new");
+    window.ActivateCommand("surface.create");
+    const auto revision = window.Session().GetDocument().Revision();
+    for (int i = 0; i < 2; ++i) {
+        window.ActivateCommand("view.display_settings");
+        window.ActivateCommand("guide.revolve");
+        if (!Explain("revolve switches method and restores pane without implicit confirm",
+            window.ShelfShown(Shelf::Surface)
+            && window.Session().GetDocument().Revision() == revision)) return false;
+    }
+    for (const char* id : {"surface.match", "surface.bridge", "surface.refit", "surface.mirror", "surface.iso_curves"}) {
+        window.ActivateCommand(id);
+        window.ActivateCommand("view.display_settings");
+        window.ActivateCommand(id);
+        if (!Explain("surface editing reactivation restores current pane", window.ShelfShown(Shelf::SurfaceEdit)
+            && window.OperationHost().CurrentPage() && window.OperationHost().CurrentPage()->isVisible()
+            && window.Session().GetDocument().Revision() == revision)) return false;
+    }
+    return true;
 }
 
 [[nodiscard]] bool CaseWorkPlaneUsesCommonKeys(V2MainWindow& window)
@@ -998,6 +1038,7 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
 std::vector<SelfTestCase> PointerCases()
 {
     return {
+        {"HP-INT-04 surface and revolve buttons restore panes without applying", CaseSurfaceButtonsRestorePane},
         {"HP-INT-03 workplane tool-first and common keys", CaseWorkPlaneUsesCommonKeys},
         {"HP-INT-01 context actions preserve unfinished input", CaseContextActionsPreserveInput},
         {"HP-INT-02 activation and explicit apply across entry points", CaseActivationDoesNotConfirm},

@@ -3,6 +3,7 @@
 #include "V2Viewport.h"
 #include "V2RoleInput.h"
 #include <QDockWidget>
+#include <QComboBox>
 #include <QPushButton>
 #include <QString>
 #include <QStringList>
@@ -40,13 +41,15 @@ public:
         if(!isVisible()||writing_)return;
         auto selection=window_.Viewport().Selection();
         if(selection.ordered.empty())for(const auto& id:selection.entityIds){app::SelectionRef ref;ref.entityId=id;selection.ordered.push_back(ref);}
+        const bool polyline = PolylineMode();
+        if (polyline != lastPolyline_) { last_.clear(); lastPolyline_ = polyline; }
         if(selection.ordered.size()==last_.size()&&std::equal(selection.ordered.begin(),selection.ordered.end(),last_.begin(),
             [](const auto& a,const auto& b){return a.entityId==b.entityId&&a.segmentId==b.segmentId;})){Refresh();return;}
         last_=selection.ordered;inputs_={};
         int index=0;
         for(const auto& ref:selection.ordered) {
             if(!Accept(ref.entityId))continue;
-            inputs_[corner_?std::min(index++,2):0].ordered.push_back(ref);
+            inputs_[corner_&&!polyline?std::min(index++,2):0].ordered.push_back(ref);
         }
         Refresh();
     }
@@ -54,6 +57,10 @@ protected:
     void showEvent(QShowEvent* event) override {QWidget::showEvent(event);Sync();}
     void hideEvent(QHideEvent* event) override {Cancel();QWidget::hideEvent(event);}
 private:
+    bool PolylineMode() const {
+        const auto* mode = window_.findChild<QComboBox*>(QStringLiteral("cornerTargetMode"));
+        return corner_ && mode && mode->currentIndex() == 1;
+    }
     bool Accept(base::EntityId id) const {
         const auto* entity=window_.Session().GetDocument().FindEntity(id);
         return entity&&((kind_==3?entity->kind==domain::EntityKind::GuideSurface:entity->kind==domain::EntityKind::Wire)||(!corner_&&entity->kind==domain::EntityKind::Part));
@@ -65,7 +72,7 @@ private:
             [this,index](std::optional<app::PickCandidate> pick){
                 active_=-1;
                 if(pick) {
-                    inputs_[index]=app::ApplySelection(corner_&&index<2?app::SelectionSet{}:inputs_[index],pick,app::SelectionMode::Add);
+                    inputs_[index]=app::ApplySelection(corner_&&!PolylineMode()&&index<2?app::SelectionSet{}:inputs_[index],pick,app::SelectionMode::Add);
                     Publish();
                 } else Refresh();
             });
@@ -82,14 +89,17 @@ private:
         last_=selection.ordered;writing_=true;window_.Viewport().SetSelection(std::move(selection));writing_=false;Refresh();
     }
     void Refresh() {
+        const bool polyline = PolylineMode();
+        if (corner_) roles_[0]->name->setText(polyline ? QStringLiteral("加工するワイヤー全体") : QStringLiteral("線 A"));
         for(int i=0;i<(corner_?3:1);++i) {
+            roles_[i]->setVisible(!polyline || i == 0);
             QStringList names;
             for(const auto& ref:inputs_[i].ordered)if(const auto* entity=window_.Session().GetDocument().FindEntity(ref.entityId))names.push_back(QString::fromStdString(entity->displayName));
             roles_[i]->value->setText(names.empty()?QStringLiteral("未選択"):names.join(QStringLiteral("、")));
             roles_[i]->SetItems(names);roles_[i]->arm->setChecked(active_==i);
         }
     }
-    V2MainWindow& window_;bool corner_=false,writing_=false;int kind_=0,active_=-1;
+    V2MainWindow& window_;bool corner_=false,writing_=false,lastPolyline_=false;int kind_=0,active_=-1;
     std::vector<app::SelectionRef> last_;
     std::array<V2RoleInput*,3> roles_{};std::array<app::SelectionSet,3> inputs_{};
 };

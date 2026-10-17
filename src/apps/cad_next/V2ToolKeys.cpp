@@ -91,7 +91,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     return (operationHost_ && dynamic_cast<V2OffsetTool*>(operationHost_->TemporaryPage()))
         || !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
-        || thicken_->shelfShown || cornerPreviewShown_
+        || thicken_->shelfShown || session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair
         || ShelfShown(kachakacha::v2::app::Shelf::WorkPlane)
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
         || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
@@ -168,7 +168,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (fabricationDock_ != nullptr && fabricationDock_->HandleKey(key)) return true;
     if (partDock_ != nullptr && partDock_->HandleKey(key)) return true;
-    if (cornerPreviewShown_ && HandleCornerToolKey(key)) {
+    if (HandleCornerToolKey(key)) {
         return true;
     }
     if (loopFaces_ != nullptr && loopFaces_->Active() && loopFaces_->HandleKey(key)) {

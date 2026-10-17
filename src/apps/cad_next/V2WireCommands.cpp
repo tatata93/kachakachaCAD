@@ -12,6 +12,7 @@
 //! 幾何の判断は1つもしない。判断は core にある。
 
 #include "V2MainWindow.h"
+#include "V2CornerSelection.h"
 #include "V2SurfaceEditTool.h"
 
 #include "kachakacha/app/PointSources.h"
@@ -648,7 +649,12 @@ void V2MainWindow::RunWireTransform(
         RunWireTransformEach(definition, labelJa, consumesInputs);
         return;
     }
-    const auto selection = viewport_->Selection();
+    auto selection = viewport_->Selection();
+    const bool wholeWire = definition.method == WireTransformMethod::CornerChamfer
+        || definition.method == WireTransformMethod::CornerFillet;
+    if (wholeWire || definition.method == WireTransformMethod::Chamfer
+        || definition.method == WireTransformMethod::Fillet)
+        selection = CornerWireSelection(std::move(selection), session_->GetDocument(), wholeWire);
     auto consumed = EditedWireIds(selection, session_->Scene());
     const auto inputIds = consumed;
     if (consumesFirstOnly && !consumed.empty()) consumed.resize(1);
@@ -748,6 +754,8 @@ void V2MainWindow::RunWireTransformEach(
             one.entityIds.push_back(id);
             for (const auto& ref : viewport_->Selection().ordered)
                 if (ref.entityId == id) one.ordered.push_back(ref);
+            if (definition.method == WireTransformMethod::CornerChamfer
+                || definition.method == WireTransformMethod::CornerFillet) one.ordered.clear();
             const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
             if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
                 continue;   // 線でないもの(点など)は直す相手にしない

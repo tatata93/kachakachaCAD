@@ -54,11 +54,9 @@ void V2MainWindow::BuildEditingShelves()
     cornerDock_ = new V2CornerDock(this);
     InstallSelectionRoleInputs(*this,*cornerDock_,true);
     cornerDock_->SetRunHandler([this](const char* command) {
-        if (std::string_view(command) == "wire.fillet" || std::string_view(command) == "wire.chamfer") {
-            if (!HandleCornerToolKey(Qt::Key_Return)) RunWireEditCommand(command);
-        } else RunCommand(command);
+        if (!HandleCornerToolKey(Qt::Key_Return)) RunWireEditCommand(command);
     });
-    cornerDock_->SetChoiceChangedHandler([this] { RefreshCornerPreview(); });
+    cornerDock_->SetChoiceChangedHandler([this] { RefreshCornerDock(); });
     cornerDock_->SetCancelHandler([this] { SendKeyToViewport(Qt::Key_Escape); });
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
     fabricationDock_ = new V2FabricationDock(this);

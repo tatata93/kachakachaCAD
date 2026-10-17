@@ -81,6 +81,15 @@ bool OpenTemporaryTool(V2MainWindow& window,std::string_view id)
     return false;
 }
 
+QString ConfigureCornerTool(V2CornerDock& dock, std::string_view id)
+{
+    dock.SetPolylineMode(id == "wire.corner_chamfer" || id == "wire.corner_fillet");
+    dock.SetFillet(id == "wire.fillet" || id == "wire.corner_fillet");
+    return dock.Choice().polyline
+        ? QStringLiteral("加工するワイヤーを選んでください。辺を押すとそのワイヤー全体の角を下見します。Enterで確定、Escで取消。")
+        : QStringLiteral("加工する辺を順に選んでください。2辺では残す側を押してください。Enterで確定、Escで取消。");
+}
+
 } // namespace
 
 //! 自分の棚を持つ道具(立体を作る・辺の丸め面取り・シェル分割・面にする)は 1 つだけ構える。
@@ -176,6 +185,7 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         ClearPendingCommand();
         EndOwnedToolsBut(surfaceEdit_.get());
         surfaceEdit_->Begin(id);
+        RefreshRightShelves();
         return true;
     }
     // 面の解析は、いつでも開ける(面を作る・面の編集の下見を塗るので、その道具は止めない)。
@@ -189,16 +199,13 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         return true;
     }
     // C面取り / R丸め。線が2本そろっていなければ、面取りの道具を持って拾うのを待つ。
-    // そろっていれば従来どおり作る(下見の Enter もここへ来る)。
-    if (id == "wire.chamfer" || id == "wire.fillet") {
+    // 両方の入口で設定と下見を先に表示する。
+    if (id == "wire.chamfer" || id == "wire.fillet"
+        || id == "wire.corner_chamfer" || id == "wire.corner_fillet") {
         ClearPendingCommand();
-        if (cornerDock_ != nullptr) {
-            cornerDock_->SetFillet(id == "wire.fillet");
-        }
+        const QString prompt = ConfigureCornerTool(*cornerDock_, id);
         SelectTool(kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair);
-        SetStatus(QStringLiteral("%1: 線を2本、残したい側を 3D で押してください(1本目が A、2本目が B。"
-                                 "直線・円弧・円・ベジェ)。2本そろうと下見が出ます。Enter で確定、Esc でやめます。")
-                .arg(id == "wire.fillet" ? QStringLiteral("R丸め") : QStringLiteral("C面取り")));
+        SetStatus(prompt);
         return true;
     }
     return false;

@@ -98,7 +98,15 @@ void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
     // 選択済みでも道具を押しただけで生成しない。設定を見てから確定する。
     const auto id = tool.commandId;
     if(id=="wire.offset"){V2OffsetTool::Open(*this);return;}
+    if (id == "guide.revolve" && surfaceShelfShown_) {
+        ChooseSurfaceMethod(kachakacha::v2::modeling::GuideSurfaceMethod::Revolve);
+        RefreshRightShelves();
+        return;
+    }
     if (!tool.surfaceMethod && !tool.measureMode && IsEditingCommand(id)) {
+        if (id == "workplane.create") ShowShelf(kachakacha::v2::app::Shelf::WorkPlane);
+        else RefreshRightShelves();
+        if (!pendingCommandId_.empty()) RefreshPendingCommand(false);
         SetStatus(QStringLiteral("入力と下見を維持しています。Enter または右ペインの確定で適用できます。"));
         return;
     }
@@ -132,6 +140,7 @@ void V2MainWindow::RunRibbonVariant(const RibbonTool& tool)
             *tool.surfaceMethod);
         if (surfaceShelfShown_) {
             ChooseSurfaceMethod(method);
+            RefreshRightShelves();
         } else {
             surfaceInput_.method = method;
             surfaceInput_.methodChosenByUser = true;

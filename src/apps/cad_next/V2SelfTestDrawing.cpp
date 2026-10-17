@@ -8,6 +8,8 @@
 #include "V2SelfTest.h"
 
 #include "V2DisplayDock.h"
+#include "V2CornerDock.h"
+#include "V2OperationPanelHost.h"
 #include "V2DrawingDock.h"
 #include "V2GridDock.h"
 #include "V2MeasureDock.h"
@@ -588,7 +590,8 @@ using kachakacha::v2::modeling::ToolSettings;
                 QStringLiteral("4")))) {
         return false;
     }
-    window.RunCommand("wire.corner_chamfer");
+    window.ActivateCommand("wire.corner_chamfer");
+    window.CornerDock().PressCreate();
     // 元の線は下流(加工した線)があるので消えず、隠れる。見えている線は 5 本。
     if (!Explain((std::string("2つの角が落ちて5本になる(") + window.StatusText().toStdString()
                      + ", 見える線 " + std::to_string(window.Session().Scene().curves.size())
@@ -601,7 +604,8 @@ using kachakacha::v2::modeling::ToolSettings;
     if (!Explain("もう一度引ける", drawU())) {
         return false;
     }
-    window.RunCommand("wire.corner_fillet");
+    window.ActivateCommand("wire.corner_fillet");
+    window.CornerDock().PressCreate();
     int arcs = 0;
     for (const auto& curve : window.Session().Scene().curves) {
         arcs += curve.segment.Kind() == kachakacha::v2::geometry::CurveKind::CircularArc ? 1 : 0;
@@ -639,7 +643,8 @@ using kachakacha::v2::modeling::ToolSettings;
         return false;
     }
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
-    window.RunCommand("wire.corner_chamfer");
+    window.ActivateCommand("wire.corner_chamfer");
+    window.CornerDock().PressCreate();
     // 1 本につき 2 つの角が落ちて 5 区間。2 本で 10 区間、新しい線は 2 本(元は隠れる)。
     if (!Explain((std::string("線ごとに角が落ちる(") + window.StatusText().toStdString() + "、見える区間 "
                      + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
@@ -651,6 +656,44 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("1 回の元に戻すで 2 本とも加工前へ戻る",
         CountOfKind(window, EntityKind::Wire) == wiresBefore
             && window.Session().Scene().curves.size() == 6);
+}
+
+// Regression: a viewport edge pick must process the complete selected polyline.
+[[nodiscard]] bool CaseCornerToolFirstEdgePick(V2MainWindow& window)
+{
+    for (const char* command : {"wire.corner_fillet", "wire.corner_chamfer"}) {
+        window.RunCommand("file.new");
+        const double scale = PrepareTopView(window);
+        auto& view = window.Viewport();
+        const QPointF center(view.width() * .5, view.height() * .5);
+        window.SelectTool(DrawingTool::Rectangle);
+        view.ClickAt(center + QPointF(-20 * scale, -20 * scale));
+        view.ClickAt(center + QPointF(20 * scale, 20 * scale));
+        const auto middle = view.Mapping().Project(window.Session().Scene().curves.front().segment.Evaluate(.5));
+        if (!middle) return false;
+        view.SetSelection({});
+        const auto revision = window.Session().GetDocument().Revision();
+        window.ActivateCommand(command);
+        if (!Explain("corner tool opens before selection", window.OperationHost().CurrentShelf()
+            == kachakacha::v2::app::Shelf::Corner && window.ToolWantsConfirmKeys())) return false;
+        window.HandleToolKey(Qt::Key_Escape, nullptr);
+        view.ClickAt(QPointF(middle->x, middle->y));
+        if (!Explain("single picked edge previews whole rectangle without committing",
+            !view.Selection().ordered.empty() && view.Selection().ordered.front().segmentId.has_value()
+            && !view.ToolPreview().empty() && window.Session().GetDocument().Revision() == revision)) return false;
+        window.CornerDock().SetOnlyVertex(true, 1);
+        const auto singleSize = view.ToolPreview().size();
+        window.CornerDock().SetOnlyVertex(false, 1);
+        if (!Explain("vertex option immediately refreshes preview", singleSize > 0
+            && view.ToolPreview().size() > singleSize)) return false;
+        window.CornerDock().PressCreate();
+        if (!Explain("confirm processes all four corners", window.Session().Scene().curves.size() == 8)) return false;
+        window.RunCommand("edit.undo");
+        if (!Explain("one undo restores four original edges", window.Session().Scene().curves.size() == 4)) return false;
+        window.RunCommand("edit.redo");
+        if (!Explain("redo restores corner processing", window.Session().Scene().curves.size() == 8)) return false;
+    }
+    return true;
 }
 
 [[nodiscard]] bool CaseV1KcdOpensAsDocument(V2MainWindow& window)
@@ -891,6 +934,7 @@ using kachakacha::v2::modeling::ToolSettings;
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"HP-CORNER-ENTRY whole wire from a real viewport edge pick", &CaseCornerToolFirstEdgePick},
         {"HP-ME-03 測定を先に選んで線と位置を拾う", &CaseMeasureToolFirst},
         {"HP-ME-01 測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
         {"HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",

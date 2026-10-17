@@ -40,6 +40,18 @@ namespace {
     return combo;
 }
 
+QWidget* MakePairSummary(QWidget* body, QLabel*& first, QLabel*& second)
+{
+    auto* widget = new QWidget(body);
+    auto* form = new QFormLayout(widget);
+    form->setContentsMargins(0, 0, 0, 0);
+    first = new QLabel(QStringLiteral("(未選択)"), widget);
+    second = new QLabel(QStringLiteral("(未選択)"), widget);
+    form->addRow(QStringLiteral("線 A"), first);
+    form->addRow(QStringLiteral("線 B"), second);
+    return widget;
+}
+
 } // namespace
 
 V2CornerDock::V2CornerDock(QWidget* parent)
@@ -53,16 +65,14 @@ V2CornerDock::V2CornerDock(QWidget* parent)
 
     // 道具の棚の共通の枠(C-10): 作り方 → 入力 → 設定 → キャンセル・確定。
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("入力")));
-    auto* inputWidget = new QWidget(body);
-    auto* inputForm = new QFormLayout(inputWidget);
-    inputForm->setContentsMargins(0, 0, 0, 0);
-    first_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
-    second_ = new QLabel(QStringLiteral("(未選択)"), inputWidget);
-    inputForm->addRow(QStringLiteral("線 A"), first_);
-    inputForm->addRow(QStringLiteral("線 B"), second_);
-    layout->addWidget(inputWidget);
+    layout->addWidget(MakePairSummary(body, first_, second_));
 
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
+    targetMode_ = new QComboBox(body);
+    targetMode_->setObjectName(QStringLiteral("cornerTargetMode"));
+    targetMode_->addItem(QStringLiteral("選んだ辺どうしの角"));
+    targetMode_->addItem(QStringLiteral("ワイヤー内の角をまとめて加工"));
+    layout->addWidget(targetMode_);
     kind_ = new QComboBox(body);
     kind_->addItem(QStringLiteral("C面取り"));
     kind_->addItem(QStringLiteral("R丸め"));
@@ -94,9 +104,10 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     form_->addRow(QStringLiteral("半径"), radius_);
     layout->addWidget(formWidget);
 
-    auto* cornerTitle = MakePanelSectionTitle(body, QStringLiteral("ポリラインの角(別の道具)"));
+    auto* cornerTitle = MakePanelSectionTitle(body, QStringLiteral("加工する頂点"));
     layout->addWidget(cornerTitle);
     auto* cornerWidget = new QWidget(body);
+    cornerOptions_ = cornerWidget;
     auto* cornerForm = new QFormLayout(cornerWidget);
     cornerForm->setContentsMargins(0, 0, 0, 0);
     onlyVertex_ = new QCheckBox(QStringLiteral("この頂点の角だけ"), cornerWidget);
@@ -111,7 +122,7 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     cornerForm->addRow(QStringLiteral("頂点番号"), vertex_);
     layout->addWidget(cornerWidget);
     corner_ = new QPushButton(QStringLiteral("角を加工(上の種類と値を使用)"), body);
-    layout->addWidget(corner_);
+    corner_->hide(); // Both modes use the pinned confirm button.
     layout->addStretch(1);
 
     auto* scroll = new QScrollArea(this);
@@ -147,6 +158,16 @@ V2CornerDock::V2CornerDock(QWidget* parent)
 //! 欄とボタンの便りを繋ぐ。コンストラクタを 100 行以内に保つために分けた。
 void V2CornerDock::Connect()
 {
+    QObject::connect(targetMode_, &QComboBox::currentIndexChanged, this, [this] {
+        RefreshKind();
+        if (!loading_ && choiceChangedHandler_) choiceChangedHandler_();
+    });
+    QObject::connect(onlyVertex_, &QCheckBox::toggled, this, [this] {
+        if (!loading_ && choiceChangedHandler_) choiceChangedHandler_();
+    });
+    QObject::connect(vertex_, &QDoubleSpinBox::valueChanged, this, [this] {
+        if (!loading_ && choiceChangedHandler_) choiceChangedHandler_();
+    });
     QObject::connect(kind_, &QComboBox::currentIndexChanged, this, [this] {
         RefreshKind();
         if (!loading_ && choiceChangedHandler_) {
@@ -174,8 +195,12 @@ void V2CornerDock::Connect()
 void V2CornerDock::RefreshKind()
 {
     const bool fillet = kind_->currentIndex() == 1;
+    const bool polyline = targetMode_->currentIndex() == 1;
+    cornerOptions_->setVisible(polyline);
+    form_->setRowVisible(firstKeep_, !polyline);
+    form_->setRowVisible(secondKeep_, !polyline);
     form_->setRowVisible(size_, !fillet);
-    form_->setRowVisible(secondSetback_, !fillet);
+    form_->setRowVisible(secondSetback_, !fillet && !polyline);
     form_->setRowVisible(radius_, fillet);
     create_->setText(fillet ? QStringLiteral("R丸めを作成(確定 Enter)")
                             : QStringLiteral("C面取りを作成(確定 Enter)"));
@@ -199,6 +224,7 @@ void V2CornerDock::EmitSize()
 V2CornerChoice V2CornerDock::Choice() const
 {
     V2CornerChoice choice;
+    choice.polyline = targetMode_->currentIndex() == 1;
     choice.fillet = kind_->currentIndex() == 1;
     choice.sizeMm = choice.fillet ? radius_->value() : size_->value();
     choice.secondSetbackMm = secondSetback_->value();
@@ -212,6 +238,7 @@ V2CornerChoice V2CornerDock::Choice() const
 void V2CornerDock::SetChoice(const V2CornerChoice& choice)
 {
     loading_ = true;
+    targetMode_->setCurrentIndex(choice.polyline ? 1 : 0);
     kind_->setCurrentIndex(choice.fillet ? 1 : 0);
     size_->setValue(choice.sizeMm);
     radius_->setValue(choice.sizeMm);
@@ -264,6 +291,12 @@ void V2CornerDock::SetSecondSetback(double mm)
     secondSetback_->setValue(mm);
 }
 
+void V2CornerDock::SetPolylineMode(bool enabled)
+{
+    targetMode_->setCurrentIndex(enabled ? 1 : 0);
+    RefreshKind();
+}
+
 void V2CornerDock::SetKeepSides(int first, int second)
 {
     firstKeep_->setCurrentIndex(first);
@@ -279,12 +312,15 @@ void V2CornerDock::SetOnlyVertex(bool only, int vertexIndex)
 void V2CornerDock::PressCreate()
 {
     if (runHandler_) {
-        runHandler_(kind_->currentIndex() == 1 ? "wire.fillet" : "wire.chamfer");
+        runHandler_(Choice().polyline
+            ? (Choice().fillet ? "wire.corner_fillet" : "wire.corner_chamfer")
+            : (Choice().fillet ? "wire.fillet" : "wire.chamfer"));
     }
 }
 
 void V2CornerDock::PressCorner()
 {
+    SetPolylineMode(true);
     if (runHandler_) {
         runHandler_(kind_->currentIndex() == 1 ? "wire.corner_fillet" : "wire.corner_chamfer");
     }

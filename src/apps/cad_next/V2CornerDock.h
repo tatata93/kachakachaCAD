@@ -25,6 +25,7 @@ class QPushButton;
 
 //! 棚で決めること。
 struct V2CornerChoice {
+    bool polyline = false;
     bool fillet = false;          //!< false: C面取り、true: R丸め
     double sizeMm = 1.0;          //!< A の切戻し、または半径(数の棚と同じ値)
     double secondSetbackMm = 0.0; //!< B の切戻し。0 なら A と同じ
@@ -56,6 +57,7 @@ public:
 
     // ---- 試験から ----
     void SetFillet(bool fillet);
+    void SetPolylineMode(bool enabled);
     void SetSecondSetback(double mm);
     void SetKeepSides(int first, int second);
     void SetOnlyVertex(bool only, int vertexIndex);
@@ -70,6 +72,8 @@ private:
     void Connect();
     void EmitSize();
 
+    QComboBox* targetMode_ = nullptr;
+    QWidget* cornerOptions_ = nullptr;
     QComboBox* kind_ = nullptr;
     QLabel* first_ = nullptr;
     QLabel* second_ = nullptr;

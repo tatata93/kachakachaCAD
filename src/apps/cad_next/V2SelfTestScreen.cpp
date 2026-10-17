@@ -8,6 +8,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2OperationPanelHost.h"
 #include "V2ArrayChoice.h"
 #include "V2ParameterDock.h"
 #include "V2PartDock.h"
@@ -24,6 +25,8 @@
 #include <QApplication>
 #include <QEvent>
 #include <QList>
+#include <QListWidget>
+#include <QPushButton>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPoint>
@@ -1360,6 +1363,64 @@ struct BoxSelectFixture {
         kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1);
 }
 
+[[nodiscard]] bool CasePendingToolReplacesDrawing(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::DrawingTool;
+    for (const char* command : {"wire.join", "wire.coincident", "wire.tangent", "wire.curvature", "wire.project"}) {
+        window.RunCommand("file.new");
+        DrawOneLine(window);
+        window.Viewport().SetSelection({});
+        window.SelectTool(DrawingTool::Line);
+        window.Viewport().ClickAt(QPointF(120, 180));
+        const auto revision = window.Session().GetDocument().Revision();
+        window.ActivateCommand(command);
+        if (!Explain((std::string(command) + " pending: tool=" + std::to_string(static_cast<int>(window.Session().CurrentTool()))
+            + " points=" + std::to_string(window.Session().PlacedPointCount()) + " label=" + window.PendingCommandLabel().toStdString()
+            + " temp=" + (window.OperationHost().TemporaryPage() ? window.OperationHost().TemporaryPage()->objectName().toStdString() : "none")
+            + " revision=" + std::to_string(window.Session().GetDocument().Revision()) + "/" + std::to_string(revision)).c_str(),
+            window.Session().CurrentTool() == DrawingTool::Select
+            && window.Session().PlacedPointCount() == 0
+            && !window.PendingCommandLabel().isEmpty()
+            && window.OperationHost().TemporaryPage()
+            && window.OperationHost().TemporaryPage()->objectName() == "pendingTargetPage"
+            && window.OperationHost().TemporaryPage()->isVisible()
+            && window.Session().GetDocument().Revision() == revision)) return false;
+        window.ActivateCommand("view.display_settings");
+        window.ActivateCommand(command);
+        if (!Explain("pending target pane can be restored", window.OperationHost().TemporaryPage()
+            && window.OperationHost().TemporaryPage()->objectName() == "pendingTargetPage")) return false;
+        window.HandleToolKey(Qt::Key_Escape, nullptr);
+        if (!Explain("cancel input leaves document unchanged", window.Viewport().Selection().entityIds.empty()
+            && window.Session().GetDocument().Revision() == revision)) return false;
+    }
+    window.RunCommand("file.new");
+    if (!DrawLineBetween(window, {0,0,0}, {20,0,0}) || !DrawLineBetween(window, {20,0,0}, {20,20,0})) return false;
+    window.Viewport().SetSelection({});
+    const auto revision = window.Session().GetDocument().Revision();
+    window.ActivateCommand("wire.join");
+    for (const auto point : {kachakacha::v2::geometry::Vector3{10,0,0}, kachakacha::v2::geometry::Vector3{20,10,0}}) {
+        const auto screen = window.Viewport().Mapping().Project(point);
+        if (!screen) return false;
+        window.Viewport().SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+    }
+    if (!Explain("join collects two targets before explicit confirm", window.Viewport().Selection().entityIds.size() == 2
+        && window.Session().GetDocument().Revision() == revision)) return false;
+    auto* page = window.OperationHost().TemporaryPage();
+    auto* list = page ? page->findChild<QListWidget*>() : nullptr;
+    if (!list) return false;
+    list->setCurrentRow(0);
+    for (auto* button : page->findChildren<QPushButton*>())
+        if (button->text() == QStringLiteral("この項目を外す")) { button->click(); break; }
+    if (!Explain("individual target removal preserves the other input", window.Viewport().Selection().entityIds.size() == 1
+        && window.Session().GetDocument().Revision() == revision)) return false;
+    const auto first = window.Viewport().Mapping().Project({10,0,0});
+    if (!first) return false;
+    window.Viewport().SelectAt(QPointF(first->x, first->y), Qt::NoModifier);
+    window.ConfirmPendingCommand();
+    return Explain("join commits and clears pending pane", window.Session().GetDocument().Revision() > revision
+        && window.PendingCommandLabel().isEmpty() && !window.OperationHost().HasTemporaryPage());
+}
+
 [[nodiscard]] bool CaseCommandWaitsForItsTargets(V2MainWindow& window)
 {
     // トリムを押すと、その場で「線を2本選んでください」と言って **終わって** いた。
@@ -1396,6 +1457,7 @@ struct BoxSelectFixture {
 std::vector<SelfTestCase> ScreenCases()
 {
     return {
+        {"HP-PENDING-ENTRY target panes replace drawing and restore on reclick", &CasePendingToolReplacesDrawing},
         {"作図面が画面に出て、どこに描いているかが読める", &CaseWorkPlanesAreDrawn},
         {"左メニューで選んだものが3D画面の選択になる", &CaseTreePickReachesViewport},
         {"3D画面で選んだものが左メニューで光る", &CaseViewportPickReachesTree},

@@ -6,6 +6,7 @@
 #include "V2MainWindow.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -17,6 +18,11 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 using namespace kachakacha::v2;
+void V2OutputAsset::OwnShape(modeling::KernelShapeHandle handle) {
+    shape=handle;
+    shapeOwner=std::shared_ptr<modeling::KernelShapeHandle>(new modeling::KernelShapeHandle(handle),
+        [](auto* owned){kernel::ReleaseShape(*owned);delete owned;});
+}
 V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
     for (auto* child : window.findChildren<QDialog*>()) {
         if (auto* active=dynamic_cast<V2OutputTool*>(child); active && active->isVisible()) {
@@ -80,7 +86,12 @@ bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
         V2OutputAsset asset;asset.entity=*entity;
         if(entity->kind==domain::EntityKind::Part || entity->kind==domain::EntityKind::GuideSurface){
             const auto& shapes=entity->kind==domain::EntityKind::Part?window_.partShapes_:window_.guideShapes_;
-            const auto found=shapes.find(id.ToString());if(found==shapes.end()){SetProblem(QString::fromStdString(entity->displayName)+QStringLiteral(": 実形状がありません。"));return false;}asset.shape=found->second;
+            const auto found=shapes.find(id.ToString());if(found==shapes.end()){SetProblem(QString::fromStdString(entity->displayName)+QStringLiteral(": 実形状がありません。"));return false;}
+            // Generated geometry is rolled back and rebuilt after capture. Own a copy.
+            geometry::OutputPlacement copy;copy.keepPosition=false;
+            const auto captured=kernel::PlaceOutputShape(found->second,copy);
+            if(!captured.HasValue()){SetProblem(QString::fromStdString(captured.FirstSummaryJa()));return false;}
+            asset.OwnShape(captured.Value());
         }else if(entity->kind==domain::EntityKind::Wire){for(const auto& curve:scene.curves)if(curve.entityId==id)asset.curves.push_back(curve.segment);
             if(asset.curves.empty()){SetProblem(QString::fromStdString(entity->displayName)+QStringLiteral(": 曲線を評価できません。"));return false;}
         }else if(entity->kind==domain::EntityKind::Point){bool found=false;for(const auto& point:scene.points)if(point.entityId==id){asset.frame.origin=point.position;found=true;}if(!found){SetProblem(QStringLiteral("点を評価できません。"));return false;}
@@ -94,7 +105,7 @@ bool V2OutputTool::Prepare() {
     prepared_.clear();const auto placement=Placement();if(!placement.Valid()){SetProblem(QStringLiteral("配置の法線と面内方向は、長さ0や平行にできません。"));return false;}
     for(int i=0;i<targets_->count();++i){if(targets_->item(i)->checkState()!=Qt::Checked)continue;auto asset=assets_[static_cast<std::size_t>(i)];
         if(!asset.curves.empty()){const auto curves=kernel::PlaceOutputCurves(asset.curves,placement,1e-7);if(!curves.HasValue()){SetProblem(QString::fromStdString(curves.FirstSummaryJa()));return false;}asset.curves=curves.Value();}
-        if(asset.entity.kind==domain::EntityKind::Part || asset.entity.kind==domain::EntityKind::GuideSurface){const auto shape=kernel::PlaceOutputShape(asset.shape,placement);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}asset.shape=shape.Value();}
+        if(asset.entity.kind==domain::EntityKind::Part || asset.entity.kind==domain::EntityKind::GuideSurface){const auto shape=kernel::PlaceOutputShape(asset.shape,placement);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}if(shape.Value().value!=asset.shape.value)asset.OwnShape(shape.Value());}
         asset.frame.origin=placement.Point(asset.frame.origin);asset.frame.normal=placement.Direction(asset.frame.normal);asset.frame.xDirection=placement.Direction(asset.frame.xDirection);prepared_.push_back(std::move(asset));
     }
     if(prepared_.empty()){SetProblem(QStringLiteral("出す対象にチェックしてください。"));return false;}return true;

@@ -17,7 +17,7 @@ bool V2OutputTool::CaptureElements() {
         auto asset=*found;
         if(ref.kind==app::SelectionElementKind::Face && ref.pickedFaceIndex){
             const auto face=kernel::OutputFace(asset.shape,*ref.pickedFaceIndex);if(!face.HasValue()){SetProblem(QStringLiteral("選択した面を取り出せません。"));return false;}
-            asset.shape=face.Value();asset.curves.clear();asset.entity.kind=domain::EntityKind::GuideSurface;asset.entity.displayName+=" / 面";
+            asset.OwnShape(face.Value());asset.curves.clear();asset.entity.kind=domain::EntityKind::GuideSurface;asset.entity.displayName+=" / 面";
         }else if(ref.kind==app::SelectionElementKind::Vertex || ref.kind==app::SelectionElementKind::ControlPoint){
             asset.shape={};asset.curves.clear();asset.entity.kind=domain::EntityKind::Point;asset.frame.origin=ref.hitPoint;asset.entity.displayName+=" / 点";
         }else if(ref.kind==app::SelectionElementKind::Edge){

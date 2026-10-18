@@ -6,6 +6,9 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include <QCoreApplication>
+#include <QEvent>
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QString>
 #include <QPointF>
@@ -119,6 +122,18 @@ bool CaseOutputPlacementInvalid(V2MainWindow& window){
     geometry::OutputPlacement placement;placement.keepPosition=false;placement.destination.normal={};output->SetPlacement(placement);
     const auto before=window.Session().GetDocument().Revision();const bool ok=!output->SaveTo(QString())&&before==window.Session().GetDocument().Revision();output->close();return Explain("不正な配置は文書を変更しない",ok);
 }
+bool CaseOutputOwnership(V2MainWindow& w){
+    if(!OutputBox(w))return false;
+    w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
+    auto* output=V2OutputTool::Open(w,2);
+    if(!Explain("output owns a native snapshot",output->AssetCount()==1&&kernel::CachedShapeCount()==baseline+1))return false;
+    geometry::OutputPlacement placement;placement.keepPosition=false;
+    for(int i=0;i<6;++i){placement.destination.origin.x=i;output->SetPlacement(placement);
+        if(!Explain("output placement replaces its owned preview",kernel::CachedShapeCount()==baseline+2))return false;}
+    QTemporaryDir folder;if(!output->SaveTo(folder.filePath("placed.kcd2")))return false;
+    output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+    return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

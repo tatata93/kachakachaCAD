@@ -1,6 +1,7 @@
 #include "V2OffsetTool.h"
 #include "V2ToolEvidence.h"
 #include "V2MainWindow.h"
+#include "V2ShapeLifetime.h"
 #include "V2ThickenPreviewState.h"
 #include "V2GeometryJob.h"
 #include "V2DocumentOpen.h"
@@ -334,6 +335,8 @@ V2MainWindow::~V2MainWindow()
     // focusOutによる拘束解除・Hover更新は、それらが生きている間に済ませる。
     if (viewport_ != nullptr) viewport_->clearFocus();
     hide();
+    v2ui::ReleaseSurfacePreview(surfaceSnapshot_,guideShapes_);
+    v2ui::ReleaseDocumentShapes(partShapes_,guideShapes_);
 }
 
 void V2MainWindow::SetMode(UiMode mode)
@@ -1177,14 +1180,14 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (BeginToolFirstCommand(id)) {
         return;
     }
-    // まだ使えない命令は、断って終わりにせず **構えて待つ**。
-    // 「道具を選ぶ → 相手を選ぶ」の順で使えるようにする(オーナー指摘 2026-09-11)。
+    // 「道具を選ぶ → 相手を選ぶ」の順で構えて待つ。
     // 選んでも直らないもの(戻せる履歴が無い等)は、ここで理由を出して終わる。
     if (ArmCommandIfUnsatisfied(id)) {
         return;
     }
-    // ここまで来たら走らせる。走る前に構えを解く(別の命令を押したとき用)。
-    if (!id.starts_with("view.") && id != "tools.search") ClearPendingCommand();
+    // 表示・検索・保存は入力を保ち、別の編集命令は構えを解く。
+    if (!id.starts_with("view.") && id != "tools.search"
+        && id != "file.save" && id != "file.save_as") ClearPendingCommand();
     if (id == "edit.undo" || id == "edit.redo") {
         RunHistoryCommand(id == "edit.undo");
         return;

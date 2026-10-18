@@ -59,7 +59,7 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
         viewport_ == nullptr ? empty : viewport_->Selection(),
         session_->GetDocument().Snapshot(), session_->Scene(),
         session_->GetDocument().Snapshot().settings.tolerance, external,
-        session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
+        session_->HasPlacedPoints() || session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
 }
 
 bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const

@@ -14,6 +14,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/kernel/OcctSurfaceEdit.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <QKeyEvent>
 #include <QString>
@@ -93,6 +94,14 @@ bool V2SurfaceEditTool::Handles(std::string_view commandId) const
         && kachakacha::v2::app::SurfaceEditOperationForCommand(commandId, operation);
 }
 
+V2SurfaceEditTool::~V2SurfaceEditTool() { ReleasePreviewSurfaces(); }
+
+void V2SurfaceEditTool::ReleasePreviewSurfaces()
+{
+    for(const auto& built:surfaces_)kachakacha::v2::kernel::ReleaseShape(built.surface.handle);
+    surfaces_.clear();
+}
+
 void V2SurfaceEditTool::Begin(std::string_view commandId)
 {
     SurfaceEditOperation operation = SurfaceEditOperation::Match;
@@ -152,7 +161,7 @@ void V2SurfaceEditTool::End(bool keepTool)
 {
     active_ = keepTool;
     if (keepTool) { input_.surfaces.clear(); input_.wires.clear(); input_.edges.clear(); }
-    surfaces_.clear();
+    ReleasePreviewSurfaces();
     wires_.clear();
     outcome_ = kachakacha::v2::app::SurfaceEditOutcome{};
     if (window_.viewport_ != nullptr) {
@@ -385,7 +394,7 @@ void V2SurfaceEditTool::BuildSurfaces()
             // 1 枚でも作れなければ、全部作らない(半分だけ作れたことにしない)。
             if (!accept(made, one, {id}, NameOf(id) + (refit ? "(整えた)" : "(対称)"),
                     NameOf(id) + ": ")) {
-                surfaces_.clear();
+                ReleasePreviewSurfaces();
                 return;
             }
         }
@@ -439,7 +448,7 @@ void V2SurfaceEditTool::BuildWires()
 void V2SurfaceEditTool::RefreshPreview()
 {
     outcome_ = kachakacha::v2::app::SurfaceEditOutcome{};
-    surfaces_.clear();
+    ReleasePreviewSurfaces();
     wires_.clear();
     window_.viewport_->HideToolPreview();
     if (!active_ || !kachakacha::v2::app::SurfaceEditReadyToBuild(input_)) {
@@ -532,7 +541,7 @@ void V2SurfaceEditTool::RefreshDock()
 }
 
 //! 面を 1 枚、文書へ入れる(EditSurface の Feature + 形状ガイドの面)。形は窓が覚える。
-bool V2SurfaceEditTool::AddSurfaceFeature(const BuiltSurface& built)
+bool V2SurfaceEditTool::AddSurfaceFeature(BuiltSurface& built)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -561,6 +570,7 @@ bool V2SurfaceEditTool::AddSurfaceFeature(const BuiltSurface& built)
     window_.guideShapes_[entity.id.ToString()] = built.surface.handle;
     window_.guideEdges_[entity.id.ToString()] = built.surface.boundary;
     window_.guideSamples_[entity.id.ToString()] = built.surface.samples;
+    built.surface.handle = {}; // The document owns the committed native shape now.
     return true;
 }
 
@@ -616,7 +626,7 @@ void V2SurfaceEditTool::Confirm()
     auto& document = window_.session_->GetDocument();
     document.BeginCompound(label);
     bool ok = true;
-    for (const BuiltSurface& built : surfaces_) {
+    for (BuiltSurface& built : surfaces_) {
         ok = ok && AddSurfaceFeature(built);
     }
     std::vector<EntityId> inputs = input_.surfaces;

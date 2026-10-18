@@ -18,6 +18,7 @@
 #include "kachakacha/app/ShellSplitInputState.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/StatusLine.h"
+#include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/modeling/SolidInput.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -30,6 +31,7 @@
 #include <QStatusBar>
 #include <QString>
 #include <QWidget>
+#include <QVariant>
 
 #include <string>
 #include <vector>
@@ -138,6 +140,16 @@ std::string V2MainWindow::RunningOperationNameJa() const
 //! 状態行の左右と HUD を、いまの状態から書き直す。
 void V2MainWindow::RefreshStatusLine()
 {
+    // Point input has its own Undo even before the first document edit.
+    // Update only history actions here; recomputing every tool predicate on hover is expensive.
+    for(const auto* id:{"edit.undo","edit.redo"})if(auto* action=ActionFor(id)) {
+        const bool available=session_ && (std::string_view(id)=="edit.undo"
+            ? session_->HasPlacedPoints() || session_->GetDocument().CanUndo()
+            : session_->GetDocument().CanRedo());
+        action->setEnabled(available);action->setProperty("toolAvailable",available);
+        if(const auto* command=kachakacha::v2::app::FindCommand(id))action->setToolTip(Text(std::string(
+            available?command->operationGuideJa:command->predicateFailureJa)));
+    }
     if (toolLabel_ == nullptr || cursorLabel_ == nullptr) {
         return;
     }

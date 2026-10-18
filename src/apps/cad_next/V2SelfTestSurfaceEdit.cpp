@@ -15,6 +15,8 @@
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/SurfaceEditInputState.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctOutput.h"
 
 #include <QPointF>
 #include <QString>
@@ -214,6 +216,54 @@ using kachakacha::v2::domain::EntityKind;
 
 } // namespace
 
+bool SurfacePreviewOwnership(V2MainWindow& w)
+{
+    const auto wire=DrawRectangleAtByHand(w,.22,.35,.46,.65);if(wire.IsNil())return false;
+    const auto surface=SurfaceFromRectangle(w,wire);if(surface.IsNil())return false;
+    w.SelectTool(modeling::DrawingTool::Select);w.Viewport().SetSelection({});
+    const auto baseline=kernel::CachedShapeCount();
+    w.ActivateCommand("surface.mirror");if(!ClickSurfaceAt(w,surface,.5,.5))return false;
+    for(int i=0;i<6;++i){
+        if(!w.SurfaceEdit().Dock()->ChooseMirrorPlane(i%2?MirrorPlaneChoice::CenterYZ:MirrorPlaneChoice::CenterXZ))return false;
+        if(!Explain("surface preview replaces its native handle",w.SurfaceEdit().Outcome().available&&kernel::CachedShapeCount()==baseline+1))return false;
+    }
+    w.SelectTool(modeling::DrawingTool::Select);
+    if(!Explain("cancel releases only the preview",kernel::CachedShapeCount()==baseline&&CountOfKind(w,EntityKind::GuideSurface)==1))return false;
+    w.Viewport().SetSelection({});w.ActivateCommand("surface.mirror");
+    if(!Explain("cancelled surface tool can pick its next source",ClickSurfaceAt(w,surface,.5,.5)))return false;
+    const auto handles=w.SurfaceEdit().PreviewSurfaces();if(!Explain("retry has one native preview",handles.size()==1))return false;
+    w.SurfaceEdit().Confirm();
+    if(!Explain("committing transfers the native surface to the document",CountOfKind(w,EntityKind::GuideSurface)==2
+        &&kernel::CaptureOutputShape(handles.front()).HasValue()&&kernel::CachedShapeCount()==baseline+1))return false;
+    w.ActivateCommand("edit.undo");if(CountOfKind(w,EntityKind::GuideSurface)!=1)return false;
+    w.ActivateCommand("edit.redo");
+    return Explain("surface edit still survives history and reopen",w.SaveAndReopen("surface-preview-ownership.kcd2")
+        &&CountOfKind(w,EntityKind::GuideSurface)==2&&w.RebuildProblems().isEmpty());
+}
+bool SurfaceCreationOwnership(V2MainWindow& w)
+{
+    const auto wire=DrawRectangleAtByHand(w,.22,.35,.46,.65);if(wire.IsNil())return false;
+    w.SelectTool(modeling::DrawingTool::Select);const auto baseline=kernel::CachedShapeCount();
+    if(!ClickOnCurveOf(w,wire))return false;w.ActivateCommand("surface.create");
+    for(int i=0;i<6;++i){
+        w.ChooseSurfaceMethod(modeling::GuideSurfaceMethod::PlanarBoundary);
+        if(!Explain("surface creation owns only the current preview",w.SurfacePreviewShown()&&kernel::CachedShapeCount()==baseline+1))return false;
+    }
+    w.SelectTool(modeling::DrawingTool::Select);
+    if(!Explain("surface creation cancellation returns to baseline",kernel::CachedShapeCount()==baseline))return false;
+    if(!ClickOnCurveOf(w,wire))return false;w.ActivateCommand("surface.create");w.ConfirmSurface();
+    if(!Explain("surface creation retains committed native shape",CountOfKind(w,EntityKind::GuideSurface)==1&&kernel::CachedShapeCount()==baseline+1))return false;
+    return true;
+}
+bool SurfaceHistoryOwnership(V2MainWindow& w)
+{
+    const auto wire=DrawRectangleAtByHand(w,.22,.35,.46,.65);if(wire.IsNil()||SurfaceFromRectangle(w,wire).IsNil())return false;
+    const auto count=kernel::CachedShapeCount();
+    for(int i=0;i<6;++i){w.ActivateCommand("edit.undo");w.ActivateCommand("edit.redo");
+        if(!Explain("Undo/Redo rebuild releases replaced native surfaces",CountOfKind(w,EntityKind::GuideSurface)==1&&kernel::CachedShapeCount()==count&&w.RebuildProblems().isEmpty()))return false;}
+    return true;
+}
+
 std::vector<SelfTestCase> SurfaceEditCases()
 {
     return {
@@ -223,6 +273,9 @@ std::vector<SelfTestCase> SurfaceEditCases()
             CaseSurfaceEditIsoRefitMirror},
         {"HP-SE-03 隣り合う面の縁を押して G1 で合わせ、元の面は残り、取り消しで消える",
             CaseSurfaceEditMatch},
+        {"HP-SE-04 surface preview ownership survives replace cancel and commit",SurfacePreviewOwnership},
+        {"HP-SE-05 surface creation preview ownership",SurfaceCreationOwnership},
+        {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
     };
 }
 

@@ -5,6 +5,7 @@
 //! しかも役割表は後ろの札にあり、**いまの作り方がどこにも出ていなかった。**
 
 #include "V2MainWindow.h"
+#include "V2ShapeLifetime.h"
 #include "V2SurfaceAnalysisTool.h"
 
 #include "V2SurfaceDock.h"
@@ -308,7 +309,7 @@ void V2MainWindow::RefreshSurfaceDock()
 //! 「見ていない形は作らない」を、面でも守るための場所。
 void V2MainWindow::RefreshSurfacePreview()
 {
-    surfaceSnapshot_.reset();
+    v2ui::ReleaseSurfacePreview(surfaceSnapshot_,guideShapes_);
     surfaceSolverNote_.clear();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
@@ -337,6 +338,7 @@ void V2MainWindow::RefreshSurfacePreview()
         // そのたびに赤い字を出すと、何が本当の失敗か分からなくなる。
         const auto built = BuildSurfaceFromTable(table, false);
         if (!built.has_value()) {
+            v2ui::ReleaseSurfacePreview(snapshot);
             return;
         }
         const auto preview = kachakacha::v2::app::SurfacePreviewLines(built->samples,
@@ -348,7 +350,7 @@ void V2MainWindow::RefreshSurfacePreview()
             snapshot->batch.emplace_back(table, *built);
         }
     }
-    surfaceSnapshot_ = snapshot;
+    surfaceSnapshot_ = std::move(snapshot);
     // 採用した断面の並びを状態へ書き戻す。画面の「3. 断面順」と 3D の札は、
     // 押した順ではなく **この順** を出す。手動固定なら渡した順がそのまま返ってくる。
     if (surfaceSnapshot_.has_value() && surfaceSnapshot_->batch.empty()) {
@@ -477,7 +479,7 @@ void V2MainWindow::ResetSurfaceInput()
 void V2MainWindow::EndSurfacePreview(bool keepTool)
 {
     surfaceShelfShown_ = keepTool;
-    surfaceSnapshot_.reset();
+    v2ui::ReleaseSurfacePreview(surfaceSnapshot_,guideShapes_);
     // 欄の中身(断面・ガイド・境界の線)は次の面へ持ち越さない。持ち越すと、次に
     // 「面を作る」を押したとき前の面の線が黙って混ざる(別の文書なら消えた id を指す。
     // PC 4 回目 HP-RS-01: 面を 1 枚作った後の場面で 2 枚目が作れなかった)。作り方は残す。

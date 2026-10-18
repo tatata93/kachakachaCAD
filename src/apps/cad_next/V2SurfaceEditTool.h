@@ -30,6 +30,7 @@ class V2MainWindow;
 class V2SurfaceEditTool final {
 public:
     explicit V2SurfaceEditTool(V2MainWindow& window);
+    ~V2SurfaceEditTool();
 
     [[nodiscard]] V2SurfaceEditDock* Dock() const noexcept { return dock_; }
     [[nodiscard]] bool Active() const noexcept { return active_; }
@@ -72,13 +73,14 @@ private:
     void Choose(kachakacha::v2::app::SurfaceEditOperation operation);
     void Refresh();
     void RefreshPreview();
+    void ReleasePreviewSurfaces();
     void BuildSurfaces();
     void BuildWires();
     void RefreshDock();
     void MirrorToSelection();
     void ApplyPick(const kachakacha::v2::base::EntityId& id);
     [[nodiscard]] std::string NameOf(const kachakacha::v2::base::EntityId& id) const;
-    [[nodiscard]] bool AddSurfaceFeature(const BuiltSurface& built);
+    [[nodiscard]] bool AddSurfaceFeature(BuiltSurface& built);
     [[nodiscard]] bool AddWireFeature(const std::vector<kachakacha::v2::geometry::CurveSegment>& wire,
         const std::vector<kachakacha::v2::base::EntityId>& inputs, bool iso);
 

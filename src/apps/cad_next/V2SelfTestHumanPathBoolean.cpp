@@ -714,6 +714,10 @@ bool CaseBooleanPreviewOwnership(V2MainWindow& window)
     if(!window.HandleToolKey(Qt::Key_Escape,nullptr))return false;
     if(!Explain("cancel releases boolean preview without changing parts",
         kachakacha::v2::kernel::CachedShapeCount()==baseline&&CountOfKind(window,EntityKind::Part)==2))return false;
+    if(!Explain("cancel clears operand roles and selection for a new base",window.BooleanInput().target.IsNil()
+        &&window.BooleanInput().tools.empty()&&window.Viewport().Selection().entityIds.empty()))return false;
+    if(!PressPart(window,second)||!Explain("retry can start with a different base",window.BooleanInput().target==second&&window.BooleanInput().tools.empty()))return false;
+    if(!window.HandleToolKey(Qt::Key_Escape,nullptr))return false;
     if(!PressPart(window,first)||!PressPart(window,second)||!window.BooleanDock().ClickConfirm())return false;
     window.RunCommand("edit.undo");window.RunCommand("edit.redo");
     return Explain("boolean retry and undo/redo preserve a usable result",

@@ -11,6 +11,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "V2ShapeLifetime.h"
 #include "V2DocumentOpen.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
@@ -364,7 +365,7 @@ bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& 
 void V2MainWindow::RebuildKernelShapes()
 {
     // 覚えていた形をいったん捨てる。捨てないと、開く前の文書の形が混ざる。
-    partShapes_.clear();
+    v2ui::ReleaseDocumentShapes(partShapes_,guideShapes_);
     partEdges_.clear();
     partFlatBoundary_.clear();
     guideShapes_.clear();

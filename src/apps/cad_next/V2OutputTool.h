@@ -7,6 +7,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <memory>
 class V2MainWindow;
 class V2OutputPreview;
 class QComboBox;
@@ -20,6 +21,8 @@ class QEvent;
 struct V2OutputAsset {
     kachakacha::v2::domain::Entity entity;
     kachakacha::v2::modeling::KernelShapeHandle shape;
+    std::shared_ptr<kachakacha::v2::modeling::KernelShapeHandle> shapeOwner;
+    void OwnShape(kachakacha::v2::modeling::KernelShapeHandle handle);
     std::vector<kachakacha::v2::geometry::CurveSegment> curves;
     kachakacha::v2::geometry::OutputFrame frame;
 };

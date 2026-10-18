@@ -474,13 +474,19 @@ void V2MainWindow::EndBoolean(bool keepTool)
     if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
     booleanBuilt_.reset();
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
-    booleanMirror_.clear();
+    const auto kind=booleanInput_.kind;
+    booleanInput_ = kachakacha::v2::app::BooleanInputState{};
+    booleanInput_.kind=kind;
+    // Keep the old mirror until selection is updated, so removed operands cannot
+    // be mistaken for new picks by selection-change callbacks.
+    MirrorBooleanToSelection();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
         viewport_->SetToolPickActive(keepTool);
         viewport_->SetToolPickToggle(keepTool);
     }
+    if(keepTool)RefreshBooleanDock();
     ShowToolFooter(QString());
     RefreshRightShelves();
 }

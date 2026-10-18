@@ -33,6 +33,8 @@
 #include <QString>
 #include <array>
 namespace kachakacha::v2::selftest {
+bool AlternateShortcutRoutes(V2MainWindow&);
+bool AlternateViewDuringInput(V2MainWindow&);
 namespace {
 int Active(V2MainWindow& w) {
     const bool temporary=w.OperationHost().HasTemporaryPage()&&w.Mode()!=app::UiMode::Instructions;
@@ -185,5 +187,5 @@ bool PreviewLifetime(V2MainWindow& w) {
 }
 }
 std::vector<SelfTestCase> ToolContractCases(){return {{"HP-TOOLS all catalog toolbar activations have input or reason",ActivationAudit},{"HP-TOOLS distinct tool illustrations",Illustrations},{"HP-TOOLS exclusive tool transition matrix and shortcuts",Lifecycle},
-    {"HP-TOOLS modal dialog keys stay in dialog",ModalKeys},{"HP-TOOLS preview shape ownership stays bounded",PreviewLifetime}};}
+    {"HP-TOOLS modal dialog keys stay in dialog",ModalKeys},{"HP-TOOLS preview shape ownership stays bounded",PreviewLifetime},{"HP-TOOLS alternate shortcut routes preserve inputs",AlternateShortcutRoutes},{"HP-TOOLS alternate view routes preserve pending targets",AlternateViewDuringInput}};}
 }

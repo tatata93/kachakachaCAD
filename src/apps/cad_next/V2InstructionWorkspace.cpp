@@ -1,9 +1,11 @@
 #include <QString>
 #include <QWidget>
 #include "V2InstructionMode.h"
+#include "V2InstructionSceneBrowser.h"
 #include "V2MainWindow.h"
 #include "V2ToolIcons.h"
 #include <QComboBox>
+#include <QDockWidget>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QLabel>
@@ -59,21 +61,44 @@ void V2InstructionMode::NewDocument()
     scenes_={InstructionPage{}};scenes_[0].title=QStringLiteral("場面 1");
     sheets_={InstructionSheet{}};sheets_[0].title=QStringLiteral("用紙 1");
     current_=currentSheet_=0;path_.clear();undo_.clear();redo_.clear();choosing_=false;
+    sceneBrowser_->Invalidate();
     ShowPage(0);dirty_=false;before_=Snapshot();
 }
-void V2InstructionMode::DeletePage()
+void V2InstructionMode::RefreshSceneBrowser()
 {
+    sceneBrowser_->Refresh(&scenes_,current_,layoutEditing_,choosing_);
+}
+void V2InstructionMode::ChooseBrowserScene(int index,bool place)
+{
+    if(choosing_||index<0||index>=int(scenes_.size()))return;
+    if(!place&&!layoutEditing_){if(current_!=index)ShowPage(index);return;}
+    if(layoutEditing_&&activeTool_=="place_scene"&&pendingItem_.sceneId==scenes_[index].id)return;
+    CancelInput();current_=index;Command("instructions.place_scene");
+}
+void V2InstructionMode::SyncBrowserVisibility(bool active)
+{
+    if(active==browserActive_)return;
+    if(auto* dock=window_.findChild<QDockWidget*>("entityDock")){
+        if(active){entityDockVisible_=!dock->isHidden();dock->hide();}
+        else dock->setVisible(entityDockVisible_);
+    }
+    browserActive_=active;
+}
+void V2InstructionMode::DeletePage(bool sceneFromBrowser)
+{
+    if(choosing_)return;
     CancelInput();
-    const QString name=layoutEditing_?sheets_[currentSheet_].title:scenes_[current_].title;
+    const bool deleteSheet=layoutEditing_&&!sceneFromBrowser;
+    const QString name=deleteSheet?sheets_[currentSheet_].title:scenes_[current_].title;
     int references=0;
-    if(!layoutEditing_)for(const auto& sheet:sheets_)for(const auto& item:sheet.items)
+    if(!deleteSheet)for(const auto& sheet:sheets_)for(const auto& item:sheet.items)
         if(item.kind==InstructionItemKind::Scene&&item.sceneId==scenes_[current_].id)++references;
     const QString message=QStringLiteral("「%1」を削除しますか？%2\n削除後はCtrl+Zで戻せます。")
         .arg(name,references?QStringLiteral("\nこの場面を使っている用紙上の図%1個も削除します。").arg(references):QString());
     if(QMessageBox::question(&window_,QStringLiteral("説明書のページ削除"),message,
         QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
     before_=Snapshot();view_->SetPage(nullptr);sheetView_->SetDocument(nullptr,nullptr);
-    if(layoutEditing_){
+    if(deleteSheet){
         sheets_.erase(sheets_.begin()+currentSheet_);
         if(sheets_.empty()){sheets_.push_back(InstructionSheet{});sheets_[0].title=QStringLiteral("用紙 1");}
         ShowSheet(std::min(currentSheet_,int(sheets_.size())-1));
@@ -82,7 +107,8 @@ void V2InstructionMode::DeletePage()
         for(auto& sheet:sheets_)std::erase_if(sheet.items,[id](const auto& item){return item.kind==InstructionItemKind::Scene&&item.sceneId==id;});
         scenes_.erase(scenes_.begin()+current_);
         if(scenes_.empty()){scenes_.push_back(InstructionPage{});scenes_[0].title=QStringLiteral("場面 1");}
-        ShowPage(std::min(current_,int(scenes_.size())-1));
+        current_=std::min(current_,int(scenes_.size())-1);
+        if(layoutEditing_)ShowSheet(currentSheet_);else ShowPage(current_);
     }
     Remember();
 }

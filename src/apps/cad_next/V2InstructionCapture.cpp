@@ -77,6 +77,7 @@ void V2InstructionMode::ShowModelPicker(){
     auto* accept=new QPushButton(QStringLiteral("この場面に配置"),panel);accept->setObjectName("instructionAcceptParts");layout->addWidget(accept);connect(accept,&QPushButton::clicked,this,[this]{AcceptParts();});
     auto* cancel=new QPushButton(QStringLiteral("取消"),panel);layout->addWidget(cancel);connect(cancel,&QPushButton::clicked,this,[this]{ShowPage(current_);});
     window_.OperationHost().ShowTemporaryPage(panel,QStringLiteral("説明書 — 使用する部品を選択"));
+    RefreshSceneBrowser();
 }
 void V2InstructionMode::AcceptParts(){
     if(!choosing_||!partList_)return;std::vector<InstructionPart> chosen;

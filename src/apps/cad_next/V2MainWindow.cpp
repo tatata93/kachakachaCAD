@@ -444,10 +444,7 @@ void V2MainWindow::BuildToolPalette()
             if (command != nullptr) {
                 action->setToolTip(QString::fromUtf8(
                     std::string(command->operationGuideJa).c_str()));
-                if (!command->defaultShortcut.empty()) {
-                    action->setShortcut(QKeySequence(QString::fromUtf8(
-                        std::string(command->defaultShortcut).c_str())));
-                }
+                // The menu owns the shortcut; a second QAction makes Qt report ambiguity.
             }
         }
         if (action->toolTip().isEmpty()) {
@@ -456,9 +453,11 @@ void V2MainWindow::BuildToolPalette()
         toolActions_.push_back(action);
         actions.emplace(tool, action);
         QObject::connect(action, &QAction::triggered, this,
-            [this, tool, action] {
-                if (session_->CurrentTool() != tool || tool == DrawingTool::Select) SelectTool(tool);
-                else action->setChecked(true); // Reselecting the current tool keeps unfinished input.
+            [this, tool] {
+                for (const auto& binding : kToolBindings) if (binding.tool == tool) {
+                    ActivateCommand(binding.commandId); return;
+                }
+                SelectTool(tool);
             });
     }
 
@@ -1185,7 +1184,7 @@ void V2MainWindow::RunCommand(std::string_view id)
         return;
     }
     // ここまで来たら走らせる。走る前に構えを解く(別の命令を押したとき用)。
-    ClearPendingCommand();
+    if (!id.starts_with("view.") && id != "tools.search") ClearPendingCommand();
     if (id == "edit.undo" || id == "edit.redo") {
         RunHistoryCommand(id == "edit.undo");
         return;

@@ -14,6 +14,7 @@ class QListWidget;
 class QSpinBox;
 class QHBoxLayout;
 class QLayout;
+class V2InstructionSceneBrowser;
 class V2InstructionMode final:public QWidget {
 public:
     static void Sync(V2MainWindow&);
@@ -50,9 +51,12 @@ private:
     void RefreshWorkspaceActions();
     void ShowSceneSelection(QWidget*);
     void AddSelectedTextControls(QWidget*,bool sheet);
-    void DeletePage();
+    void DeletePage(bool sceneFromBrowser=false);
     void NewDocument();
     void SyncPlacementInput();
+    void RefreshSceneBrowser();
+    void ChooseBrowserScene(int,bool place);
+    void SyncBrowserVisibility(bool active);
     bool AcceptTextInput(const QString&);
     bool Collect(V2MainWindow&);
     void Remember();
@@ -82,6 +86,8 @@ private:
     std::vector<bool> sourceChecks_;
     int sourceRow_=-1;
     QLayout* workspaceActions_=nullptr;
+    V2InstructionSceneBrowser* sceneBrowser_=nullptr;
+    bool browserActive_=false,entityDockVisible_=false;
     std::function<QString(bool)> pathChooser_;
     QJsonObject before_;
     std::vector<QJsonObject> undo_,redo_;

@@ -1,4 +1,5 @@
 #include "V2InstructionMode.h"
+#include "V2InstructionSceneBrowser.h"
 #include <QImageReader>
 #include <QBuffer>
 #include <QJsonArray>
@@ -138,6 +139,7 @@ bool V2InstructionMode::Restore(const QJsonObject& source) {
     if(!doc["sheets"].isArray()||!DecodeInstructionSheets(doc["sheets"].toArray(),made,sheets))return false;
     view_->SetPage(nullptr);sheetView_->SetDocument(nullptr,nullptr);
     scenes_=std::move(made);sheets_=std::move(sheets);
+    sceneBrowser_->Invalidate();
     current_=std::clamp(doc["current"].toInt(),0,int(scenes_.size())-1);
     currentSheet_=std::clamp(doc["currentSheet"].toInt(),0,int(sheets_.size())-1);
     SwitchWorkspace(workspace=="sheet");return true;

@@ -47,8 +47,8 @@ void V2InstructionMode::ShowSheetSettings(){
     if(activeTool_=="place_scene"){
         pendingItem_=InstructionSheetItem{};pendingItem_.kind=InstructionItemKind::Scene;pendingItem_.sceneId=scenes_[current_].id;
         auto* source=new QComboBox(panel);source->setObjectName("instructionSceneSource");for(const auto& scene:scenes_)source->addItem(scene.title);source->setCurrentIndex(current_);layout->addWidget(source);
-        connect(source,&QComboBox::currentIndexChanged,this,[this](int index){if(index<0||index>=int(scenes_.size()))return;pendingItem_.sceneId=scenes_[index].id;sheetView_->SetTool("place_scene",pendingItem_);});
-        hint_->setText(QStringLiteral("配置する場面を選び、用紙をクリック。選択・移動に切り替えて図をダブルクリックすると元の3D場面を編集できます。"));
+        connect(source,&QComboBox::currentIndexChanged,this,[this](int index){ChooseBrowserScene(index,true);});
+        hint_->setText(QStringLiteral("左のシーン一覧から選び、用紙をクリックすると配置します。左の「シーンを編集」で元の3D場面へ戻れます。"));
     }
     if(activeTool_=="text"){
         pendingItem_.kind=InstructionItemKind::Text;pendingItem_.rectMm=QRectF(15,15,80,25);AddFontControls(panel,true);

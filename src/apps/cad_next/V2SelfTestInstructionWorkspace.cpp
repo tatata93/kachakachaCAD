@@ -1,5 +1,6 @@
 #include <QChar>
 #include <QEvent>
+#include <QEventLoop>
 #include <QPointF>
 #include <QWidget>
 #include "V2SelfTest.h"
@@ -36,7 +37,7 @@ void Click(QWidget* w,QPointF at){for(auto type:{QEvent::MouseButtonPress,QEvent
 void Type(QPlainTextEdit* edit,const QString& text){edit->setFocus();edit->selectAll();Key(edit,0,Qt::NoModifier,text);}
 QJsonArray Marks(V2InstructionMode& m){const auto s=m.Snapshot();return s["pages"].toArray()[s["current"].toInt()].toObject()["marks"].toArray();}
 QJsonArray Items(V2InstructionMode& m){const auto s=m.Snapshot();return s["sheets"].toArray()[s["currentSheet"].toInt()].toObject()["items"].toArray();}
-void Capture(V2MainWindow& w,const char* name){const auto output=qEnvironmentVariable("KACHACAD_INSTRUCTION_PROOF_DIR");if(output.isEmpty())return;QApplication::processEvents();QDir().mkpath(output);w.grab().save(output+"/"+name+".png");}
+void Capture(V2MainWindow& w,const char* name){const auto output=qEnvironmentVariable("KACHACAD_INSTRUCTION_PROOF_DIR");if(output.isEmpty())return;QEventLoop ready;QTimer::singleShot(160,&ready,&QEventLoop::quit);ready.exec();QDir().mkpath(output);w.grab().save(output+"/"+name+".png");}
 void ConfirmPageDelete(V2InstructionMode& mode,bool accept){QTimer::singleShot(50,[accept]{if(auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))box->button(accept?QMessageBox::Yes:QMessageBox::Cancel)->click();});
     mode.Command("instructions.delete_page");QApplication::processEvents();}
 void NewWithAnswer(V2MainWindow& window,QMessageBox::StandardButton answer){QTimer::singleShot(50,[answer]{if(auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))box->button(answer)->click();});window.RunCommand("file.new");QApplication::processEvents();}
@@ -150,8 +151,11 @@ bool InstructionCaptureWorkflow(V2MainWindow& window)
         list=Visible<QListWidget>(window,"instructionModelParts");if(!list||list->count()<1)return false;
         mode->AcceptParts();
         mode->Command("instructions.arrow");Click(view,{140,140});Click(view,{260,220});mode->Command("instructions.move");Capture(window,"instruction-real-model-scene");
+        mode->Command("instructions.duplicate");mode->Command("instructions.text");
+        auto* step=Visible<QPlainTextEdit>(window,"instructionText");if(!step)return false;step->setPlainText("2");Click(view,{220,100});mode->Command("instructions.move");Capture(window,"instruction-real-model-scene");
         mode->Command("instructions.sheet_editor");mode->Command("instructions.place_scene");auto* paper=dynamic_cast<V2InstructionSheetView*>(window.findChild<QWidget*>("instructionPaperCanvas"));if(!paper)return false;
-        Click(paper,paper->ToScreen({15,15}));mode->Command("instructions.move");Capture(window,"instruction-real-model-paper");
+        auto* scenes=Visible<QListWidget>(window,"instructionSceneList");if(!scenes)return false;
+        scenes->setCurrentRow(0);Click(paper,paper->ToScreen({15,15}));scenes->setCurrentRow(1);Click(paper,paper->ToScreen({110,15}));mode->Command("instructions.move");Capture(window,"instruction-real-model-paper");
         const auto output=qEnvironmentVariable("KACHACAD_INSTRUCTION_PROOF_DIR");if(!output.isEmpty()&&(!mode->Save(output+"/example.kci")||!mode->ExportPdf(output+"/example.pdf")))return false;
     }
     if(!mode->Save(cleanup.path))return false;window.SetMode(app::UiMode::Part);return true;

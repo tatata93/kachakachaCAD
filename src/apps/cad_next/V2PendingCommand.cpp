@@ -105,6 +105,8 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     if (CommandEnabled(id, &reason)) {
         return false;   // いま使える。そのまま走らせる。
     }
+    // A view operation with no selected target must not replace the editing tool.
+    if (id.starts_with("view.")) { SetStatus(reason); return true; }
     if (!PredicateCanBeSatisfiedBySelection(command->predicate)) {
         // 選んで直るものではない(戻せる履歴が無い、など)。理由を出して終わる。
         SetStatus(reason);

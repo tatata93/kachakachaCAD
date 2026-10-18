@@ -5,6 +5,7 @@
 #include <QQuaternion>
 #include <QWidget>
 #include "V2InstructionMode.h"
+#include "V2InstructionSceneBrowser.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -18,6 +19,7 @@
 #include <QPushButton>
 #include <QListWidget>
 #include <QVBoxLayout>
+#include <QSplitter>
 #include <QHBoxLayout>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
@@ -39,6 +41,7 @@ void V2InstructionMode::Sync(V2MainWindow& window){
     auto* mode=Find(window);const bool active=window.Mode()==UiMode::Instructions;
     if(!mode&&active)mode=new V2InstructionMode(window);if(!mode)return;
     mode->setVisible(active);window.Viewport().setVisible(!active);window.Ribbon().parentWidget()->setVisible(!active);
+    mode->SyncBrowserVisibility(active);
     if(active){if(mode->choosing_)mode->ShowModelPicker();else mode->ShowSettings();}
     else {mode->CancelInput();if(mode->settings_)window.OperationHost().ClearTemporaryPage();}
 }
@@ -49,7 +52,11 @@ bool V2InstructionMode::Run(V2MainWindow& window,std::string_view id){
     if(id.starts_with("instructions.")){if(window.Mode()!=UiMode::Instructions)window.SetMode(UiMode::Instructions);Find(window)->Command(id);return true;}
     if(window.Mode()!=UiMode::Instructions)return false;auto* mode=Find(window);if(!mode)return false;
     if(id=="edit.undo")mode->Undo(false);else if(id=="edit.redo")mode->Undo(true);
-    else if(id=="edit.delete")mode->Command("instructions.remove");
+    else if(id=="edit.delete"){
+        auto* focus=QApplication::focusWidget();
+        if(focus&&mode->sceneBrowser_->isAncestorOf(focus))mode->DeletePage(true);
+        else mode->Command("instructions.remove");
+    }
     else if(id=="file.new")mode->NewDocument();
     else if(id=="file.save"||id=="file.save_as")mode->FileAction(id=="file.save_as"?"instructions.save_as":"instructions.save");
     else if(id=="file.open")mode->FileAction("instructions.open");
@@ -59,11 +66,20 @@ bool V2InstructionMode::Run(V2MainWindow& window,std::string_view id){
     else if(mode->hint_)mode->hint_->setText(QStringLiteral("説明書の3D配置を編集しています。元モデルの編集は作図・部品モードに戻ってください。"));return true;
 }
 V2InstructionMode::V2InstructionMode(V2MainWindow& window):QWidget(window.centralWidget()),window_(window){
-    setObjectName("instructionWorkspace");auto* layout=new QVBoxLayout(this);auto* row=new QHBoxLayout;layout->addLayout(row);
+    setObjectName("instructionWorkspace");auto* outer=new QHBoxLayout(this);outer->setContentsMargins(0,0,0,0);
+    auto* split=new QSplitter(Qt::Horizontal,this);outer->addWidget(split);
+    sceneBrowser_=new V2InstructionSceneBrowser(split);auto* editor=new QWidget(split);auto* layout=new QVBoxLayout(editor);
+    split->setStretchFactor(0,0);split->setStretchFactor(1,1);split->setSizes({200,900});
+    sceneBrowser_->chooseScene=[this](int i){ChooseBrowserScene(i,false);};
+    sceneBrowser_->placeScene=[this](int i){ChooseBrowserScene(i,true);};
+    sceneBrowser_->editScene=[this](int i){if(i>=0)ShowPage(i);};
+    sceneBrowser_->addScene=[this]{if(layoutEditing_)ShowPage(current_);NewPage(false);};
+    sceneBrowser_->removeScene=[this]{DeletePage(true);};
+    auto* row=new QHBoxLayout;layout->addLayout(row);
     workspace_=new QComboBox(this);workspace_->setObjectName("instructionEditorMode");workspace_->setMinimumContentsLength(18);workspace_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     workspace_->addItems({QStringLiteral("1 画像エディター（3D場面）"),QStringLiteral("2 用紙編集（印刷レイアウト）")});row->addWidget(workspace_);
     pages_=new QComboBox(this);pages_->setObjectName("instructionPages");row->addWidget(pages_);
-    title_=new QLineEdit(this);title_->setPlaceholderText(QStringLiteral("場面・用紙の見出し"));row->addWidget(title_,1);
+    title_=new QLineEdit(this);title_->setObjectName("instructionPageTitle");title_->setPlaceholderText(QStringLiteral("場面・用紙の見出し"));row->addWidget(title_,1);
     BuildWorkspaceActions(row);
     workspaceActions_=new V2FlowLayout(nullptr);layout->addLayout(workspaceActions_);
     view_=new V2InstructionScene(this);layout->addWidget(view_,1);
@@ -122,6 +138,7 @@ void V2InstructionMode::ShowSettings(){
     loading_=previous;
     SyncPlacementInput();
     RefreshWorkspaceActions();
+    RefreshSceneBrowser();
 }
 void V2InstructionMode::Command(std::string_view id){
     if(id=="instructions.scene_editor"||id=="instructions.sheet_editor"){SwitchWorkspace(id=="instructions.sheet_editor");return;}
@@ -156,7 +173,7 @@ void V2InstructionMode::Command(std::string_view id){
     if(id=="instructions.text"){auto* input=settings_->findChild<QPlainTextEdit*>("instructionText");view_->SetTool("text",input?input->toPlainText():QString());return;}
     view_->SetTool("move");
 }
-void V2InstructionMode::Remember(){if(loading_||before_==Snapshot())return;undo_.push_back(before_);if(undo_.size()>30)undo_.erase(undo_.begin());redo_.clear();dirty_=true;before_=Snapshot();}
+void V2InstructionMode::Remember(){if(loading_||before_==Snapshot())return;undo_.push_back(before_);if(undo_.size()>30)undo_.erase(undo_.begin());redo_.clear();dirty_=true;before_=Snapshot();sceneBrowser_->Invalidate(scenes_[current_].id);RefreshSceneBrowser();}
 void V2InstructionMode::CancelInput(){view_->CancelInput();sheetView_->CancelInput();}
 void V2InstructionMode::Undo(bool redo){if(choosing_)return;CancelInput();auto& from=redo?redo_:undo_;auto& to=redo?undo_:redo_;if(from.empty())return;to.push_back(Snapshot());const auto saved=from.back();from.pop_back();Restore(saved);dirty_=true;}
 bool V2InstructionMode::eventFilter(QObject* object,QEvent* event){
@@ -165,7 +182,7 @@ bool V2InstructionMode::eventFilter(QObject* object,QEvent* event){
     for(auto* parent=widget->parentWidget();parent&&parent!=&window_;parent=parent->parentWidget())if(qobject_cast<QPlainTextEdit*>(parent))return false;
     const auto* key=static_cast<QKeyEvent*>(event);if((key->modifiers()&Qt::ControlModifier)&&(key->key()==Qt::Key_Z||key->key()==Qt::Key_Y)){Undo(key->key()==Qt::Key_Y||(key->modifiers()&Qt::ShiftModifier));return true;}
     if(key->key()==Qt::Key_Escape){if(choosing_)ShowPage(current_);else if(layoutEditing_)sheetView_->CancelInput();else view_->CancelInput();return true;}
-    if(key->key()==Qt::Key_Delete){Command("instructions.remove");return true;}return false;
+    if(key->key()==Qt::Key_Delete){if(sceneBrowser_->isAncestorOf(widget))DeletePage(true);else Command("instructions.remove");return true;}return false;
 }
 bool V2InstructionMode::CheckSaved(){
     if(!dirty_)return true;const auto answer=QMessageBox::question(&window_,QStringLiteral("説明書の保存"),QStringLiteral("説明書の変更を保存しますか？"),QMessageBox::Save|QMessageBox::Discard|QMessageBox::Cancel);

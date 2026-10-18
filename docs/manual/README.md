@@ -720,7 +720,7 @@ Escは入力だけを取消してツールと設定を維持します。元形�
 
 ## 説明書エディターの再整備（2026-10-18）
 
-[instruction-editor.html](instruction-editor.html) に場面・用紙・文章・写真・保存・出力・削除の手順をまとめた。
+[instruction-editor.html](instruction-editor.html) に左のシーン一覧からの用紙配置、場面・用紙・文章・写真・保存・出力・削除の手順をまとめた。
 `instruction-editor-scene`、`instruction-editor-paper` は115面.kcd2の表示中要素を取り込んだ実画面、
 `instruction-editor-text`、`instruction-editor-paragraph` は注記だけの編集回帰の実画面。
 Qtマウス・キーイベントをWindowsアプリへ送り、KCI/PDF出力とUndo・読込まで検査した。

@@ -1,6 +1,6 @@
 # モデリングツール再点検（2026-10-18）
 
-状態: Windows全体検証成功、配布・起動確認中。対象開始版 cb73e3e38、WP-08 の UI アダプター内で実施する。
+状態: 完了（2026-10-19）。対象開始版 cb73e3e38、WP-08 の UI アダプター内で実施した。
 
 ## 方針と受入
 
@@ -79,3 +79,20 @@ Boolean取消時の入力欄を更新した後で案内を消す必要があり�
 全体ゲートは `python scripts/verify.py full --parallel 2 --run-id modeling-tools4-20261018`。
 WindowsネイティブQtでの重点試験・実モデル試験と、offscreenでの全件検証は区別している。
 検証記録、失敗・中断した実行、元モデル、旧配布物を保全した。ソースファイルの削除はない。
+
+## 配布と再開
+
+製品修正commit: `46fa5ab58`。`codex/v2-wp01-build-scaffold`へpush済み。
+成功した全体証拠と入力・設定・成果物のハッシュを照合して
+`out/releases/modeling-tools4-20261018`へ配布した。
+同フォルダーの`package/kachakacha_cad_next.exe`を検証済みランチャーから通常起動し、
+Windows・visible/exposed/on_screen/rendered/event_loop/readyがすべてtrue、1180×945の画面を確認した。
+起動記録は`out/modeling-debug-20261018/released-startup.json`。
+ユーザーが開いている旧アプリは終了していない。
+
+```powershell
+python scripts/run-verified.py out/releases/modeling-tools4-20261018
+```
+
+この完了記録とWP-08状態の更新は製品修正後の文書commitに分離した。
+検証・配布した製品は上記commitの入力バイト列であり、完了記録だけの変更を製品の再検証と混同しない。

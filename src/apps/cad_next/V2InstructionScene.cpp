@@ -1,3 +1,4 @@
+#include <QRectF>
 #include <QPointF>
 #include <QString>
 #include <QWidget>
@@ -29,7 +30,7 @@ int MarkAt(const InstructionPage& page, QPointF point, int width,
         if(!mark.arrow){
             auto font=mark.font;
             font.setPixelSize(std::max(1,int(std::round(mark.font.pointSizeF()*4/3*width/1400))));
-            const auto bounds=QFontMetricsF(font).boundingRect(mark.text).translated(a).adjusted(-4,-4,4,4);
+            const auto bounds=(mark.text.contains('\n')?QFontMetricsF(font).boundingRect(QRectF(a.x(),a.y()-QFontMetricsF(font).ascent(),width,10000),Qt::AlignLeft|Qt::AlignTop|Qt::TextExpandTabs,mark.text):QFontMetricsF(font).boundingRect(mark.text).translated(a)).adjusted(-4,-4,4,4);
             if(bounds.contains(point))distance=0;
         }
         if (distance < best) { best = distance; selected = int(i); }
@@ -46,7 +47,7 @@ int ArrowHandleAt(const InstructionPage& page, int index, QPointF point,
     return start <= end ? 0 : 1;
 }
 }
-V2InstructionScene::V2InstructionScene(QWidget* parent):QWidget(parent){setObjectName("instructionCanvas3d");setMinimumSize(300,260);setMouseTracking(true);}
+V2InstructionScene::V2InstructionScene(QWidget* parent):QWidget(parent){setObjectName("instructionCanvas3d");setMinimumSize(300,260);setMouseTracking(true);setFocusPolicy(Qt::StrongFocus);}
 void V2InstructionScene::SetPage(InstructionPage* page){
     // Callers may have reallocated scenes; never dereference the previous page here.
     editDragPending_=false;page_=page;selected_=selectedMark_=-1;CancelInput();
@@ -77,10 +78,14 @@ void V2InstructionScene::Fit(){
     for(const auto& part:page_->parts)if(part.visible)for(const auto& t:part.asset->mesh.triangles)for(auto p:t.points){
         const auto v=part.rotation.rotatedVector(QVector3D(float(p.x),float(p.y),float(p.z)));p=geometry::Vector3{v.x(),v.y(),v.z()}+part.offset;
         lo={std::min(lo.x,p.x),std::min(lo.y,p.y),std::min(lo.z,p.z)};hi={std::max(hi.x,p.x),std::max(hi.y,p.y),std::max(hi.z,p.z)};any=true;}
+    const auto include=[&](geometry::Vector3 p){lo={std::min(lo.x,p.x),std::min(lo.y,p.y),std::min(lo.z,p.z)};hi={std::max(hi.x,p.x),std::max(hi.y,p.y),std::max(hi.z,p.z)};any=true;};
+    for(const auto& part:page_->parts)if(part.visible)for(const auto& edge:part.asset->mesh.edges)for(const auto& point:edge){const auto p=part.rotation.rotatedVector(QVector3D(float(point.x),float(point.y),float(point.z)));include(geometry::Vector3{p.x(),p.y(),p.z()}+part.offset);}
+    for(const auto& mark:page_->marks){include(mark.start);if(mark.arrow)include(mark.end);}
     if(any){page_->center=(lo+hi)*.5;page_->span=std::max(1.0,(hi-lo).Length())*1.35*std::max(1.0,double(width())/std::max(1,height()));}Refresh();
 }
-void V2InstructionScene::SetTool(const QString& tool,const QString& text){tool_=tool;text_=text;CancelInput();}
-void V2InstructionScene::SetSelected(int index){CancelInput();selected_=index;selectedMark_=-1;Refresh();}
+void V2InstructionScene::SetTool(const QString& tool,const QString& text){tool_=tool;text_=text;setCursor(tool=="arrow"||tool=="text"?Qt::CrossCursor:Qt::ArrowCursor);CancelInput();}
+void V2InstructionScene::SetSelected(int index){CancelInput();selected_=page_&&index>=0&&index<int(page_->parts.size())?index:-1;selectedMark_=-1;if(selectedChanged)selectedChanged(selected_);Refresh();}
+void V2InstructionScene::SetSelectedMark(int index){CancelInput();selectedMark_=page_&&index>=0&&index<int(page_->marks.size())?index:-1;selected_=-1;if(selectedChanged)selectedChanged(-1);Refresh();}
 QPointF V2InstructionScene::Project(geometry::Vector3 p) const{const auto q=mapping_.Project(p);return q?QPointF(q->x,q->y):QPointF();}
 geometry::Vector3 V2InstructionScene::WorldAt(QPointF p) const{
     if(!page_)return {};const int x=int(p.x()),y=int(p.y());
@@ -93,6 +98,7 @@ geometry::Vector3 V2InstructionScene::WorldAt(QPointF p) const{
 void V2InstructionScene::paintEvent(QPaintEvent*){if(cache_.size()!=size())cache_=Render(size(),true);QPainter painter(this);painter.fillRect(rect(),Qt::white);painter.drawImage(0,0,cache_);}
 void V2InstructionScene::mousePressEvent(QMouseEvent* event){
     if(!page_)return;
+    setFocus(Qt::MouseFocusReason);
     if(editDragPending_)CancelInput();
     if(cache_.size()!=size())cache_=Render(size(),true);
     last_=event->position();
@@ -113,6 +119,7 @@ void V2InstructionScene::mousePressEvent(QMouseEvent* event){
         if(selectedChanged)selectedChanged(selected_);Refresh();return;
     }
     if(tool_=="text"){
+        if(text_.trimmed().isEmpty()||text_.size()>100000){if(refused)refused(QStringLiteral("文章は1文字以上、100000文字以内で入力してください。"));return;}
         if(!CanAddMark())return;
         if(beginChange)beginChange();
         InstructionMark mark{text_.isEmpty()?QStringLiteral("1"):text_,WorldAt(last_),{},false};

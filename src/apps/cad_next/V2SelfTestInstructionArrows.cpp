@@ -117,7 +117,13 @@ bool TextFormatting(V2MainWindow&){
     const auto bounds=QFontMetricsF(drawnFont).boundingRect(page.marks[0].text).translated(view.Project(page.marks[0].start));
     const QPointF farText(bounds.right()-3,bounds.center().y());SceneClick(view,farText);
     if(!Explain("text can be selected far from its anchor",QLineF(farText,view.Project(page.marks[0].start)).length()>12&&view.SelectedMark()==0))return false;
-    return Explain("Escape restores text placement during drag",CancelledMarkDrag(view,page,0,farText));
+    if(!Explain("Escape restores text placement during drag",CancelledMarkDrag(view,page,0,farText)))return false;
+    page.marks[0].text=QStringLiteral("Assembly\nNext step");view.Refresh();QApplication::processEvents();
+    const auto multiline=view.Render(view.size(),false);QPointF lastInk;bool found=false;
+    for(int y=multiline.height()-1;y>=0&&!found;--y)for(int x=multiline.width()-1;x>=0;--x)if(qGray(multiline.pixel(x,y))<150){lastInk={double(x),double(y)};found=true;break;}
+    SceneClick(view,lastInk);
+    return Explain("last line of multiline annotation is pickable",found&&view.SelectedMark()==0);
+
 }
 bool CancelPartDrag(V2MainWindow&){
     auto asset=std::make_shared<InstructionAsset>();modeling::MeshTriangle a,b;

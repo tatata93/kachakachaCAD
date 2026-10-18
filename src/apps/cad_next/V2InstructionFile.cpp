@@ -65,13 +65,14 @@ QJsonObject Asset(const InstructionAsset& asset) {
 std::shared_ptr<InstructionAsset> ReadAsset(const QJsonObject& node,std::size_t& count) {
     auto asset=std::make_shared<InstructionAsset>();asset->id=QUuid(node["id"].toString());asset->name=node["name"].toString();
     if(asset->id.isNull()||!node["triangles"].isArray()||!node["edges"].isArray())return {};
-    const auto triangles=node["triangles"].toArray();count+=triangles.size();if(count>500000||triangles.isEmpty())return {};
+    const auto triangles=node["triangles"].toArray();count+=triangles.size();if(count>500000)return {};
     for(const auto& value:triangles){const auto a=value.toArray();if(a.size()!=3)return {};modeling::MeshTriangle triangle;
         for(int i=0;i<3;++i)if(!ReadVec(a[i],triangle.points[i]))return {};asset->mesh.triangles.push_back(triangle);}
     std::size_t points=0;
     for(const auto& value:node["edges"].toArray()){const auto a=value.toArray();points+=a.size();if(!value.isArray()||points>2000000)return {};
         std::vector<geometry::Vector3> edge;for(const auto& p:a){geometry::Vector3 v;if(!ReadVec(p,v))return {};edge.push_back(v);}
         asset->mesh.edges.push_back(std::move(edge));}
+    if(asset->mesh.triangles.empty()&&std::none_of(asset->mesh.edges.begin(),asset->mesh.edges.end(),[](const auto& edge){return edge.size()>=2;}))return {};
     modeling::RefreshBounds(asset->mesh);asset->encoded=node;return asset;
 }
 bool ReadPart(const QJsonObject& node,const QHash<QUuid,std::shared_ptr<InstructionAsset>>& assets,InstructionPart& part) {
@@ -102,7 +103,7 @@ bool ReadPage(const QJsonObject& node,const QHash<QUuid,std::shared_ptr<Instruct
     for(const auto& v:node["marks"].toArray()){if(!v.isObject())return false;const auto m=v.toObject();InstructionMark mark;
         if(!m["arrow"].isBool()||!m["text"].isString()||!ReadFont(m["font"],mark.font)||
             !ReadVec(m["start"],mark.start)||!ReadVec(m["end"],mark.end))return false;
-        mark.arrow=m["arrow"].toBool();mark.text=m["text"].toString();page.marks.push_back(mark);}
+        mark.arrow=m["arrow"].toBool();mark.text=m["text"].toString();if(mark.text.size()>100000)return false;page.marks.push_back(mark);}
     return true;
 }
 QJsonObject Page(const InstructionPage& scene,QJsonArray& assets,QHash<QUuid,bool>& saved) {
@@ -164,10 +165,20 @@ bool V2InstructionMode::ExportImage(const QString& path,QSize size) {
     QImageWriter writer(&file,format);writer.setQuality(95);if(!writer.write(image))return false;return file.commit();
 }
 bool V2InstructionMode::ExportPdf(const QString& path) {
-    if(sheets_.empty())return false;QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
+    CancelInput();
+    std::vector<InstructionSheet> sceneOutput;
+    if(!layoutEditing_){
+        const auto& scene=scenes_[current_];
+        if(scene.parts.empty()&&scene.marks.empty()&&scene.legacyImage.isNull()){if(hint_)hint_->setText(QStringLiteral("場面が空です。モデル・矢印・文章を配置してください。"));return false;}
+        InstructionSheet sheet;sheet.title=scene.title;sheet.widthMm=297;sheet.heightMm=210;
+        InstructionSheetItem item;item.sceneId=scene.id;item.rectMm=QRectF(10,10,277,190);sheet.items.push_back(item);sceneOutput.push_back(sheet);
+    }
+    auto output=layoutEditing_?sheets_:sceneOutput;
+    if(output.empty()||std::all_of(output.begin(),output.end(),[](const auto& sheet){return sheet.items.empty();})){if(hint_)hint_->setText(QStringLiteral("用紙に場面・画像・文章を配置してからPDFを出力してください。"));return false;}
+    QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
     {QPdfWriter pdf(&file);pdf.setResolution(144);QPainter painter;
         V2InstructionSheetView render;
-        for(std::size_t i=0;i<sheets_.size();++i){auto& sheet=sheets_[i];
+        for(std::size_t i=0;i<output.size();++i){auto& sheet=output[i];
             pdf.setPageSize(QPageSize(QSizeF(std::min(sheet.widthMm,sheet.heightMm),std::max(sheet.widthMm,sheet.heightMm)),
                 QPageSize::Millimeter,QString(),QPageSize::ExactMatch));
             pdf.setPageOrientation(sheet.widthMm>sheet.heightMm?QPageLayout::Landscape:QPageLayout::Portrait);
@@ -182,6 +193,9 @@ bool V2InstructionMode::ExportPdf(const QString& path) {
 }
 void V2InstructionMode::FileAction(std::string_view id) {
     CancelInput();
+    if(id=="instructions.save"&&!path_.isEmpty()){
+        const bool ok=Save(path_);if(hint_)hint_->setText(ok?QStringLiteral("保存しました：")+path_:QStringLiteral("保存できません。保存先を確認してください。"));return;
+    }
     const bool open=id=="instructions.open",model=id=="instructions.model_file",pdf=id=="instructions.pdf",image=id=="instructions.image";
     QString filter=model?QStringLiteral("CADモデル (*.kcd *.kcd2)"):pdf?QStringLiteral("PDF (*.pdf)"):QStringLiteral("説明書 (*.kci)");
     if(image){QStringList formats;for(const auto& f:QImageWriter::supportedImageFormats())formats<<QString::fromLatin1(f).toUpper()+QStringLiteral(" (*.")+QString::fromLatin1(f)+")";filter=formats.join(";;");}

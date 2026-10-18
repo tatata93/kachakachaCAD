@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFile>
@@ -51,11 +52,11 @@ void V2InstructionMode::ShowSheetSettings(){
     }
     if(activeTool_=="text"){
         pendingItem_.kind=InstructionItemKind::Text;pendingItem_.rectMm=QRectF(15,15,80,25);AddFontControls(panel,true);
-        auto* text=new QLineEdit(panel);text->setObjectName("instructionText");text->setPlaceholderText(QStringLiteral("文章を入力して用紙をクリック"));layout->addWidget(text);
-        const int selected=sheetView_->Selected();if(selected>=0&&sheet.items[selected].kind==InstructionItemKind::Text)text->setText(sheet.items[selected].text);
-        pendingItem_.text=text->text();connect(text,&QLineEdit::textEdited,this,[this,text]{pendingItem_.text=text->text();sheetView_->SetTool("text",pendingItem_);});
+        auto* text=new QPlainTextEdit(panel);text->setMaximumHeight(100);text->setObjectName("instructionText");text->setPlaceholderText(QStringLiteral("文章を入力して用紙をクリック"));layout->addWidget(text);
+        const int selected=sheetView_->Selected();if(selected>=0&&sheet.items[selected].kind==InstructionItemKind::Text)text->setPlainText(sheet.items[selected].text);
+        text->setPlainText(sheetText_);pendingItem_.text=sheetText_;connect(text,&QPlainTextEdit::textChanged,this,[this,text]{sheetText_=text->toPlainText();pendingItem_.text=sheetText_;sheetView_->SetTool("text",pendingItem_);});
         auto* apply=new QPushButton(QStringLiteral("選択した文字を更新"),panel);layout->addWidget(apply);
-        connect(apply,&QPushButton::clicked,this,[this,text]{const int i=sheetView_->Selected();if(i<0||sheets_[currentSheet_].items[i].kind!=InstructionItemKind::Text)return;before_=Snapshot();sheets_[currentSheet_].items[i].text=text->text();Remember();sheetView_->Refresh();});
+        connect(apply,&QPushButton::clicked,this,[this,text]{const int i=sheetView_->Selected();if(i<0||sheets_[currentSheet_].items[i].kind!=InstructionItemKind::Text||!AcceptTextInput(text->toPlainText()))return;before_=Snapshot();sheets_[currentSheet_].items[i].text=text->toPlainText();Remember();sheetView_->Refresh();});
     }
     if(activeTool_=="insert_image")hint_->setText(QStringLiteral("画像を用紙の任意位置にクリックして配置。選択・移動でドラッグし、右下の印で大きさを調整できます。"));
     if(activeTool_=="move"){
@@ -75,6 +76,7 @@ void V2InstructionMode::ShowSheetSettings(){
         }
         hint_->setText(QStringLiteral("クリックで選択、ドラッグで移動。右下の印でサイズ変更、Shiftで縦横比を維持。重なった図は一覧からも選べます。"));
     }
+    if(activeTool_=="move")AddSelectedTextControls(panel,true);
     if(activeTool_=="image")AddImageExportControls(panel);
     layout->addStretch();window_.OperationHost().ShowTemporaryPage(panel,QStringLiteral("用紙編集 — ")+sheet.title);
 }

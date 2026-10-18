@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QComboBox>
 #include <QSignalBlocker>
@@ -26,18 +27,19 @@ void V2InstructionMode::ShowSceneSettings(){
     if(!scenes_[current_].legacyPng.isEmpty())hint_->setText(QStringLiteral("旧版の2D説明図を背景として保持しています。3D配置にはモデルを読み込んでください。"));
     if(activeTool_=="text"){
     AddFontControls(panel,false);
-    auto* text=new QLineEdit(panel);text->setObjectName("instructionText");text->setPlaceholderText(QStringLiteral("番号・説明文（ツール選択後、3D上をクリック）"));layout->addWidget(text);
-    const int mark=view_->SelectedMark();if(mark>=0&&!scenes_[current_].marks[mark].arrow)text->setText(scenes_[current_].marks[mark].text);
-    connect(text,&QLineEdit::textEdited,this,[this,text]{view_->SetTool("text",text->text());});
+    auto* text=new QPlainTextEdit(panel);text->setMaximumHeight(100);text->setObjectName("instructionText");text->setPlaceholderText(QStringLiteral("番号・説明文（ツール選択後、3D上をクリック）"));layout->addWidget(text);
+    text->setPlainText(sceneText_);
+    connect(text,&QPlainTextEdit::textChanged,this,[this,text]{sceneText_=text->toPlainText();view_->SetTool("text",sceneText_);});
     auto* applyText=new QPushButton(QStringLiteral("選択した文字を更新"),panel);layout->addWidget(applyText);
-    connect(applyText,&QPushButton::clicked,this,[this,text]{const int i=view_->SelectedMark();if(i<0)return;before_=Snapshot();scenes_[current_].marks[i].text=text->text();Remember();view_->Refresh();});
+    connect(applyText,&QPushButton::clicked,this,[this,text]{const int i=view_->SelectedMark();if(i<0||!AcceptTextInput(text->toPlainText()))return;before_=Snapshot();scenes_[current_].marks[i].text=text->toPlainText();Remember();view_->Refresh();});
     }
     if(activeTool_=="move"){
     auto* target=new QComboBox(panel);target->setObjectName("instructionPlacedPart");target->addItem(QStringLiteral("対象部品を選択"));
     for(std::size_t i=0;i<scenes_[current_].parts.size();++i)target->addItem(QString::number(i+1)+QStringLiteral("：")+scenes_[current_].parts[i].asset->name);
     target->setCurrentIndex(view_->Selected()+1);layout->addWidget(target);
     connect(target,&QComboBox::currentIndexChanged,this,[this](int index){view_->SetSelected(index-1);});
-    view_->selectedChanged=[target=QPointer<QComboBox>(target)](int index){if(target){const QSignalBlocker blocker(target);target->setCurrentIndex(index+1);}};
+
+    if(view_->Selected()>=0){
     auto* form=new QFormLayout;layout->addLayout(form);std::vector<QDoubleSpinBox*> values;
     for(const auto* label:{"X移動 mm","Y移動 mm","Z移動 mm","X回転 °","Y回転 °","Z回転 °"}){
         auto* value=new V2NumericSpinBox(panel);value->setRange(-100000,100000);value->setDecimals(3);value->setKeyboardTracking(false);form->addRow(QString::fromUtf8(label),value);values.push_back(value);}
@@ -48,6 +50,8 @@ void V2InstructionMode::ShowSceneSettings(){
         part.rotation=QQuaternion::fromEulerAngles(float(values[3]->value()),float(values[4]->value()),float(values[5]->value()))*part.rotation;
         const auto correction=previous-part.rotation.rotatedVector(center);part.offset=part.offset+kachakacha::v2::geometry::Vector3{correction.x(),correction.y(),correction.z()};Remember();view_->Refresh();});
     }
+    }
+    if(activeTool_=="move")ShowSceneSelection(panel);
     if(activeTool_=="image")AddImageExportControls(panel);
     auto* help=new QLabel(QStringLiteral("標準は白地・黒い輪郭線、隠れた線は消します。左ドラッグで部品・矢印を移動。矢印はドラッグで配置し、選択・移動で両端の印を調整。\n説明書 .kci は元モデルとは別に保存。"),panel);help->setWordWrap(true);layout->addWidget(help);layout->addStretch();
     window_.OperationHost().ShowTemporaryPage(panel,QStringLiteral("画像エディター — 3Dの場面"));

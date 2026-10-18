@@ -130,11 +130,11 @@ def render_page(row,recipe,variants,evidence,variant_figures):
             check = recipe['expected'] if i == len(recipe['actions']) else (
                 '使う対象・値：'+recipe['settings'] if i > 1 else
                 'この操作で使う入力：'+recipe['prepare'])
-            steps+=f'<li id="step-{i}"><h3>{i}　{e(action)}</h3><p class="checkpoint"><b>この段階で確認：</b>{e(check)}</p></li>' 
+            steps+=f'<li id="step-{i}"><h3>{i}　{e(action)}</h3><p class="checkpoint"><b>この段階で確認：</b>{e(check)}</p></li>'
     entry_image=HERE/'tool-entry-screens'/f'{ident}.png'
     if entry_image.is_file():
         path_html+=f'<figure><a href="../tool-entry-screens/{ident}.png"><img loading="lazy" src="../tool-entry-screens/{ident}.png" alt="{e(name)}をボタンと同じ入口で開いた画面"></a><figcaption>対象未選択でこの機能を開いた実画面（2026-10-18）。入口・入力欄の確認用です。下の練習例の生成結果ではありません。</figcaption></figure>'
-    example='' 
+    example=''
     if ident in EXAMPLES:
         example='<aside class="worked-example"><h2>実画面で最後までたどる作業例</h2>'+''.join(f'<p><a class="lesson-button" href="../{link}">{e(label)}</a></p>' for link,label in EXAMPLES[ident])+'</aside>'
     photos=''

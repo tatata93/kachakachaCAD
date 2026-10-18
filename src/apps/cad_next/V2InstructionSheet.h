@@ -50,6 +50,8 @@ private:
     InstructionSheetItem pending_;
     int selected_=-1;
     bool dragging_=false,resizing_=false;
+    bool placementHover_=false;
+    QPointF placementAt_;
     QPointF last_;
     QRectF dragOriginal_;
     QHash<QString,QImage> sceneImageCache_;

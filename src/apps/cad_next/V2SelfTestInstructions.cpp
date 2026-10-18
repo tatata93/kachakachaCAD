@@ -23,10 +23,13 @@
 #include <QIODevice>
 #include <QPointF>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QListWidget>
 #include <QPushButton>
 namespace kachakacha::v2::selftest {
 bool MakeCurvedGuideSurface(V2MainWindow&);
+bool InstructionWorkspaceWorkflow(V2MainWindow&);
+bool InstructionCaptureWorkflow(V2MainWindow&);
 namespace {
 void Mouse(QWidget* view,QEvent::Type type,QPointF at,Qt::MouseButton button,Qt::MouseButtons held){QMouseEvent event(type,at,at,button,held,Qt::NoModifier);QApplication::sendEvent(view,&event);QApplication::processEvents();}
 bool HiddenLines(){
@@ -73,7 +76,7 @@ bool Instructions(V2MainWindow& window){
     for(const auto at:{QPointF(200,200),QPointF(400,300)}){Mouse(view,QEvent::MouseButtonPress,at,Qt::LeftButton,Qt::LeftButton);Mouse(view,QEvent::MouseButtonRelease,at,Qt::LeftButton,Qt::NoButton);}
     window.RunCommand("instructions.text");Mouse(view,QEvent::MouseButtonPress,{180,140},Qt::LeftButton,Qt::LeftButton);Mouse(view,QEvent::MouseButtonRelease,{180,140},Qt::LeftButton,Qt::NoButton);
     if(!Explain("world anchored arrow and text",mode->Snapshot()["pages"].toArray()[0].toObject()["marks"].toArray().size()==2))return false;
-    window.RunCommand("tools.search");window.RunCommand("instructions.text");if(!Explain("settings return from search",window.findChild<QLineEdit*>("instructionText")!=nullptr))return false;
+    window.RunCommand("tools.search");window.RunCommand("instructions.text");if(!Explain("settings return from search",window.findChild<QPlainTextEdit*>("instructionText")!=nullptr))return false;
     window.RunCommand("instructions.move");QApplication::processEvents();QComboBox* placed=nullptr;for(auto* combo:window.findChildren<QComboBox*>("instructionPlacedPart"))if(combo->isVisible())placed=combo;
     if(!Explain("part selector available",placed&&placed->count()==2))return false;placed->setCurrentIndex(1);if(view->Selected()!=0)return false;
     window.RunCommand("instructions.duplicate");if(!Explain("duplicate page",mode->Snapshot()["pages"].toArray().size()==2))return false;
@@ -91,5 +94,5 @@ bool Instructions(V2MainWindow& window){
     window.SetMode(app::UiMode::Instructions);return Explain("mode keeps state",mode->Snapshot()==saved);
 }
 }
-std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions}};}
+std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions},{"HP-INSTRUCTIONS-WORKSPACE focus selection pages save and PDF",&InstructionWorkspaceWorkflow},{"HP-INSTRUCTIONS-CAPTURE wire assets picker state and theme",&InstructionCaptureWorkflow}};}
 }

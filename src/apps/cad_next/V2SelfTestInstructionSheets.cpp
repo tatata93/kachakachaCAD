@@ -8,6 +8,7 @@
 #include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QListWidget>
@@ -60,16 +61,15 @@ QJsonArray Items(V2InstructionMode& mode) {
     const auto doc=mode.Snapshot();return doc["sheets"].toArray()[doc["currentSheet"].toInt()].toObject()["items"].toArray();
 }
 bool AddText(V2MainWindow& window,V2InstructionMode& mode,V2InstructionSheetView* view) {
-    mode.Command("instructions.text");auto* text=Visible<QLineEdit>(window,"instructionText");
+    mode.Command("instructions.text");auto* text=Visible<QPlainTextEdit>(window,"instructionText");
     auto* size=Visible<QDoubleSpinBox>(window,"instructionFontSize");
     auto* bold=Visible<QCheckBox>(window,"instructionTextBold");auto* font=Visible<QFontComboBox>(window,"instructionFont");
     if(!Explain("paper font controls",text&&size&&bold&&font))return false;
-    text->setText(QStringLiteral("1. パーツを組み合わせる"));
-    QMetaObject::invokeMethod(text,"textEdited",Qt::DirectConnection,Q_ARG(QString,text->text()));
+    text->setPlainText(QStringLiteral("1. パーツを組み合わせる"));
     font->setCurrentFont(QFont(QStringLiteral("Arial")));size->setValue(17.5);
     QMetaObject::invokeMethod(size,"editingFinished",Qt::DirectConnection);bold->setChecked(true);Click(view,{20,100});
     const auto item=Items(mode).last().toObject(),savedFont=item["font"].toObject();
-    if(!Explain("text preserves content family size bold",item["kind"]=="text"&&item["text"]==text->text()&&
+    if(!Explain("text preserves content family size bold",item["kind"]=="text"&&item["text"]==text->toPlainText()&&
         !savedFont["family"].toString().isEmpty()&&savedFont["sizePt"].toDouble()==17.5&&savedFont["bold"].toBool()))return false;
     const auto before=view->Render({840,1188});size->setValue(23.5);
     QMetaObject::invokeMethod(size,"editingFinished",Qt::DirectConnection);

@@ -111,7 +111,7 @@ void V2InstructionSheetView::SetTool(const QString& tool,const InstructionSheetI
 }
 void V2InstructionSheetView::CancelInput() {
     if(dragging_&&sheet_&&selected_>=0&&selected_<int(sheet_->items.size()))sheet_->items[selected_].rectMm=dragOriginal_;
-    dragging_=false;resizing_=false;Refresh();
+    dragging_=false;resizing_=false;placementHover_=false;Refresh();
 }
 void V2InstructionSheetView::Refresh() {update();}
 void V2InstructionSheetView::SetSelected(int index) {
@@ -146,6 +146,12 @@ QImage V2InstructionSheetView::Render(QSize size,bool selection) {
             painter.setBrush(Qt::white);painter.drawRect(QRectF(pixels.bottomRight()-QPointF(5,5),QSizeF(10,10)));
         }
     }
+    if(selection&&placementHover_&&PlacementTool(tool_)){
+        auto ghost=pending_;ghost.rectMm.setWidth(std::clamp(ghost.rectMm.width(),.01,sheet_->widthMm));ghost.rectMm.setHeight(std::clamp(ghost.rectMm.height(),.01,sheet_->heightMm));
+        ghost.rectMm.moveTopLeft(LimitedPosition(placementAt_,ghost.rectMm.size(),*sheet_));
+        const auto pixels=ItemPixels(ghost,paper,scale);painter.setOpacity(.5);DrawItem(painter,ghost,pixels,scale,scenes_,sceneImageCache_);painter.setOpacity(1);
+        painter.setPen(QPen(QColor(20,100,210),1.5,Qt::DashLine));painter.setBrush(Qt::NoBrush);painter.drawRect(pixels);
+    }
     painter.restore();
     if(selection){painter.setPen(QPen(QColor(130,135,140),1));painter.setBrush(Qt::NoBrush);painter.drawRect(paper);}
     return image;
@@ -156,12 +162,14 @@ void V2InstructionSheetView::paintEvent(QPaintEvent*) {
 }
 void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
     if(!sheet_||event->button()!=Qt::LeftButton)return;
+    setFocus(Qt::MouseFocusReason);
     const auto point=event->position();last_=ToMm(point);
     if(PlacementTool(tool_)) {
         if(!PaperRect().contains(point))return;
         QString error;
         if(sheet_->items.size()>=1000)error=QStringLiteral("1枚の用紙には1000個まで配置できます。別の用紙を追加してください。");
-        else if(pending_.kind==InstructionItemKind::Text&&pending_.text.isEmpty())error=QStringLiteral("右ペインに文章を入力してから置いてください。");
+        else if(pending_.kind==InstructionItemKind::Text&&pending_.text.trimmed().isEmpty())error=QStringLiteral("右ペインに文章を入力してから置いてください。");
+        else if(pending_.kind==InstructionItemKind::Text&&pending_.text.size()>100000)error=QStringLiteral("文章は100000文字以内で入力してください。");
         else if(pending_.kind==InstructionItemKind::Scene&&!SceneFor(scenes_,pending_.sceneId))error=QStringLiteral("配置する場面を選んでください。");
         else if(pending_.kind==InstructionItemKind::Image&&pending_.image.isNull())error=QStringLiteral("貼る画像を選んでください。");
         if(!error.isEmpty()){if(refused)refused(error);return;}
@@ -186,6 +194,7 @@ void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
 }
 void V2InstructionSheetView::mouseMoveEvent(QMouseEvent* event) {
     if(!sheet_)return;
+    if(PlacementTool(tool_)){placementHover_=PaperRect().contains(event->position());placementAt_=ToMm(event->position());Refresh();return;}
     if(!dragging_||selected_<0||selected_>=int(sheet_->items.size())) {
         if(!PlacementTool(tool_)&&selected_>=0&&selected_<int(sheet_->items.size()))
             setCursor(QLineF(event->position(),ToScreen(sheet_->items[selected_].rectMm.bottomRight())).length()<=10?

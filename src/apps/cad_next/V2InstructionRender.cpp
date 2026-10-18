@@ -1,4 +1,5 @@
 #include <QSizeF>
+#include <QFontMetricsF>
 #include <QImage>
 #include <QPointF>
 #include "V2InstructionScene.h"
@@ -65,7 +66,9 @@ QImage V2InstructionScene::Render(QSize size,bool selection){
             QPointF previous;bool active=false;
             for(int j=0;j<=steps;++j){const double t=double(j)/steps;const auto p=pa+(pb-pa)*t;const int x=int(std::clamp(std::round(p.x()),-1.0,double(w))),y=int(std::clamp(std::round(p.y()),-1.0,double(h)));
                 const double z=geometry::Dot(a+(b-a)*t,forward);const bool visible=x>=0&&x<w&&y>=0&&y<h&&z<=depth[y*w+x]+page_->span*0.001;
-                if(visible&&active)painter.drawLine(previous,p);active=visible;previous=p;
+                if(visible&&active)painter.drawLine(previous,p);
+                if(visible&&part.asset->mesh.triangles.empty()&&depth[y*w+x]>=z){depth[y*w+x]=z;ids[y*w+x]=int(i);}
+                active=visible;previous=p;
             }
         }
     }
@@ -73,7 +76,7 @@ QImage V2InstructionScene::Render(QSize size,bool selection){
     for(std::size_t i=0;i<page_->marks.size();++i){const auto& mark=page_->marks[i];painter.setPen(QPen(selection&&int(i)==selectedMark_?QColor(20,100,210):QColor(Qt::black),std::max(1.5,w/700.0)));
         if(mark.arrow){Arrow(painter,project(mark.start),project(mark.end));
             if(selection&&int(i)==selectedMark_){painter.setBrush(Qt::white);painter.drawEllipse(project(mark.start),5,5);const auto tip=project(mark.end);painter.drawRect(QRectF(tip-QPointF(5,5),QSizeF(10,10)));painter.setBrush(Qt::NoBrush);}}
-        else{auto font=mark.font;font.setPixelSize(std::max(1,int(std::round(mark.font.pointSizeF()*4/3*w/1400))));painter.setFont(font);painter.drawText(project(mark.start),mark.text);}
+        else{auto font=mark.font;font.setPixelSize(std::max(1,int(std::round(mark.font.pointSizeF()*4/3*w/1400))));painter.setFont(font);const auto at=project(mark.start);if(!mark.text.contains('\n'))painter.drawText(at,mark.text);else painter.drawText(QRectF(at.x(),at.y()-QFontMetricsF(font).ascent(),w,10000),Qt::AlignLeft|Qt::AlignTop|Qt::TextExpandTabs,mark.text);}
     }
     if(selection&&arrowPending_){painter.setPen(QPen(QColor(20,100,210),2,Qt::DashLine));Arrow(painter,project(start_),project(preview_));painter.drawEllipse(project(start_),4,4);}painter.end();
     if(selection){pick_=std::move(ids);depth_=std::move(depth);mapping_=mapping;forward_=forward;}

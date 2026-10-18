@@ -51,6 +51,7 @@ public:
     void CancelInput();
     void SetTextFont(const QFont& font) { textFont_=font; }
     void SetSelected(int);
+    void SetSelectedMark(int);
     int Selected() const{return selected_;}
     int SelectedMark() const{return selectedMark_;}
     QImage Render(QSize,bool selection=false);

@@ -12,6 +12,8 @@ class QLineEdit;
 class QLabel;
 class QListWidget;
 class QSpinBox;
+class QHBoxLayout;
+class QLayout;
 class V2InstructionMode final:public QWidget {
 public:
     static void Sync(V2MainWindow&);
@@ -44,6 +46,14 @@ private:
     void AddImageExportControls(QWidget*);
     void ShowSettings();
     void ShowModelPicker();
+    void BuildWorkspaceActions(QHBoxLayout*);
+    void RefreshWorkspaceActions();
+    void ShowSceneSelection(QWidget*);
+    void AddSelectedTextControls(QWidget*,bool sheet);
+    void DeletePage();
+    void NewDocument();
+    void SyncPlacementInput();
+    bool AcceptTextInput(const QString&);
     bool Collect(V2MainWindow&);
     void Remember();
     void Undo(bool redo);
@@ -68,6 +78,10 @@ private:
     InstructionSheetItem pendingItem_;
     bool loading_=false,dirty_=false,choosing_=false;
     QString path_,activeTool_="move";
+    QString sceneText_=QStringLiteral("1"),sheetText_;
+    std::vector<bool> sourceChecks_;
+    int sourceRow_=-1;
+    QLayout* workspaceActions_=nullptr;
     std::function<QString(bool)> pathChooser_;
     QJsonObject before_;
     std::vector<QJsonObject> undo_,redo_;

@@ -501,11 +501,8 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
     // 名前を書き換えたら文書へ入れる。判断(空か、変わったか)は core にある。
     // 行の変更を処理すると文書から木を作り直す。DirectConnection のままでは、
     // QTreeWidgetItem::setData の途中でその行自身を削除してしまう。
-    QObject::connect(entityTree_, &QTreeWidget::itemChanged, this,
-        [this](QTreeWidgetItem* item, int column) {
-            if (column != 0) {
-                return;
-            }
+    entityTree_->SetChangeHandler([this](QTreeWidgetItem* item) {
+            if(ToggleExplorerCategory(item))return;
             // 軸の行はチェックで表示を切り替える。名前の書き換えではない。
             for (int axis = 0; axis < 3; ++axis) {
                 if (axisItems_[static_cast<std::size_t>(axis)] == item) {
@@ -522,7 +519,7 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
                 return;
             }
             RenameEntityFromItem(item);
-        }, Qt::QueuedConnection);
+        });
     // 引きずって移す(オーナー指示 §9)。木の中だけで動かす。
     // Qt に行を動かさせず、**落ちた先を聞いて文書のほうを変える。**
     // 木は文書から作り直すので、木だけ動かしても次の作り直しで元へ戻る。
@@ -550,6 +547,7 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
     QObject::connect(entityFilter_, &QLineEdit::textChanged, this,
         [this] { ApplyEntityTreeFilter(); });
     treeLayout->addWidget(entityFilter_);
+    BuildExplorerGroupButtons(treeLayout);
     treeLayout->addWidget(entityTree_, 1);
     treeDock->setWidget(treeBody);
     treeDock->setMinimumWidth(220);

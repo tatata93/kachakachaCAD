@@ -80,5 +80,12 @@ void V2Viewport::DrawHud(QPainter& painter) const
             metrics.elidedText(hudLines_[index], Qt::ElideRight, static_cast<int>(box.width() - 12.0)));
         y += lineHeight;
     }
+    if(cycle_.candidates.size()>1) {
+        const auto label=QStringLiteral("重なり %1件（%2）  Tabで切替 ／ 右クリックで一覧")
+            .arg(cycle_.candidates.size()).arg(cycle_.index+1);
+        const QRectF hint(8,box.bottom()+4,std::min(double(width()-16),double(metrics.horizontalAdvance(label)+12)),lineHeight+12);
+        painter.setPen(Qt::NoPen);painter.setBrush(back);painter.drawRoundedRect(hint,3,3);
+        painter.setPen(palette_.text);painter.drawText(hint.adjusted(6,0,-6,0),Qt::AlignVCenter,label);
+    }
     painter.restore();
 }

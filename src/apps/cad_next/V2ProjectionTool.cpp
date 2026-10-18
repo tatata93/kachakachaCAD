@@ -1,4 +1,5 @@
 #include "V2ProjectionTool.h"
+#include "V2GeneratedCurves.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -141,6 +142,7 @@ bool V2ProjectionTool::Preview() {
         status_->setText(QStringLiteral("計算中に文書が変更されました。結果を破棄しました。"));return false;
     }
     result_=made.Value();previewRevision_=revision_;
+    for(auto& run:result_->wires)run=V2CompactGeneratedCurves(run);
     std::vector<std::vector<geometry::Vector3>> lines;
     for(const auto& run:result_->wires)lines.push_back(geometry::SampleChain(run,0.01));
     window_.viewport_->ShowToolPreview(lines);

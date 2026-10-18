@@ -163,6 +163,8 @@ void V2MainWindow::RunViewCommand(std::string_view id)
 
 void V2MainWindow::HideSelected()
 {
+    const auto rows=entityTree_->selectedItems();
+    if(ApplyExplorerVisibility(std::vector<QTreeWidgetItem*>(rows.begin(),rows.end()),false))return;
     // 隠すだけ。形は消さない。消してしまうと、隠したつもりが元に戻せなくなる。
     const auto& selection = viewport_->Selection();
     if (selection.entityIds.empty()) {
@@ -257,21 +259,11 @@ void V2MainWindow::AdoptTreeSelection()
         }
     }
     syncingSelection_ = true;
-    viewport_->SetSelection(next);
-    syncingSelection_ = false;
     if (!partNumbers.isEmpty() && fabricationDock_ != nullptr) {
         fabricationDock_->SetPartNumbersText(partNumbers);
     }
-    RefreshFoldEmphasis();
-    // 選択が変わったあとの後始末は、3D 画面で選んだときと同じ道を通す。
-    RefreshExportCounts();
-    RefreshMeasurements();
-    RefreshEditDock();
-    RefreshCornerDock();
-    RefreshFabricationDock();
-    RefreshWorkPlaneDock();
-    RefreshCommandVisibility();
-    viewport_->update();
+    viewport_->SetSelection(next); // The common selection callback updates each tool once.
+    syncingSelection_ = false;
 }
 
 void V2MainWindow::HighlightTreeForSelection()
@@ -649,7 +641,11 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         menu.addSection(QStringLiteral("この場所の候補"));
         candidateActions.reserve(candidateLabels.size());
         for (const QString& label : candidateLabels) {
-            candidateActions.push_back(menu.addAction(label));
+            auto* action=menu.addAction(label);
+            const auto index=candidateActions.size();
+            action->setObjectName(QStringLiteral("pickCandidate%1").arg(index));
+            connect(action,&QAction::hovered,viewport_,[this,index]{viewport_->PreviewCandidate(index);});
+            candidateActions.push_back(action);
         }
         menu.addSeparator();
     }
@@ -711,8 +707,10 @@ std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
     if (menu.isEmpty()) {
         return std::nullopt;
     }
+    const auto previousCandidate=viewport_->CandidateIndex();
     const QAction* chosen = menu.exec(at);
     if (chosen == nullptr) {
+        viewport_->PreviewCandidate(static_cast<std::size_t>(previousCandidate));
         return std::nullopt;
     }
     for (const auto& [action, role] : roleActions) {

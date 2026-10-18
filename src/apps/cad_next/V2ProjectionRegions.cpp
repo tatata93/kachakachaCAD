@@ -1,4 +1,5 @@
 #include "V2ProjectionTool.h"
+#include "V2GeneratedCurves.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2Calculation.h"
@@ -20,6 +21,7 @@ bool V2ProjectionTool::PreviewRegions(const std::vector<modeling::KernelShapeHan
         V2Calculation::Discard(made.Value());status_->setText(QStringLiteral("文書が変更されました。結果を破棄しました。"));return false;
     }
     regions_=made.Value().faces;result_=made.Value().boundary;previewRevision_=revision_;
+    for(auto& run:result_->wires)run=V2CompactGeneratedCurves(run);
     std::vector<std::vector<geometry::Vector3>> lines,polygons;
     for(const auto& run:result_->wires)lines.push_back(geometry::SampleChain(run,.01));
     for(const auto& region:regions_) {

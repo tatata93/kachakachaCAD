@@ -9,6 +9,16 @@
 #include <QTreeWidgetItemIterator>
 #include <QVariant>
 #include <QString>
+#include <QTimer>
+#include <QSignalBlocker>
+#include <QItemSelectionModel>
+#include <QMouseEvent>
+#include <QStyleOptionViewItem>
+#include <QStyle>
+#include <QRect>
+#include <QObject>
+#include <QPersistentModelIndex>
+#include <utility>
 
 namespace {
 bool HasExpansionState(const QTreeWidgetItem* item) {
@@ -24,6 +34,11 @@ V2EntityTree::V2EntityTree(QWidget* parent) : QTreeWidget(parent)
     setDropIndicatorShown(true);
     // 木の中だけで動かす。外から落ちてくるものは受けない。
     setDragDropMode(QAbstractItemView::InternalMove);
+    QObject::connect(this,&QTreeWidget::itemChanged,this,[this](auto* item,int column){
+        if(column!=0||!item)return;const auto key=KeyOf(item);if(key.isEmpty())return;
+        changes_.insert_or_assign(key,Change{item->text(0),item->checkState(0)});
+        if(changeQueued_)return;changeQueued_=true;QTimer::singleShot(0,this,[this]{FlushChanges();});
+    });
 }
 
 void V2EntityTree::SetDropHandler(
@@ -65,19 +80,24 @@ QString V2EntityTree::KeyOf(const QTreeWidgetItem* item) {
 void V2EntityTree::BeginRebuild(const QString& documentId) {
     if(documentId_ != documentId) {
         expanded_.clear(); beforeFilter_.clear(); filter_.clear(); documentId_=documentId;
-        scroll_=0; return;
+        currentKey_.clear();selectedKeys_.clear();rows_.clear();changes_.clear();scroll_=0; return;
     }
     for(QTreeWidgetItemIterator it(this); *it; ++it) {
         const auto key=KeyOf(*it);
         if(!key.isEmpty()&&HasExpansionState(*it))expanded_[key]=(*it)->isExpanded();
     }
     scroll_=verticalScrollBar()->value();
+    currentKey_=KeyOf(currentItem());selectedKeys_.clear();
+    for(auto* item:selectedItems())selectedKeys_.insert(KeyOf(item));rows_.clear();
 }
 void V2EntityTree::EndRebuild() {
     for(QTreeWidgetItemIterator it(this); *it; ++it) {
         const auto key=KeyOf(*it);const auto found=expanded_.find(key);
         (*it)->setExpanded(found==expanded_.end() || found->second);
+        rows_.insert_or_assign(key,QPersistentModelIndex(indexFromItem(*it)));
+        if(selectedKeys_.contains(key))(*it)->setSelected(true);
     }
+    if(auto* item=FindKey(currentKey_))setCurrentItem(item,0,QItemSelectionModel::NoUpdate);
     verticalScrollBar()->setValue(scroll_);
 }
 bool V2EntityTree::BeginFilter(const QString& term) {
@@ -100,4 +120,24 @@ bool V2EntityTree::AncestorsExpanded(const QTreeWidgetItem* item) {
     for(auto* parent=item->parent();parent;parent=parent->parent())
         if(!parent->isExpanded())return false;
     return true;
+}
+QTreeWidgetItem* V2EntityTree::FindKey(const QString& key) const {
+    const auto found=rows_.find(key);return found==rows_.end()||!found->second.isValid()?nullptr:itemFromIndex(found->second);
+}
+void V2EntityTree::SetChangeHandler(std::function<void(QTreeWidgetItem*)> handler){changed_=std::move(handler);}
+void V2EntityTree::FlushChanges(){
+    changeQueued_=false;const auto pending=std::exchange(changes_,{});
+    for(const auto& [key,change]:pending)if(auto* item=FindKey(key)){
+        {QSignalBlocker block(this);item->setText(0,change.text);item->setCheckState(0,change.check);}
+        if(changed_)changed_(item);
+    }
+}
+void V2EntityTree::mousePressEvent(QMouseEvent* event){
+    if(event->button()==Qt::LeftButton)if(auto* item=itemAt(event->position().toPoint());item&&(item->flags()&Qt::ItemIsUserCheckable)){
+        QStyleOptionViewItem option;initViewItemOption(&option);option.rect=visualItemRect(item);
+        option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=item->checkState(0);
+        const QRect check=style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,this);
+        if(check.contains(event->position().toPoint())){item->setCheckState(0,item->checkState(0)==Qt::Checked?Qt::Unchecked:Qt::Checked);event->accept();return;}
+    }
+    QTreeWidget::mousePressEvent(event);
 }

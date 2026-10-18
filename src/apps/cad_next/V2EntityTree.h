@@ -11,12 +11,15 @@
 #include <QTreeWidget>
 #include <QString>
 #include <map>
+#include <QPersistentModelIndex>
+#include <set>
 
 #include <functional>
 #include <vector>
 
 class QDropEvent;
 class QTreeWidgetItem;
+class QMouseEvent;
 
 class V2EntityTree final : public QTreeWidget {
 public:
@@ -37,13 +40,24 @@ public:
     void EndRebuild();
     bool BeginFilter(const QString& term);
     static bool AncestorsExpanded(const QTreeWidgetItem* item);
+    QTreeWidgetItem* FindKey(const QString& key) const;
+    void SetChangeHandler(std::function<void(QTreeWidgetItem*)> handler);
 
 protected:
     void dropEvent(QDropEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     std::function<void(const std::vector<QTreeWidgetItem*>&, QTreeWidgetItem*)> dropHandler_;
     std::map<QString, bool> expanded_, beforeFilter_;
     QString documentId_, filter_;
     int scroll_ = 0;
+    QString currentKey_;
+    std::set<QString> selectedKeys_;
+    std::map<QString,QPersistentModelIndex> rows_;
+    struct Change {QString text;Qt::CheckState check;};
+    std::map<QString,Change> changes_;
+    std::function<void(QTreeWidgetItem*)> changed_;
+    bool changeQueued_=false;
+    void FlushChanges();
 };

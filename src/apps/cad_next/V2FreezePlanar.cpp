@@ -3,6 +3,7 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <algorithm>
@@ -51,6 +52,33 @@ Vector3 PoseVector(Vector3 p,const geometry::PlanarFrame& frame,double progress)
         geometry::Dot(x,frame.uDirection));
     return Rotate(Rotate(p,z,twist*progress),axis,angle*progress);
 }
+std::vector<geometry::CurveSegment> PoseCurves(const std::vector<geometry::CurveSegment>& curves,
+    const geometry::PlanarFrame& frame,double progress)
+{
+    const Vector3 z{0,0,1};auto axis=geometry::Cross(z,frame.normal);
+    const double angle=std::acos(std::clamp(geometry::Dot(z,frame.normal),-1.0,1.0));
+    axis=axis.Length()>1e-9?geometry::Normalized(axis):Vector3{1,0,0};
+    const auto x=Rotate({1,0,0},axis,angle);
+    const double twist=std::atan2(geometry::Dot(geometry::Cross(x,frame.uDirection),frame.normal),geometry::Dot(x,frame.uDirection));
+    std::vector<geometry::CurveSegment> result;
+    for(const auto& curve:curves) {
+        auto next=geometry::RotateCurve(geometry::TranslateCurve(curve,frame.origin*(-1)),{},axis,-angle);if(!next.HasValue())return {};
+        next=geometry::RotateCurve(next.Value(),{},z,twist*(progress-1));if(!next.HasValue())return {};
+        next=geometry::RotateCurve(next.Value(),{},axis,angle*progress);if(!next.HasValue())return {};
+        result.push_back(geometry::TranslateCurve(next.Value(),frame.origin*progress));
+    }
+    return result;
+}
+bool SameLoop(const std::vector<geometry::CurveSegment>& curves,const std::vector<geometry::Point2>& loop,
+    const geometry::PlanarFrame& frame)
+{
+    std::vector<Vector3> points;for(const auto& curve:curves)
+        for(const auto& p:geometry::SampleCurve(curve,.01))points.push_back(p.position);
+    if(points.size()!=loop.size())return false;
+    for(std::size_t i=0;i<points.size();++i)
+        if(geometry::Distance(points[i],frame.origin+frame.uDirection*loop[i].u+frame.vDirection*loop[i].v)>1e-6)return false;
+    return true;
+}
 }
 
 bool V2MainWindow::FreezePlanarPanels(const domain::CreateFabricationModelDefinition& definition,
@@ -80,7 +108,13 @@ bool V2MainWindow::FreezePlanarPanels(const domain::CreateFabricationModelDefini
         std::vector<std::vector<geometry::Point2>> loops{panel.outline};
         loops.insert(loops.end(),panel.openings.begin(),panel.openings.end());
         for(std::size_t loop=0;loop<loops.size();++loop) {
-            const auto wire=makeWire(loops[loop],true,loop?"生成した開口":"生成した外周");
+            const auto* exact=loop==0?&*source->flatBoundary:
+                loop<=source->flatOpenings.size()?&source->flatOpenings[loop-1]:nullptr;
+            base::EntityId wire;
+            if(exact&&SameLoop(*exact,loops[loop],*frame)) {
+                wire=AddPlainWire(PoseCurves(*exact,*frame,progress),loop?"生成した開口":"生成した外周");
+                if(!wire.IsNil())++wires;
+            } else wire=makeWire(loops[loop],true,loop?"生成した開口":"生成した外周");
             if(wire.IsNil())return false;boundaries.push_back(wire);
         }
         for(const auto& fold:panel.folds)if(makeWire(fold.path,false,"生成した折り線").IsNil())return false;

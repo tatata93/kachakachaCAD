@@ -60,10 +60,15 @@ void V2MainWindow::BuildExplorerMenu(QMenu& menu)
     menu.addSeparator();
     AddCatalogAction(*this, menu, "view.hide_selected");
     AddCatalogAction(*this, menu, "view.show_all");
+    auto* show=menu.addAction(QStringLiteral("選択を表示"));
+    QObject::connect(show,&QAction::triggered,this,[this]{const auto rows=entityTree_->selectedItems();ApplyExplorerVisibility(std::vector<QTreeWidgetItem*>(rows.begin(),rows.end()),true);});
     AddCatalogAction(*this, menu, "view.align_selection");
     menu.addSeparator();
     BuildMoveToGroupMenu(menu);
-    AddCatalogAction(*this, menu, "group.create");
+    auto* sibling=menu.addAction(QStringLiteral("同じ階層にグループを作る"));
+    sibling->setObjectName("explorerSiblingGroupAction");QObject::connect(sibling,&QAction::triggered,this,[this]{CreateSiblingGroup();});
+    auto* child=menu.addAction(QStringLiteral("子グループを作る"));child->setEnabled(SelectedGroupId().has_value());
+    QObject::connect(child,&QAction::triggered,this,[this]{CreateGroupFromSelection();});
     AddCatalogAction(*this, menu, "group.dissolve");
     menu.addSeparator();
     AddCatalogAction(*this, menu, "wire.copy");

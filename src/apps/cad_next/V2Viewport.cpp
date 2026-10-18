@@ -1224,7 +1224,7 @@ void V2Viewport::keyReleaseEvent(QKeyEvent* event)
 
 bool V2Viewport::event(QEvent* event)
 {
-    if (event->type() == QEvent::Leave) {
+    if (event->type() == QEvent::Leave && !candidateMenuOpen_) {
         hoveredProfileRegion_.reset();
         ForgetPickCycle();
         update();

@@ -204,7 +204,7 @@ bool V2MainWindow::RenameOrToggleGroupFromItem(QTreeWidgetItem* item)
         if (!done.committed) {
             ReportDiagnostics(done.diagnostics);
         }
-        AdoptCurrentDocument();
+        RefreshExplorerVisibility();
         SetStatus(wantVisible ? QStringLiteral("グループを出しました。")
                               : QStringLiteral("グループを隠しました。"
                                                "中の1つずつの出し隠しは変えていません。"));

@@ -10,6 +10,7 @@
 //! 消すと、どうやって作ったのかを二度とたどれなくなる。
 
 #include "V2MainWindow.h"
+#include "V2GeneratedCurves.h"
 #include "V2OutputTool.h"
 #include <QComboBox>
 
@@ -246,7 +247,7 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPlainWire(
     feature.displayName = labelJa;
     // 入力を持たせない。持たせると、また元に付いていってしまう。
     CreateWireDefinition definition;
-    definition.segments = std::move(segments);
+    definition.segments = V2CompactGeneratedCurves(segments);
     for (std::size_t index = 0; index < definition.segments.size(); ++index) {
         definition.segmentIds.push_back(
             ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());

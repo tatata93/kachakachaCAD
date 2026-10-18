@@ -95,7 +95,7 @@ class V2MainWindow final : public QMainWindow {
     friend class V2GptSurfaceTool; friend class V2DimensionTool;
     friend class V2OutputTool;
     friend class V2FaceActions; friend class V2ImageTool; friend class V2CurvedEmbossTool; friend class V2ProjectionTool; friend class V2ProjectionOwnerExercise;
-    friend class V2GptFabricationTool;
+    friend class V2GptFabricationTool; friend class V2WindowHoleExercise;
     friend class V2LoopFacesTool;         // 線から面(輪を探して面にする)
 public:
     V2MainWindow();
@@ -822,6 +822,10 @@ private:
     //! 手順の並びの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyStepsState(const QString& name);
     void RefreshEntityList();
+    void RefreshExplorerVisibility(); void RefreshExplorerCategoryChecks();
+    bool ToggleExplorerCategory(QTreeWidgetItem* item);
+    bool ApplyExplorerVisibility(const std::vector<QTreeWidgetItem*>& rows,bool visible);
+    void CreateSiblingGroup(); void BuildExplorerGroupButtons(class QVBoxLayout* layout);
     //! 役割テーブルを画面へ出し直す。色は core の式から取る(画面で作らない)。
     void RefreshGuideTable();
     //! 手順の並びを作り直す。モードを変えたときと、状況が変わったときに呼ぶ。

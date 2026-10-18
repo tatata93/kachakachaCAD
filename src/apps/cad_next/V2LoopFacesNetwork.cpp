@@ -35,12 +35,15 @@ bool V2LoopFacesTool::TryNetworkPlan()
         if(loops.size()<2)continue;
         const auto& snapshot=window_.session_->GetDocument().Snapshot();
         bool found=false;
+        // Prefer visible supports, but hiding a source must not turn a curved
+        // projected window into an unrelated refilled surface.
+        for(const bool visible:{true,false}) {
         for(const auto* shapes:{&window_.guideShapes_,&window_.partShapes_}) {
             for(const auto& [key,handle]:*shapes) {
                 const auto id=base::EntityId::Parse(key);if(!id)continue;
                 const auto* entity=window_.session_->GetDocument().FindEntity(*id);
                 if(!entity||(entity->kind!=domain::EntityKind::Part&&entity->kind!=domain::EntityKind::GuideSurface)
-                    ||!app::EntityEffectivelyVisible(snapshot,*entity))continue;
+                    ||app::EntityEffectivelyVisible(snapshot,*entity)!=visible)continue;
                 const auto cut=kernel::TrimSurfaceRegion({handle},loops,tolerance,tolerance.interactiveJoinMm);
                 if(!cut.HasValue())continue;
                 kernel::ReleaseShape(cut.Value());
@@ -48,6 +51,8 @@ bool V2LoopFacesTool::TryNetworkPlan()
                 source.sourceWireIds={*id};source.sourceLabels={entity->displayName};table.rows.push_back(source);found=true;break;
             }
             if(found)break;
+        }
+        if(found)break;
         }
     }
     for (const auto& selection : selections_) {

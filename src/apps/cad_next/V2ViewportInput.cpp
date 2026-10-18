@@ -27,6 +27,7 @@
 #include <QRectF>
 #include <QString>
 #include <QWidget>
+#include <QScopedValueRollback>
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"
@@ -436,6 +437,13 @@ std::vector<QString> V2Viewport::CandidateLabels() const
             : QStringLiteral("名前のないもの");
         QString label = name + QStringLiteral(" / ")
             + QString::fromUtf8(CandidateKindNameJa(candidate.kind));
+        if(!candidate.segmentId.IsNil()) {
+            int ordinal=0;
+            for(const auto& curve:session_->Scene().curves)if(curve.entityId==candidate.entityId) {
+                ++ordinal;if(curve.segmentId!=candidate.segmentId)continue;
+                label+=QStringLiteral(" 区間%1").arg(ordinal);break;
+            }
+        }
         // 所属するまとまりも出す(ui-workflows.md §3.2)。
         // 同じ名前の物が別のまとまりにあるとき、これが無いと見分けられない。
         if (entity != nullptr && entity->groupId.has_value()) {
@@ -475,13 +483,30 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     // 次のクリックで選ばれるものが食い違う。
     cycle_.index = index;
     SyncHoverWithCandidate();
-    const auto picked = CurrentCandidate();
+    auto picked = CurrentCandidate();
+    if(ReferencePickPending()) {
+        if(picked&&elementPickHandler_)return AcceptElementPick(*picked);
+        if(picked&&referencePickHandler_) {
+            auto handler=std::move(referencePickHandler_);referencePickIds_.clear();ForgetPickCycle();
+            handler(picked->entityId);update();return true;
+        }
+        return false;
+    }
+    picked=AsSolidIfProfileTaken(picked);
+    lastToolPick_=toolPickToggle_&&picked?std::optional{picked->entityId}:std::nullopt;
+    lastToolPickPoint_=toolPickToggle_&&picked?std::optional{picked->hitPoint}:std::nullopt;
     const auto mode = ModeForTogglePick(picked, ModeForToolPick(picked,
         kachakacha::v2::app::SelectionMode::Replace));
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
     ReportSelectionCount();
     update();
     return true;
+}
+
+bool V2Viewport::PreviewCandidate(std::size_t index)
+{
+    if(index>=cycle_.candidates.size())return false;
+    cycle_.index=index;SyncHoverWithCandidate();update();return true;
 }
 
 bool V2Viewport::StepBackInputPoint()
@@ -509,9 +534,10 @@ void V2Viewport::PressRightWithoutMoving(const QPointF& position)
     // Every tool uses the same contextual actions and candidate chooser.
     RefreshPickCycle(position);
     const bool selecting = session_->CurrentTool()
-        == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_;
+        == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_ || ReferencePickPending();
     const auto labels = selecting && cycle_.candidates.size() >= 2
         ? CandidateLabels() : std::vector<QString>{};
+    const QScopedValueRollback<bool> menuOpen(candidateMenuOpen_,true);
     const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
     if (chosen.has_value() && *chosen >= 0) {
         (void)SelectCandidate(static_cast<std::size_t>(*chosen));

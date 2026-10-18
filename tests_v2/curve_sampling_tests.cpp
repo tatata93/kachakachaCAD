@@ -273,6 +273,24 @@ KACHA_V2_TEST(sampling, 重心が正しい)
 
 KACHA_V2_TEST_MAIN("curve_sampling_tests")
 
+KACHA_V2_TEST(sampling, many_spline_spans_preserve_oscillations)
+{
+    std::vector<Vector3> controls;for(int i=0;i<=18;++i)controls.push_back({6.0*i,i%2?-6.0:6.0,0});
+    const auto spline=CurveSegment::MakeCubicBSpline(controls).Value();
+    const auto sampled=SampleCurve(spline,.01);
+    Require(sampled.size()>16,"do not collapse sixteen oscillating spans into a line");
+    Require(WorstChordError(spline,sampled)<=.012,"all knot spans retain their curvature");
+    double minimum=0,maximum=0;for(const auto& point:sampled){minimum=std::min(minimum,point.position.y);maximum=std::max(maximum,point.position.y);}
+    Require(minimum< -1.9&&maximum>1.9,"both sides of every wave remain visible");
+}
+
+KACHA_V2_TEST(sampling, cubic_inflection_cannot_hide_between_midpoints)
+{
+    const auto curve=CurveSegment::MakeCubicBezier({{0,0,0},{1,10,0},{2,-10,0},{3,0,0}}).Value();
+    const auto points=SampleCurve(curve,.01);
+    Require(WorstChordError(curve,points)<=.012,"inflection sampling respects the chord tolerance");
+}
+
 KACHA_V2_TEST(sampling, rotated_sampled_triangles_do_not_self_intersect)
 {
     for(int i=1;i<=300;++i){

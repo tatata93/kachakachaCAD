@@ -575,6 +575,7 @@ public:
     //! **通常選択は変えない。** 動くのは「いま出している候補」= Hover だけである。
     //! 選択まで変えると、送っている途中の候補が次の操作の相手になってしまう。
     bool CycleCandidate(bool backward);
+    bool PreviewCandidate(std::size_t index);
     //! カーソルの下に重なっている候補の数。試験から見る。
     [[nodiscard]] int CandidateCount() const noexcept
     {
@@ -1052,6 +1053,7 @@ private:
     std::function<void()> backToSelect_;
     std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)>
         contextMenu_;
+    bool candidateMenuOpen_ = false;
     //! 中ボタンで画面を動かしている最中か。
     //! 右ボタンはここに入らない。右はカメラを動かさない(ui-ux-integrated-spec §5.2)。
     bool panning_ = false;

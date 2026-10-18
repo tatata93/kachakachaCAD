@@ -309,6 +309,7 @@ bool ExplicitPlanarInterior(V2MainWindow& window) {
 }
 }
 std::vector<SelfTestCase> OwnerProjectionCases();
+std::vector<SelfTestCase> WindowHoleOwnerCases();
 bool PanoramaTwoPlanes(V2MainWindow& window);
 std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
     {"PROJ preselection",Preselection},{"PROJ solid face viewport click",SolidFaceClick},{"PROJ wrap closest fractional numeric retry",WrapClosestAndFraction},
@@ -327,5 +328,6 @@ std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"P
     cases.push_back({"PROJ curved projected wire interior click extrusion",[](auto& w){return CircleOutput(w,false,true,-1,true);}});
     cases.push_back({"PROJ curved body outer wire with window hole Undo save",CurvedWindowHole});
     cases.push_back({"PROJ explicit planar profile interior over a solid",ExplicitPlanarInterior});
-    const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());return cases;}
+    const auto owner=OwnerProjectionCases();cases.insert(cases.end(),owner.begin(),owner.end());
+    const auto windows=WindowHoleOwnerCases();cases.insert(cases.end(),windows.begin(),windows.end());return cases;}
 }

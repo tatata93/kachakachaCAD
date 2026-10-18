@@ -1234,6 +1234,10 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2WorkPlanePreview.cpp
         src/apps/cad_next/V2Ribbon.cpp
         src/apps/cad_next/V2ExplorerBuild.cpp
+    src/apps/cad_next/V2ExplorerUpdates.cpp
+    src/apps/cad_next/V2GeneratedCurves.cpp
+    src/apps/cad_next/V2SelfTestExplorerUpdates.cpp
+    src/apps/cad_next/V2SelfTestWindowHoleOwner.cpp
         src/apps/cad_next/V2ExplorerMenu.cpp
         src/apps/cad_next/V2Menus.cpp
         src/apps/cad_next/V2StatusLine.cpp

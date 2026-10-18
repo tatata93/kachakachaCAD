@@ -14,7 +14,11 @@ namespace {
     const Vector3 b = segment.Evaluate(t1);
     const Vector3 middle = segment.Evaluate(0.5 * (t0 + t1));
     const Vector3 chordMiddle = (a + b) * 0.5;
-    return (middle - chordMiddle).Length();
+    double error=(middle-chordMiddle).Length();
+    if(segment.Kind()==CurveKind::CubicBezier||segment.Kind()==CurveKind::CubicBSpline)
+        for(const double local:{.25,.75})error=std::max(error,
+            (segment.Evaluate(t0+(t1-t0)*local)-(a+(b-a)*local)).Length());
+    return error;
 }
 
 void Subdivide(const CurveSegment& segment, double t0, double t1, double toleranceMm,
@@ -86,9 +90,13 @@ std::vector<CurvePoint> SampleCurve(const CurveSegment& segment, double toleranc
     points.push_back(CurvePoint{0.0, segment.Evaluate(0.0)});
     // 円と閉曲線は、いきなり両端だけを見ると弦の誤差が0になって分割されない。
     // 先に4等分してから、必要なところをさらに割る。
-    const double seeds[]{0.25, 0.5, 0.75};
+    // A spline may oscillate between global quarter points. Seed every cubic
+    // knot span so equivalent Bezier/spline representations retain the bends.
+    const std::size_t spans=segment.Kind()==CurveKind::CubicBSpline?segment.ControlPoints().size()-3:1;
+    const std::size_t divisions=4*spans;
     double previous = 0.0;
-    for (const double seed : seeds) {
+    for (std::size_t i=1;i<divisions;++i) {
+        const double seed=double(i)/double(divisions);
         Subdivide(segment, previous, seed, tolerance, 0, maximumPoints, points);
         points.push_back(CurvePoint{seed, segment.Evaluate(seed)});
         previous = seed;

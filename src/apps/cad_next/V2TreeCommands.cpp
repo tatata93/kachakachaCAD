@@ -13,6 +13,7 @@
 #include "kachakacha/app/NameFilter.h"
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/app/GroupTree.h"
 
 #include <QLabel>
 #include <QLineEdit>
@@ -38,7 +39,7 @@ void V2MainWindow::RefreshWorkPlaneViews()
     std::vector<V2Viewport::WorkPlaneView> planes;
     for (const auto& entity : session_->GetDocument().Snapshot().entities) {
         if (entity.kind != kachakacha::v2::domain::EntityKind::WorkPlane
-            || entity.visibility != kachakacha::v2::domain::Visibility::Visible) {
+            || !kachakacha::v2::app::EntityEffectivelyVisible(session_->GetDocument().Snapshot(),entity)) {
             continue;
         }
         const auto frame = WorkPlaneFrameOf(entity.id);

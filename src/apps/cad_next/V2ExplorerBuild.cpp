@@ -85,6 +85,7 @@ void V2MainWindow::RefreshEntityList()
     if (!entityTree_) {
         return;
     }
+    setProperty("explorerBuilds",property("explorerBuilds").toInt()+1);
     // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
     // 「名前が変わった」と誤って伝わり、名前が入れ替わる。
     const bool blocked = entityTree_->blockSignals(true);
@@ -142,6 +143,7 @@ void V2MainWindow::RefreshEntityList()
         AddEntityRow(parent, entity);
     }
     entityTree_->EndRebuild();
+    RefreshExplorerCategoryChecks();
     for (int column = 0; column < entityTree_->columnCount(); ++column) {
         entityTree_->resizeColumnToContents(column);
     }
@@ -394,7 +396,7 @@ bool V2MainWindow::ToggleEntityVisibilityFromItem(QTreeWidgetItem* item)
     if (!done.committed) {
         ReportDiagnostics(done.diagnostics);
     }
-    AdoptCurrentDocument();
+    RefreshExplorerVisibility();
     SetStatus(wantVisible ? QStringLiteral("「%1」を出しました。").arg(name)
                           : QStringLiteral("「%1」を隠しました。").arg(name));
     return true;
@@ -447,4 +449,3 @@ QString V2MainWindow::OriginChildText(int row) const
     }
     return ExplorerRows().front()->child(row)->text(0);
 }
-

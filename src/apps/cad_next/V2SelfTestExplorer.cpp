@@ -16,6 +16,13 @@
 #include <QPointF>
 #include <QString>
 #include <QTreeWidgetItem>
+#include <QElapsedTimer>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QFile>
+#include <QIODevice>
+#include <QScrollBar>
 
 #include <map>
 #include <string>
@@ -229,15 +236,40 @@ bool CaseExplorerKeepsViewState(V2MainWindow& window) {
 
 } // namespace
 
+bool ExplorerOwnerLatency(V2MainWindow& w)
+{
+    const auto path=qEnvironmentVariable("KACHACAD_EXPLORER_OWNER_INPUT");
+    if(!w.OpenDocumentFile(path))return false;
+    w.SelectTool(modeling::DrawingTool::Select);auto* tree=w.EntityTree();
+    std::vector<base::EntityId> wires;for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==EntityKind::Wire)wires.push_back(e.id);
+    if(wires.size()<10)return false;
+    QJsonArray selecting,toggling;QElapsedTimer timer;
+    const auto builds=w.property("explorerBuilds").toInt();
+    for(int i=0;i<10;++i){timer.start();tree->setCurrentItem(w.ItemOfEntity(wires[i]));QApplication::processEvents();selecting.append(timer.nsecsElapsed()/1e6);}
+    auto* row=w.ItemOfEntity(wires.back());auto* selected=tree->currentItem();const auto key=V2EntityTree::KeyOf(selected);
+    tree->scrollToItem(row);QApplication::processEvents();const auto scroll=tree->verticalScrollBar()->value();
+    bool stable=true;
+    for(int i=0;i<10;++i){auto* item=w.ItemOfEntity(wires.back());timer.start();item->setCheckState(0,i%2?Qt::Checked:Qt::Unchecked);QApplication::processEvents();toggling.append(timer.nsecsElapsed()/1e6);
+        stable=stable&&w.ItemOfEntity(wires.back())==row&&V2EntityTree::KeyOf(tree->currentItem())==key&&tree->verticalScrollBar()->value()==scroll;}
+    const QJsonObject report{{"selection_ms",selecting},{"visibility_ms",toggling},{"tree_rebuilds",w.property("explorerBuilds").toInt()-builds},{"stable_rows_and_scroll",stable}};
+    QFile file(qEnvironmentVariable("KACHACAD_EXPLORER_OWNER_REPORT"));if(!file.open(QIODevice::WriteOnly))return false;file.write(QJsonDocument(report).toJson());
+    return Explain("owner visibility changes preserve rows selection and scroll",stable);
+}
+
+std::vector<SelfTestCase> ExplorerUpdateCases();
 std::vector<SelfTestCase> ExplorerCases()
 {
-    return {
+    std::vector<SelfTestCase> cases={
         {"HP-XP-01 一覧の節は正本の順で原点が先頭", CaseExplorerSectionsInOrder},
         {"HP-XP-02 ◉ で1つずつ出し隠しでき、取り消しで戻る", CaseExplorerToggleVisibilityPerEntity},
         {"HP-XP-03 3D と一覧の選択が両方向に同期する", CaseExplorerSelectionSyncBothWays},
         {"HP-XP-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
         {"HP-XP-05 collapse, nested groups, visibility, search and undo redo", CaseExplorerKeepsViewState},
     };
+    const auto updates=ExplorerUpdateCases();cases.insert(cases.end(),updates.begin(),updates.end());
+    if(qEnvironmentVariableIsSet("KACHACAD_EXPLORER_OWNER_INPUT"))cases.push_back({"HP-XP-OWNER actual explorer latency and checkbox position",ExplorerOwnerLatency});
+    return cases;
 }
 
 } // namespace kachakacha::v2::selftest

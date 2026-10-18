@@ -77,6 +77,9 @@ void V2SurfaceAnalysisTool::Run(std::string_view commandId)
     }
     shown_ = true;
     window_.RefreshRightShelves();
+    // Explicitly opening analysis may inspect an armed tool without cancelling it.
+    // A later tool selection restores that tool's own input page.
+    window_.ShowShelf(kachakacha::v2::app::Shelf::SurfaceAnalysis);
     Refresh();
     window_.SetStatus(QStringLiteral(
         "面の解析: 見るものを選んでください。選んだ面(選んでいなければ全部の面)と、"

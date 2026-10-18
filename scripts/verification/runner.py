@@ -140,7 +140,7 @@ def require_application_coverage(preset, inventory, exe=None, legacy=None):
         return
     required = {'v2_cad_next_smoke'}
     if os.name == 'nt':
-        required.add('v2_package_zip')
+        required.update(('v2_package_zip', 'v2_desktop_startup'))
     missing = required - {test['name'] for test in inventory}
     if missing:
         raise ValueError('GUI preset requires application/package tests: ' + ', '.join(sorted(missing)))

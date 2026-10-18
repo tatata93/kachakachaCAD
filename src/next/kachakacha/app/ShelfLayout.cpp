@@ -86,10 +86,6 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     if (ownedShelf != Shelf::None) {
         return {ownedShelf};
     }
-    // 「面の解析」は道具の棚より後ろ。道具を持てば道具の棚が前に出る(解析の表示は残る)。
-    if (analyzing) {
-        return {Shelf::SurfaceAnalysis};
-    }
     switch (tool) {
     case DrawingTool::Measure:
         // 測るときは測る欄だけ。ほかの棚は測る手を邪魔する。
@@ -129,6 +125,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
         return {Shelf::Drawing};
     case DrawingTool::Select:
         break;
+    }
+    // 「面の解析」は道具の棚より後ろ。道具を持てば道具の棚が前に出る(解析の表示は残る)。
+    if (analyzing) {
+        return {Shelf::SurfaceAnalysis};
     }
     (void)mode;
     // 道具未選択: ホストが同じモードのツール一覧を表示する。

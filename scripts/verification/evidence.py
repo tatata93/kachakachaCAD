@@ -89,6 +89,8 @@ def validate_proof(proof, source, settings, environment, artifacts):
         raise ValueError('Full verification results are missing')
     if proof['ctest']['total'] != len(proof.get('expected_ctest', [])) or proof['ctest'].get('skipped'):
         raise ValueError('Full verification inventory is incomplete')
+    if environment.get('platform', '').startswith('Windows') and 'v2_desktop_startup' not in proof.get('expected_ctest', []):
+        raise ValueError('Normal Windows desktop startup evidence is missing')
     if not proof.get('ui_cases') or any(count <= 0 for count in proof['ui_cases']):
         raise ValueError('Application/package UI results missing')
     if not proof.get('steps') or any(step.get('exit_code') != 0 for step in proof['steps']):

@@ -2,6 +2,7 @@
 """Open an immutable verified release, never the executable being rebuilt."""
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 from verification.evidence import artifact_identity
@@ -17,4 +18,10 @@ if proof.get('status') != 'passed' or proof.get('mode') != 'full' or artifact_id
 command = [str((package / 'kachakacha_cad_next.exe').resolve())]
 if args.project:
     command += ['--open', str(args.project.resolve())]
-subprocess.Popen(command, cwd=package)
+env = dict(os.environ)
+if os.name == 'nt':
+    env['QT_QPA_PLATFORM'] = 'windows'
+    env.pop('QT_PLUGIN_PATH', None)
+    env.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
+subprocess.Popen(command, cwd=package, env=env, stdin=subprocess.DEVNULL,
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

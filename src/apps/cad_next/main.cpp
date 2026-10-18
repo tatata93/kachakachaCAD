@@ -11,6 +11,7 @@
 //! 直したかどうかを人が目で見るしかなかった。
 
 #include "V2MainWindow.h"
+#include "V2DesktopStartup.h"
 #include "V2SelfTest.h"
 #include "V2GeometryJob.h"
 #include "V2DocumentOpen.h"
@@ -87,6 +88,7 @@ int main(int argc, char** argv)
         arguments << QString::fromLocal8Bit(argv[index]);
     }
 
+    PrepareDesktopLaunch(arguments);
     if (arguments.contains(QStringLiteral("--version"))) {
         std::cout << kachakacha::v2::base::ProductVersionString() << ' '
                   << kachakacha::v2::base::MigrationNoticeJa() << '\n'
@@ -161,6 +163,8 @@ int main(int argc, char** argv)
         }
     }
 
+    window.resize(windowWidth, windowHeight);
     window.show();
+    ObserveDesktopStartup(window);
     return QApplication::exec();
 }

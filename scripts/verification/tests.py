@@ -26,7 +26,7 @@ class VerificationTests(unittest.TestCase):
             self.assertFalse(baseline_matches(proof, {}, {}, changed))
         with self.assertRaises(ValueError): require_application_coverage('windows-msvc', [])
         require_application_coverage('windows-core', [])
-        inventory = [{'name': n} for n in ('v2_cad_next_smoke', 'v2_package_zip')]
+        inventory = [{'name': n} for n in ('v2_cad_next_smoke', 'v2_package_zip', 'v2_desktop_startup')]
         with tempfile.TemporaryDirectory() as work:
             absent = Path(work) / 'absent.exe'
             with self.assertRaises(ValueError): require_application_coverage('windows-msvc', inventory, absent)
@@ -87,6 +87,11 @@ class VerificationTests(unittest.TestCase):
                  'ctest': {'total': 1, 'skipped': []}, 'expected_ctest': ['a'], 'ui_cases': [1, 1],
                  'steps': [{'name': name, 'exit_code': 0} for name in ('configure','inventory','ui-inventory','preflight','tests','legacy-self-test','build-1')]}
         validate_proof(proof, source, settings, environment, artifacts)
+        windows = dict(environment, platform='Windows-test')
+        desktop_missing = copy.deepcopy(proof); desktop_missing['environment'] = windows
+        with self.assertRaises(ValueError): validate_proof(desktop_missing, source, settings, windows, artifacts)
+        desktop_missing['expected_ctest'] = ['v2_desktop_startup']
+        validate_proof(desktop_missing, source, settings, windows, artifacts)
         for field, replacement in [('status', 'failed'), ('mode', 'focused'), ('source', {'sha256': 'other'}),
                                    ('settings', {'config': 'Debug'}), ('environment', {'compiler': 'v2'}),
                                    ('artifacts', {'app': 'different'}), ('preflight', {}),

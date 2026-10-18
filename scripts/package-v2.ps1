@@ -11,6 +11,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$PythonExe = (Get-Command python -ErrorAction Stop).Source
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([System.IO.Path]::IsPathRooted($BuildDir)) {
     $BuildRoot = $BuildDir
@@ -109,6 +111,12 @@ foreach ($name in @("LICENSE", "COPYRIGHT")) {
     if (Test-Path $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $Output $name) -Force }
 }
 
+function Invoke-Deployed([string[]]$AppArguments) {
+    # Explicitly wait for the GUI-subsystem executable and retain its exit code.
+    & $PythonExe -c "import subprocess,sys;sys.exit(subprocess.run(sys.argv[1:]).returncode)" $Deployed @AppArguments
+    if ($LASTEXITCODE -ne 0) { throw "Deployed command failed: $AppArguments" }
+}
+
 $previousEnvironment = @{}
 foreach ($key in @('Path', 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QT_QPA_PLATFORM', 'TEMP', 'TMP', 'TMPDIR', 'KACHACAD_DOCUMENT_CACHE_DIR', 'KACHACAD_SELF_TEST_FIXTURE_DIR')) {
     $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
@@ -131,22 +139,27 @@ try {
     $env:KACHACAD_DOCUMENT_CACHE_DIR = Join-Path $testRoot 'document-cache'
     $env:KACHACAD_SELF_TEST_FIXTURE_DIR = $fixtureRoot
 
-    & $Deployed --version
+    # Exercise the normal event loop on the Windows platform as well as headless tests.
+    $startup = Join-Path (Split-Path $Output -Parent) 'desktop-startup-package'
+    & $PythonExe (Join-Path $RepoRoot 'scripts/verification/desktop_startup.py') --exe $Deployed --output $startup
+    if ($LASTEXITCODE -ne 0) { throw "Normal desktop startup failed" }
+
+    Invoke-Deployed -AppArguments @('--version')
     if ($LASTEXITCODE -ne 0) { throw "Version check failed" }
 
     $uiReport = Join-Path $Output "ui-results.json"
-    & $Deployed --self-test --self-test-all --self-test-report $uiReport
+    Invoke-Deployed -AppArguments @('--self-test', '--self-test-all', '--self-test-report', $uiReport)
     if ($LASTEXITCODE -ne 0) { throw "Self-tests failed" }
 
     $Opened = Join-Path $Output "opened-sample.png"
-    & $Deployed --open (Join-Path $Samples "v2-sample.kcd2") --snapshot $Opened
+    Invoke-Deployed -AppArguments @('--open', (Join-Path $Samples 'v2-sample.kcd2'), '--snapshot', $Opened)
     if ($LASTEXITCODE -ne 0) { throw "Sample open failed" }
     if (-not (Test-Path $Opened) -or (Get-Item -LiteralPath $Opened).Length -lt 1024) {
         throw "Opened sample image is missing: $Opened"
     }
 
     $NoseOpened = Join-Path $Output "opened-railway-nose.png"
-    & $Deployed --open (Join-Path $Samples "streamlined-railway-nose-1-87.kcd2") --snapshot $NoseOpened
+    Invoke-Deployed -AppArguments @('--open', (Join-Path $Samples 'streamlined-railway-nose-1-87.kcd2'), '--snapshot', $NoseOpened)
     if ($LASTEXITCODE -ne 0) { throw "Railway sample open failed" }
     if (-not (Test-Path $NoseOpened) -or (Get-Item -LiteralPath $NoseOpened).Length -lt 1024) {
         throw "Railway sample image is missing: $NoseOpened"

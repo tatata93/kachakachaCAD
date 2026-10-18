@@ -330,4 +330,16 @@ KACHA_V2_TEST(shelf, 厚みの最中はその棚が前に出る)
         "足す・引くが先");
 }
 
+KACHA_V2_TEST(shelf, AnalysisDoesNotHideDrawingInputs)
+{
+    for (const auto tool : kAllTools) {
+        if (tool == DrawingTool::Select) continue;
+        Require(FrontShelfFor(UiMode::Drawing, tool, false, false, false, false, false, true)
+            == FrontShelfFor(UiMode::Drawing, tool), "analysis must not hide active tool inputs");
+    }
+    Require(FrontShelfFor(UiMode::Drawing, DrawingTool::Select,
+        false, false, false, false, false, true) == Shelf::SurfaceAnalysis,
+        "analysis remains available in selection mode");
+}
+
 KACHA_V2_TEST_MAIN("shelf_layout_tests")

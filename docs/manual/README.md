@@ -687,3 +687,33 @@ Escは入力だけを取消してツールと設定を維持します。元形�
 - `tool-test-coverage.json` でコマンドごとの呼出しケースを確認できます。全コマンド到達試験と、有効な幾何入力を用いた機能試験は別です。
 
 未対応の方式は成功例にせず、制限と代替操作を明記します。保存形式のIDと、ユーザー向けの表示名を混同しないでください。
+
+
+## 準備から完成までの詳しい手順
+
+[作業手順から探す](learn/index.html)。各項目は、元図形を作る練習へのリンク、実際のリボン入口と検索、選択する役割、欄ごとの数値、実行・確定の違い、失敗時の戻り先を持ちます。
+[ライトを中央面まで伸ばす](headlight-to-plane.html)も配布マニュアルへ移しました。
+編集元は lesson_foundations.py（7つの準備練習）、lesson_details.py（全168項目の個別解説）、lesson_walkthroughs.py（複数役割の段階手順）、lesson_renderer.pyです。短いレシピだけを増やして完了にしません。
+
+![投影ライトの準備](images/v2-headlight-lamp-faces-preview.png)
+![中央面を選ぶ](images/v2-headlight-lamp-central-plane-pick.png)
+![押し出しの下見](images/v2-headlight-lamp-central-plane-preview.png)
+![押し出しの全体結果](images/v2-headlight-lamp-central-plane-result.png)
+![ライトの拡大結果](images/v2-headlight-lamp-central-plane-detail.png)
+
+実画面は画像ごとに別例・入力待ち・下見・確定の別を記載しています。模式図を実際のCAD完成形とは扱いません。
+
+`headlight-lamp-faces-preview`、`headlight-lamp-central-plane-pick`、`headlight-lamp-central-plane-preview`、`headlight-lamp-central-plane-result`、`headlight-lamp-central-plane-detail` は2026-10-16の実アプリ記録を同梱した画像名です。`--manual-state` の引数ではありません。
+
+## 2026-10-18 の入口確認
+
+`tool-entry-screens/` は全168コマンドをActivateCommandで開いた対象未選択の実画面です。
+対応するactivation.jsonに入力ペイン、待っている対象、状態、時間を記録しています。
+入口の検査と、形状生成に成功した実例の画像を区別します。各ページの主手順は準備図形・役割・値・確定を読み合わせてください。
+角加工は新しい対象モードと下見／Enter確定へ更新しました。
+
+![通常のWindows起動](images/v2-desktop-startup.png)
+
+[startup.html](startup.html)は配布ZIPの展開から最初の作図までの起動手順です。
+
+`desktop-startup` は通常のWindowsイベントループで起動・表示・描画を確認した画像名です。`--manual-state` の名前ではありません。

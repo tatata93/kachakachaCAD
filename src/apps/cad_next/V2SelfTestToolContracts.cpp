@@ -3,6 +3,12 @@
 #include "V2ToolIcons.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include <QDir>
+#include <QElapsedTimer>
+#include <QFile>
+#include <QIODevice>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QImage>
 #include <QPixmap>
 #include "V2MainWindow.h"
@@ -15,6 +21,7 @@
 #include "V2EdgeFinishTool.h"
 #include "V2EdgeFinishDock.h"
 #include "V2ShellSplitTool.h"
+#include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
 #include "V2LoopFacesTool.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -57,6 +64,18 @@ bool Illustrations(V2MainWindow& w) {
     w.SetMode(app::UiMode::Drawing);return true;
 }
 bool Lifecycle(V2MainWindow& w) {
+    for (const auto* command : {"draw.line", "wire.fillet", "wire.chamfer", "wire.corner_fillet", "wire.corner_chamfer"}) {
+        w.SelectTool(modeling::DrawingTool::Select);
+        w.ActivateCommand("draw.line");
+        w.ActivateCommand("view.surface_analysis");
+        if (!Explain("analysis opens from an armed drawing tool", w.ShelfShown(app::Shelf::SurfaceAnalysis))) return false;
+        w.ActivateCommand(command);
+        const auto expected = w.Session().CurrentTool() == modeling::DrawingTool::ChamferOrFilletPair
+            ? app::Shelf::Corner : app::Shelf::Drawing;
+        if (!Explain((std::string("analysis does not cover inputs: ") + command).c_str(),
+            w.ShelfShown(expected))) return false;
+    }
+    w.SurfaceAnalysis().Close();
     const std::array<const char*,21> tools={"surface.create","surface.from_lines","part.extrude","part.revolve","part.loft_solid","part.sweep",
         "part.thicken","part.thicken_to_plane","part.boolean_add","part.boolean_cut","part.fillet","part.chamfer","part.shell","part.split",
         "surface.match","surface.refit","wire.project_surface","wire.wrap_project","dimension.open","wire.offset","fabrication.create"};
@@ -81,6 +100,42 @@ bool Lifecycle(V2MainWindow& w) {
     w.RunCommand("fabrication.preview_update");w.RunCommand("fabrication.preview_update");
     return Explain("preview update opens inputs without committing",w.ApproxShelfShown()&&w.Session().GetDocument().Revision()==revision);
 }
+bool ActivationAudit(V2MainWindow& w) {
+    const QString directory = qEnvironmentVariable("KACHACAD_TOOL_ACTIVATION_AUDIT_DIR");
+    QJsonArray report;
+    if (!directory.isEmpty()) QDir().mkpath(directory);
+    for (const auto& command : app::CommandCatalog()) {
+        w.SetMode(app::UiMode::Drawing);
+        w.ActivateCommand("selection.activate");
+        w.Viewport().SetSelection({});
+        QElapsedTimer timer; timer.start();
+        w.ActivateCommand(command.id);
+        QApplication::processEvents();
+        const bool page = w.OperationHost().TemporaryPage() || w.OperationHost().CurrentPage();
+        const bool tool = command.mode == app::CommandMode::Tool && command.id != "selection.activate";
+        if (!Explain((std::string("activation gives visible input or reason: ") + std::string(command.id)).c_str(),
+            !w.StatusText().isEmpty() && (!tool || page || !w.PendingCommandLabel().isEmpty()
+                || w.Session().CurrentTool() != modeling::DrawingTool::Select))) return false;
+        if (w.Session().CurrentTool() == modeling::DrawingTool::ChamferOrFilletPair
+            && !Explain("corner settings are actually displayed", w.ShelfShown(app::Shelf::Corner))) return false;
+        const QString id = QString::fromUtf8(command.id.data(), int(command.id.size()));
+        report.append(QJsonObject{{"command", id}, {"status", w.StatusText()},
+            {"panel", w.OperationHost().CurrentShelfTitle()}, {"has_input_page", page},
+            {"pending", w.PendingCommandLabel()}, {"elapsed_ms", timer.elapsed()},
+            {"scope", QStringLiteral("entry with no selected geometry; not proof of generated output")}});
+        if (!directory.isEmpty()) w.grab().save(QDir(directory).filePath(id + ".png"));
+        w.Viewport().CancelPointPick();
+        w.Viewport().CancelReferencePick();
+    }
+    if (!directory.isEmpty()) {
+        QFile output(QDir(directory).filePath("activation.json"));
+        if (!output.open(QIODevice::WriteOnly)) return false;
+        output.write(QJsonDocument(report).toJson());
+    }
+    w.SetMode(app::UiMode::Drawing);
+    return true;
+}
+
 bool ModalKeys(V2MainWindow& w) {
     w.SelectTool(modeling::DrawingTool::Line);const auto before=w.Session().GetDocument().Revision();
     w.Viewport().ClickAt({100,100});QDialog dialog(&w);dialog.setModal(true);dialog.show();QApplication::processEvents();
@@ -129,6 +184,6 @@ bool PreviewLifetime(V2MainWindow& w) {
     return Explain("window destruction releases uncommitted preview",kernel::CachedShapeCount()==beforeWindow);
 }
 }
-std::vector<SelfTestCase> ToolContractCases(){return {{"HP-TOOLS distinct tool illustrations",Illustrations},{"HP-TOOLS exclusive tool transition matrix and shortcuts",Lifecycle},
+std::vector<SelfTestCase> ToolContractCases(){return {{"HP-TOOLS all catalog toolbar activations have input or reason",ActivationAudit},{"HP-TOOLS distinct tool illustrations",Illustrations},{"HP-TOOLS exclusive tool transition matrix and shortcuts",Lifecycle},
     {"HP-TOOLS modal dialog keys stay in dialog",ModalKeys},{"HP-TOOLS preview shape ownership stays bounded",PreviewLifetime}};}
 }

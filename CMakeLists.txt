@@ -1095,6 +1095,8 @@ endif()
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     add_executable(kachakacha_cad_next WIN32
         src/apps/cad_next/main.cpp
+        src/apps/cad_next/V2DesktopStartup.cpp
+        src/apps/cad_next/V2DesktopStartup.h
         src/apps/cad_next/V2SelfTest.cpp
         src/apps/cad_next/V2SelfTestReporting.cpp
         src/apps/cad_next/V2SelfTestReporting.h
@@ -1410,8 +1412,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     target_compile_features(kachakacha_cad_next PRIVATE cxx_std_20)
     if(MSVC)
         target_compile_options(kachakacha_cad_next PRIVATE /W4 /permissive- /utf-8 /MP)
-        # --version と --self-test をコンソールから使えるようにする。
-        set_target_properties(kachakacha_cad_next PROPERTIES WIN32_EXECUTABLE FALSE)
+        # Normal desktop launch has no console; diagnostic mode reuses parent output.
+        set_target_properties(kachakacha_cad_next PROPERTIES WIN32_EXECUTABLE TRUE)
     else()
         target_compile_options(kachakacha_cad_next PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -1422,6 +1424,14 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
                 --name v2_cad_next_smoke -- $<TARGET_FILE:kachakacha_cad_next> --self-test --self-test-all
         )
+        if(WIN32)
+            add_test(NAME v2_desktop_startup
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/desktop_startup.py"
+                    --exe $<TARGET_FILE:kachakacha_cad_next>
+                    --output "${CMAKE_BINARY_DIR}/desktop-startup")
+            set_tests_properties(v2_desktop_startup PROPERTIES
+                RESOURCE_LOCK cad_gui_package TIMEOUT 90)
+        endif()
         # 自己試験は増える一方である(2026-09-14 で 225 件、PC で約 200 秒)。
         # 120 秒のままだと、落ちてもいないのに時間切れで赤くなる。
         # 増えるたびに直すのではなく、余裕を持たせておく。

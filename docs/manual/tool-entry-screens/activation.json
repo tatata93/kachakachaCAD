@@ -1,0 +1,1514 @@
+[
+    {
+        "command": "part.curved_emboss",
+        "elapsed_ms": 39,
+        "has_input_page": true,
+        "panel": "曲面押し出し（近似）",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [主点] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "instructions.scene_editor",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.sheet_editor",
+        "elapsed_ms": 45,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 1",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.paper",
+        "elapsed_ms": 41,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 1",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.place_scene",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 1",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.insert_image",
+        "elapsed_ms": 48,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 1",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.new_page",
+        "elapsed_ms": 109,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 2",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.duplicate",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "用紙編集 — 用紙 3",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.capture",
+        "elapsed_ms": 62,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.move",
+        "elapsed_ms": 82,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.arrow",
+        "elapsed_ms": 86,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.text",
+        "elapsed_ms": 96,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.remove",
+        "elapsed_ms": 79,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.save",
+        "elapsed_ms": 81,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.open",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.model_file",
+        "elapsed_ms": 90,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.image",
+        "elapsed_ms": 79,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "instructions.pdf",
+        "elapsed_ms": 76,
+        "has_input_page": true,
+        "panel": "画像エディター — 3Dの場面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "説明書モードにしました。選んでいるものはそのままです。"
+    },
+    {
+        "command": "tools.search",
+        "elapsed_ms": 63,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "view.fit_selection",
+        "elapsed_ms": 44,
+        "has_input_page": true,
+        "panel": "選択にズーム",
+        "pending": "選択にズーム",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択にズーム: 対象を選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.isolate",
+        "elapsed_ms": 40,
+        "has_input_page": true,
+        "panel": "選択を局所表示",
+        "pending": "選択を局所表示",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択を局所表示: 対象を選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.restore_isolation",
+        "elapsed_ms": 12,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "局所表示を解除しました。"
+    },
+    {
+        "command": "image.place",
+        "elapsed_ms": 52,
+        "has_input_page": true,
+        "panel": "画像を貼る / 編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [主点] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "file.new",
+        "elapsed_ms": 82,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "新しい文書にしました。"
+    },
+    {
+        "command": "file.open",
+        "elapsed_ms": 7,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "開くのをやめました。"
+    },
+    {
+        "command": "file.save",
+        "elapsed_ms": 6,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "保存するのをやめました。"
+    },
+    {
+        "command": "file.save_as",
+        "elapsed_ms": 7,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "保存するのをやめました。"
+    },
+    {
+        "command": "edit.undo",
+        "elapsed_ms": 8,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "戻せる操作がありません。"
+    },
+    {
+        "command": "edit.redo",
+        "elapsed_ms": 7,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "やり直せる操作がありません。"
+    },
+    {
+        "command": "edit.delete",
+        "elapsed_ms": 42,
+        "has_input_page": true,
+        "panel": "削除",
+        "pending": "削除",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "削除: 消すものを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.hide_selected",
+        "elapsed_ms": 48,
+        "has_input_page": true,
+        "panel": "選択を隠す",
+        "pending": "選択を隠す",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択を隠す: 線・部品・面のどれかを選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.show_all",
+        "elapsed_ms": 104,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "すべて表示: 隠しているものはありません。"
+    },
+    {
+        "command": "selection.activate",
+        "elapsed_ms": 109,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "dimension.open",
+        "elapsed_ms": 89,
+        "has_input_page": true,
+        "panel": "寸法",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [主点] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "measure.open",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "測る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "測るものが選ばれていません。"
+    },
+    {
+        "command": "edit.numeric",
+        "elapsed_ms": 51,
+        "has_input_page": true,
+        "panel": "編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択なし"
+    },
+    {
+        "command": "view.fit_all",
+        "elapsed_ms": 13,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "見えているものがありません。"
+    },
+    {
+        "command": "view.align_selection",
+        "elapsed_ms": 40,
+        "has_input_page": true,
+        "panel": "選択に正対",
+        "pending": "選択に正対",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択に正対: 作業平面・立体の面・面・線のどれかを選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.align_selection_back",
+        "elapsed_ms": 44,
+        "has_input_page": true,
+        "panel": "反対側から正対",
+        "pending": "反対側から正対",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "反対側から正対: 作業平面・立体の面・面・線のどれかを選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "view.align_workplane",
+        "elapsed_ms": 12,
+        "has_input_page": false,
+        "panel": "ツールを選択",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "top_XY に正対しました。形は変わっていません。"
+    },
+    {
+        "command": "view.display_settings",
+        "elapsed_ms": 17,
+        "has_input_page": true,
+        "panel": "表示",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "表示: 右の「表示」で線の太さ・様式・色と段を決めてください。"
+    },
+    {
+        "command": "view.number_settings",
+        "elapsed_ms": 18,
+        "has_input_page": true,
+        "panel": "数",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "数の設定: 右の「数」で板厚・面取り量・型紙の余白・縮尺を決めてください。"
+    },
+    {
+        "command": "view.surface_analysis",
+        "elapsed_ms": 16,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面の解析: 見るものを選んでください。選んだ面(選んでいなければ全部の面)と、面を作る・面の編集の下見を塗ります。棚を閉じても表示は残ります。"
+    },
+    {
+        "command": "view.analysis_zebra",
+        "elapsed_ms": 14,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面の解析: ゼブラ(0 枚)。塗れる面がありません。面を選ぶか、面を作ってください。"
+    },
+    {
+        "command": "view.stage_all",
+        "elapsed_ms": 10,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "設計: グリッドも補助線も出しています。"
+    },
+    {
+        "command": "view.stage_no_grid",
+        "elapsed_ms": 6,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "グリッドを消しました。補助線は出ています。"
+    },
+    {
+        "command": "view.stage_no_construction",
+        "elapsed_ms": 11,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "完成形: グリッドも補助線も消しました。形だけが出ています。"
+    },
+    {
+        "command": "view.stage_selection_only",
+        "elapsed_ms": 13,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択だけ: 選んでいるものだけを出しています。"
+    },
+    {
+        "command": "entity.rename",
+        "elapsed_ms": 7,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "名前を変えるものを、一覧で選んでください。"
+    },
+    {
+        "command": "snap.toggle",
+        "elapsed_ms": 10,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "吸着を切りました(Sでも一時的に止められます)。"
+    },
+    {
+        "command": "group.set_active",
+        "elapsed_ms": 12,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "作業中グループを外しました。"
+    },
+    {
+        "command": "group.create",
+        "elapsed_ms": 38,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "グループを作りました。名前は F2 で変えられます。"
+    },
+    {
+        "command": "group.dissolve",
+        "elapsed_ms": 9,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "グループを解く: 左の一覧でグループの行を選んでください。"
+    },
+    {
+        "command": "group.rename",
+        "elapsed_ms": 8,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "名前を変える: 左の一覧でグループの行を選んでください。"
+    },
+    {
+        "command": "workplane.set_active",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "作業平面を使用",
+        "pending": "作業平面を使用",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "作業平面を使用: 作業平面を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "draw.point",
+        "elapsed_ms": 78,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "作図点を置きます。"
+    },
+    {
+        "command": "draw.line",
+        "elapsed_ms": 78,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "2点で直線を引きます。"
+    },
+    {
+        "command": "draw.polyline",
+        "elapsed_ms": 63,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "点を続けて置きます。Backspaceで1点戻せます。"
+    },
+    {
+        "command": "draw.rectangle",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "向かい合う2隅で四角を描きます。"
+    },
+    {
+        "command": "draw.circle",
+        "elapsed_ms": 62,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "中心と半径で円を描きます。"
+    },
+    {
+        "command": "draw.arc",
+        "elapsed_ms": 61,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "円弧を描きます。作り方は3通りから選べます。"
+    },
+    {
+        "command": "draw.bezier",
+        "elapsed_ms": 76,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "制御点4つでベジェ曲線を描きます。"
+    },
+    {
+        "command": "draw.spline",
+        "elapsed_ms": 70,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "通る点を並べてスプラインを描きます。"
+    },
+    {
+        "command": "wire.trim",
+        "elapsed_ms": 77,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "線の上に置くと、消える区間(いちばん近い交点の間)が破線で見えます。押すと消えます。境目は画面の全部の線。円は交点の間が消えて円弧に。続けて押せます(Esc でやめる)。"
+    },
+    {
+        "command": "wire.extend",
+        "elapsed_ms": 85,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "延長: 伸ばしたい線の端の近くに置くと伸びる先が見えます。押すと伸びます。Esc でやめます。"
+    },
+    {
+        "command": "wire.split",
+        "elapsed_ms": 52,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "分割: 線の上に置くと分かれる点が見えます。押すとそこで 2 本になります。Esc でやめます。"
+    },
+    {
+        "command": "wire.move",
+        "elapsed_ms": 90,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選んだ線・部品を、2点で示した分だけ動かします(元の線は残さず、元の部品は隠します)。"
+    },
+    {
+        "command": "wire.copy",
+        "elapsed_ms": 67,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選んだ線・部品を、2点で示した分だけ離して複製します。元は残します。"
+    },
+    {
+        "command": "wire.mirror",
+        "elapsed_ms": 69,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "2点で引いた線を鏡にして、選んだ線・部品を複製します。元は残します。"
+    },
+    {
+        "command": "wire.rotate",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "中心・始まりの向き・終わりの向きの3点で、選んだ線・部品を回します。"
+    },
+    {
+        "command": "wire.scale",
+        "elapsed_ms": 73,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "中心と倍率(または中心・基準・行き先の3点)で、選んだ線の大きさを変えます。直線・円弧・曲線は種類を保ちます(部品のスケールはまだありません)。"
+    },
+    {
+        "command": "wire.join",
+        "elapsed_ms": 45,
+        "has_input_page": true,
+        "panel": "結合",
+        "pending": "結合",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "結合: つなぐ線を2つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.coincident",
+        "elapsed_ms": 44,
+        "has_input_page": true,
+        "panel": "端点一致",
+        "pending": "端点一致",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "端点一致: 鎖を2つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.tangent",
+        "elapsed_ms": 58,
+        "has_input_page": true,
+        "panel": "接線接続",
+        "pending": "接線接続",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "接線接続: 鎖を2つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.curvature",
+        "elapsed_ms": 45,
+        "has_input_page": true,
+        "panel": "曲率接続",
+        "pending": "曲率接続",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "曲率接続: 鎖を2つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.chamfer",
+        "elapsed_ms": 42,
+        "has_input_page": true,
+        "panel": "面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "加工する辺を順に選んでください。2辺では残す側を押してください。Enterで確定、Escで取消。"
+    },
+    {
+        "command": "wire.fillet",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "加工する辺を順に選んでください。2辺では残す側を押してください。Enterで確定、Escで取消。"
+    },
+    {
+        "command": "wire.offset",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "オフセット",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "wire.meet_lines",
+        "elapsed_ms": 47,
+        "has_input_page": true,
+        "panel": "2線を交点まで",
+        "pending": "2線を交点まで",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "2線を交点まで: 鎖を2つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.intersection_points",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "交点に点",
+        "pending": "交点に点",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "交点に点: ワイヤーを2つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "help.copy_diagnostics",
+        "elapsed_ms": 49,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "診断情報をクリップボードへコピーしました。"
+    },
+    {
+        "command": "wire.center_points",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "中心に点",
+        "pending": "中心に点",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "中心に点: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.key_points",
+        "elapsed_ms": 46,
+        "has_input_page": true,
+        "panel": "端点と中点に点",
+        "pending": "端点と中点に点",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "端点と中点に点: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.corner_chamfer",
+        "elapsed_ms": 48,
+        "has_input_page": true,
+        "panel": "面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "加工するワイヤーを選んでください。辺を押すとそのワイヤー全体の角を下見します。Enterで確定、Escで取消。"
+    },
+    {
+        "command": "wire.corner_fillet",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "加工するワイヤーを選んでください。辺を押すとそのワイヤー全体の角を下見します。Enterで確定、Escで取消。"
+    },
+    {
+        "command": "wire.array_linear",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "配列",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "直線に並べる: 個数・間隔・方向を決めて「確定」を押してください。"
+    },
+    {
+        "command": "wire.array_circular",
+        "elapsed_ms": 74,
+        "has_input_page": true,
+        "panel": "配列",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "円に並べる: 個数・中心・全体角度を決めて「確定」を押してください。"
+    },
+    {
+        "command": "wire.set_datum",
+        "elapsed_ms": 51,
+        "has_input_page": true,
+        "panel": "基準線に設定",
+        "pending": "基準線に設定",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "基準線に設定: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.clear_datum",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "基準解除",
+        "pending": "基準解除",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "基準解除: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "workplane.from_face",
+        "elapsed_ms": 51,
+        "has_input_page": true,
+        "panel": "フェイスで作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [スナップなし] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "fabrication.from_face",
+        "elapsed_ms": 50,
+        "has_input_page": true,
+        "panel": "フェイスを近似",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [スナップなし] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "workplane.create",
+        "elapsed_ms": 43,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "作業面1 の作業平面を作って、作業中にしました。"
+    },
+    {
+        "command": "grid.edit",
+        "elapsed_ms": 21,
+        "has_input_page": true,
+        "panel": "グリッド",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "グリッド: 右の「グリッド」で間隔・副点・基準・色を決めてください。"
+    },
+    {
+        "command": "grid.move_origin",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "グリッド",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "グリッド原点: 動かす先を1回押してください(Esc でやめます)。"
+    },
+    {
+        "command": "surface.gpt_create",
+        "elapsed_ms": 76,
+        "has_input_page": true,
+        "panel": "曲線から近似面",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [スナップなし] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "surface.from_lines",
+        "elapsed_ms": 81,
+        "has_input_page": true,
+        "panel": "面にする",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面にする: ワイヤーを選んでください。選び足すたびに輪の下見を更新します。"
+    },
+    {
+        "command": "surface.create",
+        "elapsed_ms": 65,
+        "has_input_page": true,
+        "panel": "面を作る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面を作る\n作り方: 平面(閉じた外形と穴)\n右の棚で作り方と入力を決めて、Enter で確定します。Esc でやめます。"
+    },
+    {
+        "command": "guide.revolve",
+        "elapsed_ms": 97,
+        "has_input_page": true,
+        "panel": "面を作る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "回転体\n3D で断面の線を押し、次に軸の直線を押してください。角度は数の棚の「回転体の角度」。Enter で確定、Esc でやめます。\n次のクリック → 断面(1本目)"
+    },
+    {
+        "command": "surface.match",
+        "elapsed_ms": 60,
+        "has_input_page": true,
+        "panel": "面の編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面を合わせる: 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。Enter で確定、Esc でやめます。元の面はそのまま残ります。"
+    },
+    {
+        "command": "surface.bridge",
+        "elapsed_ms": 65,
+        "has_input_page": true,
+        "panel": "面の編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面をつなぐ: 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。Enter で確定、Esc でやめます。元の面はそのまま残ります。"
+    },
+    {
+        "command": "surface.refit",
+        "elapsed_ms": 64,
+        "has_input_page": true,
+        "panel": "面の編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面を整える: 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。Enter で確定、Esc でやめます。元の面はそのまま残ります。"
+    },
+    {
+        "command": "surface.mirror",
+        "elapsed_ms": 57,
+        "has_input_page": true,
+        "panel": "面の編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "対称に写す: 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。Enter で確定、Esc でやめます。元の面はそのまま残ります。"
+    },
+    {
+        "command": "surface.iso_curves",
+        "elapsed_ms": 90,
+        "has_input_page": true,
+        "panel": "面の編集",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面の縦横線を取り出す: 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。Enter で確定、Esc でやめます。元の面はそのまま残ります。"
+    },
+    {
+        "command": "guide.set_method",
+        "elapsed_ms": 36,
+        "has_input_page": true,
+        "panel": "形状ガイドの役割",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面の作り方: ロフト(断面2つ以上 + ガイド・中心線は任意)。使う役割: 断面・外形U・中心線"
+    },
+    {
+        "command": "guide.add_row",
+        "elapsed_ms": 56,
+        "has_input_page": true,
+        "panel": "選択を表へ",
+        "pending": "選択を表へ",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択を表へ: ワイヤーか形状ガイドの面を1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.append_row",
+        "elapsed_ms": 68,
+        "has_input_page": true,
+        "panel": "選択を既存行へ追加",
+        "pending": "選択を既存行へ追加",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択を既存行へ追加: 役割表の行を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.row_up",
+        "elapsed_ms": 48,
+        "has_input_page": true,
+        "panel": "行を上へ",
+        "pending": "行を上へ",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "行を上へ: 役割表の行を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.row_down",
+        "elapsed_ms": 52,
+        "has_input_page": true,
+        "panel": "行を下へ",
+        "pending": "行を下へ",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "行を下へ: 役割表の行を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.row_remove",
+        "elapsed_ms": 49,
+        "has_input_page": true,
+        "panel": "行を削除",
+        "pending": "行を削除",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "行を削除: 役割表の行を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.row_reverse",
+        "elapsed_ms": 49,
+        "has_input_page": true,
+        "panel": "向きを反転",
+        "pending": "向きを反転",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "向きを反転: 役割表の行を1つ選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.build",
+        "elapsed_ms": 52,
+        "has_input_page": true,
+        "panel": "表から面を作る",
+        "pending": "表から面を作る",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "表から面を作る: 役割表に行を1つ以上入れてください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "guide.clear",
+        "elapsed_ms": 56,
+        "has_input_page": true,
+        "panel": "表を空にする",
+        "pending": "表を空にする",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "表を空にする: 役割表に行を1つ以上入れてください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.project",
+        "elapsed_ms": 56,
+        "has_input_page": true,
+        "panel": "面へ投影",
+        "pending": "面へ投影",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面へ投影: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "wire.wrap_project",
+        "elapsed_ms": 102,
+        "has_input_page": true,
+        "panel": "曲面へ投影",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "① 元ワイヤー: 3Dビューまたは左ペインで追加します。"
+    },
+    {
+        "command": "wire.project_surface",
+        "elapsed_ms": 104,
+        "has_input_page": true,
+        "panel": "曲面へ投影",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "① 元ワイヤー: 3Dビューまたは左ペインで追加します。"
+    },
+    {
+        "command": "part.extrude",
+        "elapsed_ms": 77,
+        "has_input_page": true,
+        "panel": "押し出し",
+        "pending": "押し出し",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "押し出し: 閉じた輪郭を1つ以上、または立体の平らな面を選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "part.revolve",
+        "elapsed_ms": 61,
+        "has_input_page": true,
+        "panel": "立体を作る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "回転体: 閉じた輪郭(外周と穴。何個でも)と、回転軸にする直線を 3D で押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 輪郭"
+    },
+    {
+        "command": "part.loft_solid",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "立体を作る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "ロフト立体: 閉じた断面を、通す順に 3D で押してください(2 つ以上、何個でも)。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 断面(通す順に押してください。いま 0 つ)"
+    },
+    {
+        "command": "part.sweep",
+        "elapsed_ms": 67,
+        "has_input_page": true,
+        "panel": "立体を作る",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "スイープ: 閉じた輪郭と、経路の線(何本でも。1 本につながるように)を 3D で押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 輪郭"
+    },
+    {
+        "command": "part.fillet",
+        "elapsed_ms": 62,
+        "has_input_page": true,
+        "panel": "辺の丸め・面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "フィレット: 部品の丸めたい辺の近くを 3D で押してください(何本でも。入っている辺の近くを押すと外れます)。大きさは右の棚で決めます。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.chamfer",
+        "elapsed_ms": 62,
+        "has_input_page": true,
+        "panel": "辺の丸め・面取り",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "面取り: 部品の落としたい辺の近くを 3D で押してください(何本でも。入っている辺の近くを押すと外れます)。大きさは右の棚で決めます。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.shell",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "中空化・分割",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "シェル: 部品の開けたい面を 3D で押してください(何枚でも。入っている面を押すと外れます)。肉厚は右の棚で決めます。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.split",
+        "elapsed_ms": 73,
+        "has_input_page": true,
+        "panel": "中空化・分割",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "分割: 分けたい部品を 3D で押してください。いまの作業平面で 2 つに分けます(位置は右の棚の「ずらす」で動かせます)。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.thicken",
+        "elapsed_ms": 60,
+        "has_input_page": true,
+        "panel": "厚み",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "厚み: 3D で形状ガイドの面を押してください(何枚でも。押し直すと外れます)。作り方を選んで、Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.surface_jig",
+        "elapsed_ms": 55,
+        "has_input_page": true,
+        "panel": "部品",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "対象と条件を指定し、右ペインの下端で確定してください。"
+    },
+    {
+        "command": "part.thickness_placement",
+        "elapsed_ms": 14,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "厚みの付け方: 内側(次に面へ厚みを付けるときに効きます)"
+    },
+    {
+        "command": "part.thicken_to_plane",
+        "elapsed_ms": 69,
+        "has_input_page": true,
+        "panel": "厚み",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "厚み: 3D で形状ガイドの面を押してください(何枚でも。押し直すと外れます)。作り方を選んで、Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "part.from_wire_cage",
+        "elapsed_ms": 55,
+        "has_input_page": true,
+        "panel": "部品",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "対象と条件を指定し、右ペインの下端で確定してください。"
+    },
+    {
+        "command": "part.overlap_inspect",
+        "elapsed_ms": 63,
+        "has_input_page": true,
+        "panel": "めり込みを処理",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "めり込み部分を選び、残す／削る側を指定して Enter で確定します。"
+    },
+    {
+        "command": "part.contact_wire",
+        "elapsed_ms": 70,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "交わりにワイヤー: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.trim_overlap",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "めり込みを削る: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.split_overlap",
+        "elapsed_ms": 72,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "交わりで分割: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.boolean_add",
+        "elapsed_ms": 75,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "足す: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.boolean_cut",
+        "elapsed_ms": 79,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "引く: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.boolean_intersect",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "足す・引く",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "交差: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。押し直すと外れます。Enter で確定、Esc でやめます。\n次のクリック → 土台"
+    },
+    {
+        "command": "part.move",
+        "elapsed_ms": 93,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選んだ部品を、2点で示した分だけ動かします(元の部品は隠します。何個でも 1 回で戻る)。"
+    },
+    {
+        "command": "part.copy",
+        "elapsed_ms": 93,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選んだ部品を、2点で示した分だけ離して写します。元の部品は残します。"
+    },
+    {
+        "command": "part.mirror",
+        "elapsed_ms": 82,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "2点で引いた線を含み作業平面に垂直な面を鏡にして、部品を写します。元の部品は残します。"
+    },
+    {
+        "command": "part.rotate",
+        "elapsed_ms": 81,
+        "has_input_page": true,
+        "panel": "作図",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "中心・始まりの向き・終わりの向きの3点で、作業平面の法線まわりに部品を回します(元は隠します)。"
+    },
+    {
+        "command": "part.array_linear",
+        "elapsed_ms": 91,
+        "has_input_page": true,
+        "panel": "配列",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "直線に並べる: 個数・間隔・方向を決めて「確定」を押してください。"
+    },
+    {
+        "command": "part.array_circular",
+        "elapsed_ms": 83,
+        "has_input_page": true,
+        "panel": "配列",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "円に並べる: 個数・中心・全体角度を決めて「確定」を押してください。"
+    },
+    {
+        "command": "derived.freeze",
+        "elapsed_ms": 55,
+        "has_input_page": true,
+        "panel": "部品",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "対象と条件を指定し、右ペインの下端で確定してください。"
+    },
+    {
+        "command": "fabrication.create",
+        "elapsed_ms": 143,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "近似\n3D で面か立体を押してください。押すたびに候補を作って比べます。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "fabrication.assign_role",
+        "elapsed_ms": 60,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "境界の役割",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "境界の役割: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "fabrication.assign_relief_cut",
+        "elapsed_ms": 55,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "切れ目にする",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "切れ目にする: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "fabrication.preview_update",
+        "elapsed_ms": 135,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "近似\n3D で面か立体を押してください。押すたびに候補を作って比べます。Enter で確定、Esc でやめます。"
+    },
+    {
+        "command": "fabrication.create_pattern",
+        "elapsed_ms": 68,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.set_assembly",
+        "elapsed_ms": 64,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.set_method",
+        "elapsed_ms": 12,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "近似の方式: 面を分類して展開(V2方式)"
+    },
+    {
+        "command": "fabrication.freeze_output",
+        "elapsed_ms": 29,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "固定で作るもの: 部品のみ"
+    },
+    {
+        "command": "fabrication.set_connection_scope",
+        "elapsed_ms": 46,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "形に追従する線",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "形に追従する線: ワイヤーを1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "fabrication.freeze_state",
+        "elapsed_ms": 57,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.freeze_flat",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.freeze_target",
+        "elapsed_ms": 63,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.freeze_wires",
+        "elapsed_ms": 58,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.edit_part",
+        "elapsed_ms": 62,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.merge_parts",
+        "elapsed_ms": 66,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.split_part",
+        "elapsed_ms": 59,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "fabrication.set_unfold_base",
+        "elapsed_ms": 61,
+        "has_input_page": true,
+        "panel": "製作",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "入力と条件を指定し、右ペインで確定してください。"
+    },
+    {
+        "command": "export.validate",
+        "elapsed_ms": 53,
+        "has_input_page": true,
+        "panel": "出力を検査",
+        "pending": "出力を検査",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "出力を検査: 部品を1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "export.selection",
+        "elapsed_ms": 77,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選択: 選択: 対象を選んでください。  [スナップなし] 次: この道具はここまでです。 [右クリックか Enter で決める / Esc でやめる / Backspace で1点戻す] 選択 0 件"
+    },
+    {
+        "command": "export.kcd",
+        "elapsed_ms": 29,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "output.copy",
+        "elapsed_ms": 17,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "export.stl",
+        "elapsed_ms": 19,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "export.step",
+        "elapsed_ms": 17,
+        "has_input_page": true,
+        "panel": "面の解析",
+        "pending": "",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "選ぶ道具に戻ります。"
+    },
+    {
+        "command": "export.svg",
+        "elapsed_ms": 54,
+        "has_input_page": true,
+        "panel": "SVGで保存",
+        "pending": "SVGで保存",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "SVGで保存: 型紙を1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "export.dxf",
+        "elapsed_ms": 60,
+        "has_input_page": true,
+        "panel": "DXFで保存",
+        "pending": "DXFで保存",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "DXFで保存: 型紙を1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    },
+    {
+        "command": "export.pdf_1to1",
+        "elapsed_ms": 71,
+        "has_input_page": true,
+        "panel": "1:1 PDFで保存",
+        "pending": "1:1 PDFで保存",
+        "scope": "entry with no selected geometry; not proof of generated output",
+        "status": "1:1 PDFで保存: 型紙を1つ以上選んでください。(選ぶと続きます。Esc でやめます)"
+    }
+]

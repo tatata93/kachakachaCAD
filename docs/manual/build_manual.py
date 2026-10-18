@@ -44,7 +44,7 @@ def build():
     notes=json.loads((HERE/'command-notes.json').read_text(encoding='utf-8'))
     rows=commands(); sections=re.findall(r'<section\b[^>]*>.*?</section>',source+'\n'+extra,re.S)
     # Keep tutorials next to the associated feature instead of appending updates after the index.
-    order=['about','quick-workflow','start','first-sheet','screen','tool-search-focus',
+    order=['about','detailed-lessons','quick-workflow','start','first-sheet','screen','tool-search-focus',
            'groups-guide','draw','workplane','wire-edit','measure','area-picture',
            'image-placement','image-fit-guide','guide','loft-picture','part','solid-recipes',
            'contact-operations','boolean-picture','fabrication','adaptive-guide',
@@ -64,7 +64,7 @@ def build():
                    'Modeless':'操作ペインを開き、3Dビューの選択と設定を行います。'}[mode]
             detail=notes.get(ident,'')
             if detail and html.unescape(re.sub('<[^>]+>','',detail))==guide: detail=''
-            cards.append(f'<article class="command" id="cmd-{ident}" data-command="{ident}"><img class="tool-icon" src="manual/tool-icons/{ident}.png" alt="{escape(name)}の操作図"><h3>{escape(name)}'+(f' <kbd>{escape(shortcut)}</kbd>' if shortcut else '')+f'</h3><p>{escape(guide)}</p>'+(f'<p>{detail}</p>' if detail else '')+f'<p class="meta">準備例: {escape(RECIPES[ident]["prepare"])} / 設定例: {escape(RECIPES[ident]["settings"])}</p>'+(f'<p class="meta">対象・実行条件の案内: {escape(failure)}</p>' if failure else '')+f'<p><a href="manual/tools/{ident}.html">{escape(RECIPES[ident]["task"])} — 図付きの具体的手順</a> · <a href="#{chapter}">機能の概要</a> · <code>{ident}</code></p></article>')
+            cards.append(f'<article class="command" id="cmd-{ident}" data-command="{ident}"><img class="tool-icon" src="manual/tool-icons/{ident}.png" alt="{escape(name)}の操作図"><h3>{escape(name)}'+(f' <kbd>{escape(shortcut)}</kbd>' if shortcut else '')+f'</h3><p>{escape(guide)}</p>'+(f'<p>{detail}</p>' if detail else '')+f'<p class="meta">準備例: {escape(RECIPES[ident]["prepare"])} / 設定例: {escape(RECIPES[ident]["settings"])}</p>'+(f'<p class="meta">対象・実行条件の案内: {escape(failure)}</p>' if failure else '')+f'<p><a href="manual/tools/{ident}.html">{escape(RECIPES[ident]["task"])} — 準備・選択・設定・確定までの詳しい手順</a> · <a href="#{chapter}">機能の概要</a> · <code>{ident}</code></p></article>')
         refs.append(f'<section id="ref-{key}"><h2>{label} — 全コマンド一覧</h2>'+figure(picture,label+'の参考画面・模式図（個々の設定は下の項目を参照）')+'\n'.join(cards)+'</section>')
     sections+=refs
     nav=[]
@@ -117,4 +117,7 @@ if __name__=='__main__':
     output=build();audit(output)
     target=ROOT/'docs/manual.html'
     if args.check:assert target.read_text(encoding='utf-8')==output,'Run build_manual.py to regenerate'
-    else:target.write_text(output,encoding='utf-8',newline='\n')
+    else:
+        temporary=target.with_suffix('.html.tmp')
+        temporary.write_text(output,encoding='utf-8',newline='\n')
+        temporary.replace(target)

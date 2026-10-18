@@ -1,6 +1,6 @@
 # 左ペインと不要な曲線分割の改善（2026-10-19）
 
-状態: 進行中。基点745717a02、WP-08の画面・操作アダプターを担当する。
+状態: 完了。基点745717a02、WP-08の画面・操作アダプターを担当する。
 
 ## 範囲と受入
 
@@ -111,3 +111,13 @@ Windows Qtの実画面、同じ115投影.kcd2、各10操作で比較した中央
   CTest実時間1425.06秒。追加ケースのため検証を省略した高速化ではない。
 - 対象ソースSHA256: `8ff57fccdab378a4f0bca7773a5eb956e0b888d5bf11bcb4dae9b3a5e401d325`。
 - 左一覧の45.40→17.06msは実モデル10回のチェック操作の中央値であり、全機能の速度改善率ではない。
+
+### 配布と起動
+
+- 実装commit: `3da8d4c61`、開発ブランチへpush済み。
+- 検証済み配布先: `out/releases/explorer-curves3-20261019/package/kachakacha_cad_next.exe`。
+  `scripts/verify.py publish`で対象ソース/環境/成果物/試験範囲の一致を照合して複製した。
+- `python scripts/run-verified.py out/releases/explorer-curves3-20261019`でWindows通常起動。
+  `out/explorer-curves-20261019/release-startup.json`でready/rendered/event_loop/visible/exposed/on_screenすべてtrue。
+  使用中の他アプリは終了せず、新配布版を起動したままにした。
+- この後の完了記録commitは進捗文書だけで、検証済み実装や配布物のバイト列は変更しない。

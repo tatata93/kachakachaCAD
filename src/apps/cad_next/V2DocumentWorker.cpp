@@ -1,7 +1,9 @@
 #include "V2DocumentOpen.h"
 #include "V2DocumentCache.h"
+#include "V2DocumentTiming.h"
 #include "V2MainWindow.h"
 #include "kachakacha/io/AtomicFile.h"
+#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QCoreApplication>
@@ -24,6 +26,7 @@ void V2DocumentOpen::Progress(int completed,int total,const std::string& name) {
     text.replace('\n',' ');text.replace('\r',' ');std::cout<<"KACHACAD_PHASE:"<<text.toUtf8().constData()<<std::endl;
 }
 base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::string archive) {
+    V2DocumentTiming timing("capture");
     V2PreparedDocument data;data.archive=std::move(archive);
     const auto capture=[](const auto& source,auto& target)->base::Result<bool>{
         for(const auto& entry:source){const auto shape=kernel::CaptureOutputShape(entry.second);
@@ -31,6 +34,7 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
         return base::Result<bool>::Success(true);
     };
     const auto parts=capture(w.partShapes_,data.parts),guides=capture(w.guideShapes_,data.guides);
+    timing.Mark("serialize-native");
     if(!parts.HasValue())return base::Result<V2PreparedDocument>::Failure(parts.Diagnostics());
     if(!guides.HasValue())return base::Result<V2PreparedDocument>::Failure(guides.Diagnostics());
     data.partEdges=w.partEdges_;data.flatBoundaries=w.partFlatBoundary_;data.guideEdges=w.guideEdges_;
@@ -39,9 +43,15 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
         const auto cached=w.shapeMeshes_.find(handle.value);
         if(cached!=w.shapeMeshes_.end())data.meshes[id]=cached->second;
         else {
+            const auto entityId=base::EntityId::Parse(id);
+            const auto* entity=entityId?w.session_->GetDocument().FindEntity(*entityId):nullptr;
+            // Native geometry and history are transferred for every entity. Display
+            // meshes for hidden entities are built on demand when they become visible.
+            if(entity&&!app::EntityEffectivelyVisible(w.session_->GetDocument().Snapshot(),*entity))continue;
             const auto mesh=kernel::BuildShapeMesh(handle,0.0,shapes==&w.guideShapes_?8:0);
             if(!mesh.HasValue())return base::Result<V2PreparedDocument>::Failure(mesh.Diagnostics());
             data.meshes[id]=mesh.Value();
+            timing.Mark(("mesh-"+id).c_str());
         }
     }
     return base::Result<V2PreparedDocument>::Success(std::move(data));
@@ -65,25 +75,37 @@ int V2DocumentOpen::Worker(const QString& directory) {
     if(request.value("version").toInt()!=1||token.isEmpty()||request.value("source").toString().isEmpty())return 2;
     QJsonObject response{{"version",1},{"token",token},{"ok",false}};
     try {
+        V2DocumentTiming timing("worker");
         Progress(0,0,"保存文書を読み込んでいます");
         const auto bytes=io::ReadWholeFile(request.value("source").toString().toStdString());
         if(!bytes.HasValue())throw bytes.FirstDiagnostic();
+        timing.Mark("read-archive");
         auto loaded=io::LoadDocument(bytes.Value());if(!loaded.HasValue())throw loaded.FirstDiagnostic();
+        timing.Mark("parse-archive");
         if(auto cached=V2DocumentCache::Read(bytes.Value())) {
+            timing.Mark("read-cache-hit");
             Progress(1,1,"内容が一致する計算済み形状を復元しています");
             if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,*cached))throw std::runtime_error("Cannot transfer cached document");
+            timing.Mark("write-transfer-cache");
             response["ok"]=true;
         } else {
+        timing.Mark("read-cache-miss");
         V2MainWindow window;
+        timing.Mark("create-worker-window");
         if(!Adopt(window,loaded.Value().snapshot)||!window.RebuildProblems().isEmpty())
             throw std::runtime_error(window.RebuildProblems().isEmpty()?window.StatusText().toStdString():window.RebuildProblems().toStdString());
+        timing.Mark("rebuild-and-adopt");
         auto sourceFile=loaded.Value();sourceFile.snapshot=window.session_->GetDocument().Snapshot();
         Progress(1,1,"計算済み形状と製作データを転送する準備をしています");
         const auto archive=io::SaveDocument(sourceFile);if(!archive.HasValue())throw archive.FirstDiagnostic();
+        timing.Mark("encode-archive");
         auto captured=Capture(window,archive.Value());if(!captured.HasValue())throw captured.FirstDiagnostic();
         auto data=captured.Value();
+        timing.Mark("capture-native-and-meshes");
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
+        timing.Mark("write-transfer");
         (void)V2DocumentCache::Write(bytes.Value(),data);
+        timing.Mark("write-cache");
         response["ok"]=true;
         }
     }catch(const base::Diagnostic& diagnostic) {

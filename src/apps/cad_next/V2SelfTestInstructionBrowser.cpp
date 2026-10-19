@@ -57,7 +57,9 @@ bool InstructionBrowserWorkflow(V2MainWindow& w)
     SelectRow(list,1);ClickBrowser(paper,paper->ToScreen({20,110}));
     if(!Explain("another scene can be chosen without leaving paper",mode->Snapshot()["workspace"]=="sheet"&&PaperItems(*mode).size()==2&&PaperItems(*mode)[1].toObject()["sceneId"]==second))return false;
     mode->Command("instructions.move");SelectRow(list,1);ClickBrowser(paper,paper->ToScreen({110,20}));
-    if(!Explain("clicking the same selected scene rearms placement",PaperItems(*mode).size()==3&&PaperItems(*mode).last().toObject()["sceneId"]==second))return false;
+    if(!Explain("browsing a scene in move mode does not accidentally place it",PaperItems(*mode).size()==2))return false;
+    place=Shown<QPushButton>(w,"instructionBrowserPlace");if(!place)return false;place->click();ClickBrowser(paper,paper->ToScreen({110,20}));
+    if(!Explain("explicit place button rearms the selected scene",PaperItems(*mode).size()==3&&PaperItems(*mode).last().toObject()["sceneId"]==second))return false;
     const auto placed=mode->Snapshot();w.RunCommand("edit.undo");const auto undone=mode->Snapshot();ClickBrowser(paper,paper->ToScreen({110,150}));
     if(!Explain("Undo cancels a stale scene placement",PaperItems(*mode)==undone["sheets"].toArray()[0].toObject()["items"].toArray()))return false;
     w.RunCommand("edit.redo");if(!Explain("Redo restores the placement and browser selection",mode->Snapshot()==placed&&list->currentRow()==1))return false;

@@ -14,6 +14,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GptSurfaceTool.h"
+#include "V2GuideBuildJobs.h"
 
 #include "kachakacha/app/ExplorerModel.h"
 
@@ -401,6 +402,12 @@ bool V2MainWindow::RebuildGuideSurfaceShape(const kachakacha::v2::domain::Featur
         return false;
     }
     if (definition->gptBuilder) { return gptSurface_->Rebuild(feature, output); }
+    if(auto ready=V2GuideBuildJobs::Take(*this,output)) {
+        guideShapes_[output.ToString()]=ready->built.handle;
+        guideEdges_[output.ToString()]=std::move(ready->built.boundary);
+        guideSamples_[output.ToString()]=std::move(ready->built.samples);
+        guideTable_=std::move(ready->table);return true;
+    }
     const auto table = kachakacha::v2::app::GuideTableFromDefinition(
         session_->GetDocument(), session_->Scene(), *definition);
     if (!table.HasValue()) {

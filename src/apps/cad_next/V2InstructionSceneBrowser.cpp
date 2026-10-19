@@ -23,7 +23,7 @@ V2InstructionSceneBrowser::V2InstructionSceneBrowser(QWidget* parent):QWidget(pa
     setObjectName("instructionSceneBrowser");setMinimumWidth(170);
     auto* layout=new QVBoxLayout(this);layout->setContentsMargins(4,4,4,4);
     layout->addWidget(new QLabel(QStringLiteral("作ったシーン"),this));
-    auto* help=new QLabel(QStringLiteral("用紙編集中はシーンを選び、用紙をクリックして配置。ダブルクリックで編集。"),this);
+    auto* help=new QLabel(QStringLiteral("シーンを選び「用紙へ配置」。配置中は用紙をクリック。ダブルクリックで編集。"),this);
     help->setWordWrap(true);layout->addWidget(help);
     list_=new QListWidget(this);list_->setObjectName("instructionSceneList");
     list_->setViewMode(QListView::IconMode);list_->setFlow(QListView::TopToBottom);
@@ -69,7 +69,7 @@ void V2InstructionSceneBrowser::Refresh(std::vector<InstructionPage>* scenes,int
     while(list_->count()<count)list_->addItem(new QListWidgetItem);
     for(int i=0;i<count;++i){const auto& scene=(*scenes)[i];auto* item=list_->item(i);
         item->setData(Qt::UserRole,scene.id);item->setText(QStringLiteral("%1  %2").arg(i+1).arg(scene.title));
-        item->setToolTip(scene.title+QStringLiteral("\n")+(paper?QStringLiteral("選んで用紙をクリックすると配置"):QStringLiteral("選んで3Dシーンを編集")));
+        item->setToolTip(scene.title+QStringLiteral("\n")+(paper?QStringLiteral("選び「用紙へ配置」。配置中は図を切替"):QStringLiteral("選んで3Dシーンを編集")));
         item->setIcon(icons_.value(scene.id));
     }
     list_->setCurrentRow(selected>=0&&selected<count?selected:-1);

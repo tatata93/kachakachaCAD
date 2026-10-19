@@ -123,6 +123,13 @@ bool InstructionCaptureWorkflow(V2MainWindow& window)
     if(!Explain("wire-only CAD can be read into instruction editor",mode->ReadModel(modelPath)))return false;
     if(!Explain("reading model preserves application theme",window.Theme()==UiTheme::Normal&&QApplication::font()==font&&QApplication::style()->objectName()==style))return false;
     auto* list=Visible<QListWidget>(window,"instructionModelParts");if(!list||list->count()!=2)return false;
+    auto* search=Visible<QLineEdit>(window,"instructionPartSearch");if(!search)return false;search->setText("Line");
+    int shown=0;for(int i=0;i<list->count();++i)shown+=!list->item(i)->isHidden();
+    if(!Explain("part name search filters candidates without changing their checks",shown==1&&list->item(0)->checkState()==Qt::Checked&&list->item(1)->checkState()==Qt::Checked))return false;
+    bool unchecked=false;for(auto* b:window.findChildren<QPushButton*>())if(b->isVisible()&&b->text()==QStringLiteral("一覧を全て外す")){b->click();unchecked=true;break;}
+    if(!unchecked)return false;
+    for(int i=0;i<list->count();++i)if(!Explain("bulk selection only affects search results",list->item(i)->checkState()==(list->item(i)->isHidden()?Qt::Checked:Qt::Unchecked)))return false;
+    search->clear();for(int i=0;i<list->count();++i)list->item(i)->setCheckState(Qt::Checked);
     list->item(1)->setCheckState(Qt::Unchecked);list->setCurrentRow(0);
     window.SetMode(app::UiMode::Part);window.SetMode(app::UiMode::Instructions);QApplication::processEvents();
     list=Visible<QListWidget>(window,"instructionModelParts");
@@ -156,6 +163,7 @@ bool InstructionCaptureWorkflow(V2MainWindow& window)
         mode->Command("instructions.sheet_editor");mode->Command("instructions.place_scene");auto* paper=dynamic_cast<V2InstructionSheetView*>(window.findChild<QWidget*>("instructionPaperCanvas"));if(!paper)return false;
         auto* scenes=Visible<QListWidget>(window,"instructionSceneList");if(!scenes)return false;
         scenes->setCurrentRow(0);Click(paper,paper->ToScreen({15,15}));scenes->setCurrentRow(1);Click(paper,paper->ToScreen({110,15}));mode->Command("instructions.move");Capture(window,"instruction-real-model-paper");
+        paper->SetSelected(0);paper->SetZoom(1.5);Capture(window,"instruction-real-model-paper-zoom");paper->FitView();
         const auto output=qEnvironmentVariable("KACHACAD_INSTRUCTION_PROOF_DIR");if(!output.isEmpty()&&(!mode->Save(output+"/example.kci")||!mode->ExportPdf(output+"/example.pdf")))return false;
     }
     if(!mode->Save(cleanup.path))return false;window.SetMode(app::UiMode::Part);return true;

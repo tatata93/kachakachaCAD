@@ -48,7 +48,7 @@ void V2InstructionMode::ShowSceneSettings(){
         before_=Snapshot();auto& part=scenes_[current_].parts[i];part.offset=part.offset+kachakacha::v2::geometry::Vector3{values[0]->value(),values[1]->value(),values[2]->value()};
         const auto c=(part.asset->mesh.minimum+part.asset->mesh.maximum)*.5;const QVector3D center(float(c.x),float(c.y),float(c.z));const auto previous=part.rotation.rotatedVector(center);
         part.rotation=QQuaternion::fromEulerAngles(float(values[3]->value()),float(values[4]->value()),float(values[5]->value()))*part.rotation;
-        const auto correction=previous-part.rotation.rotatedVector(center);part.offset=part.offset+kachakacha::v2::geometry::Vector3{correction.x(),correction.y(),correction.z()};Remember();view_->Refresh();});
+        const auto correction=previous-part.rotation.rotatedVector(center);part.offset=part.offset+kachakacha::v2::geometry::Vector3{correction.x(),correction.y(),correction.z()};Remember();view_->Refresh();for(auto* value:values)value->setValue(0);});
     }
     }
     if(activeTool_=="move")ShowSceneSelection(panel);
@@ -60,7 +60,9 @@ void V2InstructionMode::AddImageExportControls(QWidget* panel){
     auto* layout=static_cast<QVBoxLayout*>(panel->layout());auto* dimensions=new QHBoxLayout;layout->addLayout(dimensions);
     for(const auto* name:{"instructionImageWidth","instructionImageHeight"}){
         dimensions->addWidget(new QLabel(QString(name).endsWith("Width")?QStringLiteral("幅 px"):QStringLiteral("高さ px"),panel));
-        auto* value=new QSpinBox(panel);value->setObjectName(name);value->setRange(64,4096);value->setValue(QString(name).endsWith("Width")?1600:1131);dimensions->addWidget(value);}
+        const bool width=QString(name).endsWith("Width");
+        auto* value=new QSpinBox(panel);value->setObjectName(name);value->setRange(64,4096);value->setValue(width?imageOutputSize_.width():imageOutputSize_.height());dimensions->addWidget(value);
+        connect(value,&QSpinBox::valueChanged,this,[this,width](int v){if(width)imageOutputSize_.setWidth(v);else imageOutputSize_.setHeight(v);});}
     auto* output=new QPushButton(QStringLiteral("形式と保存先を選んで画像出力"),panel);layout->addWidget(output);
     connect(output,&QPushButton::clicked,this,[this]{FileAction("instructions.image");});
 }
@@ -74,7 +76,7 @@ void V2InstructionMode::AddFontControls(QWidget* panel,bool sheet){
     auto* size=new V2NumericSpinBox(panel);size->setObjectName("instructionFontSize");size->setRange(1,300);size->setDecimals(1);size->setKeyboardTracking(false);size->setValue(initial.pointSizeF());row->addWidget(size);
     auto* bold=new QCheckBox(QStringLiteral("太字"),panel);bold->setObjectName("instructionTextBold");bold->setChecked(initial.bold());row->addWidget(bold);
     auto* italic=new QCheckBox(QStringLiteral("斜体"),panel);italic->setChecked(initial.italic());row->addWidget(italic);
-    const auto update=[this,sheet,family,size,bold,italic]{if(loading_)return;auto font=family->currentFont();font.setPointSizeF(size->value());font.setBold(bold->isChecked());font.setItalic(italic->isChecked());
+    const auto update=[this,sheet,family,size,bold,italic]{if(loading_||!CommitSelectedText())return;auto font=family->currentFont();font.setPointSizeF(size->value());font.setBold(bold->isChecked());font.setItalic(italic->isChecked());
         before_=Snapshot();if(sheet){pendingItem_.font=font;const int i=sheetView_->Selected();
             if(i>=0&&sheets_[currentSheet_].items[i].kind==InstructionItemKind::Text)sheets_[currentSheet_].items[i].font=font;
             sheetView_->SetTool(activeTool_,pendingItem_);sheetView_->Refresh();}

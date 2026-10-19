@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QString>
 #include <QVariant>
@@ -61,15 +62,21 @@ bool V2InstructionMode::ReadModel(const QString& path){
 void V2InstructionMode::ShowModelPicker(){
     auto* panel=new QWidget;settings_=panel;auto* layout=new QVBoxLayout(panel);
     hint_=new QLabel(QStringLiteral("使用する部品にチェックを入れ、3Dで確認して「この場面に配置」。一覧の行を押すと対応部品を強調します。"),panel);hint_->setWordWrap(true);layout->addWidget(hint_);
+    auto* search=new QLineEdit(panel);search->setObjectName("instructionPartSearch");search->setPlaceholderText(QStringLiteral("部品名で絞り込み"));layout->addWidget(search);
+    auto* count=new QLabel(panel);count->setObjectName("instructionPartCount");layout->addWidget(count);
     auto* list=new QListWidget(panel);partList_=list;list->setObjectName("instructionModelParts");layout->addWidget(list,1);
     for(std::size_t i=0;i<source_.parts.size();++i){auto* item=new QListWidgetItem(source_.parts[i].asset->name,list);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(sourceChecks_[i]?Qt::Checked:Qt::Unchecked);}
     list->setCurrentRow(sourceRow_);
-    connect(list,&QListWidget::itemChanged,this,[this,list](QListWidgetItem* item){const int row=list->row(item);if(row>=0&&row<int(sourceChecks_.size())){sourceChecks_[row]=item->checkState()==Qt::Checked;source_.parts[row].visible=sourceChecks_[row];view_->Refresh();}});
+    const auto updateCount=[list,count]{int selected=0,shown=0;for(int i=0;i<list->count();++i){selected+=list->item(i)->checkState()==Qt::Checked;shown+=!list->item(i)->isHidden();}
+        count->setText(QStringLiteral("使用 %1 / 全 %2 要素　一覧 %3 要素").arg(selected).arg(list->count()).arg(shown));};
+    connect(search,&QLineEdit::textChanged,this,[list,updateCount](const QString& text){for(int i=0;i<list->count();++i)list->item(i)->setHidden(!list->item(i)->text().contains(text,Qt::CaseInsensitive));updateCount();});
+    connect(list,&QListWidget::itemChanged,this,[this,list,updateCount](QListWidgetItem* item){const int row=list->row(item);if(row>=0&&row<int(sourceChecks_.size())){sourceChecks_[row]=item->checkState()==Qt::Checked;source_.parts[row].visible=sourceChecks_[row];view_->Refresh();}updateCount();});
+    updateCount();
     connect(list,&QListWidget::currentRowChanged,this,[this](int row){sourceRow_=row;view_->SetSelected(row);});
 
     auto* row=new QHBoxLayout;layout->addLayout(row);
-    for(const bool checked:{true,false}){auto* button=new QPushButton(checked?QStringLiteral("全て使う"):QStringLiteral("全て外す"),panel);row->addWidget(button);
-        connect(button,&QPushButton::clicked,this,[list,checked]{for(int i=0;i<list->count();++i)list->item(i)->setCheckState(checked?Qt::Checked:Qt::Unchecked);});}
+    for(const bool checked:{true,false}){auto* button=new QPushButton(checked?QStringLiteral("一覧を全て使う"):QStringLiteral("一覧を全て外す"),panel);row->addWidget(button);
+        connect(button,&QPushButton::clicked,this,[list,checked]{for(int i=0;i<list->count();++i)if(!list->item(i)->isHidden())list->item(i)->setCheckState(checked?Qt::Checked:Qt::Unchecked);});}
     auto* preview=new QPushButton(QStringLiteral("チェックした部品だけを3D表示"),panel);layout->addWidget(preview);
     connect(preview,&QPushButton::clicked,this,[this,list]{for(int i=0;i<list->count();++i)source_.parts[i].visible=list->item(i)->checkState()==Qt::Checked;view_->Refresh();});
     auto* all=new QPushButton(QStringLiteral("モデル全体を3D表示"),panel);layout->addWidget(all);

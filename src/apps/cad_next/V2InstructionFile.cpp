@@ -137,7 +137,7 @@ bool V2InstructionMode::Restore(const QJsonObject& source) {
         ids.insert(page.id);made.push_back(std::move(page));}
     std::vector<InstructionSheet> sheets;
     if(!doc["sheets"].isArray()||!DecodeInstructionSheets(doc["sheets"].toArray(),made,sheets))return false;
-    view_->SetPage(nullptr);sheetView_->SetDocument(nullptr,nullptr);
+    commitText_={};view_->SetPage(nullptr);sheetView_->SetDocument(nullptr,nullptr);
     scenes_=std::move(made);sheets_=std::move(sheets);
     sceneBrowser_->Invalidate();
     current_=std::clamp(doc["current"].toInt(),0,int(scenes_.size())-1);
@@ -145,6 +145,7 @@ bool V2InstructionMode::Restore(const QJsonObject& source) {
     SwitchWorkspace(workspace=="sheet");return true;
 }
 bool V2InstructionMode::Save(const QString& path) {
+    if(!CommitSelectedText())return false;
     CancelInput();
     QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
     const auto bytes=QJsonDocument(Snapshot()).toJson(QJsonDocument::Compact);
@@ -212,7 +213,7 @@ void V2InstructionMode::FileAction(std::string_view id) {
     auto* w=settings_?settings_->findChild<QSpinBox*>("instructionImageWidth"):nullptr;
     auto* h=settings_?settings_->findChild<QSpinBox*>("instructionImageHeight"):nullptr;
     if(hint_)hint_->clear();
-    const bool ok=open?Load(path):pdf?ExportPdf(path):image?ExportImage(path,QSize(w?w->value():1600,h?h->value():1131)):Save(path);
+    const bool ok=open?Load(path):pdf?ExportPdf(path):image?ExportImage(path,QSize(w?w->value():imageOutputSize_.width(),h?h->value():imageOutputSize_.height())):Save(path);
     if(hint_){if(ok)hint_->setText(QStringLiteral("完了：")+path);
         else if(hint_->text().isEmpty())hint_->setText(QStringLiteral("読み書きできません。形式・保存先・空き容量を確認してください。旧版の説明書も読み込めます。"));}
 }

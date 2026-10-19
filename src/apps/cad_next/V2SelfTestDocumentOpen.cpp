@@ -10,6 +10,7 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ShapeMesh.h"
 #include <QApplication>
 #include <QByteArray>
@@ -32,6 +33,7 @@
 #include <stdexcept>
 
 namespace kachakacha::v2::selftest {
+bool MakeCurvedGuideSurface(V2MainWindow&);
 namespace {
 std::string Snapshot(V2MainWindow& w) {
     io::DocumentFile file;file.snapshot=w.Session().GetDocument().Snapshot();return io::WriteDocumentJson(file);
@@ -167,6 +169,68 @@ bool Cache(V2MainWindow& w) {
     return Explain("bad cache falls back to full reconstruction and leaves source intact",rebuilt&&!hit&&w.KernelShapeCount()==1
         &&V2DocumentCache::Read(original.Value()).has_value()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
 }
+bool HiddenMesh(V2MainWindow& w) {
+    CacheScope scope;if(!scope.folder.isValid())return false;
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
+    w.RunCommand("surface.create");if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    if(w.Viewport().ShapeViews().size()!=1)return false;
+    auto file=V2DocumentOpen::FileForSave(w);
+    // Compare against eager reconstruction of this same serialized definition,
+    // rather than the interactive builder's permissible topology ordering.
+    const auto visiblePath=scope.folder.filePath("visible.kcd2");
+    if(!Write(visiblePath,file)||!w.OpenDocumentFile(visiblePath)||w.Viewport().ShapeViews().size()!=1)return false;
+    const auto visibleBytes=io::ReadWholeFile(visiblePath.toStdString());if(!visibleBytes.HasValue())return false;
+    const auto visibleData=V2DocumentCache::Read(visibleBytes.Value());if(!visibleData)return false;
+    for(auto& entity:file.snapshot.entities)if(entity.kind==domain::EntityKind::GuideSurface)entity.visibility=domain::Visibility::Hidden;
+    const auto path=scope.folder.filePath("hidden.kcd2");if(!Write(path,file)||!w.OpenDocumentFile(path))return false;
+    const auto bytes=io::ReadWholeFile(path.toStdString());if(!bytes.HasValue())return false;
+    const auto cached=V2DocumentCache::Read(bytes.Value());
+    if(!Explain("hidden face keeps native geometry and history without eager display meshing",cached&&cached->guides.size()==1&&cached->guides==visibleData->guides&&cached->meshes.empty()&&w.KernelShapeCount()==1&&w.Viewport().ShapeViews().empty()))return false;
+    w.RunCommand("view.show_all");
+    // Transfer uses a BRep text round-trip. Remeshing that same transferred
+    // native shape must be exact; a worker mesh can differ at sub-ulp edge ends.
+    const auto restored=kernel::RestoreOutputShape(cached->guides.begin()->second);
+    if(!restored.HasValue())return false;
+    const auto eager=kernel::BuildShapeMesh(restored.Value(),0.0,8);kernel::ReleaseShape(restored.Value());
+    if(!Explain("lazy and eager display meshes of the transferred native face are identical",eager.HasValue()
+        &&w.Viewport().ShapeViews().size()==1&&SameMesh(eager.Value(),w.Viewport().ShapeViews().front().mesh)))return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("Undo of visibility retains the native shape",w.Viewport().ShapeViews().empty()&&w.KernelShapeCount()==1))return false;
+    return Explain("warm hidden read is still exact and source remains intact",w.OpenDocumentFile(path)&&w.Viewport().ShapeViews().empty()&&w.KernelShapeCount()==1&&io::ReadWholeFile(path.toStdString()).Value()==bytes.Value());
+}
+bool ParallelRead(V2MainWindow& w) {
+    QTemporaryDir folder;if(!folder.isValid())return false;w.RunCommand("file.new");
+    if(!MakeCurvedGuideSurface(w))return false;auto file=V2DocumentOpen::FileForSave(w);
+    const auto source=std::find_if(file.snapshot.entities.begin(),file.snapshot.entities.end(),[](const auto& e){return e.kind==domain::EntityKind::GuideSurface;});
+    if(source==file.snapshot.entities.end())return false;
+    const auto feature=std::find_if(file.snapshot.features.begin(),file.snapshot.features.end(),[&](const auto& f){return f.id==source->createdBy;});
+    if(feature==file.snapshot.features.end())return false;base::DeterministicIdGenerator ids(940000);
+    auto clone=*feature;auto entity=*source;clone.id=ids.NextTyped<base::IdKind::Feature>();entity.id=ids.NextTyped<base::IdKind::Entity>();
+    entity.createdBy=clone.id;clone.outputs={{"surface",entity.id,entity.kind}};file.snapshot.features.push_back(clone);file.snapshot.entities.push_back(entity);
+    const auto path=folder.filePath("independent.kcd2");if(!Write(path,file))return false;
+    const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
+    struct SerialFlag {QByteArray previous=qgetenv("KACHACAD_OPEN_SERIAL");~SerialFlag(){if(previous.isNull())qunsetenv("KACHACAD_OPEN_SERIAL");else qputenv("KACHACAD_OPEN_SERIAL",previous);}}flag;
+    std::optional<V2PreparedDocument> serial,parallel;
+    for(bool sequential:{true,false}) {
+        CacheScope scope;if(!scope.folder.isValid())return false;
+        if(sequential)qputenv("KACHACAD_OPEN_SERIAL","1");else qunsetenv("KACHACAD_OPEN_SERIAL");
+        if(!w.OpenDocumentFile(path))return false;
+        auto data=V2DocumentCache::Read(original.Value());if(!data)return false;
+        (sequential?serial:parallel)=std::move(data);
+    }
+    if(!Explain("parallel cold read preserves exact native BRep, editable archive and curve correspondence",serial&&parallel&&serial->guides.size()==2
+        &&serial->guides==parallel->guides&&serial->parts==parallel->parts&&serial->archive==parallel->archive
+        &&serial->guideEdges.size()==parallel->guideEdges.size()&&serial->meshes.size()==parallel->meshes.size()))return false;
+    for(const auto& [id,edges]:serial->guideEdges) {
+        if(!parallel->guideEdges.contains(id)||edges.size()!=parallel->guideEdges.at(id).size())return false;
+        for(std::size_t i=0;i<edges.size();++i){const auto& a=edges[i];const auto& b=parallel->guideEdges.at(id)[i];
+            if(!Explain("parallel native boundaries retain curve types and exact parameters",a.Kind()==b.Kind()&&a.ControlPoints()==b.ControlPoints()
+                &&a.Center()==b.Center()&&a.Normal()==b.Normal()&&a.ReferenceDirection()==b.ReferenceDirection()&&a.Radius()==b.Radius()
+                &&a.StartAngleRad()==b.StartAngleRad()&&a.SweepAngleRad()==b.SweepAngleRad()))return false;}
+    }
+    for(const auto& [id,mesh]:serial->meshes)if(!Explain("parallel rebuild retains exact display triangles normals and face indices",parallel->meshes.contains(id)&&SameMesh(mesh,parallel->meshes.at(id))))return false;
+    return Explain("parallel rebuild does not overwrite the user's model",io::ReadWholeFile(path.toStdString()).Value()==original.Value());
+}
 void InteractionTiming(V2MainWindow& w,const char* label,ViewDirection direction=ViewDirection::Top) {
     auto& v=w.Viewport();w.resize(1500,950);QApplication::processEvents();
     v.SetViewDirection(direction);v.SetViewCenter({0,0,0});v.SetVisibleWidthMm(35);
@@ -256,6 +320,8 @@ std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-04 prepared open preserves metadata and unknown archive entries",Metadata},
     {"HP-OPEN-05 unsupported warped history preserves the old document",Unsupported},
     {"HP-OPEN-06 saved native cache, invalidation and corruption recovery",Cache},
+    {"HP-OPEN-07 hidden native shapes mesh on first visibility",HiddenMesh},
+    {"HP-OPEN-08 parallel independent surfaces match serial cold rebuild",ParallelRead},
     {"HP-PERF-01 dense face hover and image compositing",Interaction}};
     if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}
 }

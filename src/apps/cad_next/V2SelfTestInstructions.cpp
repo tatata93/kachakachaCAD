@@ -31,6 +31,8 @@ bool MakeCurvedGuideSurface(V2MainWindow&);
 bool InstructionWorkspaceWorkflow(V2MainWindow&);
 bool InstructionCaptureWorkflow(V2MainWindow&);
 bool InstructionBrowserWorkflow(V2MainWindow&);
+bool InstructionLayoutUsability(V2MainWindow&);
+bool InstructionTextAndPageUsability(V2MainWindow&);
 namespace {
 void Mouse(QWidget* view,QEvent::Type type,QPointF at,Qt::MouseButton button,Qt::MouseButtons held){QMouseEvent event(type,at,at,button,held,Qt::NoModifier);QApplication::sendEvent(view,&event);QApplication::processEvents();}
 bool HiddenLines(){
@@ -95,5 +97,5 @@ bool Instructions(V2MainWindow& window){
     window.SetMode(app::UiMode::Instructions);return Explain("mode keeps state",mode->Snapshot()==saved);
 }
 }
-std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions},{"HP-INSTRUCTIONS-WORKSPACE focus selection pages save and PDF",&InstructionWorkspaceWorkflow},{"HP-INSTRUCTIONS-CAPTURE wire assets picker state and theme",&InstructionCaptureWorkflow},{"HP-INSTRUCTIONS-BROWSER scene list placement history and alternate files",&InstructionBrowserWorkflow}};}
+std::vector<SelfTestCase> InstructionCases(){return {{"HP-INSTRUCTIONS 3D model choice outlines arrows image export",&Instructions},{"HP-INSTRUCTIONS-WORKSPACE focus selection pages save and PDF",&InstructionWorkspaceWorkflow},{"HP-INSTRUCTIONS-CAPTURE wire assets picker state and theme",&InstructionCaptureWorkflow},{"HP-INSTRUCTIONS-BROWSER scene list placement history and alternate files",&InstructionBrowserWorkflow},{"HP-INSTRUCTIONS-LAYOUT zoom pan stacking alignment aspect and output",&InstructionLayoutUsability},{"HP-INSTRUCTIONS-EDIT text draft save and scene paper ordering",&InstructionTextAndPageUsability}};}
 }

@@ -1,3 +1,5 @@
+#include <QPointer>
+#include <QUuid>
 #include <QString>
 #include <QWidget>
 #include "V2InstructionMode.h"
@@ -14,9 +16,12 @@
 #include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
+#include <QSignalBlocker>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <memory>
 
 void V2InstructionMode::BuildWorkspaceActions(QHBoxLayout* row)
 {
@@ -30,6 +35,11 @@ void V2InstructionMode::BuildWorkspaceActions(QHBoxLayout* row)
 }
 void V2InstructionMode::RefreshWorkspaceActions()
 {
+    if(auto* controls=findChild<QWidget*>("instructionPaperViewControls"))controls->setVisible(layoutEditing_);
+    if(auto* zoom=findChild<QSpinBox*>("instructionPaperZoom")){const QSignalBlocker blocked(zoom);zoom->setValue(int(sheetView_->Zoom()*100+.5));}
+    const int count=layoutEditing_?int(sheets_.size()):int(scenes_.size());const int index=layoutEditing_?currentSheet_:current_;
+    if(auto* button=findChild<QPushButton*>("instructionPageEarlier"))button->setEnabled(!choosing_&&index>0);
+    if(auto* button=findChild<QPushButton*>("instructionPageLater"))button->setEnabled(!choosing_&&index+1<count);
     if(!workspaceActions_)return;
     while(auto* item=workspaceActions_->takeAt(0)){if(item->widget()){item->widget()->hide();item->widget()->deleteLater();}delete item;}
     const auto add=[this](const char* text,const char* id){
@@ -72,6 +82,9 @@ void V2InstructionMode::ChooseBrowserScene(int index,bool place)
 {
     if(choosing_||index<0||index>=int(scenes_.size()))return;
     if(!place&&!layoutEditing_){if(current_!=index)ShowPage(index);return;}
+    if(!place&&layoutEditing_&&activeTool_!="place_scene"){
+        if(!CommitSelectedText())return;current_=index;RefreshSceneBrowser();return;
+    }
     if(layoutEditing_&&activeTool_=="place_scene"&&pendingItem_.sceneId==scenes_[index].id)return;
     CancelInput();current_=index;Command("instructions.place_scene");
 }
@@ -86,7 +99,7 @@ void V2InstructionMode::SyncBrowserVisibility(bool active)
 }
 void V2InstructionMode::DeletePage(bool sceneFromBrowser)
 {
-    if(choosing_)return;
+    if(choosing_||!ReadyToSwitch())return;
     CancelInput();
     const bool deleteSheet=layoutEditing_&&!sceneFromBrowser;
     const QString name=deleteSheet?sheets_[currentSheet_].title:scenes_[current_].title;
@@ -128,12 +141,27 @@ void V2InstructionMode::AddSelectedTextControls(QWidget* panel,bool sheet)
     AddFontControls(panel,sheet);
     auto* edit=new QPlainTextEdit(panel);edit->setMaximumHeight(100);edit->setObjectName("instructionSelectedText");
     edit->setPlainText(sheet?sheets_[currentSheet_].items[index].text:scenes_[current_].marks[index].text);layout->addWidget(edit);
-    auto* apply=new QPushButton(QStringLiteral("文章を適用"),panel);apply->setObjectName("instructionApplySelectedText");layout->addWidget(apply);
-    connect(apply,&QPushButton::clicked,this,[this,sheet,index,edit]{
-        if(!AcceptTextInput(edit->toPlainText()))return;
-        before_=Snapshot();if(sheet)sheets_[currentSheet_].items[index].text=edit->toPlainText();else scenes_[current_].marks[index].text=edit->toPlainText();
-        Remember();if(sheet)sheetView_->Refresh();else view_->Refresh();
+    auto accepted=std::make_shared<QString>(edit->toPlainText());
+    connect(edit,&QPlainTextEdit::textChanged,this,[this,edit,accepted]{
+        if(edit->toPlainText().size()<=100000){*accepted=edit->toPlainText();return;}
+        const QSignalBlocker blocked(edit);edit->setPlainText(*accepted);
+        if(hint_)hint_->setText(QStringLiteral("100000文字を超える入力は適用しませんでした。文章を短くするか分けてください。"));
     });
+    const auto sceneId=scenes_[current_].id,sheetId=sheets_[currentSheet_].id;
+    const auto itemId=sheet?sheets_[currentSheet_].items[index].id:QUuid{};
+    commitText_=[this,sheet,index,sceneId,sheetId,itemId,input=QPointer<QPlainTextEdit>(edit)]{
+        if(!input)return true;
+        QString* target=nullptr;
+        if(sheet){for(auto& paper:sheets_)if(paper.id==sheetId)for(auto& item:paper.items)
+            if(item.id==itemId&&item.kind==InstructionItemKind::Text)target=&item.text;}
+        else for(auto& scene:scenes_)if(scene.id==sceneId&&index<int(scene.marks.size())&&!scene.marks[index].arrow)target=&scene.marks[index].text;
+        if(!target||*target==input->toPlainText())return true;
+        if(!AcceptTextInput(input->toPlainText()))return false;
+        before_=Snapshot();*target=input->toPlainText();Remember();
+        if(sheet)sheetView_->Refresh();else view_->Refresh();return true;
+    };
+    auto* apply=new QPushButton(QStringLiteral("文章を適用"),panel);apply->setObjectName("instructionApplySelectedText");layout->addWidget(apply);
+    connect(apply,&QPushButton::clicked,this,[this]{CommitSelectedText();});
 }
 void V2InstructionMode::ShowSceneSelection(QWidget* panel)
 {

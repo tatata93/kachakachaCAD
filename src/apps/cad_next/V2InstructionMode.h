@@ -48,6 +48,12 @@ private:
     void ShowSettings();
     void ShowModelPicker();
     void BuildWorkspaceActions(QHBoxLayout*);
+    void BuildViewControls(QHBoxLayout*);
+    void AddSheetLayoutControls(QWidget*);
+    void MoveCurrentPage(int);
+    bool CommitSelectedText();
+    bool ReadyToSwitch();
+    void FocusSelectedText();
     void RefreshWorkspaceActions();
     void ShowSceneSelection(QWidget*);
     void AddSelectedTextControls(QWidget*,bool sheet);
@@ -89,6 +95,8 @@ private:
     V2InstructionSceneBrowser* sceneBrowser_=nullptr;
     bool browserActive_=false,entityDockVisible_=false;
     std::function<QString(bool)> pathChooser_;
+    std::function<bool()> commitText_;
+    QSize imageOutputSize_{1600,1131};
     QJsonObject before_;
     std::vector<QJsonObject> undo_,redo_;
 };

@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QComboBox>
+#include <QSignalBlocker>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QDoubleSpinBox>
@@ -21,7 +22,6 @@
 #include <QImageReader>
 #include <QBuffer>
 #include <QFontComboBox>
-#include <QSignalBlocker>
 #include <algorithm>
 namespace {
 QDoubleSpinBox* Number(QWidget* panel,const char* name,double value,double low,double high){
@@ -58,7 +58,7 @@ void V2InstructionMode::ShowSheetSettings(){
         auto* apply=new QPushButton(QStringLiteral("選択した文字を更新"),panel);layout->addWidget(apply);
         connect(apply,&QPushButton::clicked,this,[this,text]{const int i=sheetView_->Selected();if(i<0||sheets_[currentSheet_].items[i].kind!=InstructionItemKind::Text||!AcceptTextInput(text->toPlainText()))return;before_=Snapshot();sheets_[currentSheet_].items[i].text=text->toPlainText();Remember();sheetView_->Refresh();});
     }
-    if(activeTool_=="insert_image")hint_->setText(QStringLiteral("画像を用紙の任意位置にクリックして配置。選択・移動でドラッグし、右下の印で大きさを調整できます。"));
+    if(activeTool_=="insert_image")hint_->setText(QStringLiteral("画像を用紙の任意位置にクリックして配置。選択・移動でドラッグし、四隅・四辺の印で大きさを調整できます。"));
     if(activeTool_=="move"){
         auto* targets=new QComboBox(panel);targets->setObjectName("instructionSheetItems");targets->addItem(QStringLiteral("用紙上の対象を選択"));
         for(const auto& item:sheet.items){QString name=item.kind==InstructionItemKind::Text?item.text.left(24):item.kind==InstructionItemKind::Image?QStringLiteral("貼り付け画像"):QStringLiteral("3D場面");
@@ -71,10 +71,15 @@ void V2InstructionMode::ShowSheetSettings(){
             std::vector<QDoubleSpinBox*> values;const char* names[]={"instructionItemX","instructionItemY","instructionItemWidth","instructionItemHeight"};
             const QString labels[]={QStringLiteral("左 mm"),QStringLiteral("上 mm"),QStringLiteral("幅 mm"),QStringLiteral("高さ mm")};const double coords[]={rect.x(),rect.y(),rect.width(),rect.height()};
             for(int i=0;i<4;++i){auto* box=Number(panel,names[i],coords[i],i<2?-100000:.01,100000);values.push_back(box);form->addRow(labels[i],box);}
+            AddSheetLayoutControls(panel);
+            for(int changed:{2,3})connect(values[changed],&QDoubleSpinBox::editingFinished,this,[this,values,rect,changed]{
+                if(!sheetView_->KeepAspect())return;const int other=changed==2?3:2;const QSignalBlocker blocked(values[other]);
+                values[other]->setValue(changed==2?values[2]->value()*rect.height()/rect.width():values[3]->value()*rect.width()/rect.height());
+            });
             auto* apply=new QPushButton(QStringLiteral("位置・大きさを適用"),panel);apply->setObjectName("instructionApplyItem");layout->addWidget(apply);
             connect(apply,&QPushButton::clicked,this,[this,selected,values]{before_=Snapshot();sheets_[currentSheet_].items[selected].rectMm=QRectF(values[0]->value(),values[1]->value(),values[2]->value(),values[3]->value());Remember();sheetView_->Refresh();});
         }
-        hint_->setText(QStringLiteral("クリックで選択、ドラッグで移動。右下の印でサイズ変更、Shiftで縦横比を維持。重なった図は一覧からも選べます。"));
+        hint_->setText(QStringLiteral("クリックで選択、ドラッグで移動。四隅・四辺の印でサイズ変更、Shiftで縦横比を維持。重なった図は一覧からも選べます。"));
     }
     if(activeTool_=="move")AddSelectedTextControls(panel,true);
     if(activeTool_=="image")AddImageExportControls(panel);

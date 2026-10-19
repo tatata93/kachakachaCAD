@@ -18,6 +18,8 @@
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QIODevice>
+#include <QPlainTextEdit>
+#include <utility>
 #include <algorithm>
 #include <cmath>
 
@@ -100,18 +102,23 @@ QPointF LimitedPosition(QPointF position,QSizeF item,const InstructionSheet& she
 V2InstructionSheetView::V2InstructionSheetView(QWidget* parent):QWidget(parent) {
     setObjectName("instructionPaperCanvas");setMinimumSize(300,260);
     setMouseTracking(true);setFocusPolicy(Qt::StrongFocus);
+    textEditor_=new QPlainTextEdit(this);textEditor_->setObjectName("instructionInlineText");textEditor_->hide();
+    textEditor_->installEventFilter(this);
+    connect(textEditor_,&QPlainTextEdit::textChanged,this,[this]{if(textEditor_->isVisible()&&textDraftChanged)textDraftChanged(textEditor_->toPlainText());});
 }
 void V2InstructionSheetView::SetDocument(InstructionSheet* sheet,std::vector<InstructionPage>* scenes) {
-    CancelInput();
+    CommitTextEdit();CancelTextEdit();CancelInput();
+    if(sheet&&sheet->id!=viewSheetId_){zoom_=1;pan_={};viewSheetId_=sheet->id;}
     sheet_=sheet;scenes_=scenes;selected_=-1;sceneImageCache_.clear();CancelInput();Refresh();
 }
 void V2InstructionSheetView::SetTool(const QString& tool,const InstructionSheetItem& item) {
-    CancelInput();tool_=tool;pending_=item;
+    CommitTextEdit();CancelInput();tool_=tool;pending_=item;
     setCursor(PlacementTool(tool)?Qt::CrossCursor:Qt::ArrowCursor);Refresh();
 }
 void V2InstructionSheetView::CancelInput() {
     if(dragging_&&sheet_&&selected_>=0&&selected_<int(sheet_->items.size()))sheet_->items[selected_].rectMm=dragOriginal_;
     dragging_=false;resizing_=false;placementHover_=false;Refresh();
+    panning_=false;
 }
 void V2InstructionSheetView::Refresh() {update();}
 void V2InstructionSheetView::SetSelected(int index) {
@@ -120,7 +127,13 @@ void V2InstructionSheetView::SetSelected(int index) {
     if(selectionChanged)selectionChanged();Refresh();
 }
 QRectF V2InstructionSheetView::PaperRect() const {
-    return sheet_?FittedPaper(size(),*sheet_,20):QRectF();
+    return ViewPaperRect(size());
+}
+QRectF V2InstructionSheetView::ViewPaperRect(QSize size) const {
+    if(!sheet_)return {};
+    const auto fitted=FittedPaper(size,*sheet_,20);
+    const QSizeF scaled=fitted.size()*zoom_;
+    return QRectF(fitted.center()-QPointF(scaled.width()/2,scaled.height()/2)+pan_,scaled);
 }
 QPointF V2InstructionSheetView::ToScreen(QPointF mm) const {
     if(!sheet_)return {};
@@ -134,17 +147,22 @@ QImage V2InstructionSheetView::Render(QSize size,bool selection) {
     if(!sheet_||size.width()<1||size.height()<1)return {};
     QImage image(size,QImage::Format_RGB32);image.fill(selection?QColor(220,222,225):QColor(Qt::white));
     QPainter painter(&image);painter.setRenderHint(QPainter::Antialiasing);
-    const auto paper=FittedPaper(size,*sheet_,selection?20:0);
+    const auto paper=selection?ViewPaperRect(size):FittedPaper(size,*sheet_,0);
     const double scale=paper.width()/sheet_->widthMm;
     painter.fillRect(paper,Qt::white);painter.save();painter.setClipRect(paper);
     for(std::size_t i=0;i<sheet_->items.size();++i) {
         const auto pixels=ItemPixels(sheet_->items[i],paper,scale);
         DrawItem(painter,sheet_->items[i],pixels,scale,scenes_,sceneImageCache_);
-        if(selection&&int(i)==selected_) {
+    }
+    if(selection&&selected_>=0&&selected_<int(sheet_->items.size())) {
+            const auto pixels=ItemPixels(sheet_->items[selected_],paper,scale);
             painter.setPen(QPen(QColor(20,100,210),1.5,Qt::DashLine));painter.setBrush(Qt::NoBrush);
             painter.drawRect(pixels);painter.setPen(QPen(QColor(20,100,210),1));
-            painter.setBrush(Qt::white);painter.drawRect(QRectF(pixels.bottomRight()-QPointF(5,5),QSizeF(10,10)));
-        }
+            painter.setBrush(Qt::white);
+            for(const auto point:{pixels.topLeft(),QPointF(pixels.center().x(),pixels.top()),pixels.topRight(),
+                QPointF(pixels.right(),pixels.center().y()),pixels.bottomRight(),QPointF(pixels.center().x(),pixels.bottom()),
+                pixels.bottomLeft(),QPointF(pixels.left(),pixels.center().y())})
+                painter.drawRect(QRectF(point-QPointF(4,4),QSizeF(8,8)));
     }
     if(selection&&placementHover_&&PlacementTool(tool_)){
         auto ghost=pending_;ghost.rectMm.setWidth(std::clamp(ghost.rectMm.width(),.01,sheet_->widthMm));ghost.rectMm.setHeight(std::clamp(ghost.rectMm.height(),.01,sheet_->heightMm));
@@ -161,8 +179,10 @@ void V2InstructionSheetView::paintEvent(QPaintEvent*) {
     painter.drawImage(0,0,Render(size(),true));
 }
 void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
-    if(!sheet_||event->button()!=Qt::LeftButton)return;
-    setFocus(Qt::MouseFocusReason);
+    if(!sheet_)return;
+    if(event->button()==Qt::MiddleButton){CancelInput();panning_=true;panLast_=event->position();setCursor(Qt::ClosedHandCursor);return;}
+    if(event->button()!=Qt::LeftButton)return;
+    if(!CommitTextEdit())return;setFocus(Qt::MouseFocusReason);
     const auto point=event->position();last_=ToMm(point);
     if(PlacementTool(tool_)) {
         if(!PaperRect().contains(point))return;
@@ -181,8 +201,8 @@ void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
         if(endChange)endChange();Refresh();return;
     }
     if(selected_>=0&&selected_<int(sheet_->items.size())) {
-        const auto handle=ToScreen(sheet_->items[selected_].rectMm.bottomRight());
-        if(QLineF(point,handle).length()<=10) {
+        resizeHandle_=HandleAt(point);
+        if(resizeHandle_>=0) {
             if(beginChange)beginChange();dragOriginal_=sheet_->items[selected_].rectMm;resizing_=true;dragging_=true;Refresh();return;
         }
     }
@@ -194,28 +214,49 @@ void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
 }
 void V2InstructionSheetView::mouseMoveEvent(QMouseEvent* event) {
     if(!sheet_)return;
+    if(panning_){pan_+=event->position()-panLast_;panLast_=event->position();Refresh();return;}
     if(PlacementTool(tool_)){placementHover_=PaperRect().contains(event->position());placementAt_=ToMm(event->position());Refresh();return;}
     if(!dragging_||selected_<0||selected_>=int(sheet_->items.size())) {
         if(!PlacementTool(tool_)&&selected_>=0&&selected_<int(sheet_->items.size()))
-            setCursor(QLineF(event->position(),ToScreen(sheet_->items[selected_].rectMm.bottomRight())).length()<=10?
-                      Qt::SizeFDiagCursor:Qt::ArrowCursor);
+            {const int handle=HandleAt(event->position());
+            const Qt::CursorShape cursors[]={Qt::SizeFDiagCursor,Qt::SizeVerCursor,Qt::SizeBDiagCursor,Qt::SizeHorCursor,
+                Qt::SizeFDiagCursor,Qt::SizeVerCursor,Qt::SizeBDiagCursor,Qt::SizeHorCursor};
+            setCursor(handle>=0?cursors[handle]:Qt::ArrowCursor);}
         return;
     }
     auto& item=sheet_->items[selected_];const auto next=ToMm(event->position());
     if(resizing_) {
-        const double availableWidth=std::clamp(sheet_->widthMm-item.rectMm.x(),2.0,100000.0);
-        const double availableHeight=std::clamp(sheet_->heightMm-item.rectMm.y(),2.0,100000.0);
-        item.rectMm.setSize(QSizeF(std::clamp(next.x()-item.rectMm.x(),2.0,availableWidth),
-            std::clamp(next.y()-item.rectMm.y(),2.0,availableHeight)));
-        if(event->modifiers()&Qt::ShiftModifier){const double ratio=dragOriginal_.height()/dragOriginal_.width();
-            const double minWidth=std::clamp(.01/ratio,.01,100000.0);
-            const double maxWidth=std::max(minWidth,std::min(availableWidth,availableHeight/ratio));
-            const double width=std::clamp(next.x()-item.rectMm.x(),minWidth,maxWidth);
-            item.rectMm.setSize(QSizeF(width,std::clamp(width*ratio,.01,100000.0)));}
+        const int horizontal[]={-1,0,1,1,1,0,-1,-1},vertical[]={-1,-1,-1,0,1,1,1,0};
+        const int dx=horizontal[resizeHandle_],dy=vertical[resizeHandle_];
+        auto rect=dragOriginal_;
+        const auto widthLimits=[](double anchor,int direction) {
+            if(direction<0){const double upper=std::clamp(anchor+100000,.01,100000.0);return std::pair{std::clamp(anchor-100000,.01,upper),upper};}
+            if(direction>0)return std::pair{.01,100000.0};
+            const double upper=std::clamp(2*(anchor+100000),.01,100000.0);
+            return std::pair{std::clamp(2*(anchor-100000),.01,upper),upper};
+        };
+        const double anchorX=dx<0?dragOriginal_.right():dx>0?dragOriginal_.left():dragOriginal_.center().x();
+        const double anchorY=dy<0?dragOriginal_.bottom():dy>0?dragOriginal_.top():dragOriginal_.center().y();
+        const auto [minWidth,maxWidth]=widthLimits(anchorX,dx);
+        const auto [minHeight,maxHeight]=widthLimits(anchorY,dy);
+        double newWidth=dx?std::clamp(dx<0?anchorX-next.x():next.x()-anchorX,minWidth,maxWidth):dragOriginal_.width();
+        double newHeight=dy?std::clamp(dy<0?anchorY-next.y():next.y()-anchorY,minHeight,maxHeight):dragOriginal_.height();
+        if(keepAspect_||(event->modifiers()&Qt::ShiftModifier)) {
+            const double ratio=dragOriginal_.height()/dragOriginal_.width();
+            const double minimum=std::max(minWidth,minHeight/ratio);
+            const double maximum=std::max(minimum,std::min(maxWidth,maxHeight/ratio));
+            newWidth=std::clamp(dx?newWidth:newHeight/ratio,minimum,maximum);
+            newHeight=std::clamp(newWidth*ratio,.01,100000.0);
+        }
+        const double left=dx<0?anchorX-newWidth:dx>0?anchorX:anchorX-newWidth/2;
+        const double top=dy<0?anchorY-newHeight:dy>0?anchorY:anchorY-newHeight/2;
+        rect=QRectF(QPointF(std::clamp(left,-100000.0,100000.0),std::clamp(top,-100000.0,100000.0)),QSizeF(newWidth,newHeight));
+        item.rectMm=rect;
     } else item.rectMm.moveTopLeft(LimitedPosition(item.rectMm.topLeft()+next-last_,item.rectMm.size(),*sheet_));
     last_=next;Refresh();
 }
 void V2InstructionSheetView::mouseReleaseEvent(QMouseEvent* event) {
+    if(event->button()==Qt::MiddleButton&&panning_){panning_=false;setCursor(PlacementTool(tool_)?Qt::CrossCursor:Qt::ArrowCursor);return;}
     if(event->button()!=Qt::LeftButton||!dragging_)return;
     dragging_=false;resizing_=false;if(endChange)endChange();if(selectionChanged)selectionChanged();Refresh();
 }
@@ -225,6 +266,7 @@ void V2InstructionSheetView::mouseDoubleClickEvent(QMouseEvent* event) {
     for(std::size_t i=sheet_->items.size();i>0;--i) {
         const auto& item=sheet_->items[i-1];
         if(item.rectMm.contains(point)) {
+            if(item.kind==InstructionItemKind::Text){dragging_=false;SetSelected(int(i-1));if(editText)editText();}
             if(item.kind==InstructionItemKind::Scene&&openScene)openScene(item.sceneId);
             return;
         }

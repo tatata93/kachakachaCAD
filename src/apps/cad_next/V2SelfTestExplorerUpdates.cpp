@@ -116,6 +116,7 @@ bool Compact(V2MainWindow&) {
 }
 }
 bool Overlap(V2MainWindow& w) {
+    w.resize(1500,950);QApplication::processEvents();
     w.RunCommand("file.new");
     auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(80);
     for(int i=0;i<2;++i){w.SelectTool(modeling::DrawingTool::Line);
@@ -125,6 +126,13 @@ bool Overlap(V2MainWindow& w) {
     const auto labels=view.CandidateLabels();if(labels.size()<2)return false;QMenu menu(&w);
     const auto actions=w.BuildSelectMenu(menu,labels);actions.back()->hover();
     if(!Explain("menu hover previews exact overlapping line without committing",view.CandidateIndex()==int(actions.size()-1)&&view.Selection().entityIds.empty()))return false;
+    const auto shots=qEnvironmentVariable("KACHACAD_FOLDER_SHOTS");
+    if(!shots.isEmpty()){
+        QDir directory(shots);directory.mkpath(".");menu.popup(w.mapToGlobal(QPoint(600,300)));QApplication::processEvents();
+        const auto hoverPoint=menu.actionGeometry(actions.back()).center();
+        QMouseEvent hover(QEvent::MouseMove,hoverPoint,menu.mapToGlobal(hoverPoint),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(&menu,&hover);QApplication::processEvents();
+        menu.grab().save(directory.filePath("overlap-candidates-menu.png"));w.grab().save(directory.filePath("overlap-candidates-highlight.png"));menu.close();QApplication::processEvents();
+    }
     const auto point=QPointF(at->x,at->y);
     view.SetContextMenuCallback([&](const auto&,const auto&){QEvent leave(QEvent::Leave);QApplication::sendEvent(&view,&leave);view.PreviewCandidate(1);return std::optional<int>{1};});
     view.PressRightWithoutMoving(point);if(view.Selection().entityIds.empty())return Explain("leaving the viewport for the candidate menu preserves candidates",false);

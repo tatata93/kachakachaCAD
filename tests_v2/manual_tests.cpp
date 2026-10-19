@@ -453,11 +453,14 @@ KACHA_V2_TEST(manual, 全ツールに固有の図付き手順がある)
         for (const auto* section : {"準備", "操作手順", "結果を確認", "取消・やり直し", "進めない場合"})
             Require(page.find(section) != std::string::npos, "必要な手順節: " + id);
         Require(page.find("<li>") != std::string::npos, "操作が番号付き: " + id);
-        const auto diagram = RepoRoot() / "docs/manual/tool-diagrams" / (id + ".svg");
+        const auto screenshot = RepoRoot() / "docs/manual/tool-screens" / (id + ".png");
         const auto icon = RepoRoot() / "docs/manual/tool-icons" / (id + ".png");
-        Require(std::filesystem::exists(diagram) && std::filesystem::file_size(diagram) > 100, "模式図がある: " + id);
+        Require(std::filesystem::exists(screenshot) && std::filesystem::file_size(screenshot) > 1000, "実アプリの操作画面がある: " + id);
+        const auto pixels=ReadFile(screenshot);
+        Require(pixels.starts_with("\x89PNG\r\n\x1a\n"), "操作画面は実際のPNG画像: " + id);
         Require(std::filesystem::exists(icon) && std::filesystem::file_size(icon) > 100, "操作図がある: " + id);
-        Require(page.find("模式図") != std::string::npos, "模式図を実画面と混同しない: " + id);
+        Require(page.find("<svg") == std::string::npos && page.find("tool-diagrams/") == std::string::npos, "操作画像に模式図を使わない: " + id);
+        Require(page.find("完成画像とは限りません") != std::string::npos, "設定参考と完成結果を区別する: " + id);
     }
 }
 

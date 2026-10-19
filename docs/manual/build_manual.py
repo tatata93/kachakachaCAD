@@ -19,7 +19,7 @@ GROUPS = {
  'part': ('立体・加工・配置', 'part', 'v2-ui-tool-fillet.png'),
  'fabrication': ('製作近似・曲げ・型紙・生成', 'fabrication', 'v2-ui-approx-candidates.png'),
  'instructions': ('組み立て説明書', 'assembly-guide', 'v2-instructions-3d.png'),
- 'image': ('画像の貼付・編集', 'image-placement', 'image-fit.svg'),
+ 'image': ('画像の貼付・編集', 'image-placement', 'v2-image-fit-operation.png'),
  'export': ('選択出力・型紙出力', 'selection-output', 'v2-export.png'),
  'output': ('同一文書への配置', 'selection-output', 'v2-export.png'),
  'group': ('グループ・子グループ', 'groups-guide', 'v2-ui-explorer-groups.png'),
@@ -28,7 +28,7 @@ GROUPS = {
 }
 
 def figure(name, caption):
-    src='manual/'+('diagrams/' if name.endswith('.svg') else 'images/')+name
+    src='manual/images/'+name
     return f'<figure><a href="{src}" target="_blank" rel="noopener"><img src="{src}" alt="{html.escape(caption)}" loading="lazy"></a><figcaption>{html.escape(caption)}。画像をクリックすると原寸表示。</figcaption></figure>'
 
 def commands():

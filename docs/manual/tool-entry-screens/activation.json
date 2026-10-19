@@ -1,7 +1,7 @@
 [
     {
         "command": "part.curved_emboss",
-        "elapsed_ms": 40,
+        "elapsed_ms": 37,
         "has_input_page": true,
         "panel": "曲面押し出し（近似）",
         "pending": "",
@@ -10,7 +10,7 @@
     },
     {
         "command": "instructions.scene_editor",
-        "elapsed_ms": 61,
+        "elapsed_ms": 64,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -19,7 +19,7 @@
     },
     {
         "command": "instructions.sheet_editor",
-        "elapsed_ms": 43,
+        "elapsed_ms": 44,
         "has_input_page": true,
         "panel": "用紙編集 — 用紙 1",
         "pending": "",
@@ -28,7 +28,7 @@
     },
     {
         "command": "instructions.paper",
-        "elapsed_ms": 43,
+        "elapsed_ms": 45,
         "has_input_page": true,
         "panel": "用紙編集 — 用紙 1",
         "pending": "",
@@ -46,7 +46,7 @@
     },
     {
         "command": "instructions.insert_image",
-        "elapsed_ms": 40,
+        "elapsed_ms": 48,
         "has_input_page": true,
         "panel": "用紙編集 — 用紙 1",
         "pending": "",
@@ -64,7 +64,7 @@
     },
     {
         "command": "instructions.duplicate",
-        "elapsed_ms": 56,
+        "elapsed_ms": 62,
         "has_input_page": true,
         "panel": "用紙編集 — 用紙 3",
         "pending": "",
@@ -82,7 +82,7 @@
     },
     {
         "command": "instructions.move",
-        "elapsed_ms": 64,
+        "elapsed_ms": 67,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -100,7 +100,7 @@
     },
     {
         "command": "instructions.text",
-        "elapsed_ms": 85,
+        "elapsed_ms": 84,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -109,7 +109,7 @@
     },
     {
         "command": "instructions.remove",
-        "elapsed_ms": 89,
+        "elapsed_ms": 87,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -118,7 +118,7 @@
     },
     {
         "command": "instructions.save",
-        "elapsed_ms": 76,
+        "elapsed_ms": 82,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -127,7 +127,7 @@
     },
     {
         "command": "instructions.open",
-        "elapsed_ms": 80,
+        "elapsed_ms": 81,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -136,7 +136,7 @@
     },
     {
         "command": "instructions.model_file",
-        "elapsed_ms": 88,
+        "elapsed_ms": 93,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -145,7 +145,7 @@
     },
     {
         "command": "instructions.image",
-        "elapsed_ms": 88,
+        "elapsed_ms": 91,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -154,7 +154,7 @@
     },
     {
         "command": "instructions.pdf",
-        "elapsed_ms": 78,
+        "elapsed_ms": 88,
         "has_input_page": true,
         "panel": "画像エディター — 3Dの場面",
         "pending": "",
@@ -163,7 +163,7 @@
     },
     {
         "command": "tools.search",
-        "elapsed_ms": 70,
+        "elapsed_ms": 75,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -172,7 +172,7 @@
     },
     {
         "command": "view.fit_selection",
-        "elapsed_ms": 11,
+        "elapsed_ms": 10,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -181,7 +181,7 @@
     },
     {
         "command": "view.isolate",
-        "elapsed_ms": 9,
+        "elapsed_ms": 10,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -190,7 +190,7 @@
     },
     {
         "command": "view.restore_isolation",
-        "elapsed_ms": 11,
+        "elapsed_ms": 12,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -199,7 +199,7 @@
     },
     {
         "command": "image.place",
-        "elapsed_ms": 58,
+        "elapsed_ms": 56,
         "has_input_page": true,
         "panel": "画像を貼る / 編集",
         "pending": "",
@@ -208,7 +208,7 @@
     },
     {
         "command": "file.new",
-        "elapsed_ms": 82,
+        "elapsed_ms": 86,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -217,7 +217,7 @@
     },
     {
         "command": "file.open",
-        "elapsed_ms": 11,
+        "elapsed_ms": 10,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -226,7 +226,7 @@
     },
     {
         "command": "file.save",
-        "elapsed_ms": 9,
+        "elapsed_ms": 8,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -244,7 +244,7 @@
     },
     {
         "command": "edit.undo",
-        "elapsed_ms": 8,
+        "elapsed_ms": 10,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -253,7 +253,7 @@
     },
     {
         "command": "edit.redo",
-        "elapsed_ms": 11,
+        "elapsed_ms": 8,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -262,7 +262,7 @@
     },
     {
         "command": "edit.delete",
-        "elapsed_ms": 43,
+        "elapsed_ms": 49,
         "has_input_page": true,
         "panel": "削除",
         "pending": "削除",
@@ -289,7 +289,7 @@
     },
     {
         "command": "selection.activate",
-        "elapsed_ms": 66,
+        "elapsed_ms": 72,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -298,7 +298,7 @@
     },
     {
         "command": "dimension.open",
-        "elapsed_ms": 73,
+        "elapsed_ms": 69,
         "has_input_page": true,
         "panel": "寸法",
         "pending": "",
@@ -307,7 +307,7 @@
     },
     {
         "command": "measure.open",
-        "elapsed_ms": 66,
+        "elapsed_ms": 70,
         "has_input_page": true,
         "panel": "測る",
         "pending": "",
@@ -316,7 +316,7 @@
     },
     {
         "command": "edit.numeric",
-        "elapsed_ms": 46,
+        "elapsed_ms": 47,
         "has_input_page": true,
         "panel": "編集",
         "pending": "",
@@ -325,7 +325,7 @@
     },
     {
         "command": "view.fit_all",
-        "elapsed_ms": 13,
+        "elapsed_ms": 14,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -352,7 +352,7 @@
     },
     {
         "command": "view.align_workplane",
-        "elapsed_ms": 8,
+        "elapsed_ms": 10,
         "has_input_page": false,
         "panel": "ツールを選択",
         "pending": "",
@@ -361,7 +361,7 @@
     },
     {
         "command": "view.display_settings",
-        "elapsed_ms": 18,
+        "elapsed_ms": 21,
         "has_input_page": true,
         "panel": "表示",
         "pending": "",
@@ -370,7 +370,7 @@
     },
     {
         "command": "view.number_settings",
-        "elapsed_ms": 16,
+        "elapsed_ms": 18,
         "has_input_page": true,
         "panel": "数",
         "pending": "",
@@ -379,7 +379,7 @@
     },
     {
         "command": "view.surface_analysis",
-        "elapsed_ms": 18,
+        "elapsed_ms": 20,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -406,7 +406,7 @@
     },
     {
         "command": "view.stage_no_grid",
-        "elapsed_ms": 8,
+        "elapsed_ms": 9,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -415,7 +415,7 @@
     },
     {
         "command": "view.stage_no_construction",
-        "elapsed_ms": 11,
+        "elapsed_ms": 12,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -424,7 +424,7 @@
     },
     {
         "command": "view.stage_selection_only",
-        "elapsed_ms": 10,
+        "elapsed_ms": 13,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -433,7 +433,7 @@
     },
     {
         "command": "entity.rename",
-        "elapsed_ms": 11,
+        "elapsed_ms": 9,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -442,7 +442,7 @@
     },
     {
         "command": "snap.toggle",
-        "elapsed_ms": 11,
+        "elapsed_ms": 20,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -451,7 +451,7 @@
     },
     {
         "command": "group.set_active",
-        "elapsed_ms": 12,
+        "elapsed_ms": 13,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -460,7 +460,7 @@
     },
     {
         "command": "group.create",
-        "elapsed_ms": 38,
+        "elapsed_ms": 57,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -469,7 +469,7 @@
     },
     {
         "command": "group.dissolve",
-        "elapsed_ms": 14,
+        "elapsed_ms": 15,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -487,7 +487,7 @@
     },
     {
         "command": "workplane.set_active",
-        "elapsed_ms": 44,
+        "elapsed_ms": 49,
         "has_input_page": true,
         "panel": "作業平面を使用",
         "pending": "作業平面を使用",
@@ -496,7 +496,7 @@
     },
     {
         "command": "draw.point",
-        "elapsed_ms": 69,
+        "elapsed_ms": 75,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -505,7 +505,7 @@
     },
     {
         "command": "draw.line",
-        "elapsed_ms": 71,
+        "elapsed_ms": 70,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -532,7 +532,7 @@
     },
     {
         "command": "draw.circle",
-        "elapsed_ms": 64,
+        "elapsed_ms": 71,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -541,7 +541,7 @@
     },
     {
         "command": "draw.arc",
-        "elapsed_ms": 65,
+        "elapsed_ms": 67,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -550,7 +550,7 @@
     },
     {
         "command": "draw.bezier",
-        "elapsed_ms": 67,
+        "elapsed_ms": 73,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -559,7 +559,7 @@
     },
     {
         "command": "draw.spline",
-        "elapsed_ms": 66,
+        "elapsed_ms": 80,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -568,7 +568,7 @@
     },
     {
         "command": "wire.trim",
-        "elapsed_ms": 94,
+        "elapsed_ms": 90,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -577,7 +577,7 @@
     },
     {
         "command": "wire.extend",
-        "elapsed_ms": 89,
+        "elapsed_ms": 96,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -586,7 +586,7 @@
     },
     {
         "command": "wire.split",
-        "elapsed_ms": 40,
+        "elapsed_ms": 43,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -595,7 +595,7 @@
     },
     {
         "command": "wire.move",
-        "elapsed_ms": 80,
+        "elapsed_ms": 86,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -604,7 +604,7 @@
     },
     {
         "command": "wire.copy",
-        "elapsed_ms": 79,
+        "elapsed_ms": 72,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -622,7 +622,7 @@
     },
     {
         "command": "wire.rotate",
-        "elapsed_ms": 73,
+        "elapsed_ms": 75,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -631,7 +631,7 @@
     },
     {
         "command": "wire.scale",
-        "elapsed_ms": 78,
+        "elapsed_ms": 80,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -640,7 +640,7 @@
     },
     {
         "command": "wire.join",
-        "elapsed_ms": 46,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "結合",
         "pending": "結合",
@@ -649,7 +649,7 @@
     },
     {
         "command": "wire.coincident",
-        "elapsed_ms": 46,
+        "elapsed_ms": 47,
         "has_input_page": true,
         "panel": "端点一致",
         "pending": "端点一致",
@@ -658,7 +658,7 @@
     },
     {
         "command": "wire.tangent",
-        "elapsed_ms": 51,
+        "elapsed_ms": 47,
         "has_input_page": true,
         "panel": "接線接続",
         "pending": "接線接続",
@@ -667,7 +667,7 @@
     },
     {
         "command": "wire.curvature",
-        "elapsed_ms": 47,
+        "elapsed_ms": 51,
         "has_input_page": true,
         "panel": "曲率接続",
         "pending": "曲率接続",
@@ -676,7 +676,7 @@
     },
     {
         "command": "wire.chamfer",
-        "elapsed_ms": 47,
+        "elapsed_ms": 49,
         "has_input_page": true,
         "panel": "面取り",
         "pending": "",
@@ -685,7 +685,7 @@
     },
     {
         "command": "wire.fillet",
-        "elapsed_ms": 46,
+        "elapsed_ms": 71,
         "has_input_page": true,
         "panel": "面取り",
         "pending": "",
@@ -694,7 +694,7 @@
     },
     {
         "command": "wire.offset",
-        "elapsed_ms": 69,
+        "elapsed_ms": 72,
         "has_input_page": true,
         "panel": "オフセット",
         "pending": "",
@@ -703,7 +703,7 @@
     },
     {
         "command": "wire.meet_lines",
-        "elapsed_ms": 49,
+        "elapsed_ms": 52,
         "has_input_page": true,
         "panel": "2線を交点まで",
         "pending": "2線を交点まで",
@@ -712,7 +712,7 @@
     },
     {
         "command": "wire.intersection_points",
-        "elapsed_ms": 47,
+        "elapsed_ms": 53,
         "has_input_page": true,
         "panel": "交点に点",
         "pending": "交点に点",
@@ -721,7 +721,7 @@
     },
     {
         "command": "help.copy_diagnostics",
-        "elapsed_ms": 33,
+        "elapsed_ms": 48,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -730,7 +730,7 @@
     },
     {
         "command": "wire.center_points",
-        "elapsed_ms": 44,
+        "elapsed_ms": 62,
         "has_input_page": true,
         "panel": "中心に点",
         "pending": "中心に点",
@@ -739,7 +739,7 @@
     },
     {
         "command": "wire.key_points",
-        "elapsed_ms": 52,
+        "elapsed_ms": 49,
         "has_input_page": true,
         "panel": "端点と中点に点",
         "pending": "端点と中点に点",
@@ -748,7 +748,7 @@
     },
     {
         "command": "wire.corner_chamfer",
-        "elapsed_ms": 55,
+        "elapsed_ms": 51,
         "has_input_page": true,
         "panel": "面取り",
         "pending": "",
@@ -757,7 +757,7 @@
     },
     {
         "command": "wire.corner_fillet",
-        "elapsed_ms": 48,
+        "elapsed_ms": 46,
         "has_input_page": true,
         "panel": "面取り",
         "pending": "",
@@ -766,7 +766,7 @@
     },
     {
         "command": "wire.array_linear",
-        "elapsed_ms": 74,
+        "elapsed_ms": 78,
         "has_input_page": true,
         "panel": "配列",
         "pending": "",
@@ -775,7 +775,7 @@
     },
     {
         "command": "wire.array_circular",
-        "elapsed_ms": 80,
+        "elapsed_ms": 77,
         "has_input_page": true,
         "panel": "配列",
         "pending": "",
@@ -784,7 +784,7 @@
     },
     {
         "command": "wire.set_datum",
-        "elapsed_ms": 49,
+        "elapsed_ms": 52,
         "has_input_page": true,
         "panel": "基準線に設定",
         "pending": "基準線に設定",
@@ -802,7 +802,7 @@
     },
     {
         "command": "workplane.from_face",
-        "elapsed_ms": 53,
+        "elapsed_ms": 58,
         "has_input_page": true,
         "panel": "フェイスで作図",
         "pending": "",
@@ -811,7 +811,7 @@
     },
     {
         "command": "fabrication.from_face",
-        "elapsed_ms": 51,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "フェイスを近似",
         "pending": "",
@@ -820,7 +820,7 @@
     },
     {
         "command": "workplane.create",
-        "elapsed_ms": 47,
+        "elapsed_ms": 50,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -829,7 +829,7 @@
     },
     {
         "command": "grid.edit",
-        "elapsed_ms": 20,
+        "elapsed_ms": 19,
         "has_input_page": true,
         "panel": "グリッド",
         "pending": "",
@@ -838,7 +838,7 @@
     },
     {
         "command": "grid.move_origin",
-        "elapsed_ms": 71,
+        "elapsed_ms": 77,
         "has_input_page": true,
         "panel": "グリッド",
         "pending": "",
@@ -847,7 +847,7 @@
     },
     {
         "command": "surface.gpt_create",
-        "elapsed_ms": 79,
+        "elapsed_ms": 82,
         "has_input_page": true,
         "panel": "曲線から近似面",
         "pending": "",
@@ -856,7 +856,7 @@
     },
     {
         "command": "surface.from_lines",
-        "elapsed_ms": 96,
+        "elapsed_ms": 79,
         "has_input_page": true,
         "panel": "面にする",
         "pending": "",
@@ -865,7 +865,7 @@
     },
     {
         "command": "surface.create",
-        "elapsed_ms": 68,
+        "elapsed_ms": 70,
         "has_input_page": true,
         "panel": "面を作る",
         "pending": "",
@@ -874,7 +874,7 @@
     },
     {
         "command": "guide.revolve",
-        "elapsed_ms": 104,
+        "elapsed_ms": 109,
         "has_input_page": true,
         "panel": "面を作る",
         "pending": "",
@@ -883,7 +883,7 @@
     },
     {
         "command": "surface.match",
-        "elapsed_ms": 64,
+        "elapsed_ms": 62,
         "has_input_page": true,
         "panel": "面の編集",
         "pending": "",
@@ -892,7 +892,7 @@
     },
     {
         "command": "surface.bridge",
-        "elapsed_ms": 71,
+        "elapsed_ms": 67,
         "has_input_page": true,
         "panel": "面の編集",
         "pending": "",
@@ -901,7 +901,7 @@
     },
     {
         "command": "surface.refit",
-        "elapsed_ms": 63,
+        "elapsed_ms": 66,
         "has_input_page": true,
         "panel": "面の編集",
         "pending": "",
@@ -910,7 +910,7 @@
     },
     {
         "command": "surface.mirror",
-        "elapsed_ms": 60,
+        "elapsed_ms": 63,
         "has_input_page": true,
         "panel": "面の編集",
         "pending": "",
@@ -919,7 +919,7 @@
     },
     {
         "command": "surface.iso_curves",
-        "elapsed_ms": 61,
+        "elapsed_ms": 59,
         "has_input_page": true,
         "panel": "面の編集",
         "pending": "",
@@ -928,7 +928,7 @@
     },
     {
         "command": "guide.set_method",
-        "elapsed_ms": 33,
+        "elapsed_ms": 32,
         "has_input_page": true,
         "panel": "形状ガイドの役割",
         "pending": "",
@@ -937,7 +937,7 @@
     },
     {
         "command": "guide.add_row",
-        "elapsed_ms": 54,
+        "elapsed_ms": 55,
         "has_input_page": true,
         "panel": "選択を表へ",
         "pending": "選択を表へ",
@@ -946,7 +946,7 @@
     },
     {
         "command": "guide.append_row",
-        "elapsed_ms": 55,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "選択を既存行へ追加",
         "pending": "選択を既存行へ追加",
@@ -955,7 +955,7 @@
     },
     {
         "command": "guide.row_up",
-        "elapsed_ms": 51,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "行を上へ",
         "pending": "行を上へ",
@@ -964,7 +964,7 @@
     },
     {
         "command": "guide.row_down",
-        "elapsed_ms": 54,
+        "elapsed_ms": 53,
         "has_input_page": true,
         "panel": "行を下へ",
         "pending": "行を下へ",
@@ -973,7 +973,7 @@
     },
     {
         "command": "guide.row_remove",
-        "elapsed_ms": 50,
+        "elapsed_ms": 56,
         "has_input_page": true,
         "panel": "行を削除",
         "pending": "行を削除",
@@ -982,7 +982,7 @@
     },
     {
         "command": "guide.row_reverse",
-        "elapsed_ms": 56,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "向きを反転",
         "pending": "向きを反転",
@@ -991,7 +991,7 @@
     },
     {
         "command": "guide.build",
-        "elapsed_ms": 53,
+        "elapsed_ms": 54,
         "has_input_page": true,
         "panel": "表から面を作る",
         "pending": "表から面を作る",
@@ -1000,7 +1000,7 @@
     },
     {
         "command": "guide.clear",
-        "elapsed_ms": 54,
+        "elapsed_ms": 57,
         "has_input_page": true,
         "panel": "表を空にする",
         "pending": "表を空にする",
@@ -1009,7 +1009,7 @@
     },
     {
         "command": "wire.project",
-        "elapsed_ms": 52,
+        "elapsed_ms": 61,
         "has_input_page": true,
         "panel": "面へ投影",
         "pending": "面へ投影",
@@ -1018,7 +1018,7 @@
     },
     {
         "command": "wire.wrap_project",
-        "elapsed_ms": 110,
+        "elapsed_ms": 175,
         "has_input_page": true,
         "panel": "曲面へ投影",
         "pending": "",
@@ -1027,7 +1027,7 @@
     },
     {
         "command": "wire.project_surface",
-        "elapsed_ms": 108,
+        "elapsed_ms": 119,
         "has_input_page": true,
         "panel": "曲面へ投影",
         "pending": "",
@@ -1036,7 +1036,7 @@
     },
     {
         "command": "part.extrude",
-        "elapsed_ms": 80,
+        "elapsed_ms": 82,
         "has_input_page": true,
         "panel": "押し出し",
         "pending": "押し出し",
@@ -1045,7 +1045,7 @@
     },
     {
         "command": "part.revolve",
-        "elapsed_ms": 66,
+        "elapsed_ms": 69,
         "has_input_page": true,
         "panel": "立体を作る",
         "pending": "",
@@ -1054,7 +1054,7 @@
     },
     {
         "command": "part.loft_solid",
-        "elapsed_ms": 73,
+        "elapsed_ms": 78,
         "has_input_page": true,
         "panel": "立体を作る",
         "pending": "",
@@ -1063,7 +1063,7 @@
     },
     {
         "command": "part.sweep",
-        "elapsed_ms": 71,
+        "elapsed_ms": 70,
         "has_input_page": true,
         "panel": "立体を作る",
         "pending": "",
@@ -1072,7 +1072,7 @@
     },
     {
         "command": "part.fillet",
-        "elapsed_ms": 66,
+        "elapsed_ms": 73,
         "has_input_page": true,
         "panel": "辺の丸め・面取り",
         "pending": "",
@@ -1081,7 +1081,7 @@
     },
     {
         "command": "part.chamfer",
-        "elapsed_ms": 66,
+        "elapsed_ms": 73,
         "has_input_page": true,
         "panel": "辺の丸め・面取り",
         "pending": "",
@@ -1090,7 +1090,7 @@
     },
     {
         "command": "part.shell",
-        "elapsed_ms": 63,
+        "elapsed_ms": 65,
         "has_input_page": true,
         "panel": "中空化・分割",
         "pending": "",
@@ -1099,7 +1099,7 @@
     },
     {
         "command": "part.split",
-        "elapsed_ms": 62,
+        "elapsed_ms": 65,
         "has_input_page": true,
         "panel": "中空化・分割",
         "pending": "",
@@ -1108,7 +1108,7 @@
     },
     {
         "command": "part.thicken",
-        "elapsed_ms": 67,
+        "elapsed_ms": 62,
         "has_input_page": true,
         "panel": "厚み",
         "pending": "",
@@ -1117,7 +1117,7 @@
     },
     {
         "command": "part.surface_jig",
-        "elapsed_ms": 65,
+        "elapsed_ms": 58,
         "has_input_page": true,
         "panel": "部品",
         "pending": "",
@@ -1126,7 +1126,7 @@
     },
     {
         "command": "part.thickness_placement",
-        "elapsed_ms": 19,
+        "elapsed_ms": 18,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1135,7 +1135,7 @@
     },
     {
         "command": "part.thicken_to_plane",
-        "elapsed_ms": 58,
+        "elapsed_ms": 64,
         "has_input_page": true,
         "panel": "厚み",
         "pending": "",
@@ -1153,7 +1153,7 @@
     },
     {
         "command": "part.overlap_inspect",
-        "elapsed_ms": 61,
+        "elapsed_ms": 63,
         "has_input_page": true,
         "panel": "めり込みを処理",
         "pending": "",
@@ -1162,7 +1162,7 @@
     },
     {
         "command": "part.contact_wire",
-        "elapsed_ms": 71,
+        "elapsed_ms": 114,
         "has_input_page": true,
         "panel": "足す・引く",
         "pending": "",
@@ -1171,7 +1171,7 @@
     },
     {
         "command": "part.trim_overlap",
-        "elapsed_ms": 77,
+        "elapsed_ms": 78,
         "has_input_page": true,
         "panel": "足す・引く",
         "pending": "",
@@ -1189,7 +1189,7 @@
     },
     {
         "command": "part.boolean_add",
-        "elapsed_ms": 73,
+        "elapsed_ms": 79,
         "has_input_page": true,
         "panel": "足す・引く",
         "pending": "",
@@ -1207,7 +1207,7 @@
     },
     {
         "command": "part.boolean_intersect",
-        "elapsed_ms": 68,
+        "elapsed_ms": 69,
         "has_input_page": true,
         "panel": "足す・引く",
         "pending": "",
@@ -1216,7 +1216,7 @@
     },
     {
         "command": "part.move",
-        "elapsed_ms": 88,
+        "elapsed_ms": 89,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -1225,7 +1225,7 @@
     },
     {
         "command": "part.copy",
-        "elapsed_ms": 91,
+        "elapsed_ms": 95,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -1234,7 +1234,7 @@
     },
     {
         "command": "part.mirror",
-        "elapsed_ms": 89,
+        "elapsed_ms": 87,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -1243,7 +1243,7 @@
     },
     {
         "command": "part.rotate",
-        "elapsed_ms": 88,
+        "elapsed_ms": 91,
         "has_input_page": true,
         "panel": "作図",
         "pending": "",
@@ -1252,7 +1252,7 @@
     },
     {
         "command": "part.array_linear",
-        "elapsed_ms": 85,
+        "elapsed_ms": 86,
         "has_input_page": true,
         "panel": "配列",
         "pending": "",
@@ -1261,7 +1261,7 @@
     },
     {
         "command": "part.array_circular",
-        "elapsed_ms": 85,
+        "elapsed_ms": 86,
         "has_input_page": true,
         "panel": "配列",
         "pending": "",
@@ -1270,7 +1270,7 @@
     },
     {
         "command": "derived.freeze",
-        "elapsed_ms": 59,
+        "elapsed_ms": 61,
         "has_input_page": true,
         "panel": "部品",
         "pending": "",
@@ -1279,7 +1279,7 @@
     },
     {
         "command": "fabrication.create",
-        "elapsed_ms": 128,
+        "elapsed_ms": 129,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1288,7 +1288,7 @@
     },
     {
         "command": "fabrication.assign_role",
-        "elapsed_ms": 61,
+        "elapsed_ms": 65,
         "has_input_page": true,
         "panel": "製作",
         "pending": "境界の役割",
@@ -1297,7 +1297,7 @@
     },
     {
         "command": "fabrication.assign_relief_cut",
-        "elapsed_ms": 58,
+        "elapsed_ms": 61,
         "has_input_page": true,
         "panel": "製作",
         "pending": "切れ目にする",
@@ -1306,7 +1306,7 @@
     },
     {
         "command": "fabrication.preview_update",
-        "elapsed_ms": 131,
+        "elapsed_ms": 137,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1315,7 +1315,7 @@
     },
     {
         "command": "fabrication.create_pattern",
-        "elapsed_ms": 75,
+        "elapsed_ms": 79,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1324,7 +1324,7 @@
     },
     {
         "command": "fabrication.set_assembly",
-        "elapsed_ms": 69,
+        "elapsed_ms": 71,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1342,7 +1342,7 @@
     },
     {
         "command": "fabrication.freeze_output",
-        "elapsed_ms": 23,
+        "elapsed_ms": 25,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1351,7 +1351,7 @@
     },
     {
         "command": "fabrication.set_connection_scope",
-        "elapsed_ms": 49,
+        "elapsed_ms": 51,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "形に追従する線",
@@ -1360,7 +1360,7 @@
     },
     {
         "command": "fabrication.freeze_state",
-        "elapsed_ms": 61,
+        "elapsed_ms": 64,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1378,7 +1378,7 @@
     },
     {
         "command": "fabrication.freeze_target",
-        "elapsed_ms": 64,
+        "elapsed_ms": 63,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1396,7 +1396,7 @@
     },
     {
         "command": "fabrication.edit_part",
-        "elapsed_ms": 67,
+        "elapsed_ms": 71,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1414,7 +1414,7 @@
     },
     {
         "command": "fabrication.split_part",
-        "elapsed_ms": 66,
+        "elapsed_ms": 65,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1423,7 +1423,7 @@
     },
     {
         "command": "fabrication.set_unfold_base",
-        "elapsed_ms": 63,
+        "elapsed_ms": 66,
         "has_input_page": true,
         "panel": "製作",
         "pending": "",
@@ -1432,7 +1432,7 @@
     },
     {
         "command": "export.validate",
-        "elapsed_ms": 57,
+        "elapsed_ms": 62,
         "has_input_page": true,
         "panel": "出力を検査",
         "pending": "出力を検査",
@@ -1441,7 +1441,7 @@
     },
     {
         "command": "export.selection",
-        "elapsed_ms": 87,
+        "elapsed_ms": 91,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1450,7 +1450,7 @@
     },
     {
         "command": "export.kcd",
-        "elapsed_ms": 26,
+        "elapsed_ms": 31,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1459,7 +1459,7 @@
     },
     {
         "command": "output.copy",
-        "elapsed_ms": 20,
+        "elapsed_ms": 19,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1468,7 +1468,7 @@
     },
     {
         "command": "export.stl",
-        "elapsed_ms": 22,
+        "elapsed_ms": 24,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1477,7 +1477,7 @@
     },
     {
         "command": "export.step",
-        "elapsed_ms": 18,
+        "elapsed_ms": 19,
         "has_input_page": true,
         "panel": "面の解析",
         "pending": "",
@@ -1486,7 +1486,7 @@
     },
     {
         "command": "export.svg",
-        "elapsed_ms": 58,
+        "elapsed_ms": 59,
         "has_input_page": true,
         "panel": "SVGで保存",
         "pending": "SVGで保存",
@@ -1495,7 +1495,7 @@
     },
     {
         "command": "export.dxf",
-        "elapsed_ms": 56,
+        "elapsed_ms": 60,
         "has_input_page": true,
         "panel": "DXFで保存",
         "pending": "DXFで保存",
@@ -1504,7 +1504,7 @@
     },
     {
         "command": "export.pdf_1to1",
-        "elapsed_ms": 60,
+        "elapsed_ms": 64,
         "has_input_page": true,
         "panel": "1:1 PDFで保存",
         "pending": "1:1 PDFで保存",

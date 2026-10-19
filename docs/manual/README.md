@@ -525,7 +525,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 
 ## 2026-10-05 追加の図
 
-説明書モードを含む5モードの図。SVGは操作説明の模式図です。
+説明書モードを含む5モードの実アプリ画面です。
 
 
 
@@ -562,7 +562,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 
 `instructions-3d` は HP-INSTRUCTIONS 自己試験で保存したWindows実画面です。manual-state の引数ではありません。
 
-模式図: [画像フィット](diagrams/image-fit.svg)、[自動分割](diagrams/adaptive.svg)。
+画像フィットは下記の操作画面、自動分割は `approx-outline-preview` の実操作画面を参照します。
 
 ## 2026-10-10 組み立て説明書の二つのエディター
 
@@ -682,7 +682,7 @@ Escは入力だけを取消してツールと設定を維持します。元形�
 
 - 編集元: `tool_recipes.py`（コマンド別）、`tool_variants.py`（方式別）、`chapters.html`、`illustrated-workflows.html`、`command-notes.json`。
 - 生成: `python docs/manual/build_manual.py`。整合確認: 同コマンドに `--check`。
-- `tool-diagrams/` は説明用模式図、`tool-icons/` は製品の実際の操作アイコンです。模式図は形状精度の検証画像ではありません。
+- 説明用の模式図は廃止し、実アプリ画面を使います。`tool-icons/` は製品の実際の操作アイコンです。
 - `tool-screens/` はWindows UI試験で取得した画面です。`tool-evidence.json` が試験名・時刻・実行ファイルのSHA256を保持します。コマンド直後の入力待ちや下見も含み、確定形状の証拠と混同しません。
 - `tool-test-coverage.json` でコマンドごとの呼出しケースを確認できます。全コマンド到達試験と、有効な幾何入力を用いた機能試験は別です。
 
@@ -772,3 +772,31 @@ Qtマウス・キーイベントをWindowsアプリへ送り、KCI/PDF出力とU
 `folder-move-paths`: ![フォルダと面の実操作画面](images/v2-folder-move-paths.png)
 
 WindowsのExplorer操作試験の実Qtウィンドウから取得。OSからの入力注入とは区別する。[操作手順](explorer-selection.html)。
+
+
+## 2026-10-19 実操作画面への統一
+
+`image-fit-operation` は画像の1点目を選び、2点目へカーソルを移動したWindows実画面です。
+`image-fit-settings` は同じ画像フィット試験の設定・下見画面です。
+入力待ち・下見・確定後をキャプションで区別し、共通入力画面を各方式の完成結果として扱いません。
+
+![画像側の2点を指定中](images/v2-image-fit-operation.png)
+
+![画像フィット後の設定](images/v2-image-fit-settings.png)
+
+
+## 2026-10-19 説明書と選択の追加実画面
+
+`instruction-paper-zoom`: ![Windowsの実Qt操作画面](images/v2-instruction-paper-zoom.png)
+
+`instruction-paper-arrange`: ![Windowsの実Qt操作画面](images/v2-instruction-paper-arrange.png)
+
+`overlap-candidates-highlight`: ![Windowsの実Qt操作画面](images/v2-overlap-candidates-highlight.png)
+
+`overlap-candidates-menu`: ![Windowsの実Qt操作画面](images/v2-overlap-candidates-menu.png)
+
+説明書はHP-INSTRUCTIONS操作試験、重なり候補はHP-XP-09で取得。入力イベントを実ウィジェットへ送り、撮影したアプリ画面です。OS入力とは区別します。
+
+`instruction-inline-text`: ![用紙上で文章を直接編集](images/v2-instruction-inline-text.png)
+
+HP-INSTRUCTIONS-EDIT、2026-10-19のWindows実Qtウィンドウ。

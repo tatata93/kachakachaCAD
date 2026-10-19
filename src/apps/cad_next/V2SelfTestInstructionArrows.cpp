@@ -44,7 +44,22 @@ bool CancelledMarkDrag(V2InstructionScene& view,InstructionPage& page,int index,
     return (page.marks[index].start-before.start).Length()<1e-8&&
         (page.marks[index].end-before.end).Length()<1e-8&&page.marks[index].font==before.font;
 }
+bool ArrowOutputScale() {
+    InstructionPage page;page.pitch=1.5707963267948966;page.yaw=0;page.span=100;
+    page.marks.push_back({{},geometry::Vector3{-30,0,0},geometry::Vector3{30,0,0},true});
+    V2InstructionScene view(nullptr);view.SetPage(&page);double minimum=1,maximum=0;
+    for(int width:{700,1400,2800}) {
+        view.resize(width,width*5/7);view.Render(view.size(),true);const auto image=view.Render(view.size());
+        const auto a=view.Project(page.marks[0].start),b=view.Project(page.marks[0].end);const auto delta=b-a;const double length=std::hypot(delta.x(),delta.y());
+        const QPointF normal(-delta.y()/length,delta.x()/length);double extent=0;
+        for(int y=0;y<image.height();++y)for(int x=0;x<image.width();++x)if(qGray(image.pixel(x,y))<150)
+            extent=std::max(extent,std::abs((x+.5-a.x())*normal.x()+(y+.5-a.y())*normal.y()));
+        minimum=std::min(minimum,extent/width);maximum=std::max(maximum,extent/width);
+    }
+    return Explain("arrowheads keep their proportion at 700 1400 and 2800 pixels",minimum>.003&&maximum<.007&&maximum-minimum<.002);
+}
 bool ArrowInteractions(V2MainWindow&){
+    if(!ArrowOutputScale())return false;
     InstructionPage page;V2InstructionScene view(nullptr);view.resize(640,480);
     view.SetPage(&page);view.show();QApplication::processEvents();view.SetTool("arrow");
     SceneMouse(view,QEvent::MouseButtonPress,{100,100},Qt::LeftButton,Qt::LeftButton);

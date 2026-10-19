@@ -1188,10 +1188,13 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestUsability.cpp
         src/apps/cad_next/V2ImageTool.cpp
         src/apps/cad_next/V2InstructionWorkspace.cpp
+        src/apps/cad_next/V2InstructionControls.cpp
         src/apps/cad_next/V2InstructionSceneBrowser.cpp
         src/apps/cad_next/V2InstructionSettings.cpp
         src/apps/cad_next/V2InstructionSheetSettings.cpp
         src/apps/cad_next/V2InstructionSheet.cpp
+        src/apps/cad_next/V2InstructionSheetActions.cpp
+        src/apps/cad_next/V2InstructionSheetEditing.cpp
         src/apps/cad_next/V2InstructionSheetFile.cpp
         src/apps/cad_next/V2SelfTestInstructionArrows.cpp
         src/apps/cad_next/V2SelfTestInstructionSheets.cpp
@@ -1203,6 +1206,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2InstructionLegacy.cpp
         src/apps/cad_next/V2SelfTestInstructionWorkspace.cpp
         src/apps/cad_next/V2SelfTestInstructionBrowser.cpp
+        src/apps/cad_next/V2SelfTestInstructionUsability.cpp
         src/apps/cad_next/V2SelfTestAlternateRoutes.cpp
         src/apps/cad_next/V2SelfTestInstructions.cpp
         src/apps/cad_next/V2ImageToolUi.cpp
@@ -1229,6 +1233,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp
         src/apps/cad_next/V2DocumentWorker.cpp
+        src/apps/cad_next/V2GuideBuildJobs.cpp
         src/apps/cad_next/V2OffsetTool.cpp
         src/apps/cad_next/V2CornerPreview.cpp
         src/apps/cad_next/V2WorkPlanePreview.cpp

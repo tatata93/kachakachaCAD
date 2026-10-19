@@ -13,6 +13,8 @@
 #include "V2MainWindow.h"
 #include "V2ShapeLifetime.h"
 #include "V2DocumentOpen.h"
+#include "V2DocumentTiming.h"
+#include "V2GuideBuildJobs.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "V2EdgeFinishTool.h"
@@ -386,6 +388,8 @@ void V2MainWindow::RebuildKernelShapes()
         return;
     }
     int made = 0, completed = 0;
+    V2GuideBuildJobs independentGuides(*this,steps);
+    V2DocumentTiming timing("rebuild");
     std::vector<std::string> failed;
     for (const auto& step : steps) {
         V2DocumentOpen::Progress(completed++,static_cast<int>(steps.size()),step.displayName);
@@ -394,6 +398,7 @@ void V2MainWindow::RebuildKernelShapes()
             continue;
         }
         const bool ok = RebuildOneShape(step, *feature);
+        timing.Mark(("step-"+std::to_string(completed)+"-kind-"+std::to_string(static_cast<int>(step.kind))).c_str());
         if (ok) {
             ++made;
         } else {

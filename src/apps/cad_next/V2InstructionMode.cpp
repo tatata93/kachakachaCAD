@@ -4,6 +4,7 @@
 #include <QSignalBlocker>
 #include <QQuaternion>
 #include <QWidget>
+#include <QTimer>
 #include "V2InstructionMode.h"
 #include "V2InstructionSceneBrowser.h"
 #include "V2MainWindow.h"
@@ -84,6 +85,7 @@ V2InstructionMode::V2InstructionMode(V2MainWindow& window):QWidget(window.centra
     workspaceActions_=new V2FlowLayout(nullptr);layout->addLayout(workspaceActions_);
     view_=new V2InstructionScene(this);layout->addWidget(view_,1);
     sheetView_=new V2InstructionSheetView(this);layout->addWidget(sheetView_,1);sheetView_->hide();
+    BuildViewControls(row);
     static_cast<QVBoxLayout*>(window.centralWidget()->layout())->insertWidget(0,this,1);qApp->installEventFilter(this);
     connect(workspace_,&QComboBox::currentIndexChanged,this,[this](int i){if(!loading_)SwitchWorkspace(i==1);});
     connect(pages_,&QComboBox::currentIndexChanged,this,[this](int i){if(!loading_){if(layoutEditing_)ShowSheet(i);else ShowPage(i);}});
@@ -97,9 +99,15 @@ V2InstructionMode::V2InstructionMode(V2MainWindow& window):QWidget(window.centra
     sheetView_->refused=[this](const QString& text){if(hint_)hint_->setText(text);};
     view_->refused=[this](const QString& text){if(hint_)hint_->setText(text);};
     sheetView_->openScene=[this](QUuid id){for(std::size_t i=0;i<scenes_.size();++i)if(scenes_[i].id==id){ShowPage(int(i));break;}};
+    sheetView_->editText=[this]{FocusSelectedText();};
+    sheetView_->removeItem=[this]{Command("instructions.remove");};
+    sheetView_->textDraftChanged=[this](const QString& text){
+        if(auto* input=settings_?settings_->findChild<QPlainTextEdit*>("instructionSelectedText"):nullptr)input->setPlainText(text);
+    };
     NewPage(false);sheets_.push_back(InstructionSheet{});sheets_[0].title=QStringLiteral("用紙 1");dirty_=false;undo_.clear();
 }
 void V2InstructionMode::NewPage(bool copy){
+    if(!ReadyToSwitch())return;
     if(layoutEditing_){NewSheet(copy);return;}
     if(scenes_.size()>=200){if(hint_)hint_->setText(QStringLiteral("場面は200個までです。別の説明書に分けてください。"));return;}
     CancelInput();before_=Snapshot();InstructionPage page;if(copy&&!scenes_.empty())page=scenes_[current_];
@@ -107,7 +115,7 @@ void V2InstructionMode::NewPage(bool copy){
     page.title=QStringLiteral("場面 %1").arg(scenes_.size()+1);scenes_.push_back(std::move(page));ShowPage(int(scenes_.size())-1);Remember();
 }
 void V2InstructionMode::ShowPage(int index){
-    if(index<0||index>=int(scenes_.size()))return;CancelInput();choosing_=false;current_=index;layoutEditing_=false;loading_=true;
+    if(index<0||index>=int(scenes_.size())||!ReadyToSwitch())return;CancelInput();choosing_=false;current_=index;layoutEditing_=false;loading_=true;
     workspace_->setCurrentIndex(0);pages_->clear();for(const auto& page:scenes_)pages_->addItem(page.title);
     pages_->setCurrentIndex(index);title_->setText(scenes_[index].title);loading_=false;
     sheetView_->hide();view_->show();view_->SetPage(&scenes_[index]);view_->SetTool("move");activeTool_="move";
@@ -119,19 +127,21 @@ void V2InstructionMode::SwitchWorkspace(bool layout){
     else ShowPage(std::clamp(current_,0,int(scenes_.size())-1));
 }
 void V2InstructionMode::NewSheet(bool copy){
+    if(!ReadyToSwitch())return;
     if(sheets_.size()>=200){if(hint_)hint_->setText(QStringLiteral("用紙は200枚までです。"));return;}
     CancelInput();before_=Snapshot();InstructionSheet sheet;if(copy&&!sheets_.empty())sheet=sheets_[currentSheet_];
     sheet.id=QUuid::createUuid();for(auto& item:sheet.items)item.id=QUuid::createUuid();
     sheet.title=QStringLiteral("用紙 %1").arg(sheets_.size()+1);sheets_.push_back(std::move(sheet));ShowSheet(int(sheets_.size())-1);Remember();
 }
 void V2InstructionMode::ShowSheet(int index){
-    if(index<0||index>=int(sheets_.size()))return;CancelInput();choosing_=false;currentSheet_=index;layoutEditing_=true;loading_=true;
+    if(index<0||index>=int(sheets_.size())||!ReadyToSwitch())return;CancelInput();choosing_=false;currentSheet_=index;layoutEditing_=true;loading_=true;
     workspace_->setCurrentIndex(1);pages_->clear();for(const auto& sheet:sheets_)pages_->addItem(sheet.title);
     pages_->setCurrentIndex(index);title_->setText(sheets_[index].title);loading_=false;
     view_->hide();sheetView_->show();sheetView_->SetDocument(&sheets_[index],&scenes_);sheetView_->SetTool("move");activeTool_="move";
     if(isVisible())ShowSettings();
 }
 void V2InstructionMode::ShowSettings(){
+    if(!CommitSelectedText())return;commitText_={};
     const bool previous=loading_;loading_=true;
     if(settings_){settings_->blockSignals(true);for(auto* child:settings_->findChildren<QObject*>())child->blockSignals(true);}
     if(layoutEditing_)ShowSheetSettings();else ShowSceneSettings();
@@ -141,6 +151,7 @@ void V2InstructionMode::ShowSettings(){
     RefreshSceneBrowser();
 }
 void V2InstructionMode::Command(std::string_view id){
+    if(!CommitSelectedText())return;
     if(id=="instructions.scene_editor"||id=="instructions.sheet_editor"){SwitchWorkspace(id=="instructions.sheet_editor");return;}
     if(id=="instructions.capture"){SwitchWorkspace(false);Capture();return;}
     if(id=="instructions.model_file"){SwitchWorkspace(false);FileAction(id);return;}
@@ -153,6 +164,7 @@ void V2InstructionMode::Command(std::string_view id){
     if(id=="instructions.place_scene"||id=="instructions.paper")if(!layoutEditing_)SwitchWorkspace(true);
     if(id=="instructions.arrow"&&layoutEditing_){if(hint_)hint_->setText(QStringLiteral("矢印は画像エディターで場面に配置してください。"));return;}
     if(id=="instructions.remove"){
+        commitText_={};
         if(layoutEditing_)sheetView_->CancelInput();else view_->CancelInput();
         before_=Snapshot();if(layoutEditing_){const int item=sheetView_->Selected();if(item>=0)sheets_[currentSheet_].items.erase(sheets_[currentSheet_].items.begin()+item);sheetView_->SetSelected(-1);sheetView_->Refresh();}
         else{const int part=view_->Selected(),mark=view_->SelectedMark();if(part>=0)scenes_[current_].parts.erase(scenes_[current_].parts.begin()+part);
@@ -175,16 +187,22 @@ void V2InstructionMode::Command(std::string_view id){
 }
 void V2InstructionMode::Remember(){if(loading_||before_==Snapshot())return;undo_.push_back(before_);if(undo_.size()>30)undo_.erase(undo_.begin());redo_.clear();dirty_=true;before_=Snapshot();sceneBrowser_->Invalidate(scenes_[current_].id);RefreshSceneBrowser();}
 void V2InstructionMode::CancelInput(){view_->CancelInput();sheetView_->CancelInput();}
-void V2InstructionMode::Undo(bool redo){if(choosing_)return;CancelInput();auto& from=redo?redo_:undo_;auto& to=redo?undo_:redo_;if(from.empty())return;to.push_back(Snapshot());const auto saved=from.back();from.pop_back();Restore(saved);dirty_=true;}
+void V2InstructionMode::Undo(bool redo){if(choosing_||!CommitSelectedText())return;CancelInput();auto& from=redo?redo_:undo_;auto& to=redo?undo_:redo_;if(from.empty())return;to.push_back(Snapshot());const auto saved=from.back();from.pop_back();Restore(saved);dirty_=true;}
+
 bool V2InstructionMode::eventFilter(QObject* object,QEvent* event){
+    if(event->type()==QEvent::FocusOut&&object->objectName()=="instructionSelectedText") {
+        const auto commit=commitText_;const auto panel=settings_;
+        QTimer::singleShot(0,this,[this,commit,panel]{if(panel&&panel==settings_&&commit)commit();});
+    }
     if(object==&window_&&event->type()==QEvent::Close&&!CheckSaved()){static_cast<QCloseEvent*>(event)->ignore();return true;}
     if(!isVisible()||event->type()!=QEvent::KeyPress)return false;auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window()||qobject_cast<QLineEdit*>(object)||qobject_cast<QPlainTextEdit*>(object)||qobject_cast<QAbstractSpinBox*>(object))return false;
     for(auto* parent=widget->parentWidget();parent&&parent!=&window_;parent=parent->parentWidget())if(qobject_cast<QPlainTextEdit*>(parent))return false;
     const auto* key=static_cast<QKeyEvent*>(event);if((key->modifiers()&Qt::ControlModifier)&&(key->key()==Qt::Key_Z||key->key()==Qt::Key_Y)){Undo(key->key()==Qt::Key_Y||(key->modifiers()&Qt::ShiftModifier));return true;}
-    if(key->key()==Qt::Key_Escape){if(choosing_)ShowPage(current_);else if(layoutEditing_)sheetView_->CancelInput();else view_->CancelInput();return true;}
+    if(key->key()==Qt::Key_Escape){if(choosing_)ShowPage(current_);else if(layoutEditing_)Command("instructions.move");else view_->CancelInput();return true;}
     if(key->key()==Qt::Key_Delete){if(sceneBrowser_->isAncestorOf(widget))DeletePage(true);else Command("instructions.remove");return true;}return false;
 }
 bool V2InstructionMode::CheckSaved(){
+    if(!CommitSelectedText())return false;
     if(!dirty_)return true;const auto answer=QMessageBox::question(&window_,QStringLiteral("説明書の保存"),QStringLiteral("説明書の変更を保存しますか？"),QMessageBox::Save|QMessageBox::Discard|QMessageBox::Cancel);
     if(answer==QMessageBox::Cancel)return false;if(answer==QMessageBox::Discard)return true;FileAction("instructions.save");return !dirty_;
 }

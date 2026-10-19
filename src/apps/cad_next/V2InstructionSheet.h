@@ -35,6 +35,8 @@ public:
     int Selected() const {return selected_;}
     void SetSelected(int);
     double Zoom() const {return zoom_;}
+    std::size_t SceneRenderCount() const {return sceneRenders_;}
+    qsizetype SceneCacheBytes() const;
     void SetZoom(double);
     void FitView();
     bool KeepAspect() const {return keepAspect_;}
@@ -83,6 +85,7 @@ private:
     QPointF last_;
     QRectF dragOriginal_;
     QHash<QString,QImage> sceneImageCache_;
+    std::size_t sceneRenders_=0;
     QUuid viewSheetId_;
     double zoom_=1;
     QPointF pan_,panLast_;

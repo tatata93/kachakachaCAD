@@ -68,7 +68,7 @@ bool V2InstructionSheetView::eventFilter(QObject* object,QEvent* event) {
     }
     if(object==textEditor_&&event->type()==QEvent::FocusOut) {
         const auto epoch=textEditEpoch_;
-        QTimer::singleShot(0,this,[this,epoch]{if(epoch==textEditEpoch_&&!textItemId_.isNull()&&CommitTextEdit()&&selectionChanged)selectionChanged();});
+        QTimer::singleShot(0,this,[this,epoch]{if(epoch==textEditEpoch_&&!textItemId_.isNull())CommitTextEdit();});
     }
     return QWidget::eventFilter(object,event);
 }

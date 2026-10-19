@@ -15,6 +15,10 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QImage>
+#include <QFontComboBox>
+#include <QGuiApplication>
+#include <iostream>
+#include <QPointer>
 #include <QColor>
 #include <QPoint>
 #include <QKeyEvent>
@@ -40,13 +44,71 @@ namespace kachakacha::v2::selftest {
 namespace {
 template<class T>T* Shown(V2MainWindow& w,const char* name){for(auto* item:w.findChildren<T*>(name))if(item->isVisible())return item;return nullptr;}
 V2InstructionMode* Editor(V2MainWindow& w){for(auto* child:w.centralWidget()->children())if(auto* mode=dynamic_cast<V2InstructionMode*>(child))return mode;return nullptr;}
-void Mouse(QWidget* w,QEvent::Type type,QPointF point,Qt::MouseButton button,Qt::MouseButtons held){QMouseEvent e(type,point,point,button,held,Qt::NoModifier);QApplication::sendEvent(w,&e);QApplication::processEvents();}
+void Mouse(QWidget* w,QEvent::Type type,QPointF point,Qt::MouseButton button,Qt::MouseButtons held){if(!w->window()->isActiveWindow()){w->window()->activateWindow();QApplication::processEvents();}QMouseEvent e(type,point,point,button,held,Qt::NoModifier);QApplication::sendEvent(w,&e);QApplication::processEvents();}
 void Click(QWidget* w,QPointF point){Mouse(w,QEvent::MouseButtonPress,point,Qt::LeftButton,Qt::LeftButton);Mouse(w,QEvent::MouseButtonRelease,point,Qt::LeftButton,Qt::NoButton);}
 QJsonArray Items(V2InstructionMode& m){const auto s=m.Snapshot();return s["sheets"].toArray()[s["currentSheet"].toInt()].toObject()["items"].toArray();}
 QRectF Rect(const QJsonObject& item){const auto a=item["rect"].toArray();return {a[0].toDouble(),a[1].toDouble(),a[2].toDouble(),a[3].toDouble()};}
 bool Press(V2MainWindow& w,const char* name){auto* button=Shown<QPushButton>(w,name);if(!button)return false;button->click();QApplication::processEvents();return true;}
 void Capture(V2MainWindow& w,const char* name){const auto root=qEnvironmentVariable("KACHACAD_INSTRUCTION_PROOF_DIR");if(root.isEmpty())return;QDir().mkpath(root);QApplication::processEvents();w.grab().save(root+"/"+name+".png");}
 struct Cleanup{V2InstructionMode* mode;QString path;~Cleanup(){mode->Save(path);}};
+}
+bool InstructionCancelAndSettings(V2MainWindow& w,V2InstructionMode& mode,V2InstructionSheetView* paper) {
+    QTemporaryDir folder;const auto path=folder.filePath("cancel.kci");mode.Command("instructions.move");
+    if(!mode.Save(path))return false;const auto original=mode.Snapshot();
+    for(bool aspect:{false,true})for(int h=0;h<8;++h) {
+        if(!mode.Load(path))return false;paper->SetSelected(0);paper->SetKeepAspect(aspect);
+        const auto r=Rect(Items(mode)[0].toObject());const QPointF points[]={r.topLeft(),{r.center().x(),r.top()},r.topRight(),
+            {r.right(),r.center().y()},r.bottomRight(),{r.center().x(),r.bottom()},r.bottomLeft(),{r.left(),r.center().y()}};
+        const int dx[]={-1,0,1,1,1,0,-1,-1},dy[]={-1,-1,-1,0,1,1,1,0};const auto end=points[h]+QPointF(dx[h]*6,dy[h]*4);
+        Mouse(paper,QEvent::MouseButtonPress,paper->ToScreen(points[h]),Qt::LeftButton,Qt::LeftButton);
+        Mouse(paper,QEvent::MouseMove,paper->ToScreen(end),Qt::NoButton,Qt::LeftButton);
+        if(!Explain("resize has a real preview to cancel",mode.Snapshot()!=original))return false;
+        QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(paper,&escape);QApplication::processEvents();
+        if(!Explain("Escape restores the frame before rebuilding the inspector",mode.Snapshot()==original))return false;
+        const char* names[]={"instructionItemX","instructionItemY","instructionItemWidth","instructionItemHeight"};const double values[]={r.x(),r.y(),r.width(),r.height()};
+        for(int i=0;i<4;++i){auto* input=Shown<QDoubleSpinBox>(w,names[i]);if(!Explain("cancelled inspector agrees with the actual frame",input&&std::abs(input->value()-values[i])<.001))return false;}
+        Mouse(paper,QEvent::MouseButtonRelease,paper->ToScreen(end),Qt::LeftButton,Qt::NoButton);
+        if(!Press(w,"instructionApplyItem")||!Explain("applying after cancel cannot reapply the cancelled preview",mode.Snapshot()==original))return false;
+        w.RunCommand("edit.undo");if(!Explain("cancel and unchanged apply create no Undo entry",mode.Snapshot()==original))return false;
+    }
+    return mode.Load(path);
+}
+bool InstructionInlineFocus(V2MainWindow& w,V2InstructionMode& mode,V2InstructionSheetView* paper) {
+    QTemporaryDir folder;const auto path=folder.filePath("focus.kci");if(!mode.Save(path))return false;
+    const auto original=mode.Snapshot();const QJsonValue originalFont=Items(mode)[0].toObject()["font"];
+    for(const char* tool:{"instructions.image","instructions.paper"}) {
+        if(!mode.Load(path))return false;mode.Command(tool);paper->SetSelected(0);
+        Mouse(paper,QEvent::MouseButtonDblClick,paper->ToScreen({25,25}),Qt::LeftButton,Qt::LeftButton);
+        auto* edit=Shown<QPlainTextEdit>(w,"instructionInlineText");
+        if(!Explain("double click from output or paper settings exposes text and font controls",edit
+            &&Shown<QFontComboBox>(w,"instructionFont")&&Shown<QPlainTextEdit>(w,"instructionSelectedText")))return false;
+        edit->setPlainText("Cancelled alternate-entry draft");
+        QKeyEvent cancel(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(edit,&cancel);QApplication::processEvents();
+        if(!Explain("alternate-entry Escape preserves the saved paragraph",mode.Snapshot()==original))return false;
+    }
+    for(bool fontTarget:{true,false}) {
+        if(!mode.Load(path))return false;paper->SetSelected(0);
+        Mouse(paper,QEvent::MouseButtonDblClick,paper->ToScreen({25,25}),Qt::LeftButton,Qt::LeftButton);
+        auto* edit=Shown<QPlainTextEdit>(w,"instructionInlineText");if(!Explain("inline editor opens before inspector focus test",edit!=nullptr))return false;edit->setPlainText("Inline B");
+        QPointer<QWidget> target=fontTarget?static_cast<QWidget*>(Shown<QFontComboBox>(w,"instructionFont")):Shown<QPlainTextEdit>(w,"instructionSelectedText");
+        if(!Explain("inspector target exists before focus transfer",target!=nullptr))return false;target->setFocus(Qt::MouseFocusReason);QApplication::processEvents();
+        if(!Explain("moving to the inspector keeps the same focused widget",target&&target->isVisible()&&target->hasFocus()
+            &&Items(mode)[0].toObject()["text"]=="Inline B"))return false;
+        if(fontTarget){
+            auto* font=qobject_cast<QFontComboBox*>(target.data());if(!Explain("the focused inspector is the font family control",font!=nullptr))return false;
+            std::cout<<"font families on "<<QGuiApplication::platformName().toStdString()<<"="<<font->count()<<std::endl;
+            if(QGuiApplication::platformName()=="windows"&&!Explain("Windows lists real font families",font->count()>=2))return false;
+            if(font->count()>=2)font->setCurrentIndex((font->currentIndex()+1)%font->count());
+            else {auto* bold=Shown<QCheckBox>(w,"instructionTextBold");if(!bold)return false;bold->setChecked(!bold->isChecked());}
+        }
+        else {auto* text=qobject_cast<QPlainTextEdit*>(target.data());if(!text)return false;text->setPlainText("Inspector C");if(!mode.Save(folder.filePath("edited.kci")))return false;}
+        w.RunCommand("edit.undo");QApplication::processEvents();
+        if(!Explain("inspector change Undo preserves the committed inline text",Items(mode)[0].toObject()["text"]=="Inline B"
+            &&Items(mode)[0].toObject()["font"]==originalFont))return false;
+        w.RunCommand("edit.undo");QApplication::processEvents();
+        if(!Explain("text Undo and pending focus callbacks preserve the restored document",mode.Snapshot()==original))return false;
+    }
+    return mode.Load(path);
 }
 bool InstructionResizeBounds() {
     InstructionSheet sheet;std::vector<InstructionPage> scenes;InstructionSheetItem item;item.kind=InstructionItemKind::Image;
@@ -140,6 +202,7 @@ bool InstructionLayoutUsability(V2MainWindow& w) {
     w.RunCommand("edit.undo");if(!Explain("context duplicate is undoable",mode->Snapshot()==contextStart))return false;
     mode->Command("instructions.image");auto* output=Shown<QSpinBox>(w,"instructionImageWidth");if(!output)return false;output->setValue(2048);mode->Command("instructions.move");mode->Command("instructions.image");
     if(!Explain("image output dimensions survive a tool switch",Shown<QSpinBox>(w,"instructionImageWidth")->value()==2048))return false;
+    if(!InstructionCancelAndSettings(w,*mode,paper))return false;
     if(!mode->Save(cleanup.path))return false;const auto saved=mode->Snapshot();
     return Explain("layout edits round-trip while CAD remains unchanged",mode->Load(cleanup.path)&&mode->Snapshot()==saved&&w.Session().GetDocument().Revision()==revision);
 }
@@ -150,6 +213,7 @@ bool InstructionTextAndPageUsability(V2MainWindow& w) {
     input->setPlainText(QStringLiteral("変更前の文章"));Click(paper,paper->ToScreen({20,20}));mode->Command("instructions.move");paper->SetSelected(0);
     auto* edit=Shown<QPlainTextEdit>(w,"instructionSelectedText");if(!edit)return false;edit->setPlainText(QStringLiteral("適用ボタンを押さずに保存した文章"));
     if(!mode->Save(cleanup.path)||!mode->Load(cleanup.path)||!Explain("save commits the selected text draft",Items(*mode)[0].toObject()["text"]==QStringLiteral("適用ボタンを押さずに保存した文章")))return false;
+    if(!InstructionInlineFocus(w,*mode,paper))return false;
     paper->SetSelected(0);edit=Shown<QPlainTextEdit>(w,"instructionSelectedText");if(!edit)return false;edit->setFocus();edit->setPlainText(QStringLiteral("新規作成前の編集中の文章"));
     bool asked=false;QTimer::singleShot(50,[&]{if(auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())){asked=true;box->button(QMessageBox::Cancel)->click();}});
     w.RunCommand("file.new");if(!Explain("new shortcut commits the focused draft before its save question",asked&&Items(*mode)[0].toObject()["text"]==QStringLiteral("新規作成前の編集中の文章")))return false;

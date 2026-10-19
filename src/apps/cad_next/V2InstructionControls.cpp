@@ -24,8 +24,10 @@ bool V2InstructionMode::ReadyToSwitch() {
     return false;
 }
 void V2InstructionMode::FocusSelectedText() {
-    activeTool_="move";ShowSettings();
-    if(layoutEditing_){sheetView_->BeginTextEdit();return;}
+    const bool needsSettings=activeTool_!="move";
+    if(!CommitSelectedText())return;activeTool_="move";
+    if(layoutEditing_){if(needsSettings)ShowSettings();sheetView_->SetTool("move");sheetView_->BeginTextEdit();return;}
+    ShowSettings();
     if(auto* edit=settings_?settings_->findChild<QPlainTextEdit*>("instructionSelectedText"):nullptr){edit->setFocus();edit->selectAll();}
 }
 void V2InstructionMode::BuildViewControls(QHBoxLayout* row) {

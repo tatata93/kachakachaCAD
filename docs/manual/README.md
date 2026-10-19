@@ -800,3 +800,5 @@ WindowsのExplorer操作試験の実Qtウィンドウから取得。OSからの�
 `instruction-inline-text`: ![用紙上で文章を直接編集](images/v2-instruction-inline-text.png)
 
 HP-INSTRUCTIONS-EDIT、2026-10-19のWindows実Qtウィンドウ。
+
+マニュアル本文の単独アイコン画像も外し、操作の説明画像は実画面だけに統一しました。`tool-icons/` の元画像ファイルは製品アイコンの確認資産として保持します。

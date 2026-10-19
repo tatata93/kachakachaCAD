@@ -56,11 +56,11 @@ QString SceneImageKey(const InstructionPage& scene,QSize size) {
               <<mark.end.x<<mark.end.y<<mark.end.z;
     return QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha256).toHex());
 }
-QImage SceneImage(InstructionPage& scene,QSize size,QHash<QString,QImage>& cache) {
+QImage SceneImage(InstructionPage& scene,QSize size,QHash<QString,QImage>& cache,std::size_t& builds) {
     const auto key=SceneImageKey(scene,size);const auto found=cache.constFind(key);
     if(found!=cache.constEnd())return *found;
-    V2InstructionScene renderer(nullptr);renderer.SetPage(&scene);auto image=renderer.Render(size);
-    constexpr qsizetype maxBytes=32*1024*1024;
+    ++builds;V2InstructionScene renderer(nullptr);renderer.SetPage(&scene);auto image=renderer.Render(size);
+    constexpr qsizetype maxBytes=128*1024*1024;
     if(image.sizeInBytes()<=maxBytes) {
         qsizetype used=0;for(auto it=cache.constBegin();it!=cache.constEnd();++it)used+=it->sizeInBytes();
         while(!cache.isEmpty()&&(cache.size()>=16||used+image.sizeInBytes()>maxBytes)) {
@@ -71,7 +71,7 @@ QImage SceneImage(InstructionPage& scene,QSize size,QHash<QString,QImage>& cache
     return image;
 }
 void DrawItem(QPainter& painter,const InstructionSheetItem& item,const QRectF& pixels,
-              double scale,std::vector<InstructionPage>* scenes,QHash<QString,QImage>& cache) {
+              double scale,std::vector<InstructionPage>* scenes,QHash<QString,QImage>& cache,std::size_t& builds) {
     painter.save();painter.setClipRect(pixels);
     if(item.kind==InstructionItemKind::Text) {
         auto font=item.font;
@@ -85,7 +85,7 @@ void DrawItem(QPainter& painter,const InstructionSheetItem& item,const QRectF& p
         const QSize renderSize(std::clamp(int(std::ceil(pixels.width()*2)),1,4096),
                                std::clamp(int(std::ceil(pixels.height()*2)),1,4096));
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
-        painter.drawImage(pixels,SceneImage(*scene,renderSize,cache));
+        painter.drawImage(pixels,SceneImage(*scene,renderSize,cache,builds));
     }
     painter.restore();
 }
@@ -152,7 +152,8 @@ QImage V2InstructionSheetView::Render(QSize size,bool selection) {
     painter.fillRect(paper,Qt::white);painter.save();painter.setClipRect(paper);
     for(std::size_t i=0;i<sheet_->items.size();++i) {
         const auto pixels=ItemPixels(sheet_->items[i],paper,scale);
-        DrawItem(painter,sheet_->items[i],pixels,scale,scenes_,sceneImageCache_);
+        if(pixels.intersects(QRectF(QPointF(0,0),QSizeF(size))))
+            DrawItem(painter,sheet_->items[i],pixels,scale,scenes_,sceneImageCache_,sceneRenders_);
     }
     if(selection&&selected_>=0&&selected_<int(sheet_->items.size())) {
             const auto pixels=ItemPixels(sheet_->items[selected_],paper,scale);
@@ -167,7 +168,7 @@ QImage V2InstructionSheetView::Render(QSize size,bool selection) {
     if(selection&&placementHover_&&PlacementTool(tool_)){
         auto ghost=pending_;ghost.rectMm.setWidth(std::clamp(ghost.rectMm.width(),.01,sheet_->widthMm));ghost.rectMm.setHeight(std::clamp(ghost.rectMm.height(),.01,sheet_->heightMm));
         ghost.rectMm.moveTopLeft(LimitedPosition(placementAt_,ghost.rectMm.size(),*sheet_));
-        const auto pixels=ItemPixels(ghost,paper,scale);painter.setOpacity(.5);DrawItem(painter,ghost,pixels,scale,scenes_,sceneImageCache_);painter.setOpacity(1);
+        const auto pixels=ItemPixels(ghost,paper,scale);painter.setOpacity(.5);DrawItem(painter,ghost,pixels,scale,scenes_,sceneImageCache_,sceneRenders_);painter.setOpacity(1);
         painter.setPen(QPen(QColor(20,100,210),1.5,Qt::DashLine));painter.setBrush(Qt::NoBrush);painter.drawRect(pixels);
     }
     painter.restore();
@@ -266,9 +267,13 @@ void V2InstructionSheetView::mouseDoubleClickEvent(QMouseEvent* event) {
     for(std::size_t i=sheet_->items.size();i>0;--i) {
         const auto& item=sheet_->items[i-1];
         if(item.rectMm.contains(point)) {
-            if(item.kind==InstructionItemKind::Text){dragging_=false;SetSelected(int(i-1));if(editText)editText();}
+            if(item.kind==InstructionItemKind::Text){dragging_=false;if(selected_!=int(i-1))SetSelected(int(i-1));if(editText)editText();}
             if(item.kind==InstructionItemKind::Scene&&openScene)openScene(item.sceneId);
             return;
         }
     }
+}
+
+qsizetype V2InstructionSheetView::SceneCacheBytes() const {
+    qsizetype bytes=0;for(auto it=sceneImageCache_.constBegin();it!=sceneImageCache_.constEnd();++it)bytes+=it->sizeInBytes();return bytes;
 }

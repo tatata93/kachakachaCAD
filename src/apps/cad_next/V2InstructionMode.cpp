@@ -176,6 +176,7 @@ void V2InstructionMode::Command(std::string_view id){
         if(layoutEditing_&&selected>=0&&sheets_[currentSheet_].items[selected].kind==InstructionItemKind::Text)sheetText_=sheets_[currentSheet_].items[selected].text;
         if(!layoutEditing_&&selected>=0&&!scenes_[current_].marks[selected].arrow)sceneText_=scenes_[current_].marks[selected].text;
     }
+    CancelInput();
     activeTool_=QString::fromUtf8(id.data()+13,int(id.size()-13));
     if(id=="instructions.image"||id=="instructions.paper"){if(layoutEditing_)sheetView_->SetTool("move");else view_->SetTool("move");}
     ShowSettings();

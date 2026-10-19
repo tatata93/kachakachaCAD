@@ -11,10 +11,13 @@
 #include "V2Viewport.h"
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QString>
 #include <QStringList>
 
+#include <algorithm>
+#include <random>
 #include <exception>
 #include <chrono>
 #include <cstdlib>
@@ -216,7 +219,13 @@ void Note(const char* what)
 
 int RunSelfTest()
 {
-    const std::vector<SelfTestCase> cases = AllCases();
+    auto cases = AllCases();
+    const auto arguments=QCoreApplication::arguments();const int orderFlag=arguments.indexOf("--self-test-order");
+    if(orderFlag>=0){const auto order=arguments.value(orderFlag+1);
+        if(order=="reverse")std::reverse(cases.begin(),cases.end());
+        else {bool ok=false;const auto seed=order.startsWith("seed:")?order.mid(5).toUInt(&ok):0;
+            if(!ok){std::cerr<<"Invalid explicit self-test order\n";return 1;}
+            std::mt19937 generator(seed);std::shuffle(cases.begin(),cases.end(),generator);}}
     Reporting reporting(cases);
     if (!reporting.Valid()) {
         std::cerr << reporting.Error().toUtf8().constData() << '\n';

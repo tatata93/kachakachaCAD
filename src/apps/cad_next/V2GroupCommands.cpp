@@ -105,6 +105,7 @@ void V2MainWindow::CreateGroupFromSelection()
     if (!ok) {
         return;
     }
+    if(auto* row=entityTree_->FindKey("group:"+QString::fromStdString(id.ToString())))entityTree_->setCurrentItem(row);
     SetStatus(chosen.empty()
             ? QStringLiteral("グループを作りました。名前は F2 で変えられます。")
             : QStringLiteral("%1個をグループにしました。名前は F2 で変えられます。")
@@ -225,7 +226,8 @@ bool V2MainWindow::RenameOrToggleGroupFromItem(QTreeWidgetItem* item)
     if (!done.committed) {
         ReportDiagnostics(done.diagnostics);
     }
-    AdoptCurrentDocument();
+    RefreshEntityList();RefreshExportCounts();RefreshCommandVisibility();
+    viewport_->update();
     return true;
 }
 

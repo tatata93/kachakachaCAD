@@ -19,6 +19,7 @@
 //! (オーナー指示 §9)。
 
 #include "V2MainWindow.h"
+#include "V2EntityTree.h"
 #include "V2ThickenPreviewState.h"
 #include "V2GeometryJob.h"
 #include "V2GptSurfaceTool.h"
@@ -323,6 +324,12 @@ bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
     if(auto* widget=qobject_cast<QWidget*>(target);widget&&widget->window()!=this)
         return QMainWindow::eventFilter(target,event);
     if(QApplication::activeModalWidget())return QMainWindow::eventFilter(target,event);
+    // Inline tree labels own Enter/Esc even while a modeling tool is armed.
+    if(entityTree_) {
+        const auto inTree=[this](QWidget* field){return field&&IsTypingField(field)&&entityTree_->isAncestorOf(field);};
+        if(inTree(qobject_cast<QWidget*>(target))||inTree(QApplication::focusWidget()))
+            return QMainWindow::eventFilter(target,event);
+    }
     if (event != nullptr && event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
         if (HandleToolKey(key->key(), target)) {

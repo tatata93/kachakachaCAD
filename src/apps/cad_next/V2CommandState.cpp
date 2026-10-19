@@ -18,8 +18,8 @@ void V2MainWindow::RefreshCommandVisibility()
         entry.second->setVisible(visible);
         QString reason;
         const CommandDescriptor* command = FindCommand(entry.first);
-        const bool ready=command&&(entry.first=="part.extrude"?extrudeReady:
-            kachakacha::v2::app::SelectionSatisfies(command->predicate,facts));
+        const bool ready=command&&((entry.first=="edit.delete"&&SelectedGroupId().has_value())||(entry.first=="part.extrude"?extrudeReady:
+            kachakacha::v2::app::SelectionSatisfies(command->predicate,facts)));
         if(!ready&&command)reason=QString::fromUtf8(std::string(command->predicateFailureJa).c_str());
         const bool canSelectTarget = command != nullptr
             && kachakacha::v2::app::PredicateCanBeSatisfiedBySelection(
@@ -72,9 +72,9 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
         return false;
     }
     // 判断は core にある。ここで数えると、画面を出さないと確かめられなくなる。
-    const bool ok = id == "part.extrude" ? PlanExtrudeFromSelection().readyToPreview
+    const bool ok = (id=="edit.delete"&&SelectedGroupId().has_value()) || (id == "part.extrude" ? PlanExtrudeFromSelection().readyToPreview
         : kachakacha::v2::app::SelectionSatisfies(command->predicate,
-        BuildFactsForCommands());
+        BuildFactsForCommands()));
     if (!ok && reasonOut != nullptr) {
         *reasonOut = QString::fromUtf8(
             std::string(command->predicateFailureJa).c_str());

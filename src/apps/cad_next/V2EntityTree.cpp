@@ -148,5 +148,5 @@ void V2EntityTree::mousePressEvent(QMouseEvent* event){
     const bool label=row&&event->position().x()>=visualItemRect(row).left();
     const bool expanded=row&&row->isExpanded();
     QTreeWidget::mousePressEvent(event);
-    if(folder&&plain&&label&&row->childCount()>0)row->setExpanded(!expanded);
+    if(folder&&plain&&label)if(auto* current=FindKey(key))current->setExpanded(!expanded);
 }

@@ -21,8 +21,15 @@
 #include <QWidget>
 #include <QString>
 #include <QKeyEvent>
+#include <QObject>
+#include <QPixmap>
 #include <QEventLoop>
 #include <QTimer>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QFile>
+#include <QIODevice>
 #include <QLineEdit>
 #include <QInputMethodEvent>
 #include <QComboBox>
@@ -127,6 +134,10 @@ bool Overlap(V2MainWindow& w) {
 }
 
 namespace {
+void SaveInteractionShot(QWidget& widget,const char* name){
+    const auto path=qEnvironmentVariable("KACHACAD_FOLDER_SHOTS");if(path.isEmpty())return;
+    QDir directory(path);directory.mkpath(".");widget.grab().save(directory.filePath(QString::fromUtf8(name)+".png"));
+}
 void HumanClick(QWidget* widget,const QPointF& point){
     QMouseEvent press(QEvent::MouseButtonPress,point,widget->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
     QMouseEvent release(QEvent::MouseButtonRelease,point,widget->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
@@ -159,7 +170,7 @@ bool FolderInputs(V2MainWindow& w){
     HumanKey(tree,Qt::Key_Right);if(!Explain("right arrow opens the folder",row->isExpanded()))return false;
     HumanKey(tree,Qt::Key_F2);editor=tree->findChild<QLineEdit*>();
     if(!Explain("F2 edits a folder through the keyboard route",editor&&editor->isVisible()))return false;
-    HumanKey(editor,Qt::Key_Escape);
+    HumanKey(editor,Qt::Key_Escape);SaveInteractionShot(w,"folder-open");
     return Explain("folder editing retains the wire",w.Session().GetDocument().FindEntity(wire)!=nullptr);
 }
 bool WireUnderSurface(V2MainWindow& w){
@@ -177,7 +188,7 @@ bool WireUnderSurface(V2MainWindow& w){
     if(!w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary))return false;
     HumanClick(&view,where);
     if(!Explain("advanced surface boundary also takes the source wire",view.Selection().entityIds==std::vector<base::EntityId>{wire}))return false;
-    HumanKey(&w.Viewport(),Qt::Key_Escape);return Explain("both source wire and face remain visible",view.ShapeViews().size()==1&&w.Session().GetDocument().FindEntity(wire)->visibility==domain::Visibility::Visible);
+    SaveInteractionShot(w,"wire-under-face");HumanKey(&w.Viewport(),Qt::Key_Escape);return Explain("both source wire and face remain visible",view.ShapeViews().size()==1&&w.Session().GetDocument().FindEntity(wire)->visibility==domain::Visibility::Visible);
 }
 bool SurfaceGridChoice(V2MainWindow& w){
     w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
@@ -185,7 +196,7 @@ bool SurfaceGridChoice(V2MainWindow& w){
     auto& v=w.Viewport();v.SetSelection({});const auto before=w.Session().GetDocument().Snapshot().revision;
     const auto faces=v.ShapeViews().front().mesh.faceCount;const auto triangles=v.ShapeViews().front().mesh.triangles.size();
     auto choice=w.CurrentGridChoice();choice.grid.visible=false;choice.surfaceGridMode=0;w.ApplyGridChoice(choice);QApplication::processEvents();
-    const auto off=v.grab().toImage();choice.surfaceGridMode=2;w.ApplyGridChoice(choice);QApplication::processEvents();const auto all=v.grab().toImage();
+    SaveInteractionShot(w,"surface-grid-off");const auto off=v.grab().toImage();choice.surfaceGridMode=2;w.ApplyGridChoice(choice);QApplication::processEvents();const auto all=v.grab().toImage();SaveInteractionShot(w,"surface-grid-all");
     if(!Explain("grid display changes pixels without splitting native faces",off!=all&&v.ShapeViews().front().mesh.faceCount==faces&&v.ShapeViews().front().mesh.triangles.size()==triangles))return false;
     choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedOnly=v.grab().toImage();
     if(!Explain("unselected surface does not draw a UV grid in selected-only mode",selectedOnly==off))return false;
@@ -193,6 +204,73 @@ bool SurfaceGridChoice(V2MainWindow& w){
     if(!combo||!combo->isVisible())return false;combo->setFocus();HumanKey(combo,Qt::Key_Home);
     return Explain("keyboard grid choice is view-only and synchronized",v.property("surfaceGridMode").toInt()==0&&w.Session().GetDocument().Snapshot().revision==before);
 }
+bool ConfirmFolderAction(V2MainWindow& w,const char* button){
+    bool found=false;QTimer poll,deadline;deadline.setSingleShot(true);
+    QObject::connect(&poll,&QTimer::timeout,&poll,[&]{if(auto* dialog=w.findChild<QDialog*>("confirmDependentDelete")){
+        poll.stop();found=true;SaveInteractionShot(*dialog,"folder-delete");if(!button)dialog->reject();else if(auto* action=dialog->findChild<QPushButton*>(button))HumanClick(action,action->rect().center());else dialog->reject();}});
+    QObject::connect(&deadline,&QTimer::timeout,&deadline,[&]{for(auto* dialog:w.findChildren<QDialog*>())dialog->reject();});
+    poll.start(2);deadline.start(2000);w.RunCommand("edit.delete");return found;
+}
+bool FolderDeletion(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire}});w.RunCommand("group.create");
+    const auto group=w.Session().GetDocument().Snapshot().groups.back().id;auto* tree=w.EntityTree();
+    const auto select=[&]{tree->clearSelection();tree->setCurrentItem(tree->FindKey("group:"+QString::fromStdString(group.ToString())));QApplication::processEvents();};
+    select();if(!ConfirmFolderAction(w,nullptr))return false;
+    if(!Explain("canceling folder deletion retains folder and geometry",w.Session().GetDocument().Snapshot().groups.size()==1&&w.Session().GetDocument().FindEntity(wire)))return false;
+    select();if(!ConfirmFolderAction(w,"keepGroupContents"))return false;
+    if(!Explain("dissolve retains geometry and removes folder",w.Session().GetDocument().Snapshot().groups.empty()&&w.Session().GetDocument().FindEntity(wire)&&!w.Session().GetDocument().FindEntity(wire)->groupId))return false;
+    w.RunCommand("edit.undo");select();if(!ConfirmFolderAction(w,"confirmDelete"))return false;
+    if(!Explain("delete removes the folder together with its contents",w.Session().GetDocument().Snapshot().groups.empty()&&!w.Session().GetDocument().FindEntity(wire)))return false;
+    w.RunCommand("edit.undo");if(!Explain("one undo restores the folder and contents",w.Session().GetDocument().Snapshot().groups.size()==1&&w.Session().GetDocument().FindEntity(wire)))return false;
+    w.RunCommand("edit.redo");w.RunCommand("edit.undo");
+    return Explain("restored folder survives save/reopen",w.SaveAndReopen("folder-delete.kcd2"));
+}
+bool RenameDuringTool(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire}});w.RunCommand("group.create");
+    const auto group=w.Session().GetDocument().Snapshot().groups.back().id;
+    w.RunCommand("surface.from_lines");if(!w.LoopFacesTool().Active())return false;
+    w.EntityTree()->setCurrentItem(w.EntityTree()->FindKey("group:"+QString::fromStdString(group.ToString())));
+    w.RunCommand("entity.rename");QApplication::processEvents();auto* editor=w.EntityTree()->findChild<QLineEdit*>();if(!editor||!editor->isVisible())return false;
+    editor->selectAll();QInputMethodEvent text;text.setCommitString(QStringLiteral("窓"));QApplication::sendEvent(editor,&text);HumanKey(editor,Qt::Key_Return);
+    Note((std::string("armed rename: guides=")+std::to_string(CountOfKind(w,domain::EntityKind::GuideSurface))+" active="+std::to_string(w.LoopFacesTool().Active())+" name="+w.Session().GetDocument().Snapshot().groups.back().displayName).c_str());
+    return Explain("renaming while a tool is active never confirms geometry",CountOfKind(w,domain::EntityKind::GuideSurface)==0&&w.LoopFacesTool().Active()
+        &&w.Session().GetDocument().Snapshot().groups.back().displayName=="窓");
+}
+
+bool PendingFolderPick(V2MainWindow& w){
+    w.RunCommand("file.new");auto& v=w.Viewport();v.SetVisibleWidthMm(80);
+    std::vector<base::EntityId> wires;
+    for(const auto& ends:std::vector<std::pair<geometry::Vector3,geometry::Vector3>>{{{-20,-5,0},{-5,-5,0}},{{5,5,0},{20,5,0}}}){
+        w.RunCommand("draw.line");for(const auto& point:{ends.first,ends.second}){auto at=v.Mapping().Project(point);if(!at)return false;HumanClick(&v,{at->x,at->y});}
+        w.RunCommand("selection.activate");for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Wire&&std::find(wires.begin(),wires.end(),e.id)==wires.end())wires.push_back(e.id);
+    }
+    if(wires.size()!=2)return false;v.SetSelection(app::SelectionSet{wires});w.RunCommand("group.create");
+    const auto group=w.Session().GetDocument().Snapshot().groups.back().id;const auto key="group:"+QString::fromStdString(group.ToString());
+    v.SetSelection({});w.EntityTree()->clearSelection();w.RunCommand("wire.coincident");
+    auto* row=w.EntityTree()->FindKey(key);if(!row)return false;w.EntityTree()->scrollToItem(row);QApplication::processEvents();
+    const auto builds=w.property("explorerBuilds").toInt();HumanClick(w.EntityTree()->viewport(),w.EntityTree()->visualItemRect(row).center());
+    return Explain("pending two-wire command may rebuild the tree during a folder click without stale rows",w.EntityTree()->FindKey(key)
+        &&w.property("explorerBuilds").toInt()>builds&&w.Session().GetDocument().Snapshot().groups.size()==1);
+}
+bool MixedFolderDeletion(V2MainWindow& w){
+    w.RunCommand("file.new");auto& v=w.Viewport();const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.RunCommand("draw.point");const auto at=v.Mapping().Project({25,25,0});if(!at)return false;HumanClick(&v,{at->x,at->y});w.RunCommand("selection.activate");
+    base::EntityId point;for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Point)point=e.id;
+    if(point.IsNil())return false;
+    v.SetSelection(app::SelectionSet{{wire,point}});w.RunCommand("group.create");const auto group=w.Session().GetDocument().Snapshot().groups.back().id;
+    v.SetSelection({});w.RunCommand("surface.create");if(!w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary))return false;
+    w.EntityTree()->setCurrentItem(w.EntityTree()->FindKey("group:"+QString::fromStdString(group.ToString())));QApplication::processEvents();
+    if(!Explain("surface tool keeps the folder row while mirroring only accepted wires",w.EntityTree()->FindKey("group:"+QString::fromStdString(group.ToString()))->isSelected()
+        &&std::find(v.Selection().entityIds.begin(),v.Selection().entityIds.end(),point)==v.Selection().entityIds.end()))return false;
+    if(!ConfirmFolderAction(w,"confirmDelete"))return false;
+    if(!Explain("folder delete uses document membership including filtered points",!w.Session().GetDocument().FindEntity(wire)&&!w.Session().GetDocument().FindEntity(point)
+        &&w.Session().GetDocument().Snapshot().groups.empty()))return false;
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");
+    return Explain("no dangling folder memberships survive saving",w.SaveAndReopen("folder-filtered-delete.kcd2"));
+}
+
 }
 
 std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categories preserve selection and Undo",Categories},
@@ -201,5 +279,9 @@ std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categori
     {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope},
     {"HP-FP-01 folder mouse keyboard naming and empty creation",FolderInputs},
     {"HP-FP-02 source wires remain pickable under displayed faces",WireUnderSurface},
-    {"HP-FP-03 surface grid is optional and keeps native topology",SurfaceGridChoice}};}
+    {"HP-FP-03 surface grid is optional and keeps native topology",SurfaceGridChoice},
+    {"HP-FP-04 folder delete cancel dissolve Undo and save",FolderDeletion},
+    {"HP-FP-05 inline rename cannot confirm an armed modeling tool",RenameDuringTool},
+    {"HP-FP-06 folder pick remains safe when a pending command rebuilds rows",PendingFolderPick},
+    {"HP-FP-07 folder deletion includes members filtered by an active tool",MixedFolderDeletion}};}
 }

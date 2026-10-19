@@ -353,6 +353,7 @@ void V2MainWindow::BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGr
         made->setText(0, QString::fromStdString(
             group->displayName + (active ? " ←作業中" : "")));
         made->setText(1, QStringLiteral("グループ"));
+        made->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
         made->setIcon(0, V2GroupTreeIcon());
         if (active) {
             QFont font = made->font(0);

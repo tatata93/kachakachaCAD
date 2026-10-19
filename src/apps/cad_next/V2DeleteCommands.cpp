@@ -3,8 +3,12 @@
 // Selection deletion is prepared without touching the document, previewed, then committed atomically.
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
+#include <QTreeWidgetItem>
 #include "kachakacha/document/Commands.h"
 #include <QDialog>
+#include <QObject>
+#include <QWidget>
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QListWidget>
@@ -26,14 +30,47 @@ public:
     }
 private: document::DocumentSnapshot after_;
 };
+void ExpandFolderSelection(const document::DocumentSnapshot& before,const std::set<base::GroupId>& allFolders,app::SelectionSet& selection){
+    // A tool may mirror only accepted input kinds into the viewport. Folder contents
+    // come from the document, and always mean whole entities (not picked segments).
+    for(const auto& entity:before.entities)if(entity.groupId&&allFolders.contains(*entity.groupId)){
+        if(std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())selection.entityIds.push_back(entity.id);
+        std::erase_if(selection.ordered,[&](const auto& ref){return ref.entityId==entity.id;});
+        app::SelectionRef whole;whole.entityId=entity.id;selection.ordered.push_back(whole);
+    }
+}
+int ConfirmDeletion(QWidget* parent,const QStringList& names,bool hasFolders){
+        bool keepContents=false;QDialog dialog(parent);dialog.setObjectName(QStringLiteral("confirmDependentDelete"));dialog.setWindowTitle(QStringLiteral("使っているものも削除"));
+        auto* layout=new QVBoxLayout(&dialog);
+        layout->addWidget(new QLabel(!hasFolders?QStringLiteral("この要素を使っているものがあります。\n次の要素が消えます。削除しますか？\n3Dビューの赤色が削除対象です。"):
+            QStringLiteral("グループと中の要素を削除しますか？\n中身を残してグループだけ解除することもできます。\n3Dビューの赤色が削除対象です。"),&dialog));
+        auto* list=new QListWidget(&dialog);list->addItems(names);list->setMinimumSize(330,160);layout->addWidget(list);
+        auto* buttons=new QDialogButtonBox(QDialogButtonBox::Cancel,&dialog);
+        auto* confirm=buttons->addButton(QStringLiteral("一覧の要素を削除"),QDialogButtonBox::AcceptRole);confirm->setObjectName(QStringLiteral("confirmDelete"));
+        if(hasFolders){auto* keep=buttons->addButton(QStringLiteral("グループを解除（中身を残す）"),QDialogButtonBox::ActionRole);
+            keep->setObjectName("keepGroupContents");QObject::connect(keep,&QPushButton::clicked,&dialog,[&]{keepContents=true;dialog.accept();});}
+        buttons->button(QDialogButtonBox::Cancel)->setDefault(true);layout->addWidget(buttons);
+        QObject::connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);QObject::connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+    if(dialog.exec()!=QDialog::Accepted)return -1;
+    return keepContents?1:0;
+}
+
 }
 
 void V2MainWindow::DeleteSelected()
 {
     using namespace kachakacha::v2;
-    const auto selection=viewport_->Selection();
-    if(selection.entityIds.empty()){SetStatus(QStringLiteral("削除: 先に選んでください。"));return;}
+    auto selection=viewport_->Selection();
+    std::set<base::GroupId> folders;
+    for(const auto& [row,id]:groupItems_)if(row->isSelected())folders.insert(id);
+    if(selection.entityIds.empty()&&folders.empty()){SetStatus(QStringLiteral("削除: 先に選んでください。"));return;}
     auto after=session_->GetDocument().Snapshot();const auto before=after;
+    auto allFolders=folders;
+    for(std::size_t pass=0;pass<before.groups.size();++pass)
+        for(const auto& group:before.groups)if(group.parentId&&allFolders.contains(*group.parentId))allFolders.insert(group.id);
+    ExpandFolderSelection(before,allFolders,selection);
+    std::erase_if(after.groups,[&](const auto& group){return allFolders.contains(group.id);});
+    if(after.settings.activeGroupId&&allFolders.contains(*after.settings.activeGroupId))after.settings.activeGroupId.reset();
     std::set<base::FeatureId> roots;
     std::set<base::SegmentId> cutIds;
     QStringList partialNames;bool dependencyCascade=false;
@@ -90,7 +127,8 @@ void V2MainWindow::DeleteSelected()
     }
     const auto gone=[&](base::EntityId id){return std::none_of(after.entities.begin(),after.entities.end(),[&](const auto& e){return e.id==id;});};
     QStringList names=partialNames;std::vector<base::EntityId> preview;
-    bool dependents=dependencyCascade;
+    bool dependents=dependencyCascade||!folders.empty();bool keepContents=false;
+    for(const auto& group:before.groups)if(allFolders.contains(group.id))names.push_back(QStringLiteral("グループ: ")+QString::fromStdString(group.displayName));
     for(const auto& entity:before.entities)if(gone(entity.id)){
         preview.push_back(entity.id);names.push_back(QString::fromStdString(entity.displayName));
         if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())dependents=true;
@@ -104,19 +142,16 @@ void V2MainWindow::DeleteSelected()
     });
     if(dependents){
         viewport_->SetDeletionPreview(preview);RefreshShapeViews();
-        QDialog dialog(this);dialog.setObjectName(QStringLiteral("confirmDependentDelete"));dialog.setWindowTitle(QStringLiteral("使っているものも削除"));
-        auto* layout=new QVBoxLayout(&dialog);
-        layout->addWidget(new QLabel(QStringLiteral("この要素を使っているものがあります。\n次の要素が消えます。削除しますか？\n3Dビューの赤色が削除対象です。"),&dialog));
-        auto* list=new QListWidget(&dialog);list->addItems(names);list->setMinimumSize(330,160);layout->addWidget(list);
-        auto* buttons=new QDialogButtonBox(QDialogButtonBox::Cancel,&dialog);
-        auto* confirm=buttons->addButton(QStringLiteral("一覧の要素を削除"),QDialogButtonBox::AcceptRole);confirm->setObjectName(QStringLiteral("confirmDelete"));
-        buttons->button(QDialogButtonBox::Cancel)->setDefault(true);layout->addWidget(buttons);
-        connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-        const bool accepted=dialog.exec()==QDialog::Accepted;viewport_->SetDeletionPreview({});RefreshShapeViews();
+        const int choice=ConfirmDeletion(this,names,!folders.empty());
+        const bool accepted=choice>=0;keepContents=choice==1;
+        viewport_->SetDeletionPreview({});RefreshShapeViews();
         if(!accepted){fail(QStringLiteral("使っているものを含む削除を取り消しました。"));return;}
     }
+    if(keepContents){after=before;for(const auto id:folders){const auto diagnostics=document::RemoveGroupCommand(id).Apply(after);
+        for(const auto& d:diagnostics)if(d.IsError()){ReportDiagnostics(diagnostics);return;}}}
     const auto result=session_->GetDocument().Run(DeletePlan(std::move(after)));
     if(!result.committed){ReportDiagnostics(result.diagnostics);return;}
     session_->CancelTool();AdoptCurrentDocument();RefreshShapeViews();RefreshEntityList();
-    SetStatus(QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));
+    SetStatus(keepContents?QStringLiteral("グループを解除しました。中身は残っています。Ctrl+Zで戻せます。"):
+        QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));
 }

@@ -46,6 +46,7 @@ template<class T>T* Shown(V2MainWindow& w,const char* name){for(auto* item:w.fin
 V2InstructionMode* Editor(V2MainWindow& w){for(auto* child:w.centralWidget()->children())if(auto* mode=dynamic_cast<V2InstructionMode*>(child))return mode;return nullptr;}
 void Mouse(QWidget* w,QEvent::Type type,QPointF point,Qt::MouseButton button,Qt::MouseButtons held){if(!w->window()->isActiveWindow()){w->window()->activateWindow();QApplication::processEvents();}QMouseEvent e(type,point,point,button,held,Qt::NoModifier);QApplication::sendEvent(w,&e);QApplication::processEvents();}
 void Click(QWidget* w,QPointF point){Mouse(w,QEvent::MouseButtonPress,point,Qt::LeftButton,Qt::LeftButton);Mouse(w,QEvent::MouseButtonRelease,point,Qt::LeftButton,Qt::NoButton);}
+void Key(QWidget* w,int key,Qt::KeyboardModifiers modifiers=Qt::NoModifier){QKeyEvent press(QEvent::KeyPress,key,modifiers);QApplication::sendEvent(w,&press);QKeyEvent release(QEvent::KeyRelease,key,modifiers);QApplication::sendEvent(w,&release);QApplication::processEvents();}
 QJsonArray Items(V2InstructionMode& m){const auto s=m.Snapshot();return s["sheets"].toArray()[s["currentSheet"].toInt()].toObject()["items"].toArray();}
 QRectF Rect(const QJsonObject& item){const auto a=item["rect"].toArray();return {a[0].toDouble(),a[1].toDouble(),a[2].toDouble(),a[3].toDouble()};}
 bool Press(V2MainWindow& w,const char* name){auto* button=Shown<QPushButton>(w,name);if(!button)return false;button->click();QApplication::processEvents();return true;}
@@ -131,6 +132,31 @@ bool InstructionResizeBounds() {
     }
     return true;
 }
+bool InstructionInlineKeys(V2MainWindow& w,V2InstructionMode& mode,V2InstructionSheetView* paper) {
+    QTemporaryDir folder;const auto path=folder.filePath("keys.kci");if(!mode.Save(path))return false;
+    const auto original=mode.Snapshot();const auto revision=w.Session().GetDocument().Revision();
+    paper->SetSelected(0);Mouse(paper,QEvent::MouseButtonDblClick,paper->ToScreen({25,25}),Qt::LeftButton,Qt::LeftButton);
+    auto* edit=Shown<QPlainTextEdit>(w,"instructionInlineText");if(!edit)return false;
+    edit->setPlainText("Keyboard baseline");edit->selectAll();edit->insertPlainText("Keyboard replacement");
+    Key(edit,Qt::Key_Z,Qt::ControlModifier);
+    if(!Explain("inline Ctrl+Z changes the draft, preserving the paper item and CAD history",edit->toPlainText()=="Keyboard baseline"
+        &&Items(mode).size()==1&&mode.Snapshot()==original&&w.Session().GetDocument().Revision()==revision))return false;
+    edit->selectAll();Key(edit,Qt::Key_Delete);
+    if(!Explain("inline Delete removes selected characters, not the paper item",edit->toPlainText().isEmpty()&&Items(mode).size()==1))return false;
+    Key(edit,Qt::Key_Z,Qt::ControlModifier);Key(edit,Qt::Key_Return,Qt::ControlModifier);
+    if(!Explain("inline Ctrl+Enter commits the paragraph and returns to paper selection",!edit->isVisible()
+        &&Items(mode)[0].toObject()["text"]=="Keyboard baseline"&&paper->hasFocus()))return false;
+    Key(paper,Qt::Key_Z,Qt::ControlModifier);
+    if(!Explain("paper Ctrl+Z undoes the committed paragraph without changing CAD",mode.Snapshot()==original
+        &&w.Session().GetDocument().Revision()==revision))return false;
+    paper->SetSelected(0);Mouse(paper,QEvent::MouseButtonDblClick,paper->ToScreen({25,25}),Qt::LeftButton,Qt::LeftButton);
+    edit=Shown<QPlainTextEdit>(w,"instructionInlineText");if(!edit)return false;edit->setPlainText("Keyboard saved paragraph");
+    Key(edit,Qt::Key_S,Qt::ControlModifier);
+    if(!Explain("inline Ctrl+S commits the draft before saving KCI",!edit->isVisible()&&Items(mode)[0].toObject()["text"]=="Keyboard saved paragraph"))return false;
+    if(!mode.Load(path)||!Explain("Ctrl+S saved the paragraph to disk and preserved CAD",Items(mode)[0].toObject()["text"]=="Keyboard saved paragraph"
+        &&w.Session().GetDocument().Revision()==revision))return false;
+    return mode.Restore(original);
+}
 bool InstructionLayoutUsability(V2MainWindow& w) {
     if(!InstructionResizeBounds())return false;
     QTemporaryDir folder;w.resize(1550,1000);w.show();w.SetMode(app::UiMode::Instructions);QApplication::processEvents();
@@ -214,6 +240,7 @@ bool InstructionTextAndPageUsability(V2MainWindow& w) {
     auto* edit=Shown<QPlainTextEdit>(w,"instructionSelectedText");if(!edit)return false;edit->setPlainText(QStringLiteral("適用ボタンを押さずに保存した文章"));
     if(!mode->Save(cleanup.path)||!mode->Load(cleanup.path)||!Explain("save commits the selected text draft",Items(*mode)[0].toObject()["text"]==QStringLiteral("適用ボタンを押さずに保存した文章")))return false;
     if(!InstructionInlineFocus(w,*mode,paper))return false;
+    if(!InstructionInlineKeys(w,*mode,paper))return false;
     paper->SetSelected(0);edit=Shown<QPlainTextEdit>(w,"instructionSelectedText");if(!edit)return false;edit->setFocus();edit->setPlainText(QStringLiteral("新規作成前の編集中の文章"));
     bool asked=false;QTimer::singleShot(50,[&]{if(auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())){asked=true;box->button(QMessageBox::Cancel)->click();}});
     w.RunCommand("file.new");if(!Explain("new shortcut commits the focused draft before its save question",asked&&Items(*mode)[0].toObject()["text"]==QStringLiteral("新規作成前の編集中の文章")))return false;

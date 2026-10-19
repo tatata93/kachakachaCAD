@@ -65,7 +65,7 @@ def build():
             detail=notes.get(ident,'')
             if detail and html.unescape(re.sub('<[^>]+>','',detail))==guide: detail=''
             cards.append(f'<article class="command" id="cmd-{ident}" data-command="{ident}"><h3>{escape(name)}'+(f' <kbd>{escape(shortcut)}</kbd>' if shortcut else '')+f'</h3><p>{escape(guide)}</p>'+(f'<p>{detail}</p>' if detail else '')+f'<p class="meta">準備例: {escape(RECIPES[ident]["prepare"])} / 設定例: {escape(RECIPES[ident]["settings"])}</p>'+(f'<p class="meta">対象・実行条件の案内: {escape(failure)}</p>' if failure else '')+f'<p><a href="manual/tools/{ident}.html">{escape(RECIPES[ident]["task"])} — 準備・選択・設定・確定までの詳しい手順</a> · <a href="#{chapter}">機能の概要</a> · <code>{ident}</code></p></article>')
-        refs.append(f'<section id="ref-{key}"><h2>{label} — 全コマンド一覧</h2>'+figure(picture,label+'の参考画面・模式図（個々の設定は下の項目を参照）')+'\n'.join(cards)+'</section>')
+        refs.append(f'<section id="ref-{key}"><h2>{label} — 全コマンド一覧</h2>'+figure(picture,label+'の参考実画面（個々の設定は下の項目を参照）')+'\n'.join(cards)+'</section>')
     sections+=refs
     nav=[]
     for s in sections:
@@ -79,8 +79,8 @@ def build():
 <body><a class="skip" href="#manual-content">本文へ</a><div class="layout"><nav aria-label="目次"><strong>kachakachaCAD</strong><span>画像付きユーザーマニュアル</span>
 <label for="manual-search">全機能を検索</label><input id="manual-search" type="search" placeholder="例: 円弧 / 画像 / 押し出し"><div class="toolbar"><button id="clear-search">検索解除</button><button id="print-manual">印刷 / PDF</button></div><p id="search-result" role="status"></p><ol>'''+''.join(nav)+'''</ol></nav><main id="manual-content">
 <p class="eyebrow">V2 / 操作例・方式別手順 / オフライン対応</p>
-'''+f'<p>作図・部品・製作・出力・説明書の5モード。現在の登録コマンド <strong>{len(rows)}件</strong> を掲載しています。図はWindows版の実画面と、操作を説明する模式図です。模式図は実画面ではありません。機能名・用途で検索し、図をクリックして拡大できます。</p>\n'+'\n'.join(sections)+'''
-<footer>対象: V2。各コマンドの図付き手順に具体例と制限を記載。実画面と模式図は区別して表示。記載の制限は解消済みとは扱いません。表示形状・製作近似の誤差と実製作寸法を確認してください。HTMLと隣のmanualフォルダーを一緒に保管すればインターネットなしで読めます。</footer></main></div></body></html>
+'''+f'<p>作図・部品・製作・出力・説明書の5モード。現在の登録コマンド <strong>{len(rows)}件</strong> を掲載しています。画像は実アプリの操作画面です。入力待ち・下見・確定後の別をキャプションで確認できます。機能名・用途で検索し、図をクリックして拡大できます。</p>\n'+'\n'.join(sections)+'''
+<footer>対象: V2。各コマンドの図付き手順に具体例と制限を記載。入力待ち・下見・確定後を区別して表示。記載の制限は解消済みとは扱いません。表示形状・製作近似の誤差と実製作寸法を確認してください。HTMLと隣のmanualフォルダーを一緒に保管すればインターネットなしで読めます。</footer></main></div></body></html>
 '''
     # Every illustration is expandable, including inherited tutorial figures.
     text=re.sub(r'(<figure[^>]*>)\s*(<img\b[^>]*src="([^"]+)"[^>]*>)',

@@ -701,7 +701,7 @@ Escは入力だけを取消してツールと設定を維持します。元形�
 ![押し出しの全体結果](images/v2-headlight-lamp-central-plane-result.png)
 ![ライトの拡大結果](images/v2-headlight-lamp-central-plane-detail.png)
 
-実画面は画像ごとに別例・入力待ち・下見・確定の別を記載しています。模式図を実際のCAD完成形とは扱いません。
+実画面は画像ごとに別例・入力待ち・下見・確定の別を記載しています。入口・参考画面を、例題の各段階の生成証拠とは扱いません。
 
 `headlight-lamp-faces-preview`、`headlight-lamp-central-plane-pick`、`headlight-lamp-central-plane-preview`、`headlight-lamp-central-plane-result`、`headlight-lamp-central-plane-detail` は2026-10-16の実アプリ記録を同梱した画像名です。`--manual-state` の引数ではありません。
 

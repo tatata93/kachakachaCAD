@@ -22,6 +22,7 @@
 #include <QString>
 
 #include <string>
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -73,6 +74,7 @@ private:
     void Choose(kachakacha::v2::app::SurfaceEditOperation operation);
     void Refresh();
     void RefreshPreview();
+    [[nodiscard]] std::vector<std::uint64_t> CurrentSourceHandles() const;
     void ReleasePreviewSurfaces();
     void BuildSurfaces();
     void BuildWires();
@@ -92,5 +94,8 @@ private:
     kachakacha::v2::app::SurfaceEditInputState input_;
     kachakacha::v2::app::SurfaceEditOutcome outcome_;
     std::vector<BuiltSurface> surfaces_;
+    std::vector<std::uint64_t> previewSourceHandles_;
+    kachakacha::v2::geometry::Vector3 previewPlaneOrigin_, previewPlaneNormal_;
+    double previewLinearMm_ = 0, previewAngularRad_ = 0, previewJoinMm_ = 0, previewNumericEpsilon_ = 0;
     std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> wires_;
 };

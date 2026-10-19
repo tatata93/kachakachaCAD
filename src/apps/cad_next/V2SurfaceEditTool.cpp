@@ -215,6 +215,7 @@ void V2SurfaceEditTool::HandleSelectionChanged()
     if (!active_ || mirroring_ || window_.viewport_ == nullptr) {
         return;
     }
+    const auto before=input_;
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
         ApplyPick(*pick);
     } else if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges == 0) {
@@ -227,8 +228,21 @@ void V2SurfaceEditTool::HandleSelectionChanged()
         window_.SetStatus(QStringLiteral("縁は3Dビューで選んでください。面だけの一覧選択では縁を特定できません。"));
     }
     MirrorToSelection();   // 受けなかったもの(部品など)を選択に残さない。
+    const auto& plane=window_.viewport_->WorkPlane();
+    const auto& tolerance=window_.session_->GetDocument().Snapshot().settings.tolerance;
+    const bool sameEdges=before.edges.size()==input_.edges.size()&&std::equal(before.edges.begin(),before.edges.end(),input_.edges.begin(),
+        [](const auto& a,const auto& b){return a.surface==b.surface&&a.edgeIndex==b.edgeIndex&&a.hitPoint==b.hitPoint;});
+    // Folder/visibility changes can re-notify an identical selection. Retain a
+    // surface-only preview only when its exact native sources and context match.
+    // Wire projection remains on the normal path: its source curves may change
+    // without replacing a native surface handle.
+    if(input_.wires.empty()&&before.surfaces==input_.surfaces&&before.wires==input_.wires&&sameEdges
+        &&previewSourceHandles_==CurrentSourceHandles()&&previewPlaneOrigin_==plane.origin&&previewPlaneNormal_==plane.normal
+        &&previewLinearMm_==tolerance.modelLinearMm&&previewAngularRad_==tolerance.modelAngularRad
+        &&previewJoinMm_==tolerance.interactiveJoinMm&&previewNumericEpsilon_==tolerance.numericEpsilon){RefreshDock();return;}
     Refresh();
 }
+
 
 void V2SurfaceEditTool::ApplyPick(const EntityId& id)
 {
@@ -324,6 +338,13 @@ namespace {
 }
 
 } // namespace
+
+std::vector<std::uint64_t> V2SurfaceEditTool::CurrentSourceHandles() const{
+    std::vector<std::uint64_t> handles;
+    for(const auto& edge:input_.edges)handles.push_back(ShapeOf(window_.guideShapes_,edge.surface).value);
+    for(const auto& surface:input_.surfaces)handles.push_back(ShapeOf(window_.guideShapes_,surface).value);
+    return handles;
+}
 
 //! 面ができる作り方(合わせる・つなぐ・整える・対称)。**実際に核で作る。**
 void V2SurfaceEditTool::BuildSurfaces()
@@ -447,6 +468,11 @@ void V2SurfaceEditTool::BuildWires()
 //! そろっていれば **実際に作って** 下見に出す。文書へは書かない。
 void V2SurfaceEditTool::RefreshPreview()
 {
+    previewSourceHandles_=CurrentSourceHandles();
+    previewPlaneOrigin_=window_.viewport_->WorkPlane().origin;previewPlaneNormal_=window_.viewport_->WorkPlane().normal;
+    const auto& previewTolerance=window_.session_->GetDocument().Snapshot().settings.tolerance;
+    previewLinearMm_=previewTolerance.modelLinearMm;previewAngularRad_=previewTolerance.modelAngularRad;
+    previewJoinMm_=previewTolerance.interactiveJoinMm;previewNumericEpsilon_=previewTolerance.numericEpsilon;
     outcome_ = kachakacha::v2::app::SurfaceEditOutcome{};
     ReleasePreviewSurfaces();
     wires_.clear();

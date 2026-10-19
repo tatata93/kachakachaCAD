@@ -10,6 +10,8 @@
 #include "V2SurfaceEditDock.h"
 #include "V2SurfaceEditTool.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
+#include "kachakacha/document/Commands.h"
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
@@ -20,8 +22,15 @@
 
 #include <QPointF>
 #include <QString>
+#include <QPushButton>
+#include <QTreeWidgetItem>
+#include <QApplication>
+#include <QMouseEvent>
+#include <QEvent>
+#include <QVariant>
 
 #include <string>
+#include <algorithm>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -264,6 +273,38 @@ bool SurfaceHistoryOwnership(V2MainWindow& w)
     return true;
 }
 
+
+bool SurfaceFolderPreview(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.22,.35,.46,.65);if(wire.IsNil())return false;
+    const auto surface=SurfaceFromRectangle(w,wire);if(surface.IsNil())return false;
+    w.SelectTool(modeling::DrawingTool::Select);w.Viewport().SetSelection({});w.EntityTree()->clearSelection();w.RunCommand("group.create");
+    const auto hidden=w.Session().GetDocument().Snapshot().groups.back().id;
+    const auto row=[&]{return w.EntityTree()->FindKey("group:"+QString::fromStdString(hidden.ToString()));};
+    row()->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    w.ActivateCommand("surface.mirror");if(!ClickSurfaceAt(w,surface,.5,.5))return false;
+    const auto handles=w.SurfaceEdit().PreviewSurfaces();if(handles.size()!=1)return false;const auto count=kernel::CachedShapeCount();
+    auto* button=w.findChild<QPushButton*>("explorerSiblingGroup");if(!button)return false;const QPointF point=button->rect().center();
+    QMouseEvent press(QEvent::MouseButtonPress,point,button->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease,point,button->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(button,&press);QApplication::sendEvent(button,&release);QApplication::processEvents();
+    const auto retained=[&]{return w.SurfaceEdit().Active()&&w.SurfaceEdit().Outcome().available&&w.SurfaceEdit().PreviewSurfaces().size()==1&&w.SurfaceEdit().PreviewSurfaces().front().value==handles.front().value&&kernel::CachedShapeCount()==count;};
+    if(!Explain("empty folder mouse creation does not recalculate a valid surface preview",retained()))return false;
+    w.EntityTree()->DropOnto({w.ItemOfEntity(surface)},row());
+    if(!Explain("folder move preserves preview and hides source geometry",retained()&&std::none_of(w.Viewport().ShapeViews().begin(),w.Viewport().ShapeViews().end(),[&](const auto& shape){return shape.entityId==surface;})))return false;
+    row()->setCheckState(0,Qt::Checked);QApplication::processEvents();if(!Explain("group visibility keeps the same native preview",retained()))return false;
+    auto settings=w.Session().GetDocument().Snapshot();settings.settings.tolerance.interactiveJoinMm=.02;
+    const auto changed=w.Session().GetDocument().ResetTo(std::move(settings));
+    if(std::any_of(changed.begin(),changed.end(),[](const auto& d){return d.IsError();}))return false;
+    w.SurfaceEdit().HandleSelectionChanged();const auto withTolerance=w.SurfaceEdit().PreviewSurfaces();
+    if(!Explain("join tolerance alone invalidates the native preview",withTolerance.size()==1&&withTolerance.front().value!=handles.front().value&&w.SurfaceEdit().Outcome().available))return false;
+    const auto* entity=w.Session().GetDocument().FindEntity(wire);const auto* feature=w.Session().GetDocument().FindFeature(entity->createdBy);
+    auto definition=std::get<domain::CreateWireDefinition>(feature->definition);
+    for(auto& segment:definition.segments)segment=geometry::CurveSegment::MakeLine(segment.StartPoint()+geometry::Vector3{3,0,0},segment.EndPoint()+geometry::Vector3{3,0,0}).Value();
+    if(!w.Session().GetDocument().Run(document::UpdateFeatureDefinitionCommand(feature->id,definition,feature->inputEntityIds,"source geometry change")).committed)return false;
+    w.RebuildKernelShapes();w.SurfaceEdit().HandleSelectionChanged();const auto fresh=w.SurfaceEdit().PreviewSurfaces();
+    return Explain("a real native source change still recalculates the preview",fresh.size()==1&&fresh.front().value!=withTolerance.front().value&&w.SurfaceEdit().Outcome().available&&w.RebuildProblems().isEmpty());
+}
+
 std::vector<SelfTestCase> SurfaceEditCases()
 {
     return {
@@ -276,6 +317,7 @@ std::vector<SelfTestCase> SurfaceEditCases()
         {"HP-SE-04 surface preview ownership survives replace cancel and commit",SurfacePreviewOwnership},
         {"HP-SE-05 surface creation preview ownership",SurfaceCreationOwnership},
         {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
+        {"HP-SE-07 folder metadata preserves preview but geometry invalidates it",SurfaceFolderPreview},
     };
 }
 

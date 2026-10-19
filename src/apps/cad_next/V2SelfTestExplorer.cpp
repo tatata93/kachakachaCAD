@@ -23,8 +23,18 @@
 #include <QFile>
 #include <QIODevice>
 #include <QScrollBar>
+#include <QMouseEvent>
+#include <QEvent>
+#include <QStyleOptionViewItem>
+#include <QStyle>
+#include <QCryptographicHash>
+#include <QPixmap>
+#include <QDir>
+#include <QWidget>
+#include <QByteArray>
 
 #include <map>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -236,25 +246,44 @@ bool CaseExplorerKeepsViewState(V2MainWindow& window) {
 
 } // namespace
 
+namespace {
+void ExplorerMouseClick(QWidget* widget,const QPointF& position){
+    QMouseEvent press(QEvent::MouseButtonPress,position,widget->mapToGlobal(position.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease,position,widget->mapToGlobal(position.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(widget,&press);QApplication::sendEvent(widget,&release);QApplication::processEvents();
+}
+QByteArray ExplorerInputHash(const QString& path){QFile file(path);if(!file.open(QIODevice::ReadOnly))return {};return QCryptographicHash::hash(file.readAll(),QCryptographicHash::Sha256).toHex();}
+}
 bool ExplorerOwnerLatency(V2MainWindow& w)
 {
-    const auto path=qEnvironmentVariable("KACHACAD_EXPLORER_OWNER_INPUT");
-    if(!w.OpenDocumentFile(path))return false;
+    const auto path=qEnvironmentVariable("KACHACAD_EXPLORER_OWNER_INPUT");const auto original=ExplorerInputHash(path);QElapsedTimer load;load.start();
+    if(original.isEmpty()||!w.OpenDocumentFile(path))return false;const double openMs=load.nsecsElapsed()/1e6;
     w.SelectTool(modeling::DrawingTool::Select);auto* tree=w.EntityTree();
     std::vector<base::EntityId> wires;for(const auto& e:w.Session().GetDocument().Snapshot().entities)
         if(e.kind==EntityKind::Wire)wires.push_back(e.id);
     if(wires.size()<10)return false;
-    QJsonArray selecting,toggling;QElapsedTimer timer;
+    QJsonArray selecting,toggling;QElapsedTimer timer;bool correct=true;
     const auto builds=w.property("explorerBuilds").toInt();
-    for(int i=0;i<10;++i){timer.start();tree->setCurrentItem(w.ItemOfEntity(wires[i]));QApplication::processEvents();selecting.append(timer.nsecsElapsed()/1e6);}
+    for(int i=0;i<10;++i){auto* row=w.ItemOfEntity(wires[i]);tree->scrollToItem(row);QApplication::processEvents();timer.start();
+        ExplorerMouseClick(tree->viewport(),tree->visualItemRect(row).center());selecting.append(timer.nsecsElapsed()/1e6);
+        correct=correct&&tree->currentItem()==row&&std::find(w.Viewport().Selection().entityIds.begin(),w.Viewport().Selection().entityIds.end(),wires[i])!=w.Viewport().Selection().entityIds.end();}
     auto* row=w.ItemOfEntity(wires.back());auto* selected=tree->currentItem();const auto key=V2EntityTree::KeyOf(selected);
     tree->scrollToItem(row);QApplication::processEvents();const auto scroll=tree->verticalScrollBar()->value();
-    bool stable=true;
-    for(int i=0;i<10;++i){auto* item=w.ItemOfEntity(wires.back());timer.start();item->setCheckState(0,i%2?Qt::Checked:Qt::Unchecked);QApplication::processEvents();toggling.append(timer.nsecsElapsed()/1e6);
-        stable=stable&&w.ItemOfEntity(wires.back())==row&&V2EntityTree::KeyOf(tree->currentItem())==key&&tree->verticalScrollBar()->value()==scroll;}
-    const QJsonObject report{{"selection_ms",selecting},{"visibility_ms",toggling},{"tree_rebuilds",w.property("explorerBuilds").toInt()-builds},{"stable_rows_and_scroll",stable}};
+    const bool visible=w.Session().GetDocument().FindEntity(wires.back())->visibility==Visibility::Visible;bool stable=true;
+    for(int i=0;i<50;++i){auto* item=w.ItemOfEntity(wires.back());QStyleOptionViewItem option;option.initFrom(tree);option.rect=tree->visualItemRect(item);
+        option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=item->checkState(0);
+        const QPointF checkbox=tree->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,tree).center();timer.start();
+        ExplorerMouseClick(tree->viewport(),checkbox);toggling.append(timer.nsecsElapsed()/1e6);
+        const bool expected=i%2?visible:!visible;
+        stable=stable&&w.ItemOfEntity(wires.back())==row&&V2EntityTree::KeyOf(tree->currentItem())==key&&tree->verticalScrollBar()->value()==scroll
+            &&(w.Session().GetDocument().FindEntity(wires.back())->visibility==Visibility::Visible)==expected;}
+    const bool unchanged=ExplorerInputHash(path)==original;
+    const QJsonObject report{{"input_sha256",QString::fromLatin1(original)},{"input_unchanged",unchanged},{"input_transport",QStringLiteral("Qt mouse events; OS injection unavailable")},
+        {"open_ms",openMs},{"wire_count",int(wires.size())},{"selection_ms",selecting},{"visibility_ms",toggling},{"tree_rebuilds",w.property("explorerBuilds").toInt()-builds},
+        {"correct_selection",correct},{"stable_rows_and_scroll",stable}};
     QFile file(qEnvironmentVariable("KACHACAD_EXPLORER_OWNER_REPORT"));if(!file.open(QIODevice::WriteOnly))return false;file.write(QJsonDocument(report).toJson());
-    return Explain("owner visibility changes preserve rows selection and scroll",stable);
+    const auto shots=qEnvironmentVariable("KACHACAD_FOLDER_SHOTS");if(!shots.isEmpty()){QDir dir(shots);dir.mkpath(".");w.grab().save(dir.filePath("owner-explorer.png"));}
+    return Explain("owner mouse selection and checkbox changes preserve targets rows scroll and source file",stable&&correct&&unchanged);
 }
 
 std::vector<SelfTestCase> ExplorerUpdateCases();

@@ -1,6 +1,6 @@
 # フォルダ操作・面表示・ワイヤ選択と5視点のデバッグ（2026-10-19）
 
-状態: 進行中。基点dfc6d153f、WP-08。既存の無関係なworktree・原本・配布物は保全する。
+状態: 完了。基点dfc6d153f、WP-08。検証済み製品・試験ソースはdaa0ceaeb。既存の無関係なworktree・原本・配布物を保全した。
 
 ## 最初の修正
 
@@ -109,3 +109,86 @@
 - 折れ面の体積検査を上下限の包絡から、幅・厚み・曲げ角のmiter補正を含む解析値との1e-6 mm³比較へ強化。表/裏/中央、平坦/37%/90度、反転した軸で一致。平坦時は7.8 mm³、90度は表7.6・裏8.0・中央7.8 mm³。
 - `round5-native/tests.log`で全12件成功。穴・島・スキン位置・元形状不変の検査を保持。許容を緩和しない。
 - ここから完成候補を固定し、正式`full`で全CTest・開発版全UI・配布版全UI・旧自己試験を確認する。完了前に完成配布版とは扱わない。
+
+最終候補はdaa0ceaebとしてcommit・pushして固定。配布ZIPの全542 UIが成功（CTest v2_package_zip: 762.60秒）。全体ゲートの残りを確認中。
+
+
+## 第5回完了・配布と通常起動
+
+- `out/verification/folder-surfaces-final-20261019/result.json`: status passed、preflight 9件、CTest 195件（skip 0）、開発版全542 UI、配布版全542 UI、旧CAD `--self-test`が全て成功。
+- CTest経過1491.81秒、通常の全体入口の経過1581.30秒（26分21秒）。配布版762.60秒・開発版675.60秒は各CTestの経過であり、並列区間を足してユーザー待ち時間としていない。旧自己試験9.95秒。
+- ソース候補daa0ceaeba7ef248f767220ba91bc534d9f45b50、入力SHA-256 `b31908f545aabf9a2b25ac1c70def06ca7d822f74deb4467e39bee2555fd7a53`。
+- `verify.py publish`がソース・設定・環境・XML・両UI予定/実績・ZIP・コピー後バイト列を再照合して成功。
+- 配布先 `out/releases/folder-surfaces-final-20261019/package/kachakacha_cad_next.exe`。ZIP `out/releases/folder-surfaces-final-20261019/package.zip`、SHA-256 `b520e502dd9bee4f512554c319cbff6ac7c940e9cbf08f62d68a2063ef19599e`。
+- `scripts/run-verified.py out/releases/folder-surfaces-final-20261019`で通常起動。`out/folder-surface-20261019/normal-startup/startup.json`でready/rendered/event_loop/visible/exposed/on_screenが全てtrue。Windows、1180×945。自動終了フラグを付けず、利用可能なウィンドウを残した。編集中の旧版は終了させない。
+- WP-08の完了欄は、配布後の記録更新として別コミットへ入れる。この記録更新を製品の再ビルドと混同しない。配布物は上記候補の不変な検証済みバイト列。
+
+## 各回のコミットと入口
+
+| 段階 | commit | 主な確認 |
+| --- | --- | --- |
+| 最初の修正 | 649f25d40 | フォルダ操作・面入力・格子・不要境界整理 |
+| 第1回 操作 | 3fa164153 | 通常順 全539 UI、名前・削除・再入・選択 |
+| 第2回 形状/描画 | 96ad970bf | software 全539 UI、穴・折れ・厚み・島 |
+| 第3回 履歴/文書 | cd2aff37c | seed:185 全541 UI、階層・メニュー・保存 |
+| 第4回 負荷/反復 | 787acac20 | reverse 全542 UI、実モデル60 mouse操作、preview保持/失効 |
+| 第5回 配布/製作 | daa0ceaeb | 解析体積、正式full全195＋UI542×2・旧試験・通常起動 |
+
+実行入口:
+
+```text
+python scripts/run-verified.py out/releases/folder-surfaces-final-20261019
+python scripts/verify.py full --parallel 2 --run-id <新しい実行ID>
+```
+
+操作説明は `docs/manual/explorer-selection.html`。写真6枚はmanual画像台帳へ登録済み。
+OSのnative入力APIは利用不可であり、OSからの実ドラッグは未確認。実Qtのマウス・キー・IME、
+実メニュークリックと本番drop通知以降を検査した。全登録ケースの成功を、未知の全形状への保証とはしていない。
+
+## ファイル構成・削除と保全
+
+削除した製品ファイル・元モデルは0。不要境界の整理は生成形状の処理であり、元Wireや旧版ファイルの削除ではない。
+新規画像6枚、開発記録MD/HTMLを追加。公開core APIと保存形式は変更しない。既存の増分ビルド、
+旧配布、ユーザーモデル、他worktree、無関係な未追跡ファイルを保全した。
+基点から候補までの変更対象は次のとおり（全体の追加/変更、削除なし）。
+
+```text
+A	docs/development/folder-surface-debug-20261019.html
+A	docs/development/folder-surface-debug-20261019.md
+M	docs/manual/README.md
+M	docs/manual/explorer-selection.html
+A	docs/manual/images/v2-folder-delete.png
+A	docs/manual/images/v2-folder-move-paths.png
+A	docs/manual/images/v2-folder-open.png
+A	docs/manual/images/v2-surface-grid-all.png
+A	docs/manual/images/v2-surface-grid-off.png
+A	docs/manual/images/v2-wire-under-face.png
+M	docs/v2/implementation-work-packages.md
+M	src/apps/cad_next/V2CommandState.cpp
+M	src/apps/cad_next/V2DeleteCommands.cpp
+M	src/apps/cad_next/V2EntityTree.cpp
+M	src/apps/cad_next/V2ExplorerBuild.cpp
+M	src/apps/cad_next/V2ExplorerMenu.cpp
+M	src/apps/cad_next/V2ExplorerUpdates.cpp
+M	src/apps/cad_next/V2GridDock.cpp
+M	src/apps/cad_next/V2GridDock.h
+M	src/apps/cad_next/V2GroupCommands.cpp
+M	src/apps/cad_next/V2LoopFacesTool.cpp
+M	src/apps/cad_next/V2PlaneCommands.cpp
+M	src/apps/cad_next/V2SelfTest.cpp
+M	src/apps/cad_next/V2SelfTestExplorer.cpp
+M	src/apps/cad_next/V2SelfTestExplorerUpdates.cpp
+M	src/apps/cad_next/V2SelfTestSurfaceEdit.cpp
+M	src/apps/cad_next/V2Shelves.cpp
+M	src/apps/cad_next/V2SurfaceEditTool.cpp
+M	src/apps/cad_next/V2SurfaceEditTool.h
+M	src/apps/cad_next/V2ToolKeys.cpp
+M	src/apps/cad_next/V2ToolRoleLabels.cpp
+M	src/apps/cad_next/V2ViewCommands.cpp
+M	src/apps/cad_next/V2ViewportDraw.cpp
+M	src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
+M	src/next_occt/kachakacha/kernel/OcctThicken.cpp
+M	tests_v2/gpt_fabrication_tests.cpp
+```
+
+完了記録更新後の短い4検査も成功。検証候補との入力差分はWP-08完了欄の文書1ファイルだけで、製品・試験・manualの差分は0。公開済み配布フォルダの全バイト列は証拠と一致（completion-metadata.json）。

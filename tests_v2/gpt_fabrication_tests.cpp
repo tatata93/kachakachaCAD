@@ -246,7 +246,9 @@ KACHA_V2_TEST(gpt_fabrication, compact_patch_surfaces_remain_usable_for_extrusio
         for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside,fabrication::ThicknessPlacement::Centered}){
             const auto solid=kernel::ThickenSurface(made.Value().handle,.2,placement,{});Require(solid.HasValue(),std::string("progress=")+std::to_string(progress)+" placement="+std::to_string(int(placement))+" "+solid.FirstMessageJa());
             const auto check=kernel::CheckSolidForExport(solid.Value().handle,1e-6);Require(check.HasValue()&&check.Value().Ok(),"thickness produces a valid closed material");
-            Require(solid.Value().volumeMm3>7.5&&solid.Value().volumeMm3<8.1,"bending preserves sheet volume within the analytic corner envelope");
+            const double corner=5*.2*.2*std::tan(progress*std::acos(-1.)*.25);
+            const double volume=7.8+(placement==fabrication::ThicknessPlacement::Outside?-corner:placement==fabrication::ThicknessPlacement::Inside?corner:0);
+            RequireNear(solid.Value().volumeMm3,volume,1e-6,"folded wall has the analytic miter-corner volume for its placement");
             if(progress==0)RequireNear(solid.Value().volumeMm3,7.8,1e-6,"flat material has analytic volume");
             const double lower=placement==fabrication::ThicknessPlacement::Outside?0:placement==fabrication::ThicknessPlacement::Inside?-.2:-.1;
             for(const double z:{lower,lower+.2}){

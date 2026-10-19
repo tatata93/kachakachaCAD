@@ -13,6 +13,7 @@
 #include <QMouseEvent>
 #include <QEvent>
 #include <QPointF>
+#include <QPoint>
 #include <QStyleOptionViewItem>
 #include <QStyle>
 #include <QSignalBlocker>
@@ -271,6 +272,52 @@ bool MixedFolderDeletion(V2MainWindow& w){
     return Explain("no dangling folder memberships survive saving",w.SaveAndReopen("folder-filtered-delete.kcd2"));
 }
 
+base::GroupId NamedFolder(V2MainWindow& w,const char* name,std::optional<base::GroupId> parent={}){
+    w.EntityTree()->clearSelection();w.Viewport().SetSelection({});w.RunCommand("group.create");
+    const auto id=w.Session().GetDocument().Snapshot().groups.back().id;
+    auto* row=w.EntityTree()->FindKey("group:"+QString::fromStdString(id.ToString()));
+    row->setText(0,QString::fromUtf8(name));QApplication::processEvents();
+    if(parent)w.DropTreeItemsOnto({w.EntityTree()->FindKey("group:"+QString::fromStdString(id.ToString()))},w.EntityTree()->FindKey("group:"+QString::fromStdString(parent->ToString())));
+    return id;
+}
+bool FolderAncestorDrop(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    const auto a=NamedFolder(w,"車体"),b=NamedFolder(w,"ライト",a),c=NamedFolder(w,"移動先");
+    auto* tree=w.EntityTree();const auto row=[&](base::GroupId id){return tree->FindKey("group:"+QString::fromStdString(id.ToString()));};
+    tree->DropOnto({w.ItemOfEntity(wire)},row(b));w.ItemOfEntity(wire)->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    const auto parent=[&](base::GroupId id){for(const auto& g:w.Session().GetDocument().Snapshot().groups)if(g.id==id)return g.parentId;return std::optional<base::GroupId>{};};
+    const auto preserved=[&]{const auto* e=w.Session().GetDocument().FindEntity(wire);return parent(b)==a&&e&&e->groupId==b&&e->visibility==domain::Visibility::Hidden;};
+    // Qt only accepts a native internal drag after its own drag session. Exercise
+    // the production drop notification with the exact selected row set here.
+    tree->DropOnto({w.ItemOfEntity(wire),row(b),row(a)},row(c));
+    if(!Explain("moving selected parent child and member preserves nested membership",parent(a)==c&&preserved()))return false;
+    w.RunCommand("edit.undo");if(!Explain("one undo restores the complete hierarchy",!parent(a)&&preserved()))return false;
+    w.RunCommand("edit.redo");if(parent(a)!=c||!preserved())return false;
+    tree->DropOnto({row(a),row(b),w.ItemOfEntity(wire)},nullptr);
+    if(!Explain("moving the selection to root also preserves nested membership",!parent(a)&&preserved()))return false;
+    return Explain("nested multi-selection move survives save and reopen",w.SaveAndReopen("folder-ancestor-move.kcd2")&&preserved());
+}
+bool FolderMenuStable(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.25,.3,.45,.5),other=DrawRectangleAtByHand(w,.6,.3,.8,.5);
+    if(wire.IsNil()||other.IsNil())return false;
+    const auto body=NamedFolder(w,"車体"),a=NamedFolder(w,"ライト",body),bogie=NamedFolder(w,"台車"),b=NamedFolder(w,"ライト",bogie);
+    auto* tree=w.EntityTree();tree->clearSelection();tree->setCurrentItem(w.ItemOfEntity(wire));QMenu menu(&w);w.BuildMoveToGroupMenu(menu);
+    auto* into=menu.actions().front()->menu();if(!into)return false;QAction *left=nullptr,*right=nullptr;
+    for(auto* action:into->actions()){if(action->text()==QStringLiteral("車体/ライト"))left=action;if(action->text()==QStringLiteral("台車/ライト"))right=action;}
+    if(!Explain("same-named destinations show complete paths",left&&right))return false;
+    const auto before=w.Session().GetDocument().Snapshot().revision;into->popup(w.mapToGlobal(QPoint(300,300)));QApplication::processEvents();SaveInteractionShot(*into,"folder-move-paths");HumanKey(into,Qt::Key_Escape);
+    if(!Explain("canceling the move menu does not change the document",w.Session().GetDocument().Snapshot().revision==before))return false;
+    w.Viewport().SetSelection(app::SelectionSet{{other}});w.RunCommand("group.create");
+    const auto otherGroup=w.Session().GetDocument().FindEntity(other)->groupId;
+    for(const auto& target:std::vector<std::pair<QAction*,base::GroupId>>{{left,a},{right,b}}){
+        into->popup(w.mapToGlobal(QPoint(300,300)));QApplication::processEvents();HumanClick(into,into->actionGeometry(target.first).center());
+        if(!Explain("menu resolves stable source and destination after row replacement",w.Session().GetDocument().FindEntity(wire)->groupId==target.second
+            &&w.Session().GetDocument().FindEntity(other)->groupId==otherGroup))return false;
+    }
+    w.RunCommand("edit.undo");if(w.Session().GetDocument().FindEntity(wire)->groupId!=a)return false;w.RunCommand("edit.redo");
+    return Explain("menu move history survives save and reopen",w.SaveAndReopen("folder-menu-move.kcd2")&&w.Session().GetDocument().FindEntity(wire)->groupId==b);
+}
+
 }
 
 std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categories preserve selection and Undo",Categories},
@@ -283,5 +330,7 @@ std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categori
     {"HP-FP-04 folder delete cancel dissolve Undo and save",FolderDeletion},
     {"HP-FP-05 inline rename cannot confirm an armed modeling tool",RenameDuringTool},
     {"HP-FP-06 folder pick remains safe when a pending command rebuilds rows",PendingFolderPick},
-    {"HP-FP-07 folder deletion includes members filtered by an active tool",MixedFolderDeletion}};}
+    {"HP-FP-07 folder deletion includes members filtered by an active tool",MixedFolderDeletion},
+    {"HP-FP-08 ancestor drag keeps nested hierarchy and Undo",FolderAncestorDrop},
+    {"HP-FP-09 move menu distinguishes paths and survives row rebuild",FolderMenuStable}};}
 }

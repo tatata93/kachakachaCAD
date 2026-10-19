@@ -10,17 +10,20 @@
 
 #include "V2EditDock.h"
 #include "V2EntityTree.h"
+#include "kachakacha/app/GroupTree.h"
 
 #include <QAction>
 #include <QMenu>
 #include <QObject>
 #include <QPoint>
 #include <QString>
+#include <QStringList>
 #include <QTreeWidgetItem>
 
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <map>
 
 namespace {
 
@@ -86,10 +89,10 @@ void V2MainWindow::BuildMoveToGroupMenu(QMenu& menu)
 {
     QMenu* into = menu.addMenu(QStringLiteral("グループへ移動"));
     const auto& snapshot = session_->GetDocument().Snapshot();
-    std::vector<QTreeWidgetItem*> moved;
+    QStringList moved;
     for (QTreeWidgetItem* item : entityTree_->selectedItems()) {
         if (item != nullptr && (item->flags() & Qt::ItemIsDragEnabled)) {
-            moved.push_back(item);
+            moved.push_back(V2EntityTree::KeyOf(item));
         }
     }
     if (moved.empty()) {
@@ -97,21 +100,22 @@ void V2MainWindow::BuildMoveToGroupMenu(QMenu& menu)
         none->setEnabled(false);
         return;
     }
+    const auto drop=[this,moved](const QString& targetKey){
+        std::vector<QTreeWidgetItem*> rows;
+        for(const auto& key:moved){auto* row=entityTree_->FindKey(key);if(!row){SetStatus(QStringLiteral("移動する項目が変わりました。選び直してください。"));return;}rows.push_back(row);}
+        auto* target=targetKey.isEmpty()?nullptr:entityTree_->FindKey(targetKey);
+        if(!targetKey.isEmpty()&&!target){SetStatus(QStringLiteral("移動先のグループがありません。選び直してください。"));return;}
+        DropTreeItemsOnto(rows,target);
+    };
+    std::map<QString,int> paths;
+    for(const auto& group:snapshot.groups)++paths[QString::fromStdString(kachakacha::v2::app::GroupPathJa(snapshot,group.id))];
     for (const auto& [item, groupId] : groupItems_) {
-        const kachakacha::v2::document::Group* group = nullptr;
-        for (const auto& candidate : snapshot.groups) {
-            if (candidate.id == groupId) {
-                group = &candidate;
-            }
-        }
-        if (group == nullptr) {
-            continue;
-        }
-        QAction* action = into->addAction(QString::fromStdString(group->displayName));
-        QTreeWidgetItem* target = item;
-        action->setEnabled(std::find(moved.begin(), moved.end(), target) == moved.end());
-        QObject::connect(action, &QAction::triggered, this,
-            [this, moved, target] { DropTreeItemsOnto(moved, target); });
+        const auto key=V2EntityTree::KeyOf(item);
+        auto label=QString::fromStdString(kachakacha::v2::app::GroupPathJa(snapshot,groupId));
+        if(paths[label]>1)label+=QStringLiteral(" [%1]").arg(QString::fromStdString(groupId.ToString()));
+        QAction* action=into->addAction(label);
+        action->setEnabled(!moved.contains(key));
+        QObject::connect(action,&QAction::triggered,this,[drop,key]{drop(key);});
     }
     if (snapshot.groups.empty()) {
         QAction* none = into->addAction(QStringLiteral("(グループがありません。先に「グループを作る」)"));
@@ -120,7 +124,7 @@ void V2MainWindow::BuildMoveToGroupMenu(QMenu& menu)
     into->addSeparator();
     QAction* out = into->addAction(QStringLiteral("グループの外へ"));
     QObject::connect(out, &QAction::triggered, this,
-        [this, moved] { DropTreeItemsOnto(moved, nullptr); });
+        [drop] { drop(QString()); });
 }
 
 //! プロパティ: 選んだものの直せる値は右の「直す」欄に出る。欄を前に出すだけ。

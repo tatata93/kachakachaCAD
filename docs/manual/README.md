@@ -755,3 +755,20 @@ Qtマウス・キーイベントをWindowsアプリへ送り、KCI/PDF出力とU
 ![115面の左側曲面から作成した丸いライト穴](images/v2-owner-curved-window-hole.png)
 
 `owner-planar-window-hole` と `owner-curved-window-hole` は、115面.kcd2を入力するWindowsのPROJ OWNER操作試験で取得した実画面です。通常の空の画面サンプルではありません。
+
+
+## フォルダ・面の選択と表示の実画面（2026-10-19）
+
+`folder-open`: ![フォルダと面の実操作画面](images/v2-folder-open.png)
+
+`folder-delete`: ![フォルダと面の実操作画面](images/v2-folder-delete.png)
+
+`wire-under-face`: ![フォルダと面の実操作画面](images/v2-wire-under-face.png)
+
+`surface-grid-off`: ![フォルダと面の実操作画面](images/v2-surface-grid-off.png)
+
+`surface-grid-all`: ![フォルダと面の実操作画面](images/v2-surface-grid-all.png)
+
+`folder-move-paths`: ![フォルダと面の実操作画面](images/v2-folder-move-paths.png)
+
+WindowsのExplorer操作試験の実Qtウィンドウから取得。OSからの入力注入とは区別する。[操作手順](explorer-selection.html)。

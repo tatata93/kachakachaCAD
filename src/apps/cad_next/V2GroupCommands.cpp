@@ -259,6 +259,12 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
     std::vector<kachakacha::v2::base::EntityId> entities;
     std::vector<GroupId> groups;
     for (QTreeWidgetItem* item : moved) {
+        // Moving a folder already moves all its descendants. Do not pull
+        // selected children out of that folder into the destination as peers.
+        bool carried=false;
+        for(auto* parent=item?item->parent():nullptr;parent;parent=parent->parent())
+            if(GroupOfItem(groupItems_,parent)&&std::find(moved.begin(),moved.end(),parent)!=moved.end()){carried=true;break;}
+        if(carried)continue;
         if (const auto group = GroupOfItem(groupItems_, item); group.has_value()) {
             groups.push_back(*group);
             continue;

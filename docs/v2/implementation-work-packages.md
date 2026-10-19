@@ -14,7 +14,7 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(v2_guide_surface / v2_kernel_surface。7つの作り方、偏差を測って断る) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 完了(v2_extrude / v2_kernel_extrude / v2_wire_cage / v2_kernel_wire_cage。意味的Subshapeキー) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 完了（2026-10-19。フォルダ操作・面表示・元Wire選択と5視点。候補daa0ceaeb：Windows全195＋UI542×2、旧自己試験・通常起動成功。docs/development/folder-surface-debug-20261019.md） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中（Codex、codex/v2-wp01-build-scaffold、2026-10-19。読込待ち時間・説明書編集・実操作画像。基点35f573509、計画docs/development/instruction-load-improvements-20261019.md。直前候補daa0ceaebの全体ゲート成功は保持） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(Claude, cda2a5b。対象x形式の表・検査・原子的な書き込みに加え、選択と書き出しの棚を画面へ繋いだ。tests_v2/export_panel_tests.cpp 25件、export_content_tests.cpp 15件、selection_tests.cpp 21件、cad_next --self-test 4件) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

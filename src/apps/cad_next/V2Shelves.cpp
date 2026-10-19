@@ -413,7 +413,7 @@ void V2MainWindow::BuildSurfaceDock()
             return;
         }
         surfaceInput_.supportPickFor = surfaceInput_.boundaries[static_cast<std::size_t>(row)];
-        RefreshSurfaceDock();
+        RefreshSurfaceRoleLabels();RefreshSurfaceDock();
         SetStatus(QStringLiteral("面を作る: 3D で隣の面(支持面)を押してください。"));
     });
     // おまかせ: 一覧の行の役割(自動/断面/ガイド/境界/通る線/中心線)、他の候補、おまかせに戻す。

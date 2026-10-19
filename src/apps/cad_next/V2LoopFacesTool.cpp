@@ -135,6 +135,10 @@ void V2LoopFacesTool::Start()
     waitingAfterCancel_ = true;
     window_.viewport_->SetToolPickActive(true);
     window_.viewport_->SetToolPickToggle(true);
+    window_.viewport_->SetToolCandidateFilter([this](const auto& pick){
+        const auto* e=window_.Session().GetDocument().FindEntity(pick.entityId);
+        return e&&e->kind==kachakacha::v2::domain::EntityKind::Wire;
+    });
     HandleSelectionChanged();
     window_.RefreshRightShelves();
 }
@@ -710,6 +714,10 @@ void V2LoopFacesTool::Clear(bool keepTool)
     window_.viewport_->SetToolPickActive(keepTool);
     window_.viewport_->SetToolPickToggle(keepTool);
     if (keepTool) {
+        window_.viewport_->SetToolCandidateFilter([this](const auto& pick){
+            const auto* e=window_.Session().GetDocument().FindEntity(pick.entityId);
+            return e&&e->kind==kachakacha::v2::domain::EntityKind::Wire;
+        });
         window_.viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
         dock_->ShowView({});
     }

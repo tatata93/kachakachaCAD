@@ -117,7 +117,11 @@ void V2MainWindow::RefreshEntityList()
         for (const auto category : kachakacha::v2::app::ExplorerSections()) {
             if (category == ExplorerSection::Images && std::none_of(snapshot.entities.begin(), snapshot.entities.end(),
                 [&](const auto& e){ return e.kind == kachakacha::v2::domain::EntityKind::Image && e.groupId && e.groupId->ToString() == key; })) continue;
-            if (category != ExplorerSection::Origin && category != ExplorerSection::Groups)
+            const bool populated=std::any_of(snapshot.entities.begin(),snapshot.entities.end(),[&](auto entity){
+                if(!entity.groupId||entity.groupId->ToString()!=key)return false;
+                entity.groupId.reset();return kachakacha::v2::app::SectionForEntity(snapshot,entity)==category;
+            });
+            if (populated && category != ExplorerSection::Origin && category != ExplorerSection::Groups)
                 groupedSections[{key, category}] = MakeSectionItem(group, category);
         }
     }

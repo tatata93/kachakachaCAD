@@ -74,9 +74,11 @@ void V2MainWindow::RefreshExplorerVisibility(){
     setProperty("explorerVisibilityMs",timer.nsecsElapsed()/1e6);
 }
 void V2MainWindow::CreateSiblingGroup(){
-    const auto selected=SelectedGroupId();if(!selected){CreateGroupFromSelection();return;}
+    const auto selected=SelectedGroupId();
     document::Group group;group.id=ids_->NextTyped<base::IdKind::Group>();group.displayName=NextGroupName();
-    for(const auto& current:session_->GetDocument().Snapshot().groups)if(current.id==*selected)group.parentId=current.parentId;
+    if(selected)for(const auto& current:session_->GetDocument().Snapshot().groups)if(current.id==*selected)group.parentId=current.parentId;
+    if(!selected)if(const auto* entity=EntityForItem(entityTree_->currentItem()))
+        if(const auto* current=session_->GetDocument().FindEntity(*entity))group.parentId=current->groupId;
     const auto id=group.id;const auto result=session_->GetDocument().Run(document::AddGroupCommand(std::move(group)));
     if(!result.committed){ReportDiagnostics(result.diagnostics);return;}AdoptCurrentDocument();
     if(auto* row=entityTree_->FindKey("group:"+QString::fromStdString(id.ToString())))entityTree_->setCurrentItem(row);
@@ -84,7 +86,7 @@ void V2MainWindow::CreateSiblingGroup(){
 }
 void V2MainWindow::BuildExplorerGroupButtons(QVBoxLayout* layout){
     auto* row=new QHBoxLayout;auto* sibling=new QPushButton(QStringLiteral("新規グループ"),entityTree_);
-    sibling->setObjectName("explorerSiblingGroup");sibling->setToolTip(QStringLiteral("選択したグループと同じ階層に作成します。"));
+    sibling->setObjectName("explorerSiblingGroup");sibling->setToolTip(QStringLiteral("同じ階層に空のグループを作成します。既存の項目は移動しません。"));
     auto* child=new QPushButton(QStringLiteral("子グループ"),entityTree_);child->setObjectName("explorerChildGroup");
     child->setToolTip(QStringLiteral("選択したグループの中にグループを作成します。"));child->setEnabled(false);
     QObject::connect(sibling,&QPushButton::clicked,this,[this]{CreateSiblingGroup();});

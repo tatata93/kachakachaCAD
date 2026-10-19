@@ -35,6 +35,7 @@ struct V2GridChoice {
     bool workPlaneVisible = true;
     //! 立体と面を画面に出す。消すと線だけになる(V1 のワイヤーフレームに当たる)。
     bool shapesVisible = true;
+    int surfaceGridMode = 1; // 0 hidden, 1 selected, 2 all (view only)
     QColor majorColor;
     QColor minorColor;
     QColor backgroundColor;
@@ -76,6 +77,7 @@ private:
     QCheckBox* dimOffPlane_ = nullptr;
     QCheckBox* workPlaneVisible_ = nullptr;
     QCheckBox* shapesVisible_ = nullptr;
+    QComboBox* surfaceGrid_ = nullptr;
     QPushButton* majorColor_ = nullptr;
     QPushButton* minorColor_ = nullptr;
     QPushButton* backgroundColor_ = nullptr;

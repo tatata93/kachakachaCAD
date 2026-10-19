@@ -1,4 +1,5 @@
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/fabrication/GptApproximation.h"
 #include "kachakacha/kernel/OcctGptFabrication.h"
 #include "kachakacha/kernel/OcctGptSurface.h"
@@ -176,6 +177,9 @@ KACHA_V2_TEST(gpt_fabrication, generated_panel_faces_preserve_holes_and_bend)
         const auto made=kernel::BuildGptSurface(request,{});
         Require(made.HasValue(),made.FirstMessageJa());
         RequireNear(made.Value().areaMm2,3.6,1e-6,"hole area and bend preserve surface area");
+        const auto mesh=kernel::BuildShapeMesh(made.Value().handle,0.0,0);
+        Require(mesh.HasValue(),mesh.FirstMessageJa());
+        Require(mesh.Value().faceCount==(progress==0?1:2),"sampling stations do not split coplanar material; real bend remains");
         const auto hole=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point({.5,1},progress));
         Require(hole.HasValue() && hole.Value()>.19,"opening is not capped");
         const auto onFace=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point({1.5,1},progress));

@@ -803,7 +803,7 @@ void V2MainWindow::BeginRenameSelected()
         return;
     }
     QTreeWidgetItem* item = entityTree_->currentItem();
-    if (item == nullptr || EntityForItem(item) == nullptr) {
+    if (item == nullptr || !(item->flags() & Qt::ItemIsEditable)) {
         SetStatus(QStringLiteral("名前を変えるものを、一覧で選んでください。"));
         return;
     }

@@ -34,6 +34,8 @@ V2EntityTree::V2EntityTree(QWidget* parent) : QTreeWidget(parent)
     setDropIndicatorShown(true);
     // 木の中だけで動かす。外から落ちてくるものは受けない。
     setDragDropMode(QAbstractItemView::InternalMove);
+    setExpandsOnDoubleClick(false);setAutoExpandDelay(650);
+    setEditTriggers(QAbstractItemView::EditKeyPressed);
     QObject::connect(this,&QTreeWidget::itemChanged,this,[this](auto* item,int column){
         if(column!=0||!item)return;const auto key=KeyOf(item);if(key.isEmpty())return;
         changes_.insert_or_assign(key,Change{item->text(0),item->checkState(0)});
@@ -139,5 +141,12 @@ void V2EntityTree::mousePressEvent(QMouseEvent* event){
         const QRect check=style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,this);
         if(check.contains(event->position().toPoint())){item->setCheckState(0,item->checkState(0)==Qt::Checked?Qt::Unchecked:Qt::Checked);event->accept();return;}
     }
+    auto* row=itemAt(event->position().toPoint());
+    const auto key=KeyOf(row);
+    const bool folder=row&&key.startsWith("group:")&&!key.contains("/section:");
+    const bool plain=event->button()==Qt::LeftButton&&event->modifiers()==Qt::NoModifier;
+    const bool label=row&&event->position().x()>=visualItemRect(row).left();
+    const bool expanded=row&&row->isExpanded();
     QTreeWidget::mousePressEvent(event);
+    if(folder&&plain&&label&&row->childCount()>0)row->setExpanded(!expanded);
 }

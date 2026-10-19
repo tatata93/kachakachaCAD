@@ -3,6 +3,8 @@
 #include "V2EntityTree.h"
 #include "V2Viewport.h"
 #include "V2GeneratedCurves.h"
+#include "V2LoopFacesTool.h"
+#include "V2SurfaceDock.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/geometry/CurveFit.h"
 #include <QApplication>
@@ -18,6 +20,14 @@
 #include <QAction>
 #include <QWidget>
 #include <QString>
+#include <QKeyEvent>
+#include <QEventLoop>
+#include <QTimer>
+#include <QLineEdit>
+#include <QInputMethodEvent>
+#include <QComboBox>
+#include <QImage>
+#include <QVariant>
 #include <cmath>
 #include <algorithm>
 
@@ -115,8 +125,81 @@ bool Overlap(V2MainWindow& w) {
     view.PressRightWithoutMoving(point);
     return Explain("candidate menu also reaches the active input role after viewport leave",!picked.IsNil()&&view.Selection().entityIds.empty());
 }
+
+namespace {
+void HumanClick(QWidget* widget,const QPointF& point){
+    QMouseEvent press(QEvent::MouseButtonPress,point,widget->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease,point,widget->mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(widget,&press);QApplication::sendEvent(widget,&release);QEventLoop settle;QTimer::singleShot(15,&settle,&QEventLoop::quit);settle.exec();
+}
+void HumanKey(QWidget* widget,int key){
+    QKeyEvent press(QEvent::KeyPress,key,Qt::NoModifier),release(QEvent::KeyRelease,key,Qt::NoModifier);
+    QApplication::sendEvent(widget,&press);QApplication::sendEvent(widget,&release);QEventLoop settle;QTimer::singleShot(15,&settle,&QEventLoop::quit);settle.exec();
+}
+bool FolderInputs(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire}});
+    auto* newFolder=w.findChild<QPushButton*>("explorerSiblingGroup");if(!newFolder||!newFolder->isVisible())return false;
+    HumanClick(newFolder,newFolder->rect().center());
+    const auto group=w.Session().GetDocument().Snapshot().groups.back().id;
+    if(!Explain("new empty folder does not move the selected wire",!w.Session().GetDocument().FindEntity(wire)->groupId))return false;
+    auto* tree=w.EntityTree();const auto key="group:"+QString::fromStdString(group.ToString());
+    auto* row=tree->FindKey(key);if(!row)return false;
+    w.RunCommand("entity.rename");QApplication::processEvents();
+    auto* editor=tree->findChild<QLineEdit*>();if(!Explain("common rename opens the folder label editor",editor&&editor->isVisible()))return false;
+    editor->selectAll();QInputMethodEvent text;text.setCommitString(QStringLiteral("ライト"));QApplication::sendEvent(editor,&text);
+    HumanKey(editor,Qt::Key_Return);
+    Note((std::string("folder name after Enter: ")+w.Session().GetDocument().Snapshot().groups.back().displayName).c_str());
+    if(!Explain("Enter commits the folder name",w.Session().GetDocument().Snapshot().groups.back().displayName=="ライト"))return false;
+    row=tree->FindKey(key);tree->DropOnto({w.ItemOfEntity(wire)},row);
+    row=tree->FindKey(key);if(!row||row->childCount()!=1)return Explain("folder contains only populated category",false);
+    tree->setFocus();tree->scrollToItem(row);QApplication::processEvents();
+    const bool expanded=row->isExpanded();HumanClick(tree->viewport(),tree->visualItemRect(row).center());
+    if(!Explain("one label click toggles the folder without changing visibility",row->isExpanded()!=expanded&&w.Session().GetDocument().Snapshot().groups.back().visible))return false;
+    HumanKey(tree,Qt::Key_Right);if(!Explain("right arrow opens the folder",row->isExpanded()))return false;
+    HumanKey(tree,Qt::Key_F2);editor=tree->findChild<QLineEdit*>();
+    if(!Explain("F2 edits a folder through the keyboard route",editor&&editor->isVisible()))return false;
+    HumanKey(editor,Qt::Key_Escape);
+    return Explain("folder editing retains the wire",w.Session().GetDocument().FindEntity(wire)!=nullptr);
+}
+bool WireUnderSurface(V2MainWindow& w){
+    w.RunCommand("file.new");auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);
+    const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
+    view.SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");HumanKey(&w.Viewport(),Qt::Key_Return);
+    if(CountOfKind(w,domain::EntityKind::GuideSurface)!=1)return false;
+    w.RunCommand("selection.activate");view.SetSelection({});
+    geometry::Vector3 point;bool found=false;for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==wire){point=curve.segment.Evaluate(.37);found=true;break;}
+    const auto at=view.Mapping().Project(point);if(!found||!at)return false;const QPointF where(at->x,at->y);
+    w.RunCommand("surface.from_lines");HumanClick(&view,where);
+    if(!Explain("surface edge cannot steal a displayed source wire during face creation",view.Selection().entityIds==std::vector<base::EntityId>{wire}))return false;
+    HumanClick(&view,where);if(!Explain("clicking again removes the source wire",view.Selection().entityIds.empty()))return false;
+    HumanKey(&w.Viewport(),Qt::Key_Escape);w.RunCommand("surface.create");
+    if(!w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary))return false;
+    HumanClick(&view,where);
+    if(!Explain("advanced surface boundary also takes the source wire",view.Selection().entityIds==std::vector<base::EntityId>{wire}))return false;
+    HumanKey(&w.Viewport(),Qt::Key_Escape);return Explain("both source wire and face remain visible",view.ShapeViews().size()==1&&w.Session().GetDocument().FindEntity(wire)->visibility==domain::Visibility::Visible);
+}
+bool SurfaceGridChoice(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");HumanKey(&w.Viewport(),Qt::Key_Return);w.RunCommand("selection.activate");
+    auto& v=w.Viewport();v.SetSelection({});const auto before=w.Session().GetDocument().Snapshot().revision;
+    const auto faces=v.ShapeViews().front().mesh.faceCount;const auto triangles=v.ShapeViews().front().mesh.triangles.size();
+    auto choice=w.CurrentGridChoice();choice.grid.visible=false;choice.surfaceGridMode=0;w.ApplyGridChoice(choice);QApplication::processEvents();
+    const auto off=v.grab().toImage();choice.surfaceGridMode=2;w.ApplyGridChoice(choice);QApplication::processEvents();const auto all=v.grab().toImage();
+    if(!Explain("grid display changes pixels without splitting native faces",off!=all&&v.ShapeViews().front().mesh.faceCount==faces&&v.ShapeViews().front().mesh.triangles.size()==triangles))return false;
+    choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedOnly=v.grab().toImage();
+    if(!Explain("unselected surface does not draw a UV grid in selected-only mode",selectedOnly==off))return false;
+    w.ShowGridDock();QApplication::processEvents();auto* combo=w.findChild<QComboBox*>("surfaceGridMode");
+    if(!combo||!combo->isVisible())return false;combo->setFocus();HumanKey(combo,Qt::Key_Home);
+    return Explain("keyboard grid choice is view-only and synchronized",v.property("surfaceGridMode").toInt()==0&&w.Session().GetDocument().Snapshot().revision==before);
+}
+}
+
 std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categories preserve selection and Undo",Categories},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},
     {"HP-XP-09 overlap preview and reference-picking roles",Overlap},
-    {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope}};}
+    {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope},
+    {"HP-FP-01 folder mouse keyboard naming and empty creation",FolderInputs},
+    {"HP-FP-02 source wires remain pickable under displayed faces",WireUnderSurface},
+    {"HP-FP-03 surface grid is optional and keeps native topology",SurfaceGridChoice}};}
 }

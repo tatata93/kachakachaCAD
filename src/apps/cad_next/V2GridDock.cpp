@@ -95,6 +95,11 @@ V2GridDock::V2GridDock(QWidget* parent)
     shapesVisible_->setToolTip(QStringLiteral(
         "押し出しや形状ガイドで作った形を塗って出します。外すと線だけになります。"));
     form->addRow(shapesVisible_);
+    surfaceGrid_=new QComboBox(body);surfaceGrid_->setObjectName("surfaceGridMode");
+    surfaceGrid_->addItems({QStringLiteral("表示しない"),QStringLiteral("選択した面だけ"),QStringLiteral("すべての面")});
+    surfaceGrid_->setCurrentIndex(1);
+    surfaceGrid_->setToolTip(QStringLiteral("形状確認用のU/V線です。面の分割や編集用ワイヤーではありません。"));
+    form->addRow(QStringLiteral("面の形状確認線"),surfaceGrid_);
 
     majorColor_ = new QPushButton(QStringLiteral("主点色"), body);
     minorColor_ = new QPushButton(QStringLiteral("副点色"), body);
@@ -142,6 +147,7 @@ void V2GridDock::ConnectSignals()
     QObject::connect(allModes_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(dimOffPlane_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(workPlaneVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(surfaceGrid_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
     QObject::connect(shapesVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(majorColor_, &QPushButton::clicked, this,
         [this] { ChooseColor(majorColor_, major_, QStringLiteral("主点色")); });
@@ -200,6 +206,7 @@ V2GridChoice V2GridDock::Choice() const
     choice.dimOffPlaneLines = dimOffPlane_->isChecked();
     choice.workPlaneVisible = workPlaneVisible_->isChecked();
     choice.shapesVisible = shapesVisible_->isChecked();
+    choice.surfaceGridMode=surfaceGrid_->currentIndex();
     choice.majorColor = major_;
     choice.minorColor = minor_;
     choice.backgroundColor = background_;
@@ -226,6 +233,7 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
     dimOffPlane_->setChecked(choice.dimOffPlaneLines);
     workPlaneVisible_->setChecked(choice.workPlaneVisible);
     shapesVisible_->setChecked(choice.shapesVisible);
+    surfaceGrid_->setCurrentIndex(choice.surfaceGridMode);
     major_ = choice.majorColor;
     minor_ = choice.minorColor;
     background_ = choice.backgroundColor;

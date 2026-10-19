@@ -20,8 +20,10 @@
 #include "kachakacha/view/ViewOrientation.h"
 
 #include <QComboBox>
+#include <QVariant>
 #include <QString>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -343,6 +345,7 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
     choice.dimOffPlaneLines = viewport_->DisplaySettingsNow().dimOffPlaneLines;
     choice.workPlaneVisible = viewport_->DisplaySettingsNow().workPlaneVisible;
     choice.shapesVisible = viewport_->DisplaySettingsNow().shapesVisible;
+    choice.surfaceGridMode=viewport_->property("surfaceGridMode").isValid()?viewport_->property("surfaceGridMode").toInt():1;
     choice.majorColor = viewport_->Colors().gridMajor;
     choice.minorColor = viewport_->Colors().gridMinor;
     choice.backgroundColor = viewport_->Colors().background;
@@ -384,6 +387,7 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     display.dimOffPlaneLines = choice.dimOffPlaneLines;
     display.workPlaneVisible = choice.workPlaneVisible;
     display.shapesVisible = choice.shapesVisible;
+    viewport_->setProperty("surfaceGridMode",std::clamp(choice.surfaceGridMode,0,2));
     ApplyDisplaySettings(display);
     RefreshGridSuppression();
     viewport_->update();

@@ -21,6 +21,7 @@
 #include <QPolygonF>
 #include <QRectF>
 #include <QString>
+#include <QVariant>
 
 
 #include <algorithm>
@@ -761,7 +762,8 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
     painter.setBrush(Qt::NoBrush);
     // 面の格子(U/V 線)。稜線より細く薄く、稜線の下に。塗りだけだと膨らみやねじれが読めない
     // (オーナー指示 2026-09-25「作った面の形がわかりにくいからグリッドを入れて」)。
-    if (shape.surface && !shape.mesh.isoLines.empty()) {
+    const int gridMode=property("surfaceGridMode").isValid()?property("surfaceGridMode").toInt():1;
+    if (shape.surface && !shape.mesh.isoLines.empty() && (gridMode==2||(gridMode==1&&selected))) {
         DrawSurfaceGrid(painter, shape, edge, selected || hovered);
     }
     painter.setPen(QPen(edge, selected || hovered ? 2.0 : 1.1, Qt::SolidLine, Qt::RoundCap,

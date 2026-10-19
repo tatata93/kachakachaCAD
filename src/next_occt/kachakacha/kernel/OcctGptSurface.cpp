@@ -6,6 +6,10 @@
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <ShapeUpgrade_UnifySameDomain.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 #include <BRep_Builder.hxx>
 #include <TopoDS_Compound.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -78,7 +82,23 @@ Result<TopoDS_Shape> GeneratePanelPatches(const app::GptSurfaceRequest& request,
         if(!face.IsDone()) { return Result<TopoDS_Shape>::Failure(MakeError("GPT-S003","部材の面区間を作れません。","区間の平面性を確認してください。")); }
         builder.Add(compound,face.Face());
     }
-    return Result<TopoDS_Shape>::Success(compound);
+    // Patch vertices are sampling/cutting stations, not additional physical seams.
+    // Join matching edges, then remove only same-domain face/edge boundaries.
+    // Angular and linear tolerances are the document tolerances; real folds remain.
+    BRepBuilderAPI_Sewing sewing(tolerance.modelLinearMm);
+    sewing.Add(compound);sewing.Perform();
+    const auto joined=sewing.SewedShape();
+    if(joined.IsNull())return Result<TopoDS_Shape>::Success(compound);
+    ShapeUpgrade_UnifySameDomain unify(joined,true,true,false);
+    unify.SetSafeInputMode(true);unify.SetLinearTolerance(tolerance.modelLinearMm);
+    unify.SetAngularTolerance(tolerance.modelAngularRad);unify.Build();
+    const auto compact=unify.Shape();
+    GProp_GProps before,after;BRepGProp::SurfaceProperties(compound,before);
+    if(!compact.IsNull())BRepGProp::SurfaceProperties(compact,after);
+    const double areaTolerance=1e-10*std::max(1.,before.Mass())+tolerance.modelLinearMm*tolerance.modelLinearMm;
+    if(compact.IsNull()||!BRepCheck_Analyzer(compact).IsValid()||std::abs(before.Mass()-after.Mass())>areaTolerance)
+        return Result<TopoDS_Shape>::Success(compound);
+    return Result<TopoDS_Shape>::Success(compact);
 }
 
 Result<TopoDS_Shape> GenerateSections(const app::GptSurfaceRequest& request,

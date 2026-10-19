@@ -123,6 +123,12 @@ void V2MainWindow::RefreshSurfaceRoleLabels()
     if (viewport_ == nullptr) {
         return;
     }
+    viewport_->SetToolCandidateFilter([this](const auto& pick){
+        const auto* entity=session_->GetDocument().FindEntity(pick.entityId);
+        const bool support=!surfaceInput_.supportPickFor.IsNil()
+            ||surfaceInput_.activeSlot==kachakacha::v2::modeling::ChainRole::SourceSurface;
+        return entity&&entity->kind==(support?kachakacha::v2::domain::EntityKind::GuideSurface:kachakacha::v2::domain::EntityKind::Wire);
+    });
     // 役割の色分け(ガイド = 青、断面 = 橙、境界 = 紫、通る線 = 緑)。線と札を同じ色にする。
     std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> colors;
     for (const auto& [id, rgb] : kachakacha::v2::app::SurfaceRoleColors(surfaceInput_)) {

@@ -28,6 +28,8 @@
 #include <BRepGProp_Face.hxx>
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <BRepOffset_MakeOffset.hxx>
+#include <GeomAbs_JoinType.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <GeomLib_IsPlanarSurface.hxx>
@@ -47,6 +49,7 @@
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Vertex.hxx>
+#include <TopoDS_Iterator.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Trsf.hxx>
@@ -87,14 +90,34 @@ namespace {
     return edges;
 }
 
+// Adjacent planar faces need intersected offset planes at their real creases.
+// The simple offset deliberately does not compute those intersections.
+bool PlanarSheetWithCreases(const TopoDS_Shape& shape){
+    int count=0;for(TopExp_Explorer f(shape,TopAbs_FACE);f.More();f.Next()){
+        if(BRepAdaptor_Surface(TopoDS::Face(f.Current()),true).GetType()!=GeomAbs_Plane)return false;
+        ++count;
+    }
+    return count>1;
+}
+
 //! 面を法線方向へずらした面(シェル)を作る。中央付け・内側付けの下ごしらえ。
 [[nodiscard]] Result<TopoDS_Shape> OffsetSurface(const TopoDS_Shape& face,
-    double distanceMm)
+    double distanceMm,const geometry::GeometryTolerance& tolerance)
 {
     using Out = Result<TopoDS_Shape>;
     try {
+        if(face.ShapeType()==TopAbs_COMPOUND){
+            TopoDS_Compound islands;BRep_Builder builder;builder.MakeCompound(islands);
+            for(TopoDS_Iterator i(face);i.More();i.Next()){
+                const auto moved=OffsetSurface(i.Value(),distanceMm,tolerance);
+                if(!moved.HasValue())return moved;builder.Add(islands,moved.Value());
+            }
+            return Out::Success(islands);
+        }
         BRepOffsetAPI_MakeOffsetShape maker;
-        maker.PerformBySimple(face, distanceMm);
+        if(PlanarSheetWithCreases(face))maker.PerformByJoin(face,distanceMm,tolerance.modelLinearMm,
+            BRepOffset_Skin,false,false,GeomAbs_Intersection,true);
+        else maker.PerformBySimple(face, distanceMm);
         if (!maker.IsDone()) {
             return Out::Failure(MakeError(kThickenFailed,
                 "面に厚みを付けられませんでした。",
@@ -113,13 +136,29 @@ namespace {
 
 //! 面(またはシェル)を、法線方向へ厚みぶん膨らませて立体にする。
 [[nodiscard]] Result<TopoDS_Shape> ThickSolid(const TopoDS_Shape& base,
-    double thicknessMm)
+    double thicknessMm,const geometry::GeometryTolerance& tolerance)
 {
     using Out = Result<TopoDS_Shape>;
     try {
-        BRepOffsetAPI_MakeThickSolid maker;
-        maker.MakeThickSolidBySimple(base, thicknessMm);
-        if (!maker.IsDone()) {
+        if(base.ShapeType()==TopAbs_COMPOUND){
+            TopoDS_Compound islands;BRep_Builder builder;builder.MakeCompound(islands);
+            for(TopoDS_Iterator i(base);i.More();i.Next()){
+                const auto made=ThickSolid(i.Value(),thicknessMm,tolerance);
+                if(!made.HasValue())return made;builder.Add(islands,made.Value());
+            }
+            return Out::Success(islands);
+        }
+        TopoDS_Shape thickened;bool done=false;
+        if(PlanarSheetWithCreases(base)){
+            BRepOffset_MakeOffset maker;
+            maker.Initialize(base,thicknessMm,tolerance.modelLinearMm,
+                BRepOffset_Skin,false,false,GeomAbs_Intersection,true,true);
+            maker.MakeOffsetShape();done=maker.IsDone();if(done)thickened=maker.Shape();
+        }else {
+            BRepOffsetAPI_MakeThickSolid maker;maker.MakeThickSolidBySimple(base,thicknessMm);
+            done=maker.IsDone();if(done)thickened=maker.Shape();
+        }
+        if (!done) {
             return Out::Failure(MakeError(kThickenFailed,
                 "面に厚みを付けられませんでした。",
                 "厚みが曲がりに対して大きすぎるか、面が自分自身と交わります。"
@@ -128,7 +167,7 @@ namespace {
         // Simple thickening can return an inside-out solid. Absolute volume hid
         // that defect, while STL consumers received inward-facing triangles.
         std::vector<TopoDS_Solid> solids;
-        for (TopExp_Explorer e(maker.Shape(), TopAbs_SOLID); e.More(); e.Next()) {
+        for (TopExp_Explorer e(thickened, TopAbs_SOLID); e.More(); e.Next()) {
             auto solid = TopoDS::Solid(e.Current());
             if (!BRepLib::OrientClosedSolid(solid)) {
                 return Out::Failure(MakeError(kThickenFailed,
@@ -235,7 +274,7 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     if(!folded)folded=detail::ThickenRevolvedProfile(face,thicknessMm,placement,tolerance);
     TopoDS_Shape base = face;
     if (!folded && startOffset != 0.0) {
-        const auto moved = OffsetSurface(face, startOffset);
+        const auto moved = OffsetSurface(face, startOffset,tolerance);
         if (!moved.HasValue()) {
             return Out::Failure(moved.Diagnostics());
         }
@@ -245,7 +284,7 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     // Offset(-t) followed by Offset(+t) creates nested offset surfaces and can
     // corrupt B-spline revolution seams instead of retaining the source skin.
     const double signedThickness=placement==fabrication::ThicknessPlacement::Inside ? -thicknessMm : thicknessMm;
-    const auto built = folded ? *folded : ThickSolid(base, signedThickness);
+    const auto built = folded ? *folded : ThickSolid(base, signedThickness,tolerance);
     if (!built.HasValue()) {
         return Out::Failure(built.Diagnostics());
     }

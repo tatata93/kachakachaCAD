@@ -1,5 +1,9 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/fabrication/GptApproximation.h"
 #include "kachakacha/kernel/OcctGptFabrication.h"
 #include "kachakacha/kernel/OcctGptSurface.h"
@@ -188,4 +192,113 @@ KACHA_V2_TEST(gpt_fabrication, generated_panel_faces_preserve_holes_and_bend)
     }
 }
 #endif
+
+#ifdef KACHACAD_V2_WITH_OCCT
+namespace {
+app::GptSurfaceRequest PatchRequest(const fabrication::GptApproxPanel& panel,double progress){
+    app::GptSurfaceRequest request;request.panelPatches=true;
+    for(const auto& patch:fabrication::GptPanelPatches(panel,progress)){
+        app::GptSurfaceCurve curve;for(std::size_t i=0;i<patch.size();++i)
+            curve.segments.push_back(geometry::CurveSegment::MakeLine(patch[i],patch[(i+1)%patch.size()]).Value());
+        request.curves.push_back(curve);
+    }
+    return request;
+}
+fabrication::GptApproxPanel DensePanel(){
+    fabrication::GptApproxPanel panel;panel.u={1,0,0};panel.v={0,1,0};panel.normal={0,0,1};
+    for(int i=0;i<=24;++i){const double x=i*.5,z=i<=8?0:i<16?(i-8)*.25:2;
+        panel.profile.push_back({x,z});if(i==0)panel.lengths.push_back(0);
+        else {const auto a=panel.profile[i-1];panel.lengths.push_back(panel.lengths.back()+std::hypot(x-a.u,z-a.v));}}
+    panel.pattern.outline={{0,0},{panel.lengths.back(),0},{panel.lengths.back(),8},{0,8}};
+    panel.pattern.openings={{{1,1},{2,1},{2,3},{1,3}},{{3.5,4},{5.5,4},{5.5,6},{3.5,6}}};return panel;
+}
+}
+KACHA_V2_TEST(gpt_fabrication, patch_compaction_preserves_dense_holes_folds_and_every_station){
+    const auto panel=DensePanel();
+    for(double progress:{0.,.37,1.}){
+        const auto request=PatchRequest(panel,progress);Require(request.curves.size()>20,"fixture contains unnecessary sampling patches");
+        const auto made=kernel::BuildGptSurface(request,{});Require(made.HasValue(),made.FirstMessageJa());
+        const auto mesh=kernel::BuildShapeMesh(made.Value().handle,0,0);Require(mesh.HasValue(),mesh.FirstMessageJa());
+        Require(mesh.Value().faceCount==(progress==0?1:3),"only physical planar pieces remain");
+        RequireNear(made.Value().areaMm2,panel.lengths.back()*8-6,1e-6,"two windows and complete material area are retained");
+        for(const auto& patch:fabrication::GptPanelPatches(panel,progress)){
+            geometry::Vector3 center{};for(const auto& p:patch){center=center+p;const auto d=kernel::DistanceToShapeSurface(made.Value().handle,p);Require(d.HasValue()&&d.Value()<1e-6,"every station stays on exact surface");}
+            const auto d=kernel::DistanceToShapeSurface(made.Value().handle,center*.25);Require(d.HasValue()&&d.Value()<1e-6,"every patch interior stays on exact surface");
+        }
+        for(const auto hole:{geometry::Point2{1.5,2},geometry::Point2{4.5,5}}){const auto d=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point(hole,progress));Require(d.HasValue()&&d.Value()>.45,"windows including one across a fold stay open");}
+        const auto edges=kernel::OutputEdges(made.Value().handle,1e-6);Require(edges.HasValue(),edges.FirstMessageJa());
+        Require(edges.Value().size()<=24,"sampling stations are not exported as artificial boundaries");
+        const auto saved=kernel::CaptureOutputShape(made.Value().handle);Require(saved.HasValue(),saved.FirstMessageJa());
+        const auto restored=kernel::RestoreOutputShape(saved.Value());Require(restored.HasValue(),restored.FirstMessageJa());
+        Require(kernel::BuildShapeMesh(restored.Value(),0,0).Value().faceCount==mesh.Value().faceCount,"native save roundtrip keeps topology");
+        kernel::ReleaseShape(restored.Value());kernel::ReleaseShape(made.Value().handle);
+    }
+}
+KACHA_V2_TEST(gpt_fabrication, compact_patch_surfaces_remain_usable_for_extrusion_and_thickness){
+    fabrication::GptApproxPanel panel;panel.u={1,0,0};panel.v={0,1,0};panel.normal={0,0,1};
+    panel.profile={{0,0},{4,0},{4,4}};panel.lengths={0,4,8};panel.pattern.outline={{0,0},{8,0},{8,5},{0,5}};
+    panel.pattern.openings={{{1,1},{2,1},{2,2},{1,2}}};
+    for(int pose=0;pose<2;++pose){
+    if(pose){panel.origin={12,-9,4};panel.u={0,1,0};panel.v={0,0,-1};panel.normal={-1,0,0};}
+    for(double progress:{0.,.37,1.}){
+        const auto made=kernel::BuildGptSurface(PatchRequest(panel,progress),{});Require(made.HasValue(),made.FirstMessageJa());
+        const auto original=kernel::CaptureOutputShape(made.Value().handle);Require(original.HasValue(),original.FirstMessageJa());
+        for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside,fabrication::ThicknessPlacement::Centered}){
+            const auto solid=kernel::ThickenSurface(made.Value().handle,.2,placement,{});Require(solid.HasValue(),std::string("progress=")+std::to_string(progress)+" placement="+std::to_string(int(placement))+" "+solid.FirstMessageJa());
+            const auto check=kernel::CheckSolidForExport(solid.Value().handle,1e-6);Require(check.HasValue()&&check.Value().Ok(),"thickness produces a valid closed material");
+            Require(solid.Value().volumeMm3>7.5&&solid.Value().volumeMm3<8.1,"bending preserves sheet volume within the analytic corner envelope");
+            if(progress==0)RequireNear(solid.Value().volumeMm3,7.8,1e-6,"flat material has analytic volume");
+            const double lower=placement==fabrication::ThicknessPlacement::Outside?0:placement==fabrication::ThicknessPlacement::Inside?-.2:-.1;
+            for(const double z:{lower,lower+.2}){
+                const auto skin=kernel::DistanceToShapeSurface(solid.Value().handle,panel.Point({.5,3},progress)+panel.normal*z);
+                Require(skin.HasValue()&&skin.Value()<1e-6,"placement preserves the specified source and opposite skins");
+            }
+            const auto hole=kernel::DistanceToShapeSurface(solid.Value().handle,panel.Point({1.5,1.5},progress));Require(hole.HasValue()&&hole.Value()>.3,"thickened window is not capped");
+            kernel::ReleaseShape(solid.Value().handle);
+        }
+        if(progress<1&&pose==0){const auto extruded=kernel::BuildSurfaceExtrude(made.Value().handle,{0,0,1},0,.2,{});
+            Require(extruded.HasValue(),extruded.FirstMessageJa());Require(extruded.Value().parts.size()==1,"connected profile extrudes as one material");
+            const double expected=(19+20*std::cos(progress*std::acos(-1.)*.5))*.2;
+            RequireNear(extruded.Value().totalVolumeMm3,expected,1e-6,"surface extrusion has analytic projected-area volume");
+            for(const auto& part:extruded.Value().parts)kernel::ReleaseShape(part.handle);}
+        Require(kernel::CaptureOutputShape(made.Value().handle).Value()==original.Value(),"downstream operations never modify the source skin");
+        kernel::ReleaseShape(made.Value().handle);
+    }
+    }
+}
+KACHA_V2_TEST(gpt_fabrication, separate_patch_islands_are_not_joined_or_lost){
+    fabrication::GptApproxPanel panel;panel.u={1,0,0};panel.v={0,1,0};panel.normal={0,0,1};
+    panel.profile={{0,0},{2,0}};panel.lengths={0,2};panel.pattern.outline={{0,0},{2,0},{2,2},{0,2}};
+    auto request=PatchRequest(panel,0);panel.origin={5,0,0};const auto other=PatchRequest(panel,0);
+    request.curves.insert(request.curves.end(),other.curves.begin(),other.curves.end());
+    const auto made=kernel::BuildGptSurface(request,{});Require(made.HasValue(),made.FirstMessageJa());
+    RequireNear(made.Value().areaMm2,8,1e-6,"both islands remain");
+    const auto extruded=kernel::BuildSurfaceExtrude(made.Value().handle,{0,0,1},0,.2,{});
+    Require(extruded.HasValue(),extruded.FirstMessageJa());Require(extruded.Value().parts.size()==2,"separate material stays separate");
+    for(const auto& part:extruded.Value().parts)kernel::ReleaseShape(part.handle);
+    for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside,fabrication::ThicknessPlacement::Centered}){
+        const auto solid=kernel::ThickenSurface(made.Value().handle,.2,placement,{});Require(solid.HasValue(),solid.FirstMessageJa());
+        RequireNear(solid.Value().volumeMm3,1.6,1e-6,"thickness keeps both disconnected islands");
+        kernel::ReleaseShape(solid.Value().handle);
+    }
+    kernel::ReleaseShape(made.Value().handle);
+}
+KACHA_V2_TEST(gpt_fabrication, patch_compaction_is_independent_of_pose_and_scale){
+    for(const double scale:{.01,1.,100.}){
+        auto panel=DensePanel();panel.origin={123,-57,19};panel.u={0,1,0};panel.v={0,0,1};panel.normal={1,0,0};
+        for(auto& p:panel.profile){p.u*=scale;p.v*=scale;}for(auto& length:panel.lengths)length*=scale;
+        for(auto& p:panel.pattern.outline){p.u*=scale;p.v*=scale;}
+        for(auto& hole:panel.pattern.openings)for(auto& p:hole){p.u*=scale;p.v*=scale;}
+        for(double progress:{0.,1.}){
+            const auto made=kernel::BuildGptSurface(PatchRequest(panel,progress),{});Require(made.HasValue(),made.FirstMessageJa());
+            const auto mesh=kernel::BuildShapeMesh(made.Value().handle,0,0);Require(mesh.HasValue(),mesh.FirstMessageJa());
+            Require(mesh.Value().faceCount==(progress==0?1:3),"native topology is independent of drawing axes and model size");
+            RequireNear(made.Value().areaMm2,panel.lengths.back()*8*scale-6*scale*scale,1e-7*std::max(1.,scale*scale),"scaled material and both windows keep their area");
+            const auto hole=kernel::DistanceToShapeSurface(made.Value().handle,panel.Point({1.5*scale,2*scale},progress));
+            Require(hole.HasValue()&&hole.Value()>.45*scale,"posed and scaled window stays open");kernel::ReleaseShape(made.Value().handle);
+        }
+    }
+}
+#endif
+
 KACHA_V2_TEST_MAIN("gpt_fabrication_tests")

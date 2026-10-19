@@ -157,6 +157,35 @@ bool InstructionInlineKeys(V2MainWindow& w,V2InstructionMode& mode,V2Instruction
         &&w.Session().GetDocument().Revision()==revision))return false;
     return mode.Restore(original);
 }
+bool InstructionInlineNavigation(V2MainWindow& w,V2InstructionMode& mode,V2InstructionSheetView* paper) {
+    QTemporaryDir folder;const auto path=folder.filePath("navigation.kci");if(!mode.Save(path))return false;
+    const auto original=mode.Snapshot();const auto revision=w.Session().GetDocument().Revision();
+    for(int route=0;route<4;++route)for(bool invalid:{false,true}) {
+        if(!mode.Load(path))return false;paper->FitView();paper->SetZoom(1.25);paper->SetSelected(0);
+        Mouse(paper,QEvent::MouseButtonDblClick,paper->ToScreen({25,25}),Qt::LeftButton,Qt::LeftButton);
+        auto* edit=Shown<QPlainTextEdit>(w,"instructionInlineText");auto* zoom=Shown<QSpinBox>(w,"instructionPaperZoom");if(!edit||!zoom)return false;
+        edit->setPlainText(invalid?"   ":"Navigation committed paragraph");const auto anchor=paper->ToScreen({25,25});
+        const QPointF point(paper->width()-15,15);
+        if(route==0){QWheelEvent wheel(point,point,{},QPoint(0,120),Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);QApplication::sendEvent(paper,&wheel);QApplication::processEvents();}
+        else if(route==1){Mouse(paper,QEvent::MouseButtonPress,point,Qt::MiddleButton,Qt::MiddleButton);Mouse(paper,QEvent::MouseMove,point+QPointF(30,20),Qt::NoButton,Qt::MiddleButton);Mouse(paper,QEvent::MouseButtonRelease,point+QPointF(30,20),Qt::MiddleButton,Qt::NoButton);}
+        else if(route==2){if(!Press(w,"instructionPaperFit"))return false;}
+        else {zoom->setValue(200);QApplication::processEvents();}
+        if(invalid) {
+            if(!Explain("invalid inline text rejects view navigation and restores the zoom control",edit->isVisible()&&edit->hasFocus()
+                &&paper->Zoom()==1.25&&zoom->value()==125&&QLineF(anchor,paper->ToScreen({25,25})).length()<1e-6
+                &&mode.Snapshot()==original))return false;
+            Key(edit,Qt::Key_Escape);
+        } else {
+            if(!Explain("view navigation commits inline text before changing its screen coordinates",!edit->isVisible()
+                &&Items(mode)[0].toObject()["text"]=="Navigation committed paragraph"
+                &&QLineF(anchor,paper->ToScreen({25,25})).length()>.1))return false;
+            paper->setFocus();Key(paper,Qt::Key_Z,Qt::ControlModifier);
+        }
+        if(!Explain("navigation adds no document history beyond its paragraph commit",mode.Snapshot()==original
+            &&w.Session().GetDocument().Revision()==revision))return false;
+    }
+    return mode.Load(path);
+}
 bool InstructionLayoutUsability(V2MainWindow& w) {
     if(!InstructionResizeBounds())return false;
     QTemporaryDir folder;w.resize(1550,1000);w.show();w.SetMode(app::UiMode::Instructions);QApplication::processEvents();
@@ -241,6 +270,7 @@ bool InstructionTextAndPageUsability(V2MainWindow& w) {
     if(!mode->Save(cleanup.path)||!mode->Load(cleanup.path)||!Explain("save commits the selected text draft",Items(*mode)[0].toObject()["text"]==QStringLiteral("適用ボタンを押さずに保存した文章")))return false;
     if(!InstructionInlineFocus(w,*mode,paper))return false;
     if(!InstructionInlineKeys(w,*mode,paper))return false;
+    if(!InstructionInlineNavigation(w,*mode,paper))return false;
     paper->SetSelected(0);edit=Shown<QPlainTextEdit>(w,"instructionSelectedText");if(!edit)return false;edit->setFocus();edit->setPlainText(QStringLiteral("新規作成前の編集中の文章"));
     bool asked=false;QTimer::singleShot(50,[&]{if(auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())){asked=true;box->button(QMessageBox::Cancel)->click();}});
     w.RunCommand("file.new");if(!Explain("new shortcut commits the focused draft before its save question",asked&&Items(*mode)[0].toObject()["text"]==QStringLiteral("新規作成前の編集中の文章")))return false;

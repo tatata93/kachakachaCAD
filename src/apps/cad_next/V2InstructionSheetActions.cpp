@@ -9,14 +9,19 @@
 #include <algorithm>
 #include <cmath>
 
+bool V2InstructionSheetView::PrepareNavigation() {
+    if(!sheet_)return false;
+    if(!CommitTextEdit()){if(viewChanged)viewChanged();return false;}
+    CancelInput();return true;
+}
 void V2InstructionSheetView::ZoomAt(double value,QPointF anchor) {
-    if(!sheet_)return;
-    CancelInput();const auto mm=ToMm(anchor);
+    if(!PrepareNavigation())return;
+    const auto mm=ToMm(anchor);
     zoom_=std::clamp(value,.25,8.0);pan_+=anchor-ToScreen(mm);
     Refresh();if(viewChanged)viewChanged();
 }
 void V2InstructionSheetView::SetZoom(double value) {ZoomAt(value,QPointF(width()/2.0,height()/2.0));}
-void V2InstructionSheetView::FitView() {CancelInput();zoom_=1;pan_={};Refresh();if(viewChanged)viewChanged();}
+void V2InstructionSheetView::FitView() {if(!PrepareNavigation())return;zoom_=1;pan_={};Refresh();if(viewChanged)viewChanged();}
 void V2InstructionSheetView::wheelEvent(QWheelEvent* event) {
     ZoomAt(zoom_*std::pow(1.15,event->angleDelta().y()/120.0),event->position());event->accept();
 }

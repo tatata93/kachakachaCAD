@@ -181,7 +181,7 @@ void V2InstructionSheetView::paintEvent(QPaintEvent*) {
 }
 void V2InstructionSheetView::mousePressEvent(QMouseEvent* event) {
     if(!sheet_)return;
-    if(event->button()==Qt::MiddleButton){CancelInput();panning_=true;panLast_=event->position();setCursor(Qt::ClosedHandCursor);return;}
+    if(event->button()==Qt::MiddleButton){if(!PrepareNavigation())return;panning_=true;panLast_=event->position();setCursor(Qt::ClosedHandCursor);return;}
     if(event->button()!=Qt::LeftButton)return;
     if(!CommitTextEdit())return;setFocus(Qt::MouseFocusReason);
     const auto point=event->position();last_=ToMm(point);

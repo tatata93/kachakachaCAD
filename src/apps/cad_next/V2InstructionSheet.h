@@ -68,6 +68,7 @@ private:
     QRectF PaperRect() const;
     QRectF ViewPaperRect(QSize) const;
     void ZoomAt(double,QPointF);
+    bool PrepareNavigation();
     InstructionSheet* sheet_=nullptr;
     std::vector<InstructionPage>* scenes_=nullptr;
     QString tool_="move";

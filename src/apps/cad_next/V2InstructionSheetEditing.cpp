@@ -45,6 +45,7 @@ bool V2InstructionSheetView::CommitTextEdit() {
     const auto text=textEditor_->toPlainText();
     if(text.trimmed().isEmpty()||text.size()>100000) {
         if(refused)refused(QStringLiteral("文章は1文字以上、100000文字以内で入力してください。Escで編集前に戻せます。"));
+        textEditor_->setFocus();
         return false;
     }
     const auto id=textItemId_;textItemId_={};textEditor_->hide();

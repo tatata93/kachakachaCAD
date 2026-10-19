@@ -8,6 +8,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -303,6 +306,17 @@ KACHA_V2_TEST(railway_nose_ho, 保存して開き直しても中身が残る)
         "縮尺を書いてある");
     Require(loaded.Value().metadata.description.find("16.5mm") != std::string::npos,
         "ゲージを書いてある");
+}
+
+KACHA_V2_TEST(railway_nose_ho, 配布見本が現行の生成仕様と一致する)
+{
+    const auto expected=BuildRailwayNoseHoSampleArchive();
+    Require(expected.HasValue(), "現行HO見本を生成できる");
+    const auto path=std::filesystem::path(KACHACAD_V2_REPO_ROOT)/"samples"/"railway_streamlined_nose_ho.kcd2";
+    std::ifstream file(path,std::ios::binary);
+    Require(file.good(), "保存済みHO見本が存在する");
+    std::ostringstream bytes;bytes<<file.rdbuf();
+    Require(bytes.str()==expected.Value(), "保存見本を置き直し忘れて古い面の作り方を配布しない");
 }
 
 KACHA_V2_TEST_MAIN("railway_nose_ho_tests")

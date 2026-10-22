@@ -14,7 +14,7 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(v2_guide_surface / v2_kernel_surface。7つの作り方、偏差を測って断る) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 完了(v2_extrude / v2_kernel_extrude / v2_wire_cage / v2_kernel_wire_cage。意味的Subshapeキー) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 進行中（Codex、codex/v2-wp01-build-scaffold、2026-10-22。基点695a9ecf5。全操作の性能計測とUI境界の高速化、描画・選択・一覧・読込/Undo/出力の不要処理を削減。検証済み配布a0c9dfd97は保全） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 完了（Codex、e8249a446、2026-10-22。GPU直接描画と共通更新の軽量化。Windows実画面552件、CTest195件、開発/配布UI各552件、旧自己試験成功。配布operation-latency-final-20261022を起動確認。実測・残課題はdocs/development/operation-latency-20261022.md、記録bc8f7bc9e。全演算の常時60fps保証ではない） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(Claude, cda2a5b。対象x形式の表・検査・原子的な書き込みに加え、選択と書き出しの棚を画面へ繋いだ。tests_v2/export_panel_tests.cpp 25件、export_content_tests.cpp 15件、selection_tests.cpp 21件、cad_next --self-test 4件) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

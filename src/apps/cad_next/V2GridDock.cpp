@@ -45,7 +45,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     setFeatures(QDockWidget::NoDockWidgetFeatures);
     setAllowedAreas(Qt::RightDockWidgetArea);
     setMinimumWidth(280);
-    setMinimumHeight(215);
+    setMinimumHeight(235);
     setMaximumHeight(285);
     auto* body = new QWidget(this);
     auto* layout = new QVBoxLayout(body);

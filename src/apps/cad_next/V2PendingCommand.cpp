@@ -18,6 +18,7 @@
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
 #include "V2RoleInput.h"
+#include "V2PanelFrame.h"
 #include <QDockWidget>
 #include <QLabel>
 #include <QObject>
@@ -45,13 +46,12 @@ void ShowPendingTargets(V2MainWindow& window, V2OperationPanelHost& host,
 {
     auto* page = host.TemporaryPage();
     if (!page || page->objectName() != pendingPageName) {
-        page = new QWidget(&host);
-        page->setObjectName(pendingPageName);
-        auto* layout = new QVBoxLayout(page);
+        auto* body = new QWidget(&host);
+        auto* layout = new QVBoxLayout(body);
         auto* hint = new QLabel(QString::fromUtf8(std::string(command.predicateFailureJa).c_str())
-            + QStringLiteral("。3Dビューまたは左ペインから順に選んでください。"), page);
+            + QStringLiteral("。3Dビューまたは左ペインから順に選んでください。"), body);
         hint->setWordWrap(true); layout->addWidget(hint);
-        auto* role = new V2RoleInput(page, QStringLiteral("加工する対象（選択順）"));
+        auto* role = new V2RoleInput(body, QStringLiteral("加工する対象（選択順）"));
         role->setObjectName(QStringLiteral("pendingTargetRole"));
         layout->addWidget(role);
         role->removeItem = [&window](int row) {
@@ -62,18 +62,22 @@ void ShowPendingTargets(V2MainWindow& window, V2OperationPanelHost& host,
             std::erase_if(selection.ordered, [id](const auto& ref) { return ref.entityId == id; });
             window.Viewport().SetSelection(std::move(selection));
         };
-        QObject::connect(role->arm, &QPushButton::clicked, page, [&window] {
+        QObject::connect(role->arm, &QPushButton::clicked, body, [&window] {
             window.Viewport().setFocus();
         });
-        QObject::connect(role->clear, &QPushButton::clicked, page, [&window] {
+        QObject::connect(role->clear, &QPushButton::clicked, body, [&window] {
             window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
         });
         layout->addStretch(1);
-        auto* actions = new QHBoxLayout;
-        auto* cancel = new QPushButton(QStringLiteral("取消 Esc"), page);
-        auto* confirm = new QPushButton(QStringLiteral("確定 Enter"), page);
+        auto* footer = new QWidget(&host);
+        auto* actions = new QHBoxLayout(footer);
+        auto* cancel = new QPushButton(QStringLiteral("取消 Esc"), footer);
+        auto* confirm = new QPushButton(QStringLiteral("確定 Enter"), footer);
+        cancel->setObjectName(QStringLiteral("pendingTargetCancel"));
         confirm->setObjectName(QStringLiteral("pendingTargetConfirm"));
-        actions->addWidget(cancel); actions->addWidget(confirm); layout->addLayout(actions);
+        actions->addWidget(cancel); actions->addWidget(confirm);
+        page = MakeScrollableToolPanel(body, footer);
+        page->setObjectName(pendingPageName);
         QObject::connect(cancel, &QPushButton::clicked, page, [&window] {
             window.HandleToolKey(Qt::Key_Escape, nullptr);
         });

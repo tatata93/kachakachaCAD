@@ -283,7 +283,7 @@ bool RenameDuringTool(V2MainWindow& w){
 bool PendingFolderPick(V2MainWindow& w){
     w.RunCommand("file.new");auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(80);
     std::vector<base::EntityId> wires;
-    for(const auto& ends:std::vector<std::pair<geometry::Vector3,geometry::Vector3>>{{{-20,-5,0},{-5,-5,0}},{{5,5,0},{20,5,0}}}){
+    for(const auto& ends:std::vector<std::pair<geometry::Vector3,geometry::Vector3>>{{{-35,-10,0},{-20,-10,0}},{{-35,10,0},{-20,10,0}}}){
         w.RunCommand("draw.line");QApplication::processEvents();
         for(const auto& point:{ends.first,ends.second}){auto at=v.Mapping().Project(point);if(!Explain("folder fixture endpoint projects inside viewport",at&&v.rect().contains(QPoint(at->x,at->y))))return false;HumanClick(&v,{at->x,at->y});}
         w.RunCommand("selection.activate");for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Wire&&std::find(wires.begin(),wires.end(),e.id)==wires.end())wires.push_back(e.id);
@@ -298,7 +298,7 @@ bool PendingFolderPick(V2MainWindow& w){
 }
 bool MixedFolderDeletion(V2MainWindow& w){
     w.RunCommand("file.new");auto& v=w.Viewport();const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(!Explain("folder input rectangle created",!wire.IsNil()))return false;
-    w.RunCommand("draw.point");const auto at=v.Mapping().Project({25,25,0});if(!at)return false;HumanClick(&v,{at->x,at->y});w.RunCommand("selection.activate");
+    w.RunCommand("draw.point");QApplication::processEvents();const auto at=v.Mapping().Project({-30,-25,0});if(!at)return false;HumanClick(&v,{at->x,at->y});w.RunCommand("selection.activate");
     base::EntityId point;for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Point)point=e.id;
     if(!Explain((std::string("folder input point created: ")+w.StatusText().toStdString()).c_str(),!point.IsNil()))return false;
     v.SetSelection(app::SelectionSet{{wire,point}});w.RunCommand("group.create");const auto group=w.Session().GetDocument().Snapshot().groups.back().id;

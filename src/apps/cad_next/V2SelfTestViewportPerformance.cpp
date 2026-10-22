@@ -2,6 +2,8 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2GridDock.h"
+#include "V2OperationPanelHost.h"
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/modeling/GridModel.h"
 #include "kachakacha/app/OriginPlanes.h"
 #include <QApplication>
@@ -30,6 +32,8 @@
 #include <QObject>
 #include <QDockWidget>
 #include <QScrollArea>
+#include <QPushButton>
+#include <QChar>
 #include <QString>
 #include <algorithm>
 #include <cmath>
@@ -90,6 +94,33 @@ bool GridVisibilityInteraction(V2MainWindow& window) {
         &&window.Session().GetDocument().Revision()==revision))return false;
     window.SelectTool(modeling::DrawingTool::Select);Shot(window,"grid-on");return true;
 }
+bool PendingActionsFit(V2MainWindow& window) {
+    window.resize(1400,900);QApplication::processEvents();
+    window.RunCommand("file.new");
+    const auto a=DrawRectangleAtByHand(window,.1,.5,.25,.65);
+    const auto b=DrawRectangleAtByHand(window,.3,.5,.45,.65);
+    if(a.IsNil()||b.IsNil())return false;
+    const std::string name=QString(180,QChar(0x7a93)).toStdString();
+    for(const auto id:{a,b})if(!window.Session().GetDocument().Run(document::RenameEntityCommand(id,name)).committed)return false;
+    window.Viewport().SetSelection({});window.RunCommand("wire.join");
+    window.Viewport().SetSelection(app::SelectionSet{{a,b}});QApplication::processEvents();
+    auto* page=window.OperationHost().TemporaryPage();if(!page)return false;
+    auto* confirm=page->findChild<QPushButton*>("pendingTargetConfirm");
+    auto* cancel=page->findChild<QPushButton*>("pendingTargetCancel");
+    for(const int height:{700,600}) {
+        window.resize(1000,height);QApplication::processEvents();
+        for(auto* button:{confirm,cancel})if(!Explain("long multiple target names leave fixed actions inside the operation panel",button
+            &&button->isVisible()&&page->rect().contains(button->mapTo(page,button->rect().topLeft()))
+            &&page->rect().contains(button->mapTo(page,button->rect().bottomRight()))))return false;
+    }
+    if(!confirm->isEnabled())return false;
+    cancel->setFocus();const QPointF at=cancel->rect().center();
+    QMouseEvent press(QEvent::MouseButtonPress,at,cancel->mapToGlobal(at.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease,at,cancel->mapToGlobal(at.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(cancel,&press);QApplication::sendEvent(cancel,&release);QApplication::processEvents();
+    return Explain("pending target cancel clears inputs and leaves the tool ready to retry",window.Viewport().Selection().entityIds.empty()
+        &&window.OperationHost().HasTemporaryPage()&&!confirm->isEnabled());
+}
 bool PersistentGridControls(V2MainWindow& window) {
     window.RunCommand("file.new");
     auto* dock=dynamic_cast<V2GridDock*>(window.findChild<QDockWidget*>("gridDock"));
@@ -103,6 +134,8 @@ bool PersistentGridControls(V2MainWindow& window) {
         window.SetMode(mode);QApplication::processEvents();
         if(!Explain("grid settings persist in every mode",!dock->isHidden()&&!spacing->isHidden()&&dock->isAncestorOf(spacing)))return false;
         auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
+        if(scroll)std::cout<<"grid common dock="<<dock->height()<<" available="<<scroll->viewport()->height()
+            <<" details bottom="<<details->mapTo(scroll->viewport(),details->rect().bottomRight()).y()<<std::endl;
         if(!Explain("frequent grid fields and details toggle are visible without scrolling",scroll
             &&scroll->viewport()->rect().contains(details->mapTo(scroll->viewport(),details->rect().bottomRight()))))return false;
     }
@@ -134,7 +167,7 @@ bool PersistentGridControls(V2MainWindow& window) {
     auto* check=window.findChild<QCheckBox*>("gridVisibility");if(!check)return false;check->click();
     if(!Explain("permanent grid follows plane changes without applying stale origin",window.CurrentGridChoice().grid.originUmm==0
         &&window.Session().Scene().grid.origin==origin&&dock->Choice().grid.originUmm==0))return false;
-    Shot(window,"grid-persistent-settings");return true;
+    Shot(window,"grid-persistent-settings");return PendingActionsFit(window);
 }
 bool GridProjectionReuse(V2MainWindow& window) {
     window.RunCommand("file.new");auto& view=window.Viewport();

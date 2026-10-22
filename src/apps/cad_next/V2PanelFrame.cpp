@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QFrame>
 #include <QDockWidget>
+#include <QLayout>
 
 QLabel* MakePanelSectionTitle(QWidget* parent, const QString& text)
 {
@@ -78,6 +79,8 @@ QWidget* MakeScrollableToolPanel(QWidget* body, QWidget* footer)
     layout->setContentsMargins(0, 0, 0, 0);
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
+    // Dynamic wrapped labels must contribute their updated minimum content height.
+    if (body->layout()) body->layout()->setSizeConstraint(QLayout::SetMinimumSize);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(body);

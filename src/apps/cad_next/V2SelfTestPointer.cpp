@@ -812,7 +812,7 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
                         kachakacha::v2::modeling::StandardPlaneKind::ZX));
             }},
         {"グリッドを変える", {},
-            [&window]() { window.ApplyGridChoice(window.CurrentGridChoice()); }},
+            [&window]() { auto grid=window.CurrentGridChoice();grid.grid.majorSpacingMm+=1;window.ApplyGridChoice(grid); }},
     };
     // 線の上の点。ここでは候補送りの元(拾える線)が出る。
     // 端点の 14px 先は線から外れているので、そちらでは候補が出ない。

@@ -281,13 +281,14 @@ bool RenameDuringTool(V2MainWindow& w){
 }
 
 bool PendingFolderPick(V2MainWindow& w){
-    w.RunCommand("file.new");auto& v=w.Viewport();v.SetVisibleWidthMm(80);
+    w.RunCommand("file.new");auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(80);
     std::vector<base::EntityId> wires;
     for(const auto& ends:std::vector<std::pair<geometry::Vector3,geometry::Vector3>>{{{-20,-5,0},{-5,-5,0}},{{5,5,0},{20,5,0}}}){
-        w.RunCommand("draw.line");for(const auto& point:{ends.first,ends.second}){auto at=v.Mapping().Project(point);if(!at)return false;HumanClick(&v,{at->x,at->y});}
+        w.RunCommand("draw.line");QApplication::processEvents();
+        for(const auto& point:{ends.first,ends.second}){auto at=v.Mapping().Project(point);if(!Explain("folder fixture endpoint projects inside viewport",at&&v.rect().contains(QPoint(at->x,at->y))))return false;HumanClick(&v,{at->x,at->y});}
         w.RunCommand("selection.activate");for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Wire&&std::find(wires.begin(),wires.end(),e.id)==wires.end())wires.push_back(e.id);
     }
-    if(wires.size()!=2)return false;v.SetSelection(app::SelectionSet{wires});w.RunCommand("group.create");
+    if(!Explain(("folder fixture line count="+std::to_string(wires.size())+": "+w.StatusText().toStdString()).c_str(),wires.size()==2))return false;v.SetSelection(app::SelectionSet{wires});w.RunCommand("group.create");
     const auto group=w.Session().GetDocument().Snapshot().groups.back().id;const auto key="group:"+QString::fromStdString(group.ToString());
     v.SetSelection({});w.EntityTree()->clearSelection();w.RunCommand("wire.coincident");
     auto* row=w.EntityTree()->FindKey(key);if(!row)return false;w.EntityTree()->scrollToItem(row);QApplication::processEvents();

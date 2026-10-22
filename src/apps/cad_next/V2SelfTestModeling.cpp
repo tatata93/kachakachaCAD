@@ -35,6 +35,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QStringList>
+#include <QDockWidget>
+#include <QLineEdit>
 
 #include <iostream>
 #include <cmath>
@@ -177,8 +179,10 @@ namespace {
     // grid.edit は値を勝手に巡回せず、明示指定する棚を開く。
     const std::uint64_t before = window.Session().GetDocument().Revision();
     window.RunCommand("grid.edit");
-    if (!Explain("グリッドの棚を案内する",
-            window.StatusText().contains(QStringLiteral("右の「グリッド」")))) {
+    auto* grid=window.findChild<QDockWidget*>("gridDock");
+    auto* spacing=window.findChild<QLineEdit*>("gridSpacing");
+    if (!Explain("常設グリッドの間隔欄へ焦点を移す",
+            grid&&grid->isVisible()&&spacing&&spacing->hasFocus()&&spacing->hasSelectedText())) {
         return false;
     }
     return Explain("文書は変わらない",

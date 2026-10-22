@@ -139,14 +139,16 @@ namespace {
     viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetVisibleWidthMm(200.0);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
-    viewport.ClickAt(QPointF(viewport.width() * 0.3, viewport.height() * 0.5));
+    const auto start=viewport.Mapping().Project({-30,0,0});
+    const auto target=viewport.Mapping().Project({30,20,0});if(!start||!target)return false;
+    viewport.ClickAt(QPointF(start->x,start->y));
     // Shift 無しなら、斜めに引ける。
     viewport.SetAxisConstraintByKey(false);
-    viewport.HoverAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.3));
+    viewport.HoverAt(QPointF(target->x,target->y));
     const auto slanted = viewport.HoverPosition();
     // Shift を押すと、同じ場所でも水平に寄る。
     viewport.SetAxisConstraintByKey(true);
-    viewport.HoverAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.3));
+    viewport.HoverAt(QPointF(target->x,target->y));
     const auto flat = viewport.HoverPosition();
     viewport.SetAxisConstraintByKey(false);
     if (!Explain("どちらも位置が取れる",

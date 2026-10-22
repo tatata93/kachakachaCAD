@@ -97,6 +97,8 @@ bool PersistentGridControls(V2MainWindow& window) {
     auto* details=window.findChild<QToolButton*>("gridDetails");
     auto* body=window.findChild<QWidget*>("gridDetailsBody");
     if(!dock||!spacing||!details||!body)return false;
+    window.resize(1000,700);QApplication::processEvents();
+    if(!Explain("permanent grid and tool panel fit a 700px-high window",window.height()<=700))return false;
     for(const auto mode:app::AllUiModes()) {
         window.SetMode(mode);QApplication::processEvents();
         if(!Explain("grid settings persist in every mode",!dock->isHidden()&&!spacing->isHidden()&&dock->isAncestorOf(spacing)))return false;
@@ -154,6 +156,8 @@ bool GridProjectionReuse(V2MainWindow& window) {
     return true;
 }
 bool SelectedWireContrast(V2MainWindow& window) {
+    // Keep the crossing clear of navigation controls in the narrow-window fixture.
+    window.resize(1400,900);QApplication::processEvents();
     window.RunCommand("file.new");auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(200);
     view.SetSnapSuppressedByKey(true);window.SelectTool(modeling::DrawingTool::Polyline);
     for(const auto point:std::vector<geometry::Vector3>{{-40,0,0},{40,0,0},{40,20,0}}) {

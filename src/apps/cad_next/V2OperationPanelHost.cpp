@@ -13,6 +13,7 @@
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QSizePolicy>
 
 #include <algorithm>
 
@@ -53,6 +54,9 @@ V2OperationPanelHost::V2OperationPanelHost(QWidget* parent)
 
     pages_ = new QStackedWidget(this);
     pages_->setObjectName(QStringLiteral("operationPages"));
+    // Hidden pages must not force the whole window to the tallest tool's height.
+    // Each tool owns its scroll area; keep its footer in the available dock space.
+    pages_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
     layout->addWidget(pages_, 1);
     back_ = new QPushButton(QStringLiteral("ツール一覧に戻る"), this);
     back_->setObjectName(QStringLiteral("operationBack"));

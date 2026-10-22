@@ -802,3 +802,15 @@ WindowsのExplorer操作試験の実Qtウィンドウから取得。OSからの�
 HP-INSTRUCTIONS-EDIT、2026-10-19のWindows実Qtウィンドウ。
 
 マニュアル本文の単独アイコン画像も外し、操作の説明画像は実画面だけに統一しました。`tool-icons/` の元画像ファイルは製品アイコンの確認資産として保持します。
+
+## 2026-10-22 グリッド表示と選択線
+
+「スナップ」の隣に「グリッド表示」を追加しました。表示を隠してもスナップは維持します。
+選択線は明るい色と暗い縁取りで強調し、重なった通常線より手前に描きます。
+役割色と破線も維持します。[操作手順](section-and-delete.html)を参照してください。
+
+`grid-visible-switch`: ![常設のグリッド表示ボタン](images/v2-grid-visible-switch.png)
+
+`selected-wire-contrast`: ![選択線分のオレンジ色と縁取り](images/v2-selected-wire-contrast.png)
+
+WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入力注入とは区別します。

@@ -80,7 +80,7 @@ ViewportPalette ViewportPalette::Win95()
     palette.axisZ = QColor(0x00, 0x00, 0x80);
     palette.wire = QColor(0x00, 0x00, 0x00);
     palette.construction = QColor(0x80, 0x80, 0x80);
-    palette.selected = QColor(0x00, 0x00, 0x80);
+    palette.selected = QColor(0xFF, 0x78, 0x00);
     palette.hover = QColor(0x00, 0x80, 0x80);
     palette.preview = QColor(0x80, 0x00, 0x80);
     palette.point = QColor(0x00, 0x00, 0x00);
@@ -448,6 +448,7 @@ void V2Viewport::SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& 
 {
     // 見え方だけを変える。文書には何も書かない。
     display_ = settings;
+    RefreshQuickGridVisibility(*this);
     ApplyVisibilityFilter();
     update();
 }
@@ -792,7 +793,12 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     if(trace)std::fprintf(stderr,"paint stages ms %.3f %.3f %.3f %.3f\n",gridTime/1e6,(shapeTime-gridTime)/1e6,(documentTime-shapeTime)/1e6,(paintTimer.nsecsElapsed()-documentTime)/1e6);
     };
     QPainter destination(this);
-    if(!gpuRenderer_.PaintFrame(destination,width(),height(),draw))draw(destination);
+    // Keep GPU QPainter acceleration for the grid/wires even when visible
+    // images or analysis require software compositing of the shape layer.
+    const bool paintedGpu=gpuRenderer_.PaintFrame(destination,width(),height(),draw);
+    if(!paintedGpu)draw(destination);
+    destination.end();
+    if(trace)std::fprintf(stderr,"paint complete ms %.3f gpu-frame %d\n",paintTimer.nsecsElapsed()/1e6,int(paintedGpu));
 }
 
 void V2Viewport::HoverAt(const QPointF& position)
@@ -1110,7 +1116,7 @@ void V2Viewport::ClickAt(const QPointF& position)
     // 1回目の押しで相手を選ぶ(オーナー指摘 2026-09-11)。判断は core にある。
     if (kachakacha::v2::app::ClickPicksTarget(session_->CurrentTool(),
             !selection_.entityIds.empty(),
-            session_->PlacedPointCount())) {
+            static_cast<int>(session_->PlacedPointCount()))) {
         // ここも Hover と同じ絞りで拾う。動かす相手も、
         // 画面で掴めると見えているものだけにする。
         const auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,

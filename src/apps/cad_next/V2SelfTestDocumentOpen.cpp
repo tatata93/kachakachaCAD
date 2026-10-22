@@ -35,6 +35,11 @@
 namespace kachakacha::v2::selftest {
 bool MakeCurvedGuideSurface(V2MainWindow&);
 namespace {
+struct SoftwareRendererScope {
+    QByteArray previous=qgetenv("KACHACAD_SOFTWARE_RENDER");
+    SoftwareRendererScope(){qputenv("KACHACAD_SOFTWARE_RENDER","1");}
+    ~SoftwareRendererScope(){if(previous.isNull())qunsetenv("KACHACAD_SOFTWARE_RENDER");else qputenv("KACHACAD_SOFTWARE_RENDER",previous);}
+};
 std::string Snapshot(V2MainWindow& w) {
     io::DocumentFile file;file.snapshot=w.Session().GetDocument().Snapshot();return io::WriteDocumentJson(file);
 }
@@ -266,13 +271,15 @@ bool Interaction(V2MainWindow& w) {
     const auto id=ids.NextTyped<base::IdKind::Entity>();
     w.Viewport().SetShapeViews({{id,mesh,true}});
     InteractionTiming(w,"dense GPU");
-    // An image forces the existing depth-composited software path.
+    // An empty image must not force the depth-composited software path.
     w.Viewport().SetImageViews({V2ImageView{}});InteractionTiming(w,"dense image path");
     w.Viewport().SetImageViews({});w.Viewport().SetShapeViews({});
+    const SoftwareRendererScope software;
     V2Viewport v(w.Session());v.resize(900,600);v.SetShapeViews({{id,std::move(mesh),true}});
     v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(30);v.SetProfileRegionPicking(true);
     v.SetImageViews({V2ImageView{}});QImage first(v.size(),QImage::Format_ARGB32),second=first;
-    v.HoverAt({420,300});v.render(&first);const auto initial=v.InteractionCounts();
+    v.HoverAt({420,300});v.render(&first);
+    const auto initial=v.InteractionCounts();
     v.render(&second);const bool identical=first==second;
     v.HoverAt({425,300});v.render(&second);const auto reused=v.InteractionCounts();
     if(!Explain("unchanged face reuses exact raster and immutable partitions",identical

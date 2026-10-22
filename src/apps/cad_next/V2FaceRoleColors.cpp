@@ -8,6 +8,7 @@ void V2Viewport::SetSegmentRoleColors(std::vector<SegmentRoleColor> colors) {
 }
 std::optional<QColor> V2Viewport::SegmentRoleColorOf(
     const kachakacha::v2::base::EntityId& id,const kachakacha::v2::base::SegmentId& segmentId) const {
+    if(DeletionPreviewContains(id))return QColor(235,65,55);
     for(const auto& role:segmentRoleColors_)if(role.entityId==id&&role.segmentId==segmentId)return role.color;
     return RoleColorOf(id);
 }

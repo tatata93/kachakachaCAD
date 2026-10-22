@@ -97,7 +97,8 @@ StatusLineParts V2MainWindow::BuildStatusLineParts() const
     }
     const auto& grid = session_->Scene().grid;
     parts.gridMm = grid.majorSpacingMm;
-    parts.gridShown = grid.visible;
+    parts.gridShown = grid.visible && viewport_->DisplaySettingsNow().gridVisible
+        && !viewport_->GridSuppressedByMode();
     parts.snapOn = snapEnabled_;
     if (toolBeforeMeasure_.has_value() && tool == DrawingTool::Measure) {
         parts.resumeToolJa =

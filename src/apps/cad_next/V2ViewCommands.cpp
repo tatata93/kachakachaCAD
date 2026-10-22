@@ -745,6 +745,7 @@ void V2MainWindow::ApplyDisplaySettings(const kachakacha::v2::app::DisplaySettin
     if (displayDock_ != nullptr) {
         displayDock_->SetSettings(settings, displayStage_);
     }
+    RefreshStatusLine();
     viewport_->update();
 }
 

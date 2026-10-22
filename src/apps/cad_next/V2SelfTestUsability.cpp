@@ -55,14 +55,15 @@ bool QuickDisplay(V2MainWindow& w) {
     const auto d=add({geometry::CurveSegment::MakeLine({0,-20,0},{0,20,0}).Value()},"複数面共通");
     const auto mixed=add({geometry::CurveSegment::MakeLine({-10,0,0},{10,0,0}).Value(),geometry::CurveSegment::MakeLine({10,0,0},{10,0,5}).Value()},"立体ワイヤー");
     if(a.IsNil()||b.IsNil()||c.IsNil()||d.IsNil()||mixed.IsNil())return false;
+    auto* visible=w.findChild<QToolButton*>("quickGridVisible");
     auto* grid=w.findChild<QToolButton*>("quickGridOnTop");auto* only=w.findChild<QToolButton*>("quickPlaneWiresOnly");
-    auto* check=w.findChild<QCheckBox*>("gridOnTop");if(!grid||!only||!check)return false;
+    auto* check=w.findChild<QCheckBox*>("gridOnTop");if(!grid||!only||!check||!visible)return false;
     w.Session().SetScene(app::RebuildSceneKeepingView(w.Session().Scene(),w.Session().GetDocument().Snapshot(),ids));
     const auto revision=w.Session().GetDocument().Revision();
     for(auto theme:{UiTheme::Normal,UiTheme::Windows95})for(int width:{1000,1280}){
         w.ApplyTheme(theme);w.resize(width,800);
         for(auto mode:app::AllUiModes()){w.SetMode(mode);QApplication::processEvents();
-            if(!Explain("quick display buttons remain visible",grid->isVisible()&&only->isVisible()&&grid->visibleRegion().boundingRect()==grid->rect()&&only->visibleRegion().boundingRect()==only->rect())){w.grab().save("out/quick-display-overflow.png");return false;}}
+            if(!Explain("quick display buttons remain visible",grid->isVisible()&&only->isVisible()&&visible->isVisible()&&visible->visibleRegion().boundingRect()==visible->rect()&&grid->visibleRegion().boundingRect()==grid->rect()&&only->visibleRegion().boundingRect()==only->rect())){w.grab().save("out/quick-display-overflow.png");return false;}}
     }
     grid->click();if(!Explain("toolbar grid synchronizes dock",!check->isChecked()))return false;
     check->click();if(!Explain("dock grid synchronizes toolbar",grid->isChecked()))return false;

@@ -10,6 +10,7 @@
 
 #include "V2MainWindow.h"
 #include "V2WorkPlaneRoleInputs.h"
+#include "V2QuickDisplayControls.h"
 
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/WorkPlaneOptions.h"
@@ -335,7 +336,7 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
     const auto& scene = session_->Scene();
     const auto& plane = viewport_->WorkPlane();
     V2GridChoice choice;
-    choice.grid.visible = scene.grid.visible;
+    choice.grid.visible = viewport_->DisplaySettingsNow().gridVisible;
     choice.grid.majorSpacingMm = scene.grid.majorSpacingMm;
     choice.grid.subdivision = scene.grid.subdivision;
     choice.grid.originUmm = plane.CoordinateU(scene.grid.origin);
@@ -363,7 +364,8 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
         return;
     }
     auto scene = session_->Scene();
-    scene.grid.visible = choice.grid.visible;
+    // Visibility belongs to display settings; hiding a grid must not disable snapping.
+    scene.grid.visible = true;
     scene.grid.majorSpacingMm = checked.Value().majorSpacingMm;
     scene.grid.subdivision = checked.Value().subdivision;
     // 基準は作業平面の上の (u, v)。平面が動けば付いていく(GridModel の決まり 1)。
@@ -383,6 +385,7 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     }
     viewport_->SetPalette(palette);
     auto display = viewport_->DisplaySettingsNow();
+    display.gridVisible = choice.grid.visible;
     display.gridInAllModes = choice.showInAllModes;
     display.dimOffPlaneLines = choice.dimOffPlaneLines;
     display.workPlaneVisible = choice.workPlaneVisible;
@@ -398,6 +401,8 @@ void V2MainWindow::RefreshGridSuppression()
     // 「作図モード以外でも表示」を外したら、作図モード以外ではグリッドを出さない。
     viewport_->SetGridSuppressedByMode(!viewport_->DisplaySettingsNow().gridInAllModes
         && mode_ != kachakacha::v2::app::UiMode::Drawing);
+    RefreshQuickGridVisibility(*viewport_);
+    RefreshStatusLine();
 }
 
 void V2MainWindow::MoveGridOriginByClick()

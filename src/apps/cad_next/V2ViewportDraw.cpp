@@ -14,6 +14,7 @@
 #include "kachakacha/geometry/WireEdit.h"
 
 #include <QColor>
+#include <QLineF>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -79,7 +80,16 @@ void V2Viewport::DrawGrid(QPainter& painter) const
             return;
         }
         painter.setPen(QPen(color, 1.0));
-        QPainterPath lines;
+        std::vector<QLineF> lines;
+        // Independent grid strokes do not need QPainterPath's path stroker/tessellator.
+        // Clip before submitting: almost edge-on planes can project endpoints far outside the widget.
+        const auto append=[&](QPointF a,QPointF b) {
+            const double dx=b.x()-a.x(),dy=b.y()-a.y();double lo=0,hi=1;
+            const auto clip=[&](double p,double q){if(std::abs(p)<1e-14)return q>=0;
+                const double t=q/p;if(p<0)lo=std::max(lo,t);else hi=std::min(hi,t);return lo<=hi;};
+            if(clip(-dx,a.x()+2)&&clip(dx,width()+2-a.x())&&clip(-dy,a.y()+2)&&clip(dy,height()+2-a.y()))
+                lines.emplace_back(QPointF(a.x()+dx*lo,a.y()+dy*lo),QPointF(a.x()+dx*hi,a.y()+dy*hi));
+        };
         const bool showU=kachakacha::v2::modeling::GridLineSpacingPx(mapping_,grid.origin,grid.vDirection,grid.uDirection*spacingMm)>=6;
         const bool showV=kachakacha::v2::modeling::GridLineSpacingPx(mapping_,grid.origin,grid.uDirection,grid.vDirection*spacingMm)>=6;
         // 線は見えている範囲の端から端まで。長さを決め打ちにしない。
@@ -94,7 +104,7 @@ void V2Viewport::DrawGrid(QPainter& painter) const
             const auto sb = ToScreen(grid.origin + grid.uDirection * offset
                 + grid.vDirection * spanVMax);
             if (sa && sb) {
-                lines.moveTo(*sa); lines.lineTo(*sb);
+                append(*sa,*sb);
             }
         }
         if (showV) for (long long index = range.firstV; index <= range.lastV; ++index) {
@@ -104,10 +114,10 @@ void V2Viewport::DrawGrid(QPainter& painter) const
             const auto sd = ToScreen(grid.origin + grid.vDirection * offset
                 + grid.uDirection * spanUMax);
             if (sc && sd) {
-                lines.moveTo(*sc); lines.lineTo(*sd);
+                append(*sc,*sd);
             }
         }
-        painter.drawPath(lines);
+        if(!lines.empty())painter.drawLines(lines.data(),int(lines.size()));
     };
     if (majorPx >= 6.0) {
         // 副点: 0 = 主点のみ、2 = 1/2、3 = 1/3、4 = 1/4(V1 と同じ)。
@@ -273,6 +283,29 @@ namespace {
     return Qt::SolidLine;
 }
 
+QPen SelectionStroke(const QColor& color,double width,double sourceWidth,Qt::PenStyle style)
+{
+    QPen pen(color,width,style,Qt::RoundCap,Qt::RoundJoin);
+    if(style!=Qt::SolidLine) {
+        pen.setCapStyle(Qt::FlatCap);
+        // Qt dash units are multiples of pen width. Keep every outline in the same pixel phase.
+        QPen source(color,sourceWidth,style);auto pattern=source.dashPattern();
+        for(auto& length:pattern)length*=sourceWidth/width;
+        pen.setDashPattern(pattern);
+    }
+    return pen;
+}
+void DrawSelectionOutline(QPainter& painter,const QPainterPath& path,double width,
+    bool hasRole,const QColor& selected,Qt::PenStyle style)
+{
+    painter.setPen(SelectionStroke(QColor(24,24,24),width+(hasRole?6.:2.),width,style));
+    painter.drawPath(path);
+    if(hasRole) {
+        painter.setPen(SelectionStroke(selected,width+4.,width,style));
+        painter.drawPath(path);
+    }
+}
+
 //! その線が作業平面の上にあるか(両端と中央が面から浮いていない)。
 } // namespace
 
@@ -352,30 +385,23 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         && kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
     std::unordered_set<kachakacha::v2::base::EntityId> meshed;
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);
-    for (const auto& curve : scene.curves) {
+    std::vector<const kachakacha::v2::modeling::SnapCurve*> selectedCurves;
+    const auto drawCurve=[&](const auto& curve,SemanticState state) {
         if(sectionView_){const auto* e=session_->GetDocument().FindEntity(curve.entityId);
-            if(e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface))continue;}
-        const SemanticState state = CurveStateOf(curve.entityId, curve.segmentId);
+            if(e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface))return;}
         const bool plain = state == SemanticState::Default;
         // 派生稜線の二重描画と、描かない曲線の標本化を避ける。
-        if (plain && meshed.count(curve.entityId) != 0) continue;
+        if (plain && meshed.count(curve.entityId) != 0) return;
+        if(!EntityShown(curve.entityId)||(curve.construction&&!display_.constructionVisible))return;
         QPainterPath path;
         bool started = false;
         AppendCurve(path, curve.segment, started);
-        if (!started) {
-            continue;
-        }
-        if (curve.construction && !display_.constructionVisible) {
-            continue;
-        }
+        if (!started) return;
         // 「選択だけ」と、掴んで動かす影は **物体単位** で見る。
         // 線分1本を選んだだけで折れ線の残りが消えたり、片方だけ動いて見えたりすると、
         // 実際に動くもの(物体まるごと)と画面が食い違う。
         const bool entitySelected = kachakacha::v2::app::IsSelected(selection_,
             curve.entityId);
-        if (!EntityShown(curve.entityId)) {
-            continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
-        }
         // 意味状態は core が決める(app/SemanticState)。
         // 選んだ線分だけが Selected になり、同じワイヤーの残りは通常表示のままになる。
         // 通常表示のときだけデータ種類(補助線)の色と太さを使う。
@@ -393,7 +419,8 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         double width = plain && curve.construction ? display_.constructionWidthPx
                                                    : SemanticWidthPx(state);
         // 面を作っている最中は、欄に入った線を役割の色で出す(3D・右の棚・札で同じ色)。
-        if (const auto role = SegmentRoleColorOf(curve.entityId,curve.segmentId); role.has_value()) {
+        const auto role = SegmentRoleColorOf(curve.entityId,curve.segmentId);
+        if (role.has_value()) {
             color = *role;
             width = std::max(width, 3.0);
         }
@@ -401,8 +428,10 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         const Qt::PenStyle style = curve.datum
             ? Qt::DashDotLine
             : PenStyleOf(curve.construction ? display_.constructionStyle : display_.wireStyle);
-        painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
+        if(state==SemanticState::Selected&&!DeletionPreviewContains(curve.entityId))
+            DrawSelectionOutline(painter,path,width,role.has_value(),SemanticColor(state),style);
+        painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.drawPath(path);
         if (entitySelected && bodyDrag_.active && bodyDrag_.gesture.IsDrag()) {
             // 掴んでいる間の行き先を出す。元の線はそのまま残して、両方見せる。
@@ -417,12 +446,16 @@ void V2Viewport::DrawDocument(QPainter& painter) const
                 painter.drawPath(ghost);
             }
         }
+    };
+    for(const auto& curve:scene.curves) {
+        const auto state=CurveStateOf(curve.entityId,curve.segmentId);
+        if(state==SemanticState::Selected)selectedCurves.push_back(&curve);
+        else drawCurve(curve,state);
     }
+    for(const auto* curve:selectedCurves)drawCurve(*curve,SemanticState::Selected);
     for (const auto& point : scene.points) {
         const auto screen = ToScreen(point.position);
-        if (!screen.has_value()) {
-            continue;
-        }
+        if (!screen.has_value()) continue;
         const SemanticState state = kachakacha::v2::app::PointSemanticState(selection_,
             point.entityId, hoveredEntityId_);
         if (!EntityShown(point.entityId)) {
@@ -477,7 +510,7 @@ void V2Viewport::DrawFoldPreview(QPainter& painter) const
     // いるのかが見えないと、曲げ状態も部材の編集もどこに当たるのか分からない)。
     const QColor selected = SemanticColor(SemanticState::Selected);
     QColor fill = selected;
-    fill.setAlphaF(0.28);
+    fill.setAlphaF(0.28f);
     // 強い強調ほど後に描く。塗りが隣の帯の線に隠れないように。
     for (int level = 0; level <= 2; ++level) {
         if (level == 0) {
@@ -648,7 +681,7 @@ void V2Viewport::DrawBoxSelect(QPainter& painter) const
     const QColor ink = SemanticColor(SemanticState::Selected);
     painter.setPen(QPen(ink, 1.4, contained ? Qt::SolidLine : Qt::DashLine));
     QColor fill = ink;
-    fill.setAlphaF(0.10);
+    fill.setAlphaF(0.10f);
     painter.setBrush(fill);
     painter.drawRect(BoxSelectRect());
     painter.setBrush(Qt::NoBrush);

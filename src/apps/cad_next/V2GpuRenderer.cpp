@@ -214,13 +214,18 @@ bool V2GpuRenderer::PaintFrame(QPainter& destination,int width,int height,
     }
     if(!s.frame->isValid()){s.context.doneCurrent();return false;}
     s.frame->bind();s.paintingFrame=true;
+    QElapsedTimer timer;timer.start();
     QOpenGLPaintDevice device(width,height);
     {QPainter painter(&device);draw(painter);}
     s.paintingFrame=false;
+    const auto painted=timer.nsecsElapsed();
     const QImage image=s.frame->toImage();
+    const auto read=timer.nsecsElapsed();
     s.cachedImage={};s.frame->release();s.context.doneCurrent();
     if(image.isNull())return false;
-    destination.drawImage(0,0,image);return true;
+    destination.drawImage(0,0,image);
+    if(qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"gpu frame ms draw %.3f readback %.3f copy %.3f\n",painted/1e6,(read-painted)/1e6,(timer.nsecsElapsed()-read)/1e6);
+    return true;
 }
 
 #else

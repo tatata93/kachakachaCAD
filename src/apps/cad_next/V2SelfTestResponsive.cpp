@@ -16,6 +16,10 @@
 #include <vector>
 
 namespace kachakacha::v2::selftest {
+bool ViewportFrameBenchmark(V2MainWindow&);
+bool GridVisibilityInteraction(V2MainWindow&);
+bool SelectedWireContrast(V2MainWindow&);
+bool HiddenOverlayRendering(V2MainWindow&);
 namespace {
 
 //! HP-RS-01。5つの場面がどれも作れ、1280x720 でも帯のボタンが幅に収まる。
@@ -74,11 +78,17 @@ namespace {
 
 std::vector<SelfTestCase> ResponsiveCases()
 {
-    return {
+    std::vector<SelfTestCase> cases={
+        {"HP-GRID-01 display toggle preserves snapping and pending input",GridVisibilityInteraction},
+        {"HP-GRID-02 selected wire contrast and overlapping roles",SelectedWireContrast},
+        {"HP-GRID-03 hidden overlays keep GPU shading",HiddenOverlayRendering},
         {"HP-RS-01 5 つの撮影の場面が作れる", CaseAllResponsiveShotsCanBeBuilt},
         {"HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",
             CaseAllComparisonShotsCanBeBuilt},
     };
+    if(!qEnvironmentVariableIsEmpty("KACHACAD_VIEWPORT_PERF_MODEL"))
+        cases.push_back({"HP-GRID-PERF orbit pan and grid frame times",ViewportFrameBenchmark});
+    return cases;
 }
 
 } // namespace kachakacha::v2::selftest

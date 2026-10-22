@@ -1,5 +1,6 @@
 #include "V2QuickDisplayControls.h"
 #include "V2Viewport.h"
+#include "V2MainWindow.h"
 #include "kachakacha/app/PlaneFocus.h"
 #include <QCheckBox>
 #include <QObject>
@@ -30,6 +31,15 @@ QToolButton* Button(QToolBar& bar,const char* id,const QString& text,const QStri
 }
 void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSession& session) {
     auto* state=new PlaneWireDisplay(view,session);
+    auto* visible=Button(bar,"quickGridVisible",QStringLiteral("グリッド表示"),
+        QStringLiteral("グリッド線の表示/非表示。スナップは切り替えません。オンにすると全モードで表示します。"));
+    visible->setChecked(view.DisplaySettingsNow().gridVisible);
+    QObject::connect(visible,&QToolButton::toggled,&view,[&view](bool on){
+        auto& window=static_cast<V2MainWindow&>(*view.window());
+        auto choice=window.CurrentGridChoice();choice.grid.visible=on;
+        if(on)choice.showInAllModes=true;
+        window.ApplyGridChoice(choice);window.RefreshStatusLine();
+    });
     auto* grid=Button(bar,"quickGridOnTop",QStringLiteral("グリッド透過"),
         QStringLiteral("オン: 面やソリッド越しにグリッドを表示。オフ: 形状の後ろにあるグリッドを隠す。"));
     grid->setChecked(true);
@@ -39,6 +49,20 @@ void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSess
     QObject::connect(plane,&QToolButton::toggled,&view,[&view,state](bool on){
         state->enabled=on;RefreshPlaneWireDisplay(view);view.ApplyVisibilityFilter();view.PruneSelection();view.update();
     });
+}
+void RefreshQuickGridVisibility(V2Viewport& view) {
+    const bool on=view.DisplaySettingsNow().gridVisible;
+    if(auto* button=view.window()->findChild<QToolButton*>("quickGridVisible")) {
+        const auto* state=State(view);
+        const bool shown=on&&!view.GridSuppressedByMode()&&(!state||state->session.Scene().grid.visible);
+        const QSignalBlocker block(button);button->setChecked(shown);
+    }
+    if(auto* check=view.window()->findChild<QCheckBox*>("gridVisibility")) {
+        const QSignalBlocker block(check);check->setChecked(on);
+    }
+    if(auto* check=view.window()->findChild<QCheckBox*>("gridAllModes")) {
+        const QSignalBlocker block(check);check->setChecked(view.DisplaySettingsNow().gridInAllModes);
+    }
 }
 void BindQuickGridControl(V2Viewport& view,QCheckBox& check) {
     auto* button=view.window()->findChild<QToolButton*>("quickGridOnTop");if(!button)return;

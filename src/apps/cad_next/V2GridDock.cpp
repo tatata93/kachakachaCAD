@@ -43,6 +43,8 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->setSpacing(3);
 
     visible_ = new QCheckBox(QStringLiteral("グリッドを表示"), body);
+    visible_->setObjectName(QStringLiteral("gridVisibility"));
+    visible_->setToolTip(QStringLiteral("表示だけを切り替えます。グリッドへのスナップはスナップボタンで切り替えます。"));
     visible_->setChecked(true);
     form->addRow(visible_);
 
@@ -80,6 +82,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->addRow(originButtons);
 
     allModes_ = new QCheckBox(QStringLiteral("作図モード以外でも表示"), body);
+    allModes_->setObjectName(QStringLiteral("gridAllModes"));
     allModes_->setChecked(true);
     form->addRow(allModes_);
     dimOffPlane_ = new QCheckBox(QStringLiteral("新規作図中だけ作図面以外の線を薄く"), body);

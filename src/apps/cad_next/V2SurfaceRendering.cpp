@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2RenderLayers.h"
 #include "kachakacha/view/SurfaceRaster.h"
 #include <QImage>
 #include <QColor>
@@ -79,7 +80,9 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
 bool V2Viewport::DrawGpuShapes(QPainter& painter) const
 {
     // Images/analysis retain their existing compositing path until GPU parity is tested.
-    if (!imageViews_.empty() || !analysisViews_.empty()) return false;
+    const auto layers=V2RenderLayersOf(*this,analysisViews_);
+    if(layers.images||layers.analysis)return false;
+    if(!layers.shapes)return true;
     std::vector<V2GpuRenderer::Item> items;
     for(const auto& shape:shapeViews_) {
         const bool selected=kachakacha::v2::app::IsSelected(selection_,shape.entityId);

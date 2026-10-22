@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "date_jst": "2026-10-23",
+  "source_commit": "18ba0c2c6a2563bb59478d8417bbe35bf2ea6c92",
+  "baseline_release": "operation-latency-final-20261022",
+  "release": "grid-wire-verified-20261023",
+  "status": "passed",
+  "measurements": [
+    {
+      "model": "owner",
+      "version": "baseline-20261023",
+      "cold_ms": 4221,
+      "warm_ms": 725,
+      "shapes": 10
+    },
+    {
+      "model": "owner",
+      "version": "final4-20261023",
+      "cold_ms": 4532,
+      "warm_ms": 720,
+      "shapes": 10
+    },
+    {
+      "model": "heavy",
+      "version": "baseline-20261023",
+      "cold_ms": 22631,
+      "warm_ms": 6974,
+      "shapes": 1085
+    },
+    {
+      "model": "heavy",
+      "version": "final4-20261023",
+      "cold_ms": 22970,
+      "warm_ms": 7130,
+      "shapes": 1085
+    }
+  ],
+  "runs": [
+    {
+      "model": "owner",
+      "scenario": "open",
+      "utc": "2026-10-22T16:11:54.199564+00:00",
+      "seconds": 7.789841890335083,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "c08ff964c9eed80f768b773b1148f878cb726b2a3e5aa08060313b490ddd91a3",
+      "exe_sha256": "c84429909003efac72ff4af68ddf30b06511ddaa9d594bbed9a96a9fe58fc86c"
+    },
+    {
+      "model": "owner",
+      "scenario": "explorer",
+      "utc": "2026-10-22T16:12:02.024110+00:00",
+      "seconds": 7.649688720703125,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "c08ff964c9eed80f768b773b1148f878cb726b2a3e5aa08060313b490ddd91a3",
+      "exe_sha256": "c84429909003efac72ff4af68ddf30b06511ddaa9d594bbed9a96a9fe58fc86c"
+    },
+    {
+      "model": "heavy",
+      "scenario": "open",
+      "utc": "2026-10-22T16:12:09.723858+00:00",
+      "seconds": 32.599848985672,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "8e08619769ef38028af3c2a9f4a6699e607c1e7e8066f3301100aa149b72b4d5",
+      "exe_sha256": "c84429909003efac72ff4af68ddf30b06511ddaa9d594bbed9a96a9fe58fc86c"
+    },
+    {
+      "model": "heavy",
+      "scenario": "explorer",
+      "utc": "2026-10-22T16:12:42.365194+00:00",
+      "seconds": 31.658357620239258,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "8e08619769ef38028af3c2a9f4a6699e607c1e7e8066f3301100aa149b72b4d5",
+      "exe_sha256": "c84429909003efac72ff4af68ddf30b06511ddaa9d594bbed9a96a9fe58fc86c"
+    },
+    {
+      "model": "owner",
+      "scenario": "open",
+      "utc": "2026-10-22T18:47:35.226158+00:00",
+      "seconds": 7.600903749465942,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "c08ff964c9eed80f768b773b1148f878cb726b2a3e5aa08060313b490ddd91a3",
+      "exe_sha256": "b46f79f39439edc2ef40034da2866648310ecf8a0822e1d90d0c02a5ba316931"
+    },
+    {
+      "model": "heavy",
+      "scenario": "open",
+      "utc": "2026-10-22T18:47:42.864802+00:00",
+      "seconds": 33.13374066352844,
+      "exit_code": 0,
+      "ok": true,
+      "source_sha256": "8e08619769ef38028af3c2a9f4a6699e607c1e7e8066f3301100aa149b72b4d5",
+      "exe_sha256": "b46f79f39439edc2ef40034da2866648310ecf8a0822e1d90d0c02a5ba316931"
+    }
+  ],
+  "source_sha256": "376ea1fff8522240ada54df0c20cab16afc2c35381ed14b259bf9871e3256a0f",
+  "limitations": [
+    "One cold/warm pair per model and binary, same PC and Qt Windows backend; not a statistical latency guarantee.",
+    "The permanent grid panel changes the available viewport dimensions.",
+    "No overall large-model load speedup or universal 60fps is established in the final measured pair. Cache transfer preparation alone falls from about 604ms to 0.6ms.",
+    "Existing saved hidden history chains are not automatically removed. Sources referenced by other features or dimensions remain protected."
+  ],
+  "evidence": {
+    "focused": "out/performance-wide-20261022/grid-always-focused-20261023-f/result.json (68/69; folder case separately fixed and passed; final all-case gate authoritative)",
+    "dimension": "out/performance-wide-20261022/grid-always-dimension-20261023/result.json",
+    "scale150": "out/performance-wide-20261022/grid-always-150-final4-20261023/result.json",
+    "software": "out/performance-wide-20261022/grid-always-software-final4-20261023/result.json",
+    "full": "out/verification/grid-wire-verified-20261023/result.json",
+    "interrupted": [
+      "out/verification/grid-wire-final-20261023/result.json",
+      "out/verification/grid-wire-final2-20261023/result.json",
+      "out/verification/grid-wire-final3-20261023/result.json"
+    ],
+    "folder": "out/performance-wide-20261022/grid-always-folder-20261023/result.json",
+    "old_failures": "out/performance-wide-20261022/grid-always-old4-final4-20261023/result.json",
+    "offscreen": "out/performance-wide-20261022/grid-always-offscreen-final4-20261023/result.json",
+    "layout_failures": "out/performance-wide-20261022/grid-always-layout3-final4-20261023/result.json",
+    "rejected_start": "out/verification/grid-wire-final4-20261023/result.json",
+    "startup": "out/performance-wide-20261022/grid-always-normal-startup-20261023/startup.json"
+  },
+  "exe_sha256": "b46f79f39439edc2ef40034da2866648310ecf8a0822e1d90d0c02a5ba316931",
+  "verification": {
+    "start": "2026-10-22T18:50:10.520436+00:00",
+    "end": "2026-10-22T19:16:16.433376+00:00",
+    "ctest": {
+      "total": 195,
+      "skipped": []
+    },
+    "ui_cases": [
+      560,
+      560
+    ],
+    "seconds": 1565.91294
+  },
+  "startup": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 760,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1180,
+    "original_project_sha256_unchanged": true,
+    "image": "normal-startup.png"
+  },
+  "publication": "out/releases/grid-wire-verified-20261023/verification.json"
+}

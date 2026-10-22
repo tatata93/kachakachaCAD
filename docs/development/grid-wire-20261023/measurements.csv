@@ -1,0 +1,5 @@
+model,version,cold_ms,warm_ms,shapes
+owner,baseline-20261023,4221,725,10
+owner,final4-20261023,4532,720,10
+heavy,baseline-20261023,22631,6974,1085
+heavy,final4-20261023,22970,7130,1085

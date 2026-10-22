@@ -656,6 +656,8 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         &&candidate->kind==kachakacha::v2::app::SelectionElementKind::Edge) {
         auto* remove=menu.addAction(QStringLiteral("この線分だけを削除"));
         remove->setObjectName(QStringLiteral("deletePickedSegment"));
+        const auto index=static_cast<std::size_t>(viewport_->CandidateIndex());
+        connect(remove,&QAction::hovered,viewport_,[this,index]{viewport_->PreviewCandidate(index);});
         connect(remove,&QAction::triggered,this,[this,pick=*candidate] {
             RunCommand("selection.activate");
             kachakacha::v2::app::SelectionSet exact;

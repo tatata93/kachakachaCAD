@@ -433,7 +433,11 @@ bool CaseDeleteRoundedSegment(V2MainWindow& w,int mode=0) {
         if(mode==3)w.RunCommand("wire.corner_fillet");
         kachakacha::v2::app::SelectionSet whole;whole.entityIds={target->entityId};v.SetSelection(whole);
     }
-    if(mode<4)w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);
+    if(mode==3)v.ClickAt({at->x,at->y});
+    else if(mode<4)w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);
+    if(mode==3&&!Explain("real C/R click refines whole wire to the arc only",v.Selection().ordered.size()==1
+        &&v.Selection().ordered.front().kind==kachakacha::v2::app::SelectionElementKind::Edge
+        &&v.Selection().ordered.front().segmentId==target->segmentId))return false;
     std::vector<kachakacha::v2::base::SegmentId> deleted={target->segmentId};
     if(mode==2) {
         const auto other=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return c.segmentId!=target->segmentId;});
@@ -461,6 +465,32 @@ bool CaseDeleteRoundedSegment(V2MainWindow& w,int mode=0) {
     kachakacha::v2::app::SelectionSet whole;whole.entityIds={curves.front().entityId};v.SetSelection(whole);
     w.RunCommand("edit.delete");if(!w.Session().Scene().curves.empty())return false;
     w.RunCommand("edit.undo");return survivors();
+}
+bool CaseContextOverlapDeletion(V2MainWindow& w) {
+    using namespace kachakacha::v2;w.RunCommand("file.new");
+    if(!MakeAndSelectWire(w,app::DirectWireKind::PlanarLine,{{-20,0,0},{20,0,0}},0,QStringLiteral("横"))
+        ||!MakeAndSelectWire(w,app::DirectWireKind::PlanarLine,{{0,-20,0},{0,20,0}},0,QStringLiteral("縦")))return false;
+    w.RunCommand("selection.activate");auto& v=w.Viewport();const auto at=v.Mapping().Project({0,0,0});if(!at)return false;
+    base::EntityId initial;bool checked=false;
+    QTimer::singleShot(0,&w,[&]{
+        auto* menu=qobject_cast<QMenu*>(QApplication::activePopupWidget());if(!menu||!v.CurrentCandidate())return;
+        initial=v.CurrentCandidate()->entityId;
+        auto* other=menu->findChild<QAction*>("pickCandidate1");
+        auto* remove=menu->findChild<QAction*>("deletePickedSegment");
+        if(other&&remove) {
+            other->activate(QAction::Hover);
+            const bool switched=v.CurrentCandidate()&&v.CurrentCandidate()->entityId!=initial;
+            remove->activate(QAction::Hover);
+            checked=switched&&v.CurrentCandidate()&&v.CurrentCandidate()->entityId==initial;
+            if(checked)remove->trigger();
+        }
+        menu->close();
+    });
+    v.PressRightWithoutMoving({at->x,at->y});
+    if(!Explain("delete menu restores its exact target after another overlap candidate was hovered",checked
+        &&!w.Session().GetDocument().FindEntity(initial)&&CountOfKind(w,EntityKind::Wire)==1))return false;
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Wire)!=2)return false;
+    w.RunCommand("edit.redo");return CountOfKind(w,EntityKind::Wire)==1&&!w.Session().GetDocument().FindEntity(initial);
 }
 bool CaseNativeEdgesHistory(V2MainWindow& w) {
     w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
@@ -642,6 +672,7 @@ std::vector<SelfTestCase> EditCases()
         {"HP-DEL-11 fillet tool whole wire refines to arc and real Delete",[](auto& w){return CaseDeleteRoundedSegment(w,3);}},
         {"HP-DEL-12 context arc deletion ignores old whole wire selection",[](auto& w){return CaseDeleteRoundedSegment(w,4);}},
         {"HP-DEL-13 context straight deletion retains rounded arc",[](auto& w){return CaseDeleteRoundedSegment(w,5);}},
+        {"HP-DEL-14 overlapping context highlight matches deleted segment",CaseContextOverlapDeletion},
         {"HP-DEL-06 unfinished drawing Undo keeps earlier deletion",CasePendingDrawingUndo},
         {"HP-DEL-07 stale and dependent segment deletion refuses safely",CaseDeleteGuards},
         {"HP-DEL-03 native edges never duplicate or resurrect",CaseNativeEdgesHistory},

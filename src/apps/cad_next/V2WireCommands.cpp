@@ -833,7 +833,12 @@ void V2MainWindow::RemoveConsumedWires(
             continue;
         }
         const auto* feature = session_->GetDocument().FindFeature(entity->createdBy);
-        if (feature && feature->outputs.size() > 1) {
+        const auto& dimensions = session_->GetDocument().Snapshot().referenceDimensions;
+        const bool dimensionUses = std::any_of(dimensions.begin(),dimensions.end(),[&](const auto& dimension) {
+            return std::find(dimension.targets.begin(),dimension.targets.end(),id)!=dimension.targets.end()
+                ||std::any_of(dimension.segments.begin(),dimension.segments.end(),[&](const auto& ref){return ref.entityId==id;});
+        });
+        if (dimensionUses || (feature && feature->outputs.size() > 1)) {
             (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
                 {id}, kachakacha::v2::domain::Visibility::Hidden));
             continue;

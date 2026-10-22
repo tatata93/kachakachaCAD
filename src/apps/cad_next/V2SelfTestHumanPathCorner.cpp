@@ -20,6 +20,8 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/document/Commands.h"
+#include "kachakacha/document/Dimension.h"
 
 #include <QWidget>
 #include <QImage>
@@ -28,6 +30,7 @@
 #include <QString>
 
 #include <cmath>
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -491,6 +494,35 @@ bool CaseAutomaticOffset(V2MainWindow& w) {
     w.RunCommand("selection.activate");w.RunCommand("edit.undo");
     return Explain("undo restores input and retains plane",w.Session().Scene().curves.size()==4&&std::abs(view.WorkPlane().normal.y)>0.99);
 }
+bool CaseDimensionProtectedCorner(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    for(bool driving:{false,true}) {
+        w.RunCommand("file.new");
+        const auto a=DrawLineAtByHand(w,.2,.5,.8,.5),b=DrawLineAtByHand(w,.7,.3,.7,.9);
+        if(a.IsNil()||b.IsNil())return false;
+        const auto curves=w.Session().Scene().curves;
+        const auto source=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return c.entityId==a;});
+        if(source==curves.end())return false;
+        base::DeterministicIdGenerator ids(993000);document::ReferenceDimension dimension;
+        dimension.id=ids.NextTyped<base::IdKind::Dimension>();dimension.label="corner reference";
+        dimension.kind="dim_length";dimension.unit="mm";dimension.targets={a};dimension.segments={{a,source->segmentId}};
+        dimension.driving=driving;dimension.recordedValue=(source->segment.EndPoint()-source->segment.StartPoint()).Length();
+        if(!w.Session().GetDocument().Run(document::AddReferenceDimensionCommand(dimension)).committed)return false;
+        w.Viewport().SetSelection({});w.RunCommand("wire.chamfer");
+        if(!PressCurveOf(w,a)||!PressCurveOf(w,b)||!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        const auto valid=[&] {
+            const auto* entity=w.Session().GetDocument().FindEntity(a);
+            const auto result=document::EvaluateDimension(w.Session().GetDocument().Snapshot(),dimension);
+            return entity&&entity->visibility==domain::Visibility::Hidden&&result.HasValue()
+                &&std::abs(result.Value().value-dimension.recordedValue)<1e-8&&w.Session().Scene().curves.size()==3;
+        };
+        if(!Explain("reference and driving dimensions retain a valid hidden source after C/R",valid()))return false;
+        w.RunCommand("edit.undo");if(w.Session().Scene().curves.size()!=2)return false;
+        w.RunCommand("edit.redo");
+        if(!valid()||!w.SaveAndReopen("corner-dimension.kcd2")||!valid())return false;
+    }
+    return true;
+}
 bool CaseBatchCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false,true); }
 bool CaseBatchPolylineCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,true,true); }
 bool CaseRepeatedSeparateCorners(V2MainWindow& w) { return CaseRepeatedCorners(w,false); }
@@ -502,6 +534,7 @@ std::vector<SelfTestCase> HumanPathCornerCases()
 {
     return {
         {"HP-CN-09 full-length R1 corner", CaseFullLengthCorner},
+        {"HP-CN-10 corner replacement preserves reference and driving dimensions",CaseDimensionProtectedCorner},
         {"HP-WP-AUTO automatic edit plane", CaseAutomaticOffset},
         {"HP-CN-07 batch corners and image cache", CaseBatchCorners},
         {"HP-CN-08 polyline batch corners", CaseBatchPolylineCorners},

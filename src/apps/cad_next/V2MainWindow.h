@@ -400,7 +400,7 @@ public:
     //! 部品の棚(V1 の部品タブ)。押し出しの距離・板厚・厚みの付け方・治具・回転体。
     [[nodiscard]] V2PartDock& PartDock() { return *partDock_; }
     //! 部品の棚を、いまの数と選択に合わせて書き直す。
-    void RefreshPartDock();
+    void RefreshPartDock(const kachakacha::v2::app::SelectionFacts* sharedFacts=nullptr);
 
     //! 並べ方を聞く手立て。既定は窓を出す。試験では差し替える。
     //! 2つめの引数が真なら円、偽なら直線。空を返したら「やめた」。
@@ -798,7 +798,7 @@ private:
     //! 台帳 QAction を2段目のモード別道具として再利用する。
     //! その命令は作図の道具(kToolBindings)として既に並んでいるか。
     [[nodiscard]] static bool IsToolBoundCommand(std::string_view id);
-    void RefreshCommandVisibility();
+    void RefreshCommandVisibility(const kachakacha::v2::app::SelectionFacts* sharedFacts=nullptr);
     //! 文書のまとまりと上の帯を同期する。
     void RefreshActiveGroupCombo();
     void ActivateGroupByComboIndex(int index);
@@ -822,7 +822,7 @@ private:
     //! 手順の並びの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyStepsState(const QString& name);
     void RefreshEntityList();
-    void RefreshExplorerVisibility(); void RefreshExplorerCategoryChecks();
+    void RefreshExplorerVisibility(bool shapeVisibilityChanged=true); void RefreshExplorerCategoryChecks();
     bool ToggleExplorerCategory(QTreeWidgetItem* item);
     bool ApplyExplorerVisibility(const std::vector<QTreeWidgetItem*>& rows,bool visible);
     void CreateSiblingGroup(); void BuildExplorerGroupButtons(class QVBoxLayout* layout);

@@ -10,6 +10,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QEventLoop>
+#include <QTimer>
+#include <QWidget>
+#include <QPixmap>
+#include <QVariant>
 #include <QCheckBox>
 #include <QColor>
 #include <QEvent>
@@ -25,7 +30,12 @@
 
 namespace kachakacha::v2::selftest {
 namespace {
-QImage Frame(V2Viewport& view) {QImage result(view.size(),QImage::Format_ARGB32);result.fill(Qt::transparent);view.render(&result);return result;}
+QImage Frame(V2Viewport& view) {
+    QImage result(view.size(),QImage::Format_ARGB32);result.fill(Qt::transparent);view.render(&result);
+    const auto path=qEnvironmentVariable("KACHACAD_GRID_PROOF_DIR");
+    if(!path.isEmpty()){static int number=0;QDir dir(path);dir.mkpath(".");result.save(dir.filePath(QString("frame-%1.png").arg(++number)));}
+    return result;
+}
 bool Near(const QImage& image,QPointF at,QColor color,int radius) {
     for(int y=std::max(0,int(at.y())-radius);y<std::min(image.height(),int(at.y())+radius+1);++y)
         for(int x=std::max(0,int(at.x())-radius);x<std::min(image.width(),int(at.x())+radius+1);++x) {
@@ -159,7 +169,24 @@ bool HiddenOverlayRendering(V2MainWindow& window) {
     image.image.pixels[0]=0xffff0000u;view.SetImageViews({image});
     return Explain("visible image keeps its depth/compositing and replacement pixels",visible!=Frame(view));
 }
-// Explicit benchmark only: fixed-size interactive repaint, not a sleep-based FPS estimate.
+bool PresentationUpdates(V2MainWindow& window){
+    window.RunCommand("file.new");auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);
+    if(!DrawRectangleByHand(window))return false;window.RunCommand("selection.activate");
+    QApplication::processEvents();const auto first=Frame(view);const auto paints=view.property("nativeViewportFrames").toULongLong();
+    view.PanByPixels(25,15);view.repaint();view.CompletePresentationForTest();
+    const auto moved=Frame(view);if(!Explain("presentation capture follows camera changes",first!=moved))return false;
+    auto* canvas=view.findChild<QWidget*>("nativeViewportCanvas");const bool native=canvas&&canvas->isVisible()&&canvas->property("nativeReady").toBool();
+    if(native&&!Explain("native repaint paints a fresh frame",view.property("nativeViewportFrames").toULongLong()>paints))return false;
+    app::SelectionSet selected;for(const auto& curve:window.Session().Scene().curves)selected.entityIds.push_back(curve.entityId);
+    view.SetSelection(selected);view.repaint();const auto marked=Frame(view);
+    if(!Explain("native and fallback captures include selection",marked!=moved&&!window.grab().isNull()&&!view.grab().isNull()))return false;
+    window.resize(window.width()+80,window.height()+60);QApplication::processEvents();
+    const auto resized=Frame(view);if(!Explain("resize preserves complete viewport capture",resized.size()==view.size()&&resized!=marked))return false;
+    QApplication::processEvents();const auto idle=view.property("nativeViewportFrames").toULongLong();
+    QEventLoop settle;QTimer::singleShot(150,&settle,&QEventLoop::quit);settle.exec();
+    return Explain("presentation does not schedule an idle repaint loop",!native||view.property("nativeViewportFrames").toULongLong()<=idle+2);
+}
+// Explicit benchmark only: fixed-size interactive repaint with GPU completion.
 bool ViewportFrameBenchmark(V2MainWindow& window)
 {
     const auto model=qEnvironmentVariable("KACHACAD_VIEWPORT_PERF_MODEL");
@@ -186,7 +213,8 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
             const QPointF start(view.width()*.4,view.height()*.6);
             const auto modifiers=QString::fromLatin1(operation)=="orbit"?Qt::ShiftModifier:Qt::NoModifier;
             if(events){QMouseEvent press(QEvent::MouseButtonPress,start,view.mapToGlobal(start.toPoint()),Qt::MiddleButton,Qt::MiddleButton,modifiers);QApplication::sendEvent(&view,&press);}
-            const auto counts=view.InteractionCounts();std::vector<double> samples;
+            const auto counts=view.InteractionCounts();std::vector<double> samples,workSamples;
+            const auto nativeFrames=view.property("nativeViewportFrames").toULongLong(),readbacks=view.PresentationReadbacks();
             for(int i=0;i<frames+4;++i) {
                 QElapsedTimer timer;timer.start();
                 const double sign=i%2?1:-1;
@@ -194,10 +222,15 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
                     QMouseEvent move(QEvent::MouseMove,at,view.mapToGlobal(at.toPoint()),Qt::NoButton,Qt::MiddleButton,modifiers);QApplication::sendEvent(&view,&move);}
                 else if(QString::fromLatin1(operation)=="orbit")view.OrbitByPixels(sign*3,sign);
                 else view.PanByPixels(sign*3,sign);
-                view.repaint(); // normal on-screen QWidget presentation, including FBO readback
-                if(i>=4)samples.push_back(double(timer.nsecsElapsed())/1e6);
+                view.repaint();QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+                view.CompletePresentationForTest(); // include Qt composition and completed GPU work
+                if(i>=4){samples.push_back(double(timer.nsecsElapsed())/1e6);workSamples.push_back(view.property("presentationWorkMs").toDouble());}
             }
             std::sort(samples.begin(),samples.end());
+            std::sort(workSamples.begin(),workSamples.end());
+            const auto paintedFrames=view.property("nativeViewportFrames").toULongLong()-nativeFrames;
+            if(nativeFrames>0)std::cout<<"native frames="<<paintedFrames<<" requested="<<frames+4<<" readbacks="<<view.PresentationReadbacks()-readbacks<<std::endl;
+            if(nativeFrames>0&&!Explain("every requested native frame is painted without application readback",paintedFrames>=std::uint64_t(frames+4)&&view.PresentationReadbacks()==readbacks))return false;
             if(events){QMouseEvent release(QEvent::MouseButtonRelease,start,view.mapToGlobal(start.toPoint()),Qt::MiddleButton,Qt::NoButton,modifiers);QApplication::sendEvent(&view,&release);}
             const auto percentile=[&](double p){return samples[std::min(samples.size()-1,std::size_t(p*samples.size()))];};
             const auto over=std::count_if(samples.begin(),samples.end(),[](double ms){return ms>1000./60;});
@@ -205,6 +238,9 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
                 {"median_ms",percentile(.5)},{"p95_ms",percentile(.95)},{"p99_ms",percentile(.99)},
                 {"max_ms",samples.back()},{"over_16_67_ms",int(over)},
                 {"backend",QString::fromUtf8(view.RenderBackend())},
+                {"native_frames",double(paintedFrames)},{"application_readbacks",double(view.PresentationReadbacks()-readbacks)},
+                {"paint_gpu_complete_median_ms",workSamples[workSamples.size()/2]},
+                {"paint_gpu_complete_p95_ms",workSamples[std::size_t(.95*workSamples.size())]},
                 {"software_rasterizations",double(view.InteractionCounts().rasterizations-counts.rasterizations)},
                 {"shapes",view.ShapeViewCount()},{"triangles",view.ShapeTriangleCount()}};
             const auto& g=window.Session().Scene().grid;const double spacing=g.majorSpacingMm/(g.subdivision>1?g.subdivision:1);
@@ -217,7 +253,7 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
     if(!output.isEmpty()) {
         QFile file(output);if(!file.open(QIODevice::WriteOnly))return false;
         QJsonObject report{{"model",model},{"viewport_width",view.width()},{"viewport_height",view.height()},
-            {"device_pixel_ratio",view.devicePixelRatioF()},{"measure","camera input + synchronous QWidget repaint"},
+            {"device_pixel_ratio",view.devicePixelRatioF()},{"measure","camera input + Qt repaint/composition events + GPU completion"},
                 {"qt_mouse_events",events},{"results",results}};file.write(QJsonDocument(report).toJson());
     }
     return Explain("benchmark keeps document and rebuilt geometry unchanged",

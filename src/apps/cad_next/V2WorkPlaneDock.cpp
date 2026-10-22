@@ -417,6 +417,10 @@ void V2WorkPlaneDock::SetChoice(const WorkPlaneChoice& choice)
 void V2WorkPlaneDock::SetPlanes(
     const std::vector<std::pair<kachakacha::v2::base::EntityId, QString>>& planes)
 {
+    bool same=planes.size()==planeIds_.size();
+    for(std::size_t i=0;same&&i<planes.size();++i)
+        same=planes[i].first==planeIds_[i]&&referencePlane_->itemText(int(i)+1)==planes[i].second;
+    if(same){RefreshNeeds();return;}
     // コンボを作り直す間は下見を作り直させない(combo->clear() でも指標は動く)。
     loading_ = true;
     // 選び直しても、前に選んでいた平面が残るなら残す。

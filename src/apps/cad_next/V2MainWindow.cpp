@@ -318,7 +318,8 @@ void V2MainWindow::HandleSelectionChanged()
     RefreshCornerDock();
     V2OffsetTool::Refresh(*this);
     RefreshFabricationDock();
-    RefreshPartDock();
+    const auto commandFacts=BuildFactsForCommands();
+    RefreshPartDock(&commandFacts);
     // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
     RefreshWorkPlaneDock();
     // 面の解析は選んだ面を塗る(選んでいなければ全部の面)。
@@ -326,7 +327,7 @@ void V2MainWindow::HandleSelectionChanged()
         surfaceAnalysis_->Refresh();
     }
     // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
-    RefreshCommandVisibility();
+    RefreshCommandVisibility(&commandFacts);
 }
 
 V2MainWindow::~V2MainWindow()

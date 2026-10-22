@@ -220,6 +220,35 @@ bool ConfirmFolderAction(V2MainWindow& w,const char* button){
     QObject::connect(&deadline,&QTimer::timeout,&deadline,[&]{for(auto* dialog:w.findChildren<QDialog*>())dialog->reject();});
     poll.start(2);deadline.start(2000);w.RunCommand("edit.delete");return found;
 }
+bool SameMesh(const modeling::ShapeMesh& a,const modeling::ShapeMesh& b){
+    if(a.triangles.size()!=b.triangles.size()||a.edges!=b.edges||a.isoLines!=b.isoLines||a.faceCount!=b.faceCount)return false;
+    for(std::size_t i=0;i<a.triangles.size();++i){const auto& x=a.triangles[i];const auto& y=b.triangles[i];
+        if(x.points!=y.points||x.normal!=y.normal||x.faceIndex!=y.faceIndex||x.vertexNormals!=y.vertexNormals)return false;}
+    return true;
+}
+bool VisibilityKeepsNativeGeometry(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
+    auto& v=w.Viewport();v.SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");
+    HumanKey(&v,Qt::Key_Return);w.RunCommand("selection.activate");v.SetSelection({});
+    if(v.ShapeViews().empty())return false;
+    const auto mesh=v.ShapeViews().front().mesh;
+    const auto partitions=v.InteractionCounts().facePartitions;
+    const auto curves=w.Session().Scene().curves;
+    auto* row=w.ItemOfEntity(wire);auto* tree=w.EntityTree();tree->setCurrentItem(row);
+    const auto key=V2EntityTree::KeyOf(row);const auto builds=w.property("explorerBuilds").toInt();
+    row->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    if(!Explain("wire checkbox preserves face topology, mesh cache, selected row and tree",w.ItemOfEntity(wire)==row
+        &&V2EntityTree::KeyOf(tree->currentItem())==key&&w.property("explorerBuilds").toInt()==builds
+        &&v.InteractionCounts().facePartitions==partitions&&SameMesh(v.ShapeViews().front().mesh,mesh)))return false;
+    for(const auto& old:curves)if(old.entityId!=wire){const auto found=std::find_if(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& now){return now.entityId==old.entityId&&now.segmentId==old.segmentId;});
+        if(found==w.Session().Scene().curves.end()||found->segment.Kind()!=old.segment.Kind()
+            ||found->segment.StartPoint()!=old.segment.StartPoint()||found->segment.EndPoint()!=old.segment.EndPoint())return Explain("native edge IDs remain stable",false);}
+    w.RunCommand("edit.undo");if(w.Session().GetDocument().FindEntity(wire)->visibility!=domain::Visibility::Visible)return false;
+    w.RunCommand("edit.redo");if(w.Session().GetDocument().FindEntity(wire)->visibility!=domain::Visibility::Hidden)return false;
+    w.RunCommand("edit.undo");
+    return Explain("wire visibility and unchanged native face survive Undo/Redo and reopen",w.SaveAndReopen("visibility-native-cache.kcd2")
+        &&SameMesh(v.ShapeViews().front().mesh,mesh));
+}
 bool FolderDeletion(V2MainWindow& w){
     w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
     w.Viewport().SetSelection(app::SelectionSet{{wire}});w.RunCommand("group.create");
@@ -340,5 +369,6 @@ std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categori
     {"HP-FP-06 folder pick remains safe when a pending command rebuilds rows",PendingFolderPick},
     {"HP-FP-07 folder deletion includes members filtered by an active tool",MixedFolderDeletion},
     {"HP-FP-08 ancestor drag keeps nested hierarchy and Undo",FolderAncestorDrop},
-    {"HP-FP-09 move menu distinguishes paths and survives row rebuild",FolderMenuStable}};}
+    {"HP-FP-09 move menu distinguishes paths and survives row rebuild",FolderMenuStable},
+    {"HP-PERF-02 visibility retains native geometry and edge identity",VisibilityKeepsNativeGeometry}};}
 }

@@ -8,18 +8,19 @@
 #include <QString>
 #include <QVariant>
 using namespace kachakacha::v2::app;
-void V2MainWindow::RefreshCommandVisibility()
+void V2MainWindow::RefreshCommandVisibility(const SelectionFacts* sharedFacts)
 {
     QElapsedTimer timer;timer.start();
-    const auto facts=BuildFactsForCommands();
-    const bool extrudeReady=PlanExtrudeFromSelection().readyToPreview;
+    const auto facts=sharedFacts?*sharedFacts:BuildFactsForCommands();
     for (const auto& entry : commandActions_) {
         const bool visible = CommandVisibleInMode(entry.first, mode_);
         entry.second->setVisible(visible);
         QString reason;
         const CommandDescriptor* command = FindCommand(entry.first);
-        const bool ready=command&&((entry.first=="edit.delete"&&SelectedGroupId().has_value())||(entry.first=="part.extrude"?extrudeReady:
-            kachakacha::v2::app::SelectionSatisfies(command->predicate,facts)));
+        // Tool-first entries stay enabled without building a geometric preview.
+        // Exact extrusion planning still runs when the tool is invoked.
+        const bool ready=command&&((entry.first=="edit.delete"&&SelectedGroupId().has_value())||
+            kachakacha::v2::app::SelectionSatisfies(command->predicate,facts));
         if(!ready&&command)reason=QString::fromUtf8(std::string(command->predicateFailureJa).c_str());
         const bool canSelectTarget = command != nullptr
             && kachakacha::v2::app::PredicateCanBeSatisfiedBySelection(

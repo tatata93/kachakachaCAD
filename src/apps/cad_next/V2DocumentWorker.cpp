@@ -25,9 +25,10 @@ void V2DocumentOpen::Progress(int completed,int total,const std::string& name) {
     auto text=QStringLiteral("再構築 %1/%2: %3").arg(completed).arg(total).arg(QString::fromStdString(name));
     text.replace('\n',' ');text.replace('\r',' ');std::cout<<"KACHACAD_PHASE:"<<text.toUtf8().constData()<<std::endl;
 }
-base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::string archive) {
+base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2MainWindow& w,std::string archive) {
     V2DocumentTiming timing("capture");
-    V2PreparedDocument data;data.archive=std::move(archive);
+    using Captured=base::Result<std::unique_ptr<V2PreparedDocument>>;
+    auto result=std::make_unique<V2PreparedDocument>();auto& data=*result;data.archive=std::move(archive);
     const auto capture=[](const auto& source,auto& target)->base::Result<bool>{
         for(const auto& entry:source){const auto shape=kernel::CaptureOutputShape(entry.second);
             if(!shape.HasValue())return base::Result<bool>::Failure(shape.Diagnostics());target[entry.first]=shape.Value();}
@@ -35,8 +36,8 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
     };
     const auto parts=capture(w.partShapes_,data.parts),guides=capture(w.guideShapes_,data.guides);
     timing.Mark("serialize-native");
-    if(!parts.HasValue())return base::Result<V2PreparedDocument>::Failure(parts.Diagnostics());
-    if(!guides.HasValue())return base::Result<V2PreparedDocument>::Failure(guides.Diagnostics());
+    if(!parts.HasValue())return Captured::Failure(parts.Diagnostics());
+    if(!guides.HasValue())return Captured::Failure(guides.Diagnostics());
     data.partEdges=w.partEdges_;data.flatBoundaries=w.partFlatBoundary_;data.guideEdges=w.guideEdges_;
     data.samples=w.guideSamples_;data.fabrication=w.fabricationModels_;data.guideTable=w.guideTable_;
     for(const auto* shapes:{&w.partShapes_,&w.guideShapes_})for(const auto& [id,handle]:*shapes) {
@@ -49,22 +50,23 @@ base::Result<V2PreparedDocument> V2DocumentOpen::Capture(V2MainWindow& w,std::st
             // meshes for hidden entities are built on demand when they become visible.
             if(entity&&!app::EntityEffectivelyVisible(w.session_->GetDocument().Snapshot(),*entity))continue;
             const auto mesh=kernel::BuildShapeMesh(handle,0.0,shapes==&w.guideShapes_?8:0);
-            if(!mesh.HasValue())return base::Result<V2PreparedDocument>::Failure(mesh.Diagnostics());
+            if(!mesh.HasValue())return Captured::Failure(mesh.Diagnostics());
             data.meshes[id]=mesh.Value();
             timing.Mark(("mesh-"+id).c_str());
         }
     }
-    return base::Result<V2PreparedDocument>::Success(std::move(data));
+    return Captured::Success(std::move(result));
 }
 void V2DocumentOpen::CacheSaved(V2MainWindow& w,const std::string& archive) {
     if(IsWorker()||!w.rebuildProblems_.isEmpty())return;
+    if(V2DocumentCache::Read(archive))return;
     for(const auto& e:w.session_->GetDocument().Snapshot().entities) {
         const auto key=e.id.ToString();
         if(e.kind==domain::EntityKind::Part&&!w.partShapes_.contains(key))return;
         if(e.kind==domain::EntityKind::GuideSurface&&!w.guideShapes_.contains(key))return;
     }
     auto result=Capture(w,archive);
-    if(result.HasValue()){auto data=result.Value();(void)V2DocumentCache::Write(archive,data);}
+    if(result.HasValue())(void)V2DocumentCache::Write(archive,*result.Value());
 }
 int V2DocumentOpen::Worker(const QString& directory) {
     QCoreApplication::instance()->setProperty("documentRebuildWorker",true);
@@ -100,7 +102,7 @@ int V2DocumentOpen::Worker(const QString& directory) {
         const auto archive=io::SaveDocument(sourceFile);if(!archive.HasValue())throw archive.FirstDiagnostic();
         timing.Mark("encode-archive");
         auto captured=Capture(window,archive.Value());if(!captured.HasValue())throw captured.FirstDiagnostic();
-        auto data=captured.Value();
+        auto& data=*captured.Value();
         timing.Mark("capture-native-and-meshes");
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");

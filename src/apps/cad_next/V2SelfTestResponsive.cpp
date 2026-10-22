@@ -17,6 +17,7 @@
 
 namespace kachakacha::v2::selftest {
 bool ViewportFrameBenchmark(V2MainWindow&);
+bool PresentationUpdates(V2MainWindow&);
 bool GridVisibilityInteraction(V2MainWindow&);
 bool SelectedWireContrast(V2MainWindow&);
 bool HiddenOverlayRendering(V2MainWindow&);
@@ -80,6 +81,7 @@ std::vector<SelfTestCase> ResponsiveCases()
 {
     std::vector<SelfTestCase> cases={
         {"HP-GRID-01 display toggle preserves snapping and pending input",GridVisibilityInteraction},
+        {"HP-PERF-03 presentation camera capture resize and idle",PresentationUpdates},
         {"HP-GRID-02 selected wire contrast and overlapping roles",SelectedWireContrast},
         {"HP-GRID-03 hidden overlays keep GPU shading",HiddenOverlayRendering},
         {"HP-RS-01 5 つの撮影の場面が作れる", CaseAllResponsiveShotsCanBeBuilt},

@@ -6,6 +6,7 @@
 #include <vector>
 #include <functional>
 class QPainter;
+class QPaintDevice;
 
 // Display-only GPU cache. Exact CAD geometry and CPU picking stay unchanged.
 class V2GpuRenderer {
@@ -24,6 +25,9 @@ public:
     bool PaintFrame(QPainter& destination, int width, int height,
         const std::function<void(QPainter&)>& draw);
     bool PaintingFrame() const;
+    bool PaintDirect(QPaintDevice& target, int width, int height, double devicePixelRatio,
+        const std::function<void(QPainter&)>& draw);
+    std::uint64_t Readbacks() const;
 private:
     struct State;
     std::unique_ptr<State> state_;

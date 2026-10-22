@@ -1,6 +1,7 @@
 #include "V2GpuRenderer.h"
 #include <QImage>
 #include <QPainter>
+#include <QPaintDevice>
 #ifdef KACHACAD_GPU_VIEW
 #include <QByteArray>
 #include <QOpenGLFramebufferObjectFormat>
@@ -66,7 +67,9 @@ struct V2GpuRenderer::State {
     std::unique_ptr<QOpenGLFramebufferObject> frame;
     std::vector<Batch> batches;
     std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
-    bool attempted = false, ready = false, paintingFrame = false;
+    bool attempted = false, ready = false, paintingFrame = false, directFrame = false;
+    double pixelRatio=1;
+    std::uint64_t readbacks=0;
     kachakacha::v2::geometry::Vector3 origin{};
     double extent=1;
     QByteArray renderer;
@@ -86,6 +89,7 @@ struct V2GpuRenderer::State {
             || QGuiApplication::platformName()=="offscreen") return false;
         QSurfaceFormat format; format.setVersion(2,1); format.setDepthBufferSize(24);
         context.setFormat(format);
+        context.setShareContext(QOpenGLContext::globalShareContext());
         if (!context.create()) return false;
         surface.setFormat(context.format()); surface.create();
         if (!surface.isValid() || !context.makeCurrent(&surface)) return false;
@@ -128,7 +132,7 @@ struct V2GpuRenderer::State {
         revision=version;
     }
     void Draw(const std::vector<Item>& items, bool edges) {
-        auto* gl=context.functions(); shader.setUniformValue("edges",edges);
+        auto* gl=QOpenGLContext::currentContext()->functions(); shader.setUniformValue("edges",edges);
         if(edges) { gl->glDepthMask(GL_FALSE); gl->glDepthFunc(GL_LEQUAL); }
         else { gl->glEnable(GL_POLYGON_OFFSET_FILL); gl->glPolygonOffset(1,1); }
         for(std::size_t i=0;i<items.size();) {
@@ -145,7 +149,7 @@ struct V2GpuRenderer::State {
             }
             shader.setUniformValue("closed",b.closed);
             shader.setUniformValue("color",Color(color));
-            if(edges)gl->glLineWidth(items[i].emphasized?3.f:1.f);
+            if(edges)gl->glLineWidth(float((items[i].emphasized?3.:1.)*pixelRatio));
             gl->glDrawArrays(edges?GL_LINES:GL_TRIANGLES,edges?b.edges:b.triangles,count);
             i=end;
         }
@@ -165,15 +169,17 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
         |(std::uint64_t(item.visible)<<48)|(std::uint64_t(item.emphasized)<<49));
     if(!s.paintingFrame && s.cachedRevision==revision && s.cachedMatrix==mapping.matrix && s.cachedStyle==style
         && s.cachedImage.size()==QSize(width,height))return s.cachedImage;
-    if(!s.context.makeCurrent(&s.surface))return {};
-    if(!s.frame||s.frame->size()!=QSize(width,height)) {
+    if(!s.directFrame&&!s.context.makeCurrent(&s.surface))return {};
+    if(!s.directFrame&&(!s.frame||s.frame->size()!=QSize(width,height))) {
         QOpenGLFramebufferObjectFormat format; format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
         s.frame=std::make_unique<QOpenGLFramebufferObject>(width,height,format);
     }
-    if(!s.frame->isValid()){s.context.doneCurrent();return {};}
+    if(!s.directFrame&&!s.frame->isValid()){s.context.doneCurrent();return {};}
     QElapsedTimer gpuTimer; gpuTimer.start();
-    s.frame->bind(); s.Upload(items,revision); s.buffer.bind(); s.shader.bind();
-    auto* gl=s.context.functions();gl->glViewport(0,0,width,height);
+    if(!s.directFrame)s.frame->bind();
+    s.Upload(items,revision); s.buffer.bind(); s.shader.bind();
+    auto* gl=QOpenGLContext::currentContext()->functions();
+    gl->glViewport(0,0,int(std::round(width*s.pixelRatio)),int(std::round(height*s.pixelRatio)));
     gl->glDepthMask(GL_TRUE);gl->glClearColor(0,0,0,0);gl->glClear(s.paintingFrame?GL_DEPTH_BUFFER_BIT:GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     gl->glEnable(GL_DEPTH_TEST);gl->glDisable(GL_BLEND);gl->glDisable(GL_CULL_FACE);
     QMatrix4x4 matrix;
@@ -198,7 +204,7 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
     s.shader.release();s.buffer.release();
     if(s.paintingFrame)return {};
     const auto submitTime=gpuTimer.nsecsElapsed();
-    QImage image=s.frame->toImage();s.frame->release();s.context.doneCurrent();
+    QImage image=s.frame->toImage();++s.readbacks;s.frame->release();s.context.doneCurrent();
     if(qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"gpu stages ms %.3f %.3f\n",submitTime/1e6,(gpuTimer.nsecsElapsed()-submitTime)/1e6);
     s.cachedImage=image; s.cachedMatrix=mapping.matrix; s.cachedStyle=std::move(style);s.cachedRevision=revision;
     return image;
@@ -219,7 +225,7 @@ bool V2GpuRenderer::PaintFrame(QPainter& destination,int width,int height,
     {QPainter painter(&device);draw(painter);}
     s.paintingFrame=false;
     const auto painted=timer.nsecsElapsed();
-    const QImage image=s.frame->toImage();
+    const QImage image=s.frame->toImage();++s.readbacks;
     const auto read=timer.nsecsElapsed();
     s.cachedImage={};s.frame->release();s.context.doneCurrent();
     if(image.isNull())return false;
@@ -228,12 +234,38 @@ bool V2GpuRenderer::PaintFrame(QPainter& destination,int width,int height,
     return true;
 }
 
+bool V2GpuRenderer::PaintDirect(QPaintDevice& target,int width,int height,double ratio,
+    const std::function<void(QPainter&)>& draw) {
+    (void)target;
+    auto* current=QOpenGLContext::currentContext();
+    if(!current||width<=0||height<=0)return false;
+    auto* surface=current->surface();auto* gl=current->functions();
+    GLint framebuffer=0;gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING,&framebuffer);
+    auto& s=*state_;const bool ready=s.Initialize();
+    // Restore the widget's context and its nonzero default FBO after creating
+    // shared resources in the owned context, before starting QPainter.
+    if(!current->makeCurrent(surface))return false;
+    gl->glBindFramebuffer(GL_FRAMEBUFFER,GLuint(framebuffer));
+    if(!ready||!QOpenGLContext::areSharing(current,&s.context))return false;
+    s.paintingFrame=true;s.directFrame=true;s.pixelRatio=ratio;
+    // QWidget::render redirects a widget's paint engine to its capture image.
+    // An explicit GL device keeps every layer on the current widget FBO even
+    // during grabFramebuffer; Qt then copies the complete, fresh frame once.
+    QOpenGLPaintDevice device(int(std::round(width*ratio)),int(std::round(height*ratio)));
+    device.setDevicePixelRatio(ratio);
+    {QPainter painter(&device);draw(painter);}
+    s.paintingFrame=false;s.directFrame=false;s.pixelRatio=1;
+    return true;
+}
+std::uint64_t V2GpuRenderer::Readbacks() const {return state_->readbacks;}
 #else
 struct V2GpuRenderer::State {};
 V2GpuRenderer::V2GpuRenderer()=default;
 V2GpuRenderer::~V2GpuRenderer()=default;
 const char* V2GpuRenderer::Backend() const { return "CPU"; }
 bool V2GpuRenderer::PaintingFrame() const {return false;}
+bool V2GpuRenderer::PaintDirect(QPaintDevice&,int,int,double,const std::function<void(QPainter&)>&){return false;}
+std::uint64_t V2GpuRenderer::Readbacks() const {return 0;}
 bool V2GpuRenderer::PaintFrame(QPainter&,int,int,const std::function<void(QPainter&)>&){return false;}
 QImage V2GpuRenderer::Render(const std::vector<Item>&,std::uint64_t,
     const kachakacha::v2::geometry::ScreenMapping&,const kachakacha::v2::geometry::Vector3&,int,int){return {};}

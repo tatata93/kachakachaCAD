@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <functional>
+#include <memory>
 class V2MainWindow;
 
 class V2DocumentOpen final:public QObject {
@@ -19,6 +20,6 @@ public:
 private:
     explicit V2DocumentOpen(V2MainWindow& window);
     static V2DocumentOpen* State(V2MainWindow& window,bool create);
-    static kachakacha::v2::base::Result<V2PreparedDocument> Capture(V2MainWindow& window,std::string archive);
+    static kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> Capture(V2MainWindow& window,std::string archive);
     kachakacha::v2::io::DocumentFile extras_;
 };

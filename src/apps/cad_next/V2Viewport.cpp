@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 #include "V2QuickDisplayControls.h"
+#include "V2NativeCanvas.h"
 
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/GrabToMove.h"
@@ -19,6 +20,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPaintDevice>
 #include <QPainterPath>
 #include <QPen>
 #include <QPointF>
@@ -140,7 +142,18 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
     sceneChanged_ = session_->OnSceneChanged([this] { OnSceneReplaced(); });
     // 吸着のあとに点を寄せる手立てを据える(Shift の拘束と直角スナップ)。
     InstallPointAdjuster();
+    nativeCanvas_=V2CreateNativeCanvas(this,[this](QPaintDevice& target,double ratio){
+        return gpuRenderer_.PaintDirect(target,width(),height(),ratio,[this](QPainter& painter){PaintScene(painter);});
+    });
 }
+
+V2Viewport::~V2Viewport(){delete nativeCanvas_;nativeCanvas_=nullptr;}
+void V2Viewport::update(){QWidget::update();if(nativeCanvas_&&nativeCanvas_->isVisible())nativeCanvas_->update();}
+void V2Viewport::repaint(){
+    if(V2NativeCanvasActive(nativeCanvas_))nativeCanvas_->repaint();
+    else QWidget::repaint();
+}
+void V2Viewport::CompletePresentationForTest(){V2CompleteNativeCanvas(nativeCanvas_);}
 
 //! 場面が入れ替わった。文書を開く、Undo/Redo、作業平面やグリッドの変更で通る。
 //!
@@ -743,11 +756,10 @@ void V2Viewport::DrawGuideRows(QPainter& painter) const
     painter.restore();
 }
 
-void V2Viewport::paintEvent(QPaintEvent* /*event*/)
+void V2Viewport::PaintScene(QPainter& painter)
 {
     QElapsedTimer paintTimer; paintTimer.start();
     const bool trace=qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER");
-    const auto draw=[&](QPainter& painter) {
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.fillRect(rect(), palette_.background);
     if(!gridOnTop_) DrawGrid(painter);
@@ -791,14 +803,19 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawViewButtonsOnTop(painter);
     DrawCursorInput(painter);
     if(trace)std::fprintf(stderr,"paint stages ms %.3f %.3f %.3f %.3f\n",gridTime/1e6,(shapeTime-gridTime)/1e6,(documentTime-shapeTime)/1e6,(paintTimer.nsecsElapsed()-documentTime)/1e6);
-    };
+}
+void V2Viewport::paintEvent(QPaintEvent* /*event*/)
+{
+    if(V2NativeCanvasActive(nativeCanvas_))return;
+    QElapsedTimer timer;timer.start();
+    const auto draw=[this](QPainter& painter){PaintScene(painter);};
     QPainter destination(this);
     // Keep GPU QPainter acceleration for the grid/wires even when visible
     // images or analysis require software compositing of the shape layer.
     const bool paintedGpu=gpuRenderer_.PaintFrame(destination,width(),height(),draw);
     if(!paintedGpu)draw(destination);
     destination.end();
-    if(trace)std::fprintf(stderr,"paint complete ms %.3f gpu-frame %d\n",paintTimer.nsecsElapsed()/1e6,int(paintedGpu));
+    if(qEnvironmentVariableIsSet("KACHACAD_VIEWPORT_PERF_FRAMES"))setProperty("presentationWorkMs",timer.nsecsElapsed()/1e6);
 }
 
 void V2Viewport::HoverAt(const QPointF& position)
@@ -1366,4 +1383,5 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
 void V2Viewport::resizeEvent(QResizeEvent* /*event*/)
 {
     RebuildMapping();
+    if(nativeCanvas_){nativeCanvas_->setGeometry(rect());nativeCanvas_->update();}
 }

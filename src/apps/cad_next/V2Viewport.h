@@ -105,6 +105,13 @@ class V2Viewport final : public QWidget {
 public:
     explicit V2Viewport(kachakacha::v2::app::DrawingSession& session,
         QWidget* parent = nullptr);
+    ~V2Viewport() override;
+    using QWidget::update;
+    using QWidget::repaint;
+    void update();
+    void repaint();
+    void CompletePresentationForTest();
+    std::uint64_t PresentationReadbacks() const {return gpuRenderer_.Readbacks();}
 
     const char* RenderBackend() const { return gpuRenderer_.Backend(); }
     void SetPalette(const ViewportPalette& palette);
@@ -831,6 +838,8 @@ protected:
     bool focusNextPrevChild(bool next) override;
 
 private:
+    void PaintScene(QPainter& painter);
+    QWidget* nativeCanvas_=nullptr;
     bool EditCursorFieldForKey(int key);
     mutable V2GpuRenderer gpuRenderer_;
     std::uint64_t shapeViewRevision_ = 0;

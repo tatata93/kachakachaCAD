@@ -17,6 +17,7 @@
 #include <set>
 #include <map>
 #include <functional>
+#include <algorithm>
 using namespace kachakacha::v2;
 namespace {
 bool Category(const QTreeWidgetItem* item){return item&&V2EntityTree::KeyOf(item).contains("/section:");}
@@ -40,7 +41,9 @@ bool V2MainWindow::ApplyExplorerVisibility(const std::vector<QTreeWidgetItem*>& 
     document::Document::Transaction transaction(document,visible?"まとめて表示":"まとめて非表示");
     for(const auto id:groups){const auto result=document.Run(document::SetGroupVisibilityCommand(id,visible));if(!result.committed){ReportDiagnostics(result.diagnostics);return true;}}
     if(!entities.empty()){const auto result=document.Run(document::SetVisibilityCommand(entities,visible?domain::Visibility::Visible:domain::Visibility::Hidden));if(!result.committed){ReportDiagnostics(result.diagnostics);return true;}}
-    if(transaction.Commit()){RefreshExplorerVisibility();SetStatus(visible?QStringLiteral("選んだ項目を表示しました。グループ内の個別設定は維持します。"):
+    const bool shapesChanged=!groups.empty()||std::any_of(entities.begin(),entities.end(),[&](auto id){
+        const auto kind=document.FindEntity(id)->kind;return kind!=domain::EntityKind::Wire&&kind!=domain::EntityKind::Point&&kind!=domain::EntityKind::WorkPlane;});
+    if(transaction.Commit()){RefreshExplorerVisibility(shapesChanged);SetStatus(visible?QStringLiteral("選んだ項目を表示しました。グループ内の個別設定は維持します。"):
         QStringLiteral("選んだ項目を隠しました。グループ内の個別設定は維持します。"));}
     return true;
 }
@@ -50,26 +53,33 @@ bool V2MainWindow::ToggleExplorerCategory(QTreeWidgetItem* item){
 void V2MainWindow::RefreshExplorerCategoryChecks(){
     if(!entityTree_)return;QSignalBlocker block(entityTree_);
     if(auto* child=findChild<QPushButton*>("explorerChildGroup"))child->setEnabled(SelectedGroupId().has_value());
+    const auto& snapshot=session_->GetDocument().Snapshot();
+    std::map<base::EntityId,domain::Visibility> visibility;
+    for(const auto& entity:snapshot.entities)visibility.emplace(entity.id,entity.visibility);
+    std::map<base::GroupId,bool> groupVisibility;
+    for(const auto& group:snapshot.groups)groupVisibility.emplace(group.id,group.visible);
     std::map<QTreeWidgetItem*,std::pair<int,int>> counts;
-    for(const auto& [row,id]:entityItems_)if(const auto* entity=session_->GetDocument().FindEntity(id)){
-        row->setCheckState(0,entity->visibility==domain::Visibility::Visible?Qt::Checked:Qt::Unchecked);
+    for(const auto& [row,id]:entityItems_)if(const auto found=visibility.find(id);found!=visibility.end()){
+        row->setCheckState(0,found->second==domain::Visibility::Visible?Qt::Checked:Qt::Unchecked);
         for(auto* parent=row->parent();parent;parent=parent->parent())if(Category(parent)&&!GroupCategory(parent)){
-            auto& count=counts[parent];++count.first;count.second+=entity->visibility==domain::Visibility::Visible;
+            auto& count=counts[parent];++count.first;count.second+=found->second==domain::Visibility::Visible;
         }
     }
-    for(const auto& [row,id]:groupItems_)for(const auto& group:session_->GetDocument().Snapshot().groups)if(group.id==id){
-        row->setCheckState(0,group.visible?Qt::Checked:Qt::Unchecked);
-        if(auto* parent=row->parent();GroupCategory(parent)){auto& count=counts[parent];++count.first;count.second+=group.visible;}
+    for(const auto& [row,id]:groupItems_)if(const auto found=groupVisibility.find(id);found!=groupVisibility.end()){
+        row->setCheckState(0,found->second?Qt::Checked:Qt::Unchecked);
+        if(auto* parent=row->parent();GroupCategory(parent)){auto& count=counts[parent];++count.first;count.second+=found->second;}
     }
     for(const auto& [row,count]:counts){row->setFlags(row->flags()|Qt::ItemIsUserCheckable);
         row->setCheckState(0,count.second==0?Qt::Unchecked:count.second==count.first?Qt::Checked:Qt::PartiallyChecked);
         row->setToolTip(0,QStringLiteral("チェックでこの分類をまとめて表示・非表示。個別に混在しているときは中間の印になります。"));}
 }
-void V2MainWindow::RefreshExplorerVisibility(){
+void V2MainWindow::RefreshExplorerVisibility(bool shapeVisibilityChanged){
     QElapsedTimer timer;timer.start();
     // Visibility changes do not replace tree rows, recalculate geometry, or notify
     // target-picking tools as though the user had picked the same objects again.
-    RefreshPartEdges();RefreshWorkPlaneViews();RefreshShapeViews();RefreshExplorerCategoryChecks();
+    RefreshPartEdges();RefreshWorkPlaneViews();
+    if(shapeVisibilityChanged)RefreshShapeViews();
+    RefreshExplorerCategoryChecks();
     RefreshExportCounts();RefreshCommandVisibility();viewport_->update();
     setProperty("explorerVisibilityMs",timer.nsecsElapsed()/1e6);
 }

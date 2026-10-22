@@ -168,7 +168,6 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
     if(hadErrors || oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot()))RebuildKernelShapes();
-    else RefreshPartEdges();
     // 作り直せなかった形があれば、その知らせを「元に戻しました」で上書きしない。
     const QString problems = rebuildProblems_.isEmpty()
         ? QString()

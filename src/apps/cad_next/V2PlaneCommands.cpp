@@ -21,6 +21,7 @@
 #include "kachakacha/view/ViewOrientation.h"
 
 #include <QComboBox>
+#include <QSignalBlocker>
 #include <QVariant>
 #include <QString>
 
@@ -218,6 +219,14 @@ void V2MainWindow::RefreshWorkPlaneDock()
     workPlaneDock_->Refresh(BuildWorkPlaneFacts());
     // 上の帯の「作図面」コンボも同じ一覧。作業中のものを選んだ状態にする。
     if (planeCombo_ == nullptr) {
+        return;
+    }
+    bool same=planes.size()==planeComboIds_.size();
+    for(std::size_t i=0;same&&i<planes.size();++i)
+        same=planes[i].first==planeComboIds_[i]&&planeCombo_->itemText(int(i))==planes[i].second;
+    if(same) {
+        const auto it=std::find(planeComboIds_.begin(),planeComboIds_.end(),activeWorkPlaneId_);
+        const QSignalBlocker block(planeCombo_);planeCombo_->setCurrentIndex(it==planeComboIds_.end()?-1:int(it-planeComboIds_.begin()));
         return;
     }
     refreshingPlaneCombo_ = true;

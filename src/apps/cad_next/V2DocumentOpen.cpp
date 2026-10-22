@@ -73,7 +73,7 @@ bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSna
     if(install)install();else w.RebuildKernelShapes();
     timing.Mark("install-or-rebuild-shapes");
     w.AdoptCurrentDocument();timing.Mark("adopt-ui");
-    w.RefreshPartEdges();w.RefreshWorkPlaneDock();w.viewport_->update();timing.Mark("refresh-docks");return true;
+    w.RefreshWorkPlaneDock();w.viewport_->update();timing.Mark("refresh-docks");return true;
 }
 bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
     using namespace kachakacha::v2;
@@ -87,7 +87,7 @@ bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
         auto result=ReadPreparedDocument(dataPath,token,pulse);
         timing.Mark("read-transfer");
         if(!result.HasValue())return base::Result<bool>::Failure(result.Diagnostics());
-        prepared.data=result.Value();const auto loaded=io::LoadDocument(prepared.data.archive);
+        prepared.data=std::move(*result.Value());const auto loaded=io::LoadDocument(prepared.data.archive);
         if(!loaded.HasValue())return base::Result<bool>::Failure(loaded.Diagnostics());prepared.file=loaded.Value();
         timing.Mark("parse-transferred-archive");
         auto restored=Restore(prepared.data.parts,prepared.parts,prepared.file,domain::EntityKind::Part,pulse);

@@ -78,8 +78,10 @@ void V2MainWindow::RefreshShapeViews()
             const auto foundEntity = entities.find(entry.first);
             const auto* entity = foundEntity == entities.end() ? nullptr : foundEntity->second;
             // Hidden geometry remains live: visibility changes must not discard its mesh.
-            if(entity && shapeMeshes_.contains(entry.second.value))
-                keep.emplace(entry.second.value,shapeMeshes_.at(entry.second.value));
+            if(entity&&!keep.contains(entry.second.value)) {
+                auto node=shapeMeshes_.extract(entry.second.value);
+                if(!node.empty())keep.insert(std::move(node));
+            }
             // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
                 || (!viewport_->DeletionPreviewContains(entity->id) && !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity))
@@ -89,8 +91,8 @@ void V2MainWindow::RefreshShapeViews()
             V2Viewport::ShapeView view;
             view.entityId = entity->id;
             view.surface = surface;
-            const auto cached = shapeMeshes_.find(entry.second.value);
-            if (cached != shapeMeshes_.end()) {
+            auto cached = keep.find(entry.second.value);
+            if (cached != keep.end()) {
                 view.mesh = cached->second;
             } else {
                 // まだ網にしていない形。ここで1度だけ作る。面には U/V の格子を入れる
@@ -102,10 +104,9 @@ void V2MainWindow::RefreshShapeViews()
                     ReportDiagnostics(made.Diagnostics());
                     continue;
                 }
-                view.mesh = made.Value();
+                cached=keep.emplace(entry.second.value,std::move(made.Value())).first;
+                view.mesh = cached->second;
             }
-            if (cached != shapeMeshes_.end()) keep.insert(shapeMeshes_.extract(cached));
-            else keep.emplace(entry.second.value, view.mesh);
             shapes.push_back(std::move(view));
         }
     };
@@ -137,7 +138,7 @@ const kachakacha::v2::domain::Entity* V2MainWindow::FindEntityByIdText(
 //!
 //! 値は数の棚と同じものを映す。別に持つと、数の棚で変えたのに
 //! 部品の棚が古いまま、ということが起きる。
-void V2MainWindow::RefreshPartDock()
+void V2MainWindow::RefreshPartDock(const kachakacha::v2::app::SelectionFacts* sharedFacts)
 {
     using kachakacha::v2::app::ParameterId;
     if (partDock_ == nullptr || parameterDock_ == nullptr) {
@@ -151,7 +152,7 @@ void V2MainWindow::RefreshPartDock()
     }
     partDock_->SetPlacement(thicknessPlacement_);
     // いま何を選んでいるかを一言で出す。押す前に「足りない」と分かるようにする。
-    const auto facts = BuildFactsForCommands();
+    const auto facts = sharedFacts?*sharedFacts:BuildFactsForCommands();
     if (facts.wires + facts.parts + facts.guideSurfaces + facts.workPlanes == 0) {
         partDock_->SetSelectionText(QStringLiteral("選んでいるものはありません。"));
         return;

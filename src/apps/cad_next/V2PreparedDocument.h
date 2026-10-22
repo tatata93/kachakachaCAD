@@ -5,6 +5,7 @@
 #include <QString>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 
 // Ephemeral calculation result, never part of the kcd2 file format.
@@ -20,5 +21,5 @@ struct V2PreparedDocument {
 };
 
 bool WritePreparedDocument(const QString& path, const QString& token, V2PreparedDocument& data);
-kachakacha::v2::base::Result<V2PreparedDocument> ReadPreparedDocument(
+kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDocument(
     const QString& path, const QString& token, const std::function<bool()>& pulse);

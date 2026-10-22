@@ -74,7 +74,7 @@ std::optional<V2PreparedDocument> Read(const std::string& source) {
         ||info.value("sha256").toString().toLatin1()!=DigestFile(path))return std::nullopt;
     auto restored=ReadPreparedDocument(path,key,[]{return true;});
     if(!restored.HasValue())return std::nullopt;
-    return std::move(restored.Value());
+    return std::move(*restored.Value());
 }
 bool Write(const std::string& source,V2PreparedDocument& data) {
     const auto key=Key(source);if(key.isEmpty())return false;

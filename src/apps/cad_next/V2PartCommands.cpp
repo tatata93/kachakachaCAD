@@ -1003,9 +1003,15 @@ void V2MainWindow::RefreshPartEdges()
 {
     // 部品の辺を場面へ足す。立体そのものはまだ描かないので、輪郭で見せる。
     // 描いていないものを「描いた」と言わないため、辺は補助線として出す。
-    const auto previous=session_->Scene();
+    const auto& previous=session_->Scene();
+    std::map<EntityId,std::vector<const SnapCurve*>> previousCurves;
+    for(const auto& curve:previous.curves)previousCurves[curve.entityId].push_back(&curve);
     const auto& snapshot=session_->GetDocument().Snapshot();
     auto scene=kachakacha::v2::app::RebuildSceneKeepingView(previous,snapshot,*ids_);
+    std::map<EntityId,const kachakacha::v2::domain::Entity*> entities;
+    for(const auto& entity:snapshot.entities)entities.emplace(entity.id,&entity);
+    std::map<kachakacha::v2::base::FeatureId,const kachakacha::v2::domain::Feature*> features;
+    for(const auto& feature:snapshot.features)features.emplace(feature.id,&feature);
     const auto same=[](const CurveSegment& a,const CurveSegment& b){return a.Kind()==b.Kind()
         &&a.ControlPoints()==b.ControlPoints()&&a.Center()==b.Center()&&a.Normal()==b.Normal()
         &&a.ReferenceDirection()==b.ReferenceDirection()&&a.Radius()==b.Radius()
@@ -1017,13 +1023,14 @@ void V2MainWindow::RefreshPartEdges()
             if (!id.has_value()) {
                 continue;
             }
-            const auto* entity=session_->GetDocument().FindEntity(*id);
-            const auto* feature=entity?session_->GetDocument().FindFeature(entity->createdBy):nullptr;
+            const auto found=entities.find(*id);
+            const auto* entity=found==entities.end()?nullptr:found->second;
+            const auto featureAt=entity?features.find(entity->createdBy):features.end();
+            const auto* feature=featureAt==features.end()?nullptr:featureAt->second;
             if(!entity||!feature||!feature->enabled||!kachakacha::v2::app::EntityEffectivelyVisible(snapshot,*entity)
                 ||(entity->kind!=kachakacha::v2::domain::EntityKind::Part
                     &&entity->kind!=kachakacha::v2::domain::EntityKind::GuideSurface))continue;
-            std::vector<const SnapCurve*> old;
-            for(const auto& c:previous.curves)if(c.entityId==*id)old.push_back(&c);
+            const auto& old=previousCurves[*id];
             std::size_t index=0;
             for (const auto& segment : entry.second) {
                 const auto segmentId=index<old.size()&&same(old[index]->segment,segment)?old[index]->segmentId

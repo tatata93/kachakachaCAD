@@ -1275,6 +1275,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2LoopFacesDock.cpp
         src/apps/cad_next/V2ToolPreviewFaces.cpp
         src/apps/cad_next/V2GpuRenderer.cpp
+          src/apps/cad_next/V2NativeCanvas.cpp
         src/apps/cad_next/V2SurfaceRendering.cpp
         src/apps/cad_next/V2GptFabricationTool.cpp
     src/apps/cad_next/V2GptFabricationIntegration.cpp
@@ -1391,6 +1392,15 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
                     $<TARGET_FILE:Qt6::OpenGL> $<TARGET_FILE_DIR:kachakacha_cad_next>
                 COMMAND_EXPAND_LISTS)
         endif()
+    endif()
+    find_package(Qt6 QUIET COMPONENTS OpenGLWidgets)
+    if(WIN32 AND TARGET Qt6::OpenGLWidgets AND TARGET Qt6::OpenGL)
+        target_link_libraries(kachakacha_cad_next PRIVATE Qt6::OpenGLWidgets)
+        target_compile_definitions(kachakacha_cad_next PRIVATE KACHACAD_NATIVE_VIEWPORT=1)
+        add_custom_command(TARGET kachakacha_cad_next POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:Qt6::OpenGLWidgets> $<TARGET_FILE_DIR:kachakacha_cad_next>
+            COMMAND_EXPAND_LISTS)
     endif()
     if(WIN32)
         # Keep the developer executable's image formats consistent with windeployqt packages.

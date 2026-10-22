@@ -151,14 +151,14 @@ bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDo
         stream.Values(magic,version,id,data);stream.Check();return file.commit();
     }catch(...){return false;}
 }
-kachakacha::v2::base::Result<V2PreparedDocument> ReadPreparedDocument(const QString& path,const QString& token,const std::function<bool()>& pulse) {
+kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDocument(const QString& path,const QString& token,const std::function<bool()>& pulse) {
     using namespace kachakacha::v2;
-    using Result=base::Result<V2PreparedDocument>;
+    using Result=base::Result<std::unique_ptr<V2PreparedDocument>>;
     try {
         QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>1024LL*1024*1024)throw std::runtime_error("Cannot read calculation result");
         Archive stream(&file,true,pulse);std::string magic,id;int version=0;stream.Values(magic,version,id);
         if(magic!="kachakacha-prepared-document"||version!=2||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
-        V2PreparedDocument data;stream.Values(data);stream.Check();if(!file.atEnd())throw std::runtime_error("Unexpected result tail");
+        auto data=std::make_unique<V2PreparedDocument>();stream.Values(*data);stream.Check();if(!file.atEnd())throw std::runtime_error("Unexpected result tail");
         return Result::Success(std::move(data));
     }catch(const std::exception& e) {
         return Result::Failure(base::MakeError(app::kGeometryJobFailed,"文書の再構築結果を読み込めませんでした。元の文書は保持しています。",e.what()));

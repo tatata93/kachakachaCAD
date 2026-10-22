@@ -395,13 +395,14 @@ bool V2MainWindow::ToggleEntityVisibilityFromItem(QTreeWidgetItem* item)
     // 2026-09-19 の原因)。
     const QString name = item->text(0);
     const kachakacha::v2::base::EntityId id = *entityId;
+    const bool shapesChanged=entity->kind!=EntityKind::Wire&&entity->kind!=EntityKind::Point&&entity->kind!=EntityKind::WorkPlane;
     const auto done = session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
         {id}, wantVisible ? kachakacha::v2::domain::Visibility::Visible
                           : kachakacha::v2::domain::Visibility::Hidden));
     if (!done.committed) {
         ReportDiagnostics(done.diagnostics);
     }
-    RefreshExplorerVisibility();
+    RefreshExplorerVisibility(shapesChanged);
     SetStatus(wantVisible ? QStringLiteral("「%1」を出しました。").arg(name)
                           : QStringLiteral("「%1」を隠しました。").arg(name));
     return true;

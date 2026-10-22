@@ -137,3 +137,6 @@ V2 の追加ターゲット `kachakacha_v2_core` / `kachakacha_v2_occt` / `kacha
 V2の表示境界に既存Qt 6.9.2のOpenGLモジュールを追加。Qtと同じLGPL-3.0の動的リンクで使用し、
 Windows配布ではQt6OpenGL.dllをwindeployqtで同梱する。core・保存・幾何にGPU依存を持たせない。
 OpenGLを利用できない構成では従来のCPU描画へ戻る。追加の第三者ライブラリは無し。
+
+2026-10-22: Windowsの画面描画に同じQtのOpenGLWidgetsを動的リンクする。
+Qt6OpenGLWidgets.dllも配布に同梱し、同じLGPL-3.0の条件を適用する。

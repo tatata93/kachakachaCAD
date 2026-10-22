@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <set>
 
 using kachakacha::v2::app::ApplySelection;
 using kachakacha::v2::app::IsSelected;
@@ -101,9 +102,11 @@ void V2Viewport::RebuildProfileRegions()
         return;
     }
     auto wires = session_->Scene();
+    std::set<kachakacha::v2::base::EntityId> wireIds;
+    for(const auto& entity:session_->GetDocument().Snapshot().entities)
+        if(entity.kind==kachakacha::v2::domain::EntityKind::Wire)wireIds.insert(entity.id);
     wires.curves.erase(std::remove_if(wires.curves.begin(), wires.curves.end(), [&](const auto& c) {
-        const auto* entity = session_->GetDocument().FindEntity(c.entityId);
-        return !entity || entity->kind != kachakacha::v2::domain::EntityKind::Wire;
+        return !wireIds.contains(c.entityId);
     }), wires.curves.end());
     profileRegions_ = kachakacha::v2::app::DetectProfileRegions(wires,
         session_->GetDocument().Snapshot().settings.tolerance);

@@ -100,6 +100,9 @@ int main(int argc, char** argv)
         QCoreApplication application(argc,argv);
         return V2GeometryJob::Worker(ValueAfter(arguments,QStringLiteral("--geometry-job")));
     }
+#ifdef KACHACAD_NATIVE_VIEWPORT
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+#endif
     QApplication application(argc, argv);
     if(arguments.contains(QStringLiteral("--document-job")))
         return V2DocumentOpen::Worker(ValueAfter(arguments,QStringLiteral("--document-job")));

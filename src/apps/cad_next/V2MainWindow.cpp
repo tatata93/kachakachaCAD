@@ -1125,6 +1125,7 @@ QAction* V2MainWindow::ActionFor(std::string_view id) const
 
 bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 {
+    if(auto* focus=QApplication::focusWidget();gridDock_&&focus&&gridDock_->isAncestorOf(focus)) viewport_->setFocus();
     if (partDock_ != nullptr && partDock_->ToolActive() && command.id != partDock_->ActiveCommand()
         && command.id.substr(0, 5) != "view.") { partDock_->EndTool(); }
     // 作図の道具は道具へ入る。
@@ -1160,6 +1161,7 @@ void V2MainWindow::RunCommand(std::string_view id)
 {
     V2ToolEvidence::Command evidence(*this,id);
     if(V2GeometryJob::Active()&&id.substr(0,5)!="view.")return;
+    if(id=="grid.edit") { ShowGridDock(); return; }
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         // 台帳に無い操作は、画面と台帳の食い違いとして知らせる。
@@ -1171,7 +1173,6 @@ void V2MainWindow::RunCommand(std::string_view id)
         && id.substr(0, 5) != "view.") { gptFabrication_->End(); }
     if (gptSurface_ != nullptr && gptSurface_->Active() && id != "surface.gpt_create"
         && id.substr(0, 5) != "view.") { gptSurface_->End(); }
-    // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。
     if (V2InstructionMode::Run(*this,id) || EnterToolFor(*command)) {
         return;
     }

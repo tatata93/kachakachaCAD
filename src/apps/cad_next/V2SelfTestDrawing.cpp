@@ -592,7 +592,7 @@ using kachakacha::v2::modeling::ToolSettings;
     }
     window.ActivateCommand("wire.corner_chamfer");
     window.CornerDock().PressCreate();
-    // 元の線は下流(加工した線)があるので消えず、隠れる。見えている線は 5 本。
+    // 加工前の線は結果に置き換わる。見えている線は 5 本。
     if (!Explain((std::string("2つの角が落ちて5本になる(") + window.StatusText().toStdString()
                      + ", 見える線 " + std::to_string(window.Session().Scene().curves.size())
                      + ")").c_str(),
@@ -645,11 +645,11 @@ using kachakacha::v2::modeling::ToolSettings;
     const int wiresBefore = CountOfKind(window, EntityKind::Wire);
     window.ActivateCommand("wire.corner_chamfer");
     window.CornerDock().PressCreate();
-    // 1 本につき 2 つの角が落ちて 5 区間。2 本で 10 区間、新しい線は 2 本(元は隠れる)。
+    // 1 本につき 2 つの角が落ちて 5 区間。2 本で 10 区間、加工前の重複は残さない。
     if (!Explain((std::string("線ごとに角が落ちる(") + window.StatusText().toStdString() + "、見える区間 "
                      + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
             window.Session().Scene().curves.size() == 10
-                && CountOfKind(window, EntityKind::Wire) == wiresBefore + 2)) {
+                && CountOfKind(window, EntityKind::Wire) == wiresBefore)) {
         return false;
     }
     window.RunCommand("edit.undo");

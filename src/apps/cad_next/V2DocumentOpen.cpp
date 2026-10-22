@@ -31,11 +31,13 @@ struct Prepared {
 };
 base::Result<bool> Restore(const std::map<std::string,std::string>& source,Shapes& shapes,
     const io::DocumentFile& file,domain::EntityKind kind,const std::function<bool()>& pulse) {
+    std::map<base::EntityId,domain::EntityKind> kinds;
+    for(const auto& entity:file.snapshot.entities)kinds.emplace(entity.id,entity.kind);
     for(const auto& entry:source) {
         if(!pulse())return base::Result<bool>::Failure(base::MakeError(app::kGeometryJobCancelled,"文書を開くのを取り消しました。"));
         const auto id=base::EntityId::Parse(entry.first);
-        const auto found=std::find_if(file.snapshot.entities.begin(),file.snapshot.entities.end(),[&](const auto& e){return id&&e.id==*id&&e.kind==kind;});
-        if(found==file.snapshot.entities.end())return base::Result<bool>::Failure(base::MakeError(app::kGeometryJobFailed,"再構築結果の参照が文書と一致しません。"));
+        const auto found=id?kinds.find(*id):kinds.end();
+        if(found==kinds.end()||found->second!=kind)return base::Result<bool>::Failure(base::MakeError(app::kGeometryJobFailed,"再構築結果の参照が文書と一致しません。"));
         const auto shape=kernel::RestoreOutputShape(entry.second);
         if(!shape.HasValue())return base::Result<bool>::Failure(shape.Diagnostics());
         shapes.emplace(entry.first,shape.Value());

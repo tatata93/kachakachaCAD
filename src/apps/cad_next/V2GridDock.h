@@ -23,6 +23,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QFormLayout;
 
 //! 棚で決めること。グリッドの定義 + 見え方の印。
 struct V2GridChoice {
@@ -60,6 +61,7 @@ public:
     [[nodiscard]] QString MessageText() const;
 
 private:
+    void BuildDisplayFields(QFormLayout* form, QWidget* body);
     void ConnectSignals();
     void Emit();
     void ChooseColor(QPushButton* button, QColor& color, const QString& title);

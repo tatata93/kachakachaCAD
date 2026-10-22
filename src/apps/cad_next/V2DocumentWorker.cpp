@@ -82,16 +82,15 @@ int V2DocumentOpen::Worker(const QString& directory) {
         const auto bytes=io::ReadWholeFile(request.value("source").toString().toStdString());
         if(!bytes.HasValue())throw bytes.FirstDiagnostic();
         timing.Mark("read-archive");
-        auto loaded=io::LoadDocument(bytes.Value());if(!loaded.HasValue())throw loaded.FirstDiagnostic();
-        timing.Mark("parse-archive");
-        if(auto cached=V2DocumentCache::Read(bytes.Value())) {
+        if(V2DocumentCache::Transfer(bytes.Value(),dir.filePath("prepared.bin"),token)) {
             timing.Mark("read-cache-hit");
             Progress(1,1,"内容が一致する計算済み形状を復元しています");
-            if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,*cached))throw std::runtime_error("Cannot transfer cached document");
             timing.Mark("write-transfer-cache");
             response["ok"]=true;
         } else {
         timing.Mark("read-cache-miss");
+        auto loaded=io::LoadDocument(bytes.Value());if(!loaded.HasValue())throw loaded.FirstDiagnostic();
+        timing.Mark("parse-archive");
         V2MainWindow window;
         timing.Mark("create-worker-window");
         if(!Adopt(window,loaded.Value().snapshot)||!window.RebuildProblems().isEmpty())
@@ -106,7 +105,7 @@ int V2DocumentOpen::Worker(const QString& directory) {
         timing.Mark("capture-native-and-meshes");
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");
-        (void)V2DocumentCache::Write(bytes.Value(),data);
+        (void)V2DocumentCache::StoreTransfer(bytes.Value(),dir.filePath("prepared.bin"),token);
         timing.Mark("write-cache");
         response["ok"]=true;
         }

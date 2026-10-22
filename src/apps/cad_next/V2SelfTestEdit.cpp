@@ -31,6 +31,9 @@
 #include <QListWidget>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QTimer>
+#include <QMenu>
+#include <QAction>
 
 #include <cmath>
 #include <algorithm>
@@ -423,17 +426,31 @@ bool CaseDeleteRoundedSegment(V2MainWindow& w,int mode=0) {
     w.RunCommand("selection.activate");w.Viewport().SetSelection({});
     const auto curves=w.Session().Scene().curves;
     if(curves.size()!=3)return false;
-    auto target=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return (c.segment.Kind()==kachakacha::v2::geometry::CurveKind::CircularArc)==(mode==1);});
+    auto target=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return (c.segment.Kind()==kachakacha::v2::geometry::CurveKind::CircularArc)==(mode==1||mode==3||mode==4);});
     if(target==curves.end())return false;
     const auto at=w.Viewport().Mapping().Project(target->segment.Evaluate(.5));if(!at)return false;
-    w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);
+    if(mode>=3) {
+        if(mode==3)w.RunCommand("wire.corner_fillet");
+        kachakacha::v2::app::SelectionSet whole;whole.entityIds={target->entityId};v.SetSelection(whole);
+    }
+    if(mode<4)w.Viewport().SelectAt({at->x,at->y},Qt::NoModifier);
     std::vector<kachakacha::v2::base::SegmentId> deleted={target->segmentId};
     if(mode==2) {
         const auto other=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return c.segmentId!=target->segmentId;});
         const auto pixel=v.Mapping().Project(other->segment.Evaluate(.5));if(!pixel)return false;
         v.SelectAt({pixel->x,pixel->y},Qt::ControlModifier);deleted.push_back(other->segmentId);
     }
-    w.RunCommand("edit.delete");
+    if(mode>=4) {
+        bool triggered=false;QTimer::singleShot(0,&w,[&]{
+            auto* menu=qobject_cast<QMenu*>(QApplication::activePopupWidget());if(!menu)return;
+            if(auto* action=menu->findChild<QAction*>("deletePickedSegment")){triggered=true;action->trigger();}
+            menu->close();
+        });
+        v.PressRightWithoutMoving({at->x,at->y});
+        if(!Explain("context deletion targets the pointed segment despite whole-wire selection",triggered))return false;
+    } else if(mode==3) {
+        v.setFocus();QKeyEvent key(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);QApplication::sendEvent(&v,&key);
+    } else w.RunCommand("edit.delete");
     const auto survivors=[&]{const auto& scene=w.Session().Scene().curves;
         return scene.size()==3-deleted.size()&&std::none_of(scene.begin(),scene.end(),[&](const auto& c){return std::find(deleted.begin(),deleted.end(),c.segmentId)!=deleted.end();})
             &&std::all_of(scene.begin(),scene.end(),[&](const auto& c){return std::any_of(curves.begin(),curves.end(),[&](const auto& old){return old.segmentId==c.segmentId;});});};
@@ -622,6 +639,9 @@ std::vector<SelfTestCase> EditCases()
         {"HP-DEL-02 individual rounded wire segment deletion",[](auto& w){return CaseDeleteRoundedSegment(w);}},
         {"HP-DEL-04 delete arc preserves straight segments",[](auto& w){return CaseDeleteRoundedSegment(w,1);}},
         {"HP-DEL-05 multiple segments delete together",[](auto& w){return CaseDeleteRoundedSegment(w,2);}},
+        {"HP-DEL-11 fillet tool whole wire refines to arc and real Delete",[](auto& w){return CaseDeleteRoundedSegment(w,3);}},
+        {"HP-DEL-12 context arc deletion ignores old whole wire selection",[](auto& w){return CaseDeleteRoundedSegment(w,4);}},
+        {"HP-DEL-13 context straight deletion retains rounded arc",[](auto& w){return CaseDeleteRoundedSegment(w,5);}},
         {"HP-DEL-06 unfinished drawing Undo keeps earlier deletion",CasePendingDrawingUndo},
         {"HP-DEL-07 stale and dependent segment deletion refuses safely",CaseDeleteGuards},
         {"HP-DEL-03 native edges never duplicate or resurrect",CaseNativeEdgesHistory},

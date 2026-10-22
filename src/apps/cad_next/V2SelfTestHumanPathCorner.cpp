@@ -201,6 +201,9 @@ using kachakacha::v2::modeling::DrawingTool;
         || !Explain("確定すると下見は消える", !window.CornerPreviewShown())) {
         return false;
     }
+    window.RunCommand("view.show_all");
+    if(!Explain("C面取りは加工後の線だけを残す",CountOfKind(window,EntityKind::Wire)==1
+        &&window.Session().Scene().curves.size()==before+1))return false;
     window.RunCommand("edit.undo");
     return Explain("1回の取り消しで2本へ戻る", window.Session().Scene().curves.size() == before);
 }
@@ -413,6 +416,7 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
     }
     if (!Explain("first corner previews",window.CornerPreviewShown())
         || !window.HandleToolKey(Qt::Key_Return,nullptr)) return false;
+    if (!Explain("first corner replaces source wires instead of hiding duplicates",CountOfKind(window,EntityKind::Wire)==(polyline?1:2)))return false;
     if (!Explain("first corner retains tool and all 4 curves",window.Session().Scene().curves.size()==4
             && window.Session().CurrentTool()==DrawingTool::ChamferOrFilletPair)) return false;
     click(0,20); click(30,0);
@@ -422,14 +426,21 @@ bool CaseRepeatedCorners(V2MainWindow& window, bool polyline, bool batch=false)
     for (const auto& c:window.Session().Scene().curves)
         arcs+=c.segment.Kind()==kachakacha::v2::geometry::CurveKind::CircularArc;
     if (!Explain("two corners leave 3 lines and 2 arcs",arcs==2&&window.Session().Scene().curves.size()==5)
+        || !Explain("repeated fillet retains only the edited wire",CountOfKind(window,EntityKind::Wire)==1)
         || !Explain("background remains visible",view.ImageViews().size()==1
             && CountOfKind(window,EntityKind::Image)==1)) return false;
     window.RunCommand("edit.undo");
     if (!Explain("one undo restores first corner only",window.Session().Scene().curves.size()==4
             && view.ImageViews().size()==1)) return false;
     window.RunCommand("edit.redo");
-    return Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
-        && view.ImageViews().size()==1);
+    if(!Explain("redo keeps both corners and image",window.Session().Scene().curves.size()==5
+        && view.ImageViews().size()==1&&CountOfKind(window,EntityKind::Wire)==1))return false;
+    window.RunCommand("view.show_all");
+    if(!Explain("show all never resurrects pre-fillet duplicates",window.Session().Scene().curves.size()==5))return false;
+    const auto model=folder.filePath(QStringLiteral("edited.kcd2"));
+    window.SetPathChooser([&](bool){return model;});window.RunCommand("file.save_as");
+    return Explain("save and reopen retain edited geometry only",window.OpenDocumentFile(model)
+        &&CountOfKind(window,EntityKind::Wire)==1&&window.Session().Scene().curves.size()==5&&view.ImageViews().size()==1);
 }
 bool CaseFullLengthCorner(V2MainWindow& w) {
     using namespace kachakacha::v2;

@@ -10,6 +10,7 @@
 #include <QToolButton>
 #include <QWidget>
 #include <set>
+#include <map>
 #include <cmath>
 using namespace kachakacha::v2;
 namespace {
@@ -78,15 +79,17 @@ void RefreshPlaneWireDisplay(V2Viewport& view) {
     auto* state=State(view);if(!state||!state->enabled)return;
     state->visible.clear();std::set<base::EntityId> rejected;
     const auto& scene=state->session.Scene();
+    std::map<base::EntityId,domain::EntityKind> kinds;
+    for(const auto& entity:state->session.GetDocument().Snapshot().entities)kinds.emplace(entity.id,entity.kind);
     for(const auto& curve:scene.curves){
-        const auto* entity=state->session.GetDocument().FindEntity(curve.entityId);
-        if(!entity||entity->kind!=domain::EntityKind::Wire)continue;
+        const auto found=kinds.find(curve.entityId);
+        if(found==kinds.end()||found->second!=domain::EntityKind::Wire)continue;
         if(app::CurveLiesOnPlane(curve.segment,view.WorkPlane()))state->visible.insert(curve.entityId);
         else rejected.insert(curve.entityId);
     }
     for(auto id:rejected)state->visible.erase(id);
-    for(const auto& point:scene.points){const auto* entity=state->session.GetDocument().FindEntity(point.entityId);
-        if(entity&&entity->kind==domain::EntityKind::Point
+    for(const auto& point:scene.points){const auto found=kinds.find(point.entityId);
+        if(found!=kinds.end()&&found->second==domain::EntityKind::Point
             &&std::abs(geometry::Dot(point.position-view.WorkPlane().origin,view.WorkPlane().normal))<=app::kOnPlaneToleranceMm)
             state->visible.insert(point.entityId);
     }

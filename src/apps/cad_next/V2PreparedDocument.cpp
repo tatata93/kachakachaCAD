@@ -144,6 +144,26 @@ template<class T> void Archive::Field(T& v) {
 }
 }
 
+bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
+    const QString& destination,const QString& destinationToken,const std::function<bool()>& pulse) {
+    try {
+        if(source==destination||sourceToken.isEmpty()||destinationToken.isEmpty())return false;
+        QFile input(source);
+        if(!input.open(QIODevice::ReadOnly)||input.size()>1024LL*1024*1024)return false;
+        Archive reader(&input,true,pulse);std::string magic,id;int version=0;
+        reader.Values(magic,version,id);
+        if(magic!="kachakacha-prepared-document"||version!=2||id!=sourceToken.toStdString()||input.atEnd())return false;
+        QSaveFile output(destination);if(!output.open(QIODevice::WriteOnly))return false;
+        Archive writer(&output,false);id=destinationToken.toStdString();writer.Values(magic,version,id);
+        while(!input.atEnd()) {
+            if(!pulse())return false;
+            const auto bytes=input.read(1024*1024);
+            if(bytes.isEmpty()||output.write(bytes)!=bytes.size())return false;
+        }
+        return input.error()==QFile::NoError&&output.commit();
+    }catch(...){return false;}
+}
+
 bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDocument& data) {
     try {
         QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;

@@ -889,6 +889,32 @@ void V2Viewport::SetPendingCommandCallbacks(std::function<void()> confirm,
     cancelPending_ = std::move(cancel);
 }
 
+kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
+    const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+    kachakacha::v2::app::SelectionMode mode) const
+{
+    using kachakacha::v2::app::SelectionMode;
+    // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
+    // 素の押し方は、ModeForToolPick が Add に変えていても **押し直しは外す**。
+    // 欄の印(MirrorSurfaceEntriesToSelection)は種類を持たないので、ModeForToolPick は
+    // 同じ役割かどうかを読めず Add と答える。それに従うと、もう一度押しても外れなかった
+    // (PC 自己試験 HP-SF-06 / HP-BO-01 2026-09-18)。
+    if (!toolPickToggle_ || !picked.has_value()
+        || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
+        return mode;
+    }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
+        const bool whole=std::any_of(selection_.ordered.begin(),selection_.ordered.end(),[&](const auto& ref){
+            return ref.entityId==picked->entityId&&ref.kind==kachakacha::v2::app::SelectionElementKind::Object;});
+        const bool compatibility=selection_.ordered.empty()&&kachakacha::v2::app::IsSelected(selection_,picked->entityId);
+        if(!picked->segmentId.IsNil()&&(whole||compatibility))return SelectionMode::Replace;
+        return SelectionMode::Toggle;
+    }
+    return kachakacha::v2::app::IsSelected(selection_, picked->entityId)
+        ? SelectionMode::Subtract
+        : SelectionMode::Add;
+}
+
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
     if (elementPickHandler_) {
@@ -896,6 +922,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
             kachakacha::v2::app::PickCandidate pick;
             pick.entityId = ref.entityId; pick.kind = ref.kind;
             pick.pickedFaceIndex = ref.pickedFaceIndex; pick.hitPoint = ref.hitPoint;
+            pick.segmentId = ref.segmentId.value_or(kachakacha::v2::base::SegmentId{}); pick.subshapeKey = ref.subshapeKey;
             if (AcceptElementPick(pick)) return;
         }
         for (const auto& id : selection.entityIds) {

@@ -18,8 +18,10 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QString>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QVariant>
 
 #include <string>
 
@@ -27,6 +29,12 @@ namespace {
 
 //! 副点の並び(V1 と同じ): 主点のみ / 1/2 / 1/3 / 1/4。
 constexpr int kSubdivisions[4] = {0, 2, 3, 4};
+QWidget* PairRow(QWidget* parent, QWidget* first, QWidget* second)
+{
+    auto* row=new QWidget(parent);auto* layout=new QHBoxLayout(row);
+    layout->setContentsMargins(0,0,0,0);layout->setSpacing(4);
+    layout->addWidget(first);layout->addWidget(second);return row;
+}
 
 } // namespace
 
@@ -34,6 +42,11 @@ V2GridDock::V2GridDock(QWidget* parent)
     : QDockWidget(QStringLiteral("グリッド"), parent)
 {
     setObjectName(QStringLiteral("gridDock"));
+    setFeatures(QDockWidget::NoDockWidgetFeatures);
+    setAllowedAreas(Qt::RightDockWidgetArea);
+    setMinimumWidth(280);
+    setMinimumHeight(215);
+    setMaximumHeight(285);
     auto* body = new QWidget(this);
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -49,12 +62,13 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->addRow(visible_);
 
     spacing_ = new QLineEdit(QStringLiteral("10"), body);
+    spacing_->setObjectName(QStringLiteral("gridSpacing"));
     spacing_->setToolTip(QStringLiteral("数値または式(例: 25.4/8)。mm。"));
-    form->addRow(QStringLiteral("主点間隔"), spacing_);
     spacingValue_ = new QLabel(QStringLiteral("= 10 mm"), body);
-    form->addRow(QStringLiteral(""), spacingValue_);
+    form->addRow(QStringLiteral("主点間隔"), PairRow(body,spacing_,spacingValue_));
 
     subdivision_ = new QComboBox(body);
+    subdivision_->setObjectName(QStringLiteral("gridSubdivision"));
     subdivision_->addItem(QStringLiteral("主点のみ"));
     subdivision_->addItem(QStringLiteral("1/2"));
     subdivision_->addItem(QStringLiteral("1/3"));
@@ -62,15 +76,18 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->addRow(QStringLiteral("副点"), subdivision_);
 
     originU_ = new V2NumericSpinBox(body);
+    originU_->setObjectName(QStringLiteral("gridOriginU"));
     originU_->setRange(-100000.0, 100000.0);
     originU_->setDecimals(3);
     originU_->setSuffix(QStringLiteral(" mm"));
-    form->addRow(QStringLiteral("基準 X(u)"), originU_);
+    originU_->setToolTip(QStringLiteral("グリッド基準 X(u)"));
     originV_ = new V2NumericSpinBox(body);
+    originV_->setObjectName(QStringLiteral("gridOriginV"));
     originV_->setRange(-100000.0, 100000.0);
     originV_->setDecimals(3);
     originV_->setSuffix(QStringLiteral(" mm"));
-    form->addRow(QStringLiteral("基準 Y(v)"), originV_);
+    originV_->setToolTip(QStringLiteral("グリッド基準 Y(v)"));
+    form->addRow(QStringLiteral("基準 X / Y"), PairRow(body,originU_,originV_));
 
     auto* originButtons = new QWidget(body);
     auto* originLayout = new QHBoxLayout(originButtons);
@@ -81,6 +98,43 @@ V2GridDock::V2GridDock(QWidget* parent)
     originLayout->addWidget(pickOrigin_);
     form->addRow(originButtons);
 
+    layout->addLayout(form);
+    auto* detailsButton = new QToolButton(body);
+    detailsButton->setObjectName(QStringLiteral("gridDetails"));
+    detailsButton->setText(QStringLiteral("詳細設定（表示・色）"));
+    detailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    detailsButton->setArrowType(Qt::RightArrow);
+    detailsButton->setCheckable(true);
+    layout->addWidget(detailsButton);
+    auto* details = new QWidget(body);
+    details->setObjectName(QStringLiteral("gridDetailsBody"));
+    details->hide();
+    form = new QFormLayout(details);
+    form->setContentsMargins(0, 0, 0, 0);
+    form->setSpacing(3);
+    layout->addWidget(details);
+    QObject::connect(detailsButton, &QToolButton::toggled, details,
+        [details, detailsButton](bool on) {
+            details->setVisible(on);
+            detailsButton->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+        });
+
+    BuildDisplayFields(form, body);
+
+    message_ = new QLabel(body);
+    message_->setWordWrap(true);
+    layout->addWidget(message_);
+    layout->addStretch(1);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body);
+    setWidget(scroll);
+    ConnectSignals();
+}
+
+void V2GridDock::BuildDisplayFields(QFormLayout* form, QWidget* body)
+{
     allModes_ = new QCheckBox(QStringLiteral("作図モード以外でも表示"), body);
     allModes_->setObjectName(QStringLiteral("gridAllModes"));
     allModes_->setChecked(true);
@@ -110,21 +164,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->addRow(QStringLiteral("主点色"), majorColor_);
     form->addRow(QStringLiteral("副点色"), minorColor_);
     form->addRow(QStringLiteral("背景色"), backgroundColor_);
-    layout->addLayout(form);
 
-    message_ = new QLabel(body);
-    message_->setWordWrap(true);
-    layout->addWidget(message_);
-    layout->addStretch(1);
-    // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
-    // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(body);
-    setWidget(scroll);
-
-    ConnectSignals();
 }
 
 void V2GridDock::ConnectSignals()
@@ -133,12 +173,18 @@ void V2GridDock::ConnectSignals()
     QObject::connect(spacing_, &QLineEdit::editingFinished, this,
         [this] { if(!loading_)(void)ApplySpacingExpression(spacing_->text()); });
     QObject::connect(subdivision_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
-    QObject::connect(originU_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
-    QObject::connect(originV_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(originU_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if(!loading_)originU_->setProperty("exactGridOrigin",value); Emit();
+    });
+    QObject::connect(originV_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if(!loading_)originV_->setProperty("exactGridOrigin",value); Emit();
+    });
     QObject::connect(resetOrigin_, &QPushButton::clicked, this, [this] {
         loading_ = true;
         originU_->setValue(0.0);
         originV_->setValue(0.0);
+        originU_->setProperty("exactGridOrigin",0.0);
+        originV_->setProperty("exactGridOrigin",0.0);
         loading_ = false;
         Emit();
     });
@@ -162,6 +208,7 @@ void V2GridDock::ConnectSignals()
 
 bool V2GridDock::ApplySpacingExpression(const QString& expression)
 {
+    if (spacing_->text() != expression) spacing_->setText(expression);
     // 式は core が読む。読めなければ、その場で理由を出して当てない(黙って前の値にしない)。
     const auto evaluated = kachakacha::v2::geometry::EvaluateExpression(
         expression.toStdString(), kachakacha::v2::geometry::QuantityKind::Length);
@@ -202,8 +249,8 @@ V2GridChoice V2GridDock::Choice() const
     choice.grid.majorSpacingMm = spacingMm_;
     const int index = subdivision_->currentIndex();
     choice.grid.subdivision = index >= 0 && index < 4 ? kSubdivisions[index] : 0;
-    choice.grid.originUmm = originU_->value();
-    choice.grid.originVmm = originV_->value();
+    choice.grid.originUmm = originU_->property("exactGridOrigin").toDouble();
+    choice.grid.originVmm = originV_->property("exactGridOrigin").toDouble();
     choice.spacingExpression = spacing_->text();
     choice.showInAllModes = allModes_->isChecked();
     choice.dimOffPlaneLines = dimOffPlane_->isChecked();
@@ -220,8 +267,10 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
 {
     loading_ = true;
     visible_->setChecked(choice.grid.visible);
+    const bool sameSpacing = spacingMm_ == choice.grid.majorSpacingMm;
     spacingMm_ = choice.grid.majorSpacingMm;
-    spacing_->setText(choice.spacingExpression.isEmpty()
+    // View-only sync must preserve the expression and caret, including unfinished input.
+    if (!sameSpacing) spacing_->setText(choice.spacingExpression.isEmpty()
             ? QString::number(choice.grid.majorSpacingMm)
             : choice.spacingExpression);
     spacingValue_->setText(QStringLiteral("= %1 mm").arg(spacingMm_, 0, 'f', 3));
@@ -232,6 +281,8 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
     }
     originU_->setValue(choice.grid.originUmm);
     originV_->setValue(choice.grid.originVmm);
+    originU_->setProperty("exactGridOrigin",choice.grid.originUmm);
+    originV_->setProperty("exactGridOrigin",choice.grid.originVmm);
     allModes_->setChecked(choice.showInAllModes);
     dimOffPlane_->setChecked(choice.dimOffPlaneLines);
     workPlaneVisible_->setChecked(choice.workPlaneVisible);

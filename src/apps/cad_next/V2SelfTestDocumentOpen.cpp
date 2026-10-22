@@ -28,6 +28,9 @@
 #include <QTimer>
 #include <QImage>
 #include <QColor>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QCryptographicHash>
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
@@ -173,6 +176,38 @@ bool Cache(V2MainWindow& w) {
     std::cout<<"cold rebuild after cache corruption="<<elapsed.elapsed()<<" ms\n";
     return Explain("bad cache falls back to full reconstruction and leaves source intact",rebuilt&&!hit&&w.KernelShapeCount()==1
         &&V2DocumentCache::Read(original.Value()).has_value()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
+}
+bool TransferValidation(V2MainWindow& w) {
+    CacheScope scope;if(!scope.folder.isValid())return false;
+    V2PreparedDocument data;data.archive=std::string(3*1024*1024,'x');
+    const auto path=scope.folder.filePath("source.bin"),copy=scope.folder.filePath("copy.bin");
+    if(!WritePreparedDocument(path,"source",data)||!CopyPreparedDocument(path,"source",copy,"destination"))return false;
+    auto restored=ReadPreparedDocument(copy,"destination",[]{return true;});
+    if(!Explain("retokened payload round-trips without changing data",restored.HasValue()&&restored.Value()->archive==data.archive
+        &&!ReadPreparedDocument(copy,"source",[]{return true;}).HasValue()))return false;
+    QFile output(copy);if(!output.open(QIODevice::ReadOnly))return false;const auto before=output.readAll();output.close();
+    if(!Explain("wrong identity and cancellation never replace output",!CopyPreparedDocument(path,"wrong",copy,"destination")
+        &&!CopyPreparedDocument(path,"source",copy,"destination",[]{return false;})))return false;
+    int blocks=0;
+    if(!Explain("cancellation after a copied block never commits partial output",!CopyPreparedDocument(path,"source",copy,"destination",[&]{return ++blocks<2;})&&blocks==2))return false;
+    if(!output.open(QIODevice::ReadOnly)||output.readAll()!=before)return false;output.close();
+    QFile truncated(path);if(!truncated.open(QIODevice::ReadWrite)||!truncated.resize(4))return false;truncated.close();
+    if(!Explain("truncated transfer header is rejected",!CopyPreparedDocument(path,"source",copy,"destination")))return false;
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;
+    w.RunCommand("surface.create");if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    const auto model=scope.folder.filePath("model.kcd2");if(!Write(model,V2DocumentOpen::FileForSave(w))||!w.OpenDocumentFile(model))return false;
+    const auto bytes=io::ReadWholeFile(model.toStdString());if(!bytes.HasValue())return false;
+    const auto key=V2DocumentCache::Key(bytes.Value());const auto cachePath=scope.folder.filePath(key+".bin");
+    QFile poisoned(cachePath);if(!poisoned.open(QIODevice::ReadWrite)||!poisoned.resize(poisoned.size()-1))return false;
+    poisoned.seek(0);const auto content=poisoned.readAll();poisoned.close();
+    QFile manifest(scope.folder.filePath(key+".json"));if(!manifest.open(QIODevice::WriteOnly))return false;
+    const QJsonObject info{{"key",key},{"size",double(content.size())},
+        {"sha256",QString::fromLatin1(QCryptographicHash::hash(content,QCryptographicHash::Sha256).toHex())}};
+    manifest.write(QJsonDocument(info).toJson());manifest.close();
+    if(!Explain("matching SHA cannot legitimize malformed cache fields",!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
+    return Explain("malformed cache falls back to original model with native geometry intact",w.OpenDocumentFile(model)
+        &&w.KernelShapeCount()==1&&V2DocumentCache::Read(bytes.Value()).has_value()
+        &&io::ReadWholeFile(model.toStdString()).Value()==bytes.Value());
 }
 bool HiddenMesh(V2MainWindow& w) {
     CacheScope scope;if(!scope.folder.isValid())return false;
@@ -329,6 +364,7 @@ std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-06 saved native cache, invalidation and corruption recovery",Cache},
     {"HP-OPEN-07 hidden native shapes mesh on first visibility",HiddenMesh},
     {"HP-OPEN-08 parallel independent surfaces match serial cold rebuild",ParallelRead},
+    {"HP-OPEN-09 prepared transfer identities cancellation and poisoned cache",TransferValidation},
     {"HP-PERF-01 dense face hover and image compositing",Interaction}};
     if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}
 }

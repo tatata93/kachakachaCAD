@@ -27,11 +27,19 @@
 #include "kachakacha/app/CommandParameters.h"
 
 #include <QDockWidget>
+#include <QMainWindow>
 #include <QPointF>
 #include <QString>
 #include <optional>
 
 namespace {
+void ArrangeRightDocks(QMainWindow& window, QDockWidget* grid, QDockWidget* operation)
+{
+    window.addDockWidget(Qt::RightDockWidgetArea, grid);
+    window.addDockWidget(Qt::RightDockWidgetArea, operation);
+    window.splitDockWidget(grid, operation, Qt::Vertical);
+    window.resizeDocks({grid, operation}, {250, 650}, Qt::Vertical);
+}
 std::optional<double> ChangedThickenAmount(const V2ThickenPreviewState& state,
     const kachakacha::v2::app::ParameterSet& values)
 {
@@ -196,6 +204,7 @@ void V2MainWindow::BuildRightShelves()
     operationDock_->setMinimumWidth(280);
     operationHost_ = new V2OperationPanelHost(operationDock_);
     for (const auto shelf : kachakacha::v2::app::AllShelves()) {
+        if (shelf == kachakacha::v2::app::Shelf::Grid) continue;
         if (QDockWidget* source = DockForShelf(shelf); source != nullptr
             && source->widget() != nullptr) {
             // 中身は統合パネルへ移す。空になった元Dockを表示したままにすると、
@@ -210,7 +219,7 @@ void V2MainWindow::BuildRightShelves()
         RunRibbonVariant(tool);
     });
     operationDock_->setWidget(operationHost_);
-    addDockWidget(Qt::RightDockWidgetArea, operationDock_);
+    ArrangeRightDocks(*this, gridDock_, operationDock_);
     RefreshRightShelves();
 }
 

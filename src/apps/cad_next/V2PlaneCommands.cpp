@@ -21,6 +21,7 @@
 #include "kachakacha/view/ViewOrientation.h"
 
 #include <QComboBox>
+#include <QLineEdit>
 #include <QSignalBlocker>
 #include <QVariant>
 #include <QString>
@@ -326,6 +327,7 @@ void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame
     scene.grid.uDirection = frame.uAxis;
     scene.grid.vDirection = frame.vAxis;
     session_->SetScene(std::move(scene));
+    if(gridDock_)gridDock_->SetChoice(CurrentGridChoice());
     viewport_->update();
 }
 
@@ -335,8 +337,12 @@ void V2MainWindow::ShowGridDock()
         return;
     }
     gridDock_->SetChoice(CurrentGridChoice());
-    ShowShelf(kachakacha::v2::app::Shelf::Grid);
-    SetStatus(QStringLiteral("グリッド: 右の「グリッド」で間隔・副点・基準・色を決めてください。"));
+    gridDock_->show();
+    gridDock_->raise();
+    if (auto* spacing = gridDock_->findChild<QLineEdit*>(QStringLiteral("gridSpacing"))) {
+        spacing->setFocus();
+        spacing->selectAll();
+    }
 }
 
 V2GridChoice V2MainWindow::CurrentGridChoice() const
@@ -372,15 +378,20 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
         ReportDiagnostics(checked.Diagnostics());
         return;
     }
+    const auto& current = session_->Scene().grid;
+    const auto origin = viewport_->WorkPlane().PointAt(choice.grid.originUmm, choice.grid.originVmm);
+    if (!current.visible || current.majorSpacingMm != checked.Value().majorSpacingMm
+        || current.subdivision != checked.Value().subdivision
+        || (current.origin-origin).Length() > 1e-9) {
     auto scene = session_->Scene();
     // Visibility belongs to display settings; hiding a grid must not disable snapping.
     scene.grid.visible = true;
     scene.grid.majorSpacingMm = checked.Value().majorSpacingMm;
     scene.grid.subdivision = checked.Value().subdivision;
     // 基準は作業平面の上の (u, v)。平面が動けば付いていく(GridModel の決まり 1)。
-    scene.grid.origin = viewport_->WorkPlane().PointAt(choice.grid.originUmm,
-        choice.grid.originVmm);
+    scene.grid.origin = origin;
     session_->SetScene(std::move(scene));
+    }
     // 色は画面の持ち物。無効な色(まだ決めていない)は触らない。
     ViewportPalette palette = viewport_->Colors();
     if (choice.majorColor.isValid()) {
@@ -392,7 +403,9 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     if (choice.backgroundColor.isValid()) {
         palette.background = choice.backgroundColor;
     }
-    viewport_->SetPalette(palette);
+    if (palette.gridMajor != viewport_->Colors().gridMajor
+        || palette.gridMinor != viewport_->Colors().gridMinor
+        || palette.background != viewport_->Colors().background) viewport_->SetPalette(palette);
     auto display = viewport_->DisplaySettingsNow();
     display.gridVisible = choice.grid.visible;
     display.gridInAllModes = choice.showInAllModes;
@@ -401,6 +414,7 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     display.shapesVisible = choice.shapesVisible;
     viewport_->setProperty("surfaceGridMode",std::clamp(choice.surfaceGridMode,0,2));
     ApplyDisplaySettings(display);
+    gridDock_->SetChoice(CurrentGridChoice());
     RefreshGridSuppression();
     viewport_->update();
 }
@@ -436,6 +450,7 @@ void V2MainWindow::MoveGridOriginByClick()
             scene.grid.origin = plane.PointAt(moved.Value().originUmm,
                 moved.Value().originVmm);
             session_->SetScene(std::move(scene));
+            if(gridDock_)gridDock_->SetChoice(CurrentGridChoice());
             viewport_->update();
             SetStatus(QStringLiteral("グリッド原点: 作業平面の上の (%1, %2) mm へ動かしました。")
                     .arg(moved.Value().originUmm, 0, 'f', 3)

@@ -57,6 +57,16 @@ void Prune(const QDir& dir) {
         QFile::remove(dir.filePath(file.completeBaseName()+".json"));
     }
 }
+bool WriteManifest(const QDir& dir,const QString& key,const QString& path) {
+    const auto size=QFileInfo(path).size();
+    if(size<=0||size>entryLimit){QFile::remove(path);return false;}
+    const auto digest=DigestFile(path);if(digest.isEmpty())return false;
+    const QJsonObject info{{"key",key},{"size",double(size)},{"sha256",QString::fromLatin1(digest)}};
+    const auto bytes=QJsonDocument(info).toJson(QJsonDocument::Compact);
+    QSaveFile manifest(dir.filePath(key+".json"));
+    const bool ok=manifest.open(QIODevice::WriteOnly)&&manifest.write(bytes)==bytes.size()&&manifest.commit();
+    Prune(dir);return ok;
+}
 }
 QString Key(const std::string& source) {
     const auto binary=BinaryIdentity();if(binary.isEmpty())return {};
@@ -81,12 +91,19 @@ bool Write(const std::string& source,V2PreparedDocument& data) {
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;
     const auto path=dir.filePath(key+".bin");
     if(!WritePreparedDocument(path,key,data))return false;
-    const auto size=QFileInfo(path).size();
-    if(size>entryLimit){QFile::remove(path);return false;}
-    const QJsonObject info{{"key",key},{"size",double(size)},{"sha256",QString::fromLatin1(DigestFile(path))}};
-    const auto bytes=QJsonDocument(info).toJson(QJsonDocument::Compact);
-    QSaveFile manifest(dir.filePath(key+".json"));
-    const bool ok=manifest.open(QIODevice::WriteOnly)&&manifest.write(bytes)==bytes.size()&&manifest.commit();
-    Prune(dir);return ok;
+    return WriteManifest(dir,key,path);
+}
+bool Transfer(const std::string& source,const QString& destination,const QString& token) {
+    // Retain full semantic validation, including malformed data with a matching manifest hash.
+    if(!Read(source))return false;
+    const auto key=Key(source);
+    return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token);
+}
+bool StoreTransfer(const std::string& source,const QString& transfer,const QString& token) {
+    const auto key=Key(source);if(key.isEmpty())return false;
+    const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;
+    const auto path=dir.filePath(key+".bin");
+    if(!CopyPreparedDocument(transfer,token,path,key))return false;
+    return WriteManifest(dir,key,path);
 }
 }

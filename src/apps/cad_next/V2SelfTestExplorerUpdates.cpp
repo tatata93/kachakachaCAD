@@ -34,6 +34,7 @@
 #include <QLineEdit>
 #include <QInputMethodEvent>
 #include <QComboBox>
+#include <QToolButton>
 #include <QImage>
 #include <QVariant>
 #include <cmath>
@@ -209,7 +210,9 @@ bool SurfaceGridChoice(V2MainWindow& w){
     if(!Explain("grid display changes pixels without splitting native faces",off!=all&&v.ShapeViews().front().mesh.faceCount==faces&&v.ShapeViews().front().mesh.triangles.size()==triangles))return false;
     choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedOnly=v.grab().toImage();
     if(!Explain("unselected surface does not draw a UV grid in selected-only mode",selectedOnly==off))return false;
-    w.ShowGridDock();QApplication::processEvents();auto* combo=w.findChild<QComboBox*>("surfaceGridMode");
+    w.ShowGridDock();QApplication::processEvents();
+    auto* details=w.findChild<QToolButton*>("gridDetails");if(!details)return false;details->setChecked(true);
+    auto* combo=w.findChild<QComboBox*>("surfaceGridMode");
     if(!combo||!combo->isVisible())return false;combo->setFocus();HumanKey(combo,Qt::Key_Home);
     return Explain("keyboard grid choice is view-only and synchronized",v.property("surfaceGridMode").toInt()==0&&w.Session().GetDocument().Snapshot().revision==before);
 }
@@ -293,12 +296,13 @@ bool PendingFolderPick(V2MainWindow& w){
         &&w.property("explorerBuilds").toInt()>builds&&w.Session().GetDocument().Snapshot().groups.size()==1);
 }
 bool MixedFolderDeletion(V2MainWindow& w){
-    w.RunCommand("file.new");auto& v=w.Viewport();const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.RunCommand("file.new");auto& v=w.Viewport();const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(!Explain("folder input rectangle created",!wire.IsNil()))return false;
     w.RunCommand("draw.point");const auto at=v.Mapping().Project({25,25,0});if(!at)return false;HumanClick(&v,{at->x,at->y});w.RunCommand("selection.activate");
     base::EntityId point;for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Point)point=e.id;
-    if(point.IsNil())return false;
+    if(!Explain((std::string("folder input point created: ")+w.StatusText().toStdString()).c_str(),!point.IsNil()))return false;
     v.SetSelection(app::SelectionSet{{wire,point}});w.RunCommand("group.create");const auto group=w.Session().GetDocument().Snapshot().groups.back().id;
-    v.SetSelection({});w.RunCommand("surface.create");if(!w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary))return false;
+    v.SetSelection({});w.RunCommand("surface.create");
+    if(!Explain((std::string("surface method card reachable: ")+w.StatusText().toStdString()).c_str(),w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary)))return false;
     w.EntityTree()->setCurrentItem(w.EntityTree()->FindKey("group:"+QString::fromStdString(group.ToString())));QApplication::processEvents();
     if(!Explain("surface tool keeps the folder row while mirroring only accepted wires",w.EntityTree()->FindKey("group:"+QString::fromStdString(group.ToString()))->isSelected()
         &&std::find(v.Selection().entityIds.begin(),v.Selection().entityIds.end(),point)==v.Selection().entityIds.end()))return false;

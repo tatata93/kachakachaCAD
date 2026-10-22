@@ -675,7 +675,10 @@ void V2MainWindow::RunWireTransform(
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::TransformWire;
     feature.displayName = labelJa.toStdString();
-    feature.inputEntityIds = inputIds;
+    // Consumed wires are replaced by this complete, baked definition. Retaining
+    // an input link prevents their removal and accumulates hidden copies per edit.
+    for (const auto id : inputIds)
+        if (std::find(consumed.begin(), consumed.end(), id) == consumed.end()) feature.inputEntityIds.push_back(id);
     // 計算した形をそのまま持たせる。持たせないと、開き直したときに形が出ない。
     kachakacha::v2::domain::CreateWireDefinition wire;
     wire.segments = computed.Value();
@@ -772,7 +775,7 @@ void V2MainWindow::RunWireTransformEach(
             feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
             feature.type = kachakacha::v2::domain::FeatureType::TransformWire;
             feature.displayName = labelJa.toStdString();
-            feature.inputEntityIds = one.entityIds;
+            if (!consumesInputs) feature.inputEntityIds = one.entityIds;
             kachakacha::v2::domain::CreateWireDefinition wire;
             wire.segments = computed.Value();
             if (consumesInputs) KeepUneditedSegments(wire.segments, one, session_->Scene(), {id}, false);

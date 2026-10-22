@@ -15,6 +15,7 @@
 
 #include <QColor>
 #include <QLineF>
+#include <QObject>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -44,12 +45,41 @@ using kachakacha::v2::modeling::SnapKind;
 using kachakacha::v2::modeling::SnapKindLabelJa;
 using kachakacha::v2::modeling::WorkPlaneFrame;
 
+namespace {
+struct GridProjectionKey {
+    std::array<double,16> matrix;
+    double width=0,height=0,spacing=0;
+    int subdivision=0;
+    Vector3 origin,u,v,planeOrigin,planeNormal;
+    bool operator==(const GridProjectionKey&) const = default;
+};
+class GridProjectionCache final : public QObject {
+public:
+    explicit GridProjectionCache(QObject* parent):QObject(parent) {setObjectName("gridProjectionCache");}
+    GridProjectionKey key;
+    bool valid=false;
+    std::array<std::vector<QLineF>,2> lines;
+};
+}
+
 void V2Viewport::DrawGrid(QPainter& painter) const
 {
     const auto& grid = session_->Scene().grid;
     if (!grid.visible || !display_.gridVisible || gridSuppressedByMode_) {
         return;
     }
+    auto* owner=const_cast<V2Viewport*>(this);
+    auto* cache=static_cast<GridProjectionCache*>(findChild<QObject*>("gridProjectionCache",Qt::FindDirectChildrenOnly));
+    if(!cache)cache=new GridProjectionCache(owner);
+    const GridProjectionKey key{mapping_.matrix,mapping_.widthPx,mapping_.heightPx,grid.majorSpacingMm,
+        grid.subdivision,grid.origin,grid.uDirection,grid.vDirection,workPlane_.origin,workPlane_.normal};
+    if(cache->valid&&cache->key==key) {
+        painter.save();painter.setBrush(Qt::NoBrush);
+        for(int i=0;i<2;++i){painter.setPen(QPen(i==0?palette_.gridMinor:palette_.gridMajor,1.0));
+            if(!cache->lines[i].empty())painter.drawLines(cache->lines[i].data(),int(cache->lines[i].size()));}
+        painter.restore();return;
+    }
+    cache->valid=false;for(auto& lines:cache->lines)lines.clear();
     const double pixelsPerMm = mapping_.PixelsPerMillimeterAt(workPlane_.origin);
     if (!(pixelsPerMm > 0.0)) {
         return;
@@ -70,7 +100,7 @@ void V2Viewport::DrawGrid(QPainter& painter) const
     // Grid paths contain independent open lines; never inherit a surface fill brush.
     painter.save();
     painter.setBrush(Qt::NoBrush);
-    const auto drawSet = [&](double spacingMm, const QColor& color) {
+    const auto drawSet = [&](double spacingMm, const QColor& color, int slot) {
         if (spacingMm * pixelsPerMm < 6.0) {
             return;
         }
@@ -80,7 +110,7 @@ void V2Viewport::DrawGrid(QPainter& painter) const
             return;
         }
         painter.setPen(QPen(color, 1.0));
-        std::vector<QLineF> lines;
+        auto& lines=cache->lines[slot];
         // Independent grid strokes do not need QPainterPath's path stroker/tessellator.
         // Clip before submitting: almost edge-on planes can project endpoints far outside the widget.
         const auto append=[&](QPointF a,QPointF b) {
@@ -122,11 +152,13 @@ void V2Viewport::DrawGrid(QPainter& painter) const
     if (majorPx >= 6.0) {
         // 副点: 0 = 主点のみ、2 = 1/2、3 = 1/3、4 = 1/4(V1 と同じ)。
         if (grid.subdivision >= 2) {
-            drawSet(majorMm / grid.subdivision, palette_.gridMinor);
+            drawSet(majorMm / grid.subdivision, palette_.gridMinor, 0);
         }
-        drawSet(majorMm, palette_.gridMajor);
+        drawSet(majorMm, palette_.gridMajor, 1);
     }
     painter.restore();
+    cache->key=key;cache->valid=true;
+    owner->setProperty("gridProjectionBuilds",owner->property("gridProjectionBuilds").toULongLong()+1);
 }
 
 //! 画面の四隅を作業平面へ戻して、見えている範囲を UV(グリッド原点から mm)で測る。

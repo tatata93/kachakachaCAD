@@ -650,6 +650,21 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         menu.addSeparator();
     }
     BuildToolContextActions(menu);
+    const auto candidate=viewport_->CurrentCandidate();
+    const auto* entity=candidate?session_->GetDocument().FindEntity(candidate->entityId):nullptr;
+    if(entity&&entity->kind==kachakacha::v2::domain::EntityKind::Wire&&!candidate->segmentId.IsNil()
+        &&candidate->kind==kachakacha::v2::app::SelectionElementKind::Edge) {
+        auto* remove=menu.addAction(QStringLiteral("この線分だけを削除"));
+        remove->setObjectName(QStringLiteral("deletePickedSegment"));
+        connect(remove,&QAction::triggered,this,[this,pick=*candidate] {
+            RunCommand("selection.activate");
+            kachakacha::v2::app::SelectionSet exact;
+            kachakacha::v2::app::SelectionRef ref;ref.entityId=pick.entityId;
+            ref.kind=pick.kind;ref.segmentId=pick.segmentId;ref.hitPoint=pick.hitPoint;
+            exact.entityIds={pick.entityId};exact.ordered={ref};viewport_->SetSelection(std::move(exact));
+            RunCommand("edit.delete");
+        });
+    }
     // 選んでいるものに対してできることを、その場に出す。
     // メニューに並べるのは台帳のコマンドだけ。ここで別の入口を作らない。
     // 別に作ると、押せるかどうかの判断も文言も二重になる。
@@ -985,11 +1000,13 @@ void V2MainWindow::RefreshRightShelves()
 
 bool V2MainWindow::ShelfShown(kachakacha::v2::app::Shelf shelf) const
 {
+    if (shelf == kachakacha::v2::app::Shelf::Grid) return gridDock_ && !gridDock_->isHidden();
     return operationHost_ != nullptr && operationHost_->Shows(shelf);
 }
 
 void V2MainWindow::ShowShelf(kachakacha::v2::app::Shelf shelf)
 {
+    if (shelf == kachakacha::v2::app::Shelf::Grid) { ShowGridDock(); return; }
     if (operationHost_ == nullptr || operationDock_ == nullptr) {
         return;
     }

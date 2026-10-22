@@ -121,6 +121,10 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    const auto inGrid = [this](QWidget* widget) {
+        return gridDock_ && widget && (widget == gridDock_ || gridDock_->isAncestorOf(widget));
+    };
+    if (inGrid(qobject_cast<QWidget*>(target)) || inGrid(QApplication::focusWidget())) return false;
     if (viewport_ && viewport_->ReferencePickPending()) {
         if (key == Qt::Key_Escape) { viewport_->CancelReferencePick(); return true; }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {

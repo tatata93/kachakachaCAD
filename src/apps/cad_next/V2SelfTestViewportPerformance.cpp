@@ -1,7 +1,9 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2GridDock.h"
 #include "kachakacha/modeling/GridModel.h"
+#include "kachakacha/app/OriginPlanes.h"
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -22,6 +24,12 @@
 #include <QPointF>
 #include <QToolButton>
 #include <QMouseEvent>
+#include <QKeyEvent>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QObject>
+#include <QDockWidget>
+#include <QScrollArea>
 #include <QString>
 #include <algorithm>
 #include <cmath>
@@ -81,6 +89,69 @@ bool GridVisibilityInteraction(V2MainWindow& window) {
     if(!Explain("grid switch keeps unfinished drawing and undo history",placed==1&&window.Session().PlacedPointCount()==placed
         &&window.Session().GetDocument().Revision()==revision))return false;
     window.SelectTool(modeling::DrawingTool::Select);Shot(window,"grid-on");return true;
+}
+bool PersistentGridControls(V2MainWindow& window) {
+    window.RunCommand("file.new");
+    auto* dock=dynamic_cast<V2GridDock*>(window.findChild<QDockWidget*>("gridDock"));
+    auto* spacing=window.findChild<QLineEdit*>("gridSpacing");
+    auto* details=window.findChild<QToolButton*>("gridDetails");
+    auto* body=window.findChild<QWidget*>("gridDetailsBody");
+    if(!dock||!spacing||!details||!body)return false;
+    for(const auto mode:app::AllUiModes()) {
+        window.SetMode(mode);QApplication::processEvents();
+        if(!Explain("grid settings persist in every mode",!dock->isHidden()&&!spacing->isHidden()&&dock->isAncestorOf(spacing)))return false;
+        auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
+        if(!Explain("frequent grid fields and details toggle are visible without scrolling",scroll
+            &&scroll->viewport()->rect().contains(details->mapTo(scroll->viewport(),details->rect().bottomRight()))))return false;
+    }
+    window.SetMode(app::UiMode::Drawing);window.SelectTool(modeling::DrawingTool::Line);
+    auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(100);
+    const auto start=view.Mapping().Project({-30,-30,0});if(!start)return false;view.ClickAt({start->x,start->y});
+    const auto revision=window.Session().GetDocument().Revision();const auto placed=window.Session().PlacedPointCount();
+    window.RunCommand("grid.edit");spacing->setText("25.4/8");
+    QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QApplication::sendEvent(spacing,&enter);
+    QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(spacing,&escape);
+    if(!Explain("real grid Enter/Escape never confirm/cancel drawing",window.Session().PlacedPointCount()==placed
+        &&placed==1&&window.Session().GetDocument().Revision()==revision
+        &&std::abs(window.Session().Scene().grid.majorSpacingMm-3.175)<1e-12))return false;
+    int changes=0;auto connection=window.Session().OnSceneChanged([&]{++changes;});
+    auto choice=window.CurrentGridChoice();window.ApplyGridChoice(choice);
+    choice.grid.visible=!choice.grid.visible;window.ApplyGridChoice(choice);
+    if(!Explain("view-only and identical grid settings do not replace scene",changes==0))return false;
+    spacing->setText("25.4/");choice=window.CurrentGridChoice();window.ApplyGridChoice(choice);
+    if(!Explain("display sync preserves unfinished expressions",spacing->text()=="25.4/"&&!dock->ApplySpacingExpression(spacing->text())&&changes==0))return false;
+    if(!dock->ApplySpacingExpression("2.5"))return false;
+    if(!Explain("new spacing replaces scene once and updates snapping grid",changes==1&&window.Session().Scene().grid.majorSpacingMm==2.5))return false;
+    details->setChecked(true);if(!Explain("advanced settings expand",!body->isHidden()))return false;
+    details->setChecked(false);if(!Explain("common settings remain after collapsing details",body->isHidden()&&!spacing->isHidden()))return false;
+    spacing->clearFocus();view.setFocus();window.SelectTool(modeling::DrawingTool::Select);
+    choice=window.CurrentGridChoice();choice.grid.originUmm=10.123456;window.ApplyGridChoice(choice);
+    const auto front=app::OriginPlaneId(window.Session().GetDocument().Snapshot(),modeling::StandardPlaneKind::ZX);
+    if(!front)return false;view.SetSelection(app::SelectionSet{{*front}});window.RunCommand("workplane.set_active");
+    const auto origin=window.Session().Scene().grid.origin;
+    auto* check=window.findChild<QCheckBox*>("gridVisibility");if(!check)return false;check->click();
+    if(!Explain("permanent grid follows plane changes without applying stale origin",window.CurrentGridChoice().grid.originUmm==0
+        &&window.Session().Scene().grid.origin==origin&&dock->Choice().grid.originUmm==0))return false;
+    Shot(window,"grid-persistent-settings");return true;
+}
+bool GridProjectionReuse(V2MainWindow& window) {
+    window.RunCommand("file.new");auto& view=window.Viewport();
+    auto choice=window.CurrentGridChoice();choice.grid.visible=true;choice.showInAllModes=true;
+    choice.grid.subdivision=4;window.ApplyGridChoice(choice);
+    view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(100);
+    const auto first=Frame(view);const auto builds=view.property("gridProjectionBuilds").toULongLong();
+    for(int i=0;i<5;++i)if(Frame(view)!=first)return false;
+    if(!Explain("unchanged grid reuses projected strokes",view.property("gridProjectionBuilds").toULongLong()==builds))return false;
+    for(int change=0;change<4;++change) {
+        if(change==0)view.SetViewCenter({12,8,0});
+        if(change==1)view.SetVisibleWidthMm(72);
+        if(change==2){choice.grid.originUmm=1.25;window.ApplyGridChoice(choice);}
+        if(change==3){choice.grid.majorSpacingMm=4;window.ApplyGridChoice(choice);}
+        const auto cached=Frame(view);
+        delete view.findChild<QObject*>("gridProjectionCache",Qt::FindDirectChildrenOnly);
+        if(!Explain("changed grid/camera matches a fresh projection exactly",cached==Frame(view)))return false;
+    }
+    return true;
 }
 bool SelectedWireContrast(V2MainWindow& window) {
     window.RunCommand("file.new");auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(200);

@@ -5,6 +5,7 @@
 //! 中身は動かしていない(欄の決め方も解き方も core の app/CursorInput にある)。
 
 #include "V2Viewport.h"
+#include "V2DrawingSelection.h"
 
 #include "kachakacha/app/CursorInput.h"
 
@@ -74,6 +75,7 @@ void V2Viewport::SetPreferredCursorField(const QString& fieldId)
 
 void V2Viewport::SyncCursorInputWithTool(bool placedPoint, bool committed)
 {
+    V2DrawingSelection::Of(*this).SyncInputs(*session_);
     // 最初の点を置いた直後に入力列を出す(ui-workflows §7)。確定したら閉じる。
     // ポリラインは確定せずに点が増えるので、置くたびに新しい基準で出し直す。
     if (committed || !session_->HasPlacedPoints()) {
@@ -172,6 +174,7 @@ void V2Viewport::DiscardHoverState()
 
 void V2Viewport::OnToolChanged()
 {
+    V2DrawingSelection::Of(*this).CancelInputs();
     CancelReferencePick();
     if (cursorPanel_.active) {
         CloseCursorInput();
@@ -275,6 +278,7 @@ bool V2Viewport::TypeIntoCursorField(const QString& text)
         return false;
     }
     cursorPanel_ = typed.Value();
+    V2DrawingSelection::Of(*this).ResumeInput();
     update();
     return true;
 }

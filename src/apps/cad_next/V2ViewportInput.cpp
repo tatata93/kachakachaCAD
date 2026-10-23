@@ -1,3 +1,4 @@
+#include "V2DrawingSelection.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
 //! ここに集めたのは、V1にあって V2 に無かったものである。
@@ -225,11 +226,13 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
             CancelPointPick();
             break;
         case kachakacha::v2::app::EscapeStep::CloseCursorInput:
+            V2DrawingSelection::Of(*this).CancelInputs();
             CloseCursorInput();
             session_->CancelTool();
             hover_.preview.clear();
             break;
         case kachakacha::v2::app::EscapeStep::CancelDrawing:
+            V2DrawingSelection::Of(*this).CancelInputs();
             session_->CancelTool();
             hover_.preview.clear();
             break;
@@ -534,13 +537,15 @@ void V2Viewport::PressRightWithoutMoving(const QPointF& position)
     // Every tool uses the same contextual actions and candidate chooser.
     RefreshPickCycle(position);
     const bool selecting = session_->CurrentTool()
-        == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_ || ReferencePickPending();
+        == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_ || ReferencePickPending()
+        || V2DrawingSelection::CanSelect(*session_,*this);
     const auto labels = selecting && cycle_.candidates.size() >= 2
         ? CandidateLabels() : std::vector<QString>{};
     const QScopedValueRollback<bool> menuOpen(candidateMenuOpen_,true);
     const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
     if (chosen.has_value() && *chosen >= 0) {
         (void)SelectCandidate(static_cast<std::size_t>(*chosen));
+        if(V2DrawingSelection::CanSelect(*session_,*this))V2DrawingSelection::Of(*this).Select();
     }
 }
 
@@ -1369,6 +1374,13 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) return;
     if (ReferencePickPending()) {
         SelectAt(event->position(), event->modifiers());
+        return;
+    }
+    if (event->button()==Qt::LeftButton && (event->modifiers()&Qt::ControlModifier)
+        && V2DrawingSelection::CanSelect(*session_,*this)) {
+        BeginBoxSelect(event->position(),event->modifiers());
+        SelectAt(event->position(),event->modifiers());
+        V2DrawingSelection::Of(*this).Select();
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

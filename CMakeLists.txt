@@ -1232,6 +1232,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2Calculation.cpp
         src/apps/cad_next/V2PreparedDocument.cpp
         src/apps/cad_next/V2RenderSelection.cpp
+        src/apps/cad_next/V2DrawingSelection.cpp
         src/apps/cad_next/V2NavigatorHighlight.cpp
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp
@@ -1313,6 +1314,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestDimension.cpp
         src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2SelfTestEdit.cpp
+        src/apps/cad_next/V2SelfTestDrawingSelection.cpp
         src/apps/cad_next/V2ExportCommands.cpp
         src/apps/cad_next/V2GenerationCommands.cpp
         src/apps/cad_next/V2FabricationGenerationUi.cpp

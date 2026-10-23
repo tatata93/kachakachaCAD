@@ -1,3 +1,4 @@
+#include "V2DrawingSelection.h"
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
 #include "V2NavigatorHighlight.h"
@@ -936,6 +937,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     }
 
     selection_ = std::move(selection);
+    if(selection_.entityIds.empty())V2DrawingSelection::Of(*this).ResumeInput();
     V2RenderSelectionOf(*this).Update(selection_);
     ApplyVisibilityFilter();
     if (selectionChangedCallback_) {
@@ -1119,6 +1121,7 @@ void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers 
 
 void V2Viewport::ClickAt(const QPointF& position)
 {
+    V2DrawingSelection::Of(*this).ResumeInput();
     if (ReferencePickPending()) { SelectAt(position, Qt::NoModifier); return; }
     if (pickHandler_) {
         // 1回だけ拾う。拾ったら道具へ戻す。押しっぱなしにしない。
@@ -1239,6 +1242,7 @@ void V2Viewport::CancelTool()
         CancelPointPick();
         return;
     }
+    V2DrawingSelection::Of(*this).CancelInputs();
     session_->CancelTool();
     // core は持ち越しを捨てている(DrawingSession::CancelTool)。画面も同じ所まで戻す。
     // preview だけ消すと、取り消したのに前のリングと候補送りが残り、
@@ -1287,7 +1291,8 @@ bool V2Viewport::event(QEvent* event)
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         if ((keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)
             && !(keyEvent->key() == Qt::Key_Delete && !selection_.entityIds.empty()
-                && !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_))) {
+                && (V2DrawingSelection::Of(*this).SelectionDelete()
+                    || !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)))) {
             event->accept();
             return true;
         }
@@ -1300,6 +1305,8 @@ bool V2Viewport::EditCursorFieldForKey(int key)
     if (!cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
         return false;
     }
+    if(key==Qt::Key_Delete && !selection_.entityIds.empty()
+        && V2DrawingSelection::Of(*this).SelectionDelete())return false;
     if (!kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)
         && (key == Qt::Key_Backspace || !selection_.entityIds.empty())) return false;
     const std::size_t at = cursorPanel_.focusedIndex;

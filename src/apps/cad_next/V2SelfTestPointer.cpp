@@ -89,10 +89,12 @@ void PressDragRelease(V2Viewport& viewport, const QPointF& from,
 //! 線を1本引いて、その真ん中の画面位置を返す。
 [[nodiscard]] std::optional<QPointF> DrawOneLineAndPickMiddle(V2MainWindow& window)
 {
-    if (!DrawLine(window, Vector3{0.0, 0.0, 0.0}, Vector3{40.0, 0.0, 0.0})) {
+    // Keep the grabbed edge below/left of the navigator on narrow native Windows layouts.
+    // Navigator clicks intentionally take priority; they are covered by NavigationCases.
+    if (!DrawLine(window, Vector3{-40.0, -20.0, 0.0}, Vector3{0.0, -20.0, 0.0})) {
         return std::nullopt;
     }
-    const auto middle = window.Viewport().Mapping().Project(Vector3{20.0, 0.0, 0.0});
+    const auto middle = window.Viewport().Mapping().Project(Vector3{-20.0, -20.0, 0.0});
     if (!middle.has_value()) {
         return std::nullopt;
     }

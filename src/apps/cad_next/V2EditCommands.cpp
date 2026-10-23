@@ -4,6 +4,7 @@
 // 欄と定義の往復は core(app/MeasurePanel, app/EntityEdit)が持ち、ここは
 // 選んでいるものを core へ渡し、返った定義を文書へ入れるだけ。
 #include "V2MainWindow.h"
+#include "V2DrawingSelection.h"
 #include "V2DimensionTool.h"
 
 #include "kachakacha/app/EntityEdit.h"
@@ -148,7 +149,9 @@ std::string ShapeInputs(const kachakacha::v2::document::DocumentSnapshot& snapsh
 
 void V2MainWindow::RunHistoryCommand(bool undo)
 {
-    if(undo&&viewport_->StepBackInputPoint())return;
+    auto& drawingSelection=V2DrawingSelection::Of(*viewport_);
+    if(undo&&!drawingSelection.PreferDocumentUndo(*session_)&&viewport_->StepBackInputPoint())return;
+    const auto beforeRevision=session_->GetDocument().Revision();
     const auto oldGeometry=ShapeInputs(session_->GetDocument().Snapshot());
     const bool hadErrors=!rebuildProblems_.isEmpty();
     // Keep the pre-history native edge identities until AdoptCurrentDocument
@@ -159,7 +162,8 @@ void V2MainWindow::RunHistoryCommand(bool undo)
                        : QStringLiteral("やり直せる操作がありません。"));
         return;
     }
-    session_->CancelTool();
+    drawingSelection.HistoryMoved(*session_,undo,beforeRevision);
+    if(!V2DrawingSelection::IsDrawing(session_->CurrentTool()))session_->CancelTool();
     // 文書だけ戻して場面を作り直さないと、消したはずの線が画面に残り、
     // 立体も古いままになる。文書が変わったあとの後始末を全部通す。
     //

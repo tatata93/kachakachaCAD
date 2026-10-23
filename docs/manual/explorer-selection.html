@@ -2,6 +2,14 @@
 <title>重なる線の選択と左一覧 | kachakachaCAD</title>
 <style>body{font:16px/1.8 "Yu Gothic UI",sans-serif;max-width:980px;margin:32px auto;padding:0 24px;color:#233443}h1,h2{line-height:1.4}svg{width:100%;background:#f3f6f8;border:1px solid #bcc7cd}li{margin:8px 0}.note{padding:14px;background:#edf4f7}a{color:#125e94}figure{margin:24px 0}figure img{max-width:100%;height:auto;border:1px solid #89939b}figcaption{font-size:14px;color:#4d5962}kbd{border:1px solid #aaa;padding:1px 5px}</style>
 <p><a href="../manual.html">説明書へ戻る</a></p><h1>重なる線を選び分け、左一覧の表示を整理する</h1>
+<h2 id="drawing-delete">作図を続けながら線を選んで削除する</h2>
+<p>直線・折れ線・円・円弧・矩形・点・ベジェ・スプライン・2点を結ぶ道具では、選択モードへ切り替える必要はありません。</p>
+<ol><li>線の道具で始点を置きます。必要なら長さなどの数値を入力します。</li><li>削除したい線の途中を<kbd>Ctrl</kbd>を押しながらクリックします。選んだ線分が橙色になります。別の線分もCtrl＋クリックで追加でき、同じ線分をもう一度押すと解除できます。</li><li><kbd>Delete</kbd>で選んだ線分を削除します。残す線分、入力途中の点、入力済みの数値、現在の道具はそのままです。参照する面なども消えるときは、名前の一覧と赤い3D表示を確認して削除または取消を選びます。</li><li>通常のクリックで次の点を置き、続けて作図します。重なる線は右クリックの「この場所の候補」から選ぶか、「この線分だけを削除」を使えます。</li></ol>
+<figure><img src="images/v2-drawing-select.png" alt="直線を作図中にCtrlクリックで横の線分を選択"><figcaption>1：長さ12.5mmを入力したまま、既存の横線をCtrl＋クリック。右ペインは直線ツールのままです。</figcaption></figure>
+<figure><img src="images/v2-drawing-delete.png" alt="選んだ横線を削除しても始点と数値入力が残る"><figcaption>2：Delete後。隣の縦線と、入力途中の始点・長さ12.5mmは残ります。</figcaption></figure>
+<figure><img src="images/v2-drawing-continue.png" alt="通常クリックで次の点を置き作図を継続"><figcaption>3：次の点をクリックして直線を作成。選択モードへの往復は不要です。</figcaption></figure>
+<p class="note"><b>選ぶ範囲：</b>Ctrl＋クリックは線分単位。Ctrl＋ドラッグはワイヤー全体の範囲選択です。左から右は枠に全体が入ったもの、右から左は枠に触れたものを含みます。線分だけ消したい場合はクリックを使います。</p>
+<p><b>数値編集と戻す順序：</b>Ctrl選択後はDeleteが線の削除になります。数値を打ち直した後や実際の文字入力欄にカーソルがある場合は、Deleteは文字の編集になります。Ctrl＋Zは「点→削除」の順なら削除を先に、「削除→点」の順なら点を先に戻します。Escは入力を取り消して道具を維持します。押し出しや面取りなどの入力対象を選んでいる間は、その道具の役割選択に従います。</p>
 <h2>重なる線は右クリックから選ぶ</h2>
 <ol><li>選択したい線が重なる場所へカーソルを置きます。3Dビューに「重なり ○件」の案内が出ます。</li><li>右クリックすると、上部の「この場所の候補」に名前・線の区間・グループが並びます。同名の候補には番号が付きます。</li><li>一覧の候補へマウスを合わせます。その候補だけが3Dビューで強調表示されます。この時点では選択を確定しません。</li><li>狙った線をクリックして確定します。間違っていたら別の候補を選び直せます。メニューを取り消しても文書は変わりません。</li></ol>
 <figure><img src="images/v2-overlap-candidates-menu.png" alt="重なる2本の直線を候補一覧で選び分ける実メニュー"><figcaption>重なる直線2本を用意したQt操作試験の実メニュー。候補の名前を確認できます。</figcaption></figure><figure><img src="images/v2-overlap-candidates-highlight.png" alt="メニューで指した候補を強調した実画面"><figcaption>同じ試験で候補にマウスを合わせた3D画面。メニューとビューは別々のウィンドウを撮影しています。</figcaption></figure>

@@ -180,6 +180,10 @@ void V2DrawingDock::BuildCommonAndActions(QVBoxLayout* layout, QWidget* page)
     snap_->setToolTip(QStringLiteral("点・線の端・交点へ吸い付けます。状態行の Snap と同じ切り替えで、"
                                      "S を押している間だけ止めることもできます。"));
     layout->addWidget(snap_);
+    auto* selectHelp = new QLabel(QStringLiteral("作図中も Ctrl＋クリックで線分を選択、Deleteで削除。\nCtrl＋ドラッグはワイヤー全体を範囲選択します。"), page);
+    selectHelp->setWordWrap(true);
+    selectHelp->setToolTip(QStringLiteral("作図途中の点・数値は残ります。重なる線は右クリックの候補から選べます。"));
+    layout->addWidget(selectHelp);
     QObject::connect(snap_, &QCheckBox::toggled, this, [this](bool on) {
         if (!loading_ && snapHandler_) {
             snapHandler_(on);

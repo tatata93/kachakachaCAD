@@ -3,6 +3,7 @@
 // Selection deletion is prepared without touching the document, previewed, then committed atomically.
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2DrawingSelection.h"
 #include "V2EntityTree.h"
 #include <QTreeWidgetItem>
 #include "kachakacha/document/Commands.h"
@@ -22,7 +23,7 @@ using namespace kachakacha::v2;
 class DeletePlan final : public document::DocumentCommand {
 public:
     explicit DeletePlan(document::DocumentSnapshot after):after_(std::move(after)){}
-    std::string Label() const override {return "選択と参照先を削除";}
+    std::string Label() const override {return V2DrawingSelection::DeleteLabel;}
     std::vector<base::Diagnostic> Apply(document::DocumentSnapshot& current) const override {
         if(current.id!=after_.id||current.revision!=after_.revision)
             return {base::MakeError("DOC-C001","削除の確認中に文書が変わりました。選び直してください。")};
@@ -149,9 +150,12 @@ void V2MainWindow::DeleteSelected()
     }
     if(keepContents){after=before;for(const auto id:folders){const auto diagnostics=document::RemoveGroupCommand(id).Apply(after);
         for(const auto& d:diagnostics)if(d.IsError()){ReportDiagnostics(diagnostics);return;}}}
+    const bool hadUndo=session_->GetDocument().CanUndo();
     const auto result=session_->GetDocument().Run(DeletePlan(std::move(after)));
     if(!result.committed){ReportDiagnostics(result.diagnostics);return;}
-    session_->CancelTool();AdoptCurrentDocument();RefreshShapeViews();RefreshEntityList();
+    V2DrawingSelection::Of(*viewport_).Deleted(*session_,before.revision,hadUndo);
+    if(!V2DrawingSelection::IsDrawing(session_->CurrentTool()))session_->CancelTool();
+    AdoptCurrentDocument();RefreshShapeViews();RefreshEntityList();
     SetStatus(keepContents?QStringLiteral("グループを解除しました。中身は残っています。Ctrl+Zで戻せます。"):
         QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));
 }

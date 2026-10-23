@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "selected": [
+    "HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",
+    "HP-DSEL-02 drawing tools multiple segments empty deletion",
+    "HP-DSEL-03 input and deletion history order save boundary",
+    "HP-DSEL-04 unrelated document Undo Redo cannot impersonate deletion",
+    "HP-DSEL-05 Ctrl window selects whole wire",
+    "HP-DSEL-06 Ctrl crossing selects whole wire",
+    "HP-DSEL-07 numeric input point pick reference pick native text and Escape",
+    "HP-DSEL-08 right click segment Delete keeps drawing",
+    "HP-DSEL-09 dependent context deletion cancel keeps drawing",
+    "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes"
+  ],
+  "total": 10,
+  "failed": 0,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 2018.4322,
+      "end": "2026-10-23T15:57:45.120Z",
+      "name": "HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",
+      "start": "2026-10-23T15:57:43.102Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1726.4529,
+      "end": "2026-10-23T15:57:46.847Z",
+      "name": "HP-DSEL-02 drawing tools multiple segments empty deletion",
+      "start": "2026-10-23T15:57:45.121Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 795.8923,
+      "end": "2026-10-23T15:57:47.644Z",
+      "name": "HP-DSEL-03 input and deletion history order save boundary",
+      "start": "2026-10-23T15:57:46.848Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 754.7012,
+      "end": "2026-10-23T15:57:48.400Z",
+      "name": "HP-DSEL-04 unrelated document Undo Redo cannot impersonate deletion",
+      "start": "2026-10-23T15:57:47.645Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 713.7429,
+      "end": "2026-10-23T15:57:49.114Z",
+      "name": "HP-DSEL-05 Ctrl window selects whole wire",
+      "start": "2026-10-23T15:57:48.400Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 762.7555,
+      "end": "2026-10-23T15:57:49.877Z",
+      "name": "HP-DSEL-06 Ctrl crossing selects whole wire",
+      "start": "2026-10-23T15:57:49.114Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 702.4712,
+      "end": "2026-10-23T15:57:50.579Z",
+      "name": "HP-DSEL-07 numeric input point pick reference pick native text and Escape",
+      "start": "2026-10-23T15:57:49.878Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 826.0466,
+      "end": "2026-10-23T15:57:51.407Z",
+      "name": "HP-DSEL-08 right click segment Delete keeps drawing",
+      "start": "2026-10-23T15:57:50.580Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 754.3704,
+      "end": "2026-10-23T15:57:52.161Z",
+      "name": "HP-DSEL-09 dependent context deletion cancel keeps drawing",
+      "start": "2026-10-23T15:57:51.407Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2176.7331,
+      "end": "2026-10-23T15:57:54.338Z",
+      "name": "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes",
+      "start": "2026-10-23T15:57:52.161Z",
+      "status": "passed"
+    }
+  ]
+}

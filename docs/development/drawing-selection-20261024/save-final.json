@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "selected": [
+    "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes"
+  ],
+  "total": 1,
+  "failed": 0,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 3495.472,
+      "end": "2026-10-23T16:00:53.180Z",
+      "name": "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes",
+      "start": "2026-10-23T16:00:49.684Z",
+      "status": "passed"
+    }
+  ]
+}

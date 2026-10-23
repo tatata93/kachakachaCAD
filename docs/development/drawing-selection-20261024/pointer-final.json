@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "selected": [
+    "HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",
+    "HP-DSEL-02 drawing tools multiple segments empty deletion",
+    "HP-DSEL-03 input and deletion history order save boundary",
+    "HP-DSEL-04 unrelated document Undo Redo cannot impersonate deletion",
+    "HP-DSEL-05 Ctrl window selects whole wire",
+    "HP-DSEL-06 Ctrl crossing selects whole wire",
+    "HP-DSEL-07 numeric input point pick reference pick native text and Escape",
+    "HP-DSEL-08 right click segment Delete keeps drawing",
+    "HP-DSEL-09 dependent context deletion cancel keeps drawing",
+    "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes",
+    "HP-INT-04 surface and revolve buttons restore panes without applying",
+    "HP-INT-03 workplane tool-first and common keys",
+    "HP-INT-01 context actions preserve unfinished input",
+    "HP-INT-02 activation and explicit apply across entry points",
+    "手ぶれでは選んだ物が動かない",
+    "引きずれば選んだ物が動く",
+    "引きずって戻して離してもクリックにしない",
+    "右でなぞった後は献立を出さない",
+    "カーソルの形が仕様どおり",
+    "画面を動かしても文書と選択が変わらない",
+    "中ボタンでは掴みが終わらない",
+    "画面を送っても引きかけの線が残る",
+    "送っている最中の左押しでは点が置かれない",
+    "どの道具でも震えたクリックは普通のクリックと同じ",
+    "どの道具でも替えたら前の途中経過が消える",
+    "掴めないと言う線は押しても拾えない",
+    "診断情報をコピーできる",
+    "診断の各欄が道具に追従する",
+    "道具を続けて替えても前の状態が残らない",
+    "押し出しが選択を読んで次を案内する",
+    "道具を替えると前の吸着と候補送りが消える",
+    "場面を差し替えると吸着の持ち越しが消える",
+    "取り消した直後に古いリングが残らない"
+  ],
+  "total": 33,
+  "failed": 0,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 2007.3527,
+      "end": "2026-10-23T15:56:56.465Z",
+      "name": "HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",
+      "start": "2026-10-23T15:56:54.458Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1456.0474,
+      "end": "2026-10-23T15:56:57.922Z",
+      "name": "HP-DSEL-02 drawing tools multiple segments empty deletion",
+      "start": "2026-10-23T15:56:56.465Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 712.4422,
+      "end": "2026-10-23T15:56:58.635Z",
+      "name": "HP-DSEL-03 input and deletion history order save boundary",
+      "start": "2026-10-23T15:56:57.922Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 650.3292,
+      "end": "2026-10-23T15:56:59.285Z",
+      "name": "HP-DSEL-04 unrelated document Undo Redo cannot impersonate deletion",
+      "start": "2026-10-23T15:56:58.636Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 641.8778,
+      "end": "2026-10-23T15:56:59.928Z",
+      "name": "HP-DSEL-05 Ctrl window selects whole wire",
+      "start": "2026-10-23T15:56:59.287Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 657.6509,
+      "end": "2026-10-23T15:57:00.587Z",
+      "name": "HP-DSEL-06 Ctrl crossing selects whole wire",
+      "start": "2026-10-23T15:56:59.929Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 666.9502,
+      "end": "2026-10-23T15:57:01.254Z",
+      "name": "HP-DSEL-07 numeric input point pick reference pick native text and Escape",
+      "start": "2026-10-23T15:57:00.588Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 682.2593,
+      "end": "2026-10-23T15:57:01.937Z",
+      "name": "HP-DSEL-08 right click segment Delete keeps drawing",
+      "start": "2026-10-23T15:57:01.255Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 651.929,
+      "end": "2026-10-23T15:57:02.590Z",
+      "name": "HP-DSEL-09 dependent context deletion cancel keeps drawing",
+      "start": "2026-10-23T15:57:01.938Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2219.6338,
+      "end": "2026-10-23T15:57:04.810Z",
+      "name": "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes",
+      "start": "2026-10-23T15:57:02.590Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 737.5267,
+      "end": "2026-10-23T15:57:05.549Z",
+      "name": "HP-INT-04 surface and revolve buttons restore panes without applying",
+      "start": "2026-10-23T15:57:04.811Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 598.6841,
+      "end": "2026-10-23T15:57:06.148Z",
+      "name": "HP-INT-03 workplane tool-first and common keys",
+      "start": "2026-10-23T15:57:05.549Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 630.1198,
+      "end": "2026-10-23T15:57:06.779Z",
+      "name": "HP-INT-01 context actions preserve unfinished input",
+      "start": "2026-10-23T15:57:06.148Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 882.08,
+      "end": "2026-10-23T15:57:07.661Z",
+      "name": "HP-INT-02 activation and explicit apply across entry points",
+      "start": "2026-10-23T15:57:06.779Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 537.036,
+      "end": "2026-10-23T15:57:08.198Z",
+      "name": "手ぶれでは選んだ物が動かない",
+      "start": "2026-10-23T15:57:07.662Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 563.1159,
+      "end": "2026-10-23T15:57:08.763Z",
+      "name": "引きずれば選んだ物が動く",
+      "start": "2026-10-23T15:57:08.199Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 566.0537,
+      "end": "2026-10-23T15:57:09.329Z",
+      "name": "引きずって戻して離してもクリックにしない",
+      "start": "2026-10-23T15:57:08.763Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 540.2424,
+      "end": "2026-10-23T15:57:09.869Z",
+      "name": "右でなぞった後は献立を出さない",
+      "start": "2026-10-23T15:57:09.330Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 647.0271,
+      "end": "2026-10-23T15:57:10.517Z",
+      "name": "カーソルの形が仕様どおり",
+      "start": "2026-10-23T15:57:09.870Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 597.7507,
+      "end": "2026-10-23T15:57:11.116Z",
+      "name": "画面を動かしても文書と選択が変わらない",
+      "start": "2026-10-23T15:57:10.518Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 596.9845,
+      "end": "2026-10-23T15:57:11.714Z",
+      "name": "中ボタンでは掴みが終わらない",
+      "start": "2026-10-23T15:57:11.117Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 569.5968,
+      "end": "2026-10-23T15:57:12.283Z",
+      "name": "画面を送っても引きかけの線が残る",
+      "start": "2026-10-23T15:57:11.714Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 563.9623,
+      "end": "2026-10-23T15:57:12.848Z",
+      "name": "送っている最中の左押しでは点が置かれない",
+      "start": "2026-10-23T15:57:12.284Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1527.6983,
+      "end": "2026-10-23T15:57:14.376Z",
+      "name": "どの道具でも震えたクリックは普通のクリックと同じ",
+      "start": "2026-10-23T15:57:12.848Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 695.1617,
+      "end": "2026-10-23T15:57:15.072Z",
+      "name": "どの道具でも替えたら前の途中経過が消える",
+      "start": "2026-10-23T15:57:14.376Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 612.4186,
+      "end": "2026-10-23T15:57:15.685Z",
+      "name": "掴めないと言う線は押しても拾えない",
+      "start": "2026-10-23T15:57:15.072Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 612.9641,
+      "end": "2026-10-23T15:57:16.298Z",
+      "name": "診断情報をコピーできる",
+      "start": "2026-10-23T15:57:15.685Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 601.4728,
+      "end": "2026-10-23T15:57:16.901Z",
+      "name": "診断の各欄が道具に追従する",
+      "start": "2026-10-23T15:57:16.299Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 600.7303,
+      "end": "2026-10-23T15:57:17.502Z",
+      "name": "道具を続けて替えても前の状態が残らない",
+      "start": "2026-10-23T15:57:16.901Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 618.0335,
+      "end": "2026-10-23T15:57:18.120Z",
+      "name": "押し出しが選択を読んで次を案内する",
+      "start": "2026-10-23T15:57:17.502Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 698.092,
+      "end": "2026-10-23T15:57:18.819Z",
+      "name": "道具を替えると前の吸着と候補送りが消える",
+      "start": "2026-10-23T15:57:18.121Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1454.7047,
+      "end": "2026-10-23T15:57:20.274Z",
+      "name": "場面を差し替えると吸着の持ち越しが消える",
+      "start": "2026-10-23T15:57:18.820Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 614.141,
+      "end": "2026-10-23T15:57:20.889Z",
+      "name": "取り消した直後に古いリングが残らない",
+      "start": "2026-10-23T15:57:20.275Z",
+      "status": "passed"
+    }
+  ]
+}

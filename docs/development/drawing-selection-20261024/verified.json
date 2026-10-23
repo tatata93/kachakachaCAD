@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "mode": "full",
+  "status": "passed",
+  "start": "2026-10-23T16:28:16.729270+00:00",
+  "end": "2026-10-23T16:57:17.881671+00:00",
+  "ctest": {
+    "total": 195,
+    "skipped": []
+  },
+  "ui_cases": [
+    576,
+    576
+  ],
+  "zip_sha256": "ba2fe4e4ec309bb6310e876f0240081eb31a63f7ad338f0bcf9bd07a61e53298",
+  "source": {
+    "commit": "7cc00e419393cf08e2a93f0943772aefcea8042a",
+    "sha256": "9369cb8e61f8978f96287da82d2cb886a066b1cf6e0f0bbd9468174da51825fa"
+  },
+  "exe_sha256": "f2d5a493c81d3c1fe020fd777acc038da30325f50e0225c0b5e8531062a0247f",
+  "ctest_seconds": 1661.49,
+  "startup": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 760,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1180
+  },
+  "release": "out/releases/drawing-selection-release-20261024",
+  "failed_or_aborted_runs": [
+    "drawing-selection-verified-20261024",
+    "drawing-selection-final-20261024"
+  ]
+}

@@ -43,6 +43,7 @@ void Click(V2Viewport& v,geometry::Vector3 point,Qt::KeyboardModifiers modifiers
 }
 void Key(V2Viewport& v,int key,Qt::KeyboardModifiers modifiers=Qt::NoModifier,QString text={})
 {
+    if(!v.window()->isActiveWindow()){v.window()->activateWindow();QApplication::processEvents();}
     v.setFocus();QKeyEvent press(QEvent::KeyPress,key,modifiers,text);
     QApplication::sendEvent(&v,&press);
     QKeyEvent release(QEvent::KeyRelease,key,modifiers);QApplication::sendEvent(&v,&release);
@@ -65,7 +66,10 @@ void Shot(V2MainWindow& w,const char* name)
 }
 bool Inputs(V2MainWindow& w,std::size_t count,std::size_t curves)
 {
-    return Explain("draft and geometry agree",w.Session().CurrentTool()==T::Line
+    const auto detail="draft and geometry agree (points="+std::to_string(w.Session().PlacedPointCount())+"/"+std::to_string(count)
+        +", curves="+std::to_string(w.Session().Scene().curves.size())+"/"+std::to_string(curves)
+        +", tool="+std::to_string(static_cast<int>(w.Session().CurrentTool()))+")";
+    return Explain(detail.c_str(),w.Session().CurrentTool()==T::Line
         &&w.Session().PlacedPointCount()==count&&w.Session().Scene().curves.size()==curves);
 }
 bool SelectDeleteContinue(V2MainWindow& w)
@@ -154,7 +158,8 @@ bool CancelAndReopen(V2MainWindow& w)
     v.CancelTool();if(!w.Session().GetDocument().CanRedo())return false;
     w.RunCommand("file.open");if(w.Session().GetDocument().CanRedo())return false;
     w.SelectTool(T::Line);v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(180);
-    Click(v,{-40,-30,0});Click(v,{-20,20,0},Qt::ControlModifier);Key(v,Qt::Key_Delete);
+    Click(v,{-40,-30,0});Click(v,{-20,20,0},Qt::ControlModifier);
+    Key(v,Qt::Key_Delete);
     w.RunCommand("edit.undo");return Inputs(w,1,2);
 }
 bool BoxSelection(V2MainWindow& w,bool crossing)

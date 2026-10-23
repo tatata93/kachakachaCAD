@@ -1,0 +1,15 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>クハ115-1000 長野色 1/80 — 部位別印刷モデル</title>
+<style>body{font:17px/1.8 system-ui,sans-serif;color:#203443;background:#edf2f3;margin:0}main{max-width:1150px;margin:auto;padding:32px}h1{line-height:1.4}section{background:white;border-radius:8px;padding:24px;margin:24px 0}img{width:100%;height:auto;border:1px solid #d7e0e3}a{color:#145d89}small{display:block}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ccd7db;text-align:left;padding:10px}.note{border-left:5px solid #cc9d40;padding:12px;background:#fff9ed}.links{display:flex;gap:20px;flex-wrap:wrap}</style>
+<main><h1>クハ115-1000 長野色<br>1/80・先頭車を部位別に印刷する</h1>
+<p>リニューアル後・黒Hゴム・集中冷房の代表形。窓を抜いた車体、曲面に沿う前面窓、Hゴム、側面サッシと中桟、屋根・床下・展示用台車・室内を編集可能なCAD部品で作成。</p>
+<p class="note">主要寸法は公開資料に合わせ、局所形状・窓配置・色は推定を含みます。特定車番の実測精密模型ではありません。実物の印刷・組立・走行は未確認です。</p>
+<section><h2>モデルと印刷データ</h2><div class="links"><a href="kuha115-1000-nagano-1-80.kcd2">通常版 KCD2</a><a href="kuha115-1000-nagano-1-80-split.kcd2">小型プリンタ版 KCD2</a><a href="../../out/models/series115-nagano-print-20261023.zip">部位別STL・STEP ZIP</a><a href="README.md">寸法・出典・組立手順</a></div>
+<p>通常版129部品。分割版134部品。分割版は車体・屋根・床板・室内トレーを前後に分け、最長約123.75mmに抑えています。透明板・真鍮線などへの置換も想定しています。</p>
+<img src="model-preview.png" alt="実際にCADから出力した形状による塗装と分解の説明図"><small>CAD出力STLの実形状に、説明用の長野色を付けたレンダリング。実CAD画面や物理印刷品ではありません。</small></section>
+<section><h2>どのグループを印刷するか</h2><table><tr><th>グループ</th><th>部位と用途</th></tr><tr><td>01 / 02</td><td>窓抜き車体・雨樋・取付桟 / 取外し式屋根</td></tr><tr><td>03 / 04</td><td>銀サッシ・中桟 / 裏貼り透明板</td></tr><tr><td>05 / 06</td><td>客扉・手すり / 前面Hゴム・貫通扉・灯具・ワイパー</td></tr><tr><td>07 / 08</td><td>AU75・通風器・アンテナ / 床板</td></tr><tr><td>09 / 10 / 11</td><td>吊り脚付き床下機器 / 心皿付き固定台車 / 脚・座席一体の室内トレー</td></tr><tr><td>12</td><td>埋込み三面図。参照のみ</td></tr><tr><td>13</td><td>小型プリンタ用の8分割部品＋床板添え板。01/02/08/11の代わりに使用</td></tr></table>
+<p>ZIP内のSTLは部位別フォルダーへ整理し、各部品のXY中央・最下点Z=0へ移動済み。STEPは組立座標を保持。部品表とUUIDで対応を追えます。サポート、傾斜、収縮補正は使用プリンタに合わせて設定してください。</p></section>
+<section><h2>自作三面図をCADへ埋め込む</h2><img src="three-view.png" alt="自作した正面・側面・上面の寸法基準三面図"><p>車体長243.750mm、幅36.875mm、屋根高45.675mm。三面を0.1mm/pixelで埋め込み、グループ12で表示を切り替えます。主要寸法以外の線は推定です。</p></section>
+<section><h2>検証済み配布CADでの実画面</h2><img src="cad-screen.png" alt="Windows版CADで実際にモデルを開いた画面"><p>Windowsの通常起動・イベントループ・描画を確認。部品属性の色名は保存していますが、現行CAD画面の部品は灰色表示です。上の塗装説明図とは区別してください。</p>
+<p>全対象部品の閉ソリッド・正の体積・寸法、STEP再読込、STLの穴・辺の向き・退化・体積を確認。分割8部品を再結合し、分割前の4部位と同じ形状になるかも検査しています。</p><div class="links"><a href="validation-summary.json">検証集計</a><a href="validation-main.json">通常版の部品検査</a><a href="validation-split.json">分割版と再結合の検査</a></div></section>
+</main></html>

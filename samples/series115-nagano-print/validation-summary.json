@@ -1,0 +1,159 @@
+{
+  "status": "passed",
+  "createdAt": "2026-10-23T14:02:28.141737+00:00",
+  "productCommit": "38dd139eb",
+  "productRelease": "camera-navigator-verified-20261023",
+  "productExeSha": "e697806e4890c4e81821a828258c1f121930a34c8e90e1d6e61a11136da33d9d",
+  "nativeExporterSha": "1401860f0a474a2050d723d0f3e573adfa093acd2542d2232bb6a1a22bc64b70",
+  "environment": {
+    "platform": "Windows 10 x64",
+    "compiler": "MSVC 19.44.35228",
+    "qt": "6.9.2",
+    "exportChordMm": 0.025,
+    "exportAngularRad": 0.12
+  },
+  "desktop": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 760,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1180
+  },
+  "negativeChecks": [
+    {
+      "case": "empty-manifest",
+      "exit": 1,
+      "rejected": true
+    },
+    {
+      "case": "empty-stl",
+      "exit": 1,
+      "rejected": true
+    },
+    {
+      "case": "reversed-triangle",
+      "exit": 1,
+      "rejected": true
+    },
+    {
+      "case": "empty-design",
+      "exit": 5,
+      "rejected": true
+    }
+  ],
+  "models": {
+    "main": {
+      "file": "kuha115-1000-nagano-1-80.kcd2",
+      "modelSha": "72613f89d9bd890d7e4987399c1ccb99ea6c8593a4766df368a1af51edc7d048",
+      "nativeRebuild": {
+        "ok": true,
+        "token": "33e4f816-8dd8-429e-b22a-0ae1c7288197",
+        "version": 1,
+        "exit": 0,
+        "seconds": 20.235000000044238,
+        "exeSha": "e697806e4890c4e81821a828258c1f121930a34c8e90e1d6e61a11136da33d9d",
+        "modelSha": "72613f89d9bd890d7e4987399c1ccb99ea6c8593a4766df368a1af51edc7d048",
+        "unchanged": true,
+        "passed": true
+      },
+      "visibleParts": 129,
+      "entities": 738,
+      "groups": 24,
+      "embeddedImages": 3,
+      "validSolids": 129,
+      "stepRoundTrips": 129,
+      "meshParts": 129,
+      "meshFailures": 0,
+      "maximumMeshRelativeVolumeError": 0.0009436139068532927,
+      "maxPartDimensionMm": 243.7500002,
+      "assemblyPairs": 67,
+      "assemblyPairsPassed": 67,
+      "splitChecks": [],
+      "translatedSTLParts": 129,
+      "translatedSTLFailures": 0,
+      "translatedMaximumRelativeVolumeError": 0.0009436297035309295,
+      "exportHashesVerified": true
+    },
+    "split": {
+      "file": "kuha115-1000-nagano-1-80-split.kcd2",
+      "modelSha": "a3e0d5321addb5f0b25a00f3e54a3afa2b4c5d66c97731d839ba37dc6a2e1384",
+      "nativeRebuild": {
+        "ok": true,
+        "token": "72f7daad-eddc-46bf-8d10-378a63527d93",
+        "version": 1,
+        "exit": 0,
+        "seconds": 21.18799999996554,
+        "exeSha": "e697806e4890c4e81821a828258c1f121930a34c8e90e1d6e61a11136da33d9d",
+        "modelSha": "a3e0d5321addb5f0b25a00f3e54a3afa2b4c5d66c97731d839ba37dc6a2e1384",
+        "unchanged": true,
+        "passed": true
+      },
+      "visibleParts": 134,
+      "entities": 756,
+      "groups": 29,
+      "embeddedImages": 3,
+      "validSolids": 134,
+      "stepRoundTrips": 134,
+      "meshParts": 134,
+      "meshFailures": 0,
+      "maximumMeshRelativeVolumeError": 0.000921543616296232,
+      "maxPartDimensionMm": 123.75000019999999,
+      "assemblyPairs": 67,
+      "assemblyPairsPassed": 67,
+      "splitChecks": [
+        {
+          "front": "65c4e2b3-4c8f-5594-b1c4-6d333c25a48c",
+          "label": "屋根 一体ドーム＋円弧一般部",
+          "passed": true,
+          "rear": "762da129-811c-5b75-acf9-ac5644beb71f",
+          "source": "a642d9ca-5d9e-52f1-9b3c-4174356de231",
+          "symmetricDifferenceMm3": 0,
+          "toleranceMm3": 8.531394109442945e-05
+        },
+        {
+          "front": "0bd79cc1-659a-56ef-af13-0ee5f8e3a3f6",
+          "label": "車体 屋根取付座・雨樋一体",
+          "passed": true,
+          "rear": "00156f31-dc3b-50f0-a03f-5cc4832a7645",
+          "source": "81fd357d-ebf8-5ed0-9408-ba98cac69d12",
+          "symmetricDifferenceMm3": 0,
+          "toleranceMm3": 7.351710437226901e-05
+        },
+        {
+          "front": "08ef7f06-052a-5b93-aecc-129aba30f261",
+          "label": "床板 1.2mm",
+          "passed": true,
+          "rear": "aa93d7fd-faee-5b76-b85f-620f2f2c547e",
+          "source": "7ee60ed2-3065-55d1-9b49-06f6059eb93b",
+          "symmetricDifferenceMm3": 0,
+          "toleranceMm3": 0.00010038553287384937
+        },
+        {
+          "front": "c673effc-33ca-56ba-9b06-bcc9fc39c25d",
+          "label": "室内 トレー・座席・運転台一体",
+          "passed": true,
+          "rear": "5293da26-bb9c-5399-95cf-4d149038b087",
+          "source": "90c532b6-4ca8-5dc7-ba9c-25c57ea32894",
+          "symmetricDifferenceMm3": 0,
+          "toleranceMm3": 5.117660566732396e-05
+        }
+      ],
+      "translatedSTLParts": 134,
+      "translatedSTLFailures": 0,
+      "translatedMaximumRelativeVolumeError": 0.0009215588408645275,
+      "exportHashesVerified": true
+    }
+  },
+  "limits": [
+    "Prototype local dimensions and color RGB are estimates.",
+    "No physical print/assembly/rolling test.",
+    "Bogie wheels are fixed for a display model.",
+    "STL is translated individually; STEP keeps assembled positions."
+  ]
+}

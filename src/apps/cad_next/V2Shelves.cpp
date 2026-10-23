@@ -39,6 +39,7 @@ void ArrangeRightDocks(QMainWindow& window, QDockWidget* grid, QDockWidget* oper
     window.addDockWidget(Qt::RightDockWidgetArea, operation);
     window.splitDockWidget(grid, operation, Qt::Vertical);
     window.resizeDocks({grid, operation}, {250, 650}, Qt::Vertical);
+    grid->hide();
 }
 std::optional<double> ChangedThickenAmount(const V2ThickenPreviewState& state,
     const kachakacha::v2::app::ParameterSet& values)

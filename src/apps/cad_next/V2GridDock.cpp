@@ -42,7 +42,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     : QDockWidget(QStringLiteral("グリッド"), parent)
 {
     setObjectName(QStringLiteral("gridDock"));
-    setFeatures(QDockWidget::NoDockWidgetFeatures);
+    setFeatures(QDockWidget::DockWidgetClosable);
     setAllowedAreas(Qt::RightDockWidgetArea);
     setMinimumWidth(280);
     setMinimumHeight(235);

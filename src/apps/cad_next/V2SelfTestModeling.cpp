@@ -181,7 +181,7 @@ namespace {
     window.RunCommand("grid.edit");
     auto* grid=window.findChild<QDockWidget*>("gridDock");
     auto* spacing=window.findChild<QLineEdit*>("gridSpacing");
-    if (!Explain("常設グリッドの間隔欄へ焦点を移す",
+    if (!Explain("グリッド設定を開いて間隔欄へ焦点を移す",
             grid&&grid->isVisible()&&spacing&&spacing->hasFocus()&&spacing->hasSelectedText())) {
         return false;
     }

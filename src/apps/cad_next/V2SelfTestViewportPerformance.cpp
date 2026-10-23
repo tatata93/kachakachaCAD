@@ -25,6 +25,7 @@
 #include <QIODevice>
 #include <QPointF>
 #include <QToolButton>
+#include <QAbstractButton>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -121,23 +122,36 @@ bool PendingActionsFit(V2MainWindow& window) {
     return Explain("pending target cancel clears inputs and leaves the tool ready to retry",window.Viewport().Selection().entityIds.empty()
         &&window.OperationHost().HasTemporaryPage()&&!confirm->isEnabled());
 }
-bool PersistentGridControls(V2MainWindow& window) {
+bool PersistentGridControls(V2MainWindow&) {
+    V2MainWindow window;window.show();QApplication::processEvents();
     window.RunCommand("file.new");
     auto* dock=dynamic_cast<V2GridDock*>(window.findChild<QDockWidget*>("gridDock"));
     auto* spacing=window.findChild<QLineEdit*>("gridSpacing");
     auto* details=window.findChild<QToolButton*>("gridDetails");
     auto* body=window.findChild<QWidget*>("gridDetailsBody");
     if(!dock||!spacing||!details||!body)return false;
+    auto* close=dock->findChild<QAbstractButton*>("qt_dockwidget_closebutton");
+    if(!Explain("grid settings start hidden and can be closed",dock->isHidden()&&close
+        &&dock->features().testFlag(QDockWidget::DockWidgetClosable)))return false;
     window.resize(1000,700);QApplication::processEvents();
-    if(!Explain("permanent grid and tool panel fit a 700px-high window",window.height()<=700))return false;
+    if(!Explain("grid and tool panel fit a 700px-high window",window.height()<=700))return false;
     for(const auto mode:app::AllUiModes()) {
         window.SetMode(mode);QApplication::processEvents();
-        if(!Explain("grid settings persist in every mode",!dock->isHidden()&&!spacing->isHidden()&&dock->isAncestorOf(spacing)))return false;
+        if(!Explain("mode changes keep closed grid settings hidden",dock->isHidden()))return false;
+        const auto tool=window.Session().CurrentTool();
+        const auto revision=window.Session().GetDocument().Revision();
+        const bool gridVisible=window.Viewport().DisplaySettingsNow().gridVisible;
+        window.RunCommand("grid.edit");QApplication::processEvents();
+        if(!Explain("grid settings open explicitly in every mode",!dock->isHidden()&&spacing->hasFocus()))return false;
         auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
         if(scroll)std::cout<<"grid common dock="<<dock->height()<<" available="<<scroll->viewport()->height()
             <<" details bottom="<<details->mapTo(scroll->viewport(),details->rect().bottomRight()).y()<<std::endl;
         if(!Explain("frequent grid fields and details toggle are visible without scrolling",scroll
             &&scroll->viewport()->rect().contains(details->mapTo(scroll->viewport(),details->rect().bottomRight()))))return false;
+        close->click();QApplication::processEvents();
+        if(!Explain("closing settings keeps grid, mode, tool and document",dock->isHidden()&&window.Mode()==mode
+            &&window.Session().CurrentTool()==tool&&window.Session().GetDocument().Revision()==revision
+            &&window.Viewport().DisplaySettingsNow().gridVisible==gridVisible))return false;
     }
     window.SetMode(app::UiMode::Drawing);window.SelectTool(modeling::DrawingTool::Line);
     auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(100);
@@ -165,9 +179,10 @@ bool PersistentGridControls(V2MainWindow& window) {
     if(!front)return false;view.SetSelection(app::SelectionSet{{*front}});window.RunCommand("workplane.set_active");
     const auto origin=window.Session().Scene().grid.origin;
     auto* check=window.findChild<QCheckBox*>("gridVisibility");if(!check)return false;check->click();
-    if(!Explain("permanent grid follows plane changes without applying stale origin",window.CurrentGridChoice().grid.originUmm==0
+    if(!Explain("grid settings follow plane changes without applying stale origin",window.CurrentGridChoice().grid.originUmm==0
         &&window.Session().Scene().grid.origin==origin&&dock->Choice().grid.originUmm==0))return false;
-    Shot(window,"grid-persistent-settings");return PendingActionsFit(window);
+    Shot(window,"grid-optional-settings-open");close->click();QApplication::processEvents();
+    Shot(window,"grid-optional-settings-closed");return PendingActionsFit(window);
 }
 bool GridProjectionReuse(V2MainWindow& window) {
     window.RunCommand("file.new");auto& view=window.Viewport();

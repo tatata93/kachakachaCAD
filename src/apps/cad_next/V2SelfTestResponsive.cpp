@@ -86,7 +86,7 @@ std::vector<SelfTestCase> ResponsiveCases()
         {"HP-PERF-03 presentation camera capture resize and idle",PresentationUpdates},
         {"HP-GRID-02 selected wire contrast and overlapping roles",SelectedWireContrast},
         {"HP-GRID-03 hidden overlays keep GPU shading",HiddenOverlayRendering},
-        {"HP-GRID-04 permanent settings preserve tools and numeric input",PersistentGridControls},
+        {"HP-GRID-04 optional settings preserve tools and numeric input",PersistentGridControls},
         {"HP-GRID-05 projected grid reuse and invalidation",GridProjectionReuse},
         {"HP-RS-01 5 つの撮影の場面が作れる", CaseAllResponsiveShotsCanBeBuilt},
         {"HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",

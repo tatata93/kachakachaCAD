@@ -4,6 +4,11 @@
 #include "V2SelfTestDeleteDialog.h"
 #include "kachakacha/document/Commands.h"
 #include <QApplication>
+#include <QDialog>
+#include <QEvent>
+#include <QObject>
+#include <QPointF>
+#include <QString>
 #include <QAction>
 #include <QDir>
 #include <QKeyEvent>

@@ -1,5 +1,6 @@
 #include "V2DrawingSelection.h"
 #include "V2Viewport.h"
+#include <QObject>
 
 using namespace kachakacha::v2;
 

@@ -8,6 +8,7 @@
 
 #include <QColor>
 #include <QFont>
+#include <QLineF>
 #include <QPainter>
 #include <QPen>
 #include <QPointF>
@@ -26,13 +27,44 @@ namespace {
 //! 別の値にすると、キューブと操作板で押した感じが変わってしまう。
 constexpr double kGadgetDragThresholdPx = 3.0;
 
+void CompactNavigator(kachakacha::v2::view::ViewGadgetLayout& layout,QPointF center)
+{
+    using namespace kachakacha::v2::view;
+    const double x=center.x(),y=center.y();
+    layout.cubeXPx=x-44;layout.cubeYPx=y-44;layout.cubeSizePx=88;
+    const auto expand=[&](auto& point){point.x=x+(point.x-x)*37/33;point.y=y+(point.y-y)*37/33;};
+    for(auto& ring:layout.rings) {
+        for(auto& point:ring.points)expand(point);
+        expand(ring.positiveHead);expand(ring.negativeHead);
+    }
+    for(auto& button:layout.gadgets) {
+        if(button.kind==ViewGadgetKind::AxisRing) {
+            button.xPx=x+(button.CenterXPx()-x)*37/33-button.widthPx/2;
+            button.yPx=y+(button.CenterYPx()-y)*37/33-button.heightPx/2;
+            continue;
+        }
+        double dx=0,dy=0,w=30,h=28;
+        if(button.kind==ViewGadgetKind::Home){dx=-78;dy=-110;w=32;}
+        if(button.kind==ViewGadgetKind::Roll){dx=button.direction==ViewGadgetDirection::Positive?-38:8;dy=-110;}
+        if(button.kind==ViewGadgetKind::AlignSelection){dx=-68;dy=102;w=136;}
+        if(button.kind==ViewGadgetKind::Orbit) {
+            const bool vertical=button.direction==ViewGadgetDirection::Up||button.direction==ViewGadgetDirection::Down;
+            dx=vertical?90:(button.direction==ViewGadgetDirection::Left?-58:8);
+            dy=vertical?(button.direction==ViewGadgetDirection::Up?-58:8):74;
+            w=vertical?28:50;h=vertical?50:28;
+        }
+        button.xPx=x+dx;button.yPx=y+dy;button.widthPx=w;button.heightPx=h;
+    }
+    layout.xPx=x-90;layout.yPx=y-110;layout.widthPx=208;layout.heightPx=240;
+}
+
 } // namespace
 
 QPointF V2Viewport::NavigatorCenter() const
 {
     // 操作板の中心。右上に置く。ここから先の場所は全部 core が決める。
     // 画面側で別に持つと、寄せたときにずれる。
-    return QPointF(static_cast<double>(width()) - 136.0, 136.0);
+    return QPointF(static_cast<double>(width()) - 118.0, 104.0);
 }
 
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
@@ -40,6 +72,7 @@ kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
     const QPointF center = NavigatorCenter();
     auto layout = kachakacha::v2::view::BuildViewGadgets(center.x(), center.y(),
         kachakacha::v2::view::kNavigatorScalePx, orientation_);
+    if(!layout.gadgets.empty())CompactNavigator(layout,center);
     // はみ出していたら寄せる。入らなければ空にして、出さない判断をここで済ませる。
     if (!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout,
             static_cast<double>(width()), static_cast<double>(height()))) {
@@ -135,6 +168,7 @@ void V2Viewport::DragViewGadget(const QPointF& position)
     if (gadget.kind != kachakacha::v2::view::ViewGadgetKind::AxisRing
         && gadget.kind != kachakacha::v2::view::ViewGadgetKind::Orbit
         && gadget.kind != kachakacha::v2::view::ViewGadgetKind::Roll) {
+        if(QLineF(gadgetDrag_->pressPosition,position).length()>kGadgetDragThresholdPx)gadgetDrag_->moved=true;
         return;
     }
     if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
@@ -165,7 +199,10 @@ void V2Viewport::DragViewGadget(const QPointF& position)
         return;
     }
     gadgetDrag_->moved = true;
-    ApplyGadgetRotation(gadget, dragPx
+    const bool reverse=gadget.direction==kachakacha::v2::view::ViewGadgetDirection::Left
+        ||gadget.direction==kachakacha::v2::view::ViewGadgetDirection::Up
+        ||gadget.direction==kachakacha::v2::view::ViewGadgetDirection::Negative;
+    ApplyGadgetRotation(gadget, (reverse?-dragPx:dragPx)
             * kachakacha::v2::view::AxisArrowDegreesPerPixel(gadgetDrag_->modifier),
         gadgetDrag_->orientationAtPress);
 }
@@ -179,12 +216,13 @@ void V2Viewport::ReleaseViewGadget(const QPointF& position)
     const bool moved = gadgetDrag_->moved;
     const std::size_t index = gadgetDrag_->index;
     const auto orientationAtPress = gadgetDrag_->orientationAtPress;
+    const auto modifier = gadgetDrag_->modifier;
     gadgetDrag_.reset();
-    (void)position;
     if (moved || index >= layout.gadgets.size()) {
         return; // 引きずったぶんはもう回してある。離した所では何も足さない。
     }
     const kachakacha::v2::view::ViewGadget& gadget = layout.gadgets[index];
+    if(gadget.kind!=kachakacha::v2::view::ViewGadgetKind::AxisRing&&ViewButtonAt(position)!=index)return;
     switch (gadget.kind) {
     case kachakacha::v2::view::ViewGadgetKind::Home:
         SetViewDirection(ViewDirection::Isometric);
@@ -197,7 +235,7 @@ void V2Viewport::ReleaseViewGadget(const QPointF& position)
         break;
     default:
         // 回すものは15度だけ回る。90度へは飛ばない。
-        ApplyGadgetRotation(gadget, kachakacha::v2::view::kAxisArrowClickDegrees,
+        ApplyGadgetRotation(gadget, modifier==kachakacha::v2::view::AxisArrowModifier::Fine?5.0:kachakacha::v2::view::kAxisArrowClickDegrees,
             orientationAtPress);
         break;
     }

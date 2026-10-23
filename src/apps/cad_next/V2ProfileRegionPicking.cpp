@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2RenderSelection.h"
 
 #include <QBrush>
 #include <QColor>
@@ -193,14 +194,14 @@ bool V2Viewport::ProfileRegionSelected(std::size_t index) const
         return false;
     }
     const auto ids = ProfileRegionEntityIds(profileRegions_[index]);
-    const auto seeds = kachakacha::v2::app::SelectedProfileSeeds(selection_);
+    const auto& seeds = V2RenderSelectionOf(*this).ProfileSeeds();
     if (!seeds.empty() && profileRegions_[index].plane.maximumDeviationMm <= 1e-6) {
         return std::any_of(seeds.begin(), seeds.end(), [&](const auto& seed) {
             return kachakacha::v2::app::ProfileRegionContains(profileRegions_[index], seed, 1e-6);
         });
     }
     return !ids.empty() && std::all_of(ids.begin(), ids.end(), [this](const auto& id) {
-        return IsSelected(selection_, id);
+        return V2RenderSelectionOf(*this).Entity(id);
     });
 }
 

@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2RenderSelection.h"
 #include "V2RenderLayers.h"
 #include "kachakacha/view/SurfaceRaster.h"
 #include <QImage>
@@ -23,7 +24,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     const auto forward = view::ForwardOf(orientation_);
     for(double value:{forward.x,forward.y,forward.z})key.push_back(std::bit_cast<std::uint64_t>(value));
     for(const auto& shape:shapeViews_) {
-        key.push_back(EntityShown(shape.entityId));key.push_back(app::IsSelected(selection_,shape.entityId));
+        key.push_back(EntityShown(shape.entityId));key.push_back(V2RenderSelectionOf(*this).Entity(shape.entityId));
         key.push_back(shape.entityId==hoveredEntityId_);
         for(const auto& piece:roleShapePieces_[&shape-shapeViews_.data()]) {
             const auto color=FaceRoleColorOf(shape.entityId,piece.faceIndex);
@@ -40,7 +41,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
         if(!EntityShown(shape.entityId))continue;
         const auto* analysis = AnalysisFor(shape.entityId);
         if (analysis != nullptr && analysis->Painted() && app::AnalysisPaintsSurface(analysis->mode)) { continue; }
-        const bool selected = !shape.entityId.IsNil() && app::IsSelected(selection_, shape.entityId);
+        const bool selected = !shape.entityId.IsNil() && V2RenderSelectionOf(*this).Entity(shape.entityId);
         const std::uint32_t color = shape.surface ? (selected ? 0xb0d2e8 : 0x91bed9)
             : (selected ? 0xc8d4df : 0xb2bcc7);
         for (const auto& triangle : shape.mesh.triangles) {
@@ -58,7 +59,7 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
     for(const auto& layer:layers)raster.DrawImage(*layer.triangle,mapping_,*layer.image);
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) {
         if (!EntityShown(shape.entityId)) continue;
-        const bool selected = app::IsSelected(selection_, shape.entityId);
+        const bool selected = V2RenderSelectionOf(*this).Entity(shape.entityId);
         const bool hovered = shape.entityId == hoveredEntityId_;
         QColor edge = palette_.background.red() > 160 ? QColor(0x36,0x52,0x66) : QColor(0xc9,0xdf,0xeb);
         if (selected) edge = SemanticColor(app::SemanticState::Selected).darker(125);
@@ -85,7 +86,7 @@ bool V2Viewport::DrawGpuShapes(QPainter& painter) const
     if(!layers.shapes)return true;
     std::vector<V2GpuRenderer::Item> items;
     for(const auto& shape:shapeViews_) {
-        const bool selected=kachakacha::v2::app::IsSelected(selection_,shape.entityId);
+        const bool selected=V2RenderSelectionOf(*this).Entity(shape.entityId);
         const bool hovered=shape.entityId==hoveredEntityId_;
         QColor edge=palette_.background.red()>160?QColor(0x36,0x52,0x66):QColor(0xc9,0xdf,0xeb);
         if(selected)edge=SemanticColor(kachakacha::v2::app::SemanticState::Selected).darker(125);

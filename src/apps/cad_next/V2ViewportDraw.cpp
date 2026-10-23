@@ -3,6 +3,7 @@
 //! 分けたのは、ファイルの長さの門(1500行)を守るため。
 
 #include "V2Viewport.h"
+#include "V2RenderSelection.h"
 
 #include "kachakacha/modeling/GridModel.h"
 
@@ -264,7 +265,7 @@ void V2Viewport::DrawOneWorkPlane(QPainter& painter, const WorkPlaneView& plane)
         polygon << *screen;
     }
     const bool selected = !plane.entityId.IsNil()
-        && kachakacha::v2::app::IsSelected(selection_, plane.entityId);
+        && V2RenderSelectionOf(*this).Entity(plane.entityId);
     // 選んだ面の色はテーマの選択色にする。固定の橙だと、テーマを替えたときに
     // 線の選択色と面の選択色が食い違う。
     QColor selectedFill = SemanticColor(SemanticState::Selected);
@@ -405,8 +406,9 @@ kachakacha::v2::app::SemanticState V2Viewport::CurveStateOf(
     kachakacha::v2::base::EntityId entityId,
     kachakacha::v2::base::SegmentId segmentId) const
 {
-    return kachakacha::v2::app::CurveSemanticState(selection_, entityId, segmentId,
-        hoveredEntityId_, hoveredSegmentId_);
+    if(V2RenderSelectionOf(*this).Curve(entityId,segmentId))return SemanticState::Selected;
+    return !hoveredEntityId_.IsNil()&&hoveredEntityId_==entityId
+        &&(hoveredSegmentId_.IsNil()||hoveredSegmentId_==segmentId)?SemanticState::Hover:SemanticState::Default;
 }
 
 void V2Viewport::DrawDocument(QPainter& painter) const
@@ -432,8 +434,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         // 「選択だけ」と、掴んで動かす影は **物体単位** で見る。
         // 線分1本を選んだだけで折れ線の残りが消えたり、片方だけ動いて見えたりすると、
         // 実際に動くもの(物体まるごと)と画面が食い違う。
-        const bool entitySelected = kachakacha::v2::app::IsSelected(selection_,
-            curve.entityId);
+        const bool entitySelected = V2RenderSelectionOf(*this).Entity(curve.entityId);
         // 意味状態は core が決める(app/SemanticState)。
         // 選んだ線分だけが Selected になり、同じワイヤーの残りは通常表示のままになる。
         // 通常表示のときだけデータ種類(補助線)の色と太さを使う。
@@ -442,8 +443,8 @@ void V2Viewport::DrawDocument(QPainter& painter) const
                                                    : SemanticColor(state);
         // 薄くするかどうかの判断は core にある(app/PlaneFocus)。
         // 掴めるかどうかと同じところから出さないと、薄いのに掴める、が起きる。
-        if (kachakacha::v2::app::DimsOffPlaneCurve(dimming, true, entitySelected,
-                kachakacha::v2::app::CurveLiesOnPlane(curve.segment, workPlane_))) {
+        if (dimming && !entitySelected
+            && !kachakacha::v2::app::CurveLiesOnPlane(curve.segment, workPlane_)) {
             color.setAlphaF(color.alphaF() * 0.24);
         }
         // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。
@@ -488,8 +489,8 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     for (const auto& point : scene.points) {
         const auto screen = ToScreen(point.position);
         if (!screen.has_value()) continue;
-        const SemanticState state = kachakacha::v2::app::PointSemanticState(selection_,
-            point.entityId, hoveredEntityId_);
+        const SemanticState state = V2RenderSelectionOf(*this).Entity(point.entityId)?SemanticState::Selected
+            :(!hoveredEntityId_.IsNil()&&point.entityId==hoveredEntityId_?SemanticState::Hover:SemanticState::Default);
         if (!EntityShown(point.entityId)) {
             continue;
         }
@@ -617,13 +618,14 @@ void V2Viewport::DrawControlPoints(QPainter& painter) const
     }
     painter.setPen(QPen(SemanticColor(SemanticState::Selected), 1.0));
     painter.setBrush(palette_.background);
-    for (const auto& point : kachakacha::v2::app::ControlPointsForSelection(
-             session_->Scene(), selection_)) {
-        const auto screen = ToScreen(point.position);
-        if (!screen.has_value()) {
-            continue;
+    const auto& selectionIndex = V2RenderSelectionOf(*this);
+    for (const auto& curve : session_->Scene().curves) {
+        if (!selectionIndex.Curve(curve.entityId, curve.segmentId)) continue;
+        for (const auto& point : kachakacha::v2::geometry::EditableControlPointsOf(curve.segment)) {
+            const auto screen = ToScreen(point.position);
+            if (!screen.has_value()) continue;
+            painter.drawRect(QRectF(screen->x() - 3.0, screen->y() - 3.0, 6.0, 6.0));
         }
-        painter.drawRect(QRectF(screen->x() - 3.0, screen->y() - 3.0, 6.0, 6.0));
     }
 }
 
@@ -811,7 +813,7 @@ void V2Viewport::DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, cons
 void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
 {
     const bool selected = !shape.entityId.IsNil()
-        && kachakacha::v2::app::IsSelected(selection_, shape.entityId);
+        && V2RenderSelectionOf(*this).Entity(shape.entityId);
     const bool hovered = !selected && !shape.entityId.IsNil()
         && shape.entityId == hoveredEntityId_;
     // 稜線を上から重ねる。三角形の網だけだと継ぎ目が全部見えて形が読めない。

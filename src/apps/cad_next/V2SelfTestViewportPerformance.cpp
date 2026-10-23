@@ -302,6 +302,13 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
     window.resize(2560,1440);window.show();QApplication::processEvents();
     auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Isometric);
     view.FitToDocument();view.SetVisibleWidthMm(200);view.SetGridSuppressedByMode(false);
+    const int selectedLimit=qEnvironmentVariableIntValue("KACHACAD_VIEWPORT_PERF_SELECTED");
+    app::SelectionSet selected;
+    if(selectedLimit>0)for(const auto& entity:window.Session().GetDocument().Snapshot().entities) {
+        if(entity.kind!=domain::EntityKind::Wire&&entity.kind!=domain::EntityKind::GuideSurface&&entity.kind!=domain::EntityKind::Part)continue;
+        selected.entityIds.push_back(entity.id);if(int(selected.entityIds.size())>=selectedLimit)break;
+    }
+    view.SetSelection(std::move(selected));
     auto grid=window.CurrentGridChoice();grid.grid.visible=true;grid.showInAllModes=true;
     const auto revision=window.Session().GetDocument().Revision();
     QJsonArray results;
@@ -354,6 +361,7 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
             const auto& g=window.Session().Scene().grid;const double spacing=g.majorSpacingMm/(g.subdivision>1?g.subdivision:1);
             row.insert("minor_u_spacing_px",modeling::GridLineSpacingPx(view.Mapping(),g.origin,g.vDirection,g.uDirection*spacing));
             row.insert("minor_v_spacing_px",modeling::GridLineSpacingPx(view.Mapping(),g.origin,g.uDirection,g.vDirection*spacing));
+            row.insert("selected_entities",int(view.Selection().entityIds.size()));
             results.push_back(row);std::cout<<QJsonDocument(row).toJson(QJsonDocument::Compact).constData()<<std::endl;
         }
     }

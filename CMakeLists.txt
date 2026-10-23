@@ -1231,6 +1231,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GeometryJob.cpp
         src/apps/cad_next/V2Calculation.cpp
         src/apps/cad_next/V2PreparedDocument.cpp
+        src/apps/cad_next/V2RenderSelection.cpp
+        src/apps/cad_next/V2NavigatorHighlight.cpp
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp
         src/apps/cad_next/V2DocumentWorker.cpp
@@ -1296,6 +1298,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2UiShotStatesResponsive.cpp
         src/apps/cad_next/V2SelfTestResponsive.cpp
         src/apps/cad_next/V2SelfTestViewportPerformance.cpp
+        src/apps/cad_next/V2SelfTestNavigation.cpp
         src/apps/cad_next/V2SelfTestDrawingAccuracy.cpp
         src/apps/cad_next/V2SelfTestBoundaryFill.cpp
         src/apps/cad_next/V2PatternDock.cpp

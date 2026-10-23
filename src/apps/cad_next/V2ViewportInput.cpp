@@ -1354,11 +1354,6 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     if (panning_) {
         return;
     }
-    // 押し出しの矢印は、選択より先に見る。矢印の上を押したら掴む。
-    // 後に回すと、矢印の下にある線が選び直されて、矢印が消える。
-    if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) {
-        return;
-    }
     kachakacha::v2::view::AxisArrowModifier modifier =
         kachakacha::v2::view::AxisArrowModifier::None;
     if ((event->modifiers() & Qt::ShiftModifier) != 0) {
@@ -1370,6 +1365,8 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
         return;
     }
+    // The visible navigator is in front of extrusion handles as well as model edges.
+    if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) return;
     if (ReferencePickPending()) {
         SelectAt(event->position(), event->modifiers());
         return;

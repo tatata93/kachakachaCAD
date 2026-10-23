@@ -1,4 +1,5 @@
 #include "V2Viewport.h"
+#include "V2RenderSelection.h"
 #include "V2QuickDisplayControls.h"
 #include <QPushButton>
 #include <QPointer>
@@ -14,14 +15,14 @@ bool V2Viewport::EntityShown(base::EntityId id) const {
     if(!id.IsNil()&&!PlaneWireDisplayAllows(*this,id))return false;
     if(id.IsNil())return true; // Tool previews are not document entities yet.
     if(IsolationActive()&&std::find(isolationExcluded_.begin(),isolationExcluded_.end(),id)!=isolationExcluded_.end())return false;
-    return !display_.selectionOnly||app::IsSelected(selection_,id);
+    return !display_.selectionOnly||V2RenderSelectionOf(*this).Entity(id);
 }
 void V2Viewport::IsolateSelection() {
     if(selection_.entityIds.empty())return;
     if(!isolationActive_)isolationPreviousSelectionOnly_=display_.selectionOnly;
     isolationExcluded_.clear();isolationDocument_=session_->GetDocument().Snapshot().id;isolationActive_=true;
     for(const auto& e:session_->GetDocument().Snapshot().entities)
-        if(!app::IsSelected(selection_,e.id))isolationExcluded_.push_back(e.id);
+        if(!V2RenderSelectionOf(*this).Entity(e.id))isolationExcluded_.push_back(e.id);
     display_.selectionOnly=false;
     auto* button=findChild<QPushButton*>(QStringLiteral("exitIsolation"));
     if(!button){button=new QPushButton(QStringLiteral("局所表示中 — 解除"),this);button->setObjectName(QStringLiteral("exitIsolation"));

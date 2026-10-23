@@ -1,4 +1,6 @@
 #include "V2Viewport.h"
+#include "V2RenderSelection.h"
+#include "V2NavigatorHighlight.h"
 #include "V2QuickDisplayControls.h"
 #include "V2NativeCanvas.h"
 
@@ -689,6 +691,7 @@ void V2Viewport::DrawViewCube(QPainter& painter) const
         }
     }
     if (cubeHoverZone_.has_value()) {
+        V2DrawNavigatorHighlight(painter,box,orientation_,*cubeHoverZone_,palette_.selected);
         painter.setPen(QPen(palette_.selected, 1.0));
         painter.drawText(QRectF(box.left(), box.bottom() - 14.0, box.width(), 14.0),
             Qt::AlignCenter,
@@ -933,6 +936,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     }
 
     selection_ = std::move(selection);
+    V2RenderSelectionOf(*this).Update(selection_);
     ApplyVisibilityFilter();
     if (selectionChangedCallback_) {
         selectionChangedCallback_();

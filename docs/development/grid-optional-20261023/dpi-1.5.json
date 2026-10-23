@@ -1,0 +1,2284 @@
+{
+  "cases": [
+    {
+      "duration_ms": 3237.9136,
+      "end": "2026-10-23T14:49:26.942Z",
+      "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+      "start": "2026-10-23T14:49:23.707Z",
+      "status": "passed"
+    }
+  ],
+  "error": "",
+  "failed": 0,
+  "inventory": [
+    {
+      "name": "道具を選べる",
+      "suite": "Basic"
+    },
+    {
+      "name": "直線を引ける",
+      "suite": "Basic"
+    },
+    {
+      "name": "曲線を曲線のまま描ける",
+      "suite": "Basic"
+    },
+    {
+      "name": "端点に吸着する",
+      "suite": "Basic"
+    },
+    {
+      "name": "見た目を切り替えられる",
+      "suite": "Basic"
+    },
+    {
+      "name": "元に戻せる",
+      "suite": "Basic"
+    },
+    {
+      "name": "視点を切り替えられる",
+      "suite": "Basic"
+    },
+    {
+      "name": "途中でやめられる",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-COMMAND 台帳の全コマンドが同じ入口から呼べる",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-COMMAND 未接続のコマンドが1つも無い",
+      "suite": "Basic"
+    },
+    {
+      "name": "メニューが台帳から出来ている",
+      "suite": "Basic"
+    },
+    {
+      "name": "対象不足のコマンドは構えて理由を出す",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-COMMAND 案内が6つそろっている",
+      "suite": "Basic"
+    },
+    {
+      "name": "失敗しても続き、文書が変わらない",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-TARGET-WAIT 対象待ちは前の作図を終了し文書を変えない",
+      "suite": "Basic"
+    },
+    {
+      "name": "モードを変えると道具だけ選択へ戻る",
+      "suite": "Basic"
+    },
+    {
+      "name": "モードで出るコマンドが変わる",
+      "suite": "Basic"
+    },
+    {
+      "name": "ビューキューブが連続に回る",
+      "suite": "Basic"
+    },
+    {
+      "name": "90度へ吸着せず離した後も回らない",
+      "suite": "Basic"
+    },
+    {
+      "name": "キューブのクリックだけが正対する",
+      "suite": "Basic"
+    },
+    {
+      "name": "回転矢印はカメラだけを回す",
+      "suite": "Basic"
+    },
+    {
+      "name": "役割テーブルが役割と接続を出す",
+      "suite": "Basic"
+    },
+    {
+      "name": "役割テーブルを編集できる",
+      "suite": "Basic"
+    },
+    {
+      "name": "数値入力が主要欄へ合い式を評価する",
+      "suite": "Basic"
+    },
+    {
+      "name": "数値入力のTabとEnterとEscが効く",
+      "suite": "Basic"
+    },
+    {
+      "name": "数値入力の間違いをBackspaceとDeleteで消せる",
+      "suite": "Basic"
+    },
+    {
+      "name": "数値入力が画面の外へ出ない",
+      "suite": "Basic"
+    },
+    {
+      "name": "作業中グループが帯と一覧に出る",
+      "suite": "Basic"
+    },
+    {
+      "name": "どちらの見た目でも配置が壊れない",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-ERGO-03 狭い画面でも部品がはみ出さない",
+      "suite": "Basic"
+    },
+    {
+      "name": "道具箱もモードに従う",
+      "suite": "Basic"
+    },
+    {
+      "name": "手順がモードで変わり番号順に並ぶ",
+      "suite": "Basic"
+    },
+    {
+      "name": "進めない段には理由が出る",
+      "suite": "Basic"
+    },
+    {
+      "name": "線を選べて足せて消せる",
+      "suite": "Basic"
+    },
+    {
+      "name": "書き出しの棚が選択に従う",
+      "suite": "Basic"
+    },
+    {
+      "name": "出せない形式は押す前に断る",
+      "suite": "Basic"
+    },
+    {
+      "name": "出す先を決めればファイルが出る",
+      "suite": "Basic"
+    },
+    {
+      "name": "出す先を尋ねてやめられる",
+      "suite": "Basic"
+    },
+    {
+      "name": "保存して開き直すと同じものが戻る",
+      "suite": "Basic"
+    },
+    {
+      "name": "視点の操作板に部品がそろっている",
+      "suite": "Basic"
+    },
+    {
+      "name": "操作板の回す部品は15度だけ回る",
+      "suite": "Basic"
+    },
+    {
+      "name": "輪は線のどこを押しても掴める",
+      "suite": "Basic"
+    },
+    {
+      "name": "キューブもボタンも押した道で掴める",
+      "suite": "Basic"
+    },
+    {
+      "name": "輪は線から少しずれても掴める",
+      "suite": "Basic"
+    },
+    {
+      "name": "家で等角ビューへ戻る",
+      "suite": "Basic"
+    },
+    {
+      "name": "測る棚が選んだものを測る",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-PARAM 数は式で入り範囲の外は断る",
+      "suite": "Basic"
+    },
+    {
+      "name": "決めた板厚が押し出しに効く",
+      "suite": "Basic"
+    },
+    {
+      "name": "縮尺で割った寸法が棚に出る",
+      "suite": "Basic"
+    },
+    {
+      "name": "見え方は4段から直接選べて形を変えない",
+      "suite": "Basic"
+    },
+    {
+      "name": "正対は平面を選ばないと理由を出す",
+      "suite": "Basic"
+    },
+    {
+      "name": "HP-OPEN-01 Escape cancels saved vessel history with an armed editor and preserves Undo",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-02 crashed rebuild preserves document path and permits retry",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-03 invalid rebuilt geometry preserves original document",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-04 prepared open preserves metadata and unknown archive entries",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-05 unsupported warped history preserves the old document",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-06 saved native cache, invalidation and corruption recovery",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-07 hidden native shapes mesh on first visibility",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-08 parallel independent surfaces match serial cold rebuild",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-OPEN-09 prepared transfer identities cancellation and poisoned cache",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "HP-PERF-01 dense face hover and image compositing",
+      "suite": "DocumentOpen"
+    },
+    {
+      "name": "メニュー文字が潰れずマウスで開ける",
+      "suite": "Menu"
+    },
+    {
+      "name": "統合前の空パネルを左上に残さない",
+      "suite": "Menu"
+    },
+    {
+      "name": "HP-SCOPE planar and spatial",
+      "suite": "Input"
+    },
+    {
+      "name": "HP-NUM direction follows snap",
+      "suite": "Input"
+    },
+    {
+      "name": "HP-NUM decimal dimensions",
+      "suite": "Input"
+    },
+    {
+      "name": "HP-NUM actual tool fields and geometry thickness",
+      "suite": "Input"
+    },
+    {
+      "name": "作図中に入力列が出て数で線が決まる",
+      "suite": "Input"
+    },
+    {
+      "name": "中ボタンで画面が動く",
+      "suite": "Input"
+    },
+    {
+      "name": "軌道回転で視点が回る",
+      "suite": "Input"
+    },
+    {
+      "name": "Escで入力を取り消し道具を維持する",
+      "suite": "Input"
+    },
+    {
+      "name": "Shiftで水平になりSで吸着が止まる",
+      "suite": "Input"
+    },
+    {
+      "name": "吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる",
+      "suite": "Input"
+    },
+    {
+      "name": "主要キーが操作キーと競合しない",
+      "suite": "Input"
+    },
+    {
+      "name": "移動と複製が本当に効く",
+      "suite": "Input"
+    },
+    {
+      "name": "つぶれた変換は断る",
+      "suite": "Input"
+    },
+    {
+      "name": "選んだ物を掴んで動かせる",
+      "suite": "Input"
+    },
+    {
+      "name": "押しただけでは動かない",
+      "suite": "Input"
+    },
+    {
+      "name": "制御点を掴んで動かせる",
+      "suite": "Input"
+    },
+    {
+      "name": "制御点は選んだ線にだけ出る",
+      "suite": "Input"
+    },
+    {
+      "name": "表示の段に数字のキーがある",
+      "suite": "Input"
+    },
+    {
+      "name": "一覧で名前を変えられる",
+      "suite": "Input"
+    },
+    {
+      "name": "作業平面を作って作業中にできる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "グリッドは棚を開いて明示指定する",
+      "suite": "Modeling"
+    },
+    {
+      "name": "分割で線が増える",
+      "suite": "Modeling"
+    },
+    {
+      "name": "線を選ばずに編集を押すと理由が出る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "そろっていない接線接続は断る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出しで部品ができる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出しの隣接区画を切り替えて保存できる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "立体の面をつまんで押せる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "部品のコマンドは選択が要る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出した部品が保存して開き直しても残る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出しでワイヤーだけ作れる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "通らない押し出しは理由を出して断る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出しをやめられる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出しの入力を片方だけ選び直せる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "引く→押し出す→部材→型紙→PDFまで通る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "順を飛ばすと何を先にするか言う",
+      "suite": "Modeling"
+    },
+    {
+      "name": "部品をSTLとSTEPで出せる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "選んだものだけを別の文書にできる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "立体がなければ立体では出せない",
+      "suite": "Modeling"
+    },
+    {
+      "name": "投影は元の線を残す",
+      "suite": "Modeling"
+    },
+    {
+      "name": "トリムは道具を持つだけでEscでやめられる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "トリムは線が1本でも道具になる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "グリッド原点は押した場所へ動く",
+      "suite": "Modeling"
+    },
+    {
+      "name": "足し引きは部品を2つ要る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "形状ガイドは断面2枚から",
+      "suite": "Modeling"
+    },
+    {
+      "name": "平面から離した作業平面を作れる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "材料が足りない作り方は断る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "面に厚みを付けて立体にできる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "面を平面まで立体にできる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "面を選ばずに厚みは付けられない",
+      "suite": "Modeling"
+    },
+    {
+      "name": "面→展開→型紙→PDFまで通る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "立体を作る前の検査は理由を出す",
+      "suite": "Modeling"
+    },
+    {
+      "name": "押し出した部品は出せると言える",
+      "suite": "Modeling"
+    },
+    {
+      "name": "固定しても元は残る",
+      "suite": "Modeling"
+    },
+    {
+      "name": "閉じていない線は折り線になる",
+      "suite": "Modeling"
+    },
+    {
+      "name": "配る見本が開ける",
+      "suite": "Modeling"
+    },
+    {
+      "name": "HP-TOOLS all catalog toolbar activations have input or reason",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS distinct tool illustrations",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS exclusive tool transition matrix and shortcuts",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS modal dialog keys stay in dialog",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS preview shape ownership stays bounded",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS alternate shortcut routes preserve inputs",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS alternate view routes preserve pending targets",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS first drawing point Undo without document history",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-TOOLS save and save-as preserve pending targets",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-UX-04 permanent grid and plane wire display controls",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-GPU display cache parity",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-ERGO-01 illustrated responsive controls",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-ERGO-02 compact tool search",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-UX-01 cross-mode tool search",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-UX-02 persistent local view picking snapping restore",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-UX-03 solid selection focus",
+      "suite": "Usability"
+    },
+    {
+      "name": "HP-IMG-01 image placement persistence cancel and edit",
+      "suite": "Image"
+    },
+    {
+      "name": "HP-IMG-02 curved projection and wrapping",
+      "suite": "Image"
+    },
+    {
+      "name": "HP-IMG-03 image drag preview cancel commit undo",
+      "suite": "Image"
+    },
+    {
+      "name": "HP-EMB-01 curved emboss selection preview outputs undo",
+      "suite": "CurvedEmboss"
+    },
+    {
+      "name": "HP-INSTRUCTIONS 3D model choice outlines arrows image export",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-WORKSPACE focus selection pages save and PDF",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-CAPTURE wire assets picker state and theme",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-BROWSER scene list placement history and alternate files",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-LAYOUT zoom pan stacking alignment aspect and output",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-EDIT text draft save and scene paper ordering",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-PAINT zoomed scene reuse and offscreen culling",
+      "suite": "Instruction"
+    },
+    {
+      "name": "HP-IN-ARROW drag placement endpoint handles and cancel",
+      "suite": "InstructionArrow"
+    },
+    {
+      "name": "HP-IN-TEXT font family size weight and rendering",
+      "suite": "InstructionArrow"
+    },
+    {
+      "name": "HP-IN-CANCEL part drag is restored by Escape",
+      "suite": "InstructionArrow"
+    },
+    {
+      "name": "HP-INSTRUCTIONS-SHEETS scenes live paper raster fonts export",
+      "suite": "InstructionSheet"
+    },
+    {
+      "name": "HP-WP-ROLE point replacement keeps other points",
+      "suite": "Plane"
+    },
+    {
+      "name": "一覧の原点に3面と3軸が出て、軸はチェックで消せる",
+      "suite": "Plane"
+    },
+    {
+      "name": "作業平面の棚で位置と向きを数で指定して作れる",
+      "suite": "Plane"
+    },
+    {
+      "name": "作業平面の棚でコンボの基準平面から離せる",
+      "suite": "Plane"
+    },
+    {
+      "name": "作業平面の棚は足りないものをその場で言い、押せない",
+      "suite": "Plane"
+    },
+    {
+      "name": "上の帯の作図面コンボで切り替わり、正対はその面を向く",
+      "suite": "Plane"
+    },
+    {
+      "name": "新しい文書にも原点の3面がある",
+      "suite": "Plane"
+    },
+    {
+      "name": "HP-DIM-03 role replacement preserves the other input",
+      "suite": "Dimension"
+    },
+    {
+      "name": "HP-DIM-01 寸法作成と編集を続ける",
+      "suite": "Dimension"
+    },
+    {
+      "name": "HP-DIM-02 Win95寸法操作",
+      "suite": "Dimension"
+    },
+    {
+      "name": "HP-LIFE-01 拘束中のビューを持つウインドウを終了できる",
+      "suite": "Dimension"
+    },
+    {
+      "name": "HP-CORNER-ENTRY whole wire from a real viewport edge pick",
+      "suite": "Drawing"
+    },
+    {
+      "name": "HP-ME-03 測定を先に選んで線と位置を拾う",
+      "suite": "Drawing"
+    },
+    {
+      "name": "HP-ME-01 測定の3モードと寸法を残す",
+      "suite": "Drawing"
+    },
+    {
+      "name": "HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
+      "suite": "Drawing"
+    },
+    {
+      "name": "V1 の .kcd を開くと V2 の文書になる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "角の加工でポリラインの角が落ちて丸まる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "角の加工は何本選んでも線ごとに作り1回で戻る",
+      "suite": "Drawing"
+    },
+    {
+      "name": "オフセットは元を残し2線を交点まで合わせる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "交点に点と基準線が効く",
+      "suite": "Drawing"
+    },
+    {
+      "name": "形から中心や端点に点を作れる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "右の棚が道具に合わせて変わる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "グリッドの棚で間隔・副点・基準が変わる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "表示の棚で太さ・様式・色と段が変わる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "HP-ARC-FLIP 作図の棚で円弧の作り方を変えられる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "補助線として作図し指定点を残せる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "数値で線を作れる",
+      "suite": "Drawing"
+    },
+    {
+      "name": "HP-DEL-10 source edge deletion removes dependent solid after confirmation",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-08 dependent deletion shows preview and supports cancel Undo Redo",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-09 actual Delete key bypasses untyped cursor panel",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-SECTION-01 workplane section clips triangles and restores geometry",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-UI-DEFAULT startup uses Win95 appearance",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-01 delete Undo Redo and drawing history remain independent",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-02 individual rounded wire segment deletion",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-04 delete arc preserves straight segments",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-05 multiple segments delete together",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-11 fillet tool whole wire refines to arc and real Delete",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-12 context arc deletion ignores old whole wire selection",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-13 context straight deletion retains rounded arc",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-14 overlapping context highlight matches deleted segment",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-06 unfinished drawing Undo keeps earlier deletion",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-07 stale and dependent segment deletion refuses safely",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-DEL-03 native edges never duplicate or resurrect",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-CN-06 面取りの棚で非対称の切戻しと残す側と頂点番号が効く",
+      "suite": "Edit"
+    },
+    {
+      "name": "編集の棚で直線の点と長さ・角度を直せる",
+      "suite": "Edit"
+    },
+    {
+      "name": "戻すと画面の線も消えやり直すと戻る",
+      "suite": "Edit"
+    },
+    {
+      "name": "編集の棚で円の半径を変えられる",
+      "suite": "Edit"
+    },
+    {
+      "name": "編集の棚で作業平面を動かし原点面は断る",
+      "suite": "Edit"
+    },
+    {
+      "name": "HP-EX-01 拾って押して確定すると立体になる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-UI-01 押し出しの最中は棚が見えている",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-UI-03 右の欄へ打ったあとも Enter と Esc が効く",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-OUTPUT-06 全部 OFF は確定できない",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-01 面を作る棚と下見が見え、文書はまだ増えない",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-02 Enter で面が1枚できて棚が片付く",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-03 Esc で何も作らずやめる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-04 作り方を変えても入れたものが消えない",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-05 5本の別ワイヤーを1輪郭として面と押し出しに使える",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "PROFILE-03〜05/07 穴・複数・解除・開いた輪郭を画面で扱える",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-EX-03 立体の面を画面から拾って押す",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-06 3D のクリックがどの欄へ入るかがいつも見えている",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-SF-07 ロフトの断面順は採用順を出し、手動固定はそのまま生成順になる",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-FAB-01 面を拾い70%曲げからワイヤーを作る",
+      "suite": "HumanPath"
+    },
+    {
+      "name": "HP-AP-01 近似は 3D で押した対象が候補になり、押し直すと外れる",
+      "suite": "HumanPathApprox"
+    },
+    {
+      "name": "HP-AP-02 候補を押すと下見が変わり、Enter で同じ作り方が文書へ入る",
+      "suite": "HumanPathApprox"
+    },
+    {
+      "name": "HP-AP-03 作り方のカードが既定の候補を決め、押した候補が勝つ",
+      "suite": "HumanPathApprox"
+    },
+    {
+      "name": "HP-AP-04 曲げ状態の基準値は組立率を打って当てる道を通る",
+      "suite": "HumanPathApprox"
+    },
+    {
+      "name": "HP-AP-06 対象の面が消えるかモードを替えると近似は解け、線が選べて消せる",
+      "suite": "HumanPathApprox"
+    },
+    {
+      "name": "HP-OUT-07 output snapshot and placement ownership",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-06 面と点の選択部分出力",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-04 近似の指定部材と生成配置の取消",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-05 3D選択と選び直し",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-OUT-03 不正な配置を拒否し元文書を保持",
+      "suite": "Output"
+    },
+    {
+      "name": "HP-EX-WIRES stop wire only Undo save",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-WIRES stop wire plus solid Undo save",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-WIRES stop end-only Undo save",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-REPEAT commit and lost mouse release",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-CAP distance orientation Undo save",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-CAP native face orientation save",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-UI tool first settings and direction pick",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-UI target solid first",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-UI face and direction independent",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-UI hovered face fill",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-EX-LINE 曲面フェイスから線まで・保存再計算",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-CALC-01 計算バー・GUI応答・取消・形状の解放",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "HP-CALC-02 分割取消で両側の内部形状を解放",
+      "suite": "FaceExtrude"
+    },
+    {
+      "name": "PROJ tool-first and Esc",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ preview commit Undo save reopen",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ preselection",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ solid face viewport click",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ wrap closest fractional numeric retry",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ manual direction and one-button reverse",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ role marks preserve tree and document",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ direct tree inputs and lifecycle",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ explicit segments and multiple marks",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ native region output and Undo",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ source-plane direction default",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ projected wire extrudes and survives save",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ planar circle projected storage extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ planar circle ordinary storage extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved lamp projected face extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved lamp ordinary storage face extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ panorama two workplanes per-row directions",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved lamp wires only Undo save",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved lamp wires and solid Undo save",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved ordinary wire interior click extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved projected wire interior click extrusion",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ curved body outer wire with window hole Undo save",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ explicit planar profile interior over a solid",
+      "suite": "Projection"
+    },
+    {
+      "name": "PROJ planar generated curves preserve holes and rigid poses",
+      "suite": "Projection"
+    },
+    {
+      "name": "HP-NAV-01 indexed selection matches core semantics",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-NAV-02 camera and reentrant selection index",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-NAV-03 compact navigator exact targets",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-NAV-04 outside release cancels buttons",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-NAV-05 consistent drag and fine clicks",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-NAV-06 cube regions highlights and extrusion overlap",
+      "suite": "Navigation"
+    },
+    {
+      "name": "HP-CT-07 surface and wire trim, cached regions and saved Undo",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-08 window wire cuts solid and retains boundaries",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-09 single picked solid face trims as an independent surface",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-BO-05 running job cancellation and saved retry",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-BO-04 boolean preview release, cancel and retry",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-FA-01 フェイスから作図と近似",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-06 ソリッドトリムのモード切替と境界ワイヤー保持",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-05 主画面で取消して再開し交差ワイヤーのみ生成",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-03 面接触と体積重なりを区別し曲面の円交線を保持",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-04 分割領域を選択して生成し保存再生成",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-01 接触境界ワイヤーのみ生成し元の両部品を保持",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CT-02 KCDの3Dめり込み一覧から領域別に双方を削り保存再生成",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-BO-01 足す引くは土台→相手へ自動で移り、札と欄に別々に出て押し直すと外れる",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-BO-02 両方入ると実際の結果が下見に出て、Enter で 1回で戻せる部品になる",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-BO-03 交差は重なりだけを残す部品になり1回で戻り開き直しても作り直せる",
+      "suite": "HumanPathBoolean"
+    },
+    {
+      "name": "HP-CN-09 full-length R1 corner",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-10 corner replacement preserves reference and driving dimensions",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-WP-AUTO automatic edit plane",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-07 batch corners and image cache",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-08 polyline batch corners",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-04 repeat corners preserves unpicked lines and image",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-05 two corners of one polyline",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-SF-08 回転体は道具 → 断面 → 軸(自動遷移)→ 下見 → Enter",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-01 面取りは道具 → A → B → 下見 → Enter、押し直すと外れる",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-02 丸めも同じ道で、Esc でやめると何も変わらない",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-CN-03 面取りは直線と円弧の角も落とせる(押した側を残す)",
+      "suite": "HumanPathCorner"
+    },
+    {
+      "name": "HP-RB-04 カテゴリタブとツールボタンの外観",
+      "suite": "Ribbon"
+    },
+    {
+      "name": "HP-RB-01 帯はカテゴリ → 道具で、押した道具になる",
+      "suite": "Ribbon"
+    },
+    {
+      "name": "HP-RB-02 核に無い道具は押せない形で理由が出る",
+      "suite": "Ribbon"
+    },
+    {
+      "name": "HP-RB-03 帯はモードで入れ替わり、面作成は作り方つきで構える",
+      "suite": "Ribbon"
+    },
+    {
+      "name": "HP-XP-01 一覧の節は正本の順で原点が先頭",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-02 ◉ で1つずつ出し隠しでき、取り消しで戻る",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-03 3D と一覧の選択が両方向に同期する",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-04 右クリックの献立は正本の順で、グループへ移せる",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-05 collapse, nested groups, visibility, search and undo redo",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-06 bulk categories preserve selection and Undo",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-07 sibling buttons and hidden descendant preservation",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-08 generated curve compaction preserves geometry",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-09 overlap preview and reference-picking roles",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-XP-10 grouped category visibility remains scoped",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-01 folder mouse keyboard naming and empty creation",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-02 source wires remain pickable under displayed faces",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-03 surface grid is optional and keeps native topology",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-04 folder delete cancel dissolve Undo and save",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-05 inline rename cannot confirm an armed modeling tool",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-06 folder pick remains safe when a pending command rebuilds rows",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-07 folder deletion includes members filtered by an active tool",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-08 ancestor drag keeps nested hierarchy and Undo",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-FP-09 move menu distinguishes paths and survives row rebuild",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-PERF-02 visibility retains native geometry and edge identity",
+      "suite": "Explorer"
+    },
+    {
+      "name": "HP-ST-01 状態行と HUD がモード・道具・吸着・座標を映す",
+      "suite": "StatusLine"
+    },
+    {
+      "name": "HP-ST-02 測定を重ねて Esc で元の道具へ戻る",
+      "suite": "StatusLine"
+    },
+    {
+      "name": "HP-ST-03 測定の途中で道具を選び直せば戻り先を忘れる",
+      "suite": "StatusLine"
+    },
+    {
+      "name": "HP-ST-04 棚で進める操作の最中は状態行と HUD がその操作の名前を出す",
+      "suite": "StatusLine"
+    },
+    {
+      "name": "HP-DM-01 作り方カードは道具に従い、押すと作り方が変わり、核に無いものは理由つき",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-02 3点のカードで 3 か所を押すと円弧ができる",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-03 スプラインは制御点と通過点を押せFitは理由つき、ベジェは 1 枚",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-04 円は中心＋半径と直径指定のどちらでも画面から引ける",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-05 ベジェは制御点を4か所押すと1本できる",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-06 スプラインは制御点を4か所押して Enter で1本できる",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-07 円の3点は3か所を押すとその3点を通る円ができる",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-08 円弧の中心・始点・終点は半径が始点で決まり左回りにできる",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-09 スプラインの通過点は押した点をすべて通る",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-DM-10 スケールは倍率でも基準の2点でも線の大きさを変え1回で戻る",
+      "suite": "DrawingMethod"
+    },
+    {
+      "name": "HP-PA-09 solid face terminal offset undo save",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-08 direct surface stop and negative offset survive save",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-07 Esc retains extrude settings and next profile can commit",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-06 任意曲面を終端として押し出し、保存・再生成",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-03 ツール先行で輪郭を選び、非対称と反転を保存後も維持",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-04 曲面を後から選び、直線方向に押し出して保存・再生成",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-05 斜めの線の面まで押し出して保存・再生成",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-01 押し出しの棚に範囲 5 通り・方向 7 通りが並び、要る欄だけ生えて作る形へ届く",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-PA-02 棚で選んだ左右対称が確定した立体に残る",
+      "suite": "PartPanel"
+    },
+    {
+      "name": "HP-AR-03 tool first explicit source role",
+      "suite": "Array"
+    },
+    {
+      "name": "HP-CA-ROLE reverse order and clear retain other",
+      "suite": "Array"
+    },
+    {
+      "name": "HP-AR-01 配列の棚で個数を決めて確定すると並び、1回の取り消しで戻る",
+      "suite": "Array"
+    },
+    {
+      "name": "HP-AR-02 配列の棚は Esc で何も作らずに引っ込む",
+      "suite": "Array"
+    },
+    {
+      "name": "HP-PF-01 道具の棚は共通の枠(節の並びとキャンセル・確定)",
+      "suite": "PanelFrame"
+    },
+    {
+      "name": "HP-PF-02 選んでから開く道具の棚も共通の枠",
+      "suite": "PanelFrame"
+    },
+    {
+      "name": "HP-PF-03 作図の棚の共通とキャンセル・確定は本物",
+      "suite": "PanelFrame"
+    },
+    {
+      "name": "HP-PL-01 部品の移動は2点の分だけ動き元は隠れ1回で戻り開き直しても同じ場所",
+      "suite": "PartPlace"
+    },
+    {
+      "name": "HP-PL-02 部品のミラーは線の向こうに同じ大きさで写し元は残す",
+      "suite": "PartPlace"
+    },
+    {
+      "name": "HP-PL-03 部品のパターンは配列の棚で個数ぶん並び1回で戻る",
+      "suite": "PartPlace"
+    },
+    {
+      "name": "HP-SO-01 回転体は輪郭と軸を押すと体積が予測と合い角度で割合どおり変わり1回で戻り開き直しても同じ",
+      "suite": "Solid"
+    },
+    {
+      "name": "HP-SO-02 スイープは輪郭と経路を押すとまっすぐな経路で面積×長さの立体になる",
+      "suite": "Solid"
+    },
+    {
+      "name": "HP-SO-03 ロフト立体は高さ違いの断面を押した順に通しガイド付きは理由つきで押せない",
+      "suite": "Solid"
+    },
+    {
+      "name": "HP-SO-04 回転体は軸が輪郭を横切れば断り足すでは相手を押して確定で相手が隠れ1回で戻る",
+      "suite": "Solid"
+    },
+    {
+      "name": "HP-FL-03 edge output choices and atomic undo",
+      "suite": "EdgeFinish"
+    },
+    {
+      "name": "HP-FL-01 フィレットは辺の近くを押して半径で丸め体積が式どおり減り1回で戻り開き直しても同じ",
+      "suite": "EdgeFinish"
+    },
+    {
+      "name": "HP-FL-02 面取りは辺を何本でも押して選び押し直すと外れ距離で落とす",
+      "suite": "EdgeFinish"
+    },
+    {
+      "name": "HP-SH-OUTPUT all output kinds themes preview undo and saved boundaries",
+      "suite": "ShellSplit"
+    },
+    {
+      "name": "HP-SH-01 シェルは面を押して選び押し直すと外れ肉厚で内側へ残し1回で戻り開き直しても同じ",
+      "suite": "ShellSplit"
+    },
+    {
+      "name": "HP-SH-02 分割は作業平面が部品を通らなければ断りずらすと両側を2つの部品にする",
+      "suite": "ShellSplit"
+    },
+    {
+      "name": "HP-TR-01 トリムは何も選ばず円の下側に置くと消える区間が見え押すと上半分の円弧になり1回で戻る",
+      "suite": "HoverEdit"
+    },
+    {
+      "name": "HP-TR-02 トリムは真ん中を押すと2本に分かれ交点の無い線は線ごと消える",
+      "suite": "HoverEdit"
+    },
+    {
+      "name": "HP-GN-01 生成の作り方カードは 現在/Flat/Target で、Target 100% は固定物を作る",
+      "suite": "Generate"
+    },
+    {
+      "name": "HP-GN-02 Flat 0% は線を作り、近似モデルは残り、1回の取り消しで線が全部消える",
+      "suite": "Generate"
+    },
+    {
+      "name": "HP-GN-03 輪郭 Wire は固定で作るものが部品でも線だけを作る",
+      "suite": "Generate"
+    },
+    {
+      "name": "HP-UF-01 展開のカードは3枚で、自動展開は展開ボタンから型紙まで通る",
+      "suite": "Unfold"
+    },
+    {
+      "name": "HP-TH-INDEPENDENT frozen solid and boundary survive source deletion and save",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-JIG-OUTPUT all jig outputs themes undo and saved results",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-OUTPUT all outputs placements to-plane themes and atomic saved results",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-CORRECT explicit correction buttons and saved native rebuild",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-08 editable viewport and coalesced latest thickness preview",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-05 running job cancellation, UI response and saved retry",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-06 crashed calculation process preserves document and supports retry",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-07 actual complex smooth surface cancellation during kernel calculation",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-04 thickness preview release, cancel and retry",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-01 面を3Dで拾い、作り方を選んで Enter すると部品になり、取り消しで消える",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-TH-02 Esc は何も作らずにやめられ、同じ面を押し直すと欄が空になる",
+      "suite": "Thicken"
+    },
+    {
+      "name": "HP-SE-01 面を2枚作り、向かい合う縁を押して G1 でつなぎ、取り消しで消える",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-03 隣り合う面の縁を押して G1 で合わせ、元の面は残り、取り消しで消える",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-04 surface preview ownership survives replace cancel and commit",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-05 surface creation preview ownership",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-06 surface history rebuild ownership",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SE-07 folder metadata preserves preview but geometry invalidates it",
+      "suite": "SurfaceEdit"
+    },
+    {
+      "name": "HP-SA-01 面の解析の棚でゼブラ・ガウス曲率・U/V 線・境目・ずれを切り替え、平面はほぼ可展",
+      "suite": "SurfaceAnalysis"
+    },
+    {
+      "name": "HP-SA-02 面を作るの下見も塗り、二重曲率を棚に出し、下見が消えれば塗りも消える",
+      "suite": "SurfaceAnalysis"
+    },
+    {
+      "name": "HP-WP-01 作業面の棚で作り方を選ぶと平面の下見が出て、作ると消える",
+      "suite": "WorkPlanePreview"
+    },
+    {
+      "name": "RG-15 治具は道具と対象を選んだ後に確定する",
+      "suite": "Regression"
+    },
+    {
+      "name": "RG-09 右は1枚で、数の棚は「数の設定」でだけ前に出る",
+      "suite": "Regression"
+    },
+    {
+      "name": "RG-02 道具を先に構えても古い右の棚が残らない",
+      "suite": "Regression"
+    },
+    {
+      "name": "RG-12 画面の文字に「まとまり」が残っていない",
+      "suite": "Regression"
+    },
+    {
+      "name": "RG-14 狭い画面でも帯の道具が右端で切れない",
+      "suite": "Regression"
+    },
+    {
+      "name": "HP-PENDING-ENTRY target panes replace drawing and restore on reclick",
+      "suite": "Screen"
+    },
+    {
+      "name": "作図面が画面に出て、どこに描いているかが読める",
+      "suite": "Screen"
+    },
+    {
+      "name": "左メニューで選んだものが3D画面の選択になる",
+      "suite": "Screen"
+    },
+    {
+      "name": "3D画面で選んだものが左メニューで光る",
+      "suite": "Screen"
+    },
+    {
+      "name": "道具を変えるとカーソルの形も変わる",
+      "suite": "Screen"
+    },
+    {
+      "name": "カーソルの下の線が分かる",
+      "suite": "Screen"
+    },
+    {
+      "name": "選択に正対すると、その面が画面の真ん中に来る",
+      "suite": "Screen"
+    },
+    {
+      "name": "右の棚がいま使っている道具に付いてくる",
+      "suite": "Screen"
+    },
+    {
+      "name": "一覧を名前・種類で絞り込める",
+      "suite": "Screen"
+    },
+    {
+      "name": "HP-WP-PICK 作図中は作業平面の外の線を掴まない",
+      "suite": "Screen"
+    },
+    {
+      "name": "押し出した部品が3D画面に出る",
+      "suite": "Screen"
+    },
+    {
+      "name": "塗った形を画面で掴める",
+      "suite": "Screen"
+    },
+    {
+      "name": "隠した形は画面からも消える",
+      "suite": "Screen"
+    },
+    {
+      "name": "型紙を出す前に画面で見られる",
+      "suite": "Screen"
+    },
+    {
+      "name": "直線に並べて一度で戻せる",
+      "suite": "Screen"
+    },
+    {
+      "name": "一周に並べても最後が元に重ならない",
+      "suite": "Screen"
+    },
+    {
+      "name": "並べる数の打ち間違いを断る",
+      "suite": "Screen"
+    },
+    {
+      "name": "部品モードでも道具の設定が右に出る",
+      "suite": "Screen"
+    },
+    {
+      "name": "上の帯は入口だけに絞られている",
+      "suite": "Screen"
+    },
+    {
+      "name": "モードを変えると選択道具へ戻る",
+      "suite": "Screen"
+    },
+    {
+      "name": "動かす道具は1回目の押しで相手を選ぶ",
+      "suite": "Screen"
+    },
+    {
+      "name": "作図点を押して選べる",
+      "suite": "Screen"
+    },
+    {
+      "name": "Ctrlで追加と解除ができる",
+      "suite": "Screen"
+    },
+    {
+      "name": "重なった候補をTabで送れる",
+      "suite": "Screen"
+    },
+    {
+      "name": "Alt+クリックで奥の候補を選べる",
+      "suite": "Screen"
+    },
+    {
+      "name": "右クリックの献立は候補を先頭に出す",
+      "suite": "Screen"
+    },
+    {
+      "name": "献立で選んだ候補だけが選択になる",
+      "suite": "Screen"
+    },
+    {
+      "name": "候補が無くても献立は出て選択も消えない",
+      "suite": "Screen"
+    },
+    {
+      "name": "矩形選択は向きで包含と交差を分ける",
+      "suite": "Screen"
+    },
+    {
+      "name": "Ctrl+矩形で足し引きし、小さな動きは矩形にしない",
+      "suite": "Screen"
+    },
+    {
+      "name": "右ドラッグでカメラが動かない",
+      "suite": "Screen"
+    },
+    {
+      "name": "中ドラッグでパン、Shift+中でオービット",
+      "suite": "Screen"
+    },
+    {
+      "name": "命令は相手がそろうまで構えて待つ",
+      "suite": "Screen"
+    },
+    {
+      "name": "作業平面へ続けて正対しても前の相手を引きずらない",
+      "suite": "Facing"
+    },
+    {
+      "name": "立体の面へ正対できる",
+      "suite": "Facing"
+    },
+    {
+      "name": "立体そのものを選んでも正対を断らない",
+      "suite": "Facing"
+    },
+    {
+      "name": "向きの違う相手を複数選ぶと最初の1つの向きに合わせて全部を収める",
+      "suite": "Facing"
+    },
+    {
+      "name": "GR グループ各階層のカテゴリと子孫選択",
+      "suite": "Group"
+    },
+    {
+      "name": "GR 複数選んでグループにできる",
+      "suite": "Group"
+    },
+    {
+      "name": "GR 引きずってグループへ移せる",
+      "suite": "Group"
+    },
+    {
+      "name": "GR グループごと隠しても中身の設定は変わらない",
+      "suite": "Group"
+    },
+    {
+      "name": "GR グループを解いても中身は消えない",
+      "suite": "Group"
+    },
+    {
+      "name": "GR グループの階層が保存して開き直しても残る",
+      "suite": "Group"
+    },
+    {
+      "name": "GR グループを作るのは1回の取り消しで戻る",
+      "suite": "Group"
+    },
+    {
+      "name": "GR 一度に引きずった分は1回の取り消しで戻る",
+      "suite": "Group"
+    },
+    {
+      "name": "GR 1つでも断られたら引きずった分は全部戻る",
+      "suite": "Group"
+    },
+    {
+      "name": "面の押し引きをやめても文書が変わらない",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "押し出しは1回の取り消しで完全に戻る",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "棚で選んだ演算のまま作られる",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "棚で選んだ向きが矢印と確定と保存まで通る",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "詳細の窓は渡した決めごとをそのまま見せる",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "詳細の窓で選んだ向きが矢印と確定と次回まで通る",
+      "suite": "ExtrudePromise"
+    },
+    {
+      "name": "面の縁の線が押し出しの入力として記録される",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "面の縁を直すと押し出しが計算し直す対象に入る",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "面の押し引きは保存して開き直しても残る",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "面の押し引きは1回の取り消しとやり直しで往復する",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "断られた押し出しは覚えている形にも跡を残さない",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "輪郭 2 つの押し出しは部品ごとに自分の輪郭を持ち開き直しても別の場所にある",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "違う平面の輪郭は平面ごとに押し出し下見に全部出て1回で戻る",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "違う平面の輪郭の足すは前の結果を次の相手につなぎ1回で戻る",
+      "suite": "ExtrudeGraph"
+    },
+    {
+      "name": "組立率と半径はどちらから打っても同じことを言い、当てるまで文書は変わらない",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "読めない部材番号では半径を出さず、理由を出す",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "何も無いところから面を作り、方式を見比べて近似できる",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "近似を0/50/70/100%へ動かし、途中の状態から線と面を作れる",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "近似は1回の取り消しで戻り、保存して開き直しても残る",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "部材は何枚にでも等分でき隣り合う何枚でも1枚にでき1回で戻り位置も選べる",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "製作の表示は元の面と近似の姿を出し分け文書は変えない",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "部材を1つにする・分けるが本当に分け方を変える",
+      "suite": "ApproximationFlow"
+    },
+    {
+      "name": "HP-HEAVY 非表示の押し出し輪郭を開き直す",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本が開けて中身がそろう",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本で作業平面と面へ正対できる",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本の輪郭を押し出せる",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本で曲げ具合を0から100まで動かせる",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本の曲げ固定と非対応厚みの安全な拒否",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本で実寸半径を入れて固定できる",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本が保存して開き直しても残る",
+      "suite": "HoModel"
+    },
+    {
+      "name": "曲げ半径は部材ごとに持ち、保存して開き直しても形ごと残る",
+      "suite": "HoModel"
+    },
+    {
+      "name": "HOの見本の上でも道具替えが綺麗",
+      "suite": "HoModel"
+    },
+    {
+      "name": "同じワイヤーでも選んだ線分だけが選択色になる",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "Hoverと選択は別の意味状態で描く",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "テーマを変えても意味状態の区別が残る",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "途中経過のペンは確定した線より細い破線か半透明",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "途中経過は拾えないし選べない",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "締められなかったときだけ途中経過を残す",
+      "suite": "SemanticState"
+    },
+    {
+      "name": "HP-INT-04 surface and revolve buttons restore panes without applying",
+      "suite": "Pointer"
+    },
+    {
+      "name": "HP-INT-03 workplane tool-first and common keys",
+      "suite": "Pointer"
+    },
+    {
+      "name": "HP-INT-01 context actions preserve unfinished input",
+      "suite": "Pointer"
+    },
+    {
+      "name": "HP-INT-02 activation and explicit apply across entry points",
+      "suite": "Pointer"
+    },
+    {
+      "name": "手ぶれでは選んだ物が動かない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "引きずれば選んだ物が動く",
+      "suite": "Pointer"
+    },
+    {
+      "name": "引きずって戻して離してもクリックにしない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "右でなぞった後は献立を出さない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "カーソルの形が仕様どおり",
+      "suite": "Pointer"
+    },
+    {
+      "name": "画面を動かしても文書と選択が変わらない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "中ボタンでは掴みが終わらない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "画面を送っても引きかけの線が残る",
+      "suite": "Pointer"
+    },
+    {
+      "name": "送っている最中の左押しでは点が置かれない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "どの道具でも震えたクリックは普通のクリックと同じ",
+      "suite": "Pointer"
+    },
+    {
+      "name": "どの道具でも替えたら前の途中経過が消える",
+      "suite": "Pointer"
+    },
+    {
+      "name": "掴めないと言う線は押しても拾えない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "診断情報をコピーできる",
+      "suite": "Pointer"
+    },
+    {
+      "name": "診断の各欄が道具に追従する",
+      "suite": "Pointer"
+    },
+    {
+      "name": "道具を続けて替えても前の状態が残らない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "押し出しが選択を読んで次を案内する",
+      "suite": "Pointer"
+    },
+    {
+      "name": "道具を替えると前の吸着と候補送りが消える",
+      "suite": "Pointer"
+    },
+    {
+      "name": "場面を差し替えると吸着の持ち越しが消える",
+      "suite": "Pointer"
+    },
+    {
+      "name": "取り消した直後に古いリングが残らない",
+      "suite": "Pointer"
+    },
+    {
+      "name": "治具は当たり面と当て板を作り一度で戻る",
+      "suite": "Guide"
+    },
+    {
+      "name": "回転体は断面を軸のまわりに回して形状ガイドを作る",
+      "suite": "Guide"
+    },
+    {
+      "name": "回転体は選んだ断面を全部回し最後の直線を軸にする",
+      "suite": "Guide"
+    },
+    {
+      "name": "役割表から平面を作り開き直しても戻る",
+      "suite": "Guide"
+    },
+    {
+      "name": "表の行に効くコマンドは行を選んでから",
+      "suite": "Guide"
+    },
+    {
+      "name": "PROJ 回り込み投影は1面から開始できる",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "製作の棚の範囲と材料・積層が効く",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "HP-FAB-SHELF 製作の棚が欄を持ち数の棚と方式を映す",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "近似モデルは文書に入り開き直しても戻る",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "組立率を変えると本当に曲がる",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "HP-FB-05 組立状態は窓を出さず棚の欄へ案内し、当てるまで文書は変わらない",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "近似の方式を切り替えられる",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "曲げ状態で固定すると線と面と部品になる",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "PROJ 曲面へ落とした窓が帯の型紙に開く",
+      "suite": "Fabrication"
+    },
+    {
+      "name": "HP-PE-01 3D で部材を押すと「対象部材」欄がその番号になり PART の札が出る",
+      "suite": "PartEdit"
+    },
+    {
+      "name": "HP-GRID-01 display toggle preserves snapping and pending input",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-PERF-03 presentation camera capture resize and idle",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-GRID-02 selected wire contrast and overlapping roles",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-GRID-03 hidden overlays keep GPU shading",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-GRID-05 projected grid reuse and invalidation",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-RS-01 5 つの撮影の場面が作れる",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",
+      "suite": "Responsive"
+    },
+    {
+      "name": "HP-AC-01 ほぼ真下へ引いた線は真下ちょうどになる",
+      "suite": "DrawingAccuracy"
+    },
+    {
+      "name": "HP-AC-02 長さを打ち Tab で角度へ移って Enter で打ったとおりの線ができる",
+      "suite": "DrawingAccuracy"
+    },
+    {
+      "name": "HP-AC-03 既存の直線の上のグリッドの点へ線の端がちょうど乗る",
+      "suite": "DrawingAccuracy"
+    },
+    {
+      "name": "HP-SF-13 おまかせ: 線を押すだけで役割と作り方が決まり、理由と候補が出て、役割を直せる",
+      "suite": "BoundaryFill"
+    },
+    {
+      "name": "HP-SF-10 境界面は外周と内側の線をまとめて選んでも外周を輪にし内側を通る線にする",
+      "suite": "BoundaryFill"
+    },
+    {
+      "name": "HP-SF-11 ロフトは断面3本とガイド3本を普通のクリックで受けて全部を使う",
+      "suite": "BoundaryFill"
+    },
+    {
+      "name": "HP-SF-12 四辺面を4辺から作り張り方を選べる",
+      "suite": "BoundaryFill"
+    },
+    {
+      "name": "HP-LF-12 複合ワイヤーの枝と途中の接続から面を作る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-11 面にするを先に選び追加クリックで下見と確定",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-01 面にするは閉じた輪を全部見つけて面にし、元の線を残す",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-02 面にするはずれを言い、Enterで直線の端を寄せてから作る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-03 面にするはEscで何も変えない",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-04 面にするはT字で線を分けてから輪を全部作り、1回の取り消しで戻る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-05 面にするの棚で輪を外す・作り方を変える・ずれをそのままにできる",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-06 線を選ぶと事実の行(載る面・長さ・端のつながり)が出て、[寄せる]でその場で寄る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-07 面にするは共有辺に連続の欄を出し、欄と Tab で G0→G1→G2 を回して作る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-08 作った直後に「直前の操作」が出て、開いて直すと 1 回の取り消しで戻って構え直す",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-09 削除は面・作業平面にも効き、使われている線と原点の平面は理由を言って断る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-LF-10 オーナーの atama の 8 本(円弧 4・直線 4、T 字)を面にすると四辺面が 2 枚でき、面に格子が乗る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-AP-05 atama の面 2 枚を選んで 近似 を押すだけで縦割り 4 部材 × 2(角のレールつき)、横割りも選べる",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-AP-07 近似モデルが 2 つあるとき、3D で押した面・一覧の「部材 n」のモデルが現在になり、曲げはそこへ当たり、帯が色分けされる",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-AP-08 面を 2 枚作って片方を近似しても、もう片方の面は 3D に残る(逆向きの辺でも作り直せる)",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-AP-09 役割表の行の色分け(境界辺)は役割表の棚を見ている間だけ 3D に出る",
+      "suite": "LoopFaces"
+    },
+    {
+      "name": "HP-AP-QUICK 日常設定詳細折畳みと実面下見とGPT製作入口廃止",
+      "suite": "ApproxOutline"
+    },
+    {
+      "name": "HP-AP-SWITCH 面作成直後から近似へ移ると日常設定が表示される",
+      "suite": "ApproxOutline"
+    },
+    {
+      "name": "HP-GPT-F04 従来帯近似の自動間隔・保存・型紙",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GPT-F05 小さい前頭部9枚・最小幅4mmでも下見と確定",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GPT-F06 取消と設定変更から近似をやり直す",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GEN-01 自動生成・選択部材・短辺・近似面・保存",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GEN-02 選択部材の別文書生成・保存取消",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GEN-04 選択部材の0・37・100%生成形状",
+      "suite": "GptFabrication"
+    },
+    {
+      "name": "HP-GPT-01 外周・下見・確定・Undo/Redo・保存再読込",
+      "suite": "GptSurface"
+    },
+    {
+      "name": "HP-GPT-02 複数断面から面を作る",
+      "suite": "GptSurface"
+    },
+    {
+      "name": "HP-GPT-03 不完全な外周を拒否・取消で文書不変",
+      "suite": "GptSurface"
+    },
+    {
+      "name": "HP-GPT-04 クリックで複合断面を追加・並べ替え・確定",
+      "suite": "GptSurface"
+    },
+    {
+      "name": "HP-GPT-05 分岐から外周自動判定・番号矢印・クリック修正",
+      "suite": "GptSurface"
+    },
+    {
+      "name": "HP-GPT-06 前頭部の滑らかな開いた殻・面表示",
+      "suite": "GptSurface"
+    }
+  ],
+  "schema": 1,
+  "selected": [
+    "HP-GRID-04 optional settings preserve tools and numeric input"
+  ],
+  "total": 1
+}

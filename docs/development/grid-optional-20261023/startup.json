@@ -1,0 +1,13 @@
+{
+    "event_loop": true,
+    "exposed": true,
+    "height": 760,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1180
+}

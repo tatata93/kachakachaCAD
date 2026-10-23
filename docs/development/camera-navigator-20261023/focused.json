@@ -1,0 +1,22 @@
+[
+  {
+    "label": "nav-final-focused",
+    "total": 69,
+    "failed": 0
+  },
+  {
+    "label": "nav-dpi150-final",
+    "total": 19,
+    "failed": 0
+  },
+  {
+    "label": "nav-offscreen-final",
+    "total": 19,
+    "failed": 0
+  },
+  {
+    "label": "nav-software-final",
+    "total": 19,
+    "failed": 0
+  }
+]

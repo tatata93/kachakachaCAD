@@ -190,3 +190,8 @@ UI操作、部材近似、保存形式、受入試験、作業パッケージを
 - ペーパークラフト3系統+ガイド付きロフト(2026-08-27〜29の作業を 2026-09-02 に main へ統合、マージ 38b26f5): `FacetedPapercraft`(多面体)、`BentSheetPapercraft`(連続曲げ板)、`FabricationPanelPapercraft`(製作用大部材)、`Surface::GuidedLoft`、面入力のグループ化(`NamedSurface::sourceWireGroups`、.kcd の surface_grouped)。ADR 0014〜0017。→ **ペーパークラフト3系統は 2026-09-01 に削除**。部材近似モデル(`PartModel` / ADR 0019、`docs/surface-unfolding-spec.md`)へ置き換えた。組み上がらない展開を出す旧方式を残す価値がないというオーナー判断。GuidedLoft と surface_grouped は存続。`MainWindow` の `UsesFacetedPapercraft` 等は常に false を返す暫定スタブとして残っており、出力タブUI刷新時に撤去する。
 - 複数環境対応(2026-09-02、809667f〜): Qt/vcpkg自動検出(`cmake/KachakachaEnvironment.cmake`)、`CMakePresets.json`、`scripts/*.sh`、MSVC `/utf-8` `/MP`、テストのタイムアウト。詳細は `docs/multi-machine-development.md`。
 - 今後の大きな機能開発の軸は面展開の新パイプライン(`docs/surface-unfolding-spec.md`)。既存の展開4系統はそこへ統合・整理していく。
+
+
+### 2026-10-23 視点操作・選択描画の追加改善
+
+38dd139eb。表示専用の選択索引をUIの独立所有型へ分離し、繰り返しの選択一覧コピーを削減。主窓ヘッダーと幾何APIは変更しない。ギズモの配置・クリック優先順位・回転方向・微調整を修正。Windows CTest195件、UI566件×2、旧自己試験、配布版通常起動が成功。大規模モデル多数選択の中央値648→42ms（グリッドなしの回転、一組）だが60fpsには未達。全条件・失敗記録・残る範囲は[比較資料](development/camera-navigator-20261023.html)。

@@ -18,14 +18,17 @@ BASE_WINDOWS = [(37.1,9,'fixed')]+[(x,w,t) for shift in [0,75] for x,w,t in
 class Revised(Train):
     def id(self):
         self.i += 1
-        return str(uuid.uuid5(NS,str(self.i)))
+        return str(uuid.uuid5(self.namespace,str(self.i)))
 
-    def __init__(self):
+    def __init__(self,detailed=False):
+        self.detailed=detailed
+        self.namespace=uuid.UUID('bb7e684d-52c6-4d90-9525-115122208025') if detailed else NS
         super().__init__()
-        self.d['documentId']=str(uuid.uuid5(NS,'revised-main'))
+        self.d['documentId']=str(uuid.uuid5(self.namespace,'revised-main'))
         self.d['metadata'].update(title='クハ115 長野色 1/80｜実車調査反映・横長貫通扉窓',
             description='New native source features. Kuha115-1222/N15 pre-training Nagano appearance study; local radii, window positions and equipment dimensions photo-estimated, not a measured reconstruction. Gangway window is wider than high per owner correction.')
         self.assembly=[]; self.windows={}; self.layout={};self.keyparts={}
+        if detailed:self.d['metadata']['title']='クハ115 長野色 1/80｜前面・屋根機器・台車の写真照合改訂'
 
     def plan(self,z,inset=0,shrink=0):
         y=SIDE-inset-shrink; r=3.8-inset; half=5.3
@@ -92,13 +95,20 @@ def body(m,root):
                      m.rounded(label+'乗務員扉',(17.0,sign*19.5,FLOOR),(1,0,0),(0,0,1),6.5,22.8,.35,g)]
         a=m.cut(label+'側面の実開口',a,profiles,(0,-sign,0),4.2,g)
     for side in [-1,1]:
-        p=m.rounded('パノラミック開口',(-3,5.3 if side>0 else -18.4,29.35),(0,1,0),(0,0,1),13.1,9.05,.8,g)
+        p=m.rounded('パノラミック開口',(-3,5.3 if side>0 else -18.4,30.6 if m.detailed else 29.35),
+                    (0,1,0),(0,0,1),13.1,7.6 if m.detailed else 9.05,.8,g)
         a=m.cut('前面と回込窓を抜く'+str(side),a,[p],(1,0,0),11.4,g)
     p=m.rounded('前面貫通開口',(-2,-4.8,FLOOR),(0,1,0),(0,0,1),9.6,23.2,.65,g)
     a=m.cut('前面貫通開口を抜く',a,[p],(1,0,0),4.2,g)
     p=m.rounded('後妻貫通開口',(L+1,-4.45,FLOOR),(0,1,0),(0,0,1),8.9,23.0,.6,g)
     a=m.cut('後妻貫通開口を抜く',a,[p],(-1,0,0),3.5,g)
     m.finished['body']=m.finish(a,thickness=1,notes='裾絞り1.1mm、折妻8度、隅R3.8mmは写真による推定設計値。実測値ではない。')
+    if m.detailed:
+        for side in [-1,1]:
+            for z,inside in [(30.2,True),(31.0,False),(38.5,True)]:
+                for depth in [.3,.6,.9]:
+                    m.points.append(dict(entity=a,label='短縮した前面窓と上下の外板',
+                        point=[math.tan(math.radians(8))*4.7+depth,side*10,z],expectedInside=inside))
 
 
 def side_details(m,root):
@@ -170,26 +180,31 @@ def side_details(m,root):
 
 def front(m,root):
     g=m.group('06 前頭部｜横長貫通扉窓・折妻・縦桟',root)
+    bottom=30.38 if m.detailed else 29.13; height=8.04 if m.detailed else 9.49
     for side in [-1,1]:
         y=5.12 if side>0 else -18.55
-        shell=m.shell('前面Hゴム素材',g,-.32,-.03,29.13,38.62)
-        o=m.rounded('ゴム外マスク',(-3,y,29.13),(0,1,0),(0,0,1),13.43,9.49,1.0,g)
-        q=m.rounded('ゴム内マスク',(-3,y+.4,29.53),(0,1,0),(0,0,1),12.63,8.69,.6,g)
+        shell=m.shell('前面Hゴム素材',g,-.32,-.03,bottom,bottom+height)
+        o=m.rounded('ゴム外マスク',(-3,y,bottom),(0,1,0),(0,0,1),13.43,height,1.0,g)
+        q=m.rounded('ゴム内マスク',(-3,y+.4,bottom+.4),(0,1,0),(0,0,1),12.63,height-.8,.6,g)
         tool=m.extrude('前面窓ゴム切出工具',[o,q],(1,0,0),11.4,g)
         rim=m.boolean('前面窓Hゴム'+str(side),shell,[tool],2,g,'黒')
-        cap=m.box('回込窓端の縦ゴム',8.05,min(side*(SIDE+.32),side*(SIDE+.03)),29.33,.35,.29,9.1,g)
+        cap=m.box('回込窓端の縦ゴム',8.05,min(side*(SIDE+.32),side*(SIDE+.03)),bottom+.2,.35,.29,height-.39,g)
         rim=m.joined('パノラミック窓ゴム一体'+str(side),[rim,cap],g,'黒')
         m.clear(m.finished['body'],rim,'パノラミックゴムと車体')
-        shell=m.shell('前面透明板素材',g,1.08,1.48,29.40,38.35)
-        p=m.rounded('前面ガラスマスク',(-3,5.35 if side>0 else -18.2,29.40),(0,1,0),(0,0,1),12.85,8.95,.8,g)
+        shell=m.shell('前面透明板素材',g,1.08,1.48,bottom+.27,bottom+height-.27)
+        p=m.rounded('前面ガラスマスク',(-3,5.35 if side>0 else -18.2,bottom+.27),(0,1,0),(0,0,1),12.85,height-.54,.8,g)
         tool=m.extrude('透明板切出工具',[p],(1,0,0),11.0,g)
         pane=m.boolean('前面曲面透明板'+str(side),shell,[tool],2,g,'透明')
         m.keyparts['glasses'].append(pane);m.clear(m.finished['body'],pane,'前面透明板と車体')
         # Divider lies on the flat/curved transition rather than bisecting the window.
         yy=14.6*side;xx=math.tan(math.radians(8))*(14.6-5.3)-.14
-        divider=m.tube('前面窓の銀色縦桟',(xx,yy,29.5),(xx,yy,38.3),.13,g)
+        divider=m.tube('前面窓の銀色縦桟',(xx,yy,bottom+.37),(xx,yy,bottom+height-.32),.13,g)
         divider=m.boolean('縦桟の両端を窓ゴムに合わせる',divider,[rim],1,g,'アルミ銀')
         m.entities[rim]['visibility']='visible'
+        if m.detailed:
+            from detail_parts import wiper
+            wiper(m,g,side)
+            continue
         arm=[m.tube('ワイパー腕',(-.40,side*8,29.8),(-.48,side*10.4,34.5),.15,g),
              m.tube('ワイパー連動腕',(-.48,side*8.5,29.8),(-.56,side*10.75,34.5),.12,g),
              m.tube('ワイパーブレード',(-.56,side*10.2,34.2),(-.56,side*12.2,36.3),.14,g)]
@@ -215,9 +230,16 @@ def front(m,root):
     ears=[m.ring('幌受上の締結耳',(-.9,y,39.0),(1,0,0),.4,.18,.4,g) for y in [-3.0,3.0]]
     m.joined('幌受け・締結耳一体',[rim]+ears,g)
     m.finish(m.box('貫通扉取手',-.56,3.6,27.2,.35,.65,.3,g),'アルミ銀')
-    m.finish(m.box('下部渡り板',-.95,-4.2,FLOOR+.3,.70,8.4,2.4,g),thickness=.70)
+    if m.detailed:
+        from detail_parts import gangway_fittings
+        gangway_fittings(m,g)
+    else:m.finish(m.box('下部渡り板',-.95,-4.2,FLOOR+.3,.70,8.4,2.4,g),thickness=.70)
     for side in [-1,1]:
         for name,y,z,r,color in [('前照灯',12.7,25.7,1.52,'透明'),('尾灯',12.7,20.2,.80,'赤透明')]:
+            if m.detailed:
+                from detail_parts import lamp
+                lamp(m,g,side,name,y,z,r,color)
+                continue
             xx=math.tan(math.radians(8))*(y-5.3)
             n=(-math.cos(math.radians(8)),side*math.sin(math.radians(8)),0)
             center=(xx-.70,side*y,z)
@@ -245,16 +267,17 @@ def front(m,root):
     m.finish(m.extrude('後妻幌受け',[o,q],(-1,0,0),.35,rg),'床下グレー')
 
 
-def roof_profile(m,g,x,top,inset=0,hollow=False):
+def roof_profile(m,g,x,top,inset=0,hollow=False,shift=0):
     """Tangent central/shoulder arcs; concentric normal offset for inner profile."""
     rt=40.0;h=top-EAVE;rs=(2*rt*h-SIDE*SIDE-h*h)/(2*(rt-SIDE))
     cy=SIDE-rs;zc=top-rt;theta=math.atan2(EAVE-zc,cy)
+    zc+=shift
     r1,r2=rt-inset,rs-inset
     if r2<=0:raise ValueError('roof shoulder offset is too thick')
     def pt(center,r,a):return (x,center[0]+r*math.cos(a),center[1]+r*math.sin(a))
-    right=(cy,EAVE);left=(-cy,EAVE);mid=(0,zc)
+    right=(cy,EAVE+shift);left=(-cy,EAVE+shift);mid=(0,zc)
     p0=pt(right,r2,0);p1=pt(left,r2,math.pi)
-    bottom=JOINT if inset==0 else JOINT-.2
+    bottom=(JOINT if inset==0 else JOINT-.2)+shift
     if hollow:
         a=.85;ri=rt-a;si=rs-a
         if si<=0:raise ValueError('Invalid inner shoulder')
@@ -284,29 +307,69 @@ def roof(m,root):
         parts=[m.loft(name+'前頭区間'+str(i),[a,b],g) for i,(a,b) in enumerate(zip(profiles,profiles[1:]))]
         parts.append(m.extrude(name+'一般部',[profiles[-1]],(1,0,0),L-8.5,g))
         return m.joined(name,parts,g,'屋根グレー')
-    outside=spans('屋根外形',False)
-    ring=spans('屋根中空断面の連続ロフト',True)
-    o=m.wire('屋根の平面外形',m.plan(38.7),g);clip=m.extrude('屋根平面トリム',[o],(0,0,1),12,g)
-    a=m.boolean('前頭の平面形に合わせた中空屋根',ring,[clip],2,g,'屋根グレー')
-    shell=m.shell('前頭の額素材',g,0,.9,JOINT,45.8)
-    mask=m.box('前頭額の範囲',-1,-20,JOINT,9.5,40,8,g)
-    shell=m.boolean('前頭額の外板',shell,[mask],2,g,'屋根グレー')
-    shell=m.boolean('屋根曲面に沿う額',shell,[outside],2,g,'屋根グレー')
-    a=m.joined('前頭屋根と一般屋根の中空一体',[a,shell],g,'屋根グレー')
+    if m.detailed:
+        def dome(name,inset):
+            radius=5.875-inset;cx=5.875
+            # Every section is an identical translated transverse profile.
+            # A single smooth loft avoids the diagonal ridge made by intersecting
+            # two cylinders, and avoids changing shoulder radii between sections.
+            profiles=[roof_profile(m,g,cx-radius*math.cos(t),CROWN,inset=inset,
+                shift=radius*(math.sin(t)-1)) for t in [i*math.pi/18 for i in range(10)]]
+            profiles.append(roof_profile(m,g,8.5,CROWN,inset=inset))
+            front=m.loft(name+'額と肩の連続ロフト',profiles,g)
+            back=m.extrude(name+'一般部',[profiles[-1]],(1,0,0),L-8.5,g)
+            return m.joined(name+'滑らかな前頭部と一般部',[front,back],g,'屋根グレー')
+        outside=dome('屋根外側',0);inner=dome('屋根内側',.85)
+        o=m.wire('丸額の平面外形',m.plan(JOINT),g);clip=m.extrude('丸額の平面トリム',[o],(0,0,1),12,g)
+        outer=m.boolean('屋根外形を平面形に合わせる',outside,[clip],2,g,'屋根グレー')
+        o=m.wire('丸額内側の平面形',m.plan(38.7,.85),g);clip=m.extrude('丸額内側の平面トリム',[o],(0,0,1),12,g)
+        inner=m.boolean('丸額内部の平面形',inner,[clip],2,g,'屋根グレー')
+        a=m.boolean('丸い額から一般屋根までの中空一体',outer,[inner],1,g,'屋根グレー')
+        outside=outer
+    else:
+        outside=spans('屋根外形',False)
+        ring=spans('屋根中空断面の連続ロフト',True)
+        o=m.wire('屋根の平面外形',m.plan(38.7),g);clip=m.extrude('屋根平面トリム',[o],(0,0,1),12,g)
+        a=m.boolean('前頭の平面形に合わせた中空屋根',ring,[clip],2,g,'屋根グレー')
+        shell=m.shell('前頭の額素材',g,0,.9,JOINT,45.8)
+        mask=m.box('前頭額の範囲',-1,-20,JOINT,9.5,40,8,g)
+        shell=m.boolean('前頭額の外板',shell,[mask],2,g,'屋根グレー')
+        shell=m.boolean('屋根曲面に沿う額',shell,[outside],2,g,'屋根グレー')
+        a=m.joined('前頭屋根と一般屋根の中空一体',[a,shell],g,'屋根グレー')
     m.finished['roof']=a;m.clear(m.finished['body'],a,'車体と屋根')
+    if m.detailed:
+        for y in [-10,-5,0,5,10]:
+            cross=40-math.sqrt(40**2-y*y)
+            for z in [41.5,42.0,43.0]:
+                dz=z+cross-39.8
+                outer_x=5.875-math.sqrt(5.875**2-dz**2)
+                inner_cross=39.15-math.sqrt(39.15**2-y*y)
+                inner_dz=z+inner_cross-39.8
+                inner_x=5.875-math.sqrt(5.025**2-inner_dz**2)
+                # Tests are clear of the loft's interpolation tolerance.
+                for x,inside in [(outer_x-.18,False),((outer_x+inner_x)/2,True),(inner_x+.18,False)]:
+                    m.points.append(dict(entity=a,label='額の中央と左右肩の丸み・肉厚を実BRepで確認',point=[x,y,z],expectedInside=inside))
     # Separate pale forehead skin, a part of the closed roof, cut at X=8.5.
     # Paint masks handle its color in preview; geometry remains one roof part.
-    o=m.rounded('前面表示枠外',(-.3,-4.65,40.2),(0,1,0),(0,0,1),9.3,2.4,.5,g)
-    q=m.rounded('前面表示枠内',(-.3,-4.25,40.55),(0,1,0),(0,0,1),8.5,1.7,.25,g)
-    m.finish(m.extrude('前面表示器枠',[o,q],(-1,0,0),.35,g),thickness=.35)
-    p=m.rounded('前面表示面',(-.10,-4.25,40.55),(0,1,0),(0,0,1),8.5,1.7,.25,g)
-    m.finish(m.extrude('前面表示面',[p],(-1,0,0),.15,g),'黒')
+    if m.detailed:
+        from detail_parts import destination
+        destination(m,g,outside)
+    else:
+        o=m.rounded('前面表示枠外',(-.3,-4.65,40.2),(0,1,0),(0,0,1),9.3,2.4,.5,g)
+        q=m.rounded('前面表示枠内',(-.3,-4.25,40.55),(0,1,0),(0,0,1),8.5,1.7,.25,g)
+        m.finish(m.extrude('前面表示器枠',[o,q],(-1,0,0),.35,g),thickness=.35)
+        p=m.rounded('前面表示面',(-.10,-4.25,40.55),(0,1,0),(0,0,1),8.5,1.7,.25,g)
+        m.finish(m.extrude('前面表示面',[p],(-1,0,0),.15,g),'黒')
     eg=m.group('07 屋根機器｜AU75G・通風器・歩み板',root)
     x0=L/2-45.75/2;z0=CROWN+.40
-    p=m.poly('AU75G横断外形',[(x0,-13.1875,z0),(x0+45.75,-13.1875,z0),
+    if m.detailed:
+        from detail_parts import climate_unit
+        ac=climate_unit(m,eg,x0,z0)
+    else:
+        p=m.poly('AU75G横断外形',[(x0,-13.1875,z0),(x0+45.75,-13.1875,z0),
         (x0+45.75,-13.1875,z0+2.9),(x0+43,-13.1875,z0+4.7),
         (x0+2.75,-13.1875,z0+4.7),(x0,-13.1875,z0+2.9)],eg)
-    ac=m.extrude('AU75Gキセ',[p],(0,1,0),26.375,eg)
+        ac=m.extrude('AU75Gキセ',[p],(0,1,0),26.375,eg)
     holes=[m.circle('AU75Gファン開口',(x,0,z0+3.8),(0,0,1),3.6,eg) for x in [x0+8.5,x0+37.25]]
     ac=m.cut('AU75G二つのファン',ac,holes,(0,0,1),1.2,eg,'アルミ銀')
     details=[ac]
@@ -314,34 +377,46 @@ def roof(m,root):
         details.append(m.ring('ファン保護環',(x,0,z0+4.5),(0,0,1),3.9,3.6,.2,eg))
         for dy in [-2.7,-1.8,-.9,0,.9,1.8,2.7]:
             half=math.sqrt(3.8**2-dy**2);details.append(m.box('ファン格子',x-half,dy-.08,z0+4.5,2*half,.16,.2,eg))
-    for sign in [-1,1]:
-        for x in [x0+12+j*1.1 for j in range(20)]:
-            details.append(m.box('キセのルーバー',x,sign*13.1-.10,z0+.5,.22,.20,2.3,eg))
+    if not m.detailed:
+        for sign in [-1,1]:
+            for x in [x0+12+j*1.1 for j in range(20)]:
+                details.append(m.box('キセのルーバー',x,sign*13.1-.10,z0+.5,.22,.20,2.3,eg))
     ac=m.joined('AU75G ステンレスキセ・ファン格子',details,eg,'アルミ銀',note='製造者の外形寸法。ファン中心・格子・脚は写真推定。')
     # A thick foot spans to the curved roof; trim its bottom with actual roof solid.
     feet=[m.box('冷房装置の取付脚',x,y,44.8,3.6,1.0,1.4,eg) for x in [x0+4,x0+38] for y in [-7.5,6.5]]
     ac=m.joined('AU75G・脚一体',[ac]+feet,eg,'アルミ銀')
     ac=m.boolean('AU75G脚底を屋根に合わせる',ac,[outside],1,eg,'アルミ銀')
     m.entities[a]['visibility']='visible';m.clear(a,ac,'屋根と冷房装置')
+    if m.detailed:
+        for y,inside in [(-12.5,False),(0,True),(12.5,False)]:
+            m.points.append(dict(entity=ac,label='AU75Gの幅方向アーチを実形状で確認',
+                point=[x0+22,y,z0+4.2],expectedInside=inside))
     for y in [-15.2,13.7]:
         m.finish(m.box('クーラー脇歩み板',x0+2,y,43.4,41.7,1.5,.3,eg),'屋根グレー',.3)
     # Rounded open-mouthed ventilators, not solid trapezoids.
     for x in [28.5,58.5,83,166.5,192,222.5]:
-        o=m.rounded('通風器外断面',(x-3.6,-3.1,45.15),(0,1,0),(0,0,1),6.2,2.1,.65,eg)
-        q=m.rounded('通風器空洞',(x-3.6,-2.65,45.5),(0,1,0),(0,0,1),5.3,1.25,.35,eg)
-        vent=m.extrude('通風器 外覆い',[o,q],(1,0,0),7.2,eg)
-        ribs=[m.box('通風器の内部仕切',x-3.6,y,45.45,7.2,.22,1.35,eg) for y in [-1.8,0,1.8]]
-        vent=m.joined('押込通風器 開口と仕切付き',[vent]+ribs,eg,'屋根グレー')
+        if m.detailed:
+            from detail_parts import ventilator
+            vent=ventilator(m,eg,x)
+        else:
+            o=m.rounded('通風器外断面',(x-3.6,-3.1,45.15),(0,1,0),(0,0,1),6.2,2.1,.65,eg)
+            q=m.rounded('通風器空洞',(x-3.6,-2.65,45.5),(0,1,0),(0,0,1),5.3,1.25,.35,eg)
+            vent=m.extrude('通風器 外覆い',[o,q],(1,0,0),7.2,eg)
+            ribs=[m.box('通風器の内部仕切',x-3.6,y,45.45,7.2,.22,1.35,eg) for y in [-1.8,0,1.8]]
+            vent=m.joined('押込通風器 開口と仕切付き',[vent]+ribs,eg,'屋根グレー')
         # Remove overlap using the same evaluated roof as contact tool.
         vent=m.boolean('屋根曲率に合わせた通風器',vent,[outside],1,eg,'屋根グレー')
         m.clear(a,vent,'屋根と通風器');m.mesh_chords[vent]=.006
         m.entities[a]['visibility']='visible'
     base=m.box('列車無線アンテナ台座',10,-1.3,44.65,2.5,2.6,.6,eg)
-    aerial=m.cylinder('列車無線アンテナ',(11.25,0,45.2),(0,0,1),.47,1.7,eg)
+    aerial=m.cylinder('列車無線アンテナ',(11.25,0,45.2),(0,0,1),.47,3.0 if m.detailed else 1.7,eg)
     aerial=m.joined('列車無線アンテナ',[base,aerial],eg,'屋根グレー')
     aerial=m.boolean('アンテナ台座の屋根合わせ',aerial,[outside],1,eg,'屋根グレー')
     m.entities[a]['visibility']='visible';m.clear(a,aerial,'屋根とアンテナ')
-    flare=m.cylinder('信号炎管',(4.8,-5.5,44.15),(0,0,1),.38,1.7,eg)
+    flare=m.cylinder('信号炎管',(4.8,-5.5,44.15),(0,0,1),.38,3.6 if m.detailed else 1.7,eg)
+    if m.detailed:
+        head=m.cylinder('炎管の段付き頭部',(4.8,-5.5,47.35),(0,0,1),.48,.5,eg)
+        flare=m.joined('信号炎管・頭部一体',[flare,head],eg,'屋根グレー')
     flare=m.boolean('炎管の屋根合わせ',flare,[outside],1,eg,'屋根グレー')
     m.entities[a]['visibility']='visible';m.clear(a,flare,'屋根と炎管')
 
@@ -399,15 +474,23 @@ def bogies(m,root):
                  (cx-4.4,y,10.2),(cx+4.4,y,10.2),(cx+6,y,9.8),(cx+11,y,10.5),
                  (cx+15,y,9.8),(cx+16,y,7.2),(cx+7,y,7.2),(cx+4.7,y,8.0),
                  (cx-4.7,y,8.0),(cx-7,y,7.2)]
-            p=m.poly('側枠外周',pts,g)
-            sideframe=m.extrude('開口付き側枠素材',[p],(0,-side,0),1.3,g)
-            holes=[m.rounded('側枠開口',(cx+dx-2.2,y+side*.1,8.7),(1,0,0),(0,0,1),4.4,1.15,.4,g) for dx in [-8.5,8.5]]
-            sideframe=m.cut('側枠の空間',sideframe,holes,(0,-side,0),1.6,g,'黒');bits.append(sideframe)
+            if m.detailed:
+                from detail_parts import sideframe as curved_sideframe
+                frame=curved_sideframe(m,g,cx,y,side)
+            else:
+                p=m.poly('側枠外周',pts,g)
+                frame=m.extrude('開口付き側枠素材',[p],(0,-side,0),1.3,g)
+                holes=[m.rounded('側枠開口',(cx+dx-2.2,y+side*.1,8.7),(1,0,0),(0,0,1),4.4,1.15,.4,g) for dx in [-8.5,8.5]]
+                frame=m.cut('側枠の空間',frame,holes,(0,-side,0),1.6,g,'黒')
+            bits.append(frame)
             for dx in [-13.125,13.125]:
                 bits.append(m.box('軸箱支持枠',cx+dx-2.0,start-.2,4.5,4.0,1.7,3.2,g))
                 bits.append(m.cylinder('軸箱丸蓋',(cx+dx,side*12.10,5.65),(0,side,0),1.35,.4,g))
                 for off in [-2.45,2.45]:
-                    bits.append(m.ribbed('軸ばね',cx+dx+off,side*11.5,6.5,.75,2.0,4,g))
+                    bits.append(m.ribbed('軸ばね',cx+dx+off,side*11.5,6.5,1.05 if m.detailed else .75,2.3 if m.detailed else 2.0,4,g))
+                if m.detailed:
+                    for sign in [-1,1]:
+                        bits.append(m.cylinder('軸箱蓋ボルト',(cx+dx+sign*.75,side*12.45,5.65),(0,side,0),.18,.18,g))
             # Two large bolster coils each side, with concentric ridge rings.
             for dx in [-2.0625,2.0625]:
                 bits.append(m.ribbed('大径枕ばね',cx+dx,side*11.5,7.3,1.72,3.7,5,g))
@@ -424,22 +507,30 @@ def bogies(m,root):
         rest=[b for b in bits if b not in used]
         for index,b in enumerate(rest):
             a=m.joined(lab+'台車 接続'+str(index)+' '+m.entities[b]['displayName'],[a,b],g,'黒')
-        holes=[m.circle('車軸貫通穴',(cx+dx,-14,5.375),(0,1,0),.96,g) for dx in [-13.125,13.125]]
-        a=m.cut(lab+'台車の車軸穴',a,holes,(0,1,0),28,g,'黒')
-        slots=[m.rect('輪軸下開き溝',(cx+dx-.96,-14,3.8),(1,0,0),(0,0,1),1.92,1.575,g) for dx in [-13.125,13.125]]
-        a=m.cut(lab+'台車の下開き',a,slots,(0,1,0),28,g,'黒')
+        holes=[m.circle('車軸貫通穴',(cx+dx,-12.05 if m.detailed else -14,5.375),(0,1,0),.96,g) for dx in [-13.125,13.125]]
+        a=m.cut(lab+'台車の車軸穴',a,holes,(0,1,0),24.1 if m.detailed else 28,g,'黒')
+        slots=[m.rect('輪軸下開き溝',(cx+dx-.96,-12.05 if m.detailed else -14,3.8),(1,0,0),(0,0,1),1.92,1.575,g) for dx in [-13.125,13.125]]
+        a=m.cut(lab+'台車の下開き',a,slots,(0,1,0),24.1 if m.detailed else 28,g,'黒')
         hole=m.circle('台車心皿穴',(cx,0,6.1),(0,0,1),1.1,g)
         a=m.cut(lab+'心皿穴を貫通',a,[hole],(0,0,1),8,g,'黒')
         m.keyparts['bogies'].append(a);m.clear(a,m.finished['floor'],lab+'台車と床板')
+        if m.detailed:
+            for dx in [-13.125,13.125]:
+                for side in [-1,1]:
+                    for z in [4.8,5.65]:m.points.append(dict(entity=a,label='黒い軸箱外蓋を残す',
+                        point=[cx+dx,side*12.3,z],expectedInside=True))
         for dx in [-13.125,13.125]:
-            ax=m.cylinder('車軸',(cx+dx,-12.6,5.375),(0,1,0),.8,25.2,g);parts=[ax]
+            ax=m.cylinder('車軸',(cx+dx,-11.85 if m.detailed else -12.6,5.375),(0,1,0),.8,23.7 if m.detailed else 25.2,g);parts=[ax]
             for side in [-1,1]:
                 parts += [m.cylinder('車輪踏面',(cx+dx,-10.0 if side<0 else 8.2,5.375),(0,1,0),5.375,1.8,g),
                           m.cylinder('フランジ',(cx+dx,-8.2 if side<0 else 7.25,5.375),(0,1,0),5.65,.95,g),
                           m.cylinder('車輪内側ディスク',(cx+dx,side*4.2-.22,5.375),(0,1,0),3.4,.44,g)]
             ax=m.joined(lab+'輪軸・内側二枚ディスク',parts,g,'金属銀',note='HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。')
             m.keyparts['wheelsets'].append(ax);m.clear(a,ax,lab+'台車と輪軸')
-        for side in [-1,1]:m.finish(m.box(lab+'輪軸押え',cx-15.3,side*12.0-1.2,3.7,30.6,2.4,.55,g),'黒',.55)
+        for side in [-1,1]:
+            if m.detailed:
+                for dx in [-13.125,13.125]:m.finish(m.box(lab+'局所輪軸押え',cx+dx-1.8,side*11.5-1.2,3.7,3.6,2.4,.8,g),'黒',.8)
+            else:m.finish(m.box(lab+'輪軸押え',cx-15.3,side*12.0-1.2,3.7,30.6,2.4,.55,g),'黒',.55)
         if lab=='前':
             p=m.poly('スノープロウ板',[(cx-20.5,-13.6,3.8),(cx-20.5,13.6,3.8),(cx-19.5,13.6,6.6),(cx-19.5,-13.6,6.6)],g)
             plow=m.extrude('前台車スノープロウ',[p],(1,0,0),.45,g)
@@ -478,7 +569,7 @@ def interior(m,root):
 
 
 def manifest(m):
-    return dict(scale=80,gaugeMm=16.5,prototype=dict(family='115-1000',carCandidate='クハ115-1222',
+    data=dict(scale=80,gaugeMm=16.5,prototype=dict(family='115-1000',carCandidate='クハ115-1222',
         period='長野色営業時代（1994〜97年頃を外装候補）',status='写真資料を基にした外観設計案。車番固有の全寸法は未確定。'),
         dimensions=dict(bodyLength=L,maximumWidth=36.875,roofHeight=CROWN,floorHeight=FLOOR,coupledLength=250,bogieCentres=172.5),
         estimated=dict(frontFoldDeg=8,frontCornerRadiusMm=3.8,skirtTaperMm=1.1,doorCentres=DOORS,
@@ -489,10 +580,17 @@ def manifest(m):
         stlChordMm=.025,stlChordByEntity=m.mesh_chords,colors=m.colors,groups=m.d['groups'],
         assemblyChecks=m.checks,pointChecks=m.points,keyParts=m.keyparts,
         entities=[{k:e[k] for k in ['id','kind','displayName','visibility','groupId','partProperties']} for e in m.d['entities']])
+    if m.detailed:
+        data['detailRevision']='2026-10-25-photo-comparison'
+        data['paintDecals']=m.decals
+        data['estimated'].update(panoramicWindow=dict(bottom=30.6,height=7.6),destination=dict(width=9.3,height=3.95),
+            climateCrossSection='YZ arch extruded along X',wheelsetAxleLength=23.7,localAxleKeepers=True,
+            foreheadLongitudinalRadius=5.875,foreheadInnerRadius=5.025,foreheadCurveOriginZ=39.8)
+    return data
 
 
 def split_model(original,root,output):
-    m=copy.deepcopy(original);m.d['documentId']=str(uuid.uuid5(NS,'revised-split'))
+    m=copy.deepcopy(original);m.d['documentId']=str(uuid.uuid5(m.namespace,'revised-split'))
     g=m.group('12 小型プリンタ用｜前後分割・床板添え板',root)
     replacements={};checks=[];mid=L/2
     for key in ['body','roof','floor','interior','gutter-1','gutter1']:
@@ -520,10 +618,15 @@ def split_model(original,root,output):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--output',required=True,type=Path)
+    ap.add_argument('--detailed',action='store_true',help='Use photo-reviewed front, roof equipment and bogie details')
     a=ap.parse_args();a.output.mkdir(parents=True,exist_ok=False)
-    m=Revised();root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
+    m=Revised(a.detailed);root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
+    if m.detailed:
+        from detail_parts import lettering
+        lettering(m,root,a.output)
     m.d['activeGroupId']=root;m.d['uiState']={'activeMode':'part','theme':'windows95'}
+    m.d['grid']=dict(visible=False,workPlaneId=None,originUvMm=dict(x=0,y=0),majorSpacingMm=10.0,subdivision='none')
     m.save(a.output/'kuha115-ho80-revised.kcd2')
     (a.output/'design.json').write_text(json.dumps(manifest(m),ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     split_model(m,root,a.output)

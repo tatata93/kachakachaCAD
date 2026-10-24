@@ -1,13 +1,13 @@
 """Paint guide rendered from the CAD-exported STL triangles (not an app screenshot)."""
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-import json, struct, math, sys, os
+import json, struct, math, sys, os, io, base64
 import numpy as np
 
 PALETTE={'フォギーグレー':(224,229,219),'アルミ銀':(185,195,200),'透明':(91,132,146),
          '赤透明':(171,40,40),'黒':(35,40,42),'屋根グレー':(145,154,156),
          '床下グレー':(70,78,83),'金属銀':(164,174,179),'室内クリーム':(204,193,155),
-         'アドバンスブルー':(65,106,140)}
+         'アドバンスブルー':(65,106,140),'電球色':(239,226,184)}
 
 def triangles(path):
     data=path.read_bytes();count=struct.unpack_from('<I',data,80)[0]
@@ -28,7 +28,7 @@ def clip(poly,axis,bound,greater):
     return output
 
 def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=(),
-           paint_bands=None,roof_forehead_mm=None,part_ids=None):
+           paint_bands=None,roof_forehead_mm=None,part_ids=None,studio=False,decals=(),surface_color=None):
     width,height=size or ((1300,1100) if front else (2600,1050))
     im=Image.new('RGB',(width,height),'#edf1f2');draw=ImageDraw.Draw(im)
     camera=camera or ((-.91,-.32,.26) if front else (-.35,-.75,.56))
@@ -41,6 +41,7 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
     for part in report['parts']:
         if part_ids is not None and part['id'] not in part_ids:continue
         colorname=part['manufacturing']['colorName'];color=PALETTE.get(colorname,PALETTE['フォギーグレー'])
+        if studio and colorname=='透明':color=(188,202,200) if 'レンズ' in part['name'] else (31,57,50)
         path=part['groupPath'];paint=colorname=='フォギーグレー' and ('01 車体' in path or '客扉' in part['name'] or part['name']=='貫通扉' or any(s in part['name'] for s in paint_names))
         if roof_forehead_mm is not None and part['name']=='貫通扉':paint=False
         dz=(17 if '02 屋根' in path or '07 屋根' in path else (-13 if '08 床板' in path or '09 床下' in path or '10 台車' in path or '11 室内' in path else 0)) if explode else 0
@@ -61,16 +62,27 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
                     q=clip(poly,0,roof_forehead_mm,greater)
                     if len(q)>=3:layers.append((q,col))
             shade=.64+.36*max(0,dot(normal,(-.4,-.5,.768)))
+            specular=0
+            if studio:
+                shade=.36+.47*max(0,dot(normal,(-.4,-.5,.768)))+.17*max(0,dot(normal,(.65,.60,.46)))
+                half=tuple(camera[i]+(-.4,-.5,.768)[i] for i in range(3));length=math.sqrt(dot(half,half));half=tuple(v/length for v in half)
+                specular=(.24 if '銀' in colorname else .10)*max(0,dot(normal,half))**28
             for poly,col in layers:
+                if surface_color is not None:col=surface_color(part,tuple(sum(p[i] for p in poly)/len(poly) for i in range(3)),normal,col)
                 poly=[(p[0],p[1],p[2]+dz) for p in poly]
                 points=[(dot(p,horizontal),dot(p,up)) for p in poly]
                 xs.extend(p[0] for p in points);ys.extend(p[1] for p in points)
-                polys.append(([dot(p,camera) for p in poly],points,tuple(round(c*shade) for c in col)))
+                polygon_color=tuple(min(255,round(c*shade+255*specular)) for c in col)
+                alpha=((.16 if 'レンズ' in part['name'] else .50) if colorname=='透明' else .68) if studio and colorname in ['透明','赤透明'] else 1
+                polys.append(([dot(p,camera) for p in poly],points,polygon_color,alpha))
     lowx,highx,lowy,highy=min(xs),max(xs),min(ys),max(ys)
     scale=min((width-100)/(highx-lowx),(height-100)/(highy-lowy))
     ox=(width-scale*(highx-lowx))/2;oy=(height-scale*(highy-lowy))/2
     pixels=np.array(im);depth=np.full((height,width),-np.inf)
-    for depths,poly,col in polys:
+    glass_depth=np.full((height,width),-np.inf) if studio else None
+    glass_pixels=np.zeros((height,width,3),dtype=np.uint8) if studio else None
+    glass_alpha=np.zeros((height,width),dtype=np.float32) if studio else None
+    for depths,poly,col,alpha in polys:
         xy=[(ox+(x-lowx)*scale,height-oy-(y-lowy)*scale) for x,y in poly]
         for i in range(1,len(xy)-1):
             a,b,c=xy[0],xy[i],xy[i+1];za,zb,zc=depths[0],depths[i],depths[i+1]
@@ -82,9 +94,45 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
             yy,xx=np.mgrid[ly:hy+1,lx:hx+1];xx=xx+.5;yy=yy+.5
             wa=((b[1]-c[1])*(xx-c[0])+(c[0]-b[0])*(yy-c[1]))/den
             wb=((c[1]-a[1])*(xx-c[0])+(a[0]-c[0])*(yy-c[1]))/den;wc=1-wa-wb
-            zz=wa*za+wb*zb+wc*zc;region=depth[ly:hy+1,lx:hx+1]
+            zz=wa*za+wb*zb+wc*zc;target_depth=glass_depth if alpha<1 else depth
+            target_pixels=glass_pixels if alpha<1 else pixels
+            region=target_depth[ly:hy+1,lx:hx+1]
             mask=(wa>=-1e-7)&(wb>=-1e-7)&(wc>=-1e-7)&(zz>region)
-            region[mask]=zz[mask];pixels[ly:hy+1,lx:hx+1][mask]=col
+            region[mask]=zz[mask];target_pixels[ly:hy+1,lx:hx+1][mask]=col
+            if alpha<1:glass_alpha[ly:hy+1,lx:hx+1][mask]=alpha
+    if studio:
+        # Screen-space contact shading only changes illumination, never geometry.
+        occupied=np.isfinite(depth);occlusion=np.zeros((height,width),dtype=np.float32)
+        for distance in [2,5,9]:
+            for dy,dx in [(0,distance),(0,-distance),(distance,0),(-distance,0)]:
+                neighbor=np.roll(depth,(dy,dx),(0,1));valid=np.roll(occupied,(dy,dx),(0,1))&occupied
+                if dy>0:valid[:dy]=False
+                if dy<0:valid[dy:]=False
+                if dx>0:valid[:,:dx]=False
+                if dx<0:valid[:,dx:]=False
+                delta=np.zeros_like(depth);np.subtract(neighbor,depth,out=delta,where=valid)
+                occlusion+=valid&(delta>.08)&(delta<2.0)
+        pixels=np.clip(pixels*(1-.022*occlusion[:,:,None]),0,255).astype(np.uint8)
+        mask=np.isfinite(glass_depth)&(glass_depth>depth)
+        alpha=glass_alpha[mask,None];pixels[mask]=(pixels[mask]*(1-alpha)+glass_pixels[mask]*alpha).astype(np.uint8)
+        depth[mask]=glass_depth[mask]
+    for decal in decals:
+        if front and decal['origin'][0]>36:continue
+        origin=decal['origin'];u=decal['u'];v=decal['v'];w=decal['widthMm'];h=decal['heightMm']
+        def project(p):return np.array([ox+(dot(p,horizontal)-lowx)*scale,height-oy-(dot(p,up)-lowy)*scale])
+        a=project(origin);b=project(tuple(origin[i]+u[i]*w for i in range(3)));c=project(tuple(origin[i]+v[i]*h for i in range(3)))
+        matrix=np.column_stack((b-a,c-a));det=np.linalg.det(matrix)
+        if abs(det)<1e-5:continue
+        corners=np.array([a,b,c,b+c-a]);lx=max(0,int(np.floor(corners[:,0].min())));hx=min(width-1,int(np.ceil(corners[:,0].max())))
+        ly=max(0,int(np.floor(corners[:,1].min())));hy=min(height-1,int(np.ceil(corners[:,1].max())))
+        if lx>hx or ly>hy:continue
+        yy,xx=np.mgrid[ly:hy+1,lx:hx+1];uv=np.linalg.inv(matrix)@np.stack((xx.ravel()+.5-a[0],yy.ravel()+.5-a[1]))
+        su,sv=uv.reshape(2,hy-ly+1,hx-lx+1);zz=dot(origin,camera)+su*dot(u,camera)*w+sv*dot(v,camera)*h
+        mask=(su>=0)&(su<=1)&(sv>=0)&(sv<=1)&(zz>=depth[ly:hy+1,lx:hx+1]-.005)
+        texture=np.array(Image.open(io.BytesIO(base64.b64decode(decal['pngBase64']))).convert('RGBA'))
+        tx=np.clip((su*texture.shape[1]).astype(int),0,texture.shape[1]-1);ty=np.clip(((1-sv)*texture.shape[0]).astype(int),0,texture.shape[0]-1)
+        ink=texture[ty,tx];alpha=ink[:,:,3:4].astype(float)/255;region=pixels[ly:hy+1,lx:hx+1]
+        region[mask]=(region[mask]*(1-alpha[mask])+ink[:,:,:3][mask]*alpha[mask]).astype(np.uint8)
     return Image.fromarray(pixels)
 
 def main():

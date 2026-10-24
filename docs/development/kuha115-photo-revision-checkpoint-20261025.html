@@ -1,0 +1,9 @@
+<!doctype html><html lang="ja"><meta charset="utf-8">
+<title>クハ115写真照合改訂の中断記録</title>
+<style>body{max-width:900px;margin:32px auto;padding:0 24px;font:16px/1.8 sans-serif}code{overflow-wrap:anywhere}</style>
+<h1>クハ115写真照合改訂：未完成のチェックポイント</h1>
+<p>列車模型の改訂中に、投影曲線の分割と窓穴付き面・ソリッドの修正を最優先する指示を受け、模型作業を中断した。ここで保全するスクリプトは完成模型の配布を意味しない。</p>
+<p>対象は <code>tools/modeling/kuha115_ho/revised.py</code>、<code>review_revised.py</code>、<code>detail_parts.py</code>、<code>render_detailed.py</code>、共用の <code>tools/modeling/series115_print/render_preview.py</code>。詳細改訂はdetailed指定で生成する。額・パノラミック窓の比率、ワイパー、灯具、屋根機器、台車外観などの途中データを含む。</p>
+<p>Python構文確認は成功した。native形状確認の途中候補はあるが、STL検査は全件成功に至っておらず、額の外観も再照合が必要。実車形状への一致、全組立、実印刷、走行は未認定である。既存の完成サンプルをこの途中候補で上書きしない。</p>
+<p>再開時は <a href="kuha115-prototype-audit-20261024.html">実車照合台帳</a>を入口とし、額を含む白い外板の輪郭照合、全native部品、STL、保存、部位の干渉確認を終えてから完成扱いにする。今回のCAD不具合修正の結果は <a href="curved-wire-window-holes-20261025.html">別の検証記録</a>にまとめる。</p>
+</html>

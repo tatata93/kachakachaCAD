@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "selected": [
+    "HP-PLANE-DRAW-01 mouse primitives visible without toggling filter"
+  ],
+  "total": 1,
+  "failed": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 2537.4682,
+      "end": "2026-10-24T03:10:52.052Z",
+      "name": "HP-PLANE-DRAW-01 mouse primitives visible without toggling filter",
+      "start": "2026-10-24T03:10:49.515Z",
+      "status": "failed"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "selected": [
+    "HP-PLANE-DRAW-01 mouse primitives visible without toggling filter",
+    "HP-PLANE-DRAW-02 cursor numeric and continuous drawing",
+    "HP-PLANE-DRAW-03 construction control polygon and kept points",
+    "HP-PLANE-DRAW-04 offset and tilted planes visibility picking snapping",
+    "HP-PLANE-DRAW-05 delete Undo Redo hidden state save reopen",
+    "HP-PLANE-DRAW-06 direct numeric entry and actual off-plane exclusion"
+  ],
+  "total": 6,
+  "failed": 0,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 492.5689,
+      "end": "2026-10-24T03:14:49.764Z",
+      "name": "HP-PLANE-DRAW-01 mouse primitives visible without toggling filter",
+      "start": "2026-10-24T03:14:49.271Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 241.8752,
+      "end": "2026-10-24T03:14:50.007Z",
+      "name": "HP-PLANE-DRAW-02 cursor numeric and continuous drawing",
+      "start": "2026-10-24T03:14:49.765Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 237.987,
+      "end": "2026-10-24T03:14:50.245Z",
+      "name": "HP-PLANE-DRAW-03 construction control polygon and kept points",
+      "start": "2026-10-24T03:14:50.007Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 235.0017,
+      "end": "2026-10-24T03:14:50.480Z",
+      "name": "HP-PLANE-DRAW-04 offset and tilted planes visibility picking snapping",
+      "start": "2026-10-24T03:14:50.245Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1412.4801,
+      "end": "2026-10-24T03:14:51.894Z",
+      "name": "HP-PLANE-DRAW-05 delete Undo Redo hidden state save reopen",
+      "start": "2026-10-24T03:14:50.482Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 221.8831,
+      "end": "2026-10-24T03:14:52.117Z",
+      "name": "HP-PLANE-DRAW-06 direct numeric entry and actual off-plane exclusion",
+      "start": "2026-10-24T03:14:51.894Z",
+      "status": "passed"
+    }
+  ]
+}

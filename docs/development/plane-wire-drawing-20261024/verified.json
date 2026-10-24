@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "mode": "full",
+  "status": "passed",
+  "start": "2026-10-24T03:18:24.153536+00:00",
+  "end": "2026-10-24T03:44:29.579122+00:00",
+  "ctest": {
+    "total": 195,
+    "skipped": []
+  },
+  "ui_cases": [
+    582,
+    582
+  ],
+  "zip_sha256": "dedaff35d8b3006d78fd29d3a2d590ebd31c84202cbb9c3a7f9d1d8a92caa07b",
+  "source": {
+    "commit": "fb143d73cd00db3c40f0e3e7096074cd13e40653",
+    "sha256": "55f26fbc3102f6079d86e36f9aca91f8a4850d18a1c851337289a625117d9c8b"
+  },
+  "exe_sha256": "b458e30134701c5ac61a6812457e1a9525bbb8235dfb30ef840e01d96dac50ea",
+  "ctest_seconds": 1484.52,
+  "startup": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 760,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1180
+  },
+  "release": "out/releases/plane-wire-drawing-release-20261024"
+}

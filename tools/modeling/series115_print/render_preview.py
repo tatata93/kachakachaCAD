@@ -27,7 +27,8 @@ def clip(poly,axis,bound,greater):
             output.append(tuple(a[j]+(b[j]-a[j])*t for j in range(3)))
     return output
 
-def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=()):
+def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=(),
+           paint_bands=None,roof_forehead_mm=None,part_ids=None):
     width,height=size or ((1300,1100) if front else (2600,1050))
     im=Image.new('RGB',(width,height),'#edf1f2');draw=ImageDraw.Draw(im)
     camera=camera or ((-.91,-.32,.26) if front else (-.35,-.75,.56))
@@ -38,8 +39,10 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
     def dot(a,b):return sum(x*y for x,y in zip(a,b))
     polys=[];xs=[];ys=[]
     for part in report['parts']:
+        if part_ids is not None and part['id'] not in part_ids:continue
         colorname=part['manufacturing']['colorName'];color=PALETTE.get(colorname,PALETTE['フォギーグレー'])
         path=part['groupPath'];paint=colorname=='フォギーグレー' and ('01 車体' in path or '客扉' in part['name'] or part['name']=='貫通扉' or any(s in part['name'] for s in paint_names))
+        if roof_forehead_mm is not None and part['name']=='貫通扉':paint=False
         dz=(17 if '02 屋根' in path or '07 屋根' in path else (-13 if '08 床板' in path or '09 床下' in path or '10 台車' in path or '11 室内' in path else 0)) if explode else 0
         for poly,normal in triangles(base/part['stl']):
             if front:
@@ -48,8 +51,14 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
             layers=[(poly,color)]
             if paint:
                 layers=[]
-                for low,high,col in [(-2,24.7,color),(24.7,26,(111,180,159)),(26,38.5,(65,106,140)),(38.5,60,color)]:
+                bands=paint_bands or [(-2,24.7,color),(24.7,26,(111,180,159)),(26,38.5,(65,106,140)),(38.5,60,color)]
+                for low,high,col in bands:
                     q=clip(clip(poly,2,low,True),2,high,False)
+                    if len(q)>=3:layers.append((q,col))
+            elif roof_forehead_mm is not None and colorname=='屋根グレー' and '02 屋根' in path:
+                layers=[]
+                for greater,col in [(False,PALETTE['フォギーグレー']),(True,color)]:
+                    q=clip(poly,0,roof_forehead_mm,greater)
                     if len(q)>=3:layers.append((q,col))
             shade=.64+.36*max(0,dot(normal,(-.4,-.5,.768)))
             for poly,col in layers:

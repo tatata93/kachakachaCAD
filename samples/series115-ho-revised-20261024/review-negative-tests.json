@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "rejected": [
+    "a consistently stale candidate pair list",
+    "a changed saved group",
+    "a changed saved part visibility",
+    "zero visible parts"
+  ],
+  "reviewResultSha256": "d81c6c47f5a112562f12cc7ba25ffbc47b9512e5c0ab4f96a6eeadc5c2eca939"
+}

@@ -1,51 +1,63 @@
-# 新規クハ115-1000・1/80 HOモデル
+# クハ115 長野色・1/80 HO16.5 のネイティブモデル
 
-既存の列車文書を読み込まず、`build.py` の寸法・輪郭・押し出し・ロフト・Booleanから作る。
-ユーザーの参考図は補助資料であり、図中のAU75Gのファン数や広窓の描写はメーカー資料・写真と照合して修正した。
-生成文書の部品はネイティブの編集履歴を持つ。STLを編集の正本にはしない。
+最新は `revised.py`。貫通扉窓はユーザーの指示どおり**横長寄り**とし、
+開口7.2×5.8 mm、幅/高さ1.241、Hゴム外周7.6×6.2 mmにした。
+扉全高22.9 mmとは独立。開口・Hゴム・ガラスを同じ設計値から作る。
+数値は写真照合による模型設計値で、実測寸法として確定したものではない。
 
-## 予想図から本モデルへ反映する修正（2026-10-24）
+以前の列車文書は読み込まず、ワイヤー・押し出し・ロフト・Booleanから作る。
+`build.py` の汎用生成ヘルパーを再利用するが、旧形状文書は流用しない。
+`build.py` / `review.py` / `render.py` / `assemble_delivery.py` は旧モデルの再現用に保全した入口。
+最新モデルには以下の `revised` の付いた入口を使う。
 
-ユーザーは完成予想図の全体の方向性を了承したが、**正面貫通扉の窓が縦長過ぎる**と指摘した。
-本モデルではこの窓を、実車写真の比率に合わせた背の低い丸角窓へ修正する。
-扉全体の高さと窓の高さを独立して設定し、縦長の扉に合わせて窓まで引き伸ばさない。
-開口・Hゴム外周／内周・透明板を同じ輪郭から作り、上端・左右幅・下端位置を実車正面写真で照合する。
-前面用の修正を後妻の窓へ無条件に共用しない。予想図は形状の正本にしない。
+## 生成と検証
 
-この節は次の本モデルに対する確定した修正要件。比較用の旧CADは未修正であり、窓の数値寸法は未確定。
-
-## 再生成と検査
-
-Python 3.10以上。生成にはPillow、画像化にはNumPyも必要。以下の変数は各環境のパスに置き換える。
-Windows/Linuxとも同じPython入口を使う。既存のCAD・Qt/OCCT環境を利用し、新たな依存は追加しない。
+Python 3.10以上。ネイティブ生成には追加Python依存なし、画像生成にはNumPyとPillowが必要。
+既存のQt/OCCTビルド環境と検証済みCADを利用する。Windows/Linux共通のPython入口で、
+デスクトップ表示確認だけはWindows実機専用。下記の `RUN` と `CAD_EXE` は実行先に置き換える。
+新規の実行フォルダーを使い、以前の検証証拠へ上書きしない。
 
 ```text
-python tools/modeling/kuha115_ho/build.py --output RUN/delivery-model --reference REFERENCE.png
-python tools/modeling/series115_print/validate_model.py RUN/delivery-model/kuha115-1000-ho80-new.kcd2 CAD_EXE --work RUN/final-check
-python tools/modeling/series115_print/validate_model.py RUN/delivery-model/kuha115-1000-ho80-new-split.kcd2 CAD_EXE --work RUN/split-check
+python tools/modeling/kuha115_ho/revised.py --output RUN/candidate04
+python tools/modeling/series115_print/validate_model.py RUN/candidate04/kuha115-ho80-revised.kcd2 CAD_EXE --work RUN/native04
+python tools/modeling/series115_print/validate_model.py RUN/candidate04/kuha115-ho80-revised-split.kcd2 CAD_EXE --work RUN/split-native04
+native_print_export RUN/native04/prepared.bin RUN/candidate04/design.json RUN/exports04
+native_print_export RUN/split-native04/prepared.bin RUN/candidate04/design-split.json RUN/split-exports04
+python tools/modeling/series115_print/check_stl.py RUN/exports04
+python tools/modeling/series115_print/check_stl.py RUN/split-exports04
+python tools/modeling/kuha115_ho/assembly_candidates.py RUN/exports04/print-parts.json RUN/candidate04/design.json RUN/candidate04/design-all-pairs.json
+python tools/modeling/kuha115_ho/assembly_candidates.py RUN/split-exports04/print-parts.json RUN/candidate04/design-split.json RUN/candidate04/design-split-all-pairs.json
+native_print_export RUN/native04/prepared.bin RUN/candidate04/design-all-pairs.json RUN/all-pairs04 --check-only
+native_print_export RUN/split-native04/prepared.bin RUN/candidate04/design-split-all-pairs.json RUN/split-all-pairs04 --check-only
 ```
 
-作業先は新規フォルダーにする。CADの出力した`prepared.bin`を使い、既存のQt/OCCT用CMake環境で
-`tools/modeling/series115_print`の`native_print_export`をビルドして実行する。
+`native_print_export` は `tools/modeling/series115_print` の既存CMakeターゲット。
+WindowsではQtとOCCT依存DLLのあるフォルダーをPATHに追加する。
+`--check-only` はBRep検査のみであり、正式なSTEP/STL出力検査の代わりにはしない。
+STL弦誤差0.025 mm、通風器のみ0.006 mm、体積差上限0.2%。
+
+CAD保存文書は `review.extract_roundtrip(prepared, destination)` でprepared内から取り出す。
+生成元とUUID・定義・所属・グループ・表示状態・材質を比較する。
+通常版を `RUN/native04/cad-serialized.kcd2` へ取り出した後、さらに再読込する。
 
 ```text
-native_print_export RUN/final-check/prepared.bin RUN/delivery-model/design.json RUN/verified-main
-native_print_export RUN/split-check/prepared.bin RUN/delivery-model/design-split.json RUN/verified-split
-python tools/modeling/series115_print/check_stl.py RUN/verified-main
-python tools/modeling/series115_print/check_stl.py RUN/verified-split
-python tools/modeling/kuha115_ho/review.py RUN
-python tools/modeling/kuha115_ho/render.py RUN/verified-main PREVIEWS
+python tools/modeling/series115_print/validate_model.py RUN/native04/cad-serialized.kcd2 CAD_EXE --work RUN/reopen04
+native_print_export RUN/reopen04/prepared.bin RUN/candidate04/design.json RUN/reopen-geometry04 --check-only
+python tools/modeling/kuha115_ho/desktop_model.py RUN/native04/cad-serialized.kcd2 CAD_EXE --work RUN/desktop04
+python tools/modeling/kuha115_ho/review_revised.py RUN --run 04
+python tools/modeling/kuha115_ho/render_revised.py RUN/exports04 RUN/previews04
+python tools/modeling/kuha115_ho/assemble_revised.py RUN SAMPLES PACKAGE --run 04
 ```
 
-`--check-only`は出力前の幾何検査専用。STEP/STL検査や完成出力の代わりにはしない。
-STL弦誤差は通常0.025 mm、曲面底を持つ通風器は0.005 mm。検査の体積誤差上限0.2%は従来から変更していない。
-`review.py`はソースSHA、CAD実行ファイルSHA、トークン、可視部品ID、検査件数、失敗、
-STEP再読込、STL閉鎖性、分割再組立、CAD保存構造を照合する。
-`final-check/cad-serialized.kcd2`はCADが保存した文書であり、追加の読込確認に使用できる。
+分割版保存文書も `RUN/split-native04/cad-serialized.kcd2` に取り出す。
+レビューが同ファイルを抽出するため、最終レビュー成功後に梱包できる。
+検査はソースSHA・CAD実行ファイルSHA・preparedトークン・可視部品ID・件数を照合し、
+古い候補リスト、失敗、0件、不一致を成功にしない。AABB候補集合は最新BRep境界箱から再計算する。
 
 ## 対象と限界
 
-長野色・黒Hゴム・AU75Gを装備した更新後の代表的なクハ115-1000。
-特定車番・撮影年月の完全な実測復元ではない。小寸法の根拠、組立方法、検査結果は
-`samples/series115-ho-new-20261024/README.md`と`index.html`に記録する。
-通常版149部品、小型プリンタ版156部品。印刷・走行・市販動力との互換は実機未確認。
+クハ115-1222／N15の長野色営業時代を外装候補とした設計案。
+局所R・窓位置・小機器・床下同定には推定が残り、特定車番の完全な実測復元ではない。
+最新の部位画像・組立・検査記録は `samples/series115-ho-revised-20261024/`。
+通常版199部品、前後分割版206部品。屋根全体も前後に二分割する。
+実印刷、走行、市販動力・輪軸との互換は未試験。静止時の形状検査と区別する。

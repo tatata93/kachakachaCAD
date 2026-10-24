@@ -1,0 +1,14 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><title>クハ115 長野色・横長貫通扉窓 1/80</title>
+<style>body{max-width:1200px;margin:30px auto;padding:0 22px;font:17px/1.8 sans-serif;color:#20303a;background:#edf1f3}h1,h2{line-height:1.4}section{background:white;padding:24px;margin:24px 0}img{max-width:100%;height:auto}figure{margin:20px 0}a{color:#005d88}nav a{display:inline-block;padding:10px}table{border-collapse:collapse}th,td{padding:8px;border:1px solid #9baab3}.front{max-height:720px}.side{width:100%}</style>
+<h1>クハ115 長野色<br>調査を反映した新規モデル・1/80 HO16.5</h1>
+<p>貫通扉窓を横長に修正。開口7.2×5.8 mm、幅/高さ1.241。Hゴム・ガラスも同じ輪郭に合わせました。寸法は写真による模型設計値です。</p>
+<nav><a href="kuha115-ho80-revised-saved.kcd2">通常版CADを開く</a><a href="kuha115-ho80-revised-split-saved.kcd2">前後分割版CAD</a><a href="README.md">組立と資料・限界</a><a href="validation-summary.json">検証記録</a></nav>
+<figure><img src="overview.png"><figcaption>実際に生成・検査したCAD形状の塗装レンダリング。AI予想図ではありません。CADの画面キャプチャとも区別しています。</figcaption></figure>
+<section><h2>横長の貫通扉窓と前頭部</h2><img class="front" src="front-detail.png"><img class="front" src="front.png"><p>扉全高22.9 mmと窓の高さを独立に設定。浅い折妻・回込窓・銀色縦桟・Hゴム・裾絞りを反映しました。</p></section>
+<section><h2>左右の側面と屋根</h2><p>上：運転士側／中：助手側／下：屋根。各画像の縮尺は統一していません。</p><img class="side" src="driver-side.png"><img class="side" src="assistant-side.png"><img class="side" src="top.png"></section>
+<section><h2>台車と部位別構成</h2><img src="bogie.png"><img src="exploded.png"><p>台車はTR62系の構造を模型化。部位グループごとに表示・編集・出力できます。実走行と市販輪軸の互換は未試験です。</p></section>
+<section><h2>実際のCAD表示</h2><img src="cad-screen.png"><p>配布済みWindows CADの通常起動で保存済みモデルを表示した実画面。色名は製作属性に保持し、この画面では塗装レンダリングと同じ塗り分けをしていません。</p></section>
+<section><h2>検査結果</h2><table><tr><th>版</th><th>部品</th><th>指定干渉組</th><th>検査点</th><th>全対の候補組</th><th>分割再組立</th></tr><tr><td>full</td><td>199</td><td>149</td><td>227</td><td>178</td><td>0</td></tr><tr><td>split</td><td>206</td><td>295</td><td>227</td><td>219</td><td>6</td></tr></table>
+<p>全BRep・全STEP再読込・全STL閉鎖性を確認。全対の候補はAABBから抽出し実形状で検査しました。通常版は保存後の再読込でも全可視部品の形状を比較しました。</p>
+<p>局所寸法と床下機器の同定には推定が残ります。特定車番の実測復元、実印刷済み、走行検証済みという主張はしません。詳細はREADMEに記録しました。</p></section>
+<section><h2>製作用データ</h2><p><a href="../../out/models/kuha115-ho80-revised-20261024.zip">部位別STL・STEP・CAD一式ZIP</a></p><p>分割版は最大部品寸法125 mm未満。STLは部品ごとのベッド原点、STEPは組立座標です。</p></section></html>

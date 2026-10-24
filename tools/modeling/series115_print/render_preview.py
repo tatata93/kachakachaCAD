@@ -27,18 +27,19 @@ def clip(poly,axis,bound,greater):
             output.append(tuple(a[j]+(b[j]-a[j])*t for j in range(3)))
     return output
 
-def render(base,report,front=False,explode=False):
-    width,height=(1300,1100) if front else (2600,1050)
+def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=()):
+    width,height=size or ((1300,1100) if front else (2600,1050))
     im=Image.new('RGB',(width,height),'#edf1f2');draw=ImageDraw.Draw(im)
-    camera=(-.91,-.32,.26) if front else (-.35,-.75,.56)
+    camera=camera or ((-.91,-.32,.26) if front else (-.35,-.75,.56))
     length=math.sqrt(sum(v*v for v in camera));camera=tuple(v/length for v in camera)
-    horizontal=(-camera[1],camera[0],0);length=math.hypot(*horizontal[:2]);horizontal=tuple(v/length for v in horizontal)
+    horizontal=(-camera[1],camera[0],0);length=math.hypot(*horizontal[:2])
+    horizontal=tuple(v/length for v in horizontal) if length>1e-12 else (1,0,0)
     up=(-camera[2]*horizontal[1],camera[2]*horizontal[0],camera[0]*horizontal[1]-camera[1]*horizontal[0])
     def dot(a,b):return sum(x*y for x,y in zip(a,b))
     polys=[];xs=[];ys=[]
     for part in report['parts']:
         colorname=part['manufacturing']['colorName'];color=PALETTE.get(colorname,PALETTE['フォギーグレー'])
-        path=part['groupPath'];paint=colorname=='フォギーグレー' and ('01 車体' in path or '客扉' in part['name'] or part['name']=='貫通扉')
+        path=part['groupPath'];paint=colorname=='フォギーグレー' and ('01 車体' in path or '客扉' in part['name'] or part['name']=='貫通扉' or any(s in part['name'] for s in paint_names))
         dz=(17 if '02 屋根' in path or '07 屋根' in path else (-13 if '08 床板' in path or '09 床下' in path or '10 台車' in path or '11 室内' in path else 0)) if explode else 0
         for poly,normal in triangles(base/part['stl']):
             if front:

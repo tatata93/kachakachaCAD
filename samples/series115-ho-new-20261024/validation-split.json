@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "token": "e1af065a-52d2-4ffc-9717-ed917919190f",
+  "version": 1,
+  "exit": 0,
+  "seconds": 18.21799999999348,
+  "exeSha": "b458e30134701c5ac61a6812457e1a9525bbb8235dfb30ef840e01d96dac50ea",
+  "modelSha": "a93d9d432444673853909ee826c8fa6bac7880a4ed429fef0ced0baf335fef2d",
+  "unchanged": true,
+  "passed": true
+}

@@ -1,0 +1,80 @@
+{
+  "timeUtc": "2026-10-24T10:23:28.806755+00:00",
+  "models": [
+    {
+      "name": "full",
+      "file": "kuha115-1000-ho80-new.kcd2",
+      "sourceSha256": "fb9ee67384ecc60b91884b517f5f93a76b0c263f4aab5df8cfb0940a9b33ae14",
+      "cadExeSha256": "b458e30134701c5ac61a6812457e1a9525bbb8235dfb30ef840e01d96dac50ea",
+      "nativeSeconds": 17.98399999999674,
+      "parts": 149,
+      "assemblyChecks": 75,
+      "pointChecks": 44,
+      "splitReassemblyChecks": 0,
+      "maximumPartExtentMm": 243.7500001,
+      "features": 775,
+      "groups": 17,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    },
+    {
+      "name": "split",
+      "file": "kuha115-1000-ho80-new-split.kcd2",
+      "sourceSha256": "a93d9d432444673853909ee826c8fa6bac7880a4ed429fef0ced0baf335fef2d",
+      "cadExeSha256": "b458e30134701c5ac61a6812457e1a9525bbb8235dfb30ef840e01d96dac50ea",
+      "nativeSeconds": 18.21799999999348,
+      "parts": 156,
+      "assemblyChecks": 75,
+      "pointChecks": 44,
+      "splitReassemblyChecks": 6,
+      "maximumPartExtentMm": 121.8750001,
+      "features": 801,
+      "groups": 18,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    }
+  ],
+  "passed": true,
+  "desktopStartup": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 1000,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0",
+    "visible": true,
+    "width": 1800
+  },
+  "savedDocumentReopen": {
+    "ok": true,
+    "token": "49f387d2-099a-4a8b-974d-6473836ea501",
+    "version": 1,
+    "exit": 0,
+    "seconds": 16.95299999997951,
+    "exeSha": "b458e30134701c5ac61a6812457e1a9525bbb8235dfb30ef840e01d96dac50ea",
+    "modelSha": "0ef1251eeac7f20390c713c9b6f80509f9ff2ae598b874ef6ee875aa8acd8904",
+    "unchanged": true,
+    "passed": true
+  },
+  "savedGeometryComparison": {
+    "passed": true,
+    "parts": 149,
+    "assemblyChecks": 75,
+    "pointChecks": 44,
+    "maximumVolumeDeltaMm3": 0.0
+  },
+  "exporterNegativeTest": {
+    "passed": true,
+    "invertedPointRejected": true,
+    "failuresDetected": 1,
+    "exit": 1,
+    "checkOnlyProducedNoStl": true
+  }
+}

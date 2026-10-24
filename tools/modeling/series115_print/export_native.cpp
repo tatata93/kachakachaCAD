@@ -9,6 +9,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepGProp.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -79,8 +80,25 @@ QJsonArray CheckSplit(const QJsonObject& design,const std::map<std::string,std::
     return results;
 }
 
+QJsonArray CheckPoints(const QJsonObject& design,const std::map<std::string,std::string>& shapes,int& failures) {
+    QJsonArray results;
+    for(const auto value:design["pointChecks"].toArray()) {
+        auto check=value.toObject();const auto point=check["point"].toArray();
+        if(point.size()!=3||!check["expectedInside"].isBool())throw std::runtime_error("invalid point check");
+        const auto shape=ReadShape(shapes,check["entity"].toString());
+        BRepClass3d_SolidClassifier classifier(shape,gp_Pnt(point[0].toDouble(),point[1].toDouble(),point[2].toDouble()),1e-6);
+        const bool inside=classifier.State()==TopAbs_IN;
+        check["inside"]=inside;check["onBoundary"]=classifier.State()==TopAbs_ON;
+        check["passed"]=classifier.State()!=TopAbs_UNKNOWN&&classifier.State()!=TopAbs_ON&&inside==check["expectedInside"].toBool();
+        if(!check["passed"].toBool())++failures;results.append(check);
+    }
+    return results;
+}
+
 int main(int argc,char** argv) {
-    QCoreApplication app(argc,argv);if(argc!=4)return 2;
+    QCoreApplication app(argc,argv);if(argc!=4&&argc!=5)return 2;
+    const bool checkOnly=argc==5&&QString::fromLocal8Bit(argv[4])=="--check-only";
+    if(argc==5&&!checkOnly)return 2;
     try {
         QFile file(QString::fromLocal8Bit(argv[1]));if(!file.open(QIODevice::ReadOnly))return 3;
         QDataStream data(&file);data.setVersion(QDataStream::Qt_6_0);data.setFloatingPointPrecision(QDataStream::DoublePrecision);
@@ -91,6 +109,8 @@ int main(int argc,char** argv) {
         std::map<std::string,std::string> shapes;
         for(quint64 i=0;i<count;++i){auto id=Text(data);shapes.emplace(id,Text(data));}
         const auto design=Json(QString::fromLocal8Bit(argv[2]));const QDir out(QString::fromLocal8Bit(argv[3]));QDir().mkpath(out.path());
+        const double chord=design["stlChordMm"].toDouble(.025);
+        if(!std::isfinite(chord)||chord<=0||chord>.025)throw std::runtime_error("invalid mesh precision");
         if(design["entities"].toArray().isEmpty()||design["groups"].toArray().isEmpty())
             throw std::runtime_error("empty or invalid design manifest");
         std::map<QString,QJsonObject> groups;
@@ -98,10 +118,14 @@ int main(int argc,char** argv) {
         QJsonArray results;int failures=0,index=0;
         const auto assembly=CheckAssembly(design,shapes,failures);
         const auto split=CheckSplit(design,shapes,failures);
+        const auto points=CheckPoints(design,shapes,failures);
         Interface_Static::SetCVal("write.step.unit","MM");
         for(const auto value:design["entities"].toArray()) {
             const auto entity=value.toObject();if(entity["kind"]!="part"||entity["visibility"]!="visible")continue;
             const auto id=entity["id"].toString();QJsonObject row{{"id",id},{"name",entity["displayName"]}};
+            const double partChord=design["stlChordByEntity"].toObject()[id].toDouble(chord);
+            if(!std::isfinite(partChord)||partChord<=0||partChord>.025)throw std::runtime_error("invalid part mesh precision");
+            row["chordMm"]=partChord;
             const auto found=shapes.find(id.toStdString());
             if(found==shapes.end()){row["error"]="missing CAD-evaluated shape";results.append(row);++failures;continue;}
             std::istringstream stream(found->second);BRep_Builder builder;TopoDS_Shape shape;BRepTools::Read(shape,stream,builder);
@@ -118,8 +142,8 @@ int main(int argc,char** argv) {
             for(int depth=0;groups.contains(group)&&depth<50;++depth){auto g=groups[group];names.prepend(g["displayName"].toString());group=g["parentGroupId"].toString();}
             row["groupPath"]=names.join('/');row["manufacturing"]=entity["partProperties"].toObject()["manufacturing"];
             const auto stem=QString("part-%1-%2").arg(++index,3,10,QChar('0')).arg(id.left(8));
-            if(valid) {
-                BRepMesh_IncrementalMesh mesh(shape,.025,false,.12,false);
+            if(valid&&!checkOnly) {
+                BRepMesh_IncrementalMesh mesh(shape,partChord,false,.12,false);
                 const auto stl=out.filePath(stem+".stl");StlAPI_Writer writer;writer.ASCIIMode()=false;
                 const bool stlOk=writer.Write(shape,stl.toUtf8().constData());
                 STEPControl_Writer step;const auto transferred=step.Transfer(shape,STEPControl_AsIs);
@@ -135,12 +159,12 @@ int main(int argc,char** argv) {
                 }
                 row["stepRoundTrip"]=roundtrip;if(!roundtrip)++failures;
                 if(!row["exported"].toBool())++failures;
-            }else ++failures;
+            }else if(!valid)++failures;
             results.append(row);
         }
         if(index==0)throw std::runtime_error("zero visible parts");
         QJsonObject report{{"preparedToken",QString::fromStdString(token)},{"cadShapes",int(count)},{"visibleParts",index},
-            {"failures",failures},{"chordMm",.025},{"assemblyChecks",assembly},{"splitChecks",split},{"parts",results}};
+            {"failures",failures},{"checkOnly",checkOnly},{"chordMm",chord},{"assemblyChecks",assembly},{"splitChecks",split},{"pointChecks",points},{"parts",results}};
         QFile result(out.filePath("print-parts.json"));if(!result.open(QIODevice::WriteOnly))return 4;result.write(QJsonDocument(report).toJson());
         std::cout<<"visible="<<index<<" failures="<<failures<<std::endl;return failures?1:0;
     }catch(const std::exception& e){std::cerr<<e.what()<<std::endl;return 5;}

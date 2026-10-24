@@ -17,6 +17,14 @@
 #include <QColor>
 #include "kachakacha/view/SurfaceRaster.h"
 #include "V2Viewport.h"
+#include "V2DrawingDock.h"
+#include "kachakacha/app/DirectWireEntry.h"
+#include <QEvent>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QComboBox>
+#include <set>
+#include <cmath>
 #include "V2OperationPanelHost.h"
 #include <QApplication>
 #include <QCheckBox>
@@ -30,6 +38,157 @@
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> ToolContractCases();
 namespace {
+using T=modeling::DrawingTool;
+QPointF PlanePixel(V2Viewport& v,geometry::Vector3 p) {
+    const auto pixel=v.Mapping().Project(p);return pixel?QPointF(pixel->x,pixel->y):QPointF(-100,-100);
+}
+void PlaneClick(V2Viewport& v,geometry::Vector3 p,Qt::KeyboardModifiers modifiers=Qt::NoModifier) {
+    const auto at=PlanePixel(v,p);
+    for(auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+        QMouseEvent event(type,at,QPointF(v.mapToGlobal(at.toPoint())),Qt::LeftButton,
+            type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,modifiers);
+        QApplication::sendEvent(&v,&event);
+    }
+}
+void PlaneKey(V2Viewport& v,int key) {
+    if(!v.window()->isActiveWindow()){v.window()->activateWindow();QApplication::processEvents();}
+    v.setFocus();QKeyEvent event(QEvent::KeyPress,key,Qt::NoModifier);QApplication::sendEvent(&v,&event);
+}
+bool PlaneSetup(V2MainWindow& w) {
+    w.RunCommand("file.new");w.resize(1440,900);QApplication::processEvents();
+    auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(180);v.SetSnapSuppressed(true);
+    auto* only=w.findChild<QToolButton*>("quickPlaneWiresOnly");if(!only)return false;
+    only->setChecked(true);return only->isChecked();
+}
+std::set<base::EntityId> PlaneEntities(V2MainWindow& w) {
+    std::set<base::EntityId> ids;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::Wire||e.kind==domain::EntityKind::Point)ids.insert(e.id);
+    return ids;
+}
+bool PlaneNewVisible(V2MainWindow& w,const std::set<base::EntityId>& before) {
+    const auto after=PlaneEntities(w);bool created=false;
+    for(const auto id:after)if(!before.contains(id)){
+        created=true;if(!Explain("new in-plane entity is immediately visible",w.Viewport().EntityShown(id)))return false;
+    }
+    return Explain("drawing actually created a document entity",created);
+}
+void PlaneShot(V2MainWindow& w,const char* name) {
+    const auto root=qEnvironmentVariable("KACHACAD_PLANE_DRAW_SHOTS");if(root.isEmpty())return;
+    QDir dir(root);dir.mkpath(".");w.grab().save(dir.filePath(QString::fromUtf8(name)+".png"));
+}
+bool PlaneMouseDrawing(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();
+    const auto draw=[&](T tool,std::vector<geometry::Vector3> points,bool finish=false){
+        const auto before=PlaneEntities(w);w.SelectTool(tool);
+        for(const auto& p:points)PlaneClick(v,p);
+        if(finish)PlaneKey(v,Qt::Key_Return);
+        return PlaneNewVisible(w,before);
+    };
+    if(!draw(T::Line,{{-60,-45,0},{-35,-45,0}}))return false;
+    // The real rendered line must be present, not just a permissive visibility flag.
+    v.CompletePresentationForTest();const auto shot=v.grab().toImage();const auto mid=PlanePixel(v,{-47.5,-45,0});
+    const double scale=double(shot.width())/v.width();bool ink=false;
+    for(int dy=-3;dy<=3;++dy)for(int dx=-3;dx<=3;++dx){
+        const auto pixel=shot.pixelColor(qRound(mid.x()*scale)+dx,qRound(mid.y()*scale)+dy);
+        ink=ink||(pixel.red()<90&&pixel.green()<90&&pixel.blue()<90);
+    }
+    if(!Explain("new line is drawn in the real viewport",ink))return false;
+    if(!draw(T::Rectangle,{{-60,-30,0},{-35,-20,0}})
+        ||!draw(T::Circle,{{-48,-5,0},{-42,-5,0}})
+        ||!draw(T::Arc,{{-60,15,0},{-50,24,0},{-40,15,0}})
+        ||!draw(T::Bezier,{{-60,40,0},{-55,45,0},{-45,35,0},{-40,40,0}})
+        ||!draw(T::Spline,{{-25,-45,0},{-15,-40,0},{-10,-20,0},{0,-30,0}},true)
+        ||!draw(T::Point,{{-10,-5,0}}))return false;
+    PlaneShot(w,"mouse-primitives");return true;
+}
+bool PlaneNumericAndContinuous(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();w.SelectTool(T::Line);
+    PlaneClick(v,{-50,-30,0});v.HoverAt(PlanePixel(v,{-20,-30,0}));
+    if(!v.TypeIntoCursorField("12.5"))return false;
+    auto before=PlaneEntities(w);PlaneKey(v,Qt::Key_Return);
+    if(!PlaneNewVisible(w,before))return false;
+    const auto& curve=w.Session().Scene().curves.back().segment;
+    if(!Explain("cursor numeric line uses its actual requested length",std::abs((curve.EndPoint()-curve.StartPoint()).Length()-12.5)<1e-8))return false;
+    for(double y:{-10.,10.,30.}){
+        before=PlaneEntities(w);PlaneClick(v,{-50,y,0});PlaneClick(v,{-20,y,0});
+        if(!PlaneNewVisible(w,before))return false;
+    }
+    before=PlaneEntities(w);w.SelectTool(T::Polyline);
+    PlaneClick(v,{-10,-30,0});PlaneClick(v,{0,-20,0});PlaneClick(v,{10,-30,0});PlaneKey(v,Qt::Key_Return);
+    return PlaneNewVisible(w,before);
+}
+bool PlaneConstructionPoints(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();modeling::ToolSettings settings;
+    settings.construction=true;settings.keepPoints=true;w.DrawingDock().SetSettings(settings);w.SelectTool(T::Line);
+    auto before=PlaneEntities(w);PlaneClick(v,{-50,-20,0});PlaneClick(v,{-20,-20,0});
+    if(!PlaneNewVisible(w,before)||PlaneEntities(w).size()!=3)return false;
+    before=PlaneEntities(w);w.SelectTool(T::Bezier);
+    for(const auto p:std::vector<geometry::Vector3>{{-50,10,0},{-40,25,0},{-30,-5,0},{-20,10,0}})PlaneClick(v,p);
+    return PlaneNewVisible(w,before);
+}
+void PlaneFrame(V2MainWindow& w,const modeling::WorkPlaneFrame& plane) {
+    w.Viewport().SetWorkPlane(plane);auto scene=w.Session().Scene();
+    scene.grid.origin=plane.origin;scene.grid.uDirection=plane.uAxis;scene.grid.vDirection=plane.vAxis;
+    w.Session().SetScene(std::move(scene));
+}
+bool PlaneTiltedDrawing(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();const auto top=v.WorkPlane();
+    for(bool tilted:{false,true}){
+        auto plane=top;plane.origin={0,0,tilted?13.:7.};
+        if(tilted){const double q=std::sqrt(.5);plane.normal={q,0,q};plane.uAxis={q,0,-q};plane.vAxis={0,1,0};}
+        PlaneFrame(w,plane);const auto before=PlaneEntities(w);w.SelectTool(T::Line);
+        PlaneClick(v,plane.origin+plane.uAxis*-45+plane.vAxis*-20);
+        PlaneClick(v,plane.origin+plane.uAxis*-20+plane.vAxis*-20);
+        if(!PlaneNewVisible(w,before))return false;
+        v.SetSnapSuppressed(false);const auto c=w.Session().Scene().curves.back();
+        const auto p=v.Mapping().Project(c.segment.StartPoint());if(!p)return false;
+        const auto snap=w.Session().PeekHover(*p).snap;
+        if(!Explain("new tilted-plane endpoint is an immediate snap target",snap&&snap->entityId==c.entityId))return false;
+        v.SelectAt({p->x,p->y},Qt::NoModifier);
+        if(!Explain("new tilted wire is immediately selectable",app::IsSelected(v.Selection(),c.entityId)))return false;
+        v.SetSnapSuppressed(true);PlaneFrame(w,top);
+        if(!Explain("true off-plane wire remains hidden",!v.EntityShown(c.entityId)))return false;
+    }
+    return true;
+}
+bool PlaneDrawingHistory(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();w.SelectTool(T::Line);
+    PlaneClick(v,{-50,-20,0});PlaneClick(v,{-20,-20,0});
+    const auto id=w.Session().Scene().curves.back().entityId;if(!v.EntityShown(id))return false;
+    PlaneClick(v,{-35,-20,0},Qt::ControlModifier);PlaneKey(v,Qt::Key_Delete);
+    if(w.Session().GetDocument().FindEntity(id))return false;
+    w.RunCommand("edit.undo");if(!v.EntityShown(id)||!w.Session().GetDocument().FindEntity(id))return false;
+    w.RunCommand("edit.redo");if(w.Session().GetDocument().FindEntity(id))return false;
+    w.RunCommand("edit.undo");
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({id},domain::Visibility::Hidden)).committed)return false;
+    base::RandomIdGenerator ids;w.Session().SetScene(app::RebuildSceneKeepingView(w.Session().Scene(),w.Session().GetDocument().Snapshot(),ids));
+    auto* only=w.findChild<QToolButton*>("quickPlaneWiresOnly");only->click();only->click();
+    if(!Explain("filter toggle does not unhide document-hidden wire",w.Session().GetDocument().FindEntity(id)->visibility==domain::Visibility::Hidden))return false;
+    w.RunCommand("edit.undo");if(!v.EntityShown(id))return false;
+    if(!w.SaveAndReopen("plane-wire-drawing.kcd2")||!only->isChecked()||!v.EntityShown(id))return false;
+    v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(180);w.SelectTool(T::Line);
+    const auto before=PlaneEntities(w);PlaneClick(v,{-50,10,0});PlaneClick(v,{-20,10,0});
+    return PlaneNewVisible(w,before);
+}
+bool PlaneDirectAndSpatial(V2MainWindow& w) {
+    if(!PlaneSetup(w))return false;auto& v=w.Viewport();app::DirectWireRequest request;
+    request.points={{-50,-20,0},{-20,-20,0}};auto before=PlaneEntities(w);
+    w.DrawingDock().SetDirectWire(request,"平面内数値線");w.DrawingDock().PressCreateWire();
+    if(!PlaneNewVisible(w,before))return false;
+    request.kind=app::DirectWireKind::SpatialLine;request.points={{-50,10,5},{-20,10,5}};
+    before=PlaneEntities(w);
+    w.DrawingDock().SetDirectWire(request,"面外数値線");w.DrawingDock().PressCreateWire();
+    if(!Explain("planar drawing rejects off-plane coordinates",PlaneEntities(w)==before))return false;
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!scope)return false;scope->setCurrentIndex(1);
+    w.DrawingDock().SetDirectWire(request,"面外数値線");w.DrawingDock().PressCreateWire();
+    if(!Explain("3D drawing actually creates the off-plane wire",PlaneEntities(w).size()==before.size()+1))return false;
+    const auto id=w.Session().Scene().curves.back().entityId;
+    if(!Explain("spatial wire truly outside the plane is excluded",!v.EntityShown(id)))return false;
+    auto* only=w.findChild<QToolButton*>("quickPlaneWiresOnly");const auto revision=w.Session().GetDocument().Revision();
+    only->click();if(!v.EntityShown(id))return false;only->click();
+    return Explain("display toggle remains outside document history",!v.EntityShown(id)&&w.Session().GetDocument().Revision()==revision);
+}
 base::EntityId Line(V2MainWindow& w,double y) {
     w.SelectTool(modeling::DrawingTool::Line);
     for(double x:{-20.,20.}){const auto p=w.Viewport().Mapping().Project({x,y,0});if(!p)return {};
@@ -216,5 +375,12 @@ bool GpuParity(V2MainWindow&) {
 }
 
 }
-std::vector<SelfTestCase> UsabilityCases(){auto cases=ToolContractCases(); const std::vector<SelfTestCase> existing{{"HP-UX-04 permanent grid and plane wire display controls",&QuickDisplay},{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};cases.insert(cases.end(),existing.begin(),existing.end());return cases;}
+std::vector<SelfTestCase> UsabilityCases(){auto cases=ToolContractCases(); const std::vector<SelfTestCase> existing{
+    {"HP-PLANE-DRAW-01 mouse primitives visible without toggling filter",PlaneMouseDrawing},
+    {"HP-PLANE-DRAW-02 cursor numeric and continuous drawing",PlaneNumericAndContinuous},
+    {"HP-PLANE-DRAW-03 construction control polygon and kept points",PlaneConstructionPoints},
+    {"HP-PLANE-DRAW-04 offset and tilted planes visibility picking snapping",PlaneTiltedDrawing},
+    {"HP-PLANE-DRAW-05 delete Undo Redo hidden state save reopen",PlaneDrawingHistory},
+    {"HP-PLANE-DRAW-06 direct numeric entry and actual off-plane exclusion",PlaneDirectAndSpatial},
+    {"HP-UX-04 permanent grid and plane wire display controls",&QuickDisplay},{"HP-GPU display cache parity",&GpuParity},{"HP-ERGO-01 illustrated responsive controls",&Ergonomics},{"HP-ERGO-02 compact tool search",&CompactSearch},{"HP-UX-01 cross-mode tool search",&Search},{"HP-UX-02 persistent local view picking snapping restore",&Isolation},{"HP-UX-03 solid selection focus",&ShapeFocus}};cases.insert(cases.end(),existing.begin(),existing.end());return cases;}
 }

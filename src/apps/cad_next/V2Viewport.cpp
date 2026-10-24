@@ -948,6 +948,9 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 
 void V2Viewport::PruneSelection()
 {
+    // Drawing appends to the scene without replacing it. Refresh geometric
+    // visibility before pruning/picking, so freshly committed wires are included.
+    RefreshPlaneWireDisplay(*this);
     // 文書が変わった。覚えていた候補は、もう無いものを指しているかもしれない。
     ForgetPickCycle();
     // 引きかけの矩形も捨てる。覚えている「押した時点の選択」には、

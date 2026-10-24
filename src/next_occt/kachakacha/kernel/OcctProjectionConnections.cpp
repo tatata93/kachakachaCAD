@@ -30,6 +30,10 @@ std::optional<CurveSegment> MoveEnd(const CurveSegment& curve,bool last,Vector3 
         auto points=curve.ControlPoints();const auto delta=point-(last?curve.EndPoint():curve.StartPoint());
         if(last){points[3]=points[3]+delta;points[2]=points[2]+delta;}else{points[0]=points[0]+delta;points[1]=points[1]+delta;}
         const auto moved=CurveSegment::MakeCubicBezier(points);if(moved.HasValue())return moved.Value();
+    } else if(curve.Kind()==CurveKind::CubicBSpline&&curve.ControlPoints().size()>=6) {
+        auto points=curve.ControlPoints();const auto delta=point-(last?curve.EndPoint():curve.StartPoint());
+        for(std::size_t i=0;i<3;++i)points[last?points.size()-1-i:i]=points[last?points.size()-1-i:i]+delta;
+        const auto moved=CurveSegment::MakeCubicBSpline(points);if(moved.HasValue())return moved.Value();
     }
     return {};
 }

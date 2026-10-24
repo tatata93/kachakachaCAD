@@ -824,3 +824,21 @@ HP-INSTRUCTIONS-EDIT、2026-10-19のWindows実Qtウィンドウ。
 `selected-wire-contrast`: ![選択線分のオレンジ色と縁取り](images/v2-selected-wire-contrast.png)
 
 WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入力注入とは区別します。
+
+## 2026-10-25 パノラミック窓の穴付き面と部品
+
+[115面の画像付き手順](panorama-window-holes.html)。外周と窓を選び「面にする」、結果に厚みを付けます。
+窓の端が車体面の端と一致する場合は、隣の面も含めて外周を取ります。
+各画像は実アプリの自動操作試験です。試験用外周と投影元コピーの準備は文書API、曲線の選択は画面座標クリックです。
+
+`115-panorama-01-projected`: ![投影して閉じた窓輪郭](images/v2-115-panorama-01-projected.png)
+
+`115-panorama-02-curve-only`: ![直線を含めず曲線部分を選ぶ](images/v2-115-panorama-02-curve-only.png)
+
+`115-panorama-03-hole-preview`: ![外周と窓から穴付き面を下見](images/v2-115-panorama-03-hole-preview.png)
+
+`115-panorama-04-hole-face`: ![元の曲面を保った窓穴付き面](images/v2-115-panorama-04-hole-face.png)
+
+`115-panorama-05-thickness-preview`: ![中央0.5mmの厚みを指定](images/v2-115-panorama-05-thickness-preview.png)
+
+`115-panorama-06-hole-solid`: ![窓が貫通したソリッド](images/v2-115-panorama-06-hole-solid.png)

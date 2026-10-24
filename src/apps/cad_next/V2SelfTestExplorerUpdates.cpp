@@ -184,6 +184,12 @@ bool FolderInputs(V2MainWindow& w){
     return Explain("folder editing retains the wire",w.Session().GetDocument().FindEntity(wire)!=nullptr);
 }
 bool WireUnderSurface(V2MainWindow& w){
+    const auto trace=[&](const char* phase){
+        const auto dir=qEnvironmentVariable("KACHACAD_TOOL_AUDIT_DIR");if(dir.isEmpty())return;
+        QFile file(dir+"/wire-under-face.txt");if(!file.open(QIODevice::Append))return;
+        file.write(phase);file.write("\n");file.write(w.StatusText().toUtf8());file.write("\n");
+        for(const auto& ref:w.Viewport().Selection().ordered)file.write((ref.entityId.ToString()+" kind="+std::to_string(int(ref.kind))+" segment="+(ref.segmentId?ref.segmentId->ToString():"none")+"\n").c_str());
+    };
     w.RunCommand("file.new");auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);
     const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
     view.SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");HumanKey(&w.Viewport(),Qt::Key_Return);
@@ -191,12 +197,16 @@ bool WireUnderSurface(V2MainWindow& w){
     w.RunCommand("selection.activate");view.SetSelection({});
     geometry::Vector3 point;bool found=false;for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==wire){point=curve.segment.Evaluate(.37);found=true;break;}
     const auto at=view.Mapping().Project(point);if(!found||!at)return false;const QPointF where(at->x,at->y);
-    w.RunCommand("surface.from_lines");HumanClick(&view,where);
+    w.RunCommand("surface.from_lines");trace("before click");HumanClick(&view,where);trace("first click");
     if(!Explain("surface edge cannot steal a displayed source wire during face creation",view.Selection().entityIds==std::vector<base::EntityId>{wire}))return false;
-    HumanClick(&view,where);if(!Explain("clicking again removes the source wire",view.Selection().entityIds.empty()))return false;
+    HumanClick(&view,where);trace("second click");if(!Explain("clicking again removes the source wire",view.Selection().entityIds.empty()))return false;
     HumanKey(&w.Viewport(),Qt::Key_Escape);w.RunCommand("surface.create");
     if(!w.SurfaceDock().ClickMethodCard(modeling::GuideSurfaceMethod::PlanarBoundary))return false;
-    HumanClick(&view,where);
+    // Changing docks can resize the viewport. Click the displayed world-space
+    // wire, not the old pixel location from the previous tool's layout.
+    QApplication::processEvents();const auto current=view.Mapping().Project(point);if(!current)return false;
+    HumanClick(&view,QPointF(current->x,current->y));
+    trace("advanced click");
     if(!Explain("advanced surface boundary also takes the source wire",view.Selection().entityIds==std::vector<base::EntityId>{wire}))return false;
     SaveInteractionShot(w,"wire-under-face");HumanKey(&w.Viewport(),Qt::Key_Escape);return Explain("both source wire and face remain visible",view.ShapeViews().size()==1&&w.Session().GetDocument().FindEntity(wire)->visibility==domain::Visibility::Visible);
 }

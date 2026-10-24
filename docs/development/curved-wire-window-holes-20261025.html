@@ -1,0 +1,42 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>曲線区間と穴付き曲面の修正・検証記録 2026-10-25</title>
+<style>body{max-width:1100px;margin:32px auto;padding:0 24px;font:16px/1.8 "Yu Gothic UI",sans-serif;color:#203040}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #bac7d3;text-align:left}img{width:100%;height:auto}code{overflow-wrap:anywhere}.note{background:#eef4f8;padding:16px}h1,h2{line-height:1.4}</style>
+<h1>曲線部分を分割せずに選び、窓穴付きの面・部品を作る</h1>
+<p>対象は投影・境界変換の曲線区間、線からの面生成、複数支持面にまたがる窓、厚みと押し出し。列車模型の外観改訂は保全した別の途中作業であり、この配布版の完成模型には含めない。</p>
+<h2>原因と対処</h2>
+<table><tr><th>問題</th><th>修正</th><th>主な位置</th></tr>
+<tr><td>正確な有理曲線を多数の三次Bezierへ変換し、その区間が編集単位になっていた。</td><td>一つの滑らかなnative曲線を一つのBSpline区間へまとめる。元の有理Bezierと候補の各重複区間をBernstein係数で上界検査する。標本点だけで精度を認定しない。直線と接線不連続の境目は統合しない。</td><td>OcctBoundaryCurves.cpp、OcctWireProjection.cpp</td></tr>
+<tr><td>長い曲線の最近点探索が一つの粗い候補だけを細分化していた。</td><td>粗い標本の全ての局所的な谷を調べ、端点も含め最小距離を採用する。長いBSplineはspan数に応じた粗い探索にする。</td><td>CurveSegment.cpp</td></tr>
+<tr><td>「面にする」が部分Edge選択を全ワイヤーへ戻していた。</td><td>選択Segment UUIDを保持。非表示入力は保存定義から同じUUIDを取得。補正時は選んでいない兄弟区間を残す。補正前の選択をRecentへ保存し、自動補正と「寄せる」ボタンの両方を試験。既存面・部品・寸法の参照を壊す部分置換は拒否してTransactionを戻す。</td><td>V2LoopFacesTool、V2Viewport</td></tr>
+<tr><td>曲面上の外周・穴に加えた交差線が、独立穴の早期判定で区画分割へ届かなかった。</td><td>穴以外の線で区画を分け、穴を一意に含む区画へ戻す。曲面四辺区画に穴を付けるときはBoundaryFillへ変更し、通常の要求解析・native面生成まで通す。</td><td>SurfaceNetwork.cpp</td></tr>
+<tr><td>窓が複数の元の面にまたがると、単一支持面しか保存・復元できなかった。</td><td>必要な支持面をまとめて切り出し、不要な依存先を除く。BoundaryFillの複数SourceSurface行を保存・復元する。OffsetGuideの単一支持面契約は保持する。</td><td>V2LoopFacesNetwork、GuideSurfaceTable、OcctSurfaceRegion</td></tr>
+<tr><td>混在した平面・複合曲面の厚みがSimple方式で不正になった。</td><td>交差付きnative offsetを再試行。それでも不正な場合、元の各面の有限厚み領域を作って重なりをnative Booleanで結合する。単一の閉じた正体積ソリッドと同じ自己交差検査を通す。継ぎ目が厚み領域の和になることをTHK-009で案内する。</td><td>OcctThicken.cpp</td></tr></table>
+<p>同じ分割原因の呼出先として、通常投影のほか、投影面領域（OcctProjectedRegions）、領域分割（OcctRegionSplit）、形状からの出力輪郭（OcctOutput）を確認した。これらは同じBoundaryCurves変換を使うため、共通箇所で修正する。通常ワイヤーとしての固定・投影確定には既存のV2CompactGeneratedCurvesも適用される。全てのコマンドを個別に書き換えたという意味ではない。</p>
+<h2>添付115面の確認</h2>
+<p>原本のSHA-256は <code>9c966f3a065cee65ca8ceb2fa12f98445501b812d8c240f9a08de74a5261057b</code>。原本を上書きせず、旧投影2本の削除は確認用コピー内だけで行った。</p>
+<p>正面と側面の入力は全長のままでは重複するため、X=15 mmで担当範囲を合わせて四隅のRを残した。窓の左端X=6 mmが元の車体面の端と接していたため、隣の中央面を含め外周をX=5 mmまで1 mm広げた。窓の位置・形を変えて通したものではない。投影直後は12区間（直線6・曲線6）。曲線6区間は、それぞれ3Dクリックで一つだけ選べることを確認した。</p>
+<p>窓穴付き面と中央0.5 mmのソリッドを生成。ソリッドは約312.074 mm³。穴の中心へ飛ばしたrayが材料に当たらず、周囲では当たることを検査した。保存・再読込の再構築、Undo／Redo、原本バイト列不変が成功。入力準備は文書API、投影・面・厚みは製品ツールの下見と確定、曲線選択は画面座標クリックであり、全てをOS入力注入で操作したとは扱わない。</p>
+<p>実行証拠は <code>out/curve-single-20261025/owner09-report.json</code>。1ケース109.575秒（再構築・保存・画像取得・履歴試験を含む）。単独の厚み処理速度ではない。結果は同フォルダーの <code>owner09/115-panorama-hole-face.kcd2</code>、<code>owner09/115-panorama-hole-solid.kcd2</code>。</p>
+<p>同じ再構築済み部品のnative BRepからSTEP・STLも書き出した。STEP再読込で形状の妥当性と体積を照合。STLは1部品・1138三角形で、開いた辺／非多様体辺0、向き不整合0、退化三角形0。CAD体積との差は約0.0051%だった。書き出しは検査用OCCTプログラムによるもので、製品の書き出しボタンを操作した記録ではない。実物を印刷したことも意味しない。結果と条件は <code>owner09/stl-validation.json</code>、STEPは <code>owner09/panorama-window.step</code>、STLは <code>owner09/panorama-window.stl</code>。</p>
+<figure><img src="../manual/images/v2-115-panorama-04-hole-face.png" alt="115面の穴付き面"></figure>
+<figure><img src="../manual/images/v2-115-panorama-06-hole-solid.png" alt="115面の穴付きソリッド"></figure>
+<p><a href="../manual/panorama-window-holes.html">利用者向けの画像6枚付き手順</a></p>
+<h2>一般形状の試験範囲</h2>
+<table><tr><th>形状・操作</th><th>検査</th></tr>
+<tr><td>円弧、自由なS字、直線とRと直線、円筒への投影</td><td>曲線の単一区間化、直線を取り込まないこと、元native曲線との偏差上界、独立した面上距離、周期曲線の閉鎖。</td></tr>
+<tr><td>前面・1/4円筒・側面をまたぐ外周と窓</td><td>穴付き曲面、内側・中央・外側への厚み。距離・両側・逆向きの押し出し、nativeフェイスまでと正負の終端オフセット。閉鎖性、正体積、自己交差、窓の空洞。</td></tr>
+<tr><td>円筒上の外周・独立窓・外周途中へ入る区切り線</td><td>2区画、穴1個、未使用線0、通常の面生成要求とnative実体、直線押し出し後も穴を保持。</td></tr>
+<tr><td>部分選択、同一形状で別UUIDの辺、非表示、隙間補正</td><td>選んだ区間だけの入力、未選択区間の保持、他の選択の保持、自動補正／手動補正後のRecent・Undo／Redo・保存。</td></tr>
+<tr><td>既存の一般ネットワーク行列</td><td>平面の円・凹形状・入れ子・島・交差線・枝、空間Bezier途中のT字、選択順と逆向き、深さ違いの交差、開いた輪郭。Windows全体試験で実行。</td></tr></table>
+<p>重点記録は <code>kernel13.txt</code>（投影kernel 43ケース）、<code>partial-referenced-report.json</code>（既存参照保護を含む部分選択）。失敗した試行も同じout作業フォルダーに保全。試験の削除・精度条件の緩和で成功扱いにしていない。</p>
+<h2>限界と区別</h2>
+<p>任意の自己交差、深さの違う端点、分岐して内外が一意でない輪郭を無条件に成功させるものではない。窓を横断する区切り線で穴の割当先が一意でない場合は、勝手に窓を埋めず入力整理を求める。曲線を一つに近似できない場合は、許容偏差を超えて統合しない。全ての数学的形状への対応や常時60fpsを認定した記録ではない。</p>
+<p>旧投影線の23＋24区間と、新しいコピーの12区間は入力の担当範囲も整理しているため、純粋な同一入力比較の削減率とは扱わない。今回はモデル読込や描画の速度比較を目的にしていない。</p>
+<h2>Windows全体ゲート</h2>
+<p id="gate-result">成功。正式入口 <code>python scripts/verify.py full --run-id curve-window-accepted-20261025 --parallel 2</code> で、195 CTest（skip 0）、開発版／配布版UI各583件、旧CAD自己試験が全て成功。開始2026-10-24 20:51:52 UTC、終了21:20:05 UTC（日本時間10月25日05:51:52〜06:20:05）、全体約28分13秒。これは今回の最終ゲート1回の時間であり、修正作業全体の時間や速度改善率ではない。</p>
+<p>証拠は <code>out/verification/curve-window-accepted-20261025/result.json</code>、配布先は <code>out/releases/curve-window-accepted-20261025</code>。成功した証拠と現在のソース・設定・環境・配布物のハッシュを正式publish入口で照合する。台帳修正前後の製品exeのSHA-256は共通で <code>21fadad57c23265967f65b582386e12f10da1b5bd7d9debf2f4374e004d18016</code>。</p>
+<p>正式publishが成功。その配布版を <code>scripts/run-verified.py</code> から窓穴付きkcd2を指定して通常起動し、Windowsの可視・画面内・イベントループ・描画完了が全て成功した（<code>out/curve-single-20261025/desktop-final.json</code>）。同名の <code>.json.png</code> を確認し、窓穴のある部品の表示を確認した。起動は <code>out/releases/curve-window-accepted-20261025/package/kachakacha_cad_next.exe</code>。</p>
+<p>最初の全体実行は、並行レビューで部分置換時の下流Segment参照破損が判明したため、当該試験のプロセスツリーだけを中止した。通常起動中のCADは終了していない。中止記録は <code>out/verification/curve-window-release-20261025/interrupted.json</code>。既存native面を参照する回帰ケースを追加して保護を確認し、その候補で全体ゲートを再実行する。</p>
+<p>2回目は配布版UI583件中HP-FP-02の1件が失敗したため中止した。右ペインの切替でviewportがリサイズされた後に、試験が古いピクセル位置をクリックしていた。現在のworld座標を画面へ投影し直して同じワイヤー選択・解除・詳細面作成の検査を保ち、単独再実行が成功（<code>fp02-final-report.json</code>）。製品の選択結果を緩和した変更ではない。中止記録は <code>out/verification/curve-window-verified-20261025/interrupted.json</code>。3回目は <code>curve-window-final-20261025</code> として実行する。</p>
+<p>3回目は開発版・配布版UI各583件が全て成功したが、195 CTest中の診断台帳試験がTHK-009の未登録を検出し失敗した。台帳へ警告の種別と内容を追加し、同試験13項目の単独再実行が成功（<code>catalog-final.log</code>）。この修正で製品バイナリは変更していない。正式入口はソース文書のハッシュも検査するため、4回目を <code>curve-window-accepted-20261025</code> として実行する。3回目の失敗証拠は保全する。</p>
+</html>

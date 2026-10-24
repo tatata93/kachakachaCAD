@@ -96,7 +96,7 @@ bool Allowed(const TopoDS_Edge& edge,const WireProjectionInput& source,
 void AddEdge(WireProjectionResult& result,const TopoDS_Edge& edge,const WireProjectionInput& source,
     const WireProjectionOptions& options) {
     if(BRep_Tool::Degenerated(edge)||!Allowed(edge,source,options))return;
-    const auto converted=detail::BoundaryCurves(edge,options.toleranceMm);
+    const auto converted=detail::BoundaryCurves(edge,options.toleranceMm*.5);
     Require(converted.HasValue(),converted.FirstMessageJa().c_str());
     result.maxCurveDeviationMm=std::max(result.maxCurveDeviationMm,converted.Value().maxDeviationBoundMm);
     auto curves=converted.Value().curves;
@@ -204,6 +204,10 @@ void ProjectOne(WireProjectionResult& result,const std::vector<TopoDS_Face>& fac
             detail::SelectVisibleProjection(pieces,[&](Vector3 point){return SourceMatch(point,segment,one,options);},options);
         else if(options.mode==WireProjectionMode::Closest||options.hits!=WireProjectionHits::All)KeepNearest(pieces,one,options);
         RestorePlanarForm(pieces,segment,one,faces,options);
+        Join(pieces,options.joinToleranceMm);
+        double additional=0;
+        for(auto& run:pieces.wires)additional=std::max(additional,detail::CompactBoundaryRun(run,options.toleranceMm-pieces.maxCurveDeviationMm));
+        pieces.maxCurveDeviationMm+=additional;
         result.maxCurveDeviationMm=std::max(result.maxCurveDeviationMm,pieces.maxCurveDeviationMm);
         result.wires.insert(result.wires.end(),pieces.wires.begin(),pieces.wires.end());
         origins.insert(origins.end(),pieces.wires.size(),origin);

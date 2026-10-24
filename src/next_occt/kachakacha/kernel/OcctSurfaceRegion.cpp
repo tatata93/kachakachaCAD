@@ -99,7 +99,7 @@ double CheckBoundary(const TopoDS_Shape& result,const std::vector<std::vector<ge
     for(const auto& loop:loops)for(const auto& curve:loop)for(int i=0;i<=32;++i) {
         BRepExtrema_DistShapeShape distance(BRepBuilderAPI_MakeVertex(ToPoint(curve.Evaluate(i/32.0))).Vertex(),edges);
         Require(distance.IsDone(),"輪郭と支持面の距離を計算できません。");
-        if(distance.Value()>eps)throw std::runtime_error("輪郭と支持面境界のずれ "+std::to_string(distance.Value())
+        if(distance.Value()>eps)throw std::runtime_error(std::string(&loop==&loops.front()?"外周":"穴の輪郭")+"と支持面境界のずれ "+std::to_string(distance.Value())
             +" mm が許容差 "+std::to_string(eps)+" mm を超えています。投影先の面を確認してください。");
         maximum=std::max(maximum,distance.Value());
         squared+=distance.Value()*distance.Value();++count;
@@ -189,19 +189,19 @@ base::Result<modeling::GuideSurfaceResult> BuildSurfaceWithHoles(
     outer.chains.erase(std::remove_if(outer.chains.begin(),outer.chains.end(),[](const auto& c){return c.role==modeling::ChainRole::HoleBoundary||c.role==modeling::ChainRole::SourceSurface;}),outer.chains.end());
     const auto analysis=modeling::AnalyzeGuideSurfaceRequest(outer,tolerance);
     if(!analysis.HasValue())return Result::Failure(analysis.Diagnostics());
-    modeling::KernelShapeHandle support;
+    std::vector<modeling::KernelShapeHandle> supports;
     for(const auto& chain:request.chains)if(chain.role==modeling::ChainRole::SourceSurface&&!chain.supportShapeHandle)
         return Result::Failure(base::MakeError("EXT-008","指定した支持面の形状を取得できません。",
             "別の曲面へ置き換えず、元の支持面を再構築してください。"));
     for(const auto& chain:request.chains)if(chain.role==modeling::ChainRole::SourceSurface&&chain.supportShapeHandle) {
-        support.value=chain.supportShapeHandle;break;
+        supports.push_back({chain.supportShapeHandle});
     }
-    const bool owned=!support.value;
+    const bool owned=supports.empty();
     std::vector<base::Diagnostic> warnings;
     if(owned) {
         const auto source=BuildGuideSurface(outer,analysis.Value(),tolerance);
         if(!source.HasValue())return source;
-        support=source.Value().handle;
+        supports.push_back(source.Value().handle);
         warnings=source.Diagnostics();
     }
     std::vector<std::vector<geometry::CurveSegment>> loops(1);
@@ -209,8 +209,8 @@ base::Result<modeling::GuideSurfaceResult> BuildSurfaceWithHoles(
         loops.front().insert(loops.front().end(),c.segments.begin(),c.segments.end());
     for(const auto& c:request.chains)if(c.role==modeling::ChainRole::HoleBoundary)loops.push_back(c.segments);
     double deviation=0,rms=0;
-    const auto trimmed=TrimSurfaceRegion({support},loops,tolerance,tolerance.interactiveJoinMm,&deviation,&rms);
-    if(owned)ReleaseShape(support);
+    const auto trimmed=TrimSurfaceRegion(supports,loops,tolerance,tolerance.interactiveJoinMm,&deviation,&rms);
+    if(owned)ReleaseShape(supports.front());
     if(!trimmed.HasValue())return Result::Failure(trimmed.Diagnostics());
     warnings.insert(warnings.end(),trimmed.Diagnostics().begin(),trimmed.Diagnostics().end());
 #ifdef KACHACAD_V2_WITH_OCCT

@@ -43,6 +43,17 @@ namespace {
 
 constexpr const char* kLabelJa = "面にする";
 
+bool WireHasUses(const kachakacha::v2::document::DocumentSnapshot& snapshot,EntityId id)
+{
+    for(const auto& feature:snapshot.features)
+        if(std::find(feature.inputEntityIds.begin(),feature.inputEntityIds.end(),id)!=feature.inputEntityIds.end())return true;
+    for(const auto& dimension:snapshot.referenceDimensions)
+        if(std::find(dimension.targets.begin(),dimension.targets.end(),id)!=dimension.targets.end()
+            ||std::any_of(dimension.segments.begin(),dimension.segments.end(),[&](const auto& ref){return ref.entityId==id;}))return true;
+    return false;
+}
+
+
 //! 作った面(形状ガイド)の名前。「平面」だけだと作業平面と紛れる(オーナー指摘 2026-09-23)ので、
 //! 「面を作る」と同じく「面」を頭に付け、作り方は括弧で言う。
 [[nodiscard]] std::string MethodLabel(LoopFaceMethod method)
@@ -134,7 +145,7 @@ void V2LoopFacesTool::Start()
     leaveGap_.clear();
     waitingAfterCancel_ = true;
     window_.viewport_->SetToolPickActive(true);
-    window_.viewport_->SetToolPickToggle(true);
+    window_.viewport_->SetToolPickToggle(true, true);
     window_.viewport_->SetToolCandidateFilter([this](const auto& pick){
         const auto* e=window_.Session().GetDocument().FindEntity(pick.entityId);
         return e&&e->kind==kachakacha::v2::domain::EntityKind::Wire;
@@ -147,10 +158,30 @@ void V2LoopFacesTool::HandleSelectionChanged()
 {
     if (!Active() || updating_) return;
     selections_.clear();
+    inputSelection_ = window_.viewport_->Selection();
     for (const EntityId& id : window_.viewport_->Selection().entityIds) {
-        const auto chosen = kachakacha::v2::app::GuideSelectionOf(
+        auto chosen = kachakacha::v2::app::GuideSelectionOf(
             window_.session_->GetDocument(), window_.session_->Scene(), id);
         if (chosen.has_value()) {
+            const auto& selection = window_.viewport_->Selection();
+            const bool partial = std::any_of(selection.ordered.begin(),selection.ordered.end(),[&](const auto& ref){
+                return ref.entityId==id&&ref.segmentId.has_value();});
+            const bool whole = std::any_of(selection.ordered.begin(),selection.ordered.end(),[&](const auto& ref){
+                return ref.entityId==id&&ref.kind==kachakacha::v2::app::SelectionElementKind::Object;});
+            if (partial && !whole) {
+                kachakacha::v2::app::SelectionSet part;
+                for (const auto& ref : selection.ordered) if (ref.entityId == id) part.ordered.push_back(ref);
+                chosen->segments = kachakacha::v2::app::SelectedCurves(part, window_.session_->Scene());
+                if(chosen->segments.empty()) {
+                    const auto* entity=window_.session_->GetDocument().FindEntity(id);
+                    const auto* feature=entity?window_.session_->GetDocument().FindFeature(entity->createdBy):nullptr;
+                    const auto* stored=feature?std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&feature->definition):nullptr;
+                    if(stored)for(std::size_t i=0;i<stored->segmentIds.size()&&i<stored->segments.size();++i)
+                        if(std::any_of(part.ordered.begin(),part.ordered.end(),[&](const auto& ref){return ref.segmentId==stored->segmentIds[i];}))
+                            chosen->segments.push_back(stored->segments[i]);
+                }
+                if (chosen->segments.empty()) continue;
+            }
             selections_.push_back(*chosen);
         }
     }
@@ -585,12 +616,17 @@ bool V2LoopFacesTool::Confirm()
     const QScopedValueRollback<bool> updateGuard(updating_, true);
     auto& document = window_.session_->GetDocument();
     const auto originalSelections = selections_;
+    const auto originalInput = inputSelection_;
+    // Reopen undoes the compound operation: remember UUIDs before splitting or gap repair.
+    Recent recent;
+    recent.selection = inputSelection_;
     int made = 0;
     // AbortCompound を先に終えてから場面を戻す。失敗時も入力とツールを保持する。
     const bool committed = [&]() {
         kachakacha::v2::document::Document::Transaction transaction(document, kLabelJa);
         if (ApplySplits() && !Replan()) return false;
-        if (CloseGaps() && !Replan()) return false;
+        const auto closed=CloseGaps();
+        if(!closed.has_value()||(*closed&&!Replan()))return false;
         if (plan_->faces.empty()) {
             window_.SetStatus(QStringLiteral("面にする: 閉じた輪が無いので、面は作りません。線を追加・解除してください。"));
             return false;
@@ -601,6 +637,7 @@ bool V2LoopFacesTool::Confirm()
     if (!committed) {
         const QString problem = window_.StatusText();
         selections_ = originalSelections;
+        inputSelection_ = originalInput;
         window_.AdoptCurrentDocument();
         window_.RebuildKernelShapes();
         if (Replan()) ShowPreview();
@@ -611,10 +648,6 @@ bool V2LoopFacesTool::Confirm()
     QString unused;
     for (const std::size_t index : plan_->unused) {
         unused += (unused.isEmpty() ? QStringLiteral("") : QStringLiteral("、")) + Text(selections_[index].label);
-    }
-    Recent recent;
-    for (const auto& selection : selections_) {
-        recent.wireIds.push_back(selection.sourceWireId);
     }
     recent.methods = methodOverride_;
     recent.make = make_;
@@ -680,9 +713,7 @@ bool V2LoopFacesTool::ReopenRecent()
     }
     // 作ったものを 1 回の取り消しで戻し、同じ線で構え直す(選んだ作り方・作るか・連続・そのまま も戻す)。
     window_.RunCommand("edit.undo");
-    kachakacha::v2::app::SelectionSet same;
-    same.entityIds = recent.wireIds;
-    window_.viewport_->SetSelection(same);
+    window_.viewport_->SetSelection(recent.selection);
     Start();
     if (!plan_.has_value()) {
         return false;
@@ -712,7 +743,7 @@ void V2LoopFacesTool::Clear(bool keepTool)
     networkUnusedJa_.clear();
     waitingAfterCancel_ = keepTool;
     window_.viewport_->SetToolPickActive(keepTool);
-    window_.viewport_->SetToolPickToggle(keepTool);
+    window_.viewport_->SetToolPickToggle(keepTool, true);
     if (keepTool) {
         window_.viewport_->SetToolCandidateFilter([this](const auto& pick){
             const auto* e=window_.Session().GetDocument().FindEntity(pick.entityId);
@@ -758,6 +789,28 @@ std::vector<EntityId> V2LoopFacesTool::ReplaceWire(std::size_t selection,
     const bool construction = source->construction;
     const auto groupId = source->groupId;
     const bool datum = source->datum;
+    const auto* oldFeature=document.FindFeature(source->createdBy);
+    const auto* oldWire=oldFeature?std::get_if<kachakacha::v2::domain::CreateWireDefinition>(&oldFeature->definition):nullptr;
+    std::optional<kachakacha::v2::domain::CreateWireDefinition> remaining;
+    if(oldWire&&oldWire->segmentIds.size()==oldWire->segments.size()) {
+        auto kept=*oldWire;kept.segments.clear();kept.segmentIds.clear();
+        const bool whole=std::any_of(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),[&](const auto& r){
+            return r.entityId==sourceId&&r.kind==kachakacha::v2::app::SelectionElementKind::Object;});
+        const bool partial=!whole&&std::any_of(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),[&](const auto& r){
+            return r.entityId==sourceId&&r.segmentId.has_value();});
+        for(std::size_t i=0;i<oldWire->segments.size();++i)
+            if(partial&&!std::any_of(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),[&](const auto& r){
+                return r.entityId==sourceId&&r.segmentId==oldWire->segmentIds[i];})) {
+                kept.segments.push_back(oldWire->segments[i]);kept.segmentIds.push_back(oldWire->segmentIds[i]);
+            }
+        if(!kept.segments.empty())remaining=std::move(kept);
+    }
+    const auto oldFeatureId=source->createdBy;
+    if(remaining&&(WireHasUses(document.Snapshot(),sourceId)||(oldFeature&&oldFeature->outputs.size()>1))) {
+        window_.SetStatus(QStringLiteral("このワイヤーを使っている面・部品・寸法があるため、部分的な補正・分割は行いません。元のワイヤーを保持しています。独立したコピーで補正してください。"));
+        return {};
+    }
+    const auto oldInputs=oldFeature?oldFeature->inputEntityIds:std::vector<EntityId>{};
     std::vector<EntityId> made;
     for (std::size_t index = 0; index < parts.size(); ++index) {
         Feature feature;
@@ -788,7 +841,18 @@ std::vector<EntityId> V2LoopFacesTool::ReplaceWire(std::size_t selection,
         }
         made.push_back(entity.id);
     }
-    window_.RemoveConsumedWires({sourceId});
+    if(remaining) {
+        const auto changed=document.Run(kachakacha::v2::document::UpdateFeatureDefinitionCommand(
+            oldFeatureId,*remaining,oldInputs,label));
+        if(!changed.committed){window_.ReportDiagnostics(changed.diagnostics);return {};}
+    } else window_.RemoveConsumedWires({sourceId});
+    inputSelection_.entityIds.erase(std::remove(inputSelection_.entityIds.begin(),inputSelection_.entityIds.end(),sourceId),inputSelection_.entityIds.end());
+    inputSelection_.ordered.erase(std::remove_if(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),
+        [&](const auto& ref){return ref.entityId==sourceId;}),inputSelection_.ordered.end());
+    for(const auto id:made) {
+        inputSelection_.entityIds.push_back(id);
+        kachakacha::v2::app::SelectionRef ref;ref.entityId=id;inputSelection_.ordered.push_back(ref);
+    }
     return made;
 }
 
@@ -828,7 +892,7 @@ bool V2LoopFacesTool::ApplySplits()
     return changed;
 }
 
-bool V2LoopFacesTool::CloseGaps()
+std::optional<bool> V2LoopFacesTool::CloseGaps()
 {
     const std::vector<LoopGap> gaps = plan_->gaps;
     bool changed = false;
@@ -843,7 +907,7 @@ bool V2LoopFacesTool::CloseGaps()
         const auto fix = kachakacha::v2::app::CloseLoopGap(selections_, gap);
         if (!fix.HasValue()) {
             window_.ReportDiagnostics(fix.Diagnostics());
-            return changed;
+            return std::nullopt;
         }
         const std::string label = std::string(kLabelJa) + "(端を寄せる)";
         const auto replace = [&](std::size_t selection, const CurveSegment& segment) {
@@ -856,10 +920,10 @@ bool V2LoopFacesTool::CloseGaps()
             return true;
         };
         if (fix.Value().first.has_value() && !replace(gap.firstSelection, *fix.Value().first)) {
-            return changed;
+            return std::nullopt;
         }
         if (fix.Value().second.has_value() && !replace(gap.secondSelection, *fix.Value().second)) {
-            return changed;
+            return std::nullopt;
         }
         changed = true;
     }
@@ -873,6 +937,7 @@ void V2LoopFacesTool::CloseOneGap(int index)
     if (!plan_.has_value() || index < 0 || static_cast<std::size_t>(index) >= plan_->gaps.size()) {
         return;
     }
+    const QScopedValueRollback<bool> updateGuard(updating_,true);
     const LoopGap chosen = plan_->gaps[static_cast<std::size_t>(index)];
     const auto endOf = [&](std::size_t piece, bool atEnd) {
         const auto& segments = plan_->pieces[piece].segments;
@@ -938,6 +1003,7 @@ void V2LoopFacesTool::CloseOneGap(int index)
         return;
     }
     window_.AdoptCurrentDocument();
+    window_.viewport_->SetSelection(inputSelection_);
     if (Replan()) {
         ShowPreview();
     }

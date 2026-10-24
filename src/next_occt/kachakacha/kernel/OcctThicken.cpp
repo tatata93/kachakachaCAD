@@ -15,6 +15,7 @@
 #include "kachakacha/kernel/OcctRevolvedThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -102,20 +103,20 @@ bool PlanarSheetWithCreases(const TopoDS_Shape& shape){
 
 //! 面を法線方向へずらした面(シェル)を作る。中央付け・内側付けの下ごしらえ。
 [[nodiscard]] Result<TopoDS_Shape> OffsetSurface(const TopoDS_Shape& face,
-    double distanceMm,const geometry::GeometryTolerance& tolerance)
+    double distanceMm,const geometry::GeometryTolerance& tolerance,bool intersect = false)
 {
     using Out = Result<TopoDS_Shape>;
     try {
         if(face.ShapeType()==TopAbs_COMPOUND){
             TopoDS_Compound islands;BRep_Builder builder;builder.MakeCompound(islands);
             for(TopoDS_Iterator i(face);i.More();i.Next()){
-                const auto moved=OffsetSurface(i.Value(),distanceMm,tolerance);
+                const auto moved=OffsetSurface(i.Value(),distanceMm,tolerance,intersect);
                 if(!moved.HasValue())return moved;builder.Add(islands,moved.Value());
             }
             return Out::Success(islands);
         }
         BRepOffsetAPI_MakeOffsetShape maker;
-        if(PlanarSheetWithCreases(face))maker.PerformByJoin(face,distanceMm,tolerance.modelLinearMm,
+        if(intersect||PlanarSheetWithCreases(face))maker.PerformByJoin(face,distanceMm,tolerance.modelLinearMm,
             BRepOffset_Skin,false,false,GeomAbs_Intersection,true);
         else maker.PerformBySimple(face, distanceMm);
         if (!maker.IsDone()) {
@@ -136,20 +137,20 @@ bool PlanarSheetWithCreases(const TopoDS_Shape& shape){
 
 //! 面(またはシェル)を、法線方向へ厚みぶん膨らませて立体にする。
 [[nodiscard]] Result<TopoDS_Shape> ThickSolid(const TopoDS_Shape& base,
-    double thicknessMm,const geometry::GeometryTolerance& tolerance)
+    double thicknessMm,const geometry::GeometryTolerance& tolerance,bool intersect = false)
 {
     using Out = Result<TopoDS_Shape>;
     try {
         if(base.ShapeType()==TopAbs_COMPOUND){
             TopoDS_Compound islands;BRep_Builder builder;builder.MakeCompound(islands);
             for(TopoDS_Iterator i(base);i.More();i.Next()){
-                const auto made=ThickSolid(i.Value(),thicknessMm,tolerance);
+                const auto made=ThickSolid(i.Value(),thicknessMm,tolerance,intersect);
                 if(!made.HasValue())return made;builder.Add(islands,made.Value());
             }
             return Out::Success(islands);
         }
         TopoDS_Shape thickened;bool done=false;
-        if(PlanarSheetWithCreases(base)){
+        if(intersect||PlanarSheetWithCreases(base)){
             BRepOffset_MakeOffset maker;
             maker.Initialize(base,thicknessMm,tolerance.modelLinearMm,
                 BRepOffset_Skin,false,false,GeomAbs_Intersection,true,true);
@@ -289,8 +290,61 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         return Out::Failure(built.Diagnostics());
     }
     ThickenedSolid made;
-    made.handle = StoreShape(built.Value());
-    const auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
+    TopoDS_Shape finalShape=built.Value();
+    made.handle = StoreShape(finalShape);
+    auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
+    // A shell can mix curved and planar faces. Simple offsetting does not
+    // intersect their displaced boundaries; retain the fast path, but rebuild
+    // failed results with native intersections and the SAME safety checks.
+    if(!folded&&(!checked.HasValue()||!checked.Value().Ok())) {
+        auto joinedBase=startOffset==0.0?Result<TopoDS_Shape>::Success(face)
+            :OffsetSurface(face,startOffset,tolerance,true);
+        if(joinedBase.HasValue()) {
+            const auto joined=ThickSolid(joinedBase.Value(),signedThickness,tolerance,true);
+            if(joined.HasValue()) {
+                const auto handle=StoreShape(joined.Value());
+                const auto check=CheckSolidForExport(handle,tolerance.modelLinearMm);
+                if(check.HasValue()&&check.Value().Ok()) {
+                    ReleaseShape(made.handle);made.handle=handle;checked=check;finalShape=joined.Value();
+                } else ReleaseShape(handle);
+            }
+        }
+    }
+    bool joinedIndividualFaces=false;
+    if(!folded&&(!checked.HasValue()||!checked.Value().Ok()))try {
+        // Some exact composite spline faces are valid for simple thickening
+        // but unsupported by OCCT's joined offset (C0 parameter knots). Build
+        // the finite wall of each original face, then unite their overlaps.
+        // Keep all source geometry and holes; never fill a hole or raise the
+        // tolerance to force a connection. A disconnected result is refused.
+        TopoDS_Shape united;int count=0;
+        for(TopExp_Explorer f(face,TopAbs_FACE);f.More();f.Next()) {
+            BRepBuilderAPI_Copy copy(f.Current(),true,false);
+            auto skin=startOffset==0.0?Result<TopoDS_Shape>::Success(copy.Shape())
+                :OffsetSurface(copy.Shape(),startOffset,tolerance);
+            if(!skin.HasValue()){united.Nullify();break;}
+            const auto wall=ThickSolid(skin.Value(),signedThickness,tolerance);
+            if(!wall.HasValue()){united.Nullify();break;}
+            if(count++==0)united=wall.Value();
+            else {
+                BRepAlgoAPI_Fuse fuse;fuse.SetNonDestructive(true);
+                TopTools_ListOfShape args,tools;args.Append(united);tools.Append(wall.Value());
+                fuse.SetArguments(args);fuse.SetTools(tools);fuse.Build();
+                if(!fuse.IsDone()||fuse.HasErrors()){united.Nullify();break;}
+                united=fuse.Shape();
+            }
+        }
+        int solids=0;if(!united.IsNull())for(TopExp_Explorer s(united,TopAbs_SOLID);s.More();s.Next())++solids;
+        if(count>1&&solids==1) {
+            for(TopExp_Explorer s(united,TopAbs_SOLID);s.More();s.Next()) {
+                auto solid=TopoDS::Solid(s.Current());if(!BRepLib::OrientClosedSolid(solid))break;
+                const auto handle=StoreShape(solid);const auto check=CheckSolidForExport(handle,tolerance.modelLinearMm);
+                if(check.HasValue()&&check.Value().Ok()) {
+                    ReleaseShape(made.handle);made.handle=handle;checked=check;finalShape=solid;joinedIndividualFaces=true;
+                } else ReleaseShape(handle);
+            }
+        }
+    }catch(const Standard_Failure&){} // Preserve the refusal when native union cannot make one safe solid.
     if (!checked.HasValue() || !checked.Value().Ok()) {
         ReleaseShape(made.handle);
         if(!checked.HasValue())return Out::Failure(MakeError(kThickenFailed,
@@ -309,8 +363,11 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     made.volumeMm3 = checked.Value().volumeMm3;
     made.thicknessMm = thicknessMm;
     made.normalThicknessMinMm = made.normalThicknessMaxMm = thicknessMm;
-    made.edges = EdgesOf(built.Value(), tolerance);
-    return Out::Success(std::move(made));
+    made.edges = EdgesOf(finalShape, tolerance);
+    std::vector<base::Diagnostic> notes;
+    if(joinedIndividualFaces)notes.push_back(base::MakeWarning("THK-009",
+        "各面の厚み領域を結合しました。", "継ぎ目は各面の厚み領域の和です。元の面と穴を保持し、閉鎖性・体積・自己交差を検査しました。"));
+    return Out::Success(std::move(made),std::move(notes));
 }
 
 namespace {

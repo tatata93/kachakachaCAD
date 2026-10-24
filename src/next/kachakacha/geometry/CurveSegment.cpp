@@ -425,31 +425,35 @@ ClosestPointResult CurveSegment::ClosestPoint(const Vector3& point) const
         return {t,position,(position-point).Length()};
     }
     // 粗い標本で当たりを付けて、その周りを黄金分割で詰める。
-    constexpr int kCoarse = 128;
+    const int kCoarse = kind_ == CurveKind::CubicBSpline
+        ? std::max(128, static_cast<int>(controlPoints_.size()-3)*8) : 128;
     double bestT = 0.0;
     double bestDistance = std::numeric_limits<double>::max();
+    std::vector<double> distances(kCoarse+1);
     for (int index = 0; index <= kCoarse; ++index) {
         const double t = static_cast<double>(index) / kCoarse;
         const double distance = (Evaluate(t) - point).LengthSquared();
+        distances[index]=distance;
         if (distance < bestDistance) {
             bestDistance = distance;
             bestT = t;
         }
     }
-    double low = std::max(0.0, bestT - 1.0 / kCoarse);
-    double high = std::min(1.0, bestT + 1.0 / kCoarse);
-    for (int iteration = 0; iteration < 64; ++iteration) {
-        const double third = (high - low) / 3.0;
-        const double a = low + third;
-        const double b = high - third;
-        if ((Evaluate(a) - point).LengthSquared() < (Evaluate(b) - point).LengthSquared()) {
-            high = b;
-        } else {
-            low = a;
+    // A long nonuniform-speed spline can have several nearby minima. Refine
+    // every sampled valley, rather than assuming the best sampled bracket is
+    // unimodal (which loses points near a periodic seam).
+    for(int i=0;i<=kCoarse;++i) {
+        if((i>0&&distances[i]>distances[i-1])||(i<kCoarse&&distances[i]>distances[i+1]))continue;
+        double low=std::max(0.0,(i-1)/double(kCoarse)),high=std::min(1.0,(i+1)/double(kCoarse));
+        for(int iteration=0;iteration<64;++iteration) {
+            const double a=low+(high-low)/3,b=high-(high-low)/3;
+            if((Evaluate(a)-point).LengthSquared()<(Evaluate(b)-point).LengthSquared())high=b;else low=a;
         }
+        const double t=(low+high)*.5,distance=(Evaluate(t)-point).LengthSquared();
+        if(distance<bestDistance){bestT=t;bestDistance=distance;}
     }
     ClosestPointResult result;
-    result.parameter = (low + high) * 0.5;
+    result.parameter = bestT;
     result.point = Evaluate(result.parameter);
     result.distance = (result.point - point).Length();
     return result;

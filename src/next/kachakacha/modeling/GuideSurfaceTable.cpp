@@ -296,7 +296,7 @@ Result<GuideTable> AddSourceSurfaceRow(const GuideTable& table, const EntityId& 
                 + ChainRoleLabelJa(ChainRole::SourceSurface) + " はありません。"));
     }
     for (const GuideTableRow& row : table.rows) {
-        if (row.role == ChainRole::SourceSurface) {
+        if (row.role == ChainRole::SourceSurface && table.method != GuideSurfaceMethod::BoundaryFill) {
             return Result<GuideTable>::Failure(MakeError("UI-R010",
                 "元の面はすでに入っています。",
                 "離した面は1枚の面からしか作れません。先に元の面の行を消してください。"));

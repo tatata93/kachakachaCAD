@@ -296,6 +296,33 @@ KACHA_V2_TEST(guide_table_build, 離した面は元の面の行と距離を持�
     Require(definition.offsetDistanceMm == 2.5, "距離が保存の形へ写る");
 }
 
+KACHA_V2_TEST(guide_table_build, boundary_holes_retain_multiple_native_support_rows)
+{
+    Fixture fixture;
+    GuideTable table;
+    table.method = GuideSurfaceMethod::BoundaryFill;
+    const auto a = fixture.ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    const auto b = fixture.ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    const auto first = kachakacha::v2::modeling::AddSourceSurfaceRow(table, a, "front");
+    Require(first.HasValue(), "first native support");
+    const auto second = kachakacha::v2::modeling::AddSourceSurfaceRow(first.Value(), b, "side");
+    Require(second.HasValue(), "adjacent native support");
+    const auto definition = DefinitionFromGuideTable(second.Value());
+    Require(definition.chains.size() == 2, "both supports enter the saved definition");
+    Require(definition.roles.size() == 2, "both native support roles are saved");
+    for (const auto role : definition.roles)
+        Require(role == static_cast<int>(ChainRole::SourceSurface), "native support role");
+    auto complete=second.Value();
+    kachakacha::v2::modeling::GuideTableRow boundary;
+    boundary.role=ChainRole::BoundarySide;boundary.sourceWireIds={a};
+    const std::vector<Vector3> points={{0,0,0},{10,0,0},{10,10,0},{0,10,0},{0,0,0}};
+    for(std::size_t i=1;i<points.size();++i)boundary.segments.push_back(CurveSegment::MakeLine(points[i-1],points[i]).Value());
+    complete.rows.push_back(boundary);
+    const auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(complete,
+        fixture.document.Snapshot().settings.tolerance);
+    Require(request.HasValue() && request.Value().chains.size() == 3, "both supports enter the kernel request");
+}
+
 KACHA_V2_TEST(guide_table_build, 回転体の軸と角度は表から要求と保存の形へ渡る)
 {
     GuideTable table;

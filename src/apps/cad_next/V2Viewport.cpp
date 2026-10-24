@@ -895,7 +895,7 @@ void V2Viewport::SetPendingCommandCallbacks(std::function<void()> confirm,
 
 kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
     const std::optional<kachakacha::v2::app::PickCandidate>& picked,
-    kachakacha::v2::app::SelectionMode mode) const
+    kachakacha::v2::app::SelectionMode mode)
 {
     using kachakacha::v2::app::SelectionMode;
     // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
@@ -907,11 +907,19 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
         || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
         return mode;
     }
-    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
+    if (toolPickSegments_ || session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
         const bool whole=std::any_of(selection_.ordered.begin(),selection_.ordered.end(),[&](const auto& ref){
             return ref.entityId==picked->entityId&&ref.kind==kachakacha::v2::app::SelectionElementKind::Object;});
         const bool compatibility=selection_.ordered.empty()&&kachakacha::v2::app::IsSelected(selection_,picked->entityId);
-        if(!picked->segmentId.IsNil()&&(whole||compatibility))return SelectionMode::Replace;
+        if(!picked->segmentId.IsNil()&&(whole||compatibility)) {
+            if(!toolPickSegments_)return SelectionMode::Replace;
+            if(selection_.ordered.empty())for(const auto& id:selection_.entityIds) {
+                kachakacha::v2::app::SelectionRef ref;ref.entityId=id;selection_.ordered.push_back(ref);
+            }
+            std::erase_if(selection_.ordered,[&](const auto& ref){return ref.entityId==picked->entityId;});
+            std::erase(selection_.entityIds,picked->entityId);
+            return SelectionMode::Add;
+        }
         return SelectionMode::Toggle;
     }
     return kachakacha::v2::app::IsSelected(selection_, picked->entityId)

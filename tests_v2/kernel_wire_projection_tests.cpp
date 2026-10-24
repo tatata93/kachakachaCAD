@@ -4,8 +4,12 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctSurfaceRegion.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <cmath>
 #include <functional>
@@ -79,6 +83,28 @@ KACHA_V2_TEST(projection, ClosestPointOnCylinder) {
     const auto r=kernel::ProjectNativeWires({cylinder.h},{{{Line({12,-2,0},{12,2,0})},{}}},Options(kernel::WireProjectionMode::Closest));
     Require(r.HasValue(),r.FirstMessageJa());OnSurface(r.Value(),0.003,[](auto p){return std::abs(std::hypot(p.x,p.y)-10);});
 }
+KACHA_V2_TEST(projection, CurvedIntervalsRemainSingleEditingSegments) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),-1,1,-10,10).Face());
+    const std::vector<geometry::CurveSegment> sources={
+        geometry::CurveSegment::MakeCircularArc({20,0,0},{1,0,0},{0,1,0},2,0,geometry::kPi/2).Value(),
+        geometry::CurveSegment::MakeCubicBezier({{20,-3,-2},{20,3,-1},{20,-2,1},{20,3,2}}).Value()};
+    for(const auto& source:sources) {
+        const auto r=kernel::ProjectNativeWires({cylinder.h},{{{source},{-1,0,0}}},Options());
+        Require(r.HasValue(),r.FirstMessageJa());
+        std::string counts;for(const auto& run:r.Value().wires){counts+=" "+std::to_string(run.size());
+            for(const auto& c:run)counts+=" kind"+std::to_string(static_cast<int>(c.Kind()));
+            if(run.size()==2)counts+=" gap"+std::to_string(geometry::Distance(run[0].EndPoint(),run[1].StartPoint()))+" cos"+std::to_string(geometry::Dot(geometry::Normalized(run[0].FirstDerivative(1)),geometry::Normalized(run[1].FirstDerivative(0))));}
+        Require(r.Value().wires.size()==1&&r.Value().wires.front().size()==1,"one whole curved interval, not adaptive Bezier fragments; source="+std::to_string(static_cast<int>(source.Kind()))+" counts="+counts);
+        Require(r.Value().wires.front().front().Kind()!=geometry::CurveKind::Line,"curve is not flattened to a line");
+        Require(r.Value().maxCurveDeviationMm<=Options().toleranceMm,"certified whole-curve error bound retained");
+        OnSurface(r.Value(),.003,[](auto p){return std::abs(std::hypot(p.x,p.y)-10);});
+    }
+    auto plane=Plane();const auto a=geometry::CurveSegment::MakeCircularArc({0,0,3},{0,0,1},{1,0,0},2,0,geometry::kPi/2).Value();
+    const auto r=kernel::ProjectNativeWires({plane.h},{{{Line({2,-3,3},{2,0,3}),a,Line({0,2,3},{-3,2,3})},{0,0,-1}}},Options());
+    Require(r.HasValue()&&r.Value().wires.size()==1&&r.Value().wires.front().size()==3,"tangent lines stay separate from the curve");
+    int lines=0,curves=0;for(const auto& c:r.Value().wires.front())(c.Kind()==geometry::CurveKind::Line?lines:curves)++;
+    Require(lines==2&&curves==1,"only curve interval selected as one segment");
+}
 KACHA_V2_TEST(projection, FullCylinderSelectsFrontHit) {
     Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),0,geometry::kPi*2,-10,10).Face());
     for(const auto mode:{kernel::WireProjectionMode::Direction,kernel::WireProjectionMode::Closest}) {
@@ -135,6 +161,95 @@ KACHA_V2_TEST(projection, RoundedPanoramaAndSpatialRegion) {
     Require(solid.HasValue(),solid.FirstMessageJa());Require(solid.Value().totalVolumeMm3>1,"uniform straight extrusion across three faces");
     for(const auto& part:solid.Value().parts)kernel::ReleaseShape(part.handle);
     kernel::ReleaseShape(patch.Value());
+}
+KACHA_V2_TEST(projection, SpatialWindowHoleThicknessAndExtrusionMatrix) {
+    Owned front(BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(gp_Pnt(),gp_Dir(0,-1,0),gp_Dir(1,0,0))),-8,0,-5,5).Face());
+    Owned radius(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(gp_Pnt(0,5,0),gp_Dir(0,0,1)),5),-geometry::kPi/2,0,-5,5).Face());
+    Owned side(BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(gp_Pnt(5,0,0),gp_Dir(1,0,0),gp_Dir(0,1,0))),5,14,-5,5).Face());
+    const std::vector<modeling::KernelShapeHandle> supports={front.h,radius.h,side.h};
+    const auto loop=[&](double left,double right,double z) {
+        return kernel::ProjectNativeWires(supports,
+            {{{Line({left,-5,z},{5,-5,z}),Line({5,-5,-z},{left,-5,-z}),Line({left,-5,-z},{left,-5,z})},{0,1,0}},
+             {{Line({10,5,z},{10,right,z}),Line({10,right,z},{10,right,-z}),Line({10,right,-z},{10,5,-z})},{-1,0,0}}},Options());
+    };
+    const auto outer=loop(-7,13,4),hole=loop(-3,10,1);
+    Require(outer.HasValue()&&hole.HasValue(),"outer and hole both span front, curved corner and side");
+    const auto cut=kernel::TrimSurfaceRegion(supports,{outer.Value().wires.front(),hole.Value().wires.front()},{});
+    Require(cut.HasValue(),cut.FirstMessageJa());
+    const auto checkHole=[&](modeling::KernelShapeHandle shape,bool closed) {
+        const auto mesh=kernel::BuildShapeMesh(shape,.01);Require(mesh.HasValue(),mesh.FirstMessageJa());
+        bool holeHit=false,wallHit=false;
+        for(const auto& t:mesh.Value().triangles) {
+            holeHit=holeHit||modeling::RayHitsTriangle({-4,2,0},{1,-1,0},t).has_value();
+            wallHit=wallHit||modeling::RayHitsTriangle({-4,2,3},{1,-1,0},t).has_value();
+        }
+        Require(!holeHit&&wallHit,"real empty window with surrounding original material");
+        if(closed){const auto quality=kernel::CheckSolidForExport(shape,.001);Require(quality.HasValue()&&quality.Value().Ok()&&quality.Value().volumeMm3>0,"valid closed positive-volume solid");}
+    };
+    checkHole(cut.Value(),false);
+    for(const auto placement:{fabrication::ThicknessPlacement::Inside,fabrication::ThicknessPlacement::Centered,fabrication::ThicknessPlacement::Outside}) {
+        const auto thick=kernel::ThickenSurface(cut.Value(),.2,placement,{});
+        Require(thick.HasValue(),thick.FirstMessageJa());checkHole(thick.Value().handle,true);kernel::ReleaseShape(thick.Value().handle);
+    }
+    for(const auto range:{std::pair{0.,.4},std::pair{-.2,.2},std::pair{-.4,0.}}) {
+        const auto solid=kernel::BuildSurfaceExtrude(cut.Value(),{1,-1,0},range.first,range.second,{});
+        Require(solid.HasValue(),solid.FirstMessageJa());
+        for(const auto& part:solid.Value().parts){checkHole(part.handle,true);kernel::ReleaseShape(part.handle);}
+    }
+    Owned stop(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(20,-20,0),gp_Dir(1,-1,0)),-40,40,-40,40).Face());
+    for(const double offset:{-.2,0.,.2}) {
+        modeling::ExtrudeRequest request;request.customDirection={1,-1,0};
+        const auto solid=kernel::BuildExtrudeToFace(request,cut.Value(),stop.h,{},offset);
+        Require(solid.HasValue(),solid.FirstMessageJa());
+        for(const auto& part:solid.Value().parts){checkHole(part.handle,true);kernel::ReleaseShape(part.handle);}
+    }
+    kernel::ReleaseShape(cut.Value());
+}
+KACHA_V2_TEST(projection, CurvedNetworkIntersectionsHoleAndStraightExtrusion) {
+    Owned body(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(gp_Pnt(),gp_Dir(0,0,1)),10),
+        -geometry::kPi*.75,-geometry::kPi*.25,-5,5).Face());
+    const auto y=-20.;
+    const std::vector<std::vector<geometry::CurveSegment>> drawings={
+        {Line({-5,y,-4},{5,y,-4}),Line({5,y,-4},{5,y,4}),Line({5,y,4},{-5,y,4}),Line({-5,y,4},{-5,y,-4})},
+        {geometry::CurveSegment::MakeCircle({-2,y,0},{0,1,0},{1,0,0},1).Value()},
+        {Line({0,y,-4},{0,y,4})}};
+    base::DeterministicIdGenerator ids{1031};std::vector<app::RoleWire> wires;
+    for(const auto& curves:drawings) {
+        const auto projected=kernel::ProjectNativeWires({body.h},{{curves,{0,1,0}}},Options());
+        Require(projected.HasValue()&&projected.Value().wires.size()==1,"project each source without joining the branch into the outer loop");
+        wires.push_back({ids.NextTyped<base::IdKind::Entity>(),projected.Value().wires.front()});
+    }
+    const auto plan=app::PlanSurfaceNetwork(wires,{});
+    Require(plan.tables.size()==2&&plan.unusedSegments.empty(),"spatial T intersections make two regions without dropping wires");
+    int holes=0;bool holeHit=false,wallHit=false;
+    for(const auto& table:plan.tables) {
+        std::vector<std::vector<geometry::CurveSegment>> loops(1);
+        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::BoundarySide||row.role==modeling::ChainRole::OuterBoundary)
+            loops.front().insert(loops.front().end(),row.segments.begin(),row.segments.end());
+        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::HoleBoundary){loops.push_back(row.segments);++holes;}
+        if(loops.size()>1) {
+            Require(table.method==modeling::GuideSurfaceMethod::BoundaryFill,"spatial hole uses the supported surface method after partitioning");
+            auto request=modeling::ToGuideSurfaceRequest(table,{});Require(request.HasValue(),"ordinary surface request retains the hole");
+            modeling::GuideChain source;source.role=modeling::ChainRole::SourceSurface;source.supportShapeHandle=body.h.value;
+            auto input=request.Value();input.chains.push_back(source);
+            const auto analysis=modeling::AnalyzeGuideSurfaceRequest(input,{});Require(analysis.HasValue(),analysis.FirstMessageJa());
+            const auto built=kernel::BuildGuideSurface(input,analysis.Value(),{});
+            Require(built.HasValue(),built.FirstMessageJa());kernel::ReleaseShape(built.Value().handle);
+        }
+        const auto region=kernel::TrimSurfaceRegion({body.h},loops,{},Options().toleranceMm);
+        Require(region.HasValue(),region.FirstMessageJa());
+        const auto solid=kernel::BuildSurfaceExtrude(region.Value(),{0,1,0},0,.3,{});
+        Require(solid.HasValue(),solid.FirstMessageJa());
+        for(const auto& part:solid.Value().parts) {
+            const auto check=kernel::CheckSolidForExport(part.handle,.001);Require(check.HasValue()&&check.Value().Ok(),"each intersected spatial region is a safe solid");
+            const auto mesh=kernel::BuildShapeMesh(part.handle,.01);Require(mesh.HasValue(),"solid mesh");
+            for(const auto& t:mesh.Value().triangles){holeHit=holeHit||modeling::RayHitsTriangle({-2,-20,0},{0,1,0},t).has_value();
+                wallHit=wallHit||modeling::RayHitsTriangle({-4,-20,0},{0,1,0},t).has_value();}
+            kernel::ReleaseShape(part.handle);
+        }
+        kernel::ReleaseShape(region.Value());
+    }
+    Require(holes==1&&!holeHit&&wallHit,"one real window hole survives network splitting and extrusion");
 }
 KACHA_V2_TEST(projection, SurfaceRegionHolesAndInvalidBoundary) {
     auto plane=Plane();auto outer=ClosedSquare(0);
@@ -275,7 +390,8 @@ KACHA_V2_TEST(projection, PeriodicComplementaryArcsOnSplinePlane) {
         OnSurface(r.Value(),.001,[](auto q){return std::abs(q.z-.08*q.x);});
         for(int i=0;i<256;++i){const auto original=circle.Evaluate(i/256.0);const geometry::Vector3 expected{original.x,original.y,.08*original.x};double distance=1e100;
             for(const auto& c:r.Value().wires.front())distance=std::min(distance,c.ClosestPoint(expected).distance);
-            Require(distance<.002,"every angle covered by the projected lamp");}
+            double dense=1e100;if(distance>=.002)for(const auto& c:r.Value().wires.front())for(int j=0;j<=16000;++j)dense=std::min(dense,geometry::Distance(c.Evaluate(j/16000.),expected));
+            Require(distance<.002,"every angle covered by the projected lamp radius="+std::to_string(radius)+" phase="+std::to_string(phase)+" sign="+std::to_string(sign)+" distance="+std::to_string(distance)+" dense="+std::to_string(dense)+" pieces="+std::to_string(r.Value().wires.front().size()));}
     }
 }
 KACHA_V2_TEST(projection, PeriodicCircleWithPartialNearLayer) {

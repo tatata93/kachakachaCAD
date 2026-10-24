@@ -13,5 +13,7 @@ struct BoundedBoundaryCurves {
     std::size_t samples=0;
 };
 base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,double tolerance);
+//! Compact adjacent curved pieces only. Returns an additional certified error budget.
+double CompactBoundaryRun(std::vector<geometry::CurveSegment>& curves,double tolerance);
 }
 #endif

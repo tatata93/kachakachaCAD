@@ -2,9 +2,12 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/CurveFit.h"
 #include <BRep_Tool.hxx>
 #include <GeomConvert.hxx>
 #include <GeomConvert_BSplineCurveToBezierCurve.hxx>
+#include <GeomConvert_CompCurveToBSplineCurve.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_BezierCurve.hxx>
 #include <Geom_TrimmedCurve.hxx>
@@ -110,6 +113,46 @@ bool Fit(const std::vector<Piece>& pieces,double tolerance,int depth,BoundedBoun
     auto left=Bezier::DownCast(piece.curve->Copy()),right=Bezier::DownCast(piece.curve->Copy());left->Segment(0,.5);right->Segment(.5,1);
     return Fit({{piece.first,mid,left}},tolerance,depth+1,out)&&Fit({{mid,piece.last,right}},tolerance,depth+1,out);
 }
+// Fit one editing segment, then certify it against the ORIGINAL rational curve.
+// Sampled fitting alone is insufficient: every overlap of a native Bezier span
+// and a proposed uniform span is checked by the same Bernstein upper bound.
+bool SingleSpline(const std::vector<Piece>& pieces,double tolerance,BoundedBoundaryCurves& out) {
+    for(std::size_t i=1;i<pieces.size();++i) {
+        gp_Pnt p,q;gp_Vec a,b;pieces[i-1].curve->D1(1,p,a);pieces[i].curve->D1(0,q,b);
+        if(a.SquareMagnitude()<1e-24||b.SquareMagnitude()<1e-24
+            ||a.Normalized().Dot(b.Normalized())<1-1e-6)return false;
+    }
+    const double first=pieces.front().first,last=pieces.back().last,length=last-first;
+    const auto value=[&](double t) {
+        const double u=first+length*t;
+        const auto it=std::lower_bound(pieces.begin(),pieces.end(),u,[](const Piece& p,double at){return p.last<at;});
+        const auto& p=it==pieces.end()?pieces.back():*it;
+        return FromPoint(p.curve->Value(std::clamp((u-p.first)/(p.last-p.first),0.0,1.0)));
+    };
+    for(const std::size_t count:{0,16,32,64,128}) {
+        const auto fit=geometry::FitUniformCubicBSpline(value,tolerance*.02,count,std::max<std::size_t>(16,count));
+        if(!fit.HasValue())continue;
+        const auto spans=geometry::UniformBSplineBezierSpans(fit.Value().curve.ControlPoints());
+        double bound=0;
+        for(std::size_t i=0;i<spans.size()&&bound<=tolerance;++i) {
+            Polygon proposal;for(std::size_t j=0;j<4;++j)proposal[j]=ToPoint(spans[i][j]);
+            const double a=first+length*i/spans.size(),b=first+length*(i+1)/spans.size();
+            for(const auto& p:pieces) {
+                const double lo=std::max(a,p.first),hi=std::min(b,p.last);if(hi-lo<=1e-14*length)continue;
+                auto native=Bezier::DownCast(p.curve->Copy());
+                native->Segment(std::clamp((lo-p.first)/(p.last-p.first),0.0,1.0),std::clamp((hi-p.first)/(p.last-p.first),0.0,1.0));
+                bound=std::max(bound,DeviationBound(native,Restrict(proposal,(lo-a)/(b-a),(hi-a)/(b-a))));
+                if(bound>tolerance)break;
+            }
+        }
+        if(bound>tolerance)continue;
+        out.curves={fit.Value().curve};out.parameters={{first,last}};out.maxDeviationBoundMm=bound;
+        out.squaredDeviationMm=0;out.samples=129;
+        for(int i=0;i<=128;++i)out.squaredDeviationMm+=(fit.Value().curve.Evaluate(i/128.0)-value(i/128.0)).LengthSquared();
+        return true;
+    }
+    return false;
+}
 }
 base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,double tolerance) {
     using Out=base::Result<BoundedBoundaryCurves>;
@@ -132,6 +175,8 @@ base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,doubl
         NCollection_Array1<double> knots(1,split.NbArcs()+1);split.Knots(knots);
         std::vector<Piece> pieces;for(int i=1;i<=split.NbArcs();++i)pieces.push_back({knots(i),knots(i+1),split.Arc(i)});
         BoundedBoundaryCurves out;if(pieces.empty()||!Fit(pieces,tolerance,0,out))throw Standard_Failure("Boundary subdivision limit reached");
+        if(out.curves.size()>1&&std::all_of(out.curves.begin(),out.curves.end(),[](const auto& c){
+            return c.Kind()!=geometry::CurveKind::Line;}))SingleSpline(pieces,tolerance,out);
         if(edge.Orientation()==TopAbs_REVERSED) {
             std::reverse(out.curves.begin(),out.curves.end());std::reverse(out.parameters.begin(),out.parameters.end());
             for(std::size_t i=0;i<out.curves.size();++i) {
@@ -142,6 +187,38 @@ base::Result<BoundedBoundaryCurves> BoundaryCurves(const TopoDS_Edge& edge,doubl
         }
         return Out::Success(std::move(out));
     }catch(const Standard_Failure& e){return Out::Failure(base::MakeError(kCurveUnsupported,"境界を許容偏差内の滑らかなワイヤーに変換できません。",e.what()));}
+}
+double CompactBoundaryRun(std::vector<geometry::CurveSegment>& curves,double tolerance) {
+    using geometry::CurveKind;double maximum=0;std::vector<geometry::CurveSegment> output;
+    for(std::size_t first=0;first<curves.size();) {
+        std::size_t end=first+1;
+        if(curves[first].Kind()!=CurveKind::Line)while(end<curves.size()&&curves[end].Kind()!=CurveKind::Line
+            &&geometry::Distance(curves[end-1].EndPoint(),curves[end].StartPoint())<1e-9
+            &&geometry::Dot(geometry::Normalized(curves[end-1].FirstDerivative(1)),geometry::Normalized(curves[end].FirstDerivative(0)))>1-1e-6)++end;
+        bool merged=false;
+        if(end>first+1&&tolerance>1e-12)try {
+            GeomConvert_CompCurveToBSplineCurve joined;
+            bool ok=true;
+            for(std::size_t i=first;i<end&&ok;++i) {
+                const auto edge=ToEdge(curves[i]);if(!edge.HasValue()){ok=false;break;}
+                double a,b;const auto c=BRep_Tool::Curve(edge.Value(),a,b);
+                // Keep knot multiplicities; concatenation itself must not smooth
+                // away a corner or spend an unreported knot-removal tolerance.
+                occ::handle<Geom_TrimmedCurve> bounded=new Geom_TrimmedCurve(c,a,b);
+                if(edge.Value().Orientation()==TopAbs_REVERSED)bounded->Reverse();
+                ok=joined.Add(bounded,1e-10,true,true,3);
+            }
+            if(ok) {
+                const auto compact=BoundaryCurves(BRepBuilderAPI_MakeEdge(joined.BSplineCurve()).Edge(),tolerance);
+                if(compact.HasValue()&&compact.Value().curves.size()==1) {
+                    output.push_back(compact.Value().curves.front());maximum=std::max(maximum,compact.Value().maxDeviationBoundMm);merged=true;
+                }
+            }
+        }catch(const Standard_Failure&){} // Keep the certified original pieces on a conversion failure.
+        if(!merged)output.insert(output.end(),curves.begin()+first,curves.begin()+end);
+        first=end;
+    }
+    curves=std::move(output);return maximum;
 }
 }
 #endif

@@ -446,9 +446,10 @@ public:
     //! なので、置き換えにすると2本目を押した瞬間に1本目が消える。
     //! 選択は必ず「押したものだけが増える/減る」の形で変わるので、
     //! 窓は差分から「何を押したか」を取り違えなく読める。
-    void SetToolPickToggle(bool active) noexcept
+    void SetToolPickToggle(bool active, bool segments = false) noexcept
     {
         toolPickToggle_ = active;
+        toolPickSegments_ = active && segments;
         lastToolPick_.reset();   // 前の道具の押し跡を次の道具へ持ち越さない
         lastToolPickPoint_.reset();
     }
@@ -953,7 +954,7 @@ private:
     //! 押すたびに入れる/外す(面を作る)。ModeForToolPick の後に掛ける。
     [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForTogglePick(
         const std::optional<kachakacha::v2::app::PickCandidate>& picked,
-        kachakacha::v2::app::SelectionMode mode) const;
+        kachakacha::v2::app::SelectionMode mode);
     [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForToolPick(
         const std::optional<kachakacha::v2::app::PickCandidate>& picked,
         kachakacha::v2::app::SelectionMode mode) const;
@@ -1171,6 +1172,7 @@ private:
     bool toolPickActive_ = false;
     //! 押すたびに入れる/外す(面を作る)。
     bool toolPickToggle_ = false;
+    bool toolPickSegments_ = false; //!< 面の輪郭入力では物体全体でなく押した辺を追加・解除する。
     std::optional<kachakacha::v2::base::EntityId> lastToolPick_;
     std::optional<kachakacha::v2::geometry::Vector3> lastToolPickPoint_;
     bool profileRegionPicking_ = false;

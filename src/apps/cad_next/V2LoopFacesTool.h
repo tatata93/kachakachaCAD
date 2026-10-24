@@ -17,6 +17,7 @@
 #include "V2LoopFacesDock.h"
 
 #include "kachakacha/app/LoopFaces.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
@@ -67,6 +68,7 @@ private:
     void ApplyStyle(int face,int style,bool all);
     [[nodiscard]] bool Replan();
     [[nodiscard]] bool TryNetworkPlan();
+    void AttachHoleSupports(kachakacha::v2::modeling::GuideTable& table);
     void ShowPreview();
     void ScheduleSurfacePreview();
     void BuildSurfacePreview();
@@ -77,8 +79,8 @@ private:
     [[nodiscard]] kachakacha::v2::geometry::GeometryTolerance ToleranceNow() const;
     //! T 字で線を分ける(新しい線に置き換える)。文書が変わったら真。
     [[nodiscard]] bool ApplySplits();
-    //! 寄せると決めたずれを寄せる(直線の端を動かす)。失敗したら偽(理由は出す)。
-    [[nodiscard]] bool CloseGaps();
+    //! 寄せると決めたずれを寄せる。変更有無を返し、失敗はnullopt(理由を表示)。
+    [[nodiscard]] std::optional<bool> CloseGaps();
     //! 輪を面にする。作れた数を返す。1 つでも作れなければ 0 で、文書は変えない。
     [[nodiscard]] int BuildFaces();
     //! 1 本の線を新しい線(片)に置き換える。新しい線の id。
@@ -103,6 +105,7 @@ private:
     bool updating_ = false;
     V2LoopFacesDock* dock_ = nullptr;
     std::vector<kachakacha::v2::modeling::GuideTableSelection> selections_;
+    kachakacha::v2::app::SelectionSet inputSelection_;
     std::optional<kachakacha::v2::app::LoopFacePlan> plan_;
     std::vector<kachakacha::v2::modeling::GuideTable> networkTables_;
     QString networkUnusedJa_;
@@ -124,7 +127,7 @@ private:
 
     //! 直前の操作(UI 設計 2-6)。作った直後の入力と選択。文書の版が変わったら開けない。
     struct Recent {
-        std::vector<kachakacha::v2::base::EntityId> wireIds;
+        kachakacha::v2::app::SelectionSet selection;
         std::vector<std::optional<kachakacha::v2::app::LoopFaceMethod>> methods;
         std::vector<bool> make;
         std::vector<kachakacha::v2::modeling::FourEdgeStyle> styles;

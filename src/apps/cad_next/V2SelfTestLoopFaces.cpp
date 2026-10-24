@@ -1,4 +1,6 @@
 #include <QComboBox>
+#include <QFile>
+#include <QIODevice>
 //! 「面にする」(線から面)の人の道(HP-LF、オーナー要望 2026-09-22、UI 設計 2026-09-23)。
 //!
 //! 線を選んで「面にする」を押すだけで、端点のつながりから閉じた輪を全部見つけて
@@ -1169,6 +1171,104 @@ bool CaseLoopFacesCompoundBranch(V2MainWindow& window)
         &&CountOfKind(window,EntityKind::GuideSurface)==2&&window.RebuildProblems().isEmpty());
 }
 
+bool CaseLoopFacesPartialGap(V2MainWindow& w,bool manual,bool referenced=false) {
+    using namespace kachakacha::v2;
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto step=[&](const char* text,bool ok){return Explain(text,ok);};
+    app::SelectionSet selected;
+    w.RunCommand("selection.activate");w.RunCommand("file.new");
+    const auto partial=w.Session().AddWire({line({0,0,0},{9.95,0,0}),line({25,0,0},{30,0,0}),
+        line({0,0,0},{9.95,0,0})},false,"補正と無関係な線");
+    const auto rest=w.Session().AddWire({line({10,0,0},{10,10,0}),line({10,10,0},{0,10,0}),line({0,10,0},{0,0,0})},false,"輪の残り");
+    if(!partial.committed||!rest.committed)return false;
+    const auto source=partial.createdEntityIds.front();const auto* sourceEntity=w.Session().GetDocument().FindEntity(source);
+    const auto sourceFeature=sourceEntity->createdBy;
+    const auto stored=std::get<domain::CreateWireDefinition>(w.Session().GetDocument().FindFeature(sourceFeature)->definition);
+    if(referenced) {
+        const auto rail=w.Session().AddWire({line({0,-3,0},{9.95,-3,0})},false,"既存面の別の辺");if(!rail.committed)return false;
+        const auto railId=rail.createdEntityIds.front();const auto* re=w.Session().GetDocument().FindEntity(railId);
+        const auto& rd=std::get<domain::CreateWireDefinition>(w.Session().GetDocument().FindFeature(re->createdBy)->definition);
+        base::RandomIdGenerator ids{1033};domain::Feature feature;feature.id=ids.NextTyped<base::IdKind::Feature>();
+        feature.type=domain::FeatureType::CreateGuideSurface;feature.inputEntityIds={source,railId};feature.displayName="参照保護を確認する面";
+        domain::CreateGuideSurfaceDefinition def;def.method=static_cast<int>(modeling::GuideSurfaceMethod::RuledSections);
+        domain::WireChainRef a,b;a.segments.push_back({source,stored.segmentIds.front()});b.segments.push_back({railId,rd.segmentIds.front()});
+        def.chains={a,b};def.roles={static_cast<int>(modeling::ChainRole::Section),static_cast<int>(modeling::ChainRole::Section)};feature.definition=def;
+        domain::Entity entity;entity.id=ids.NextTyped<base::IdKind::Entity>();entity.kind=EntityKind::GuideSurface;entity.createdBy=feature.id;entity.displayName=feature.displayName;
+        feature.outputs.push_back({"surface",entity.id,entity.kind});
+        if(!w.Session().GetDocument().Run(document::AddFeatureCommand(feature,{entity},"既存面を準備")).committed)return false;
+    }
+    selected={};selected.entityIds={source,rest.createdEntityIds.front()};
+    app::SelectionRef first;first.entityId=source;first.kind=app::SelectionElementKind::Edge;first.segmentId=stored.segmentIds.front();selected.ordered.push_back(first);
+    app::SelectionRef whole;whole.entityId=rest.createdEntityIds.front();selected.ordered.push_back(whole);
+    if(!w.SaveAndReopen("partial-loop-gap.kcd2"))return false;
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");
+    if(referenced) {
+        const auto revision=w.Session().GetDocument().Revision();
+        if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        return Explain("partial repair cannot break an existing face's segment references",w.Session().GetDocument().Revision()==revision
+            &&CountOfKind(w,EntityKind::GuideSurface)==1&&w.StatusText().contains(QStringLiteral("使っている"))
+            &&w.SaveAndReopen("partial-existing-face-protected.kcd2")&&w.RebuildProblems().isEmpty());
+    }
+    if(manual&&!w.LoopFacesTool().Dock()->ClickCloseGap(0))return false;
+    if(!step("gap repair confirms a surface",w.HandleToolKey(Qt::Key_Return,nullptr)&&CountOfKind(w,EntityKind::GuideSurface)==1))return false;
+    const auto* kept=w.Session().GetDocument().FindFeature(sourceFeature);
+    const auto* remaining=kept?std::get_if<domain::CreateWireDefinition>(&kept->definition):nullptr;
+    if(!step("gap correction preserves unselected sibling and coincident UUIDs",remaining&&remaining->segments.size()==2
+        &&remaining->segmentIds.front()==stored.segmentIds[1]&&remaining->segmentIds.back()==stored.segmentIds[2]))return false;
+    if(!step("reopen restores pre-repair segment UUIDs",w.LoopFacesTool().ReopenRecent()
+        &&w.LoopFacesTool().Plan()&&(manual?w.LoopFacesTool().Plan()->faces.size()==1:w.LoopFacesTool().Plan()->gaps.size()==1)
+        &&app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==4))return false;
+    if(!w.HandleToolKey(Qt::Key_Return,nullptr)||CountOfKind(w,EntityKind::GuideSurface)!=1)return false;
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");
+    return Explain("partial gap repair survives save and history",w.SaveAndReopen("partial-loop-correction.kcd2")&&w.RebuildProblems().isEmpty());
+}
+
+bool CaseLoopFacesPartialEdges(V2MainWindow& w) {
+    using namespace kachakacha::v2;
+    const auto step=[&](const char* text,bool ok){
+        if(!ok&&!qEnvironmentVariable("KACHACAD_TOOL_AUDIT_DIR").isEmpty()) {
+            QFile log(qEnvironmentVariable("KACHACAD_TOOL_AUDIT_DIR")+"/partial-failure.txt");
+            if(log.open(QIODevice::WriteOnly)) {log.write(text);log.write("\n");log.write(w.StatusText().toUtf8());}
+        }
+        return Explain(text,ok);
+    };
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto wire=w.Session().AddWire({line({0,0,0},{10,0,0}),line({10,0,0},{10,10,0}),
+        line({10,10,0},{0,10,0}),line({0,10,0},{0,0,0}),line({25,0,0},{30,0,0})},false,"輪と未選択の線");
+    if(!wire.committed)return false;const auto id=wire.createdEntityIds.front();
+    const auto* entity=w.Session().GetDocument().FindEntity(id);
+    const auto original=std::get<domain::CreateWireDefinition>(w.Session().GetDocument().FindFeature(entity->createdBy)->definition);
+    app::SelectionSet selected;selected.entityIds={id};
+    for(int i=0;i<4;++i){app::SelectionRef ref;ref.entityId=id;ref.kind=app::SelectionElementKind::Edge;ref.segmentId=original.segmentIds[i];selected.ordered.push_back(ref);}
+    if(!w.SaveAndReopen("partial-loop-fixture.kcd2"))return false;
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");
+    const auto onlyRing=[&] {
+        const auto& plan=w.LoopFacesTool().Plan();if(!plan||plan->faces.size()!=1)return false;
+        for(const auto& face:plan->faces)for(const auto& points:face.previewLines)for(const auto p:points)if(p.x>10.001)return false;
+        return true;
+    };
+    if(!step("only selected edges enter face preview",onlyRing())||!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    if(CountOfKind(w,EntityKind::GuideSurface)!=1||!w.LoopFacesTool().ReopenRecent())return false;
+    if(!step("reopening retains partial segment selection",onlyRing()&&app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==4))return false;
+    w.RunCommand("selection.activate");
+    // Whole-to-part narrowing on one wire must retain the other chosen wire.
+    const auto other=w.Session().AddWire({line({40,0,0},{50,0,0})},false,"別の選択");if(!other.committed)return false;
+    if(!w.SaveAndReopen("partial-loop-other.kcd2"))return false;
+    selected={};selected.entityIds={id,other.createdEntityIds.front()};w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");
+    w.Viewport().SetViewDirection(ViewDirection::Top);w.Viewport().SetViewCenter({10,5,0});w.Viewport().SetVisibleWidthMm(80);QApplication::processEvents();
+    const auto p=w.Viewport().Mapping().Project({5,0,0});if(!p)return false;w.Viewport().SelectAt(QPointF(p->x,p->y),Qt::NoModifier);
+    if(!step("narrowing one wire retains other wires",app::IsSelected(w.Viewport().Selection(),other.createdEntityIds.front())
+        &&app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==2))return false;
+    w.RunCommand("selection.activate");
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({id},domain::Visibility::Hidden)).committed)return false;
+    if(!w.SaveAndReopen("partial-loop-hidden.kcd2"))return false;
+    selected={};selected.entityIds={id};
+    for(int i=0;i<4;++i){app::SelectionRef ref;ref.entityId=id;ref.kind=app::SelectionElementKind::Edge;ref.segmentId=original.segmentIds[i];selected.ordered.push_back(ref);}
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");
+    if(!step("hidden source edges retain their stored identity",onlyRing()&&w.HandleToolKey(Qt::Key_Return,nullptr)))return false;
+    return CaseLoopFacesPartialGap(w,false)&&CaseLoopFacesPartialGap(w,true)&&CaseLoopFacesPartialGap(w,false,true);
+}
+
 bool CaseLoopFacesOwner115(V2MainWindow& window)
 {
     const QString path=qEnvironmentVariable("KACHACAD_SURFACE_TEST_FILE");
@@ -1264,6 +1364,7 @@ bool CaseLoopFacesOwnerRegion(V2MainWindow& window, const QString& name,
 std::vector<SelfTestCase> LoopFacesCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-LF-13 部分辺・他の選択・非表示・補正・再編集を保持",CaseLoopFacesPartialEdges},
         {"HP-LF-12 複合ワイヤーの枝と途中の接続から面を作る",CaseLoopFacesCompoundBranch},
         {"HP-LF-11 面にするを先に選び追加クリックで下見と確定",CaseLoopFacesToolFirst},
         {"HP-LF-01 面にするは閉じた輪を全部見つけて面にし、元の線を残す",

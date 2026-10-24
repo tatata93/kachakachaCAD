@@ -4,7 +4,9 @@
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/CurveSampling.h"
 #include <algorithm>
+#include <optional>
 
 namespace kachakacha::v2::app {
 namespace {
@@ -166,6 +168,59 @@ bool IndependentCycle(std::vector<bool> cycle, std::vector<std::vector<bool>>& b
     }
     return false;
 }
+
+SurfaceNetworkPlan DivideAroundSpatialHoles(const std::vector<RoleWire>& wires,
+    const SurfaceNetworkPlan& enclosed,const geometry::GeometryTolerance& tolerance)
+{
+    std::vector<modeling::GuideTableRow> holes;
+    for(const auto& table:enclosed.tables)for(const auto& row:table.rows)
+        if(row.role==modeling::ChainRole::HoleBoundary)holes.push_back(row);
+    if(holes.empty()||enclosed.unusedSegments.empty())return enclosed;
+    std::vector<RoleWire> structural;
+    for(const auto& wire:wires) {
+        RoleWire kept;kept.id=wire.id;
+        for(const auto& curve:wire.segments) {
+            bool hole=false;
+            for(const auto& row:holes)for(const auto& c:row.segments)
+                hole=hole||SameSegment(curve,c,tolerance.modelLinearMm);
+            if(!hole)kept.segments.push_back(curve);
+        }
+        if(!kept.segments.empty())structural.push_back(std::move(kept));
+    }
+    // No hole remains in this recursive call. The ordinary intersection/cycle
+    // solver can partition the shell without treating a window as a filled face.
+    auto divided=PlanSurfaceNetwork(structural,tolerance);
+    if(divided.tables.size()<=enclosed.tables.size())return enclosed;
+    for(const auto& hole:holes) {
+        std::optional<std::size_t> parent;
+        for(std::size_t i=0;i<divided.tables.size();++i) {
+            std::vector<geometry::CurveSegment> boundary;
+            for(const auto& row:divided.tables[i].rows)
+                if(row.role==modeling::ChainRole::BoundarySide||row.role==modeling::ChainRole::OuterBoundary)
+                    boundary.insert(boundary.end(),row.segments.begin(),row.segments.end());
+            const auto points=geometry::SampleChain(boundary,tolerance.interactiveJoinMm*.5);
+            auto plane=geometry::FitPlane(points);if(!plane.valid)continue;
+            geometry::Vector3 area{};
+            for(std::size_t j=0;j<points.size();++j)area=area+geometry::Cross(points[j]-plane.origin,points[(j+1)%points.size()]-plane.origin);
+            if(area.LengthSquared()<1e-20)continue;plane.normal=geometry::Normalized(area);
+            const auto frame=geometry::MakeFrame(plane);
+            const auto polygon=geometry::ProjectToFrame(points,frame);
+            const auto child=geometry::ProjectToFrame(geometry::SampleChain(hole.segments,tolerance.interactiveJoinMm*.5),frame);
+            if(!std::all_of(child.begin(),child.end(),[&](const auto& p){return geometry::ContainsPoint(polygon,p);}))continue;
+            if(parent)return enclosed;parent=i;
+        }
+        // A divider crossing a window requires splitting that window as well;
+        // never silently fill it or assign it to an arbitrary region.
+        if(!parent)return enclosed;
+        auto& table=divided.tables[*parent];
+        if(table.method!=modeling::GuideSurfaceMethod::PlanarBoundary)
+            table.method=modeling::GuideSurfaceMethod::BoundaryFill;
+        table.rows.push_back(hole);
+        const auto request=modeling::ToGuideSurfaceRequest(table,tolerance);
+        if(!request.HasValue()||!modeling::AnalyzeGuideSurfaceRequest(request.Value(),tolerance).HasValue())return enclosed;
+    }
+    return divided;
+}
 }
 
 SurfaceNetworkPlan PlanSurfaceNetwork(const std::vector<RoleWire>& wires,
@@ -176,7 +231,7 @@ SurfaceNetworkPlan PlanSurfaceNetwork(const std::vector<RoleWire>& wires,
         for (const auto& segment : wire.segments) curves.push_back({wire.id, {}, segment});
     // Closed independent outer/hole wires do not require the bounded cycle search.
     auto spatial=SpatialHoles(curves,tolerance);
-    if(!spatial.tables.empty())return spatial;
+    if(!spatial.tables.empty())return DivideAroundSpatialHoles(wires,spatial,tolerance);
     // Keep the bounded cycle solver bounded before intersection work as well.
     if (curves.size() > 24) return {};
     std::vector<modeling::GuideTableSelection> duplicates;

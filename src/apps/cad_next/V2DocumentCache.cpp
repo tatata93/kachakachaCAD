@@ -15,7 +15,10 @@
 
 namespace V2DocumentCache {
 namespace {
-constexpr qint64 entryLimit=128LL*1024*1024, totalLimit=256LL*1024*1024;
+// Detailed native models can exceed 128 MiB while still fitting the bounded
+// cache comfortably. Keep two maximum-size entries, as before; never relax
+// payload hashing or semantic validation to accommodate a larger document.
+constexpr qint64 entryLimit=256LL*1024*1024, totalLimit=512LL*1024*1024;
 QString Root() {
     const auto cacheOverride=qEnvironmentVariable("KACHACAD_DOCUMENT_CACHE_DIR");
     return cacheOverride.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+"/document-shapes-v1" : cacheOverride;

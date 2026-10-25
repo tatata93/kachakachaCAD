@@ -1,4 +1,4 @@
-﻿model,grid,operation,before_median_ms,after_median_ms,before_p95_ms,after_p95_ms,gpu_ms,cpu_rasters,texture_uploads
+model,grid,operation,before_median_ms,after_median_ms,before_p95_ms,after_p95_ms,gpu_ms,cpu_rasters,texture_uploads
 cad-only,off,orbit,16.6785,16.6841,17.9645,17.5159,2.5188,0,0
 cad-only,off,pan,16.6387,16.8181,19.6938,18.8999,2.1676,0,0
 cad-only,major,orbit,16.6718,16.6419,17.8045,18.249,2.0858,0,0

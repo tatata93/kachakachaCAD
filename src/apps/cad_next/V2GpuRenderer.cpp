@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QPaintDevice>
 #ifdef KACHACAD_GPU_VIEW
+#include "V2GpuImages.h"
 #include <QByteArray>
 #include <QOpenGLFramebufferObjectFormat>
 #include <QOpenGLShader>
@@ -64,6 +65,7 @@ struct V2GpuRenderer::State {
     QOffscreenSurface surface;
     QOpenGLShaderProgram shader;
     QOpenGLBuffer buffer;
+    V2GpuImages images;
     std::unique_ptr<QOpenGLFramebufferObject> frame;
     std::vector<Batch> batches;
     std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
@@ -76,10 +78,13 @@ struct V2GpuRenderer::State {
     QImage cachedImage;
     std::array<double,16> cachedMatrix{};
     std::vector<std::uint64_t> cachedStyle;
+    std::vector<const V2ImageView*> cachedImages;
+    std::uint64_t cachedImageRevision=0;
+    bool renderSucceeded=false;
     std::uint64_t cachedRevision=std::numeric_limits<std::uint64_t>::max();
     ~State() {
         if (ready && context.makeCurrent(&surface)) {
-            frame.reset(); buffer.destroy(); shader.removeAllShaders(); context.doneCurrent();
+            images.Release();frame.reset(); buffer.destroy(); shader.removeAllShaders(); context.doneCurrent();
         }
     }
     bool Initialize() {
@@ -102,11 +107,13 @@ struct V2GpuRenderer::State {
         context.doneCurrent();
         return ready;
     }
-    void Upload(const std::vector<Item>& items, std::uint64_t version) {
-        if (revision==version) return;
+    void Upload(const std::vector<Item>& items, std::uint64_t version,
+        const kachakacha::v2::geometry::Vector3& imageOrigin) {
+        auto nextOrigin=imageOrigin;
+        for(const auto& item:items)if(!item.mesh->triangles.empty()){nextOrigin=item.mesh->triangles.front().points[0];break;}
+        if (revision==version&&origin==nextOrigin) return;
         std::vector<Vertex> vertices; batches.clear();
-        origin={};
-        for(const auto& item:items)if(!item.mesh->triangles.empty()) {origin=item.mesh->triangles.front().points[0];break;}
+        origin=nextOrigin;
         for (const auto& item : items) {
             Batch batch{int(vertices.size()),0,0,0,item.mesh->closed};
             for (const auto& t : item.mesh->triangles) for (int i=0;i<3;++i) {
@@ -161,14 +168,17 @@ V2GpuRenderer::~V2GpuRenderer()=default;
 const char* V2GpuRenderer::Backend() const { return state_->ready?state_->renderer.constData():"CPU"; }
 QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revision,
     const kachakacha::v2::geometry::ScreenMapping& mapping,
-    const kachakacha::v2::geometry::Vector3& forward, int width, int height) {
+    const kachakacha::v2::geometry::Vector3& forward, int width, int height,
+    const std::vector<const V2ImageView*>& images,std::uint64_t imageRevision) {
     auto& s=*state_;
+    s.renderSucceeded=false;
     if(width<=0||height<=0||!s.Initialize())return {};
     std::vector<std::uint64_t> style;
     for(const auto& item:items)style.push_back(std::uint64_t(item.fill)|(std::uint64_t(item.edge)<<24)
         |(std::uint64_t(item.visible)<<48)|(std::uint64_t(item.emphasized)<<49));
     if(!s.paintingFrame && s.cachedRevision==revision && s.cachedMatrix==mapping.matrix && s.cachedStyle==style
-        && s.cachedImage.size()==QSize(width,height))return s.cachedImage;
+        && s.cachedImageRevision==imageRevision&&s.cachedImages==images
+        && s.cachedImage.size()==QSize(width,height)){s.renderSucceeded=true;return s.cachedImage;}
     if(!s.directFrame&&!s.context.makeCurrent(&s.surface))return {};
     if(!s.directFrame&&(!s.frame||s.frame->size()!=QSize(width,height))) {
         QOpenGLFramebufferObjectFormat format; format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
@@ -177,7 +187,12 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
     if(!s.directFrame&&!s.frame->isValid()){s.context.doneCurrent();return {};}
     QElapsedTimer gpuTimer; gpuTimer.start();
     if(!s.directFrame)s.frame->bind();
-    s.Upload(items,revision); s.buffer.bind(); s.shader.bind();
+    s.Upload(items,revision,images.empty()?kachakacha::v2::geometry::Vector3{}:images.front()->triangles.front().mesh.points[0]);
+    if(!s.images.Upload(images,imageRevision,s.origin)) {
+        // A frame owned by QPainter must remain current for the CPU-image fallback.
+        if(!s.paintingFrame){s.frame->release();s.context.doneCurrent();}return {};
+    }
+    s.buffer.bind(); s.shader.bind();
     auto* gl=QOpenGLContext::currentContext()->functions();
     gl->glViewport(0,0,int(std::round(width*s.pixelRatio)),int(std::round(height*s.pixelRatio)));
     gl->glDepthMask(GL_TRUE);gl->glClearColor(0,0,0,0);gl->glClear(s.paintingFrame?GL_DEPTH_BUFFER_BIT:GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -189,7 +204,7 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
     if(mapping.matrix[12]==0 && mapping.matrix[13]==0 && mapping.matrix[14]==0) {
         // CPU orthographic display does not clip depth when zooming. Fit the GPU
         // depth range to the cached geometry, independently of the zoom width.
-        const double depth=1+std::abs(double(matrix(2,3)))+s.extent*std::sqrt(
+        const double depth=1+std::abs(double(matrix(2,3)))+std::max(s.extent,s.images.Extent())*std::sqrt(
             mapping.matrix[8]*mapping.matrix[8]+mapping.matrix[9]*mapping.matrix[9]+mapping.matrix[10]*mapping.matrix[10]);
         for(int c=0;c<4;++c)matrix(2,c)=float(matrix(2,c)/depth);
     }
@@ -198,15 +213,22 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
     const char* names[]={"position","normal","faceNormal"};
     for(int i=0;i<3;++i){s.shader.enableAttributeArray(names[i]);
         s.shader.setAttributeBuffer(names[i],GL_FLOAT,i*3*sizeof(float),3,sizeof(Vertex));}
-    s.Draw(items,false);s.Draw(items,true);
+    s.Draw(items,false);
+    s.images.Draw(matrix,forward);
+    s.buffer.bind();s.shader.bind();
+    for(int i=0;i<3;++i){s.shader.enableAttributeArray(names[i]);
+        s.shader.setAttributeBuffer(names[i],GL_FLOAT,i*3*sizeof(float),3,sizeof(Vertex));}
+    s.Draw(items,true);
     gl->glDisable(GL_DEPTH_TEST);gl->glLineWidth(1.f);
     for(const auto* name:names)s.shader.disableAttributeArray(name);
     s.shader.release();s.buffer.release();
+    s.renderSucceeded=true;
     if(s.paintingFrame)return {};
     const auto submitTime=gpuTimer.nsecsElapsed();
     QImage image=s.frame->toImage();++s.readbacks;s.frame->release();s.context.doneCurrent();
     if(qEnvironmentVariableIsSet("KACHACAD_TRACE_RENDER"))std::fprintf(stderr,"gpu stages ms %.3f %.3f\n",submitTime/1e6,(gpuTimer.nsecsElapsed()-submitTime)/1e6);
     s.cachedImage=image; s.cachedMatrix=mapping.matrix; s.cachedStyle=std::move(style);s.cachedRevision=revision;
+    s.cachedImageRevision=imageRevision;s.cachedImages=images;
     return image;
 }
 bool V2GpuRenderer::PaintingFrame() const {return state_->paintingFrame;}
@@ -258,6 +280,8 @@ bool V2GpuRenderer::PaintDirect(QPaintDevice& target,int width,int height,double
     return true;
 }
 std::uint64_t V2GpuRenderer::Readbacks() const {return state_->readbacks;}
+bool V2GpuRenderer::RenderSucceeded() const {return state_->renderSucceeded;}
+std::uint64_t V2GpuRenderer::ImageUploads() const {return state_->images.Uploads();}
 #else
 struct V2GpuRenderer::State {};
 V2GpuRenderer::V2GpuRenderer()=default;
@@ -266,7 +290,10 @@ const char* V2GpuRenderer::Backend() const { return "CPU"; }
 bool V2GpuRenderer::PaintingFrame() const {return false;}
 bool V2GpuRenderer::PaintDirect(QPaintDevice&,int,int,double,const std::function<void(QPainter&)>&){return false;}
 std::uint64_t V2GpuRenderer::Readbacks() const {return 0;}
+bool V2GpuRenderer::RenderSucceeded() const {return false;}
+std::uint64_t V2GpuRenderer::ImageUploads() const {return 0;}
 bool V2GpuRenderer::PaintFrame(QPainter&,int,int,const std::function<void(QPainter&)>&){return false;}
 QImage V2GpuRenderer::Render(const std::vector<Item>&,std::uint64_t,
-    const kachakacha::v2::geometry::ScreenMapping&,const kachakacha::v2::geometry::Vector3&,int,int){return {};}
+    const kachakacha::v2::geometry::ScreenMapping&,const kachakacha::v2::geometry::Vector3&,int,int,
+    const std::vector<const V2ImageView*>&,std::uint64_t){return {};}
 #endif

@@ -53,10 +53,11 @@ bool V2OutputTool::SaveTo(const QString& path) {
         if(!AppendOutputs(document,*window_.ids_,prepared_,error)){SetProblem(error);return false;}
         io::DocumentFile file;file.snapshot=document.Snapshot();file.metadata.title=QFileInfo(path).fileName().toStdString();
         const auto archive=io::SaveDocument(file);if(!archive.HasValue()){SetProblem(QString::fromStdString(archive.FirstMessageJa()));return false;}bytes=archive.Value();
-    }else {std::vector<modeling::KernelShapeHandle> shapes;
-        for(const auto& asset:prepared_){if(!asset.curves.empty()){const auto shape=kernel::OutputCurveShape(asset.curves);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}shapes.push_back(shape.Value());}else shapes.push_back(asset.shape);}
+    }else {std::vector<modeling::KernelShapeHandle> shapes;std::vector<V2OutputAsset> curveOwners;
+        for(const auto& asset:prepared_){if(!asset.curves.empty()){const auto shape=kernel::OutputCurveShape(asset.curves);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}shapes.push_back(shape.Value());V2OutputAsset owner;owner.OwnShape(shape.Value());curveOwners.push_back(std::move(owner));}else shapes.push_back(asset.shape);}
         const auto content=format_->currentIndex()==0?V2Calculation::Call(nullptr, "STLを生成して検査しています…",
-        [](const auto&... values) { return kachakacha::v2::kernel::OutputStl(values...); }, shapes,0.01):kernel::OutputStep(shapes);
+        [](const auto&... values) { return kachakacha::v2::kernel::OutputStl(values...); }, shapes,0.01):V2Calculation::Call(nullptr,"STEPを生成して検査しています…",
+        [](const auto& values){return kachakacha::v2::kernel::OutputStep(values);},shapes);
         if(!content.HasValue()){SetProblem(QString::fromStdString(content.FirstSummaryJa()));return false;}bytes=content.Value();}
     const auto written=io::WriteFileAtomically(path.toStdString(),bytes);if(!written.HasValue()){SetProblem(QString::fromStdString(written.FirstMessageJa()));return false;}
     window_.SetStatus(QStringLiteral("プレビューした%1個の形状を%2へ出力しました。").arg(prepared_.size()).arg(path));return true;

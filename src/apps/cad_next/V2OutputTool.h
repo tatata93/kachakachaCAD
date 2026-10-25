@@ -51,11 +51,13 @@ private:
     bool Capture(const std::vector<kachakacha::v2::base::EntityId>& ids);
     bool CaptureElements();
     bool Prepare();
+    bool PreparePreview();
     bool CopyIntoDocument();
     void Run();
     void SetProblem(const QString& problem);
     V2MainWindow& window_;
     std::vector<V2OutputAsset> assets_,prepared_;
+    std::vector<double> previewKey_;
     std::uint64_t revision_=0;
     kachakacha::v2::base::DocumentId documentId_;
     QComboBox* format_=nullptr;

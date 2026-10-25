@@ -73,15 +73,20 @@ QString Key(const std::string& source) {
     QCryptographicHash hash(QCryptographicHash::Sha256);hash.addData("prepared-cache-v1");hash.addData(binary);
     hash.addData(QByteArray::fromStdString(source));return QString::fromLatin1(hash.result().toHex());
 }
-std::optional<V2PreparedDocument> Read(const std::string& source) {
-    const auto key=Key(source);if(key.isEmpty())return std::nullopt;
+bool HasMatchingPayload(const std::string& source) {
+    const auto key=Key(source);if(key.isEmpty())return false;
     const QDir dir(Root());const auto path=dir.filePath(key+".bin");
     QFile manifest(dir.filePath(key+".json"));
-    if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return std::nullopt;
+    if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return false;
     const auto info=QJsonDocument::fromJson(manifest.readAll()).object();
     const auto size=QFileInfo(path).size();
     if(info.value("key").toString()!=key||size<=0||size>entryLimit||info.value("size").toDouble()!=size
-        ||info.value("sha256").toString().toLatin1()!=DigestFile(path))return std::nullopt;
+        ||info.value("sha256").toString().toLatin1()!=DigestFile(path))return false;
+    return true;
+}
+std::optional<V2PreparedDocument> Read(const std::string& source) {
+    if(!HasMatchingPayload(source))return std::nullopt;
+    const auto key=Key(source);const auto path=QDir(Root()).filePath(key+".bin");
     auto restored=ReadPreparedDocument(path,key,[]{return true;});
     if(!restored.HasValue())return std::nullopt;
     return std::move(*restored.Value());

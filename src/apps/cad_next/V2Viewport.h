@@ -112,6 +112,7 @@ public:
     void repaint();
     void CompletePresentationForTest();
     std::uint64_t PresentationReadbacks() const {return gpuRenderer_.Readbacks();}
+    std::uint64_t ImageTextureUploads() const {return gpuRenderer_.ImageUploads();}
 
     const char* RenderBackend() const { return gpuRenderer_.Backend(); }
     void SetPalette(const ViewportPalette& palette);

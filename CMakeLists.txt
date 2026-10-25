@@ -1220,6 +1220,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestOutput.cpp
         src/apps/cad_next/V2OutputElements.cpp
         src/apps/cad_next/V2OutputTool.cpp
+        src/apps/cad_next/V2OutputCache.cpp
         src/apps/cad_next/V2OutputGeneration.cpp
         src/apps/cad_next/V2OutputSave.cpp
         src/apps/cad_next/V2OutputPlacementUi.cpp
@@ -1238,6 +1239,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp
         src/apps/cad_next/V2DocumentWorker.cpp
+        src/apps/cad_next/V2PreparedMeshes.cpp
         src/apps/cad_next/V2GuideBuildJobs.cpp
         src/apps/cad_next/V2OffsetTool.cpp
         src/apps/cad_next/V2CornerPreview.cpp
@@ -1279,6 +1281,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2LoopFacesDock.cpp
         src/apps/cad_next/V2ToolPreviewFaces.cpp
         src/apps/cad_next/V2GpuRenderer.cpp
+        src/apps/cad_next/V2GpuImages.cpp
           src/apps/cad_next/V2NativeCanvas.cpp
         src/apps/cad_next/V2SurfaceRendering.cpp
         src/apps/cad_next/V2GptFabricationTool.cpp
@@ -1300,6 +1303,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2UiShotStatesResponsive.cpp
         src/apps/cad_next/V2SelfTestResponsive.cpp
         src/apps/cad_next/V2SelfTestViewportPerformance.cpp
+        src/apps/cad_next/V2SelfTestGpuImages.cpp
         src/apps/cad_next/V2SelfTestNavigation.cpp
         src/apps/cad_next/V2SelfTestDrawingAccuracy.cpp
         src/apps/cad_next/V2SelfTestBoundaryFill.cpp

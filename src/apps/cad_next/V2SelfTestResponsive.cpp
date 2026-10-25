@@ -23,6 +23,7 @@ bool SelectedWireContrast(V2MainWindow&);
 bool HiddenOverlayRendering(V2MainWindow&);
 bool PersistentGridControls(V2MainWindow&);
 bool GridProjectionReuse(V2MainWindow&);
+bool GpuImageDepthAndReuse(V2MainWindow&);
 namespace {
 
 //! HP-RS-01。5つの場面がどれも作れ、1280x720 でも帯のボタンが幅に収まる。
@@ -88,6 +89,7 @@ std::vector<SelfTestCase> ResponsiveCases()
         {"HP-GRID-03 hidden overlays keep GPU shading",HiddenOverlayRendering},
         {"HP-GRID-04 optional settings preserve tools and numeric input",PersistentGridControls},
         {"HP-GRID-05 projected grid reuse and invalidation",GridProjectionReuse},
+        {"HP-IMAGE-GPU image depth transparency texture reuse and resize",GpuImageDepthAndReuse},
         {"HP-RS-01 5 つの撮影の場面が作れる", CaseAllResponsiveShotsCanBeBuilt},
         {"HP-RS-02 正本と見比べる場面(01〜10 とおまかせ・面の解析)がどれも作れる",
             CaseAllComparisonShotsCanBeBuilt},

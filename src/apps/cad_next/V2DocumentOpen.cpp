@@ -75,7 +75,7 @@ bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSna
     }
     if(install)install();else w.RebuildKernelShapes();
     timing.Mark("install-or-rebuild-shapes");
-    w.AdoptCurrentDocument();timing.Mark("adopt-ui");
+    w.AdoptCurrentDocument(bool(install));timing.Mark("adopt-ui");
     w.RefreshWorkPlaneDock();w.viewport_->update();timing.Mark("refresh-docks");return true;
 }
 bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {

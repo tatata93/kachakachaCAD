@@ -7,7 +7,14 @@
 using namespace kachakacha::v2;
 bool V2OutputTool::CaptureElements() {
     const auto& selection=window_.viewport_->Selection();if(selection.ordered.empty())return true;
-    const auto scene=app::BuildSceneFromDocument(window_.session_->GetDocument().Snapshot(),*window_.ids_);
+    modeling::SnapScene scene;
+    if(std::any_of(selection.ordered.begin(),selection.ordered.end(),[&](const auto& ref){
+        const auto* entity=window_.session_->GetDocument().FindEntity(ref.entityId);
+        return ref.kind==app::SelectionElementKind::Edge&&entity&&entity->kind==domain::EntityKind::Wire;})) {
+        auto snapshot=window_.session_->GetDocument().Snapshot();
+        for(auto& entity:snapshot.entities)entity.visibility=domain::Visibility::Visible;
+        scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);
+    }
     std::vector<V2OutputAsset> selected;
     for(const auto& ref:selection.ordered){
         const auto found=std::find_if(assets_.begin(),assets_.end(),[&](const auto& asset){return asset.entity.id==ref.entityId;});

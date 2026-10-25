@@ -24,6 +24,12 @@
 #include <QDialog>
 #include <QPushButton>
 #include <cmath>
+#include <QElapsedTimer>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QFile>
+#include <QIODevice>
+#include <iostream>
 namespace kachakacha::v2::selftest {
 namespace {
 bool DrawOutputRectangle(V2MainWindow& window) {
@@ -39,6 +45,31 @@ bool DrawOutputRectangle(V2MainWindow& window) {
 }
 bool OutputBox(V2MainWindow& window){window.RunCommand("file.new");if(!DrawOutputRectangle(window))return false;window.RunCommand("part.extrude");window.RunCommand("part.extrude");return CountOfKind(window,domain::EntityKind::Part)==1;}
 app::SelectionSet OutputSelection(V2MainWindow& window,bool wires){app::SelectionSet selection;for(const auto& entity:window.Session().GetDocument().Snapshot().entities)if(entity.kind==domain::EntityKind::Part || (wires&&entity.kind==domain::EntityKind::Wire))selection.entityIds.push_back(entity.id);return selection;}
+bool OutputPreviewReuse(V2MainWindow& window) {
+    const auto model=qEnvironmentVariable("KACHACAD_OUTPUT_PERF_MODEL");
+    if(model.isEmpty()){if(!OutputBox(window))return false;}else if(!window.OpenDocumentFile(model))return false;
+    QTemporaryDir folder;if(!folder.isValid())return false;
+    window.Viewport().SetSelection(OutputSelection(window,false));
+    QElapsedTimer timer;timer.start();auto* output=V2OutputTool::Open(window,1);const double capture=timer.nsecsElapsed()/1e6;
+    const auto builds=output->property("outputMeshBuilds").toULongLong();
+    timer.restart();output->ChooseFormat(0);output->ChooseFormat(2);output->ChooseFormat(1);const double formats=timer.nsecsElapsed()/1e6;
+    if(!Explain("format changes reuse prepared geometry and meshes",builds>0&&output->property("outputMeshBuilds").toULongLong()==builds))return false;
+    geometry::OutputPlacement placement;placement.keepPosition=false;placement.destination.origin={10,3,4};
+    output->SetPlacement(placement);const auto moved=output->property("outputMeshBuilds").toULongLong();
+    if(!Explain("changed placement rebuilds preview once",moved==builds*2))return false;
+    timer.restart();if(!output->SaveTo(folder.filePath("reuse.step")))return false;const double step=timer.nsecsElapsed()/1e6;
+    output->ChooseFormat(0);timer.restart();if(!output->SaveTo(folder.filePath("reuse.stl")))return false;const double stl=timer.nsecsElapsed()/1e6;
+    if(!Explain("saving the exact preview does not retessellate it",output->property("outputMeshBuilds").toULongLong()==moved))return false;
+    const auto bytes=io::ReadWholeFile(folder.filePath("reuse.step").toStdString());
+    if(!Explain("reused preview still exports complete STEP bytes",bytes.HasValue()&&bytes.Value().find("END-ISO-10303-21;")!=std::string::npos))return false;
+    if(!model.isEmpty()) {
+        const QJsonObject row{{"capture_ms",capture},{"three_format_changes_ms",formats},{"step_ms",step},{"stl_ms",stl},{"parts",output->AssetCount()},{"mesh_builds",double(moved)}};
+        std::cout<<QJsonDocument(row).toJson(QJsonDocument::Compact).constData()<<std::endl;
+        const auto path=qEnvironmentVariable("KACHACAD_OUTPUT_PERF_OUTPUT");
+        if(!path.isEmpty()){QFile file(path);if(!file.open(QIODevice::WriteOnly))return false;file.write(QJsonDocument(row).toJson());}
+    }
+    output->close();return true;
+}
 bool CaseSelectedOutput(V2MainWindow& window){
     if(!OutputBox(window))return false;QTemporaryDir folder;if(!folder.isValid())return false;
     window.Viewport().SetSelection({});auto* output=V2OutputTool::Open(window,1);
@@ -135,5 +166,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

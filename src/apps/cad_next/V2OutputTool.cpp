@@ -17,6 +17,7 @@
 #include <QListWidgetItem>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <algorithm>
 using namespace kachakacha::v2;
 void V2OutputAsset::OwnShape(modeling::KernelShapeHandle handle) {
     shape=handle;
@@ -64,13 +65,14 @@ void V2OutputTool::BuildUi(int format) {
     QObject::connect(save_,&QPushButton::clicked,this,[this]{Run();});
 }
 void V2OutputTool::ChooseFormat(int format){format_->setCurrentIndex(format);}
-void V2OutputTool::SetProblem(const QString& text){status_->setText(text);save_->setEnabled(false);preview_->SetModels({});}
+void V2OutputTool::SetProblem(const QString& text){previewKey_.clear();status_->setText(text);save_->setEnabled(false);preview_->SetModels({});}
 void V2OutputTool::TakeSelection() {
     generated_=false;
     if(!Capture(window_.viewport_->Selection().entityIds) || (findChild<QComboBox*>("outputScope")->currentIndex()==1 && !CaptureElements())){assets_.clear();loading_=true;targets_->clear();loading_=false;return;}
     revision_=window_.session_->GetDocument().Revision();documentId_=window_.session_->GetDocument().Snapshot().id;FillTargets();
 }
 void V2OutputTool::FillTargets() {
+    previewKey_.clear();prepared_.clear();
     loading_=true;targets_->clear();
     for(const auto& asset:assets_){auto* item=new QListWidgetItem(QString::fromStdString(asset.entity.displayName)+QStringLiteral(" / ")+QString::fromUtf8(domain::EntityKindNameJa(asset.entity.kind).data()),targets_);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Checked);}
     loading_=false;RefreshPreview();preview_->Fit();
@@ -78,8 +80,13 @@ void V2OutputTool::FillTargets() {
 bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
     assets_.clear();if(ids.empty()){SetProblem(QStringLiteral("3Dビューまたは左ペインで出すものを選び、選択を取り込んでください。"));return false;}
     for(const auto& id:ids){const auto* entity=window_.session_->GetDocument().FindEntity(id);if(entity!=nullptr && entity->kind==domain::EntityKind::FabricationModel)return CaptureModels(ids);}
-    auto snapshot=window_.session_->GetDocument().Snapshot();for(auto& entity:snapshot.entities)entity.visibility=domain::Visibility::Visible;
-    const auto scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);
+    const bool needsScene=std::any_of(ids.begin(),ids.end(),[&](const auto& id){
+        const auto* e=window_.session_->GetDocument().FindEntity(id);
+        return e&&(e->kind==domain::EntityKind::Wire||e->kind==domain::EntityKind::Point);});
+    modeling::SnapScene scene;
+    if(needsScene){auto snapshot=window_.session_->GetDocument().Snapshot();
+        for(auto& entity:snapshot.entities)entity.visibility=domain::Visibility::Visible;
+        scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);}
     for(const auto& id:ids){const auto* entity=window_.session_->GetDocument().FindEntity(id);
         if(entity==nullptr){SetProblem(QStringLiteral("選んだ対象が文書にありません。"));return false;}
         if(entity->kind==domain::EntityKind::Image){SetProblem(QStringLiteral("画像はSTL/STEPの形状ではありません。画像を含む文書は『名前を付けて保存』でKCD保存してください。"));return false;}
@@ -112,15 +119,18 @@ bool V2OutputTool::Prepare() {
 }
 void V2OutputTool::RefreshPreview() {
     if(loading_||status_==nullptr)return;
-    if(!Prepare())return;
-    std::vector<modeling::ShapeMesh> meshes;QString notes;
-    for(const auto& asset:prepared_){modeling::ShapeMesh mesh;
-        if(asset.entity.kind==domain::EntityKind::Part || asset.entity.kind==domain::EntityKind::GuideSurface){const auto made=kernel::BuildShapeMesh(asset.shape,0.01);if(!made.HasValue()){SetProblem(QString::fromStdString(made.FirstSummaryJa()));return;}mesh=made.Value();if(asset.entity.kind==domain::EntityKind::GuideSurface)notes=QStringLiteral("厚みのない面を含みます。STLでも厚みはありません。");}
-        else {geometry::Bounds3 bounds;for(const auto& c:asset.curves){std::vector<geometry::Vector3> edge;for(int k=0;k<=64;++k){edge.push_back(c.Evaluate(k/64.0));bounds.Add(edge.back());}mesh.edges.push_back(edge);}if(asset.curves.empty()){mesh.edges.push_back({asset.frame.origin});bounds.Add(asset.frame.origin);}mesh.minimum=bounds.minimum;mesh.maximum=bounds.maximum;
-            if(format_->currentIndex()==0){SetProblem(QString::fromStdString(asset.entity.displayName)+QStringLiteral(": 線・点・作業平面はSTLにできません。対象を外すか形式を変更してください。"));return;}
-            if(format_->currentIndex()==1 && asset.curves.empty()){SetProblem(QString::fromStdString(asset.entity.displayName)+QStringLiteral(": STEPには形状のある対象を選んでください。"));return;}}
-        meshes.push_back(std::move(mesh));}
-    preview_->SetModels(std::move(meshes));save_->setEnabled(true);save_->setText(format_->currentIndex()==3?QStringLiteral("同一KCDへコピーを作成"):QStringLiteral("保存先を選んで出力…"));status_->setText(QStringLiteral("%1個の出力形状。%2").arg(prepared_.size()).arg(notes));
+    if(window_.session_->GetDocument().Revision()!=revision_||window_.session_->GetDocument().Snapshot().id!=documentId_){SetProblem(QStringLiteral("文書が変更されています。対象を取り込み直してください。"));return;}
+    if(!PreparePreview())return;
+    QString notes;
+    for(const auto& asset:prepared_) {
+        if(asset.entity.kind==domain::EntityKind::GuideSurface)notes=QStringLiteral("厚みのない面を含みます。STLでも厚みはありません。");
+        if(asset.entity.kind==domain::EntityKind::Part||asset.entity.kind==domain::EntityKind::GuideSurface)continue;
+        QString error;
+        if(format_->currentIndex()==0)error=QString::fromStdString(asset.entity.displayName)+QStringLiteral(": 線・点・作業平面はSTLにできません。対象を外すか形式を変更してください。");
+        if(format_->currentIndex()==1&&asset.curves.empty())error=QString::fromStdString(asset.entity.displayName)+QStringLiteral(": STEPには形状のある対象を選んでください。");
+        if(!error.isEmpty()){status_->setText(error);save_->setEnabled(false);return;}
+    }
+    save_->setEnabled(true);save_->setText(format_->currentIndex()==3?QStringLiteral("同一KCDへコピーを作成"):QStringLiteral("保存先を選んで出力…"));status_->setText(QStringLiteral("%1個の出力形状。%2").arg(prepared_.size()).arg(notes));
 }
 void V2OutputTool::Run(){if(format_->currentIndex()==3){if(SaveTo(QString()))close();return;}
     const QString extension=format_->currentIndex()==0?QStringLiteral("stl"):format_->currentIndex()==1?QStringLiteral("step"):QStringLiteral("kcd2");

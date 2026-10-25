@@ -80,10 +80,14 @@ void V2Viewport::DrawSmoothShapes(QPainter& painter) const
 
 bool V2Viewport::DrawGpuShapes(QPainter& painter) const
 {
-    // Images/analysis retain their existing compositing path until GPU parity is tested.
+    // Painted analysis retains the software compositor. Images share shape depth
+    // on the GPU; their original pixels/triangles are uploaded only after changes.
     const auto layers=V2RenderLayersOf(*this,analysisViews_);
-    if(layers.images||layers.analysis)return false;
-    if(!layers.shapes)return true;
+    if(layers.analysis)return false;
+    if(!layers.shapes&&!layers.images)return true;
+    std::vector<const V2ImageView*> images;
+    for(const auto& image:imageViews_)if(EntityShown(image.entityId)&&image.image.opacity>0
+        &&!image.image.pixels.empty()&&!image.triangles.empty())images.push_back(&image);
     std::vector<V2GpuRenderer::Item> items;
     for(const auto& shape:shapeViews_) {
         const bool selected=V2RenderSelectionOf(*this).Entity(shape.entityId);
@@ -101,8 +105,8 @@ bool V2Viewport::DrawGpuShapes(QPainter& painter) const
     const bool native=gpuRenderer_.PaintingFrame();
     if(native)painter.beginNativePainting();
     const auto image=gpuRenderer_.Render(items,shapeViewRevision_,mapping_,
-        kachakacha::v2::view::ForwardOf(orientation_),width(),height());
-    if(native){painter.endNativePainting();return true;}
+        kachakacha::v2::view::ForwardOf(orientation_),width(),height(),images,imageViewRevision_);
+    if(native){painter.endNativePainting();return gpuRenderer_.RenderSucceeded();}
     if(image.isNull())return false;
     painter.drawImage(QRect(0,0,width(),height()),image);return true;
 }

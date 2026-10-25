@@ -344,7 +344,7 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
             const auto modifiers=QString::fromLatin1(operation)=="orbit"?Qt::ShiftModifier:Qt::NoModifier;
             if(events){QMouseEvent press(QEvent::MouseButtonPress,start,view.mapToGlobal(start.toPoint()),Qt::MiddleButton,Qt::MiddleButton,modifiers);QApplication::sendEvent(&view,&press);}
             const auto counts=view.InteractionCounts();std::vector<double> samples,workSamples;
-            const auto nativeFrames=view.property("nativeViewportFrames").toULongLong(),readbacks=view.PresentationReadbacks();
+            const auto nativeFrames=view.property("nativeViewportFrames").toULongLong(),readbacks=view.PresentationReadbacks(),imageUploads=view.ImageTextureUploads();
             for(int i=0;i<frames+4;++i) {
                 QElapsedTimer timer;timer.start();
                 const double sign=i%2?1:-1;
@@ -372,6 +372,7 @@ bool ViewportFrameBenchmark(V2MainWindow& window)
                 {"paint_gpu_complete_median_ms",workSamples[workSamples.size()/2]},
                 {"paint_gpu_complete_p95_ms",workSamples[std::size_t(.95*workSamples.size())]},
                 {"software_rasterizations",double(view.InteractionCounts().rasterizations-counts.rasterizations)},
+                {"image_texture_uploads",double(view.ImageTextureUploads()-imageUploads)},
                 {"shapes",view.ShapeViewCount()},{"triangles",view.ShapeTriangleCount()}};
             const auto& g=window.Session().Scene().grid;const double spacing=g.majorSpacingMm/(g.subdivision>1?g.subdivision:1);
             row.insert("minor_u_spacing_px",modeling::GridLineSpacingPx(view.Mapping(),g.origin,g.vDirection,g.uDirection*spacing));

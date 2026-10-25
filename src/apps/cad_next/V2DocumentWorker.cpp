@@ -1,6 +1,7 @@
 #include "V2DocumentOpen.h"
 #include "V2DocumentCache.h"
 #include "V2DocumentTiming.h"
+#include "V2PreparedMeshes.h"
 #include "V2MainWindow.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/app/GroupTree.h"
@@ -13,6 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QThread>
 #include <QString>
 #include <iostream>
 #include <stdexcept>
@@ -40,6 +42,7 @@ base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2Main
     if(!guides.HasValue())return Captured::Failure(guides.Diagnostics());
     data.partEdges=w.partEdges_;data.flatBoundaries=w.partFlatBoundary_;data.guideEdges=w.guideEdges_;
     data.samples=w.guideSamples_;data.fabrication=w.fabricationModels_;data.guideTable=w.guideTable_;
+    std::vector<V2PreparedMeshRequest> requests;
     for(const auto* shapes:{&w.partShapes_,&w.guideShapes_})for(const auto& [id,handle]:*shapes) {
         const auto cached=w.shapeMeshes_.find(handle.value);
         if(cached!=w.shapeMeshes_.end())data.meshes[id]=cached->second;
@@ -49,17 +52,18 @@ base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2Main
             // Native geometry and history are transferred for every entity. Display
             // meshes for hidden entities are built on demand when they become visible.
             if(entity&&!app::EntityEffectivelyVisible(w.session_->GetDocument().Snapshot(),*entity))continue;
-            const auto mesh=kernel::BuildShapeMesh(handle,0.0,shapes==&w.guideShapes_?8:0);
-            if(!mesh.HasValue())return Captured::Failure(mesh.Diagnostics());
-            data.meshes[id]=mesh.Value();
-            timing.Mark(("mesh-"+id).c_str());
+            requests.push_back({id,handle,shapes==&w.guideShapes_});
         }
     }
+    const auto meshes=V2BuildPreparedMeshes(requests,data.meshes,IsWorker()&&QThread::idealThreadCount()>=4
+        &&!qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL"));
+    timing.Mark("prepare-visible-meshes");
+    if(!meshes.HasValue())return Captured::Failure(meshes.Diagnostics());
     return Captured::Success(std::move(result));
 }
 void V2DocumentOpen::CacheSaved(V2MainWindow& w,const std::string& archive) {
     if(IsWorker()||!w.rebuildProblems_.isEmpty())return;
-    if(V2DocumentCache::Read(archive))return;
+    if(V2DocumentCache::HasMatchingPayload(archive))return;
     for(const auto& e:w.session_->GetDocument().Snapshot().entities) {
         const auto key=e.id.ToString();
         if(e.kind==domain::EntityKind::Part&&!w.partShapes_.contains(key))return;

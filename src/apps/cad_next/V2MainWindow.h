@@ -1157,7 +1157,7 @@ private:
     void RemoveConsumedWires(
         const std::vector<kachakacha::v2::base::EntityId>& entityIds);
     //! 文書が変わったあとの後始末。場面・選択・一覧・件数を作り直す。
-    void AdoptCurrentDocument();
+    void AdoptCurrentDocument(bool refreshEdges=true);
     //! 3D で対象を拾う道具を全部解く / 拾っていた物が消えた道具だけ解く。
     void EndArmedTools();
     void EndToolsWhoseInputsVanished();

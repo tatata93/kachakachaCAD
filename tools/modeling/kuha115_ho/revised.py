@@ -191,7 +191,7 @@ def front(m,root):
         cap=m.box('回込窓端の縦ゴム',8.05,min(side*(SIDE+.32),side*(SIDE+.03)),bottom+.2,.35,.29,height-.39,g)
         rim=m.joined('パノラミック窓ゴム一体'+str(side),[rim,cap],g,'黒')
         m.clear(m.finished['body'],rim,'パノラミックゴムと車体')
-        shell=m.shell('前面透明板素材',g,1.08,1.48,bottom+.27,bottom+height-.27)
+        shell=m.shell('前面透明板素材',g,.22 if m.detailed else 1.08,.62 if m.detailed else 1.48,bottom+.27,bottom+height-.27)
         p=m.rounded('前面ガラスマスク',(-3,5.35 if side>0 else -18.2,bottom+.27),(0,1,0),(0,0,1),12.85,height-.54,.8,g)
         tool=m.extrude('透明板切出工具',[p],(1,0,0),11.0,g)
         pane=m.boolean('前面曲面透明板'+str(side),shell,[tool],2,g,'透明')
@@ -337,6 +337,7 @@ def roof(m,root):
         shell=m.boolean('屋根曲面に沿う額',shell,[outside],2,g,'屋根グレー')
         a=m.joined('前頭屋根と一般屋根の中空一体',[a,shell],g,'屋根グレー')
     m.finished['roof']=a;m.clear(m.finished['body'],a,'車体と屋根')
+    if m.detailed:m.mesh_chords[a]=.006
     if m.detailed:
         for y in [-10,-5,0,5,10]:
             cross=40-math.sqrt(40**2-y*y)
@@ -386,13 +387,25 @@ def roof(m,root):
     feet=[m.box('冷房装置の取付脚',x,y,44.8,3.6,1.0,1.4,eg) for x in [x0+4,x0+38] for y in [-7.5,6.5]]
     ac=m.joined('AU75G・脚一体',[ac]+feet,eg,'アルミ銀')
     ac=m.boolean('AU75G脚底を屋根に合わせる',ac,[outside],1,eg,'アルミ銀')
+    if m.detailed:
+        fans=[]
+        for fan in m.keyparts['climateFans']:
+            fan=m.boolean('ファン支持桟の端をキセに合わせる',fan,[ac],1,eg,'黒')
+            fans.append(fan);m.clear(ac,fan,'キセとファン支持桟')
+        m.keyparts['climateFans']=fans;m.entities[ac]['visibility']='visible'
     m.entities[a]['visibility']='visible';m.clear(a,ac,'屋根と冷房装置')
     if m.detailed:
         for y,inside in [(-12.5,False),(0,True),(12.5,False)]:
             m.points.append(dict(entity=ac,label='AU75Gの幅方向アーチを実形状で確認',
                 point=[x0+22,y,z0+4.2],expectedInside=inside))
     for y in [-15.2,13.7]:
-        m.finish(m.box('クーラー脇歩み板',x0+2,y,43.4,41.7,1.5,.3,eg),'屋根グレー',.3)
+        plate=m.box('クーラー脇歩み板',x0+2,y,43.4,41.7,1.5,.3,eg)
+        if m.detailed:
+            legs=[m.box('歩み板の支持脚',x,y+.35,42.2,.65,.8,1.35,eg) for x in [x0+3,x0+15,x0+28,x0+42]]
+            plate=m.joined('歩み板・四本の支持脚',[plate]+legs,eg,'屋根グレー')
+            plate=m.boolean('屋根に接する脚付き歩み板',plate,[outside],1,eg,'屋根グレー')
+            m.entities[a]['visibility']='visible';m.clear(a,plate,'屋根と脚付き歩み板')
+        else:m.finish(plate,'屋根グレー',.3)
     # Rounded open-mouthed ventilators, not solid trapezoids.
     for x in [28.5,58.5,83,166.5,192,222.5]:
         if m.detailed:
@@ -408,17 +421,35 @@ def roof(m,root):
         vent=m.boolean('屋根曲率に合わせた通風器',vent,[outside],1,eg,'屋根グレー')
         m.clear(a,vent,'屋根と通風器');m.mesh_chords[vent]=.006
         m.entities[a]['visibility']='visible'
-    base=m.box('列車無線アンテナ台座',10,-1.3,44.65,2.5,2.6,.6,eg)
-    aerial=m.cylinder('列車無線アンテナ',(11.25,0,45.2),(0,0,1),.47,3.0 if m.detailed else 1.7,eg)
-    aerial=m.joined('列車無線アンテナ',[base,aerial],eg,'屋根グレー')
+    if m.detailed:
+        base=m.box('列車無線アンテナの角形架台',9.2,-1.8,46.05,4.6,3.6,.45,eg)
+        feet=[m.box('アンテナ架台の支持脚',x,-1.5,45.3,.65,3.0,.85,eg) for x in [9.5,12.9]]
+        aerial=m.cylinder('列車無線アンテナ',(11.25,0,46.4),(0,0,1),.47,2.2,eg)
+        cable=[m.tube('アンテナ引込線',p,q,.10,eg) for p,q in zip(
+            [(10.0,1.5,46.25),(8.6,1.5,45.95),(6.0,1.5,45.45)],
+            [(8.6,1.5,45.95),(6.0,1.5,45.45),(5.7,1.5,45.0)])]
+        aerial=m.joined('列車無線アンテナ・架台・脚・引込線',[base,aerial]+feet+cable,eg,'屋根グレー')
+    else:
+        base=m.box('列車無線アンテナ台座',10,-1.3,44.65,2.5,2.6,.6,eg)
+        aerial=m.cylinder('列車無線アンテナ',(11.25,0,45.2),(0,0,1),.47,1.7,eg)
+        aerial=m.joined('列車無線アンテナ',[base,aerial],eg,'屋根グレー')
     aerial=m.boolean('アンテナ台座の屋根合わせ',aerial,[outside],1,eg,'屋根グレー')
     m.entities[a]['visibility']='visible';m.clear(a,aerial,'屋根とアンテナ')
+    if m.detailed:
+        for y in [-10,10]:
+            path=[(2.4,y,42.8),(2.9,y,44.6),(4.5,y,45.0),(5.2,y,44.0)]
+            bits=[m.tube('前頭屋根ループ手掛け',p,q,.13,eg) for p,q in zip(path,path[1:])]
+            rail=m.joined('前頭屋根手掛け・取付足',bits,eg,'屋根グレー')
+            rail=m.boolean('屋根曲面に合わせたループ手掛け',rail,[outside],1,eg,'屋根グレー')
+            m.entities[a]['visibility']='visible';m.clear(a,rail,'前頭屋根とループ手掛け')
     flare=m.cylinder('信号炎管',(4.8,-5.5,44.15),(0,0,1),.38,3.6 if m.detailed else 1.7,eg)
     if m.detailed:
-        head=m.cylinder('炎管の段付き頭部',(4.8,-5.5,47.35),(0,0,1),.48,.5,eg)
-        flare=m.joined('信号炎管・頭部一体',[flare,head],eg,'屋根グレー')
+        head=m.cylinder('炎管の傘状頭部',(4.8,-5.5,47.35),(0,0,1),.78,.40,eg)
+        cap=m.cylinder('炎管頭部の上段',(4.8,-5.5,47.70),(0,0,1),.45,.20,eg)
+        flare=m.joined('信号炎管・頭部一体',[flare,head,cap],eg,'屋根グレー')
     flare=m.boolean('炎管の屋根合わせ',flare,[outside],1,eg,'屋根グレー')
     m.entities[a]['visibility']='visible';m.clear(a,flare,'屋根と炎管')
+    if m.detailed:m.points.append(dict(entity=flare,label='信号炎管の幅広い傘状頭部',point=[4.8,-6.1,47.55],expectedInside=True))
 
 
 def chassis(m,root):
@@ -440,15 +471,36 @@ def chassis(m,root):
         feet=[m.box('タンク吊り脚',xx,y-.65,12.0,1,1.3,1.65,g) for xx in [x+1,x+le-2]]
         m.joined(name+'・支持部',[p]+feet,g,'床下グレー',note='形と位置は写真推定、給排水管の完全再現ではない。')
     # Continuous skirt bottom underneath a central coupler aperture.
-    pts=[(-.55,-16.0,8.4),(-.55,16,8.4),(-.55,17.1,13.7),(-.55,-17.1,13.7)]
-    o=m.poly('スカート外周',pts,g);q=m.rounded('連結器切欠',(-.55,-3.1,10.0),(0,1,0),(0,0,1),6.2,4.6,.5,g)
-    skirt=m.extrude('スカート素材',[o],(1,0,0),.75,g)
-    skirt=m.cut('スカート 中央下縁連続',skirt,[q],(1,0,0),.75,g,'床下グレー')
+    if m.detailed:
+        panels=[]
+        for ya,yb,xa,xb in [(-17.1,-12.7,1.2,-.55),(-12.7,12.7,-.55,-.55),(12.7,17.1,-.55,1.2)]:
+            ba,bb=max(-16,ya),min(16,yb)
+            def bend(y):return xa+(xb-xa)*(y-ya)/(yb-ya)
+            p=m.poly('スカートの左右回込板',[(bend(ba),ba,6.6),(bend(bb),bb,6.6),(xb,yb,13.7),(xa,ya,13.7)],g)
+            panels.append(m.extrude('折り曲げたスカート板',[p],(1,0,0),.75,g))
+        skirt=m.joined('左右へ折れる一体スカート',panels,g,'床下グレー')
+        from detail_parts import skirt_mask
+        mask=skirt_mask(m,g)
+        skirt=m.boolean('スカート下隅の丸み',skirt,[mask],2,g,'床下グレー')
+    else:
+        pts=[(-.55,-16.0,8.4),(-.55,16,8.4),(-.55,17.1,13.7),(-.55,-17.1,13.7)]
+        o=m.poly('スカート外周',pts,g);skirt=m.extrude('スカート素材',[o],(1,0,0),.75,g)
+    q=m.rounded('連結器切欠',(-2,-3.1,10.0),(0,1,0),(0,0,1),6.2,4.6,.5,g)
+    skirt=m.cut('スカート 中央下縁連続',skirt,[q],(1,0,0),5,g,'床下グレー')
     m.finished['skirt']=skirt
+    if m.detailed:
+        for side in [-1,1]:
+            m.points.extend([dict(entity=skirt,label='スカートの下絞り内側',point=[.85,side*15.4,7.0],expectedInside=True),
+                             dict(entity=skirt,label='スカート下絞りの外側は空間',point=[1.2,side*16.7,7.0],expectedInside=False)])
     for front,x in [(True,-3.125),(False,L+2.325)]:
-        head=m.box('連結器頭',x,-1.35,10.6,.85,2.7,1.8,g)
+        head=m.box('連結器頭',x,-1.7 if m.detailed else -1.35,10.35 if m.detailed else 10.6,
+                   1.2 if m.detailed else .85,3.4 if m.detailed else 2.7,2.3 if m.detailed else 1.8,g)
         hole=m.circle('連結器口',(x-.1,0,11.45),(1,0,0),.55,g)
-        head=m.cut('密着連結器の口',head,[hole],(1,0,0),1.1,g,'床下グレー')
+        head=m.cut('密着連結器の口',head,[hole],(1,0,0),1.5,g,'床下グレー')
+        if m.detailed:
+            jaw=m.box('連結器のかみ合い突起',x-.25,-1.7,10.35,.4,.8,1.15,g)
+            horn=m.box('連結器の上部案内突起',x-.15,.9,12.1,.35,.8,.55,g)
+            head=m.joined('密着連結器の段差付き頭部',[head,jaw,horn],g,'床下グレー')
         stem=m.box('連結器柄',-2.4 if front else L-4,-.55,10.95,6.5,1.1,1.0,g)
         mount=m.box('連結器支持台',2.8 if front else L-3.8,-1,11.4,1,2,2.25,g)
         m.joined('密着連結器・取付座',[head,stem,mount],g,'床下グレー')
@@ -529,7 +581,10 @@ def bogies(m,root):
             m.keyparts['wheelsets'].append(ax);m.clear(a,ax,lab+'台車と輪軸')
         for side in [-1,1]:
             if m.detailed:
-                for dx in [-13.125,13.125]:m.finish(m.box(lab+'局所輪軸押え',cx+dx-1.8,side*11.5-1.2,3.7,3.6,2.4,.8,g),'黒',.8)
+                for dx in [-13.125,13.125]:
+                    keeper=m.box(lab+'局所輪軸押え素材',cx+dx-1.8,side*11.5-1.2,3.7,3.6,2.4,.8,g)
+                    keeper=m.boolean(lab+'局所輪軸押え',keeper,[a],1,g,'黒')
+                    m.entities[a]['visibility']='visible';m.clear(a,keeper,lab+'台車と着脱輪軸押え')
             else:m.finish(m.box(lab+'輪軸押え',cx-15.3,side*12.0-1.2,3.7,30.6,2.4,.55,g),'黒',.55)
         if lab=='前':
             p=m.poly('スノープロウ板',[(cx-20.5,-13.6,3.8),(cx-20.5,13.6,3.8),(cx-19.5,13.6,6.6),(cx-19.5,-13.6,6.6)],g)
@@ -586,6 +641,8 @@ def manifest(m):
         data['estimated'].update(panoramicWindow=dict(bottom=30.6,height=7.6),destination=dict(width=9.3,height=3.95),
             climateCrossSection='YZ arch extruded along X',wheelsetAxleLength=23.7,localAxleKeepers=True,
             foreheadLongitudinalRadius=5.875,foreheadInnerRadius=5.025,foreheadCurveOriginZ=39.8)
+        data['estimated'].update(skirtOutline=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6),
+                                 flareCapRadius=.78,frontGlazingInset=.22)
     return data
 
 

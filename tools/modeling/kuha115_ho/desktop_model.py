@@ -22,7 +22,8 @@ def main():
     proof.update(seconds=time.monotonic()-start,sourceSha256=hashlib.sha256(model.read_bytes()).hexdigest(),
                  exeSha256=hashlib.sha256(exe.read_bytes()).hexdigest(),exitCode=process.returncode)
     report.write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
-    print(json.dumps(proof,ensure_ascii=False))
+    # Console encodings such as CP932 cannot represent the title's em dash.
+    print(json.dumps(proof,ensure_ascii=True))
 
 
 if __name__=='__main__':main()

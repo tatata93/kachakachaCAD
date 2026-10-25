@@ -6,6 +6,27 @@ from pathlib import Path
 def face_x(y):return math.tan(math.radians(8))*(abs(y)-5.3)
 
 
+def skirt_mask(m,g):
+    """Tapered YZ silhouette with tangent circular corners, extruded along X."""
+    vertices=[(-16.0,6.6),(16.0,6.6),(17.1,13.7),(-17.1,13.7)];corners=[];radius=.8
+    for i,p in enumerate(vertices):
+        before=vertices[i-1];after=vertices[(i+1)%4]
+        def unit(q):
+            d=(q[0]-p[0],q[1]-p[1]);length=math.hypot(*d);return (d[0]/length,d[1]/length)
+        a,b=unit(before),unit(after);angle=math.acos(a[0]*b[0]+a[1]*b[1]);distance=radius/math.tan(angle/2)
+        start=(p[0]+a[0]*distance,p[1]+a[1]*distance);end=(p[0]+b[0]*distance,p[1]+b[1]*distance)
+        bisector=(a[0]+b[0],a[1]+b[1]);length=math.hypot(*bisector)
+        offset=radius/math.sin(angle/2);center=(p[0]+bisector[0]*offset/length,p[1]+bisector[1]*offset/length)
+        first=math.atan2(start[1]-center[1],start[0]-center[0]);last=math.atan2(end[1]-center[1],end[0]-center[0])
+        corners.append((start,end,center,first,(last-first)%(2*math.pi)))
+    segments=[]
+    for i,(start,end,center,first,sweep) in enumerate(corners):
+        segments.append(m.arc((-2,*center),(1,0,0),(0,1,0),radius,first,sweep))
+        segments.append(m.line((-2,*end),(-2,*corners[(i+1)%4][0])))
+    wire=m.wire('下絞りと丸隅を持つスカート外形',segments,g)
+    return m.extrude('スカートの下絞り外形マスク',[wire],(1,0,0),5,g)
+
+
 def wiper(m,g,side):
     def p(y,z,stand=.55):return (face_x(y)-stand,side*y,z)
     n=(-math.cos(math.radians(8)),side*math.sin(math.radians(8)),0)
@@ -49,20 +70,37 @@ def lamp(m,g,side,name,y,z,r,color):
     m.finish(body,'アドバンスブルー' if name=='前照灯' else 'フォギーグレー')
     ring=m.ring(name+'前縁金属リング',at(depth+.17),n,r+.11,r-.26,.12,g)
     m.finish(ring,'アルミ銀',.12);m.clear(body,ring,name+'胴と金属リング')
-    # The aperture has a recessed metallic reflector and a separate clear lens.
-    reflector=m.cylinder(name+'奥の反射鏡',at(.36),n,r-.27,.10,g)
-    m.finish(reflector,'金属銀',.1)
-    bulb=m.cylinder(name+'電球',at(.48),n,.28 if name=='前照灯' else .18,.20,g)
-    m.finish(bulb,'電球色',.2)
-    lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,r-.28,.12,g)
-    m.finish(lens,color,.12)
+    if name=='前照灯':
+        outer=[m.circle('反射鏡外側断面',at(d),n,rr,g) for d,rr in
+               [(.25,.46),(.45,.76),(.78,1.08),(1.22,r-.22)]]
+        inner=[m.circle('反射鏡内側断面',at(d),n,rr,g) for d,rr in
+               [(.38,.34),(.55,.65),(.87,1.00),(1.30,r-.29)]]
+        reflector=m.loft('椀状反射鏡の外側',outer,g)
+        cavity=m.loft('椀状反射鏡の凹部',inner,g)
+        reflector=m.boolean('椀状の前照灯反射鏡',reflector,[cavity],1,g,'金属銀')
+        bulb=m.cylinder(name+'電球',at(.38),n,.24,.24,g)
+        m.finish(bulb,'電球色',.24)
+        # Keep the clear face shallowly convex; the centre cap is only 0.2 mm wide.
+        sections=[m.circle('凸レンズ断面',at(depth+d),n,rr,g) for d,rr in
+                  [(.13,r-.26),(.20,r-.33),(.27,.94),(.31,.45),(.32,.10)]]
+        lens=m.loft('前照灯の浅い凸レンズ',sections,g)
+        m.finish(lens,color,.12);m.mesh_chords[lens]=.001
+        m.mesh_chords[reflector]=.001
+    else:
+        reflector=m.cylinder(name+'奥の反射鏡',at(.26),n,r-.27,.10,g)
+        m.finish(reflector,'金属銀',.1)
+        bulb=m.cylinder(name+'電球',at(.38),n,.18,.16,g)
+        m.finish(bulb,'電球色',.16)
+        lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,r-.26,.12,g)
+        m.finish(lens,color,.12)
 
 
 def destination(m,g,roof_outer):
     o=m.rounded('表示器ハウジング外',(-.85,-4.65,39.65),(0,1,0),(0,0,1),9.3,3.95,.6,g)
     q=m.rounded('表示器ハウジング開口',(-.85,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
     housing=m.extrude('前面表示器ハウジング素材',[o,q],(1,0,0),3.8,g)
-    m.boolean('表示箱背面を丸い額に合わせる',housing,[roof_outer],1,g)
+    housing=m.boolean('表示箱背面を丸い額に合わせる',housing,[roof_outer],1,g)
+    m.mesh_chords[housing]=.006
     p=m.rounded('前面表示面',(-.12,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
     m.finish(m.extrude('前面表示面',[p],(1,0,0),.05,g),'黒',.05)
 
@@ -94,14 +132,17 @@ def climate_unit(m,g,x,z):
         ribs.append(m.extrude('AU75Gの補強帯',[strip],(1,0,0),.20,g))
     ac=m.joined('AU75Gアーチキセ・肩スリット・補強帯',[ac]+ribs,g,'アルミ銀')
     # Black fan rooms and blades sit below, rather than on top of, the grilles.
+    m.keyparts['climateFans']=[]
     for cx in [x+8.5,x+37.25]:
         bits=[m.cylinder('ファンハブ',(cx,0,z+3.86),(0,0,1),.65,.24,g)]
+        bits.extend([m.box('ファンの支持桟',cx-3.8,-.15,z+3.83,7.6,.30,.16,g),
+                     m.box('ファンの支持桟',cx-.15,-3.8,z+3.83,.30,7.6,.16,g)])
         for j in range(8):
             a=j*math.pi/4
             def p(rr,t):return (cx+rr*math.cos(a)-t*math.sin(a),rr*math.sin(a)+t*math.cos(a),z+3.87)
             wire=m.poly('ファン羽根',[p(.45,-.22),p(3.25,-.05),p(3.0,.75),p(.5,.30)],g)
             bits.append(m.extrude('奥まったファン羽根',[wire],(0,0,1),.11,g))
-        m.joined('AU75Gの暗いファン室・羽根',bits,g,'黒')
+        m.keyparts['climateFans'].append(m.joined('AU75Gの支持桟付きファン',bits,g,'黒'))
     return ac
 
 

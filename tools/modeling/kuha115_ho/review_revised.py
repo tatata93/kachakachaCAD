@@ -70,7 +70,7 @@ def main():
         assert len(expected)==r['visibleParts']==mesh['parts'] and not r['failures'] and not mesh['failures'] and not all_report['failures']
         assert not r['checkOnly'] and all_report['checkOnly']
         assert len(r['assemblyChecks'])==len(design['assemblyChecks'])>140
-        assert len(r['pointChecks'])==len(design['pointChecks'])==(309 if design.get('detailRevision') else 227)
+        assert len(r['pointChecks'])==len(design['pointChecks'])==(314 if design.get('detailRevision') else 227)
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
         assert len(all_report['assemblyChecks'])==all_design['broadPhase']['candidates']>100
@@ -98,6 +98,11 @@ def main():
             assert sum('額の中央と左右肩' in c['label'] for c in checks)==45
             assert sum('短縮した前面窓' in c['label'] for c in checks)==18
             assert sum('黒い軸箱外蓋' in c['label'] for c in checks)==16
+            assert sum('信号炎管の幅広い' in c['label'] for c in checks)==1
+            assert sum('スカートの下絞り内側' in c['label'] for c in checks)==2
+            assert sum('スカート下絞りの外側' in c['label'] for c in checks)==2
+            assert design['estimated']['skirtOutline']==dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6)
+            assert design['estimated']['flareCapRadius']==.78 and design['estimated']['frontGlazingInset']==.22
         maximum=max(max(p['bounds'][i+3]-p['bounds'][i] for i in range(3)) for p in r['parts'])
         if split:assert maximum<125
         else:
@@ -129,9 +134,10 @@ def main():
         'tools/modeling/kuha115_ho/review_revised.py','tools/modeling/kuha115_ho/assembly_candidates.py',
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',
-        'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/render_detailed.py']}
+        'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/render_detailed.py',
+        'tools/modeling/kuha115_ho/assemble_detailed.py']}
     (w/'review-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
-    print(json.dumps(result,ensure_ascii=False,indent=2))
+    print(json.dumps(result,ensure_ascii=True,indent=2))
 
 
 if __name__=='__main__':main()

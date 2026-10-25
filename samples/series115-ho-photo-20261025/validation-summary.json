@@ -1,0 +1,88 @@
+{
+  "timeUtc": "2026-10-25T02:22:07.830287+00:00",
+  "models": [
+    {
+      "name": "full",
+      "file": "kuha115-ho80-revised.kcd2",
+      "sourceSha256": "293e295153d29886b286007bba4731923c78efde68289ba8f952cb111ca2497b",
+      "cadExeSha256": "4771a88784733974fe0f6b43069453778cd499cbc41179e9fda5525112be9c28",
+      "nativeSeconds": 179.1720000000205,
+      "parts": 233,
+      "features": 2035,
+      "groups": 16,
+      "assemblyChecks": 169,
+      "pointChecks": 314,
+      "splitReassemblyChecks": 0,
+      "totalPartPairs": 27028,
+      "brepInterferenceCandidates": 319,
+      "maximumPartExtentMm": 243.75000020000383,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    },
+    {
+      "name": "split",
+      "file": "kuha115-ho80-revised-split.kcd2",
+      "sourceSha256": "5432b16ec6df6a36c81dbeed980e7bc7fb0764e3638d73afba0aeb06c51947f8",
+      "cadExeSha256": "4771a88784733974fe0f6b43069453778cd499cbc41179e9fda5525112be9c28",
+      "nativeSeconds": 183.9220000000205,
+      "parts": 240,
+      "features": 2061,
+      "groups": 17,
+      "assemblyChecks": 319,
+      "pointChecks": 314,
+      "splitReassemblyChecks": 6,
+      "totalPartPairs": 28680,
+      "brepInterferenceCandidates": 327,
+      "maximumPartExtentMm": 121.87500020000383,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    }
+  ],
+  "savedReopen": {
+    "passed": true,
+    "maximumVolumeDeltaMm3": 2.3305801732931286e-11,
+    "parts": 233,
+    "seconds": 182.82800000003772
+  },
+  "desktopStartup": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 1000,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+    "visible": true,
+    "width": 1600,
+    "seconds": 219.875,
+    "sourceSha256": "436e1d57f00f3cb3f9af1bd6efbdda9f7878340b1ffd119df04368a12ae7b24c",
+    "exeSha256": "4771a88784733974fe0f6b43069453778cd499cbc41179e9fda5525112be9c28",
+    "exitCode": 0
+  },
+  "gangwayOpeningMm": [
+    7.2,
+    5.8
+  ],
+  "gangwayAspectRatio": 1.2413793103448276,
+  "passed": true,
+  "sourceFilesSha256": {
+    "tools/modeling/kuha115_ho/revised.py": "09c9ddb3dee3a7000994ec46e3c443e60bfc04f01602917a7059bccd46c85be0",
+    "tools/modeling/kuha115_ho/build.py": "c8d9322a6f67b11683036912d555d1fb49717aa7cee181faf5cd98f78acb94d4",
+    "tools/modeling/native_kcd.py": "6c3b27072b7f9c5a3abb302aa22ca47855fee4f0eb155f72cea940b08673e885",
+    "tools/modeling/kuha115_ho/review_revised.py": "2e4689a82267b8a45b84495ef317c8d7da65bff7dec09fc6cb35a166465081e5",
+    "tools/modeling/kuha115_ho/assembly_candidates.py": "b9b96dc3e62463251b1551c0f6ffa140e0649f096a8e9afa8b3262a7def720c7",
+    "tools/modeling/series115_print/export_native.cpp": "839b69e1e37117a6c154df6779cbd4360bc1b6fbedef479f1c8cfeae86c3c1a9",
+    "tools/modeling/series115_print/check_stl.py": "2e4f882302e895f7be66ab399e2d1929f98e20da88c4659e0102c0c912494314",
+    "tools/modeling/kuha115_ho/render_revised.py": "4186002feeaff69f477b32a851e60b915c4f414529d2f9e5e7f3656f38e13799",
+    "tools/modeling/series115_print/render_preview.py": "c49260a1b3d573e4d607f0f7b98dc20230b31dad3f806825cbed32c3713dddd5",
+    "tools/modeling/kuha115_ho/detail_parts.py": "90439abfc42ea564c257ec7053ac5183c43846746340509c3d8858e7fe2f4159",
+    "tools/modeling/kuha115_ho/render_detailed.py": "feabe155063b341306f68ceb0bbaf5cafbd0b659bca80020a4f52eda85466913",
+    "tools/modeling/kuha115_ho/assemble_detailed.py": "1303aac579c06f60969631af5724c9530bba16435b517cbbb9df00379d551fe3"
+  }
+}

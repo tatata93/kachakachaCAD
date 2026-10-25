@@ -11,6 +11,10 @@ def comparison_page(data):
     links=''.join('<li><a href="'+esc(row['url'])+'">'+esc(row['title'])+'</a></li>'
                   for row in data['referenceLinks'])
     concept=''.join('<li>'+esc(text)+'</li>' for text in data['conceptComparison']['observedDifferences'])
+    bogie=''
+    if data.get('bogieDetails'):
+        details=''.join('<tr>'+''.join('<td>'+esc(row[k])+'</td>' for k in ['part','before','after','limit'])+'</tr>' for row in data['bogieDetails'])
+        bogie='<section><h2>台車を単独で照合した結果</h2><p>以下は実CAD形状のSTL描画です。実車写真や生成予想画像とは区別します。</p><div class="pair"><img src="bogie-side.png"><img src="bogie-underside.png"></div><table><tr><th>部位</th><th>前版</th><th>今回</th><th>残る範囲</th></tr>'+details+'</table><p>詳細編集はtr62-native.kcd2、車体内の台車は同一の実BRepを保存した独立部品。両者の体積・外接範囲・形状ハッシュを検査します。</p></section>'
     return '''<!doctype html><html lang="ja"><meta charset="utf-8"><title>115系 部位別比較・写真照合改訂</title>
 <style>body{max-width:1450px;margin:30px auto;padding:0 24px;font:16px/1.7 sans-serif;color:#26333c}img{max-width:100%;height:auto}section{margin:36px 0}table{border-collapse:collapse}th,td{border:1px solid #9aa8b1;padding:10px;vertical-align:top}th{background:#e5edf2}.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}.pair figure{margin:0}h1,h2{line-height:1.4}@media(max-width:800px){.pair{display:block}}</style>
 <h1>115系の形を、部位ごとに比較する</h1><p>'''+esc(data['target'])+'''</p>
@@ -19,7 +23,7 @@ def comparison_page(data):
 <p>'''+esc(data.get('summary','前面ガラス・灯具・屋根機器・スカート・台車を写真照合して改訂。'))+'''</p></section>
 <section><h2>台車と屋根</h2><div class="pair"><figure><img src="before-bogie.png"><figcaption>前回の台車</figcaption></figure><figure><img src="bogie.png"><figcaption>曲線側枠・ばね・軸箱・局所押えを再確認。走行試験とは区別。</figcaption></figure></div><img src="top.png"><p>'''+esc(data.get('roofSummary','アンテナの架台・歩み板・ファン支持桟と手掛けを確認。'))+'''</p></section>
 <section><h2>各部位の差と今回の扱い</h2><table><tr><th>部位</th><th>前回・途中状態</th><th>実車で確認した特徴</th><th>今回の変更</th><th>残る推定・簡略化</th></tr>'''+rows+'''</table></section>
-<section><h2>以前の完成予想画像とも比較</h2><img src="previous-concept.png"><p>'''+esc(data['conceptComparison']['role'])+'''</p><ul>'''+concept+'''</ul></section>
+'''+bogie+'''<section><h2>以前の完成予想画像とも比較</h2><img src="previous-concept.png"><p>'''+esc(data['conceptComparison']['role'])+'''</p><ul>'''+concept+'''</ul></section>
 <section><h2>実車写真・公式資料</h2><ul>'''+links+'''</ul><p>写真原本は作業中に実見。第三者写真はこの配布物へ転載せず、原ページを案内します。透視写真から局所寸法を測り切ったとは扱いません。</p></section></html>'''
 
 
@@ -39,6 +43,8 @@ def main():
     assert len(data['items'])==10 and (args.comparison/'previous-concept.png').is_file()
     page=comparison_page(data)
     for destination in [args.samples,args.package]:
+        if design.get('bogieComponent'):
+            shutil.copy2(args.workspace/'component-negative-tests.json',destination/'component-negative-tests.json')
         shutil.copy2(args.comparison/'comparison.json',destination/'comparison.json')
         shutil.copy2(args.comparison/'previous-concept.png',destination/'previous-concept.png')
         for before,after in [('front-detail.png','before-front.png'),('bogie.png','before-bogie.png')]:
@@ -61,7 +67,14 @@ def main():
         if design['detailRevision']=='2026-10-25-shoulder-refinement':
             readme=readme.replace('屋根断面厚0.85 mm','屋根の目標肉厚1.0 mm（肩を含む0.85 mm法線サンプル検査付き。全面の最小肉厚保証とは区別）')
             readme=readme.replace('床板厚1.3 mm','床板の基板厚1.3 mm（前端台枠は床板と一体）')
-        readme+=f"\n初回の履歴再構築は複雑なBooleanを含むため重い。幾何検査に使ったCADでは、独立キャッシュでのWindows表示確認に{proof['desktopStartup']['seconds']:.1f}秒を要した（他の模型検査と並行した単発確認）。この版の計算済みデータは約136 MBで、当時の128 MiB上限ではキャッシュされなかった。キャッシュ上限修正の最新結果はリポジトリのdocs/development/image-io-performance-20261025.htmlを参照。初回を即時読込できるモデルとは扱わない。\n"
+        if design.get('bogieComponent'):
+            readme=readme.replace('ばねは巻線の段を表した形で、完全ならせんではない。',
+                'ばねは連続した丸断面の巻線をスイープした形。谷を埋めた外観で、覆いの材質・車番別仕様は未確定。')
+            readme+='\n## 台車の編集と車体への配置\n\n台車の詳細な編集原本は `tr62-native.kcd2`。検査済み8部品の実BRepを `tr62-component.kcd2` に保存し、車体へ配置した。後台車は共通7部品を172.5 mm移動し、前側のプロウは複製しない。STLへの置換や再近似はしていない。車体側の台車は独立部品なので、ばね等の詳細編集は単独原本で行い、再検査して部品を更新する。原本・形状・部品の対応は `tr62-component.json` に記録する。\n'
+            cache_mode='同一モデル・同一実行ファイルの再読込検査で作ったキャッシュを使用、hitを実測' if proof['desktopStartup'].get('validatedCacheReuse') else '独立キャッシュの単発測定'
+            readme+=f"\nこの版のWindows通常表示確認は{proof['desktopStartup']['seconds']:.1f}秒（{cache_mode}）。台車の詳細原本の冷再構築と、検査済み部品を配置した車体文書の読込時間は区別する。\n"
+        else:
+            readme+=f"\n初回の履歴再構築は複雑なBooleanを含むため重い。独立キャッシュでのWindows表示確認は{proof['desktopStartup']['seconds']:.1f}秒（他の模型検査と並行した単発確認）。キャッシュ上限修正の結果はdocs/development/image-io-performance-20261025.htmlを参照。初回を即時読込できるモデルとは扱わない。\n"
         readme+='\n## 今回の写真照合改訂\n\n[部位別の実車・前回CAD・完成予想画像との比較](comparison.html)を参照。\n'
         (destination/'README.md').write_text(readme,encoding='utf-8',newline='\n')
         index=(destination/'index.html').read_text(encoding='utf-8')

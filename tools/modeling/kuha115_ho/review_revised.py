@@ -1,6 +1,6 @@
 """Fail closed on native/export/mesh, interference, saving and desktop evidence."""
 from pathlib import Path
-import argparse, copy, datetime, itertools, json, math, zipfile
+import argparse, copy, datetime, itertools, json, math, zipfile, hashlib
 from review import extract_roundtrip, same_defined_values, sha, load
 
 
@@ -71,11 +71,16 @@ def main():
         assert not r['checkOnly'] and all_report['checkOnly']
         assert len(r['assemblyChecks'])==len(design['assemblyChecks'])>140
         refined=design.get('detailRevision')=='2026-10-25-shoulder-refinement'
-        assert len(r['pointChecks'])==len(design['pointChecks'])==(412 if refined else 314 if design.get('detailRevision') else 227)
+        assert len(r['pointChecks'])==len(design['pointChecks'])==(476 if design.get('bogieComponent') else 412 if refined else 314 if design.get('detailRevision') else 227)
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
         assert len(all_report['assemblyChecks'])==all_design['broadPhase']['candidates']>100
         assert all_design['broadPhase']['potentialPairs']==len(expected)*(len(expected)-1)//2
+        if 'reusedChecks' in all_design['broadPhase']:
+            receipt=all_design['broadPhase']['reusedChecks']
+            assert receipt==dict(reportSha256=sha(export/'print-parts.json'),preparedToken=validation['token'],
+                pointChecks=len(r['pointChecks']),splitChecks=len(r['splitChecks']))
+            assert not all_report['pointChecks'] and not all_report['splitChecks']
         pairs=lambda checks:{frozenset((c['first'],c['second'])) for c in checks}
         assert pairs(all_report['assemblyChecks'])==pairs(all_design['assemblyChecks'])
         current_pairs={frozenset((p['id'],q['id'])) for p,q in itertools.combinations(r['parts'],2)
@@ -87,6 +92,28 @@ def main():
             assert p['chordMm']==design['stlChordByEntity'].get(p['id'],design['stlChordMm'])
         doc=archive(source);saved_path=check/'cad-serialized.kcd2'
         token,saved=extract_roundtrip(check/'prepared.bin',saved_path);assert token==validation['token'];identity(doc,saved)
+        if design.get('bogieComponent'):
+            component=design['bogieComponent'];folder=source.parent
+            provenance=load(folder/'tr62-component.json');native_proof=load(folder/'tr62-native-validation.json')
+            native_parts=load(folder/'tr62-native-parts.json');library=archive(folder/'tr62-component.kcd2')
+            assert sha(folder/'tr62-native.kcd2')==component['sourceSha256']==provenance['sourceSha256']==native_proof['modelSha']
+            assert native_proof['passed'] and native_parts['preparedToken']==native_proof['token'] and not native_parts['failures']
+            assert len(library['entities'])==len(library['features'])==8
+            assert all(p['stepRoundTrip'] and p['solids']==1 for p in native_parts['parts'])
+            assert sha(folder/'tr62-component.kcd2')==component['componentSha256']==provenance['componentSha256']
+            source_parts={p['id']:p for p in native_parts['parts']};actual={p['id']:p for p in r['parts']}
+            definitions={o['entityId']:f['definition'] for f in doc['features'] for o in f['outputs']}
+            for old,new in component['frontEntities'].items():
+                assert hashlib.sha256(definitions[new]['frozenBrep'].encode()).hexdigest()==provenance['shapeSha256'][old]
+                original=source_parts[provenance['sourceEntities'][old]];placed=actual[new]
+                assert abs(original['volumeMm3']-placed['volumeMm3'])<1e-6
+                assert all(abs(original['bounds'][i]-placed['bounds'][i])<1e-6 for i in range(6))
+            rear=[p for p in r['parts'] if '/10 台車' in p['groupPath'] and '/後台車' in p['groupPath']]
+            assert len(rear)==7
+            for part in rear:
+                definition=definitions[part['id']];original=actual[definition['source']]
+                assert definition['vector']==dict(x=172.5,y=0,z=0) and abs(part['volumeMm3']-original['volumeMm3'])<1e-6
+                assert all(abs(part['bounds'][i]-original['bounds'][i]-(172.5 if i in [0,3] else 0))<1e-6 for i in range(6))
         assert design['scale']==80 and design['gaugeMm']==16.5
         gw=design['estimated']['gangwayWindow'];assert gw['width']==7.2 and gw['height']==5.8 and gw['width']>gw['height']
         rim=next(p for p in r['parts'] if p['name']=='横長貫通扉窓Hゴム')['bounds']
@@ -104,6 +131,13 @@ def main():
                 assert sum('前端台枠' in c['label'] for c in checks)==4
             assert sum('短縮した前面窓' in c['label'] for c in checks)==18
             assert sum('黒い軸箱外蓋' in c['label'] for c in checks)==16
+            if design.get('bogieComponent'):
+                assert design['bogieComponent']['rearTranslationMm']==172.5
+                springs=design['bogieComponent']['springPathChecks']
+                assert len(springs)==12 and max(s['maximumMm'] for s in springs)<.001
+                assert sum('横向きシリンダの中央下側' in c['label'] for c in checks)==4
+                assert sum('ディスクの両面を挟むパッド' in c['label'] for c in checks)==16
+                assert sum('ディスク中央の放射状通気孔' in c['label'] for c in checks)==8
             assert sum('信号炎管の幅広い' in c['label'] for c in checks)==1
             assert sum('スカートの下絞り内側' in c['label'] for c in checks)==2
             assert sum('スカート下絞りの外側' in c['label'] for c in checks)==2
@@ -143,7 +177,9 @@ def main():
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',
         'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/front_roof.py','tools/modeling/kuha115_ho/render_detailed.py',
-        'tools/modeling/kuha115_ho/assemble_detailed.py']}
+        'tools/modeling/kuha115_ho/assemble_detailed.py','tools/modeling/kuha115_ho/bogie_details.py',
+        'tools/modeling/kuha115_ho/bogie_library.py','tools/modeling/kuha115_ho/standalone_bogie.py',
+        'tools/modeling/kuha115_ho/test_bogie_library.py','tools/modeling/kuha115_ho/desktop_model.py']}
     (w/'review-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     print(json.dumps(result,ensure_ascii=True,indent=2))
 

@@ -36,6 +36,9 @@ def main():
     if not a.diagnostic_front:
         ids={p['id'] for p in report['parts'] if '/10 台車' in p['groupPath'] and '/前台車' in p['groupPath']};assert ids
         render(a.exports,report,camera=(-.4,-.9,.35),size=(1400,950),part_ids=ids,studio=True,surface_color=wheel_paint).save(a.output/'bogie.png')
+        if design.get('bogieComponent'):
+            for name,camera in [('bogie-side',(0,-1,0)),('bogie-underside',(-.25,-.65,-.65))]:
+                render(a.exports,report,camera=camera,size=(1500,1000),part_ids=ids,studio=True,surface_color=wheel_paint).save(a.output/(name+'.png'))
 
 
 if __name__=='__main__':main()

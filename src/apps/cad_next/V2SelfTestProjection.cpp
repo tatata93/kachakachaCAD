@@ -96,7 +96,24 @@ bool SelectionDeleteKeepsProjectionInputs(V2MainWindow& window) {
     window.RunCommand("edit.delete");V2ToolSelection::End(view);
     if(!Explain("projection retains inputs after unrelated delete",window.Session().GetDocument().FindEntity(WireId())
         &&window.Session().GetDocument().FindEntity(TargetId())&&tool->WireCount()==1&&tool->TargetCount()==1&&tool->Preview()))return false;
-    window.RunCommand("edit.undo");return Explain("projection inputs remain usable after history",tool->Preview());
+    window.RunCommand("edit.undo");
+    if(!Explain("projection inputs remain usable after Undo",tool->Preview()
+        &&window.Session().GetDocument().FindEntity(added.createdEntityIds.front())))return false;
+    window.RunCommand("edit.redo");
+    if(!Explain("projection inputs remain usable after Redo",tool->Preview()
+        &&!window.Session().GetDocument().FindEntity(added.createdEntityIds.front())))return false;
+    for(int i=0;i<3;++i) {
+        V2ToolSelection::Begin(view);V2ToolSelection::End(view);
+        if(!Explain("repeated selection detours retain filled projection roles",tool->WireCount()==1
+            &&tool->TargetCount()==1&&tool->Preview()))return false;
+    }
+    window.RunCommand("part.sweep");
+    if(!Explain("switching a filled projection clears old role highlights",!view.RoleColorOf(WireId())
+        &&!view.RoleColorOf(TargetId())))return false;
+    window.RunCommand("selection.activate");
+    selected.entityIds={WireId(),TargetId()};view.SetSelection(selected);tool=V2ProjectionTool::Open(window);
+    return Explain("projection can be reacquired after another tool",tool&&tool->WireCount()==1
+        &&tool->TargetCount()==1&&tool->Preview());
 }
 bool GuideCommit(V2MainWindow& window) {
     if(!Fixture(window))return false;window.RunCommand("wire.project_surface");auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!tool||!AddGuideInputs(*tool))return false;

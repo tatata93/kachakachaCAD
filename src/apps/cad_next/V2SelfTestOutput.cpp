@@ -25,6 +25,7 @@
 #include <QPushButton>
 #include <cmath>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QFile>
@@ -153,6 +154,40 @@ bool CaseOutputPlacementInvalid(V2MainWindow& window){
     geometry::OutputPlacement placement;placement.keepPosition=false;placement.destination.normal={};output->SetPlacement(placement);
     const auto before=window.Session().GetDocument().Revision();const bool ok=!output->SaveTo(QString())&&before==window.Session().GetDocument().Revision();output->close();return Explain("不正な配置は文書を変更しない",ok);
 }
+bool OutputAcrossDocuments(V2MainWindow& w) {
+    if(!OutputBox(w))return false;
+    QTemporaryDir folder;if(!folder.isValid())return false;
+    auto other=io::DocumentFile{};other.snapshot=w.Session().GetDocument().Snapshot();
+    const auto original=other.snapshot;
+    // Clone entity IDs and revision deliberately: revision alone cannot identify a document.
+    other.snapshot.id=*base::DocumentId::Parse("b0000000-0000-4000-8000-000000000901");
+    const auto archive=io::SaveDocument(other);const auto path=folder.filePath("other.kcd2");
+    if(!archive.HasValue()||!io::WriteFileAtomically(path.toStdString(),archive.Value()).HasValue())return false;
+    w.Viewport().SetSelection(OutputSelection(w,false));
+    QPointer<V2OutputTool> output=V2OutputTool::Open(w,1);
+    if(!output||output->AssetCount()!=1)return false;
+    if(!Explain("failed open retains source and usable export preview",!w.OpenDocumentFile(folder.filePath("missing.kcd2"))
+        &&w.Session().GetDocument().Snapshot().id==original.id&&output&&output->SaveTo(folder.filePath("before.step"))))return false;
+    if(!w.OpenDocumentFile(path))return false;
+    const auto revision=w.Session().GetDocument().Revision();
+    const auto entities=w.Session().GetDocument().Snapshot().entities.size();
+    if(!Explain("document clone keeps revision but changes identity",revision==original.revision
+        &&w.Session().GetDocument().Snapshot().id!=original.id))return false;
+    if(output) {
+        if(!Explain("stale preview cannot export a previous document",!output->SaveTo(folder.filePath("stale.step"))
+            &&!QFile::exists(folder.filePath("stale.step"))))return false;
+        output->ChooseFormat(3);
+        if(!Explain("stale preview cannot append to a different document",!output->SaveTo(QString())
+            &&w.Session().GetDocument().Revision()==revision
+            &&w.Session().GetDocument().Snapshot().entities.size()==entities))return false;
+        w.Viewport().SetSelection(OutputSelection(w,false));output->TakeSelection();output->ChooseFormat(1);
+    }else {
+        w.Viewport().SetSelection(OutputSelection(w,false));output=V2OutputTool::Open(w,1);
+    }
+    const bool passed=Explain("reacquiring the current document restores export",output&&output->AssetCount()==1
+        &&output->SaveTo(folder.filePath("after.step")));
+    if(output)output->close();return passed;
+}
 bool CaseOutputOwnership(V2MainWindow& w){
     if(!OutputBox(w))return false;
     w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
@@ -166,5 +201,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

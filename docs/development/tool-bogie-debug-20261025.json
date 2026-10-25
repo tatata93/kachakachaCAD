@@ -1,0 +1,717 @@
+{
+  "schema": 1,
+  "updatedUtc": "2026-10-25T12:04:52.756843+00:00",
+  "releaseGateStatus": "passed",
+  "releaseGate": "out/verification/tool-bogie-accepted-retry-20261025/result.json",
+  "coverage": {
+    "catalogEntries": 168,
+    "emptyTransitionCombinations": 441,
+    "caveat": "Qt test events and session operations; not every tool/input combination or a complete OS mouse walkthrough."
+  },
+  "comparisons": [
+    {
+      "input": "hidden sweep path",
+      "modelSha256": "9d71651517f0477f4990c0c9c99c76dd7b8d78ed311b504f3a5f46e8f8170c29",
+      "before": {
+        "details": "枕ばね 連続巻線(SOL-001 スイープの経路がありません。 輪郭を運ぶ線(経路)を選んでください。)",
+        "ok": false,
+        "summary": "文書を開けませんでした。元の文書は保持しています。",
+        "token": "b9226938-c185-4b87-a8b0-813027d740cb",
+        "version": 1,
+        "exit": 0,
+        "seconds": 1.3589999999967404,
+        "exeSha": "3afe359b221749f27823124d4a1a0bd613d200ebf5664140219025a2a0895cec",
+        "modelSha": "9d71651517f0477f4990c0c9c99c76dd7b8d78ed311b504f3a5f46e8f8170c29",
+        "unchanged": true,
+        "passed": false
+      },
+      "after": {
+        "ok": true,
+        "token": "434eb156-ab77-4b32-bcc3-d894b29fc422",
+        "version": 1,
+        "exit": 0,
+        "seconds": 8.125,
+        "exeSha": "c2234be6f9e923a9be9761556c86c05c280b5f17d115e1ae2d9c9263077b7d9a",
+        "modelSha": "9d71651517f0477f4990c0c9c99c76dd7b8d78ed311b504f3a5f46e8f8170c29",
+        "unchanged": true,
+        "passed": true
+      },
+      "note": "Intermediate fixed binary. Final binary is covered by the full gate and SO05/SO06."
+    },
+    {
+      "input": "hidden wire cage",
+      "modelSha256": "9b0454a4421aa28515586075419b160c1586099273bad8ef6f6ec47eedb6b8d5",
+      "before": {
+        "details": "cage(作図モードにしました。選んでいるものはそのままです。)",
+        "ok": false,
+        "summary": "文書を開けませんでした。元の文書は保持しています。",
+        "token": "14e7fae9-7b4d-4baf-9885-5ee6d031967b",
+        "version": 1,
+        "exit": 0,
+        "seconds": 1.077999999979511,
+        "exeSha": "3afe359b221749f27823124d4a1a0bd613d200ebf5664140219025a2a0895cec",
+        "modelSha": "9b0454a4421aa28515586075419b160c1586099273bad8ef6f6ec47eedb6b8d5",
+        "unchanged": true,
+        "passed": false
+      },
+      "after": {
+        "ok": true,
+        "token": "1aea7afe-ef43-46d1-b022-4b3d316c6f5f",
+        "version": 1,
+        "exit": 0,
+        "seconds": 0.8900000000139698,
+        "exeSha": "6106c5ff3e0548eb897fd0a8442fc0f6f60b3f799b5d57ecab77fa407a8720ec",
+        "modelSha": "9b0454a4421aa28515586075419b160c1586099273bad8ef6f6ec47eedb6b8d5",
+        "unchanged": true,
+        "passed": true
+      },
+      "note": "Intermediate fixed binary. Final binary is covered by the full gate and SO05/SO06."
+    }
+  ],
+  "focusedRuns": [
+    {
+      "run": "lifecycle-after",
+      "total": 9,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 48651.5382,
+          "end": "2026-10-25T09:50:07.014Z",
+          "name": "HP-TOOLS all catalog toolbar activations have input or reason",
+          "start": "2026-10-25T09:49:18.363Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 268.6216,
+          "end": "2026-10-25T09:50:07.286Z",
+          "name": "HP-TOOLS distinct tool illustrations",
+          "start": "2026-10-25T09:50:07.018Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 177579.4512,
+          "end": "2026-10-25T09:53:04.866Z",
+          "name": "HP-TOOLS exclusive tool transition matrix and shortcuts",
+          "start": "2026-10-25T09:50:07.287Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 328.0508,
+          "end": "2026-10-25T09:53:05.196Z",
+          "name": "HP-TOOLS modal dialog keys stay in dialog",
+          "start": "2026-10-25T09:53:04.868Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 3325.9289,
+          "end": "2026-10-25T09:53:08.522Z",
+          "name": "HP-TOOLS preview shape ownership stays bounded",
+          "start": "2026-10-25T09:53:05.196Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 356.2613,
+          "end": "2026-10-25T09:53:08.879Z",
+          "name": "HP-TOOLS alternate shortcut routes preserve inputs",
+          "start": "2026-10-25T09:53:08.523Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 301.4318,
+          "end": "2026-10-25T09:53:09.182Z",
+          "name": "HP-TOOLS alternate view routes preserve pending targets",
+          "start": "2026-10-25T09:53:08.880Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 512.4741,
+          "end": "2026-10-25T09:53:09.695Z",
+          "name": "HP-TOOLS first drawing point Undo without document history",
+          "start": "2026-10-25T09:53:09.182Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 396.7297,
+          "end": "2026-10-25T09:53:10.091Z",
+          "name": "HP-TOOLS save and save-as preserve pending targets",
+          "start": "2026-10-25T09:53:09.695Z",
+          "status": "passed"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "run": "solid-cold-after",
+      "total": 6,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 1704.4784,
+          "end": "2026-10-25T10:04:25.284Z",
+          "name": "HP-SO-06 hidden cage edges cold rebuild Undo save",
+          "start": "2026-10-25T10:04:23.579Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2927.1387,
+          "end": "2026-10-25T10:04:28.211Z",
+          "name": "HP-SO-05 hidden sweep path and revolution axis survive save reopen",
+          "start": "2026-10-25T10:04:25.284Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1251.6212,
+          "end": "2026-10-25T10:04:29.463Z",
+          "name": "HP-SO-01 回転体は輪郭と軸を押すと体積が予測と合い角度で割合どおり変わり1回で戻り開き直しても同じ",
+          "start": "2026-10-25T10:04:28.212Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 367.5665,
+          "end": "2026-10-25T10:04:29.832Z",
+          "name": "HP-SO-02 スイープは輪郭と経路を押すとまっすぐな経路で面積×長さの立体になる",
+          "start": "2026-10-25T10:04:29.464Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 407.3931,
+          "end": "2026-10-25T10:04:30.240Z",
+          "name": "HP-SO-03 ロフト立体は高さ違いの断面を押した順に通しガイド付きは理由つきで押せない",
+          "start": "2026-10-25T10:04:29.833Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 853.8883,
+          "end": "2026-10-25T10:04:31.094Z",
+          "name": "HP-SO-04 回転体は軸が輪郭を横切れば断り足すでは相手を押して確定で相手が隠れ1回で戻る",
+          "start": "2026-10-25T10:04:30.240Z",
+          "status": "passed"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "run": "face-extrude-after",
+      "total": 20,
+      "failed": 1,
+      "cases": [
+        {
+          "duration_ms": 495.7814,
+          "end": "2026-10-25T10:05:05.542Z",
+          "name": "HP-EX-01 拾って押して確定すると立体になる",
+          "start": "2026-10-25T10:05:05.047Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 739.025,
+          "end": "2026-10-25T10:05:06.281Z",
+          "name": "HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+          "start": "2026-10-25T10:05:05.543Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 296.3697,
+          "end": "2026-10-25T10:05:06.579Z",
+          "name": "HP-EX-OUTPUT-06 全部 OFF は確定できない",
+          "start": "2026-10-25T10:05:06.282Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 529.9271,
+          "end": "2026-10-25T10:05:07.109Z",
+          "name": "HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+          "start": "2026-10-25T10:05:06.579Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 345.7542,
+          "end": "2026-10-25T10:05:07.455Z",
+          "name": "HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+          "start": "2026-10-25T10:05:07.110Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 417.5779,
+          "end": "2026-10-25T10:05:07.874Z",
+          "name": "HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+          "start": "2026-10-25T10:05:07.456Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 504.6436,
+          "end": "2026-10-25T10:05:08.379Z",
+          "name": "HP-EX-03 立体の面を画面から拾って押す",
+          "start": "2026-10-25T10:05:07.874Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1445.6793,
+          "end": "2026-10-25T10:05:09.825Z",
+          "name": "HP-EX-WIRES stop wire only Undo save",
+          "start": "2026-10-25T10:05:08.379Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1068.1925,
+          "end": "2026-10-25T10:05:10.893Z",
+          "name": "HP-EX-WIRES stop wire plus solid Undo save",
+          "start": "2026-10-25T10:05:09.826Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1153.3094,
+          "end": "2026-10-25T10:05:12.048Z",
+          "name": "HP-EX-WIRES stop end-only Undo save",
+          "start": "2026-10-25T10:05:10.894Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 400.7527,
+          "end": "2026-10-25T10:05:12.449Z",
+          "name": "HP-EX-REPEAT commit and lost mouse release",
+          "start": "2026-10-25T10:05:12.048Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1079.0675,
+          "end": "2026-10-25T10:05:13.528Z",
+          "name": "HP-EX-CAP distance orientation Undo save",
+          "start": "2026-10-25T10:05:12.449Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2667.5765,
+          "end": "2026-10-25T10:05:16.197Z",
+          "name": "HP-EX-CAP native face orientation save",
+          "start": "2026-10-25T10:05:13.529Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 327.3821,
+          "end": "2026-10-25T10:05:16.524Z",
+          "name": "HP-EX-UI tool first settings and direction pick",
+          "start": "2026-10-25T10:05:16.197Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 841.9897,
+          "end": "2026-10-25T10:05:17.367Z",
+          "name": "HP-EX-UI target solid first",
+          "start": "2026-10-25T10:05:16.525Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1396.5823,
+          "end": "2026-10-25T10:05:18.764Z",
+          "name": "HP-EX-UI face and direction independent",
+          "start": "2026-10-25T10:05:17.368Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 879.643,
+          "end": "2026-10-25T10:05:19.644Z",
+          "name": "HP-EX-UI hovered face fill",
+          "start": "2026-10-25T10:05:18.765Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1959.1327,
+          "end": "2026-10-25T10:05:21.605Z",
+          "name": "HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存",
+          "start": "2026-10-25T10:05:19.646Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1997.4784,
+          "end": "2026-10-25T10:05:23.603Z",
+          "name": "HP-EX-LINE 曲面フェイスから線まで・非表示・冷再計算・保存",
+          "start": "2026-10-25T10:05:21.605Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1054.2228,
+          "end": "2026-10-25T10:05:24.658Z",
+          "name": "HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存",
+          "start": "2026-10-25T10:05:23.603Z",
+          "status": "failed"
+        }
+      ],
+      "note": "EX-POINT fixture created an off-plane point with drawing-plane-only enabled; corrected and rerun in point-after"
+    },
+    {
+      "run": "point-after",
+      "total": 1,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 2926.3064,
+          "end": "2026-10-25T10:12:55.548Z",
+          "name": "HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存",
+          "start": "2026-10-25T10:12:52.621Z",
+          "status": "passed"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "run": "projection-after",
+      "total": 1,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 1720.1728,
+          "end": "2026-10-25T10:14:43.252Z",
+          "name": "HP-UX-PROJ selection delete preserves existing projection roles",
+          "start": "2026-10-25T10:14:41.531Z",
+          "status": "passed"
+        }
+      ],
+      "note": ""
+    }
+  ],
+  "model": {
+    "timeUtc": "2026-10-25T11:09:38.590043+00:00",
+    "models": [
+      {
+        "name": "full",
+        "file": "kuha115-ho80-revised.kcd2",
+        "sourceSha256": "d1cb3d10d9bd989e3317dee120cb9ec1d165875898bc61fe9939dfc60046895f",
+        "cadExeSha256": "6bc119625b90e5815506080fddc15932db4c634239a7c10d7f5821246b6dd4c2",
+        "nativeSeconds": 114.23499999998603,
+        "parts": 233,
+        "features": 1472,
+        "groups": 16,
+        "assemblyChecks": 171,
+        "pointChecks": 476,
+        "splitReassemblyChecks": 0,
+        "totalPartPairs": 27028,
+        "brepInterferenceCandidates": 332,
+        "maximumPartExtentMm": 243.7500002000002,
+        "closedBrep": true,
+        "stepRoundTrips": true,
+        "stlManifold": true,
+        "nativeArchiveRoundTripStructure": true
+      },
+      {
+        "name": "split",
+        "file": "kuha115-ho80-revised-split.kcd2",
+        "sourceSha256": "def5c2ac6cd7e60bd4cef92297da07766083fc519dfad0c4efbb8cce4d86c07f",
+        "cadExeSha256": "6bc119625b90e5815506080fddc15932db4c634239a7c10d7f5821246b6dd4c2",
+        "nativeSeconds": 195.93699999997625,
+        "parts": 240,
+        "features": 1498,
+        "groups": 17,
+        "assemblyChecks": 321,
+        "pointChecks": 476,
+        "splitReassemblyChecks": 6,
+        "totalPartPairs": 28680,
+        "brepInterferenceCandidates": 338,
+        "maximumPartExtentMm": 121.87500020000023,
+        "closedBrep": true,
+        "stepRoundTrips": true,
+        "stlManifold": true,
+        "nativeArchiveRoundTripStructure": true
+      }
+    ],
+    "savedReopen": {
+      "passed": true,
+      "maximumVolumeDeltaMm3": 2.2593038551121936e-14,
+      "parts": 233,
+      "seconds": 112.98399999999674
+    },
+    "desktopStartup": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 1000,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+      "visible": true,
+      "width": 1600,
+      "seconds": 22.92099999997299,
+      "sourceSha256": "8be00fa8ac0a4c57d624f0ad1da0b59273f95e1ddcf5be48cfa2043b13e4b69a",
+      "exeSha256": "6bc119625b90e5815506080fddc15932db4c634239a7c10d7f5821246b6dd4c2",
+      "exitCode": 0,
+      "validatedCacheReuse": true,
+      "cacheHitConfirmed": true
+    },
+    "gangwayOpeningMm": [
+      7.2,
+      5.8
+    ],
+    "gangwayAspectRatio": 1.2413793103448276,
+    "passed": true,
+    "sourceFilesSha256": {
+      "tools/modeling/kuha115_ho/revised.py": "80d4eb83eb7f16283ad128c8b181c7b3f93fbb5484fd083b68f8761d15f343bd",
+      "tools/modeling/kuha115_ho/build.py": "c8d9322a6f67b11683036912d555d1fb49717aa7cee181faf5cd98f78acb94d4",
+      "tools/modeling/native_kcd.py": "6c3b27072b7f9c5a3abb302aa22ca47855fee4f0eb155f72cea940b08673e885",
+      "tools/modeling/kuha115_ho/review_revised.py": "0c398e3d7fdcd192e04fa62c5a82da9f372cfd1f470d78ebed2a54374caccc65",
+      "tools/modeling/kuha115_ho/assembly_candidates.py": "e0fa63646e5331ad3fcefd1a8cbc906497b7eedd46bb3c0c009fb350dd3c06d0",
+      "tools/modeling/series115_print/export_native.cpp": "839b69e1e37117a6c154df6779cbd4360bc1b6fbedef479f1c8cfeae86c3c1a9",
+      "tools/modeling/series115_print/check_stl.py": "2e4f882302e895f7be66ab399e2d1929f98e20da88c4659e0102c0c912494314",
+      "tools/modeling/kuha115_ho/render_revised.py": "4186002feeaff69f477b32a851e60b915c4f414529d2f9e5e7f3656f38e13799",
+      "tools/modeling/series115_print/render_preview.py": "c49260a1b3d573e4d607f0f7b98dc20230b31dad3f806825cbed32c3713dddd5",
+      "tools/modeling/kuha115_ho/detail_parts.py": "998386a83efc113e7d791958a69b4ee3e881721a0b84dd6093155ee793a89a3f",
+      "tools/modeling/kuha115_ho/front_roof.py": "e4a1f47d64a06fe75eece0cc39936015fb3f4aca22ed02089f38564ed6c860f5",
+      "tools/modeling/kuha115_ho/render_detailed.py": "af809c2ee7e22aafc6f5258728253ed95ef61a907e1944f0879e57c0f004c433",
+      "tools/modeling/kuha115_ho/assemble_detailed.py": "72a05b44eddea44a53aceaa584ce298e1b8b1f02d21d635869527f7689b8fff9",
+      "tools/modeling/kuha115_ho/bogie_details.py": "532f39769bc2860cf1e2690913c5b6eeb37230e83c541a363637bd7a1607a881",
+      "tools/modeling/kuha115_ho/bogie_library.py": "82f5c1c9709fd7f613db056bdab6dbf124ae1cb8ca5a1ac43ab0badaa473ea96",
+      "tools/modeling/kuha115_ho/standalone_bogie.py": "df480ad134aefa1ac43c14f28596d2b4144903de094db1b73f7f926e137cf380",
+      "tools/modeling/kuha115_ho/test_bogie_library.py": "70b08d1474dde000921a30231b50647a28bfd2af1cbf01d416f2341bd60b35db",
+      "tools/modeling/kuha115_ho/desktop_model.py": "a2096d886a6134705914560158290b851ed5826293d97545e2b6cfdf2296a755"
+    }
+  },
+  "modelReviewNegative": {
+    "passed": true,
+    "rejected": [
+      "a consistently stale candidate pair list",
+      "a changed saved group",
+      "a changed saved part visibility",
+      "zero visible parts"
+    ],
+    "reviewResultSha256": "2855ff0ce32160a22479f59de5864fed5371f75fbbed78afc12c936537af4579"
+  },
+  "componentNegative": {
+    "passed": true,
+    "rejected": [
+      "changed source digest",
+      "different native validation token",
+      "missing component part",
+      "changed BRep despite matching archive checksum"
+    ],
+    "sourceSha256": "74b7db8d77496fa6d812d3282fffe5021cecd80a7c001e438158527e980492da",
+    "componentSha256": "56b490351e31731d5cb6b87eae6f0d2c158a056b7111d2bd1f7a4f200539c83b"
+  },
+  "arrangedStl": [
+    {
+      "parts": 233,
+      "failures": 0,
+      "degenerateTriangles": 0
+    },
+    {
+      "parts": 240,
+      "failures": 0,
+      "degenerateTriangles": 0
+    }
+  ],
+  "deletedFiles": [],
+  "limits": [
+    "No physical printing/running/electrical/rotating-bogie clearance trial.",
+    "Sideframe lower edge, bolsters and axlebox shapes remain simplified; local dimensions are photo estimates.",
+    "OS capture API timed out twice. Actual Windows startup screenshot is product-generated; UI regression cases use Qt events."
+  ],
+  "fullGate": {
+    "start": "2026-10-25T11:15:37.952138+00:00",
+    "end": "2026-10-25T12:01:38.337652+00:00",
+    "ctest": {
+      "total": 195,
+      "skipped": []
+    },
+    "uiCases": [
+      595,
+      595
+    ],
+    "sourceSha256": "5fc542573c9884ef87daac1ebe201c6a6ec3ad4b496912d255235b51b7cb0a8d",
+    "applicationSha256": "6bc119625b90e5815506080fddc15932db4c634239a7c10d7f5821246b6dd4c2",
+    "steps": [
+      {
+        "name": "doctor",
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${REPOSITORY}\\scripts\\doctor.ps1"
+        ],
+        "start": "2026-10-25T11:15:41.737603+00:00",
+        "end": "2026-10-25T11:15:43.617601+00:00",
+        "seconds": 1.8798140999861062,
+        "exit_code": 0,
+        "log": "doctor.log"
+      },
+      {
+        "name": "configure",
+        "command": [
+          "cmake",
+          "--preset",
+          "windows-msvc"
+        ],
+        "start": "2026-10-25T11:15:43.617601+00:00",
+        "end": "2026-10-25T11:15:56.541329+00:00",
+        "seconds": 12.924177600012626,
+        "exit_code": 0,
+        "log": "configure.log"
+      },
+      {
+        "name": "inventory",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--show-only=json-v1"
+        ],
+        "start": "2026-10-25T11:15:56.541329+00:00",
+        "end": "2026-10-25T11:15:56.684651+00:00",
+        "seconds": 0.1435304000042379,
+        "exit_code": 0,
+        "log": "inventory.log"
+      },
+      {
+        "name": "build-3",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "2",
+          "--target",
+          "kachakacha_v2_architecture_tests",
+          "kachakacha_v2_command_availability_tests",
+          "kachakacha_v2_command_catalog_tests",
+          "kachakacha_v2_core_ui_wiring_tests",
+          "kachakacha_v2_coverage_tests",
+          "kachakacha_v2_harness_tests",
+          "kachakacha_v2_manual_tests",
+          "kachakacha_v2_scaffold_tests"
+        ],
+        "start": "2026-10-25T11:15:58.516813+00:00",
+        "end": "2026-10-25T11:16:10.017873+00:00",
+        "seconds": 11.50076079997234,
+        "exit_code": 0,
+        "log": "build-3.log"
+      },
+      {
+        "name": "preflight",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "2",
+          "--output-junit",
+          "${REPOSITORY}\\out\\verification\\tool-bogie-accepted-20261025\\preflight.xml",
+          "-R",
+          "^(v2_harness_tests|v2_architecture_tests|v2_scaffold_tests|v2_command_catalog_tests|v2_command_availability_tests|v2_core_ui_wiring_tests|v2_coverage_tests|v2_manual_tests|verification_infrastructure_tests)$"
+        ],
+        "start": "2026-10-25T11:16:10.017873+00:00",
+        "end": "2026-10-25T11:16:15.211852+00:00",
+        "seconds": 5.193345100036822,
+        "exit_code": 0,
+        "log": "preflight.log"
+      },
+      {
+        "name": "build-5",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "2"
+        ],
+        "start": "2026-10-25T11:16:15.212849+00:00",
+        "end": "2026-10-25T11:16:42.356808+00:00",
+        "seconds": 27.144606499990914,
+        "exit_code": 0,
+        "log": "build-5.log"
+      },
+      {
+        "name": "ui-inventory",
+        "command": [
+          "${REPOSITORY}\\build-msvc2022-x64\\Release\\kachakacha_cad_next.exe",
+          "--self-test-list",
+          "${REPOSITORY}\\out\\verification\\tool-bogie-accepted-20261025\\ui-inventory.json"
+        ],
+        "start": "2026-10-25T11:16:42.357773+00:00",
+        "end": "2026-10-25T11:16:42.451341+00:00",
+        "seconds": 0.09336070000426844,
+        "exit_code": 0,
+        "log": "ui-inventory.log"
+      },
+      {
+        "name": "retry-package",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "2",
+          "--output-junit",
+          "${REPOSITORY}\\out\\verification\\tool-bogie-accepted-retry-20261025\\retry-package.xml",
+          "-R",
+          "^(v2_package_zip)$"
+        ],
+        "start": "2026-10-25T11:46:56.803638+00:00",
+        "end": "2026-10-25T12:01:24.372141+00:00",
+        "seconds": 867.5721612999914,
+        "exit_code": 0,
+        "log": "retry-package.log"
+      },
+      {
+        "name": "legacy-self-test",
+        "command": [
+          "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+          "${REPOSITORY}\\scripts\\verification\\isolated_test.py",
+          "--name",
+          "legacy-final",
+          "--",
+          "${REPOSITORY}\\build-msvc2022-x64\\Release\\kachakacha_cad.exe",
+          "--self-test"
+        ],
+        "start": "2026-10-25T12:01:24.569936+00:00",
+        "end": "2026-10-25T12:01:35.799258+00:00",
+        "seconds": 11.228748800000176,
+        "exit_code": 0,
+        "log": "legacy-self-test.log"
+      },
+      {
+        "name": "tests",
+        "command": [
+          "coverage-union",
+          "${REPOSITORY}\\out\\verification\\tool-bogie-accepted-20261025\\tests.xml",
+          "retry-package.xml"
+        ],
+        "start": "2026-10-25T12:01:24.569936+00:00",
+        "end": "2026-10-25T12:01:24.569936+00:00",
+        "seconds": 0,
+        "exit_code": 0,
+        "log": "tests.log"
+      }
+    ],
+    "zipSha256": "4a8307172bfa4d5da93b15855e076fce5e0f983911de0ae8bea403e00227bece",
+    "reusedFrom": {
+      "evidence": "${REPOSITORY}\\out\\verification\\tool-bogie-accepted-20261025\\result.json",
+      "sha256": "591ba0b5b223fc322ec49feb7ad78e1e2995f5768a60501478b53ca4d0a98ecf",
+      "originalStatus": "failed",
+      "reason": "Only v2_package_zip timed out; exact source/environment/build and tested executable matched",
+      "ctestXmlSha256": "f78d5cf0501f56024ba71a04dda466024d691f2934944d88cd61c000cc03286f",
+      "passedCasesReused": 194
+    },
+    "initialFailure": {
+      "evidence": "out/verification/tool-bogie-accepted-20261025/result.json",
+      "status": "failed",
+      "error": "tests failed; inspect ${REPOSITORY}\\out\\verification\\tool-bogie-accepted-20261025\\tests.log",
+      "note": "All 595 package UI cases passed. Packaging timed out at 900 seconds. Original raw logs retained; a real CTest package retry passed."
+    }
+  }
+}

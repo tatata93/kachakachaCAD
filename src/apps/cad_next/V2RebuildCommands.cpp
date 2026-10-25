@@ -11,6 +11,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "V2WireSource.h"
 #include "V2ShapeLifetime.h"
 #include "V2DocumentOpen.h"
 #include "V2DocumentTiming.h"
@@ -162,14 +163,10 @@ bool V2MainWindow::RebuildWireCageShape(const kachakacha::v2::domain::Feature& f
         return false;
     }
     std::vector<CageEdgeInput> inputs;
-    for (const auto& curve : session_->Scene().curves) {
-        for (const EntityId& id : definition->wires) {
-            if (curve.entityId == id) {
-                inputs.push_back(
-                    CageEdgeInput{curve.entityId, curve.segmentId, curve.segment});
-                break;
-            }
-        }
+    for(const auto& id:definition->wires) {
+        if(std::any_of(inputs.begin(),inputs.end(),[&](const auto& c){return c.entityId==id;}))continue;
+        for(const auto& curve:v2ui::SourceWireCurves(session_->GetDocument(),session_->Scene(),id))
+            inputs.push_back(CageEdgeInput{curve.entityId,curve.segmentId,curve.segment});
     }
     if (inputs.size() < 3) {
         return false;

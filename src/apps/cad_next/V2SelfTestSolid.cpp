@@ -7,10 +7,12 @@
 //! 1 回の取り消しで消え、保存して開き直しても同じ形に作り直せる。
 //!
 //! 選ぶのは実際に拾う道(`SelectAt`)だけ。ID の注入も、見えない widget を叩くこともしない。
+//! 末尾の非表示・冷再構築試験だけは、再現用ワイヤー群をSessionで組み立てる。
 
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2EntityTree.h"
 #include "V2SolidDock.h"
 #include "V2SolidTool.h"
 #include "V2Viewport.h"
@@ -26,7 +28,9 @@
 #include "kachakacha/modeling/WorkPlane.h"
 
 #include <QPointF>
+#include <QApplication>
 #include <QString>
+#include <QTreeWidgetItem>
 
 #include <algorithm>
 #include <cmath>
@@ -514,11 +518,64 @@ struct Box3 {
             && CountOfKind(window, EntityKind::Part) == 1);
 }
 
+bool HiddenSolidInputs(V2MainWindow& w) {
+    for(const bool sweep:{false,true}) {
+        if(!(sweep?CaseSweepAlongPath(w):CaseRevolveByClicks(w)))return false;
+        const auto parts=VisibleParts(w);if(parts.size()!=1)return false;
+        const auto before=PartBounds(w,parts.front());if(!before)return false;
+        const auto wires=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),EntityKind::Wire);
+        for(const auto& id:wires.entityIds) {
+            auto* row=w.ItemOfEntity(id);if(!row)return false;row->setCheckState(0,Qt::Unchecked);
+        }
+        QApplication::processEvents();
+        if(!Explain("source wire checkboxes hide drawing without changing the solid",std::none_of(
+            w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& c){
+                return std::find(wires.entityIds.begin(),wires.entityIds.end(),c.entityId)!=wires.entityIds.end();})))return false;
+        w.RebuildKernelShapes();
+        if(!Explain("cold rebuild resolves hidden path and axis without native cache",w.RebuildProblems().isEmpty()))return false;
+        if(!Explain(sweep?"hidden sweep path survives native save/reopen":"hidden revolution axis survives native save/reopen",
+            w.SaveAndReopen(sweep?QStringLiteral("hidden-sweep.kcd2"):QStringLiteral("hidden-revolve.kcd2"))))return false;
+        const auto after=PartBounds(w,parts.front());
+        if(!Explain("reopened hidden inputs preserve solid bounds and exportability",after&&
+            geometry::Distance(before->minimum,after->minimum)<1e-6&&geometry::Distance(before->maximum,after->maximum)<1e-6
+            &&w.SelectTreeRowForEntity(parts.front())&&w.CanExportSelectedParts()))return false;
+        for(const auto& id:wires.entityIds)if(!Explain("reopening retains each wire's hidden state",
+            w.Session().GetDocument().FindEntity(id)&&w.Session().GetDocument().FindEntity(id)->visibility==domain::Visibility::Hidden))return false;
+    }
+    return true;
+}
+bool HiddenCageInputs(V2MainWindow& w) {
+    w.RunCommand("file.new");
+    std::vector<EntityId> wires;
+    // Twelve source wires forming a box, without an imported/frozen solid.
+    for(int axis=0;axis<3;++axis)for(int a=0;a<2;++a)for(int b=0;b<2;++b) {
+        double start[3]={},end[3]={};start[(axis+1)%3]=end[(axis+1)%3]=a*10;
+        start[(axis+2)%3]=end[(axis+2)%3]=b*10;end[axis]=10;
+        const auto line=geometry::CurveSegment::MakeLine({start[0],start[1],start[2]},{end[0],end[1],end[2]});
+        if(!line.HasValue())return false;
+        const auto added=w.Session().AddWire({line.Value()},false,"かごの辺");
+        if(!added.committed||added.createdEntityIds.size()!=1)return false;wires.push_back(added.createdEntityIds.front());
+    }
+    app::SelectionSet selected;selected.entityIds=wires;w.Viewport().SetSelection(selected);
+    w.RunCommand("part.from_wire_cage");
+    if(!Explain("twelve drawn box edges create one cage solid",CountOfKind(w,EntityKind::Part)==1))return false;
+    const auto part=VisibleParts(w).front();
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Part)!=0)return false;
+    w.RunCommand("edit.redo");if(CountOfKind(w,EntityKind::Part)!=1)return false;
+    for(const auto& id:wires){auto* row=w.ItemOfEntity(id);if(!row)return false;row->setCheckState(0,Qt::Unchecked);}
+    QApplication::processEvents();w.RebuildKernelShapes();
+    if(!Explain("cold cage rebuild uses hidden source segment IDs",w.RebuildProblems().isEmpty()
+        &&w.SelectTreeRowForEntity(part)&&w.CanExportSelectedParts()))return false;
+    return Explain("hidden cage source survives save reopen",w.SaveAndReopen(QStringLiteral("hidden-cage.kcd2"))
+        &&w.SelectTreeRowForEntity(part)&&w.CanExportSelectedParts());
+}
 } // namespace
 
 std::vector<SelfTestCase> SolidCases()
 {
     return {
+        {"HP-SO-06 hidden cage edges cold rebuild Undo save", HiddenCageInputs},
+        {"HP-SO-05 hidden sweep path and revolution axis survive save reopen", HiddenSolidInputs},
         {"HP-SO-01 回転体は輪郭と軸を押すと体積が予測と合い角度で割合どおり変わり1回で戻り開き直しても同じ",
             CaseRevolveByClicks},
         {"HP-SO-02 スイープは輪郭と経路を押すとまっすぐな経路で面積×長さの立体になる", CaseSweepAlongPath},

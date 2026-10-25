@@ -4,6 +4,7 @@
 //! 「立体を作る」の道具。V2SolidTool.h の頭の注記を見よ。
 
 #include "V2SolidTool.h"
+#include "V2WireSource.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -290,11 +291,8 @@ std::vector<kachakacha::v2::geometry::CurveSegment> V2SolidTool::SegmentsOf(
     const EntityId& id) const
 {
     std::vector<kachakacha::v2::geometry::CurveSegment> segments;
-    for (const auto& curve : window_.session_->Scene().curves) {
-        if (curve.entityId == id) {
-            segments.push_back(curve.segment);
-        }
-    }
+    for(const auto& curve:v2ui::SourceWireCurves(window_.session_->GetDocument(),window_.session_->Scene(),id))
+        segments.push_back(curve.segment);
     return segments;
 }
 

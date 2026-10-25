@@ -1,6 +1,6 @@
 """Conservative AABB broad phase; the OCCT checker then tests actual solids."""
 from pathlib import Path
-import argparse,itertools,json
+import argparse,itertools,json,hashlib
 
 
 def main():
@@ -15,9 +15,16 @@ def main():
             checks.append(dict(first=first['id'],second=second['id'],label=first['name']+' / '+second['name'],noOverlap=True))
     assert checks
     d['assemblyChecks']=checks
+    # The exact prepared token/report already proves these checks. This pass
+    # adds all-pair interference coverage; do not classify the same points and
+    # reassemble the same split parts again. The reviewer verifies this receipt.
+    reused=dict(reportSha256=hashlib.sha256(a.report.read_bytes()).hexdigest(),preparedToken=r['preparedToken'],
+        pointChecks=len(r['pointChecks']),splitChecks=len(r['splitChecks']))
+    assert not r['failures'] and all(c['passed'] for k in ['pointChecks','splitChecks'] for c in r[k])
+    d['pointChecks']=[];d['splitChecks']=[]
     d['broadPhase']=dict(method='CAD BRep AABB gaps <= 1e-5 mm on every axis (expanded bounds)',
                          potentialPairs=len(r['parts'])*(len(r['parts'])-1)//2,candidates=len(checks),
-                         narrowPhase='OCCT Common volume <= 1e-6 mm3, no exemptions')
+                         narrowPhase='OCCT Common volume <= 1e-6 mm3, no exemptions',reusedChecks=reused)
     a.output.write_text(json.dumps(d,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     print(json.dumps(d['broadPhase']))
 

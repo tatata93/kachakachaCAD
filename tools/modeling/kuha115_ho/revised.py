@@ -1,6 +1,6 @@
 """Revised 1/80 Kuha native model. All local dimensions remain explicit estimates."""
 from pathlib import Path
-import argparse, copy, hashlib, json, math, sys, uuid
+import argparse, copy, hashlib, json, math, sys, uuid, shutil
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build import Train, vec, expr
 
@@ -57,6 +57,9 @@ class Revised(Train):
         self.checks.append(dict(first=first,second=second,label=label,noOverlap=True))
 
     def ribbed(self,name,x,y,z,r,height,turns,g):
+        if self.detailed:
+            from bogie_details import spring
+            return spring(self,name,x,y,z,r,height,turns,g)
         # Fuse each spring before combining the bogie; keep Boolean groups small.
         parts=[self.cylinder(name+'芯',(x,y,z),(0,0,1),r*.88,height,g)]
         pitch=height/turns
@@ -507,6 +510,9 @@ def chassis(m,root):
 
 
 def bogies(m,root):
+    if getattr(m,'bogie_library',None):
+        from bogie_library import place
+        return place(m,root,m.bogie_library)
     g0=m.group('10 台車｜TR62系構造・HO16.5機構',root)
     m.keyparts['bogies']=[];m.keyparts['wheelsets']=[]
     for cx,lab in zip(PIVOTS,['前','後']):
@@ -523,7 +529,7 @@ def bogies(m,root):
                  (cx+15,y,9.8),(cx+16,y,7.2),(cx+7,y,7.2),(cx+4.7,y,8.0),
                  (cx-4.7,y,8.0),(cx-7,y,7.2)]
             if m.detailed:
-                from detail_parts import sideframe as curved_sideframe
+                from bogie_details import sideframe as curved_sideframe
                 frame=curved_sideframe(m,g,cx,y,side)
             else:
                 p=m.poly('側枠外周',pts,g)
@@ -537,24 +543,38 @@ def bogies(m,root):
                 for off in [-2.45,2.45]:
                     bits.append(m.ribbed('軸ばね',cx+dx+off,side*11.5,6.5,1.05 if m.detailed else .75,2.3 if m.detailed else 2.0,4,g))
                 if m.detailed:
-                    for sign in [-1,1]:
-                        bits.append(m.cylinder('軸箱蓋ボルト',(cx+dx+sign*.75,side*12.45,5.65),(0,side,0),.18,.18,g))
+                    for sx in [-1,1]:
+                        for sz in [-1,1]:
+                            bits.append(m.cylinder('軸箱蓋の四隅のボルト',(cx+dx+sx*.75,side*12.45,5.65+sz*.75),(0,side,0),.18,.18,g))
             # Two large bolster coils each side, with concentric ridge rings.
             for dx in [-2.0625,2.0625]:
                 bits.append(m.ribbed('大径枕ばね',cx+dx,side*11.5,7.3,1.72,3.7,5,g))
-            bits.append(m.cylinder('縦オイルダンパー',(cx,side*13.2,7.2),(0,0,1),.46,3.6,g))
-            bits += [m.box('ダンパー取付耳',cx-.65,side*13.2-.5,z,1.3,1.0,.4,g) for z in [7.1,10.65]]
-            for dx in [-3.6,3.6]:bits.append(m.tube('揺れ枕吊りリンク',(cx+dx,side*12.7,7.1),(cx+dx*.95,side*11.7,11.2),.25,g))
+            if m.detailed:
+                from bogie_details import damper,hanger
+                bits.append(damper(m,g,cx,side))
+                for dx in [-3.6,3.6]:bits.append(hanger(m,g,cx,side,dx))
+            else:
+                bits.append(m.cylinder('縦オイルダンパー',(cx,side*13.2,7.2),(0,0,1),.46,3.6,g))
+                bits += [m.box('ダンパー取付耳',cx-.65,side*13.2-.5,z,1.3,1.0,.4,g) for z in [7.1,10.65]]
+                for dx in [-3.6,3.6]:bits.append(m.tube('揺れ枕吊りリンク',(cx+dx,side*12.7,7.1),(cx+dx*.95,side*11.7,11.2),.25,g))
+        if m.detailed:
+            from bogie_details import brake_bits
+            bits+=brake_bits(m,g,cx)
         def named(*names):return [b for b in bits if m.entities[b]['displayName'] in names]
         lower=named('下揺れ枕');coils=named('大径枕ばね');frames=named('側枠の空間')
         upper=named('横梁','上揺れ枕','心皿')
         used=set(lower+coils+frames+upper)
-        a=m.joined(lab+'下揺れ枕と枕ばね',lower+coils,g,'黒')
-        a=m.joined(lab+'左右側枠の接続',[a]+frames,g,'黒')
-        a=m.joined(lab+'上揺れ枕と横梁',[a]+upper,g,'黒')
-        rest=[b for b in bits if b not in used]
-        for index,b in enumerate(rest):
-            a=m.joined(lab+'台車 接続'+str(index)+' '+m.entities[b]['displayName'],[a,b],g,'黒')
+        if m.detailed:
+            # One native multi-input union avoids serialising/meshing a growing
+            # complex spring assembly again for every small bolt and brake pipe.
+            a=m.joined(lab+'一体の台車枠・連続ばね・内側制動装置',bits,g,'黒')
+        else:
+            a=m.joined(lab+'下揺れ枕と枕ばね',lower+coils,g,'黒')
+            a=m.joined(lab+'左右側枠の接続',[a]+frames,g,'黒')
+            a=m.joined(lab+'上揺れ枕と横梁',[a]+upper,g,'黒')
+            rest=[b for b in bits if b not in used]
+            for index,b in enumerate(rest):
+                a=m.joined(lab+'台車 接続'+str(index)+' '+m.entities[b]['displayName'],[a,b],g,'黒')
         holes=[m.circle('車軸貫通穴',(cx+dx,-12.05 if m.detailed else -14,5.375),(0,1,0),.96,g) for dx in [-13.125,13.125]]
         a=m.cut(lab+'台車の車軸穴',a,holes,(0,1,0),24.1 if m.detailed else 28,g,'黒')
         slots=[m.rect('輪軸下開き溝',(cx+dx-.96,-12.05 if m.detailed else -14,3.8),(1,0,0),(0,0,1),1.92,1.575,g) for dx in [-13.125,13.125]]
@@ -571,8 +591,11 @@ def bogies(m,root):
             ax=m.cylinder('車軸',(cx+dx,-11.85 if m.detailed else -12.6,5.375),(0,1,0),.8,23.7 if m.detailed else 25.2,g);parts=[ax]
             for side in [-1,1]:
                 parts += [m.cylinder('車輪踏面',(cx+dx,-10.0 if side<0 else 8.2,5.375),(0,1,0),5.375,1.8,g),
-                          m.cylinder('フランジ',(cx+dx,-8.2 if side<0 else 7.25,5.375),(0,1,0),5.65,.95,g),
-                          m.cylinder('車輪内側ディスク',(cx+dx,side*4.2-.22,5.375),(0,1,0),3.4,.44,g)]
+                          m.cylinder('フランジ',(cx+dx,-8.2 if side<0 else 7.25,5.375),(0,1,0),5.65,.95,g)]
+                if m.detailed:
+                    from bogie_details import disc
+                    parts.append(disc(m,g,cx+dx,side))
+                else:parts.append(m.cylinder('車輪内側ディスク',(cx+dx,side*4.2-.22,5.375),(0,1,0),3.4,.44,g))
             ax=m.joined(lab+'輪軸・内側二枚ディスク',parts,g,'金属銀',note='HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。')
             m.keyparts['wheelsets'].append(ax);m.clear(a,ax,lab+'台車と輪軸')
         for side in [-1,1]:
@@ -583,10 +606,14 @@ def bogies(m,root):
                     m.entities[a]['visibility']='visible';m.clear(a,keeper,lab+'台車と着脱輪軸押え')
             else:m.finish(m.box(lab+'輪軸押え',cx-15.3,side*12.0-1.2,3.7,30.6,2.4,.55,g),'黒',.55)
         if lab=='前':
-            p=m.poly('スノープロウ板',[(cx-20.5,-13.6,3.8),(cx-20.5,13.6,3.8),(cx-19.5,13.6,6.6),(cx-19.5,-13.6,6.6)],g)
-            plow=m.extrude('前台車スノープロウ',[p],(1,0,0),.45,g)
-            stays=[m.box('プロウ支持腕',cx-20.1,yy,6.2,10.1,1.0,.6,g) for yy in [-6.5,5.5]]
-            plow=m.joined('前台車プロウ・支持腕',[plow]+stays,g,'黒')
+            if m.detailed:
+                from bogie_details import plow as folded_plow
+                plow=folded_plow(m,g,cx)
+            else:
+                p=m.poly('スノープロウ板',[(cx-20.5,-13.6,3.8),(cx-20.5,13.6,3.8),(cx-19.5,13.6,6.6),(cx-19.5,-13.6,6.6)],g)
+                plow=m.extrude('前台車スノープロウ',[p],(1,0,0),.45,g)
+                stays=[m.box('プロウ支持腕',cx-20.1,yy,6.2,10.1,1.0,.6,g) for yy in [-6.5,5.5]]
+                plow=m.joined('前台車プロウ・支持腕',[plow]+stays,g,'黒')
             for wheel in m.keyparts['wheelsets'][:2]:m.clear(plow,wheel,'前プロウと輪軸')
 
 
@@ -648,6 +675,9 @@ def manifest(m):
         assemblyChecks=m.checks,pointChecks=m.points,keyParts=m.keyparts,
         entities=[{k:e[k] for k in ['id','kind','displayName','visibility','groupId','partProperties']} for e in m.d['entities']])
     if m.detailed:
+        from bogie_details import REVISION
+        data['bogieRevision']=REVISION
+        if hasattr(m,'bogie_component'):data['bogieComponent']=m.bogie_component
         data['detailRevision']='2026-10-25-shoulder-refinement'
         data['paintDecals']=m.decals
         data['estimated'].update(panoramicWindow=dict(bottom=30.6,height=7.6),destination=dict(width=9.3,height=3.95),
@@ -690,8 +720,10 @@ def split_model(original,root,output):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--output',required=True,type=Path)
     ap.add_argument('--detailed',action='store_true',help='Use photo-reviewed front, roof equipment and bogie details')
+    ap.add_argument('--bogie-component',type=Path,help='Exact separately validated native bogie component; its editable source is shipped alongside')
     a=ap.parse_args();a.output.mkdir(parents=True,exist_ok=False)
-    m=Revised(a.detailed);root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
+    m=Revised(a.detailed);m.bogie_library=a.bogie_component
+    root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
     if m.detailed:
         front_underframe(m)
@@ -702,6 +734,9 @@ def main():
     m.save(a.output/'kuha115-ho80-revised.kcd2')
     (a.output/'design.json').write_text(json.dumps(manifest(m),ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     split_model(m,root,a.output)
+    if a.bogie_component:
+        for name in ['tr62-component.kcd2','tr62-component.json','tr62-native.kcd2','tr62-native-validation.json','tr62-native-parts.json','tr62-design.json']:
+            shutil.copy2(a.bogie_component.parent/name,a.output/name)
     print(json.dumps(dict(features=len(m.d['features']),parts=sum(e['kind']=='part' and e['visibility']=='visible' for e in m.d['entities']),
                          checks=len(m.checks),pointChecks=len(m.points),gangwayRatio=GW['width']/GW['height'])))
 

@@ -1,6 +1,7 @@
 #include "V2Calculation.h"
 #include "V2ExtrudeWirePreview.h"
 #include "V2MainWindow.h"
+#include "V2WireSource.h"
 #include "V2ExtrudeDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
@@ -61,8 +62,16 @@ std::optional<kachakacha::v2::modeling::WorkPlaneFrame> V2MainWindow::ExtrudeSto
     for (const auto& point : session_->Scene().points) {
         if (point.entityId == id) { plane.origin = point.position; found = true; }
     }
-    for (const auto& curve : session_->Scene().curves) {
-        if (curve.entityId != id || curve.segment.Kind() != CurveKind::Line) continue;
+    if(!found) {
+        const auto* entity=session_->GetDocument().FindEntity(id);
+        const auto* feature=entity&&entity->kind==kachakacha::v2::domain::EntityKind::Point
+            ?session_->GetDocument().FindFeature(entity->createdBy):nullptr;
+        const auto* point=feature&&feature->enabled
+            ?std::get_if<kachakacha::v2::domain::CreatePointDefinition>(&feature->definition):nullptr;
+        if(point){plane.origin=point->positionMm;found=true;}
+    }
+    for (const auto& curve : v2ui::SourceWireCurves(session_->GetDocument(),session_->Scene(),id)) {
+        if (curve.segment.Kind() != CurveKind::Line) continue;
         plane.origin = curve.segment.Evaluate(parameter >= 0.0 ? parameter : 0.0);
         if (parameter < 0.0) {
             const auto tangent = Normalized(curve.segment.EndPoint() - curve.segment.StartPoint(), 1.0e-12);

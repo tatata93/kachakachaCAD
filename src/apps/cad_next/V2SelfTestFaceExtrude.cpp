@@ -21,6 +21,7 @@
 #include <QPointF>
 #include <QPushButton>
 #include <QTimer>
+#include <QTreeWidgetItem>
 #include <QTemporaryDir>
 #include <QString>
 #include <chrono>
@@ -103,7 +104,7 @@ bool CaseNativeFace(V2MainWindow& window) {
     return Explain("保存再読込でフェイス押し出しが残る", window.SaveAndReopen("native-face-extrude.kcd2")
         && CountOfKind(window, domain::EntityKind::Part) == 2);
 }
-bool CaseNativeFaceToLine(V2MainWindow& window) {
+bool CaseNativeFaceToLine(V2MainWindow& window,bool point=false) {
     if (!ImportCurvedPart(window) || !PickCurvedFace(window)) return false;
     const auto origin = window.Viewport().ExtrudeHandleOrigin();
     const auto direction = window.Viewport().ExtrudeHandleDirection();
@@ -111,7 +112,9 @@ bool CaseNativeFaceToLine(V2MainWindow& window) {
     const auto p = origin + direction * 10;
     const auto line = geometry::CurveSegment::MakeLine(p - geometry::Vector3{0, 0, 20}, p + geometry::Vector3{0, 0, 20});
     if (!line.HasValue()) return false;
-    const auto added = window.Session().AddWire({line.Value()}, false, "終端の線");
+    if(point){window.Session().SetDrawingPlaneOnly(false);window.SelectTool(modeling::DrawingTool::Point);}
+    const auto added = point?window.Session().PlacePoint(p):window.Session().AddWire({line.Value()}, false, "終端の線");
+    if(point)window.SelectTool(modeling::DrawingTool::Select);
     if (!added.committed || added.createdEntityIds.empty() || !PickCurvedFace(window)) return false;
     app::ExtrudeChoice choice; choice.direction = modeling::ExtrudeDirectionMode::CustomXYZ;
     choice.customDirection = direction; choice.extent = modeling::ExtrudeExtentMode::ToTarget;
@@ -121,6 +124,9 @@ bool CaseNativeFaceToLine(V2MainWindow& window) {
         && window.ExtrudeDock().TargetEntityId() == choice.targetEntityId)) return false;
     if (!Explain("線までの形を確定できる", window.HandleToolKey(Qt::Key_Return, nullptr)
         && CountOfKind(window, domain::EntityKind::Part) == 2)) return false;
+    auto* row=window.ItemOfEntity(added.createdEntityIds.front());if(!row)return false;
+    row->setCheckState(0,Qt::Unchecked);QApplication::processEvents();window.RebuildKernelShapes();
+    if(!Explain(point?"非表示の終端点まで冷再計算できる":"非表示の終端線まで冷再計算できる",window.RebuildProblems().isEmpty()))return false;
     return Explain("線への参照と面を保存して再計算できる", window.SaveAndReopen("native-face-to-line.kcd2")
         && CountOfKind(window, domain::EntityKind::Part) == 2);
 }
@@ -413,7 +419,8 @@ std::vector<SelfTestCase> FaceExtrudeCases() {
         {"HP-EX-UI face and direction independent", CaseExtrudeFaceDirectionPick},
         {"HP-EX-UI hovered face fill", CaseExtrudeFaceHover},
         {"HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存", CaseNativeFace},
-        {"HP-EX-LINE 曲面フェイスから線まで・保存再計算", CaseNativeFaceToLine},
+        {"HP-EX-LINE 曲面フェイスから線まで・非表示・冷再計算・保存", [](auto& w){return CaseNativeFaceToLine(w);}},
+        {"HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存", [](auto& w){return CaseNativeFaceToLine(w,true);}},
         {"HP-CALC-01 計算バー・GUI応答・取消・形状の解放", CaseProgressCancellation},
         {"HP-CALC-02 分割取消で両側の内部形状を解放", CaseSplitCancellation}};
 }

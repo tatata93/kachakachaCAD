@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "rejected": [
+    "changed source digest",
+    "different native validation token",
+    "missing component part",
+    "changed BRep despite matching archive checksum"
+  ],
+  "sourceSha256": "74b7db8d77496fa6d812d3282fffe5021cecd80a7c001e438158527e980492da",
+  "componentSha256": "56b490351e31731d5cb6b87eae6f0d2c158a056b7111d2bd1f7a4f200539c83b"
+}

@@ -66,15 +66,16 @@ def lamp(m,g,side,name,y,z,r,color):
     xx=face_x(y)
     def at(d):return (xx+n[0]*d,side*y+n[1]*d,z)
     depth=1.15 if name=='前照灯' else .60
-    body=m.ring(name+'塗装胴',at(.15),n,r+.12,r-.22,depth,g)
+    inner_radius=r-.10
+    body=m.ring(name+'塗装胴',at(.15),n,r+.12,inner_radius,depth,g)
     m.finish(body,'アドバンスブルー' if name=='前照灯' else 'フォギーグレー')
-    ring=m.ring(name+'前縁金属リング',at(depth+.17),n,r+.11,r-.26,.12,g)
+    ring=m.ring(name+'前縁金属リング',at(depth+.17),n,r+.11,inner_radius,.12,g)
     m.finish(ring,'アルミ銀',.12);m.clear(body,ring,name+'胴と金属リング')
     if name=='前照灯':
         outer=[m.circle('反射鏡外側断面',at(d),n,rr,g) for d,rr in
-               [(.25,.46),(.45,.76),(.78,1.08),(1.22,r-.22)]]
+               [(.25,.46),(.45,.76),(.78,1.08),(1.22,r-.12)]]
         inner=[m.circle('反射鏡内側断面',at(d),n,rr,g) for d,rr in
-               [(.38,.34),(.55,.65),(.87,1.00),(1.30,r-.29)]]
+               [(.38,.34),(.55,.65),(.87,1.00),(1.30,r-.19)]]
         reflector=m.loft('椀状反射鏡の外側',outer,g)
         cavity=m.loft('椀状反射鏡の凹部',inner,g)
         reflector=m.boolean('椀状の前照灯反射鏡',reflector,[cavity],1,g,'金属銀')
@@ -82,7 +83,7 @@ def lamp(m,g,side,name,y,z,r,color):
         m.finish(bulb,'電球色',.24)
         # Keep the clear face shallowly convex; the centre cap is only 0.2 mm wide.
         sections=[m.circle('凸レンズ断面',at(depth+d),n,rr,g) for d,rr in
-                  [(.13,r-.26),(.20,r-.33),(.27,.94),(.31,.45),(.32,.10)]]
+                  [(.13,r-.11),(.20,r-.16),(.27,1.13),(.31,.45),(.32,.10)]]
         lens=m.loft('前照灯の浅い凸レンズ',sections,g)
         m.finish(lens,color,.12);m.mesh_chords[lens]=.001
         m.mesh_chords[reflector]=.001
@@ -91,14 +92,14 @@ def lamp(m,g,side,name,y,z,r,color):
         m.finish(reflector,'金属銀',.1)
         bulb=m.cylinder(name+'電球',at(.38),n,.18,.16,g)
         m.finish(bulb,'電球色',.16)
-        lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,r-.26,.12,g)
+        lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,r-.11,.12,g)
         m.finish(lens,color,.12)
 
 
 def destination(m,g,roof_outer):
     o=m.rounded('表示器ハウジング外',(-.85,-4.65,39.65),(0,1,0),(0,0,1),9.3,3.95,.6,g)
     q=m.rounded('表示器ハウジング開口',(-.85,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
-    housing=m.extrude('前面表示器ハウジング素材',[o,q],(1,0,0),3.8,g)
+    housing=m.extrude('前面表示器ハウジング素材',[o,q],(1,0,0),4.8,g)
     housing=m.boolean('表示箱背面を丸い額に合わせる',housing,[roof_outer],1,g)
     m.mesh_chords[housing]=.006
     p=m.rounded('前面表示面',(-.12,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)

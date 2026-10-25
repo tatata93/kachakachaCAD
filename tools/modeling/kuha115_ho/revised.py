@@ -246,10 +246,22 @@ def front(m,root):
             m.finish(m.ring(name+'灯具',center,n,r,r-.23,.55,g),'アルミ銀' if name=='前照灯' else '床下グレー')
             m.finish(m.cylinder(name+'レンズ',(center[0]-.05,center[1],z),n,r-.27,.15,g),color)
         y=9.5;xx=math.tan(math.radians(8))*(y-5.3)
-        cover=m.cylinder('タイフォン丸形シャッター',(xx-.42,side*y,25.7),(-1,0,0),1.23,.30,g)
-        upper=m.box('シャッター上部覆い',xx-.58,side*y-.7,26.55,.40,1.4,.7,g)
-        m.joined('丸形タイフォン覆い',[cover,upper],g,'アドバンスブルー')
-        m.finish(m.tube('シャッター中央線',(xx-.79,side*y,24.55),(xx-.79,side*y,26.8),.045,g),'黒')
+        if m.detailed:
+            n=(-math.cos(math.radians(8)),side*math.sin(math.radians(8)),0)
+            def at(d,z):return (xx+n[0]*d,side*y+n[1]*d,z)
+            cover=m.cylinder('前面の折角に沿うタイフォン丸胴',at(-.05,25.7),n,1.23,.95,g)
+            upper=m.box('シャッター上部覆い',xx-1.0,side*y-.7,26.55,1.05,1.4,.7,g)
+            cover=m.joined('奥行きのある丸形タイフォン覆い',[cover,upper],g,'アドバンスブルー')
+            cover=m.boolean('タイフォン背面を外板に合わせる',cover,[m.finished['body']],1,g,'アドバンスブルー')
+            m.entities[m.finished['body']]['visibility']='visible'
+            line=m.tube('シャッター中央線',at(.94,24.55),at(.94,26.8),.045,g)
+            m.boolean('シャッター線の食込みを除く',line,[cover],1,g,'黒')
+            m.entities[cover]['visibility']='visible'
+        else:
+            cover=m.cylinder('タイフォン丸形シャッター',(xx-.42,side*y,25.7),(-1,0,0),1.23,.30,g)
+            upper=m.box('シャッター上部覆い',xx-.58,side*y-.7,26.55,.40,1.4,.7,g)
+            m.joined('丸形タイフォン覆い',[cover,upper],g,'アドバンスブルー')
+            m.finish(m.tube('シャッター中央線',(xx-.79,side*y,24.55),(xx-.79,side*y,26.8),.045,g),'黒')
         for z,w in [(28.55,6.8),(21.4,1.7)]:
             cy=side*(10.7 if w>3 else 9.7)
             m.finish(m.tube('前面横手掛け',(-.14,cy-w/2,z),(-.14,cy+w/2,z),.13,g),'アドバンスブルー' if z>26 else 'フォギーグレー')
@@ -308,24 +320,9 @@ def roof(m,root):
         parts.append(m.extrude(name+'一般部',[profiles[-1]],(1,0,0),L-8.5,g))
         return m.joined(name,parts,g,'屋根グレー')
     if m.detailed:
-        def dome(name,inset):
-            radius=5.875-inset;cx=5.875
-            # Every section is an identical translated transverse profile.
-            # A single smooth loft avoids the diagonal ridge made by intersecting
-            # two cylinders, and avoids changing shoulder radii between sections.
-            profiles=[roof_profile(m,g,cx-radius*math.cos(t),CROWN,inset=inset,
-                shift=radius*(math.sin(t)-1)) for t in [i*math.pi/18 for i in range(10)]]
-            profiles.append(roof_profile(m,g,8.5,CROWN,inset=inset))
-            front=m.loft(name+'額と肩の連続ロフト',profiles,g)
-            back=m.extrude(name+'一般部',[profiles[-1]],(1,0,0),L-8.5,g)
-            return m.joined(name+'滑らかな前頭部と一般部',[front,back],g,'屋根グレー')
-        outside=dome('屋根外側',0);inner=dome('屋根内側',.85)
-        o=m.wire('丸額の平面外形',m.plan(JOINT),g);clip=m.extrude('丸額の平面トリム',[o],(0,0,1),12,g)
-        outer=m.boolean('屋根外形を平面形に合わせる',outside,[clip],2,g,'屋根グレー')
-        o=m.wire('丸額内側の平面形',m.plan(38.7,.85),g);clip=m.extrude('丸額内側の平面トリム',[o],(0,0,1),12,g)
-        inner=m.boolean('丸額内部の平面形',inner,[clip],2,g,'屋根グレー')
-        a=m.boolean('丸い額から一般屋根までの中空一体',outer,[inner],1,g,'屋根グレー')
-        outside=outer
+        from front_roof import Forehead
+        spec=Forehead(L,SIDE,EAVE,CROWN,JOINT)
+        outside,a=spec.build(m,g)
     else:
         outside=spans('屋根外形',False)
         ring=spans('屋根中空断面の連続ロフト',True)
@@ -339,17 +336,7 @@ def roof(m,root):
     m.finished['roof']=a;m.clear(m.finished['body'],a,'車体と屋根')
     if m.detailed:m.mesh_chords[a]=.006
     if m.detailed:
-        for y in [-10,-5,0,5,10]:
-            cross=40-math.sqrt(40**2-y*y)
-            for z in [41.5,42.0,43.0]:
-                dz=z+cross-39.8
-                outer_x=5.875-math.sqrt(5.875**2-dz**2)
-                inner_cross=39.15-math.sqrt(39.15**2-y*y)
-                inner_dz=z+inner_cross-39.8
-                inner_x=5.875-math.sqrt(5.025**2-inner_dz**2)
-                # Tests are clear of the loft's interpolation tolerance.
-                for x,inside in [(outer_x-.18,False),((outer_x+inner_x)/2,True),(inner_x+.18,False)]:
-                    m.points.append(dict(entity=a,label='額の中央と左右肩の丸み・肉厚を実BRepで確認',point=[x,y,z],expectedInside=inside))
+        spec.checks(m,a)
     # Separate pale forehead skin, a part of the closed roof, cut at X=8.5.
     # Paint masks handle its color in preview; geometry remains one roof part.
     if m.detailed:
@@ -437,7 +424,7 @@ def roof(m,root):
     m.entities[a]['visibility']='visible';m.clear(a,aerial,'屋根とアンテナ')
     if m.detailed:
         for y in [-10,10]:
-            path=[(2.4,y,42.8),(2.9,y,44.6),(4.5,y,45.0),(5.2,y,44.0)]
+            path=[(x,y,spec.height_at(x,y)+offset) for x,offset in [(2.4,-.3),(2.9,.65),(4.5,.65),(5.2,-.3)]]
             bits=[m.tube('前頭屋根ループ手掛け',p,q,.13,eg) for p,q in zip(path,path[1:])]
             rail=m.joined('前頭屋根手掛け・取付足',bits,eg,'屋根グレー')
             rail=m.boolean('屋根曲面に合わせたループ手掛け',rail,[outside],1,eg,'屋根グレー')
@@ -482,6 +469,8 @@ def chassis(m,root):
         from detail_parts import skirt_mask
         mask=skirt_mask(m,g)
         skirt=m.boolean('スカート下隅の丸み',skirt,[mask],2,g,'床下グレー')
+        gap=m.box('車体下と中央スカートの空間',-2,-12.7,10.7,5,25.4,5,g)
+        skirt=m.boolean('中央の上縁を下げたスカート',skirt,[gap],1,g,'床下グレー')
     else:
         pts=[(-.55,-16.0,8.4),(-.55,16,8.4),(-.55,17.1,13.7),(-.55,-17.1,13.7)]
         o=m.poly('スカート外周',pts,g);skirt=m.extrude('スカート素材',[o],(1,0,0),.75,g)
@@ -492,6 +481,8 @@ def chassis(m,root):
         for side in [-1,1]:
             m.points.extend([dict(entity=skirt,label='スカートの下絞り内側',point=[.85,side*15.4,7.0],expectedInside=True),
                              dict(entity=skirt,label='スカート下絞りの外側は空間',point=[1.2,side*16.7,7.0],expectedInside=False)])
+            for y in [6,10]:
+                m.points.append(dict(entity=skirt,label='ジャンパ栓の背後に開いたスカート上部',point=[-.3,side*y,12],expectedInside=False))
     for front,x in [(True,-3.125),(False,L+2.325)]:
         head=m.box('連結器頭',x,-1.7 if m.detailed else -1.35,10.35 if m.detailed else 10.6,
                    1.2 if m.detailed else .85,3.4 if m.detailed else 2.7,2.3 if m.detailed else 1.8,g)
@@ -507,7 +498,12 @@ def chassis(m,root):
     for y in [-7,-4.4,4.4,7,9.2]:
         socket=m.cylinder('前面ジャンパ栓',(-.8,y,12.0),(-1,0,0),.50,.5,g)
         pipe=m.tube('ジャンパ管',(-1.2,y,11.7),(-1.1,y+.7,9.7),.15,g)
-        m.joined('前面ジャンパ栓・管一体',[socket,pipe],g,'床下グレー')
+        bits=[socket,pipe]
+        if m.detailed:bits.append(m.tube('ジャンパ管のスカート取付足',(-1.1,y+.7,9.7),(-.54,y+.7,9.7),.18,g))
+        jumper=m.joined('前面ジャンパ栓・管・取付足一体' if m.detailed else '前面ジャンパ栓・管一体',bits,g,'床下グレー')
+        if m.detailed:
+            m.boolean('取付足をスカート前面で合わせる',jumper,[skirt],1,g,'床下グレー')
+            m.entities[skirt]['visibility']='visible'
 
 
 def bogies(m,root):
@@ -623,6 +619,22 @@ def interior(m,root):
     for glass in m.keyparts['glasses']:m.clear(a,glass,'室内と透明板')
 
 
+def front_underframe(m):
+    """Recessed end web, connected to the printable floor; centre clears the coupler."""
+    floor=m.finished['floor'];g=m.entities[floor]['groupId']
+    webs=[m.box('前端台枠の奥まった縦板',3.4,y,11.0,2.2,10.6,2.70,g)
+          for y in [-12.7,2.1]]
+    floor=m.joined('床板・前端台枠一体',[floor]+webs,g,'床下グレー',
+        note='前端台枠は写真の奥まった支持構造を模型用に簡略化。実測寸法ではない。中央は連結器逃げ。')
+    m.finished['floor']=floor
+    m.clear(floor,m.finished['body'],'前端台枠付き床板と外板')
+    m.clear(floor,m.finished['interior'],'前端台枠付き床板と室内')
+    for y in [-6,6]:
+        m.points.append(dict(entity=floor,label='前端台枠の奥まった支持板',point=[4,y,12],expectedInside=True))
+    m.points.extend([dict(entity=floor,label='前端台枠の中央連結器逃げ',point=[4,0,12],expectedInside=False),
+                     dict(entity=floor,label='前端台枠の下側空間',point=[4,6,10.7],expectedInside=False)])
+
+
 def manifest(m):
     data=dict(scale=80,gaugeMm=16.5,prototype=dict(family='115-1000',carCandidate='クハ115-1222',
         period='長野色営業時代（1994〜97年頃を外装候補）',status='写真資料を基にした外観設計案。車番固有の全寸法は未確定。'),
@@ -636,13 +648,15 @@ def manifest(m):
         assemblyChecks=m.checks,pointChecks=m.points,keyParts=m.keyparts,
         entities=[{k:e[k] for k in ['id','kind','displayName','visibility','groupId','partProperties']} for e in m.d['entities']])
     if m.detailed:
-        data['detailRevision']='2026-10-25-photo-comparison'
+        data['detailRevision']='2026-10-25-shoulder-refinement'
         data['paintDecals']=m.decals
         data['estimated'].update(panoramicWindow=dict(bottom=30.6,height=7.6),destination=dict(width=9.3,height=3.95),
             climateCrossSection='YZ arch extruded along X',wheelsetAxleLength=23.7,localAxleKeepers=True,
-            foreheadLongitudinalRadius=5.875,foreheadInnerRadius=5.025,foreheadCurveOriginZ=39.8)
-        data['estimated'].update(skirtOutline=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6),
-                                 flareCapRadius=.78,frontGlazingInset=.22)
+            foreheadLongitudinalRadius=9.0,foreheadCurveOriginZ=CROWN-9.0,roofNominalThickness=1.0,
+            foreheadConstruction='short identical analytic transverse arcs translated on a concentric longitudinal arc')
+        data['estimated'].update(skirtOutline=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6,centreTopZ=10.7),
+                                 flareCapRadius=.78,frontGlazingInset=.22,greenPaintBandZMm=[22.4,24.0],
+                                 frontUnderframeWeb=dict(x=[3.4,5.6],z=[11.0,13.70],centralClearance=4.2))
     return data
 
 
@@ -680,6 +694,7 @@ def main():
     m=Revised(a.detailed);root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
     if m.detailed:
+        front_underframe(m)
         from detail_parts import lettering
         lettering(m,root,a.output)
     m.d['activeGroupId']=root;m.d['uiState']={'activeMode':'part','theme':'windows95'}

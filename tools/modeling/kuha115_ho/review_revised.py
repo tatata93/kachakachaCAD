@@ -70,7 +70,8 @@ def main():
         assert len(expected)==r['visibleParts']==mesh['parts'] and not r['failures'] and not mesh['failures'] and not all_report['failures']
         assert not r['checkOnly'] and all_report['checkOnly']
         assert len(r['assemblyChecks'])==len(design['assemblyChecks'])>140
-        assert len(r['pointChecks'])==len(design['pointChecks'])==(314 if design.get('detailRevision') else 227)
+        refined=design.get('detailRevision')=='2026-10-25-shoulder-refinement'
+        assert len(r['pointChecks'])==len(design['pointChecks'])==(412 if refined else 314 if design.get('detailRevision') else 227)
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
         assert len(all_report['assemblyChecks'])==all_design['broadPhase']['candidates']>100
@@ -92,16 +93,23 @@ def main():
         assert abs(rim[4]-rim[1]-7.6)<1e-5 and abs(rim[5]-rim[2]-6.2)<1e-5
         if design.get('detailRevision'):
             assert design['estimated']['panoramicWindow']==dict(bottom=30.6,height=7.6)
-            assert design['estimated']['foreheadLongitudinalRadius']==5.875
+            assert abs(design['estimated']['foreheadLongitudinalRadius']-(9.0 if refined else 5.875))<1e-10
             assert len(design['paintDecals'])==3
             checks=r['pointChecks']
-            assert sum('額の中央と左右肩' in c['label'] for c in checks)==45
+            assert sum('額の中央と左右肩' in c['label'] for c in checks)==(81 if refined else 45)
+            if refined:
+                assert design['estimated']['roofNominalThickness']==1.0
+                assert sum('法線方向0.85mm' in c['label'] for c in checks)==54
+                assert sum('ジャンパ栓の背後' in c['label'] for c in checks)==4
+                assert sum('前端台枠' in c['label'] for c in checks)==4
             assert sum('短縮した前面窓' in c['label'] for c in checks)==18
             assert sum('黒い軸箱外蓋' in c['label'] for c in checks)==16
             assert sum('信号炎管の幅広い' in c['label'] for c in checks)==1
             assert sum('スカートの下絞り内側' in c['label'] for c in checks)==2
             assert sum('スカート下絞りの外側' in c['label'] for c in checks)==2
-            assert design['estimated']['skirtOutline']==dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6)
+            expected_skirt=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6)
+            if refined:expected_skirt['centreTopZ']=10.7
+            assert design['estimated']['skirtOutline']==expected_skirt
             assert design['estimated']['flareCapRadius']==.78 and design['estimated']['frontGlazingInset']==.22
         maximum=max(max(p['bounds'][i+3]-p['bounds'][i] for i in range(3)) for p in r['parts'])
         if split:assert maximum<125
@@ -134,7 +142,7 @@ def main():
         'tools/modeling/kuha115_ho/review_revised.py','tools/modeling/kuha115_ho/assembly_candidates.py',
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',
-        'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/render_detailed.py',
+        'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/front_roof.py','tools/modeling/kuha115_ho/render_detailed.py',
         'tools/modeling/kuha115_ho/assemble_detailed.py']}
     (w/'review-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     print(json.dumps(result,ensure_ascii=True,indent=2))

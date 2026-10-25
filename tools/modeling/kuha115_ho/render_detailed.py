@@ -21,7 +21,7 @@ def main():
     assert report['parts'] and (a.diagnostic_front or not report['failures'])
     a.output.mkdir(parents=True,exist_ok=True)
     options=dict(paint_names=('乗務員扉','シャッター','前面横手掛け'),roof_forehead_mm=8.5,
-        paint_bands=[(-2,24.4,(224,229,219)),(24.4,26,(90,174,151)),(26,38.5,(110,154,184)),(38.5,60,(224,229,219))],
+        paint_bands=[(-2,22.4,(224,229,219)),(22.4,24.0,(90,174,151)),(24.0,38.5,(110,154,184)),(38.5,60,(224,229,219))],
         studio=True,decals=design.get('paintDecals',[]),surface_color=wheel_paint)
     views=[('overview',dict(camera=(-.38,-.88,.28),size=(2600,1000))),
            ('front-detail',dict(front=True,camera=(-.94,-.26,.17),size=(1400,1300))),

@@ -1,0 +1,16 @@
+[
+  {
+    "model": "cad-only",
+    "seconds": 6.563000000023749,
+    "sourceSha256": "647ee8b6c810ef4235bd6f69fa7fae9834d6dabfc0739fc8082c06eded3101de",
+    "exeSha256": "2f6a494e54268f444846478f3895f783487c1287ada11816435cf6c1fe718d4c",
+    "passed": true
+  },
+  {
+    "model": "image-and-cad",
+    "seconds": 6.688000000023749,
+    "sourceSha256": "73dc15dc914bda4c20537fe4d8dbcae9f6a360b363ee58d2e668b5c6361b3ca3",
+    "exeSha256": "2f6a494e54268f444846478f3895f783487c1287ada11816435cf6c1fe718d4c",
+    "passed": true
+  }
+]

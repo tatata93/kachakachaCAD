@@ -1,0 +1,17 @@
+﻿model,grid,operation,before_median_ms,after_median_ms,before_p95_ms,after_p95_ms,gpu_ms,cpu_rasters,texture_uploads
+cad-only,off,orbit,16.6785,16.6841,17.9645,17.5159,2.5188,0,0
+cad-only,off,pan,16.6387,16.8181,19.6938,18.8999,2.1676,0,0
+cad-only,major,orbit,16.6718,16.6419,17.8045,18.249,2.0858,0,0
+cad-only,major,pan,17.1376,16.7879,18.194,17.9095,2.0219,0,0
+cad-only,subdivision,orbit,16.7906,16.8446,18.022,18.2676,2.5322,0,0
+cad-only,subdivision,pan,16.967,16.9005,17.8125,18.2179,2.5477,0,0
+cad-only,near-edge,orbit,27.2119,16.8683,91.764,21.528,2.018,0,0
+cad-only,near-edge,pan,16.6873,16.6848,17.7225,18.459,2.0395,0,0
+image-and-cad,off,orbit,151.0764,17.1216,212.9158,31.128,1.8683,0,0
+image-and-cad,off,pan,151.0928,17.0054,154.7984,19.7178,2.0925,0,0
+image-and-cad,major,orbit,156.2052,16.6105,226.3105,17.9272,1.7655,0,0
+image-and-cad,major,pan,155.2188,17.0037,158.9043,25.4303,2.0482,0,0
+image-and-cad,subdivision,orbit,159.2653,16.7408,169.2327,18.6946,2.2993,0,0
+image-and-cad,subdivision,pan,158.476,16.5963,167.697,20.0369,2.1545,0,0
+image-and-cad,near-edge,orbit,59.6726,16.7862,62.2721,17.9862,1.9517,0,0
+image-and-cad,near-edge,pan,59.3169,16.6736,61.6244,17.5155,1.955,0,0

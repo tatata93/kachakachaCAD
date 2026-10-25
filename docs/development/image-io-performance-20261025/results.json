@@ -1,0 +1,1369 @@
+{
+  "source": "a89dd605c",
+  "baseline": "tool-usability-accepted-20261025-r4",
+  "navigation": [
+    {
+      "model": "cad-only",
+      "grid": "off",
+      "operation": "orbit",
+      "before_median_ms": 16.6785,
+      "after_median_ms": 16.6841,
+      "before_p95_ms": 17.9645,
+      "after_p95_ms": 17.5159,
+      "gpu_ms": 2.5188,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "off",
+      "operation": "pan",
+      "before_median_ms": 16.6387,
+      "after_median_ms": 16.8181,
+      "before_p95_ms": 19.6938,
+      "after_p95_ms": 18.8999,
+      "gpu_ms": 2.1676,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "major",
+      "operation": "orbit",
+      "before_median_ms": 16.6718,
+      "after_median_ms": 16.6419,
+      "before_p95_ms": 17.8045,
+      "after_p95_ms": 18.249,
+      "gpu_ms": 2.0858,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "major",
+      "operation": "pan",
+      "before_median_ms": 17.1376,
+      "after_median_ms": 16.7879,
+      "before_p95_ms": 18.194,
+      "after_p95_ms": 17.9095,
+      "gpu_ms": 2.0219,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "subdivision",
+      "operation": "orbit",
+      "before_median_ms": 16.7906,
+      "after_median_ms": 16.8446,
+      "before_p95_ms": 18.022,
+      "after_p95_ms": 18.2676,
+      "gpu_ms": 2.5322,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "subdivision",
+      "operation": "pan",
+      "before_median_ms": 16.967,
+      "after_median_ms": 16.9005,
+      "before_p95_ms": 17.8125,
+      "after_p95_ms": 18.2179,
+      "gpu_ms": 2.5477,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "near-edge",
+      "operation": "orbit",
+      "before_median_ms": 27.2119,
+      "after_median_ms": 16.8683,
+      "before_p95_ms": 91.764,
+      "after_p95_ms": 21.528,
+      "gpu_ms": 2.018,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "cad-only",
+      "grid": "near-edge",
+      "operation": "pan",
+      "before_median_ms": 16.6873,
+      "after_median_ms": 16.6848,
+      "before_p95_ms": 17.7225,
+      "after_p95_ms": 18.459,
+      "gpu_ms": 2.0395,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "off",
+      "operation": "orbit",
+      "before_median_ms": 151.0764,
+      "after_median_ms": 17.1216,
+      "before_p95_ms": 212.9158,
+      "after_p95_ms": 31.128,
+      "gpu_ms": 1.8683,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "off",
+      "operation": "pan",
+      "before_median_ms": 151.0928,
+      "after_median_ms": 17.0054,
+      "before_p95_ms": 154.7984,
+      "after_p95_ms": 19.7178,
+      "gpu_ms": 2.0925,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "major",
+      "operation": "orbit",
+      "before_median_ms": 156.2052,
+      "after_median_ms": 16.6105,
+      "before_p95_ms": 226.3105,
+      "after_p95_ms": 17.9272,
+      "gpu_ms": 1.7655,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "major",
+      "operation": "pan",
+      "before_median_ms": 155.2188,
+      "after_median_ms": 17.0037,
+      "before_p95_ms": 158.9043,
+      "after_p95_ms": 25.4303,
+      "gpu_ms": 2.0482,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "subdivision",
+      "operation": "orbit",
+      "before_median_ms": 159.2653,
+      "after_median_ms": 16.7408,
+      "before_p95_ms": 169.2327,
+      "after_p95_ms": 18.6946,
+      "gpu_ms": 2.2993,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "subdivision",
+      "operation": "pan",
+      "before_median_ms": 158.476,
+      "after_median_ms": 16.5963,
+      "before_p95_ms": 167.697,
+      "after_p95_ms": 20.0369,
+      "gpu_ms": 2.1545,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "near-edge",
+      "operation": "orbit",
+      "before_median_ms": 59.6726,
+      "after_median_ms": 16.7862,
+      "before_p95_ms": 62.2721,
+      "after_p95_ms": 17.9862,
+      "gpu_ms": 1.9517,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    },
+    {
+      "model": "image-and-cad",
+      "grid": "near-edge",
+      "operation": "pan",
+      "before_median_ms": 59.3169,
+      "after_median_ms": 16.6736,
+      "before_p95_ms": 61.6244,
+      "after_p95_ms": 17.5155,
+      "gpu_ms": 1.955,
+      "cpu_rasters": 0,
+      "texture_uploads": 0
+    }
+  ],
+  "debug": [
+    {
+      "run": "round1-native2",
+      "total": 12,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 2758.9099,
+          "end": "2026-10-25T04:02:18.288Z",
+          "name": "HP-PERF-01 dense face hover and image compositing",
+          "start": "2026-10-25T04:02:15.530Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2214.0479,
+          "end": "2026-10-25T04:02:20.503Z",
+          "name": "HP-IMG-01 image placement persistence cancel and edit",
+          "start": "2026-10-25T04:02:18.290Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1536.8752,
+          "end": "2026-10-25T04:02:22.041Z",
+          "name": "HP-IMG-02 curved projection and wrapping",
+          "start": "2026-10-25T04:02:20.505Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 678.1781,
+          "end": "2026-10-25T04:02:22.720Z",
+          "name": "HP-IMG-03 image drag preview cancel commit undo",
+          "start": "2026-10-25T04:02:22.042Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1837.7834,
+          "end": "2026-10-25T04:02:24.559Z",
+          "name": "HP-PERF-02 visibility retains native geometry and edge identity",
+          "start": "2026-10-25T04:02:22.721Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 935.4856,
+          "end": "2026-10-25T04:02:25.495Z",
+          "name": "HP-GRID-01 display toggle preserves snapping and pending input",
+          "start": "2026-10-25T04:02:24.559Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1052.3263,
+          "end": "2026-10-25T04:02:26.547Z",
+          "name": "HP-PERF-03 presentation camera capture resize and idle",
+          "start": "2026-10-25T04:02:25.495Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1850.2855,
+          "end": "2026-10-25T04:02:28.399Z",
+          "name": "HP-GRID-02 selected wire contrast and overlapping roles",
+          "start": "2026-10-25T04:02:26.548Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 846.3984,
+          "end": "2026-10-25T04:02:29.245Z",
+          "name": "HP-GRID-03 hidden overlays keep GPU shading",
+          "start": "2026-10-25T04:02:28.399Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2184.2644,
+          "end": "2026-10-25T04:02:31.430Z",
+          "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+          "start": "2026-10-25T04:02:29.246Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 844.938,
+          "end": "2026-10-25T04:02:32.275Z",
+          "name": "HP-GRID-05 projected grid reuse and invalidation",
+          "start": "2026-10-25T04:02:31.431Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 985.1206,
+          "end": "2026-10-25T04:02:33.261Z",
+          "name": "HP-IMAGE-GPU image depth transparency texture reuse and resize",
+          "start": "2026-10-25T04:02:32.276Z",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "round2-edit",
+      "total": 40,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 3748.5393,
+          "end": "2026-10-25T04:03:42.796Z",
+          "name": "HP-UX-04 permanent grid and plane wire display controls",
+          "start": "2026-10-25T04:03:39.048Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 695.6002,
+          "end": "2026-10-25T04:03:43.493Z",
+          "name": "HP-UX-01 cross-mode tool search",
+          "start": "2026-10-25T04:03:42.797Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 668.1885,
+          "end": "2026-10-25T04:03:44.162Z",
+          "name": "HP-UX-02 persistent local view picking snapping restore",
+          "start": "2026-10-25T04:03:43.494Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 562.2632,
+          "end": "2026-10-25T04:03:44.724Z",
+          "name": "HP-UX-03 solid selection focus",
+          "start": "2026-10-25T04:03:44.163Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 654.7273,
+          "end": "2026-10-25T04:03:45.380Z",
+          "name": "HP-CORNER-ENTRY whole wire from a real viewport edge pick",
+          "start": "2026-10-25T04:03:44.725Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 647.1572,
+          "end": "2026-10-25T04:03:46.027Z",
+          "name": "HP-ME-03 測定を先に選んで線と位置を拾う",
+          "start": "2026-10-25T04:03:45.381Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 568.0809,
+          "end": "2026-10-25T04:03:46.597Z",
+          "name": "HP-ME-01 測定の3モードと寸法を残す",
+          "start": "2026-10-25T04:03:46.028Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 584.8114,
+          "end": "2026-10-25T04:03:47.182Z",
+          "name": "HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
+          "start": "2026-10-25T04:03:46.597Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1644.4995,
+          "end": "2026-10-25T04:03:48.826Z",
+          "name": "HP-UX-SELECT modeling tools retain inputs through selection Delete and history",
+          "start": "2026-10-25T04:03:47.182Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 633.2401,
+          "end": "2026-10-25T04:03:49.461Z",
+          "name": "HP-UX-DRAW explicit selection preserves draft and empty Delete",
+          "start": "2026-10-25T04:03:48.827Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 646.9153,
+          "end": "2026-10-25T04:03:50.107Z",
+          "name": "HP-UX-REF reference role pauses during arbitrary selection",
+          "start": "2026-10-25T04:03:49.461Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1821.9606,
+          "end": "2026-10-25T04:03:51.930Z",
+          "name": "HP-UX-TITLE file name follows new open and failed open",
+          "start": "2026-10-25T04:03:50.108Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 650.5801,
+          "end": "2026-10-25T04:03:52.581Z",
+          "name": "HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",
+          "start": "2026-10-25T04:03:51.930Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1451.2581,
+          "end": "2026-10-25T04:03:54.033Z",
+          "name": "HP-DSEL-02 drawing tools multiple segments empty deletion",
+          "start": "2026-10-25T04:03:52.582Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 720.3057,
+          "end": "2026-10-25T04:03:54.754Z",
+          "name": "HP-DSEL-03 input and deletion history order save boundary",
+          "start": "2026-10-25T04:03:54.033Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 767.6857,
+          "end": "2026-10-25T04:03:55.522Z",
+          "name": "HP-DSEL-04 unrelated document Undo Redo cannot impersonate deletion",
+          "start": "2026-10-25T04:03:54.755Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 645.0785,
+          "end": "2026-10-25T04:03:56.167Z",
+          "name": "HP-DSEL-05 Ctrl window selects whole wire",
+          "start": "2026-10-25T04:03:55.522Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 667.1654,
+          "end": "2026-10-25T04:03:56.835Z",
+          "name": "HP-DSEL-06 Ctrl crossing selects whole wire",
+          "start": "2026-10-25T04:03:56.168Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 633.1461,
+          "end": "2026-10-25T04:03:57.469Z",
+          "name": "HP-DSEL-07 numeric input point pick reference pick native text and Escape",
+          "start": "2026-10-25T04:03:56.836Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 699.5172,
+          "end": "2026-10-25T04:03:58.169Z",
+          "name": "HP-DSEL-08 right click segment Delete keeps drawing",
+          "start": "2026-10-25T04:03:57.470Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1033.8469,
+          "end": "2026-10-25T04:03:59.203Z",
+          "name": "HP-DSEL-09 dependent context deletion cancel keeps drawing",
+          "start": "2026-10-25T04:03:58.169Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1285.8104,
+          "end": "2026-10-25T04:04:00.490Z",
+          "name": "HP-DSEL-10 explicit cancel save and reopen invalidate old input prefixes",
+          "start": "2026-10-25T04:03:59.204Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1750.2561,
+          "end": "2026-10-25T04:04:02.241Z",
+          "name": "HP-UX-PROJ selection delete preserves existing projection roles",
+          "start": "2026-10-25T04:04:00.491Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 515.6184,
+          "end": "2026-10-25T04:04:02.757Z",
+          "name": "HP-NAV-01 indexed selection matches core semantics",
+          "start": "2026-10-25T04:04:02.241Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 593.3133,
+          "end": "2026-10-25T04:04:03.351Z",
+          "name": "HP-NAV-02 camera and reentrant selection index",
+          "start": "2026-10-25T04:04:02.757Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 556.4628,
+          "end": "2026-10-25T04:04:03.908Z",
+          "name": "HP-NAV-03 compact navigator exact targets",
+          "start": "2026-10-25T04:04:03.352Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 533.297,
+          "end": "2026-10-25T04:04:04.442Z",
+          "name": "HP-NAV-04 outside release cancels buttons",
+          "start": "2026-10-25T04:04:03.909Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 549.8182,
+          "end": "2026-10-25T04:04:04.992Z",
+          "name": "HP-NAV-05 consistent drag and fine clicks",
+          "start": "2026-10-25T04:04:04.442Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 531.273,
+          "end": "2026-10-25T04:04:05.524Z",
+          "name": "HP-NAV-06 cube regions highlights and extrusion overlap",
+          "start": "2026-10-25T04:04:04.992Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 656.8489,
+          "end": "2026-10-25T04:04:06.181Z",
+          "name": "HP-XP-01 一覧の節は正本の順で原点が先頭",
+          "start": "2026-10-25T04:04:05.524Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 595.4031,
+          "end": "2026-10-25T04:04:06.778Z",
+          "name": "HP-XP-02 ◉ で1つずつ出し隠しでき、取り消しで戻る",
+          "start": "2026-10-25T04:04:06.182Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 617.9981,
+          "end": "2026-10-25T04:04:07.395Z",
+          "name": "HP-XP-03 3D と一覧の選択が両方向に同期する",
+          "start": "2026-10-25T04:04:06.778Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 597.5782,
+          "end": "2026-10-25T04:04:07.994Z",
+          "name": "HP-XP-04 右クリックの献立は正本の順で、グループへ移せる",
+          "start": "2026-10-25T04:04:07.396Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 650.0679,
+          "end": "2026-10-25T04:04:08.645Z",
+          "name": "HP-XP-05 collapse, nested groups, visibility, search and undo redo",
+          "start": "2026-10-25T04:04:07.995Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 591.391,
+          "end": "2026-10-25T04:04:09.236Z",
+          "name": "HP-XP-06 bulk categories preserve selection and Undo",
+          "start": "2026-10-25T04:04:08.645Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 808.2589,
+          "end": "2026-10-25T04:04:10.045Z",
+          "name": "HP-UX-TREE selected checkbox and small pointer motion preserve selection",
+          "start": "2026-10-25T04:04:09.237Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1267.6963,
+          "end": "2026-10-25T04:04:11.314Z",
+          "name": "HP-XP-07 sibling buttons and hidden descendant preservation",
+          "start": "2026-10-25T04:04:10.046Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 515.876,
+          "end": "2026-10-25T04:04:11.830Z",
+          "name": "HP-XP-08 generated curve compaction preserves geometry",
+          "start": "2026-10-25T04:04:11.315Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 650.0544,
+          "end": "2026-10-25T04:04:12.480Z",
+          "name": "HP-XP-09 overlap preview and reference-picking roles",
+          "start": "2026-10-25T04:04:11.830Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 677.7576,
+          "end": "2026-10-25T04:04:13.158Z",
+          "name": "HP-XP-10 grouped category visibility remains scoped",
+          "start": "2026-10-25T04:04:12.481Z",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "round3-io",
+      "total": 17,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 4880.0365,
+          "end": "2026-10-25T04:13:43.501Z",
+          "name": "HP-OPEN-01 Escape cancels saved vessel history with an armed editor and preserves Undo",
+          "start": "2026-10-25T04:13:38.621Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 3036.1582,
+          "end": "2026-10-25T04:13:46.538Z",
+          "name": "HP-OPEN-02 crashed rebuild preserves document path and permits retry",
+          "start": "2026-10-25T04:13:43.501Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2850.9172,
+          "end": "2026-10-25T04:13:49.390Z",
+          "name": "HP-OPEN-03 invalid rebuilt geometry preserves original document",
+          "start": "2026-10-25T04:13:46.539Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1792.22,
+          "end": "2026-10-25T04:13:51.182Z",
+          "name": "HP-OPEN-04 prepared open preserves metadata and unknown archive entries",
+          "start": "2026-10-25T04:13:49.390Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2969.0653,
+          "end": "2026-10-25T04:13:54.152Z",
+          "name": "HP-OPEN-05 unsupported warped history preserves the old document",
+          "start": "2026-10-25T04:13:51.182Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2517.4998,
+          "end": "2026-10-25T04:13:56.670Z",
+          "name": "HP-OPEN-06 saved native cache, invalidation and corruption recovery",
+          "start": "2026-10-25T04:13:54.152Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 3512.3588,
+          "end": "2026-10-25T04:14:00.182Z",
+          "name": "HP-OPEN-07 hidden native shapes mesh on first visibility",
+          "start": "2026-10-25T04:13:56.671Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2824.006,
+          "end": "2026-10-25T04:14:03.007Z",
+          "name": "HP-OPEN-08 parallel independent surfaces match serial cold rebuild",
+          "start": "2026-10-25T04:14:00.184Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2830.0889,
+          "end": "2026-10-25T04:14:05.837Z",
+          "name": "HP-OPEN-09 prepared transfer identities cancellation and poisoned cache",
+          "start": "2026-10-25T04:14:03.008Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 807.6822,
+          "end": "2026-10-25T04:14:06.646Z",
+          "name": "HP-OUT-08 prepared output reuse and format changes",
+          "start": "2026-10-25T04:14:05.838Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 792.271,
+          "end": "2026-10-25T04:14:07.439Z",
+          "name": "HP-OUT-07 output snapshot and placement ownership",
+          "start": "2026-10-25T04:14:06.647Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 806.0666,
+          "end": "2026-10-25T04:14:08.246Z",
+          "name": "HP-OUT-06 面と点の選択部分出力",
+          "start": "2026-10-25T04:14:07.440Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1788.2115,
+          "end": "2026-10-25T04:14:10.035Z",
+          "name": "HP-OUT-04 近似の指定部材と生成配置の取消",
+          "start": "2026-10-25T04:14:08.247Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 779.2744,
+          "end": "2026-10-25T04:14:10.815Z",
+          "name": "HP-OUT-05 3D選択と選び直し",
+          "start": "2026-10-25T04:14:10.036Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 850.3485,
+          "end": "2026-10-25T04:14:11.666Z",
+          "name": "HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",
+          "start": "2026-10-25T04:14:10.815Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1516.6463,
+          "end": "2026-10-25T04:14:13.183Z",
+          "name": "HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",
+          "start": "2026-10-25T04:14:11.666Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 742.7421,
+          "end": "2026-10-25T04:14:13.926Z",
+          "name": "HP-OUT-03 不正な配置を拒否し元文書を保持",
+          "start": "2026-10-25T04:14:13.184Z",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "round1-dpi150",
+      "total": 12,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 3108.9575,
+          "end": "2026-10-25T04:24:12.486Z",
+          "name": "HP-PERF-01 dense face hover and image compositing",
+          "start": "2026-10-25T04:24:09.377Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2563.953,
+          "end": "2026-10-25T04:24:15.051Z",
+          "name": "HP-IMG-01 image placement persistence cancel and edit",
+          "start": "2026-10-25T04:24:12.486Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1601.3441,
+          "end": "2026-10-25T04:24:16.652Z",
+          "name": "HP-IMG-02 curved projection and wrapping",
+          "start": "2026-10-25T04:24:15.051Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 745.2626,
+          "end": "2026-10-25T04:24:17.398Z",
+          "name": "HP-IMG-03 image drag preview cancel commit undo",
+          "start": "2026-10-25T04:24:16.653Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1900.9281,
+          "end": "2026-10-25T04:24:19.300Z",
+          "name": "HP-PERF-02 visibility retains native geometry and edge identity",
+          "start": "2026-10-25T04:24:17.399Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 939.6354,
+          "end": "2026-10-25T04:24:20.240Z",
+          "name": "HP-GRID-01 display toggle preserves snapping and pending input",
+          "start": "2026-10-25T04:24:19.300Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1017.385,
+          "end": "2026-10-25T04:24:21.258Z",
+          "name": "HP-PERF-03 presentation camera capture resize and idle",
+          "start": "2026-10-25T04:24:20.241Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1982.8926,
+          "end": "2026-10-25T04:24:23.242Z",
+          "name": "HP-GRID-02 selected wire contrast and overlapping roles",
+          "start": "2026-10-25T04:24:21.258Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 851.6037,
+          "end": "2026-10-25T04:24:24.093Z",
+          "name": "HP-GRID-03 hidden overlays keep GPU shading",
+          "start": "2026-10-25T04:24:23.242Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2487.7825,
+          "end": "2026-10-25T04:24:26.582Z",
+          "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+          "start": "2026-10-25T04:24:24.094Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 834.0674,
+          "end": "2026-10-25T04:24:27.417Z",
+          "name": "HP-GRID-05 projected grid reuse and invalidation",
+          "start": "2026-10-25T04:24:26.582Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1272.3145,
+          "end": "2026-10-25T04:24:28.689Z",
+          "name": "HP-IMAGE-GPU image depth transparency texture reuse and resize",
+          "start": "2026-10-25T04:24:27.417Z",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "round1-software",
+      "total": 12,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 3133.4256,
+          "end": "2026-10-25T04:25:20.956Z",
+          "name": "HP-PERF-01 dense face hover and image compositing",
+          "start": "2026-10-25T04:25:17.822Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 2025.1838,
+          "end": "2026-10-25T04:25:22.981Z",
+          "name": "HP-IMG-01 image placement persistence cancel and edit",
+          "start": "2026-10-25T04:25:20.956Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1238.8892,
+          "end": "2026-10-25T04:25:24.221Z",
+          "name": "HP-IMG-02 curved projection and wrapping",
+          "start": "2026-10-25T04:25:22.982Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 472.3119,
+          "end": "2026-10-25T04:25:24.694Z",
+          "name": "HP-IMG-03 image drag preview cancel commit undo",
+          "start": "2026-10-25T04:25:24.221Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1464.977,
+          "end": "2026-10-25T04:25:26.160Z",
+          "name": "HP-PERF-02 visibility retains native geometry and edge identity",
+          "start": "2026-10-25T04:25:24.695Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 636.1987,
+          "end": "2026-10-25T04:25:26.796Z",
+          "name": "HP-GRID-01 display toggle preserves snapping and pending input",
+          "start": "2026-10-25T04:25:26.160Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 745.4196,
+          "end": "2026-10-25T04:25:27.543Z",
+          "name": "HP-PERF-03 presentation camera capture resize and idle",
+          "start": "2026-10-25T04:25:26.796Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1495.371,
+          "end": "2026-10-25T04:25:29.038Z",
+          "name": "HP-GRID-02 selected wire contrast and overlapping roles",
+          "start": "2026-10-25T04:25:27.543Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 624.2484,
+          "end": "2026-10-25T04:25:29.663Z",
+          "name": "HP-GRID-03 hidden overlays keep GPU shading",
+          "start": "2026-10-25T04:25:29.039Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1754.1677,
+          "end": "2026-10-25T04:25:31.418Z",
+          "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+          "start": "2026-10-25T04:25:29.664Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 752.5948,
+          "end": "2026-10-25T04:25:32.171Z",
+          "name": "HP-GRID-05 projected grid reuse and invalidation",
+          "start": "2026-10-25T04:25:31.419Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1128.0865,
+          "end": "2026-10-25T04:25:33.300Z",
+          "name": "HP-IMAGE-GPU image depth transparency texture reuse and resize",
+          "start": "2026-10-25T04:25:32.172Z",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "round1-offscreen",
+      "total": 12,
+      "failed": 0,
+      "cases": [
+        {
+          "duration_ms": 2043.7101,
+          "end": "2026-10-25T04:26:28.892Z",
+          "name": "HP-PERF-01 dense face hover and image compositing",
+          "start": "2026-10-25T04:26:26.849Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1853.113,
+          "end": "2026-10-25T04:26:30.746Z",
+          "name": "HP-IMG-01 image placement persistence cancel and edit",
+          "start": "2026-10-25T04:26:28.893Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1166.3824,
+          "end": "2026-10-25T04:26:31.914Z",
+          "name": "HP-IMG-02 curved projection and wrapping",
+          "start": "2026-10-25T04:26:30.747Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 428.6416,
+          "end": "2026-10-25T04:26:32.343Z",
+          "name": "HP-IMG-03 image drag preview cancel commit undo",
+          "start": "2026-10-25T04:26:31.914Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1381.0999,
+          "end": "2026-10-25T04:26:33.724Z",
+          "name": "HP-PERF-02 visibility retains native geometry and edge identity",
+          "start": "2026-10-25T04:26:32.344Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 509.8547,
+          "end": "2026-10-25T04:26:34.234Z",
+          "name": "HP-GRID-01 display toggle preserves snapping and pending input",
+          "start": "2026-10-25T04:26:33.725Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 669.1039,
+          "end": "2026-10-25T04:26:34.904Z",
+          "name": "HP-PERF-03 presentation camera capture resize and idle",
+          "start": "2026-10-25T04:26:34.235Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1247.4105,
+          "end": "2026-10-25T04:26:36.153Z",
+          "name": "HP-GRID-02 selected wire contrast and overlapping roles",
+          "start": "2026-10-25T04:26:34.905Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 567.3924,
+          "end": "2026-10-25T04:26:36.720Z",
+          "name": "HP-GRID-03 hidden overlays keep GPU shading",
+          "start": "2026-10-25T04:26:36.153Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1390.3417,
+          "end": "2026-10-25T04:26:38.112Z",
+          "name": "HP-GRID-04 optional settings preserve tools and numeric input",
+          "start": "2026-10-25T04:26:36.721Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1097.7308,
+          "end": "2026-10-25T04:26:39.209Z",
+          "name": "HP-GRID-05 projected grid reuse and invalidation",
+          "start": "2026-10-25T04:26:38.112Z",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 1142.8101,
+          "end": "2026-10-25T04:26:40.353Z",
+          "name": "HP-IMAGE-GPU image depth transparency texture reuse and resize",
+          "start": "2026-10-25T04:26:39.209Z",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "openMs": {
+    "owner": {
+      "beforeCold": 9227,
+      "afterCold": 8096,
+      "beforeWarm": 1275,
+      "afterWarm": 1101
+    },
+    "heavy": {
+      "beforeCold": 25138,
+      "afterCold": 21023,
+      "beforeWarm": 7012,
+      "afterWarm": 6964
+    }
+  },
+  "output": {
+    "capture_ms": 91.6751,
+    "mesh_builds": 24,
+    "parts": 12,
+    "step_ms": 244.6356,
+    "stl_ms": 92.472,
+    "three_format_changes_ms": 0.0418
+  },
+  "fullGate": {
+    "passed": true,
+    "ctest": 195,
+    "skip": 0,
+    "mainUiCases": 591,
+    "packageUiCases": 591,
+    "legacySelfTest": true,
+    "evidence": "out/verification/image-io-accepted-20261025/result.json",
+    "release": "out/releases/image-io-accepted-20261025",
+    "productSource": "a89dd605c"
+  },
+  "actualOwnerCopy": {
+    "change": "Only the two pre-existing images were made visible in an isolated copy; original unchanged.",
+    "runs": [
+      {
+        "version": "baseline",
+        "measurements": [
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "off",
+            "max_ms": 87.7003,
+            "median_ms": 83.4237,
+            "minor_u_spacing_px": 29.00021717641121,
+            "minor_v_spacing_px": 28.096540880068,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 87.7003,
+            "p99_ms": 87.7003,
+            "paint_gpu_complete_median_ms": 68.0656,
+            "paint_gpu_complete_p95_ms": 73.5594,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "off",
+            "max_ms": 87.9159,
+            "median_ms": 79.9327,
+            "minor_u_spacing_px": 28.284271247461906,
+            "minor_v_spacing_px": 28.2842712474617,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 87.9159,
+            "p99_ms": 87.9159,
+            "paint_gpu_complete_median_ms": 64.705,
+            "paint_gpu_complete_p95_ms": 75.5186,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "major",
+            "max_ms": 82.1675,
+            "median_ms": 77.6263,
+            "minor_u_spacing_px": 69.89052339515209,
+            "minor_v_spacing_px": 67.71266352096347,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 82.1675,
+            "p99_ms": 82.1675,
+            "paint_gpu_complete_median_ms": 62.7752,
+            "paint_gpu_complete_p95_ms": 66.618,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "major",
+            "max_ms": 81.3025,
+            "median_ms": 77.8271,
+            "minor_u_spacing_px": 68.16509370638339,
+            "minor_v_spacing_px": 68.16509370638339,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 81.3025,
+            "p99_ms": 81.3025,
+            "paint_gpu_complete_median_ms": 63.4741,
+            "paint_gpu_complete_p95_ms": 66.1114,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "subdivision",
+            "max_ms": 84.839,
+            "median_ms": 79.596,
+            "minor_u_spacing_px": 7.2500542941028945,
+            "minor_v_spacing_px": 7.024135220017078,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 84.839,
+            "p99_ms": 84.839,
+            "paint_gpu_complete_median_ms": 66.0295,
+            "paint_gpu_complete_p95_ms": 68.2259,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "subdivision",
+            "max_ms": 79.6642,
+            "median_ms": 77.2935,
+            "minor_u_spacing_px": 7.071067811865527,
+            "minor_v_spacing_px": 7.071067811865481,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 79.6642,
+            "p99_ms": 79.6642,
+            "paint_gpu_complete_median_ms": 62.4706,
+            "paint_gpu_complete_p95_ms": 63.7108,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "near-edge",
+            "max_ms": 73.156,
+            "median_ms": 67.778,
+            "minor_u_spacing_px": 7.075241415701635,
+            "minor_v_spacing_px": 0.26206840535600345,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 73.156,
+            "p99_ms": 73.156,
+            "paint_gpu_complete_median_ms": 54.3764,
+            "paint_gpu_complete_p95_ms": 59.7006,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "near-edge",
+            "max_ms": 125.5481,
+            "median_ms": 67.7272,
+            "minor_u_spacing_px": 10,
+            "minor_v_spacing_px": 0.17452406437291756,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 125.5481,
+            "p99_ms": 125.5481,
+            "paint_gpu_complete_median_ms": 53.1248,
+            "paint_gpu_complete_p95_ms": 60.8069,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 19,
+            "triangles": 49260
+          }
+        ]
+      },
+      {
+        "version": "final",
+        "measurements": [
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "off",
+            "image_texture_uploads": 0,
+            "max_ms": 27.9713,
+            "median_ms": 17.8183,
+            "minor_u_spacing_px": 29.00021717641121,
+            "minor_v_spacing_px": 28.096540880068,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 12,
+            "p95_ms": 27.9713,
+            "p99_ms": 27.9713,
+            "paint_gpu_complete_median_ms": 3.9561,
+            "paint_gpu_complete_p95_ms": 11.4759,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "off",
+            "image_texture_uploads": 0,
+            "max_ms": 35.1004,
+            "median_ms": 20.6161,
+            "minor_u_spacing_px": 28.284271247461906,
+            "minor_v_spacing_px": 28.2842712474617,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 15,
+            "p95_ms": 35.1004,
+            "p99_ms": 35.1004,
+            "paint_gpu_complete_median_ms": 3.8267,
+            "paint_gpu_complete_p95_ms": 7.2558,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "major",
+            "image_texture_uploads": 0,
+            "max_ms": 40.85,
+            "median_ms": 21.3954,
+            "minor_u_spacing_px": 69.89052339515209,
+            "minor_v_spacing_px": 67.71266352096347,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 40.85,
+            "p99_ms": 40.85,
+            "paint_gpu_complete_median_ms": 4.1429,
+            "paint_gpu_complete_p95_ms": 9.259,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "major",
+            "image_texture_uploads": 0,
+            "max_ms": 41.3658,
+            "median_ms": 23.8529,
+            "minor_u_spacing_px": 68.16509370638339,
+            "minor_v_spacing_px": 68.16509370638339,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 41.3658,
+            "p99_ms": 41.3658,
+            "paint_gpu_complete_median_ms": 4.2744,
+            "paint_gpu_complete_p95_ms": 9.9495,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "subdivision",
+            "image_texture_uploads": 0,
+            "max_ms": 25.3153,
+            "median_ms": 20.6244,
+            "minor_u_spacing_px": 7.2500542941028945,
+            "minor_v_spacing_px": 7.024135220017078,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 16,
+            "p95_ms": 25.3153,
+            "p99_ms": 25.3153,
+            "paint_gpu_complete_median_ms": 4.185,
+            "paint_gpu_complete_p95_ms": 8.2923,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "subdivision",
+            "image_texture_uploads": 0,
+            "max_ms": 25.2084,
+            "median_ms": 19.1299,
+            "minor_u_spacing_px": 7.071067811865527,
+            "minor_v_spacing_px": 7.071067811865481,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 16,
+            "p95_ms": 25.2084,
+            "p99_ms": 25.2084,
+            "paint_gpu_complete_median_ms": 3.9806,
+            "paint_gpu_complete_p95_ms": 6.6392,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "near-edge",
+            "image_texture_uploads": 0,
+            "max_ms": 18.5905,
+            "median_ms": 16.9397,
+            "minor_u_spacing_px": 7.075241415701635,
+            "minor_v_spacing_px": 0.26206840535600345,
+            "native_frames": 20,
+            "operation": "orbit",
+            "over_16_67_ms": 10,
+            "p95_ms": 18.5905,
+            "p99_ms": 18.5905,
+            "paint_gpu_complete_median_ms": 3.1568,
+            "paint_gpu_complete_p95_ms": 3.8486,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          },
+          {
+            "application_readbacks": 0,
+            "backend": "NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2",
+            "frames": 16,
+            "grid": "near-edge",
+            "image_texture_uploads": 0,
+            "max_ms": 19.2637,
+            "median_ms": 17.2408,
+            "minor_u_spacing_px": 10,
+            "minor_v_spacing_px": 0.17452406437291756,
+            "native_frames": 20,
+            "operation": "pan",
+            "over_16_67_ms": 12,
+            "p95_ms": 19.2637,
+            "p99_ms": 19.2637,
+            "paint_gpu_complete_median_ms": 3.3282,
+            "paint_gpu_complete_p95_ms": 6.3894,
+            "selected_entities": 0,
+            "shapes": 7,
+            "software_rasterizations": 0,
+            "triangles": 49260
+          }
+        ]
+      }
+    ]
+  }
+}

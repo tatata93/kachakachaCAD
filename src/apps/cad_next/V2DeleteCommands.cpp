@@ -4,6 +4,7 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 #include "V2EntityTree.h"
 #include <QTreeWidgetItem>
 #include "kachakacha/document/Commands.h"
@@ -154,7 +155,7 @@ void V2MainWindow::DeleteSelected()
     const auto result=session_->GetDocument().Run(DeletePlan(std::move(after)));
     if(!result.committed){ReportDiagnostics(result.diagnostics);return;}
     V2DrawingSelection::Of(*viewport_).Deleted(*session_,before.revision,hadUndo);
-    if(!V2DrawingSelection::IsDrawing(session_->CurrentTool()))session_->CancelTool();
+    if(!V2DrawingSelection::IsDrawing(session_->CurrentTool())&&!V2ToolSelection::Active(*viewport_))session_->CancelTool();
     AdoptCurrentDocument();RefreshShapeViews();RefreshEntityList();
     SetStatus(keepContents?QStringLiteral("グループを解除しました。中身は残っています。Ctrl+Zで戻せます。"):
         QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));

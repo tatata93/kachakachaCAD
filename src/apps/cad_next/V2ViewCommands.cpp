@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 //! 見え方と作業中グループのコマンド(V2MainWindow の一部)。
 //!
 //! ここで扱うものは、どれも **形を変えない。**
@@ -660,7 +661,7 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         const auto index=static_cast<std::size_t>(viewport_->CandidateIndex());
         connect(remove,&QAction::hovered,viewport_,[this,index]{viewport_->PreviewCandidate(index);});
         connect(remove,&QAction::triggered,this,[this,pick=*candidate] {
-            if(!V2DrawingSelection::CanSelect(*session_,*viewport_))RunCommand("selection.activate");
+            if(!V2DrawingSelection::CanSelect(*session_,*viewport_))V2ToolSelection::Begin(*viewport_);
             else V2DrawingSelection::Of(*viewport_).Select();
             kachakacha::v2::app::SelectionSet exact;
             kachakacha::v2::app::SelectionRef ref;ref.entityId=pick.entityId;

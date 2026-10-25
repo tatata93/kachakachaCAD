@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
 //! ここに集めたのは、V1にあって V2 に無かったものである。
@@ -376,10 +377,10 @@ kachakacha::v2::app::PointerCursorContext V2Viewport::CursorContextNow() const
     context.overViewGadget = gadgetHoverIndex_.has_value() || cubeHoverZone_.has_value();
     // 薄く出ている(作業平面の外の)線の上は、押しても拾えない。
     // 拾えないことは、押してみるまで分からないと困る(§5.1「禁止対象」)。
-    context.overForbidden = hoverOffPlane_;
+    context.overForbidden = hoverOffPlane_&&!V2ToolSelection::Active(*this);
     const auto tool = session_->CurrentTool();
     // 押すと作図点が置かれる道具かどうか。選択と測るは点を置かない。
-    context.placingPoints = tool != kachakacha::v2::modeling::DrawingTool::Select
+    context.placingPoints = !V2ToolSelection::Active(*this)&&tool != kachakacha::v2::modeling::DrawingTool::Select
         && tool != kachakacha::v2::modeling::DrawingTool::Measure;
     return context;
 }
@@ -487,7 +488,7 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     cycle_.index = index;
     SyncHoverWithCandidate();
     auto picked = CurrentCandidate();
-    if(ReferencePickPending()) {
+    if(ReferencePickPending()&&!V2ToolSelection::Active(*this)) {
         if(picked&&elementPickHandler_)return AcceptElementPick(*picked);
         if(picked&&referencePickHandler_) {
             auto handler=std::move(referencePickHandler_);referencePickIds_.clear();ForgetPickCycle();
@@ -966,7 +967,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
         const auto* e=session_->GetDocument().FindEntity(c.entityId);
         return e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface);
     }); // Section faces use clipped meshes; original native edges must not reappear on hover.
-    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
+    if (!V2ToolSelection::Active(*this)&&session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair) {
         std::erase_if(candidates, [](const auto& c) {
             return c.kind != kachakacha::v2::app::SelectionElementKind::Edge;
         });
@@ -978,13 +979,13 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
-    if (ReferencePickPending()) {
+    if (ReferencePickPending()&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) {
             if (elementPickFilter_) return !elementPickFilter_(c);
             return c.kind != kachakacha::v2::app::SelectionElementKind::Edge
                 || std::find(referencePickIds_.begin(), referencePickIds_.end(), c.entityId) == referencePickIds_.end();
         });
-    } else if (toolCandidateFilter_) {
+    } else if (toolCandidateFilter_&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) { return !toolCandidateFilter_(c); });
     }
     return SortCandidatesForSlot(std::move(candidates));
@@ -1002,7 +1003,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::SortCandidatesForSlo
 {
     using kachakacha::v2::app::ExtrudeSlot;
     using kachakacha::v2::app::PickedKind;
-    if (pickSlot_ == ExtrudeSlot::None || candidates.size() < 2) {
+    if (V2ToolSelection::Active(*this)||pickSlot_ == ExtrudeSlot::None || candidates.size() < 2) {
         return candidates;
     }
     const auto kindOf = [this](const kachakacha::v2::app::PickCandidate& candidate) {
@@ -1026,7 +1027,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::SortCandidatesForSlo
 std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::AsSolidIfProfileTaken(
     const std::optional<kachakacha::v2::app::PickCandidate>& picked) const
 {
-    if (!picked.has_value()) {
+    if (V2ToolSelection::Active(*this)||!picked.has_value()) {
         return picked;
     }
     std::vector<kachakacha::v2::app::PickedKind> already;
@@ -1093,7 +1094,7 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
 {
     using kachakacha::v2::app::PickedKind;
     using kachakacha::v2::app::SelectionMode;
-    if (mode != SelectionMode::Replace || !picked.has_value()) {
+    if (V2ToolSelection::Active(*this)||mode != SelectionMode::Replace || !picked.has_value()) {
         return mode;
     }
     // 決まりは core にある。**スロットではなく「道具が動いているか」で決める。**
@@ -1371,6 +1372,14 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         return;
     }
     // The visible navigator is in front of extrusion handles as well as model edges.
+    const bool editPick=V2ToolSelection::Active(*this)||((event->modifiers()&Qt::ControlModifier)
+        &&!V2DrawingSelection::IsDrawing(session_->CurrentTool())
+        &&session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Measure
+        &&(toolPickActive_||ReferencePickPending()||V2ToolSelection::HasTool(*this)||session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Select));
+    if(event->button()==Qt::LeftButton&&editPick){
+        V2ToolSelection::Begin(*this);BeginBoxSelect(event->position(),event->modifiers());
+        SelectAt(event->position(),event->modifiers());return;
+    }
     if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) return;
     if (ReferencePickPending()) {
         SelectAt(event->position(), event->modifiers());

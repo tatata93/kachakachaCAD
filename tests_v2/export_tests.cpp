@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <sstream>
+#include <array>
 #include <vector>
 
 using kachakacha::v2::exporters::PatternCurve;
@@ -348,3 +350,53 @@ KACHA_V2_TEST(exportStl, レイヤー名が機械向けである)
 }
 
 KACHA_V2_TEST_MAIN("export_tests")
+
+KACHA_V2_TEST(exportDxf, UniformSplineKnotsReproduceTheActualCurve)
+{
+    const auto curve=CurveSegment::MakeCubicBSpline({{0,0,0},{2,8,0},{10,-3,0},{18,7,0},{21,0,0},{25,4,0}}).Value();
+    PatternPage page;page.curves.push_back({PatternLine::Outline,curve,false,"spline"});
+    const auto written=WritePatternDxf(page);Require(written.HasValue(),"DXF output");
+    std::istringstream lines(written.Value());std::string code,value;
+    std::vector<double> knots;std::vector<Vector3> control;bool spline=false;
+    while(std::getline(lines,code)&&std::getline(lines,value)){
+        const auto group=std::stoi(code);if(group==0){if(spline)break;spline=value=="SPLINE";}
+        if(!spline)continue;
+        if(group==40)knots.push_back(std::stod(value));
+        if(group==10)control.push_back({std::stod(value),0,0});
+        if(group==20)control.back().y=std::stod(value);
+        if(group==30)control.back().z=std::stod(value);
+    }
+    Require(control.size()==6&&knots.size()==10,"one spline with native controls and complete knots");
+    // Independent de Boor reconstruction of the written file, including its active domain.
+    for(int i=0;i<=100;++i){
+        const double t=i/100.0,u=knots[3]+t*(knots[control.size()]-knots[3]);
+        std::size_t span=control.size()-1;
+        if(i<100)for(std::size_t j=3;j<control.size();++j)if(u>=knots[j]&&u<knots[j+1]){span=j;break;}
+        std::array<Vector3,4> d;for(int j=0;j<4;++j)d[j]=control[span-3+j];
+        for(int r=1;r<=3;++r)for(int j=3;j>=r;--j){
+            const auto k=span-3+j;const double a=(u-knots[k])/(knots[k+4-r]-knots[k]);
+            d[j]=d[j-1]*(1-a)+d[j]*a;
+        }
+        Require((d[3]-curve.Evaluate(t)).Length()<1e-6,"written spline preserves every tested point");
+    }
+}
+
+KACHA_V2_TEST(exportDxf, ArcOrientationAccountsForPlaneNormal)
+{
+    for(double normal:{-1.0,1.0})for(double sweep:{-kPi/2,kPi/2}){
+        PatternPage page;const auto arc=CurveSegment::MakeCircularArc({20,20,0},{0,0,normal},{1,0,0},10,0,sweep).Value();
+        page.curves.push_back({PatternLine::Outline,arc,false,""});
+        const auto dxf=WritePatternDxf(page),svg=WritePatternSvg(page,"arc");
+        Require(dxf.HasValue()&&svg.HasValue(),"arc output");
+        std::istringstream lines(dxf.Value());std::string code,value;double start=0,end=0;
+        while(std::getline(lines,code)&&std::getline(lines,value)){
+            if(std::stoi(code)==50)start=std::stod(value);if(std::stoi(code)==51)end=std::stod(value);
+        }
+        const double span=std::fmod(end-start+360,360);
+        RequireNear(span,90,1e-6,"DXF must contain the short quarter, never its complement");
+        const auto mid=Vector3{20+10*std::cos((start+span*.5)*kPi/180),20+10*std::sin((start+span*.5)*kPi/180),0};
+        Require((mid-arc.Evaluate(.5)).Length()<1e-6,"DXF quarter is on the correct side");
+        const auto flag=normal*sweep<0?" 0 0,1 ":" 0 0,0 ";
+        Require(svg.Value().find(flag)!=std::string::npos,"SVG respects oriented XY sweep");
+    }
+}

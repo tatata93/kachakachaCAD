@@ -842,3 +842,11 @@ WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入�
 `115-panorama-05-thickness-preview`: ![中央0.5mmの厚みを指定](images/v2-115-panorama-05-thickness-preview.png)
 
 `115-panorama-06-hole-solid`: ![窓が貫通したソリッド](images/v2-115-panorama-06-hole-solid.png)
+
+## 2026-10-25 ツールを保った選択・削除
+
+[詳しい操作手順](explorer-selection.html#tool-selection)。スナップ横の「選択・削除」で、元の役割対象とは別に任意の線・面・部品を選びます。Delete／Undo／Redoの後も元の道具を保ち、「ツールに戻る」かEscで復帰します。役割選択ボタンからも戻れます。元の入力自体を削除した場合は選び直してください。
+
+`tool-edit-selection`: ![投影ツールを保った線分選択の実Qt画面](images/v2-tool-edit-selection.png)
+
+左一覧のチェックは選択状態を変えず、その行の表示だけを一度切り替えます。タイトルには現在のファイル名を表示します。

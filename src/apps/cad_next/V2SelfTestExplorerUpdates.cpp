@@ -157,6 +157,40 @@ void HumanKey(QWidget* widget,int key){
     QKeyEvent press(QEvent::KeyPress,key,Qt::NoModifier),release(QEvent::KeyRelease,key,Qt::NoModifier);
     QApplication::sendEvent(widget,&press);QApplication::sendEvent(widget,&release);QEventLoop settle;QTimer::singleShot(15,&settle,&QEventLoop::quit);settle.exec();
 }
+QPointF CheckPosition(V2EntityTree& tree,QTreeWidgetItem* row){
+    QStyleOptionViewItem option;option.initFrom(&tree);option.rect=tree.visualItemRect(row);
+    option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=row->checkState(0);
+    return tree.style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,&tree).center();
+}
+bool SelectedVisibilityClicks(V2MainWindow& w){
+    w.RunCommand("file.new");w.resize(1500,950);QApplication::processEvents();
+    const auto a=DrawRectangleAtByHand(w,.2,.2,.4,.4),b=DrawRectangleAtByHand(w,.6,.2,.8,.4);
+    if(a.IsNil()||b.IsNil())return false;w.RunCommand("selection.activate");
+    auto* tree=w.EntityTree();auto* row=w.ItemOfEntity(a);tree->scrollToItem(row);QApplication::processEvents();
+    HumanClick(tree->viewport(),tree->visualItemRect(row).center());
+    const auto selected=w.Viewport().Selection().entityIds;const auto key=V2EntityTree::KeyOf(tree->currentItem());
+    if(!Explain("label click selects the intended wire",selected==std::vector<base::EntityId>{a}))return false;
+    const auto visible=[&](auto id){return w.Session().GetDocument().FindEntity(id)->visibility==domain::Visibility::Visible;};
+    for(const bool expected:{false,true}){
+        row=w.ItemOfEntity(a);HumanClick(tree->viewport(),CheckPosition(*tree,row));
+        if(!Explain("selected row checkbox changes visibility exactly once",visible(a)==expected&&visible(b)))return false;
+        if(!Explain("checkbox preserves exact selection and current row",w.Viewport().Selection().entityIds==selected
+            &&V2EntityTree::KeyOf(tree->currentItem())==key))return false;
+    }
+    // A hand rarely stays on one pixel. A check gesture must not inherit the
+    // last label click's Qt rubber-band origin or change any other selection.
+    HumanClick(tree->viewport(),tree->visualItemRect(w.ItemOfEntity(b)).center());
+    const auto other=w.Viewport().Selection().entityIds;row=w.ItemOfEntity(a);const auto p=CheckPosition(*tree,row);
+    QMouseEvent press(QEvent::MouseButtonPress,p,tree->viewport()->mapToGlobal(p.toPoint()),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+    QApplication::sendEvent(tree->viewport(),&press);
+    QMouseEvent move(QEvent::MouseMove,p+QPointF(1,1),tree->viewport()->mapToGlobal((p+QPointF(1,1)).toPoint()),Qt::NoButton,Qt::LeftButton,Qt::NoModifier);
+    QApplication::sendEvent(tree->viewport(),&move);
+    QMouseEvent release(QEvent::MouseButtonRelease,p,tree->viewport()->mapToGlobal(p.toPoint()),Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(tree->viewport(),&release);QApplication::processEvents();
+    if(!Explain("tiny checkbox motion cannot select the category",!visible(a)&&visible(b)&&w.Viewport().Selection().entityIds==other))return false;
+    SaveInteractionShot(w,"selected-visibility");w.RunCommand("edit.undo");
+    return Explain("visibility toggle is one undoable edit",visible(a)&&visible(b));
+}
 bool FolderInputs(V2MainWindow& w){
     w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
     w.Viewport().SetSelection(app::SelectionSet{{wire}});
@@ -373,6 +407,7 @@ bool FolderMenuStable(V2MainWindow& w){
 }
 
 std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categories preserve selection and Undo",Categories},
+    {"HP-UX-TREE selected checkbox and small pointer motion preserve selection",SelectedVisibilityClicks},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},
     {"HP-XP-09 overlap preview and reference-picking roles",Overlap},
     {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope},

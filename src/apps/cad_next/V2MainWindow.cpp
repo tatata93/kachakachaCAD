@@ -38,6 +38,7 @@
 
 #include "kachakacha/app/OperationGuide.h"
 #include "kachakacha/base/Version.h"
+#include "V2ToolSelection.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/WorkPlane.h"
@@ -203,8 +204,7 @@ V2MainWindow::V2MainWindow()
     SelectTool(kachakacha::v2::app::ToolAfterModeChange());
     SetMode(UiMode::Drawing);
     ApplyTheme(UiTheme::Windows95);
-    setWindowTitle(QStringLiteral("kachakachaCAD %1")
-            .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
+    V2ToolSelection::Caption(*this,documentPath_);
     resize(1180, 760);
 }
 
@@ -275,6 +275,7 @@ void V2MainWindow::HandleSelectionChanged()
 {
     // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
     HighlightTreeForSelection();
+    if(V2ToolSelection::Active(*viewport_)){RefreshCommandVisibility();return;}
     if (gptFabrication_ != nullptr) { gptFabrication_->HandleSelectionChanged(); }
     if (gptSurface_ != nullptr) { gptSurface_->HandleSelectionChanged(); }
     if (loopFaces_ != nullptr) { loopFaces_->HandleSelectionChanged(); }
@@ -799,7 +800,7 @@ bool V2MainWindow::ImportKcdFile(const QString& path)
         && !imported.Value().snapshot.entities.empty()) {
         return false;   // ResetTo が断った(原点の3面すら無い)。
     }
-    documentPath_.clear();
+    documentPath_.clear();V2ToolSelection::Caption(*this,documentPath_);
     for (const auto& note : imported.Value().notes) {
         AddDiagnostic(QString::fromStdString(note.code + " " + note.summaryJa + " "
             + note.detailsJa));
@@ -824,7 +825,7 @@ void V2MainWindow::RunFileCommand(std::string_view id)
     using kachakacha::v2::io::DocumentFile;
     if (id == "file.new") {
         AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
-        documentPath_.clear();
+        documentPath_.clear();V2ToolSelection::Caption(*this,documentPath_);
         viewport_->SetViewDirection(ViewDirection::Isometric);
         viewport_->FitToDocument();
         SetStatus(QStringLiteral("新しい文書にしました。"));
@@ -863,7 +864,7 @@ void V2MainWindow::RunFileCommand(std::string_view id)
         ReportDiagnostics(written.Diagnostics());
         return;
     }
-    documentPath_ = path;
+    documentPath_ = path;V2ToolSelection::Caption(*this,documentPath_);
     V2DocumentOpen::CacheSaved(*this, archive.Value());
     session_->GetDocument().MarkHistoryBoundary();
     SetStatus(QStringLiteral("%1 へ保存しました。").arg(path));
@@ -1161,7 +1162,7 @@ void V2MainWindow::RunCommand(std::string_view id)
 {
     V2ToolEvidence::Command evidence(*this,id);
     if(V2GeometryJob::Active()&&id.substr(0,5)!="view.")return;
-    if(id=="grid.edit") { ShowGridDock(); return; }
+    if(RunQuickCommand(id))return;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         // 台帳に無い操作は、画面と台帳の食い違いとして知らせる。

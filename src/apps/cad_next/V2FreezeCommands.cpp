@@ -554,10 +554,15 @@ bool V2MainWindow::FreezeWithDefinition(
         *evaluated.bandMesh, state.masterProgress, state.creaseFactors,
         state.unfoldBaseRail);
     if (selected.empty()) {
+    const auto originals=ConnectionScopeCurves(definition);
+    std::size_t sourceIndex=0;
     for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
-             *evaluated.bandMesh, folded, ConnectionScopeCurves(definition),
+             *evaluated.bandMesh, folded, originals,
              evaluated.maximumDeviationMm + 0.35)) {
-        if (!AddPlainWire(PolylineOf(wire.points),
+        while(sourceIndex<originals.size()&&originals[sourceIndex].second.empty())++sourceIndex;
+        const auto curves=wire.snappedPoints==0&&sourceIndex<originals.size()?originals[sourceIndex].second:PolylineOf(wire.points);
+        ++sourceIndex;
+        if (!AddPlainWire(curves,
                 (wire.name + " (" + stateName + ")").c_str())
                  .IsNil()) {
             ++wires;

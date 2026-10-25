@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2NumericSpinBox.h"
 #include "V2EndCapInput.h"
 #include "V2RoleInput.h"
@@ -120,7 +121,7 @@ void V2CurvedEmbossTool::TakeSelection()
 }
 bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
 {
-    if (!isVisible() || window_.viewport_->ReferencePickPending()) return false;
+    if (!isVisible() || V2ToolSelection::Active(*window_.viewport_) || window_.viewport_->ReferencePickPending()) return false;
     if (event->type()==QEvent::KeyPress) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window())return false;
         const auto key=static_cast<QKeyEvent*>(event)->key();
@@ -128,7 +129,8 @@ bool V2CurvedEmbossTool::eventFilter(QObject* object,QEvent* event)
         if(key==Qt::Key_Return||key==Qt::Key_Enter){if(built_)Commit();else Preview();return true;}
     }
     if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
-    const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
+    const auto* mouse=static_cast<QMouseEvent*>(event);
+    if(mouse->button()!=Qt::LeftButton||(mouse->modifiers()&Qt::ControlModifier))return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
     window_.viewport_->RefreshPickCycleAt(mouse->position());
     const auto picked=window_.viewport_->CurrentCandidate();if(!picked)return true;

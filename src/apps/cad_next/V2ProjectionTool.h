@@ -43,6 +43,7 @@ private:
     void TakeActiveSelection();
     bool AddResults();
     void ClearResult();
+    bool SyncInputRevision();
     bool PreviewRegions(const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& faces,
         const std::vector<kachakacha::v2::kernel::WireProjectionInput>& inputs,
         const kachakacha::v2::kernel::WireProjectionOptions& options);

@@ -2,6 +2,7 @@
 #include <QString>
 #include <QWidget>
 #include "V2ImageTool.h"
+#include "V2ToolSelection.h"
 #include "V2MainWindow.h"
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
@@ -59,7 +60,7 @@ void V2ImageTool::CancelInput() {
     status_->setText(QStringLiteral("変更を取り消しました。画像ツールはそのままです。画像を選んでください。"));
 }
 bool V2ImageTool::eventFilter(QObject* object,QEvent* event) {
-    if(!isVisible())return false;
+    if(!isVisible()||V2ToolSelection::Active(*window_.viewport_))return false;
     if(event->type()==QEvent::KeyPress){const auto* key=static_cast<QKeyEvent*>(event);auto* widget=qobject_cast<QWidget*>(object);
         if(!widget||widget->window()!=window())return false;
         if(key->key()==Qt::Key_Escape){CancelInput();return true;}

@@ -461,6 +461,7 @@ public:
     void RefreshCornerPreview();
     [[nodiscard]] bool HandleCornerToolKey(int key);
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
+    bool RunQuickCommand(std::string_view id);
     void RefreshMeasurements();
     //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
     [[nodiscard]] bool EnterToolFor(

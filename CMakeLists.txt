@@ -1233,6 +1233,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2PreparedDocument.cpp
         src/apps/cad_next/V2RenderSelection.cpp
         src/apps/cad_next/V2DrawingSelection.cpp
+        src/apps/cad_next/V2ToolSelection.cpp
         src/apps/cad_next/V2NavigatorHighlight.cpp
         src/apps/cad_next/V2DocumentCache.cpp
         src/apps/cad_next/V2DocumentOpen.cpp
@@ -1320,6 +1321,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2FabricationGenerationUi.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
       src/apps/cad_next/V2FreezePlanar.cpp
+      src/apps/cad_next/V2PlanarCurves.cpp
         src/apps/cad_next/V2GuideCommands.cpp
         src/apps/cad_next/V2GuideTableCommands.cpp
         src/apps/cad_next/V2TreeCommands.cpp

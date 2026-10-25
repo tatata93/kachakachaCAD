@@ -1,4 +1,5 @@
 #include "V2ProjectionTool.h"
+#include "V2ToolSelection.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -51,7 +52,7 @@ V2ProjectionTool::V2ProjectionTool(V2MainWindow& window):QWidget(&window),window
     update_=new QTimer(this);update_->setSingleShot(true);update_->setInterval(250);
     connect(update_,&QTimer::timeout,this,[this]{Preview();});BuildUi();qApp->installEventFilter(this);
     connect(window_.entityTree_,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem*,int){
-        if(isVisible()&&(role_==0||role_==1))TakeActiveSelection();});
+        if(isVisible()&&!V2ToolSelection::Active(*window_.viewport_)&&(role_==0||role_==1))TakeActiveSelection();});
     auto* marks=new QTimer(this);marks->setSingleShot(true);marks->setInterval(0);
     connect(window_.entityTree_->model(),&QAbstractItemModel::rowsInserted,this,[marks]{marks->start();});
     connect(marks,&QTimer::timeout,this,[this]{if(isVisible())RefreshMarks();});
@@ -180,7 +181,7 @@ void V2ProjectionTool::PickViewport(const QPointF& position) {
     }
 }
 bool V2ProjectionTool::eventFilter(QObject* object,QEvent* event) {
-    if(!isVisible())return false;
+    if(!isVisible()||V2ToolSelection::Active(*window_.viewport_))return false;
     if(event->type()==QEvent::KeyPress) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window())return false;
         const int key=static_cast<QKeyEvent*>(event)->key();
@@ -193,6 +194,7 @@ bool V2ProjectionTool::eventFilter(QObject* object,QEvent* event) {
     }
     if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
+    if(mouse->modifiers()&Qt::ControlModifier)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
     PickViewport(mouse->position());return true;
 }

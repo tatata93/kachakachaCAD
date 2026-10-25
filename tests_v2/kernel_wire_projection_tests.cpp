@@ -536,3 +536,20 @@ KACHA_V2_TEST(projection, NativeRegionRefusesOpenParallelAndNonplanar) {
 }
 #endif
 KACHA_V2_TEST_MAIN("kernel_wire_projection_tests")
+
+KACHA_V2_TEST(projection, WrappedSourceIntervalsDoNotExposeFittingSpans) {
+    Owned cylinder(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),-2,2,-10,10).Face());
+    auto o=Options(kernel::WireProjectionMode::Wrap);o.targetPoint={10,0,0};
+    const auto s=geometry::CurveSegment::MakeCubicBezier({{-6,-2,0},{-3,5,0},{3,-5,0},{6,2,0}}).Value();
+    for(const auto& source:std::vector<geometry::CurveSegment>{Line({-6,0,0},{6,0,0}),s}){
+        const auto r=kernel::ProjectNativeWires({cylinder.h},{{{source}, {}}},o);
+        Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==1,"one source interval");
+        Require(r.Value().wires.front().size()==1,"internal fitting spans become one curved interval");
+        OnSurface(r.Value(),o.toleranceMm,[](auto p){return std::abs(std::hypot(p.x,p.y)-10);});
+        for(int i=0;i<=200;++i){const auto p=source.Evaluate(i/200.0);
+            const geometry::Vector3 expected{10*std::cos(p.x/10),10*std::sin(p.x/10),p.y};
+            Require(r.Value().wires.front().front().ClosestPoint(expected).distance<o.toleranceMm,"wrapped curve stays within tolerance");}
+        double length=0;for(const auto& c:r.Value().wires.front())length+=c.TotalLength(1e-7);
+        Require(std::abs(length-source.TotalLength(1e-7))<.003,"physical length preserved");
+    }
+}

@@ -1,4 +1,5 @@
 #include "V2EntityTree.h"
+#include <QPoint>
 
 #include <QAbstractItemView>
 #include <QTreeWidget>
@@ -134,12 +135,15 @@ void V2EntityTree::FlushChanges(){
         if(changed_)changed_(item);
     }
 }
+bool V2EntityTree::CheckHit(QTreeWidgetItem* row,const QPoint& point) const{
+    if(!row||!(row->flags()&Qt::ItemIsUserCheckable))return false;
+    QStyleOptionViewItem option;initViewItemOption(&option);option.rect=visualItemRect(row);
+    option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=row->checkState(0);
+    return style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,this).contains(point);
+}
 void V2EntityTree::mousePressEvent(QMouseEvent* event){
-    if(event->button()==Qt::LeftButton)if(auto* item=itemAt(event->position().toPoint());item&&(item->flags()&Qt::ItemIsUserCheckable)){
-        QStyleOptionViewItem option;initViewItemOption(&option);option.rect=visualItemRect(item);
-        option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=item->checkState(0);
-        const QRect check=style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,this);
-        if(check.contains(event->position().toPoint())){item->setCheckState(0,item->checkState(0)==Qt::Checked?Qt::Unchecked:Qt::Checked);event->accept();return;}
+    if(event->button()==Qt::LeftButton)if(auto* item=itemAt(event->position().toPoint());event->button()==Qt::LeftButton&&CheckHit(item,event->position().toPoint())){
+        checkKey_=KeyOf(item);checkAtPress_=item->checkState(0);event->accept();return;
     }
     auto* row=itemAt(event->position().toPoint());
     const auto key=KeyOf(row);
@@ -149,4 +153,23 @@ void V2EntityTree::mousePressEvent(QMouseEvent* event){
     const bool expanded=row&&row->isExpanded();
     QTreeWidget::mousePressEvent(event);
     if(folder&&plain&&label)if(auto* current=FindKey(key))current->setExpanded(!expanded);
+}
+void V2EntityTree::mouseMoveEvent(QMouseEvent* event){
+    if(!checkKey_.isEmpty()){event->accept();return;}
+    QTreeWidget::mouseMoveEvent(event);
+}
+void V2EntityTree::mouseReleaseEvent(QMouseEvent* event){
+    if(!checkKey_.isEmpty()){
+        const auto key=std::exchange(checkKey_,{});
+        if(event->button()==Qt::LeftButton)if(auto* row=FindKey(key);CheckHit(row,event->position().toPoint())&&row->checkState(0)==checkAtPress_)
+            row->setCheckState(0,checkAtPress_==Qt::Checked?Qt::Unchecked:Qt::Checked);
+        event->accept();return;
+    }
+    QTreeWidget::mouseReleaseEvent(event);
+}
+void V2EntityTree::mouseDoubleClickEvent(QMouseEvent* event){
+    if(event->button()==Qt::LeftButton&&CheckHit(itemAt(event->position().toPoint()),event->position().toPoint())){
+        mousePressEvent(event);return;
+    }
+    QTreeWidget::mouseDoubleClickEvent(event);
 }

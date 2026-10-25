@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2Viewport.h"
 #include <QColor>
 #include <algorithm>
@@ -62,6 +63,7 @@ void V2Viewport::RefreshFaceRolePieces()
 void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> ids,
     std::function<void(std::optional<kachakacha::v2::base::EntityId>)> handler)
 {
+    if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
     CancelReferencePick();
     referencePickIds_ = std::move(ids);
     referencePickHandler_ = std::move(handler);
@@ -91,6 +93,7 @@ void V2Viewport::BeginElementPick(
     std::function<bool(const kachakacha::v2::app::PickCandidate&)> filter,
     std::function<void(std::optional<kachakacha::v2::app::PickCandidate>)> handler)
 {
+    if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
     CancelReferencePick();
     elementPickFilter_ = std::move(filter);
     elementPickHandler_ = std::move(handler);

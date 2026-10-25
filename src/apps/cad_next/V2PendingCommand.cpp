@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 //! 構えた命令(オーナー指摘 2026-09-11「ツールを選ぶ→対象を選択の順で行う」)。
 //!
 //! V2 は逆だった。トリムを押すと、その場で「線を2本選んでください」と言って
@@ -112,7 +113,7 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     }
     // A view operation with no selected target must not replace the editing tool.
     if (id.starts_with("view.") || (id=="edit.delete"
-        && V2DrawingSelection::IsDrawing(session_->CurrentTool()))) { SetStatus(reason); return true; }
+        && (V2DrawingSelection::IsDrawing(session_->CurrentTool())||V2ToolSelection::Active(*viewport_)))) { SetStatus(reason); return true; }
     if (!PredicateCanBeSatisfiedBySelection(command->predicate)) {
         // 選んで直るものではない(戻せる履歴が無い、など)。理由を出して終わる。
         SetStatus(reason);

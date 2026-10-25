@@ -90,7 +90,7 @@ std::string XmlText(const std::string& value)
         const double sweep = segment.SweepAngleRad();
         const bool largeArc = std::abs(sweep) > 3.14159265358979323846;
         // 型紙の y を反転しているので、回る向きも反転する。
-        const bool sweepFlag = sweep < 0.0;
+        const bool sweepFlag = sweep*segment.Normal().z < 0.0;
         path += " A " + Number(radius) + "," + Number(radius) + " 0 "
             + (largeArc ? "1" : "0") + "," + (sweepFlag ? "1" : "0") + " "
             + SvgPoint(segment.EndPoint(), pageHeight);
@@ -294,7 +294,7 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
                 std::atan2(start.y - center.y, start.x - center.x) * 180.0 / 3.14159265358979323846;
             const double endAngle =
                 std::atan2(end.y - center.y, end.x - center.x) * 180.0 / 3.14159265358979323846;
-            const bool reversed = curve.segment.SweepAngleRad() < 0.0;
+            const bool reversed = curve.segment.SweepAngleRad()*curve.segment.Normal().z < 0.0;
             PutDxf(dxf, 0, "ARC");
             PutDxf(dxf, 8, layer);
             PutDxf(dxf, 10, Number(center.x, 6));
@@ -316,7 +316,7 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
             PutDxf(dxf, 73, std::to_string(control.size()));
             PutDxf(dxf, 74, "0");
             for (std::size_t index = 0; index < control.size() + 4; ++index) {
-                const double knot = index < 4 ? 0.0
+                const double knot = curve.segment.Kind()==CurveKind::CubicBSpline?static_cast<double>(index):index < 4 ? 0.0
                     : (index >= control.size() ? 1.0
                                                : static_cast<double>(index - 3)
                             / static_cast<double>(control.size() - 3));

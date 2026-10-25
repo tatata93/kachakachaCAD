@@ -56,8 +56,38 @@ void V2ProjectionTool::RefreshRows() {
     if(row>=0&&row<wireRows_->count())wireRows_->setCurrentRow(row);
     RefreshMarks();
 }
+bool V2ProjectionTool::SyncInputRevision() {
+    const auto& document=window_.session_->GetDocument();
+    if(document.Snapshot().id!=documentId_)return false;
+    if(document.Revision()==revision_)return true;
+    const auto same=[](const auto& a,const auto& b){
+        return a.Kind()==b.Kind()&&a.ControlPoints()==b.ControlPoints()&&a.Center()==b.Center()
+            &&a.Normal()==b.Normal()&&a.ReferenceDirection()==b.ReferenceDirection()&&a.Radius()==b.Radius()
+            &&a.StartAngleRad()==b.StartAngleRad()&&a.SweepAngleRad()==b.SweepAngleRad();
+    };
+    for(const auto& source:sources_){
+        app::SelectionSet selection;selection.entityIds={source.ref.entityId};selection.ordered={source.ref};
+        const auto curves=app::SelectedCurves(selection,window_.session_->Scene());
+        if(curves.size()!=source.input.curves.size()||!std::equal(curves.begin(),curves.end(),source.input.curves.begin(),same))return false;
+    }
+    for(const auto& target:targets_){
+        const auto key=target.ref.entityId.ToString();
+        const auto part=window_.partShapes_.find(key),guide=window_.guideShapes_.find(key);
+        auto current=guide!=window_.guideShapes_.end()?guide->second:modeling::KernelShapeHandle{};
+        bool owned=false;
+        if(part!=window_.partShapes_.end()&&target.ref.pickedFaceIndex){
+            const auto face=kernel::OutputFace(part->second,*target.ref.pickedFaceIndex);
+            if(!face.HasValue())return false;current=face.Value();owned=true;
+        }
+        if(!document.FindEntity(target.ref.entityId)||current.value==0)return false;
+        const auto before=kernel::CaptureOutputShape(target.shape),after=kernel::CaptureOutputShape(current);
+        if(owned)kernel::ReleaseShape(current);
+        if(!before.HasValue()||!after.HasValue()||before.Value()!=after.Value())return false;
+    }
+    revision_=document.Revision();ClearResult();confirm_->setEnabled(false);return true;
+}
 bool V2ProjectionTool::AddWire(const app::SelectionRef& ref,bool toggle) {
-    if(window_.session_->GetDocument().Snapshot().id!=documentId_||((!sources_.empty()||!targets_.empty())&&window_.session_->GetDocument().Revision()!=revision_)) {
+    if(!SyncInputRevision()) {
         status_->setText(QStringLiteral("文書が変更されています。入力を取消して選び直してください。"));return false;
     }
     const auto* e=window_.session_->GetDocument().FindEntity(ref.entityId);
@@ -77,7 +107,7 @@ bool V2ProjectionTool::AddWire(const app::SelectionRef& ref,bool toggle) {
     revision_=window_.session_->GetDocument().Revision();RefreshRows();Invalidate();return true;
 }
 bool V2ProjectionTool::AddTarget(const app::SelectionRef& ref,bool toggle) {
-    if(window_.session_->GetDocument().Snapshot().id!=documentId_||((!sources_.empty()||!targets_.empty())&&window_.session_->GetDocument().Revision()!=revision_)) {
+    if(!SyncInputRevision()) {
         status_->setText(QStringLiteral("文書が変更されています。入力を取消して選び直してください。"));return false;
     }
     const auto* e=window_.session_->GetDocument().FindEntity(ref.entityId);if(!e)return false;
@@ -120,7 +150,7 @@ void V2ProjectionTool::CancelInput() {
 }
 bool V2ProjectionTool::Preview() {
     update_->stop();ClearResult();window_.viewport_->HideToolPreview();confirm_->setEnabled(false);
-    if(window_.session_->GetDocument().Snapshot().id!=documentId_||window_.session_->GetDocument().Revision()!=revision_) {
+    if(!SyncInputRevision()) {
         status_->setText(QStringLiteral("文書が変更されています。入力を取消して選び直してください。"));return false;
     }
     if(sources_.empty()||targets_.empty()){status_->setText(QStringLiteral("元ワイヤーと投影先の面を指定してください。"));return false;}

@@ -3,6 +3,8 @@
 #include "V2Viewport.h"
 #include "V2ProjectionTool.h"
 #include "V2FabricationDock.h"
+#include "V2PlanarCurves.h"
+#include "kachakacha/fabrication/PlanarPanel.h"
 #include "V2ThickenDock.h"
 #include "V2LoopFacesTool.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
@@ -261,6 +263,21 @@ bool V2WindowHoleExercise::PlanarGeneration(V2MainWindow& w) {
         domain::CreateFabricationModelDefinition definition;definition.parts={guide};definition.targetMaxDeviation.value=.1;
         const auto sources=w.FabricationSourcesFor(definition.parts,false);
         const auto evaluated=app::EvaluateFabrication(definition,sources,{},.01);if(!evaluated.HasValue()||sources.size()!=1||!sources.front().flatBoundary||sources.front().flatOpenings.empty())return false;
+        for(const double tolerance:{.002,.025}){
+            fabrication::PlanarPanelRequest request;request.panelId="native";request.boundary=*sources.front().flatBoundary;
+            request.openings=sources.front().flatOpenings;
+            const auto panel=fabrication::BuildPlanarPanel(request,tolerance);if(!panel.HasValue())return false;
+            const auto frame=V2PlanarCurves::SourceFrame(panel.Value(),sources.front(),tolerance);if(!frame)return false;
+            fabrication::PatternPlacement placement;placement.rotationRad=.47;placement.translationMm={25,40};
+            const auto paths=V2PlanarCurves::Paths(panel.Value(),sources.front(),{},*frame,tolerance);
+            const auto placed=V2PlanarCurves::Place(panel.Value(),placement,sources.front(),{},*frame,tolerance);
+            if(!placed.HasValue()||paths.size()!=2)return false;
+            std::size_t count=0;for(const auto& path:paths)for(const auto& curve:path.curves){
+                if(placed.Value()[count].segment.Kind()!=curve.Kind()||std::abs(placed.Value()[count].segment.Evaluate(.4).z)>1e-7)return false;
+                if(std::abs(placed.Value()[count].segment.TotalLength(1e-8)-curve.TotalLength(1e-8))>1e-7)return false;++count;
+            }
+            if(count!=request.boundary.size()+request.openings.front().size())return false;
+        }
         const std::vector<std::vector<CurveSegment>> original={*sources.front().flatBoundary,sources.front().flatOpenings.front()};
         w.freezeOutput_=fabrication::FreezeOutput::WiresOnly;w.Viewport().SetSelection({});w.FabricationDock().SetPartNumbersText({});
         for(const double percent:{0.0,37.0,100.0}) {

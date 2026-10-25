@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
 #include "V2NavigatorHighlight.h"
@@ -845,7 +846,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
     RefreshPickCycle(position);
     SyncHoverWithCandidate();
-    if (cursorPanel_.active) {
+    if (cursorPanel_.active && !V2ToolSelection::Active(*this)) {
         // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
         const auto point = hover_.position; // Use the same snapped/constrained point as the preview.
         if (point.has_value()) {
@@ -897,6 +898,19 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
     const std::optional<kachakacha::v2::app::PickCandidate>& picked,
     kachakacha::v2::app::SelectionMode mode)
 {
+    if(V2ToolSelection::Active(*this)){
+        using namespace kachakacha::v2::app;
+        if(mode==SelectionMode::Toggle&&picked&&!picked->segmentId.IsNil()){
+            const bool whole=selection_.ordered.empty()?IsSelected(selection_,picked->entityId):
+                std::any_of(selection_.ordered.begin(),selection_.ordered.end(),[&](const auto& ref){return ref.entityId==picked->entityId&&ref.kind==SelectionElementKind::Object;});
+            if(whole){
+                if(selection_.ordered.empty())for(auto id:selection_.entityIds){SelectionRef ref;ref.entityId=id;selection_.ordered.push_back(ref);}
+                std::erase_if(selection_.ordered,[&](const auto& ref){return ref.entityId==picked->entityId;});std::erase(selection_.entityIds,picked->entityId);
+                return SelectionMode::Add;
+            }
+        }
+        return mode;
+    }
     using kachakacha::v2::app::SelectionMode;
     // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
     // 素の押し方は、ModeForToolPick が Add に変えていても **押し直しは外す**。
@@ -929,7 +943,7 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
-    if (elementPickHandler_) {
+    if (elementPickHandler_ && !V2ToolSelection::Active(*this)) {
         for (const auto& ref : selection.ordered) {
             kachakacha::v2::app::PickCandidate pick;
             pick.entityId = ref.entityId; pick.kind = ref.kind;
@@ -972,7 +986,7 @@ void V2Viewport::PruneSelection()
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
     lastSelectPoint_ = position;
-    if (ReferencePickPending()) {
+    if (ReferencePickPending() && !V2ToolSelection::Active(*this)) {
         RefreshPickCycle(position);
         if ((modifiers & Qt::AltModifier) != 0) AdvanceCandidate(false);
         SyncHoverWithCandidate();
@@ -987,7 +1001,7 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
         update();
         return;
     }
-    if (ToggleProfileRegionAt(position)) {
+    if (!V2ToolSelection::Active(*this) && ToggleProfileRegionAt(position)) {
         return;
     }
     // 修飾キーの読み方は矩形選択と同じ一箇所(SelectionModeFor)から取る。
@@ -1076,6 +1090,7 @@ void V2Viewport::ReportSelectionCount()
 void V2Viewport::BeginPointPick(std::function<void(const PickedPoint&)> handler,
     const std::string& promptJa)
 {
+    if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
     pickHandler_ = std::move(handler);
     // 聞いていることを言う。黙って待つと、何も起きないように見える。
     status_ = promptJa;
@@ -1301,6 +1316,7 @@ bool V2Viewport::event(QEvent* event)
     if (cursorPanel_.active && event->type() == QEvent::ShortcutOverride) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         if ((keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)
+            && !V2ToolSelection::Active(*this)
             && !(keyEvent->key() == Qt::Key_Delete && !selection_.entityIds.empty()
                 && (V2DrawingSelection::Of(*this).SelectionDelete()
                     || !kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)))) {
@@ -1313,11 +1329,11 @@ bool V2Viewport::event(QEvent* event)
 
 bool V2Viewport::EditCursorFieldForKey(int key)
 {
-    if (!cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
+    if (V2ToolSelection::Active(*this) || !cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
         return false;
     }
     if(key==Qt::Key_Delete && !selection_.entityIds.empty()
-        && V2DrawingSelection::Of(*this).SelectionDelete())return false;
+        && (V2ToolSelection::Active(*this)||V2DrawingSelection::Of(*this).SelectionDelete()))return false;
     if (!kachakacha::v2::app::AnyCursorFieldTouched(cursorPanel_)
         && (key == Qt::Key_Backspace || !selection_.entityIds.empty())) return false;
     const std::size_t at = cursorPanel_.focusedIndex;
@@ -1369,7 +1385,7 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         (void)PressEscape();
         return;
     }
-    if (cursorPanel_.active
+    if (cursorPanel_.active&&!V2ToolSelection::Active(*this)
         && (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab)) {
         (void)FocusNextCursorField(event->key() == Qt::Key_Backtab
             || (event->modifiers() & Qt::ShiftModifier) != 0);
@@ -1384,6 +1400,7 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
             return;
         }
     }
+    if(V2ToolSelection::Active(*this)){QWidget::keyPressEvent(event);return;}
     if (cursorPanel_.active
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
         // 何も打っていない Enter は、点をいくつでも受ける道具(折れ線)を締める(右クリックと同じ)。

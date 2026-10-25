@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2NumericSpinBox.h"
 #include <QObject>
 #include <QString>
@@ -61,6 +62,7 @@ void V2OutputTool::Pick(int role) {
     if(role==1){QPointer<V2OutputTool> guard(this);window_.viewport_->BeginPointPick([guard](const V2Viewport::PickedPoint& point){if(guard)guard->SetPickedFrame(1,{point.point,{0,0,1},{1,0,0}});},"出力の基準点を指定してください。");}
 }
 bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
+    if(V2ToolSelection::Active(*window_.viewport_))return false;
     if(pickRole_>0 && event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape){if(pickRole_==1)window_.viewport_->CancelPointPick();pickRole_=0;RefreshPreview();show();raise();return true;}
     if(pickRole_<1 || event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;

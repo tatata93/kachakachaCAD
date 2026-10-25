@@ -1,4 +1,5 @@
 #include "V2DocumentOpen.h"
+#include "V2ToolSelection.h"
 #include "V2DocumentTiming.h"
 #include "V2GeometryJob.h"
 #include "V2MainWindow.h"
@@ -116,5 +117,5 @@ bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
         w.RefreshGuideTable();w.RefreshFabricationView();
     }))return false;
     prepared.file.snapshot={};State(w,true)->extras_=std::move(prepared.file);
-    w.documentPath_=path;w.SetStatus(QStringLiteral("%1 を開きました。").arg(path));timing.Mark("complete");return true;
+    w.documentPath_=path;V2ToolSelection::Caption(w,path);w.SetStatus(QStringLiteral("%1 を開きました。").arg(path));timing.Mark("complete");return true;
 }

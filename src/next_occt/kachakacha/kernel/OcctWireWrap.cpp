@@ -5,6 +5,7 @@
 #include <stdexcept>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include <BRepAdaptor_Surface.hxx>
 #include <BRep_Tool.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
@@ -70,7 +71,12 @@ base::Result<WireProjectionResult> WrapNativeWires(const TopoDS_Face& face,
             "この複曲面は等長に巻き付けられません。","「図面から投影」か「3Dワイヤーを面に載せる」を選んでください。"));
     const Mapper mapper(face,options);WireProjectionResult result;
     for(const auto& input:inputs)for(const auto& source:input.curves) {
-        std::vector<CurveSegment> curves;Fit(mapper,source,0,1,0,curves,result.maxCurveDeviationMm);
+        std::vector<CurveSegment> curves;double error=0;Fit(mapper,source,0,1,0,curves,error);
+        // Never merge across original input intervals. The additional error is
+        // bounded against every fitted Bezier span; Fit's mapping estimate is
+        // still sampled and is reported separately by the projection contract.
+        error+=CompactBoundaryRun(curves,options.toleranceMm*.4);
+        result.maxCurveDeviationMm=std::max(result.maxCurveDeviationMm,error);
         result.wires.push_back(std::move(curves));
     }
     return base::Result<WireProjectionResult>::Success(std::move(result));

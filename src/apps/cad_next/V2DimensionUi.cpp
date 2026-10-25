@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2NumericSpinBox.h"
 #include "V2RoleInput.h"
 #include "V2DimensionTool.h"
@@ -79,7 +80,7 @@ void V2DimensionTool::BuildUi()
 }
 bool V2DimensionTool::eventFilter(QObject* object,QEvent* event)
 {
-    if(!isVisible())return false;
+    if(!isVisible()||V2ToolSelection::Active(*window_.viewport_))return false;
     if(event->type()==QEvent::KeyPress) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget||widget->window()!=window())return false;
         const auto key=static_cast<QKeyEvent*>(event)->key();
@@ -89,6 +90,7 @@ bool V2DimensionTool::eventFilter(QObject* object,QEvent* event)
     if(object!=window_.viewport_)return false;
     if(event->type()!=QEvent::MouseButtonPress && event->type()!=QEvent::MouseMove && event->type()!=QEvent::MouseButtonDblClick)return false;
     auto* mouse=static_cast<QMouseEvent*>(event);
+    if(mouse->modifiers()&Qt::ControlModifier)return false;
     if(event->type()!=QEvent::MouseMove && mouse->button()!=Qt::LeftButton)return false;
     if(event->type()==QEvent::MouseButtonDblClick) {
         if(const auto id=window_.viewport_->DimensionAt(mouse->position())){Load(*id);return true;}

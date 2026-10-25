@@ -1,4 +1,5 @@
 #include "V2QuickDisplayControls.h"
+#include "V2ToolSelection.h"
 #include "V2Viewport.h"
 #include "V2MainWindow.h"
 #include "kachakacha/app/PlaneFocus.h"
@@ -31,6 +32,7 @@ QToolButton* Button(QToolBar& bar,const char* id,const QString& text,const QStri
 }
 }
 void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSession& session) {
+    V2ToolSelection::Install(view,bar);
     auto* state=new PlaneWireDisplay(view,session);
     auto* visible=Button(bar,"quickGridVisible",QStringLiteral("グリッド表示"),
         QStringLiteral("グリッド線の表示/非表示。スナップは切り替えません。オンにすると全モードで表示します。"));

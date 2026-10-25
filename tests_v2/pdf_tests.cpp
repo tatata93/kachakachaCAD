@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <sstream>
 #include <vector>
 
 using kachakacha::v2::exporters::PatternCurve;
@@ -270,3 +271,23 @@ KACHA_V2_TEST(pdf, 空のページでも出せる)
 }
 
 KACHA_V2_TEST_MAIN("pdf_tests")
+
+KACHA_V2_TEST(pdf, ClockwiseAndReversedPlaneArcsHaveCorrectTangents)
+{
+    for(double normal:{-1.0,1.0})for(double sweep:{-kPi/2,kPi/2}){
+        const auto arc=CurveSegment::MakeCircularArc({20,20,0},{0,0,normal},{1,0,0},10,0,sweep).Value();
+        PatternPage page;page.curves.push_back({PatternLine::Outline,arc,false,""});
+        const auto pdf=WritePatternPdf({page},{"arc",0});Require(pdf.HasValue(),"PDF output");
+        std::istringstream lines(pdf.Value());std::string line;bool found=false;
+        while(std::getline(lines,line))if(line.size()>2&&line.substr(line.size()-2)==" c"){
+            std::istringstream values(line);double x1,y1,x2,y2,x3,y3;values>>x1>>y1>>x2>>y2>>x3>>y3;
+            const double scale=25.4/72;const Vector3 p1{x1*scale,y1*scale,0},p2{x2*scale,y2*scale,0};
+            const double h=4.0/3*std::tan(kPi/8)*10;
+            const auto t0=kachakacha::v2::geometry::Normalized(arc.FirstDerivative(0));
+            const auto t1=kachakacha::v2::geometry::Normalized(arc.FirstDerivative(1));
+            Require((p1-(arc.StartPoint()+t0*h)).Length()<.001,"start handle follows directed tangent");
+            Require((p2-(arc.EndPoint()-t1*h)).Length()<.001,"end handle follows directed tangent");found=true;break;
+        }
+        Require(found,"one cubic arc emitted");
+    }
+}

@@ -6,6 +6,7 @@
 
 #include "V2Viewport.h"
 #include "V2DrawingSelection.h"
+#include "V2ToolSelection.h"
 
 #include "kachakacha/app/CursorInput.h"
 
@@ -155,8 +156,8 @@ bool V2Viewport::focusNextPrevChild(bool /*next*/)
 kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
 {
     kachakacha::v2::app::PickFocus focus;
-    focus.drawing = kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
-    focus.dimOffPlane = session_->DrawingPlaneOnly();
+    focus.drawing = !V2ToolSelection::Active(*this)&&kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
+    focus.dimOffPlane = !V2ToolSelection::Active(*this)&&session_->DrawingPlaneOnly();
     focus.plane = workPlane_;
     return focus;
 }
@@ -174,6 +175,7 @@ void V2Viewport::DiscardHoverState()
 
 void V2Viewport::OnToolChanged()
 {
+    V2ToolSelection::Reset(*this);
     V2DrawingSelection::Of(*this).CancelInputs();
     CancelReferencePick();
     if (cursorPanel_.active) {

@@ -2,6 +2,8 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2SelfTestDeleteDialog.h"
+#include "V2ToolSelection.h"
+#include "V2LoopFacesTool.h"
 #include "kachakacha/document/Commands.h"
 #include <QApplication>
 #include <QDialog>
@@ -18,6 +20,7 @@
 #include <QMouseEvent>
 #include <QTimer>
 #include <QTemporaryDir>
+#include <QToolButton>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -220,10 +223,69 @@ bool ContextDelete(V2MainWindow& w,bool dependent)
     if(!actionSeen||dialogSeen!=dependent||!Inputs(w,1,dependent?2:1))return false;
     return Explain("context action keeps numeric draft",v.CursorPanel().states[v.CursorPanel().focusedIndex].text=="8.5");
 }
+bool SelectDuringModelTools(V2MainWindow& w){
+    const char* commands[]={"surface.from_lines","surface.create","part.extrude","part.thicken","wire.project_surface","wire.offset","part.curved_emboss","dimension.open","image.place"};
+    for(const auto* command:commands){
+        if(!Setup(w))return false;auto& v=w.Viewport();w.RunCommand("selection.activate");v.SetSelection({});w.RunCommand(command);
+        const auto tool=w.Session().CurrentTool();const auto pending=w.PendingCommandLabel();
+        auto* button=w.findChild<QToolButton*>("toolEditSelection");if(!button||!button->isVisible())return false;
+        Mouse(v,QEvent::MouseButtonPress,Pixel(v,{-20,20,0}),Qt::LeftButton,Qt::LeftButton,Qt::ControlModifier);
+        Mouse(v,QEvent::MouseButtonRelease,Pixel(v,{-20,20,0}),Qt::LeftButton,Qt::NoButton,Qt::ControlModifier);
+        if(!Explain("Ctrl selects an exact edge without feeding the modeling tool",V2ToolSelection::Active(v)&&v.Selection().ordered.size()==1
+            &&v.Selection().ordered.front().segmentId.has_value()&&w.PendingCommandLabel()==pending))return false;
+        if(std::string_view(command)=="wire.project_surface")Shot(w,"tool-selection");
+        Key(v,Qt::Key_Delete);
+        if(!Explain("deletion keeps the armed modeling tool",w.Session().Scene().curves.size()==1
+            &&w.Session().CurrentTool()==tool&&w.PendingCommandLabel()==pending))return false;
+        Key(v,Qt::Key_Z,Qt::ControlModifier);if(w.Session().Scene().curves.size()!=2||!V2ToolSelection::Active(v))return false;
+        Key(v,Qt::Key_Y,Qt::ControlModifier);if(w.Session().Scene().curves.size()!=1)return false;
+        button->click();
+        if(!Explain("returning restores the tool input selection",!V2ToolSelection::Active(v)&&v.Selection().entityIds.empty()
+            &&w.Session().CurrentTool()==tool&&w.PendingCommandLabel()==pending))return false;
+    }
+    return true;
+}
+bool ExplicitSelectionKeepsDrawing(V2MainWindow& w){
+    if(!Setup(w))return false;auto& v=w.Viewport();Click(v,{-40,-30,0});
+    if(!v.TypeIntoCursorField("7.25"))return false;
+    auto* button=w.findChild<QToolButton*>("toolEditSelection");if(!button)return false;
+    button->click();Click(v,{-20,20,0});Key(v,Qt::Key_Delete);
+    if(!Inputs(w,1,1)||v.CursorPanel().states[v.CursorPanel().focusedIndex].text!="7.25")return false;
+    Key(v,Qt::Key_Z,Qt::ControlModifier);if(!Inputs(w,1,2))return false;
+    Key(v,Qt::Key_Escape);if(V2ToolSelection::Active(v)||!Inputs(w,1,2))return false;
+    button->click();v.SetSelection({});Key(v,Qt::Key_Delete);Key(v,Qt::Key_Backspace);Key(v,Qt::Key_1,Qt::NoModifier,"1");
+    if(!Explain("empty Delete does not replace the drawing tool",Inputs(w,1,2)&&V2ToolSelection::Active(v)
+        &&v.CursorPanel().states[v.CursorPanel().focusedIndex].text=="7.25"))return false;
+    button->click();Click(v,{-10,-30,0});return Inputs(w,0,3);
+}
+bool ReferencePickSurvivesSelection(V2MainWindow& w){
+    if(!Setup(w))return false;auto& v=w.Viewport();w.RunCommand("selection.activate");
+    bool called=false;v.BeginElementPick([](const auto&){return true;},[&](auto){called=true;});
+    auto* button=w.findChild<QToolButton*>("toolEditSelection");button->click();Click(v,{-20,20,0});
+    if(!Explain("edit selection does not fill the pending reference role",!called&&v.ReferencePickPending()&&!v.Selection().entityIds.empty()))return false;
+    button->click();if(!v.ReferencePickPending()||called)return false;
+    Click(v,{-20,20,0});return Explain("the original reference role resumes on return",called);
+}
+bool DocumentCaption(V2MainWindow& w){
+    w.RunCommand("file.new");if(!w.windowTitle().contains(QStringLiteral("無題")))return false;
+    QTemporaryDir directory;const auto path=directory.filePath(QStringLiteral("115 前面.kcd2"));
+    if(!Setup(w))return false;
+    w.SetPathChooser([&](bool){return path;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    w.RunCommand("file.new");if(!w.OpenDocumentFile(path))return false;
+    if(!Explain("title shows the opened file name beside the application",w.windowTitle().contains(QStringLiteral("115 前面.kcd2"))
+        &&w.windowTitle().startsWith("kachakachaCAD")&&w.windowFilePath()==path))return false;
+    Shot(w,"file-caption");
+    const auto title=w.windowTitle();if(w.OpenDocumentFile(directory.filePath("missing.kcd2"))||w.windowTitle()!=title)return false;
+    w.RunCommand("file.new");return Explain("new clears the old file name",w.windowTitle().contains(QStringLiteral("無題"))&&!w.windowTitle().contains("115"));
+}
 }
 std::vector<SelfTestCase> DrawingSelectionCases()
 {
     return {
+        {"HP-UX-SELECT modeling tools retain inputs through selection Delete and history",SelectDuringModelTools},
+        {"HP-UX-DRAW explicit selection preserves draft and empty Delete",ExplicitSelectionKeepsDrawing},
+        {"HP-UX-REF reference role pauses during arbitrary selection",ReferencePickSurvivesSelection},
+        {"HP-UX-TITLE file name follows new open and failed open",DocumentCaption},
         {"HP-DSEL-01 Ctrl segment Delete numeric draft Undo Redo and continue",SelectDeleteContinue},
         {"HP-DSEL-02 drawing tools multiple segments empty deletion",ToolsAndEmptyDelete},
         {"HP-DSEL-03 input and deletion history order save boundary",HistoryOrder},

@@ -1,4 +1,5 @@
 #include "V2OperationPanelHost.h"
+#include "V2ToolSelection.h"
 #include "V2OffsetTool.h"
 //! 道具の Enter / Esc を、窓のところで受ける(オーナー指示 2026-09-15 §14)。
 //!
@@ -121,6 +122,7 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    if(viewport_&&V2ToolSelection::Active(*viewport_))return V2ToolSelection::Key(*viewport_,key,IsTypingField(target));
     const auto inGrid = [this](QWidget* widget) {
         return gridDock_ && widget && (widget == gridDock_ || gridDock_->isAncestorOf(widget));
     };
@@ -313,6 +315,8 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
 
 bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
+    if(viewport_&&V2ToolSelection::Active(*viewport_)&&event&&event->type()==QEvent::MouseButtonPress)
+        if(auto* widget=qobject_cast<QWidget*>(target);widget&&operationHost_&&operationHost_->isAncestorOf(widget))V2ToolSelection::End(*viewport_);
     if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn || event->type()==QEvent::KeyPress))
         if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if(V2GeometryJob::Active()) {

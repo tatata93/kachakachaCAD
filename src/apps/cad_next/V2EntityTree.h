@@ -46,6 +46,9 @@ public:
 protected:
     void dropEvent(QDropEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
     std::function<void(const std::vector<QTreeWidgetItem*>&, QTreeWidgetItem*)> dropHandler_;
@@ -59,5 +62,8 @@ private:
     std::map<QString,Change> changes_;
     std::function<void(QTreeWidgetItem*)> changed_;
     bool changeQueued_=false;
+    QString checkKey_;
+    Qt::CheckState checkAtPress_=Qt::Unchecked;
+    bool CheckHit(QTreeWidgetItem* row,const QPoint& point) const;
     void FlushChanges();
 };

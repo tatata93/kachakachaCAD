@@ -62,7 +62,7 @@ void AppendArc(std::string& content, const CurveSegment& arc)
         const Vector3 p3 = arc.Evaluate(t1);
         // 端点での接線から制御点を出す。円弧のBezier近似の定石。
         const double segmentSweep = sweep * (t1 - t0);
-        const double handle = 4.0 / 3.0 * std::tan(segmentSweep / 4.0) * arc.Radius();
+        const double handle = 4.0 / 3.0 * std::tan(std::abs(segmentSweep) / 4.0) * arc.Radius();
         const Vector3 tangent0 = geometry::Normalized(arc.FirstDerivative(t0));
         const Vector3 tangent1 = geometry::Normalized(arc.FirstDerivative(t1));
         const Vector3 p1 = p0 + tangent0 * handle;

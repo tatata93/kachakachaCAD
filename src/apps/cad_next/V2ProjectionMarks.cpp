@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2ProjectionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -42,6 +43,7 @@ void MarkRow(QTreeWidgetItem* row,const QString& role,QColor color) {
 }
 }
 void V2ProjectionTool::SetPickRole(int role) {
+    if(V2ToolSelection::Active(*window_.viewport_))V2ToolSelection::End(*window_.viewport_);
     role_=role;pickWire_->setChecked(role==0);pickTarget_->setChecked(role==1);
     const QStringList prompts={QStringLiteral("① 元ワイヤー: 3Dビューまたは左ペインで追加します。"),
         QStringLiteral("② 投影先: 面の内側をクリック。立体はフェイスを選びます。"),

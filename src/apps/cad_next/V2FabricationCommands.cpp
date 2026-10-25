@@ -10,6 +10,7 @@
 //! 扱えるふりをしない。
 
 #include "V2MainWindow.h"
+#include "V2PlanarCurves.h"
 #include "V2FabricationSources.h"
 #include "V2GptFabricationTool.h"
 
@@ -457,16 +458,27 @@ void V2MainWindow::RunCreatePattern()
         page.widthMm = paper.widthMm;
         page.heightMm = paper.heightMm;
     }
+    const auto* definition=CurrentFabricationDefinition();
+    const auto sources=definition?FabricationSourcesFor(definition->parts,definition->splitSolidFaces):std::vector<kachakacha::v2::app::FabricationSource>{};
+    const auto markings=definition?FabricationMarkingsFor(*definition):kachakacha::v2::app::FabricationMarkings{};
+    const auto tolerance=session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     for (const auto& placement : layout.Value().placements) {
         for (const auto& panel : panels) {
             if (panel.panelId != placement.panelId) {
                 continue;
             }
-            const auto curves = PlacePanelCurves(panel, placement);
-            if (!curves.HasValue()) {
-                ReportDiagnostics(curves.Diagnostics());
-                return;
+            auto curves = PlacePanelCurves(panel, placement);
+            const auto index=static_cast<std::size_t>(&panel-panels.data());
+            if(index<model->second.panelOrigins.size()){
+                const auto& origin=model->second.panelOrigins[index];
+                const auto source=std::find_if(sources.begin(),sources.end(),[&](const auto& item){
+                    return item.entityId==origin.entityId&&item.faceIndex==origin.faceIndex&&item.flatBoundary;});
+                if(source!=sources.end()){
+                    const auto frame=V2PlanarCurves::SourceFrame(panel,*source,tolerance);
+                    if(frame)curves=V2PlanarCurves::Place(panel,placement,*source,markings,*frame,tolerance);
+                }
             }
+            if (!curves.HasValue()) {ReportDiagnostics(curves.Diagnostics());return;}
             const std::size_t page = static_cast<std::size_t>(
                 std::max(0, placement.pageIndex));
             if (page >= patternPages_.size()) {

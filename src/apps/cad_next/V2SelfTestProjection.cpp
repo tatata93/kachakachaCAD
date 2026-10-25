@@ -1,5 +1,6 @@
 #include "V2SelfTest.h"
 #include "V2ProjectionTool.h"
+#include "V2ToolSelection.h"
 #include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -83,6 +84,20 @@ bool ToolFirst(V2MainWindow& window) {
     const auto revision=window.Session().GetDocument().Revision();tool->CancelInput();
     return Explain("PROJ Esc preserves tool and mode",tool->isVisible()&&mode->currentIndex()==2&&revision==window.Session().GetDocument().Revision());
 }
+bool SelectionDeleteKeepsProjectionInputs(V2MainWindow& window) {
+    if(!Fixture(window))return false;
+    const auto added=window.Session().AddWire({geometry::CurveSegment::MakeLine({20,0,0},{24,0,0}).Value()},false,"unrelated");
+    if(!added.committed)return false;
+    app::SelectionSet selected;selected.entityIds={WireId(),TargetId()};window.Viewport().SetSelection(selected);
+    auto* tool=V2ProjectionTool::Open(window);if(!tool||tool->WireCount()!=1||tool->TargetCount()!=1)return false;
+    auto& view=window.Viewport();V2ToolSelection::Begin(view);
+    if(!Explain("role inputs do not leak into scratch deletion",view.Selection().entityIds.empty()))return false;
+    app::SelectionSet scratch;scratch.entityIds={added.createdEntityIds.front()};view.SetSelection(scratch);
+    window.RunCommand("edit.delete");V2ToolSelection::End(view);
+    if(!Explain("projection retains inputs after unrelated delete",window.Session().GetDocument().FindEntity(WireId())
+        &&window.Session().GetDocument().FindEntity(TargetId())&&tool->WireCount()==1&&tool->TargetCount()==1&&tool->Preview()))return false;
+    window.RunCommand("edit.undo");return Explain("projection inputs remain usable after history",tool->Preview());
+}
 bool GuideCommit(V2MainWindow& window) {
     if(!Fixture(window))return false;window.RunCommand("wire.project_surface");auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!tool||!AddGuideInputs(*tool))return false;
     const auto before=window.Session().GetDocument().Snapshot();const auto revision=window.Session().GetDocument().Revision();if(!Explain("PROJ native preview",tool->Preview()))return false;
@@ -100,10 +115,12 @@ bool Preselection(V2MainWindow& window) {
     return Explain("PROJ preselection imported to separate inputs",tool&&tool->WireCount()==1&&tool->TargetCount()==1&&tool->Preview());
 }
 bool SolidFaceClick(V2MainWindow& window) {
+    window.resize(1500,950);QApplication::processEvents();
     if(!Fixture(window,true))return false;auto& viewport=window.Viewport();viewport.SetViewDirection(ViewDirection::Top);viewport.SetViewCenter({0,0,0});viewport.SetVisibleWidthMm(40);
     window.RunCommand("wire.project_surface");auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!tool)return false;
     app::SelectionRef wire;wire.entityId=WireId();tool->AddWire(wire);
     for(auto* button:tool->findChildren<QPushButton*>())if(button->text().startsWith(QStringLiteral("②")))button->click();
+    QApplication::processEvents(); // Let the projection panel finish layout before choosing a visible model pixel.
     const auto screen=viewport.Mapping().Project({0,0,2});if(!screen)return false;
     QMouseEvent mouse(QEvent::MouseButtonPress,QPointF(screen->x,screen->y),QPointF(screen->x,screen->y),Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
     QApplication::sendEvent(&viewport,&mouse);
@@ -321,6 +338,7 @@ std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"P
     {"PROJ planar circle ordinary storage extrusion",[](auto& w){return CircleOutput(w,true,false);}},
     {"PROJ curved lamp projected face extrusion",[](auto& w){return CircleOutput(w,false,true);}},
     {"PROJ curved lamp ordinary storage face extrusion",[](auto& w){return CircleOutput(w,true,true);}}};
+    cases.push_back({"HP-UX-PROJ selection delete preserves existing projection roles",SelectionDeleteKeepsProjectionInputs});
     cases.push_back({"PROJ panorama two workplanes per-row directions",PanoramaTwoPlanes});
     cases.push_back({"PROJ curved lamp wires only Undo save",[](auto& w){return CircleOutput(w,true,true,0);}});
     cases.push_back({"PROJ curved lamp wires and solid Undo save",[](auto& w){return CircleOutput(w,true,true,1);}});

@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2RoleInput.h"
+#include "V2ToolSelection.h"
 #include <QDockWidget>
 #include <QComboBox>
 #include <QPushButton>
@@ -38,7 +39,7 @@ public:
         }
     }
     void Sync() {
-        if(!isVisible()||writing_)return;
+        if(!isVisible()||writing_||V2ToolSelection::Active(window_.Viewport()))return;
         auto selection=window_.Viewport().Selection();
         if(selection.ordered.empty())for(const auto& id:selection.entityIds){app::SelectionRef ref;ref.entityId=id;selection.ordered.push_back(ref);}
         const bool polyline = PolylineMode();

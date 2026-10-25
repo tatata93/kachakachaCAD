@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from verification.evidence import source_identity, validate_ctest, validate_proof, validate_ui
 from verification.selection import PREFLIGHT, select_plan
 from verification.runner import Run, child_environment, baseline_matches, require_application_coverage
+from verification.test_retry_package_timeout import RetryEvidenceTests
 
 
 class VerificationTests(unittest.TestCase):

@@ -47,6 +47,16 @@ python scripts/verify.py publish --evidence out/verification/<run-id>/result.jso
 python scripts/run-verified.py out/releases/<run-id>
 ```
 
+Windowsで全体試験のうち`v2_package_zip`だけがTimeoutになり、ソース・設定・環境・
+コンパイラ/依存設定が同じ場合は、`python scripts/verification/retry_package_timeout.py
+out/verification/<failed-run>/result.json --run-id <retry-run>`で配布試験だけを実際のCTestで再実行できる。
+本体/配布UIの全件成功を前提とし、元XMLと再試験XMLを保全して全件の集合を再検査する。
+バイナリの更新時刻・再試験前後のハッシュも照合する。元試験時点で全バイナリのハッシュを
+採取していなかった場合、過去の同一性までハッシュで保証したとは表現しない。
+0件・欠落・重複・skip・通常の試験失敗・未成功の再試験は受け付けない。Timeoutは延長しない。
+`--audit-only`で原証拠と合成結果を再照合してから通常のpublish入口を使う。
+これは全体試験の省略ではなく、同一版の成功結果の明示的な再利用である。旧失敗ログは消さない。
+
 PowerShellは `scripts/verify.ps1 -Mode focused|full`、Linux側は
 `./scripts/verify.sh focused linux-core`。Windowsの `check.ps1 -Preset windows-msvc` は証拠付き全体入口へ委譲する。
 custom generator/build directoryを使う旧check入口は保持する。`check-v2.ps1` のV2→全件の二重実行はなくす。

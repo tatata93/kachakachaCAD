@@ -1,0 +1,108 @@
+{
+  "sourceSha256": "d6df321f8a2fb00fa43a3a41916bb1573cff31bb742c3faa31d2819f3bcf0f3c",
+  "exeSha256": "5b506721483cc88f14cf3adbe5e6466da12a370a85f35c06d8279ba6d9456e09",
+  "runs": [
+    {
+      "name": "cold",
+      "seconds": 188.84299999999348,
+      "payloadBytes": 135919373,
+      "payloadSha256": "0e773e1663a7d6a62b363cedadeaa1947d67eca4ab23ce7e4efc7812e4b3fe44",
+      "desktop": {
+        "event_loop": true,
+        "exposed": true,
+        "height": 1000,
+        "on_screen": true,
+        "platform": "windows",
+        "ready": true,
+        "rendered": true,
+        "schema": 1,
+        "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+        "visible": true,
+        "width": 1600
+      }
+    },
+    {
+      "name": "warm",
+      "seconds": 31.39100000000326,
+      "payloadBytes": 135919373,
+      "payloadSha256": "0e773e1663a7d6a62b363cedadeaa1947d67eca4ab23ce7e4efc7812e4b3fe44",
+      "desktop": {
+        "event_loop": true,
+        "exposed": true,
+        "height": 1000,
+        "on_screen": true,
+        "platform": "windows",
+        "ready": true,
+        "rendered": true,
+        "schema": 1,
+        "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+        "visible": true,
+        "width": 1600
+      }
+    }
+  ],
+  "passed": true,
+  "geometry": {
+    "parts": 233,
+    "allChecksPassed": true,
+    "pointChecks": 412,
+    "assemblyChecks": 171,
+    "maximumVolumeDeltaMm3": 2.3533175408374518e-11,
+    "maximumBoundsDeltaMm": 7.105427357601002e-15,
+    "worker": {
+      "ok": true,
+      "token": "23351277-b46c-4064-b024-6891843bd97d",
+      "version": 1,
+      "seconds": 2.85999999998603,
+      "exeSha256": "5b506721483cc88f14cf3adbe5e6466da12a370a85f35c06d8279ba6d9456e09",
+      "sourceSha256": "d6df321f8a2fb00fa43a3a41916bb1573cff31bb742c3faa31d2819f3bcf0f3c",
+      "cacheHit": true,
+      "trace": [
+        {
+          "elapsed_ms": 63.3296,
+          "pid": 19644,
+          "scope": "worker",
+          "stage": "read-archive",
+          "stage_ms": 63.3296,
+          "utc": "2026-10-25T06:33:14.387Z"
+        },
+        {
+          "elapsed_ms": 2746.6635,
+          "pid": 19644,
+          "scope": "worker",
+          "stage": "read-cache-hit",
+          "stage_ms": 2683.3339,
+          "utc": "2026-10-25T06:33:17.070Z"
+        },
+        {
+          "elapsed_ms": 2747.259,
+          "pid": 19644,
+          "scope": "worker",
+          "stage": "write-transfer-cache",
+          "stage_ms": 0.5954999999999018,
+          "utc": "2026-10-25T06:33:17.071Z"
+        }
+      ]
+    }
+  },
+  "previousCapacityAttempt": {
+    "event_loop": true,
+    "exposed": true,
+    "height": 1000,
+    "on_screen": true,
+    "platform": "windows",
+    "ready": true,
+    "rendered": true,
+    "schema": 1,
+    "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+    "visible": true,
+    "width": 1600,
+    "seconds": 187.56199999997625,
+    "sourceSha256": "d6df321f8a2fb00fa43a3a41916bb1573cff31bb742c3faa31d2819f3bcf0f3c",
+    "exeSha256": "fa89c8b049b2fdcb0457b9e98e7f25de904c337de9e5d8a37b9d5bc56f5c13e5",
+    "cache": "reused desktop03/cache",
+    "exitCode": 0,
+    "cacheReused": false,
+    "cacheMissReason": "135919345-byte prepared data exceeds previous 134217728-byte entry limit; requested cache directory remained empty"
+  }
+}

@@ -1365,5 +1365,21 @@
         ]
       }
     ]
+  },
+  "capacityGate": {
+    "run": "image-io-cache-accepted-20261025",
+    "sourceCommit": "6222e0f058032291e956fb00f55c19aeb3f22789",
+    "ctest": {
+      "total": 195,
+      "skipped": []
+    },
+    "uiCases": [
+      591,
+      591
+    ],
+    "exeSha256": "3afe359b221749f27823124d4a1a0bd613d200ebf5664140219025a2a0895cec",
+    "zipSha256": "58c4cf12d1d32ea7ca990f7ce6a3292ce5bc34e0535d9c72c91a6513cef8a783",
+    "start": "2026-10-25T06:31:12.097980+00:00",
+    "end": "2026-10-25T07:01:22.668528+00:00"
   }
 }

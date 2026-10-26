@@ -52,6 +52,15 @@ def identity(source,saved):
                 assert same_defined_values(expected,actual)
 
 
+def contacts(design, report):
+    expected=design.get('attachmentChecks',[]);actual=report.get('attachmentChecks',[])
+    assert expected and len(expected)==len(actual), 'missing attachment checks'
+    for source,result in zip(expected,actual):
+        assert all(result.get(k)==v for k,v in source.items()), 'stale attachment check'
+        assert result['passed'] and 0<=result['distanceMm']<=source['maximumDistanceMm']
+        assert result['contactAreaMm2']>=source['minimumAreaMm2']>0
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('workspace',type=Path);ap.add_argument('--run',default='04')
     a=ap.parse_args();w=a.workspace;run=a.run;result=dict(timeUtc=datetime.datetime.now(datetime.timezone.utc).isoformat(),models=[])
@@ -74,12 +83,18 @@ def main():
         assert len(r['pointChecks'])==len(design['pointChecks'])==(476 if design.get('bogieComponent') else 412 if refined else 314 if design.get('detailRevision') else 227)
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
+        if design.get('attachmentRevision'):
+            contacts(design,r)
+            assert not all_design['attachmentChecks'] and not all_report['attachmentChecks']
+            assert all_design['broadPhase']['reusedChecks']['attachmentChecks']==len(r['attachmentChecks'])
         assert len(all_report['assemblyChecks'])==all_design['broadPhase']['candidates']>100
         assert all_design['broadPhase']['potentialPairs']==len(expected)*(len(expected)-1)//2
         if 'reusedChecks' in all_design['broadPhase']:
             receipt=all_design['broadPhase']['reusedChecks']
-            assert receipt==dict(reportSha256=sha(export/'print-parts.json'),preparedToken=validation['token'],
+            expected_receipt=dict(reportSha256=sha(export/'print-parts.json'),preparedToken=validation['token'],
                 pointChecks=len(r['pointChecks']),splitChecks=len(r['splitChecks']))
+            if design.get('attachmentRevision'):expected_receipt['attachmentChecks']=len(r['attachmentChecks'])
+            assert receipt==expected_receipt
             assert not all_report['pointChecks'] and not all_report['splitChecks']
         pairs=lambda checks:{frozenset((c['first'],c['second'])) for c in checks}
         assert pairs(all_report['assemblyChecks'])==pairs(all_design['assemblyChecks'])
@@ -157,12 +172,15 @@ def main():
             cadExeSha256=validation['exeSha'],nativeSeconds=validation['seconds'],parts=len(expected),
             features=len(doc['features']),groups=len(doc['groups']),assemblyChecks=len(r['assemblyChecks']),
             pointChecks=len(r['pointChecks']),splitReassemblyChecks=len(r['splitChecks']),
+            attachmentChecks=len(r.get('attachmentChecks',[])),
             totalPartPairs=all_design['broadPhase']['potentialPairs'],brepInterferenceCandidates=len(all_report['assemblyChecks']),
             maximumPartExtentMm=maximum,closedBrep=True,stepRoundTrips=True,stlManifold=True,nativeArchiveRoundTripStructure=True))
     reopen=load(w/('reopen'+run)/'validation.json');geom=load(w/('reopen-geometry'+run)/'print-parts.json')
     original=load(w/('exports'+run)/'print-parts.json');saved=w/('native'+run)/'cad-serialized.kcd2'
     assert reopen['passed'] and reopen['modelSha']==sha(saved) and reopen['exeSha']==result['models'][0]['cadExeSha256']
     assert geom['preparedToken']==reopen['token'] and not geom['failures'] and geom['checkOnly']
+    if load(w/('candidate'+run)/'design.json').get('attachmentRevision'):
+        contacts(load(w/('candidate'+run)/'design.json'),geom)
     old={p['id']:p for p in original['parts']};new={p['id']:p for p in geom['parts']};assert old.keys()==new.keys()
     delta=max(abs(p['volumeMm3']-new[k]['volumeMm3']) for k,p in old.items());assert delta<1e-6
     assert all(abs(p['bounds'][i]-new[k]['bounds'][i])<1e-6 for k,p in old.items() for i in range(6))
@@ -172,7 +190,7 @@ def main():
                   desktopStartup=desktop,gangwayOpeningMm=[7.2,5.8],gangwayAspectRatio=7.2/5.8,passed=True)
     repo=Path(__file__).resolve().parents[3]
     result['sourceFilesSha256']={p:sha(repo/p) for p in ['tools/modeling/kuha115_ho/revised.py',
-        'tools/modeling/kuha115_ho/build.py','tools/modeling/native_kcd.py',
+        'tools/modeling/kuha115_ho/build.py','tools/modeling/native_kcd.py','tools/modeling/kuha115_ho/fit_details.py',
         'tools/modeling/kuha115_ho/review_revised.py','tools/modeling/kuha115_ho/assembly_candidates.py',
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',

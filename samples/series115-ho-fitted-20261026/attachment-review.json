@@ -1,0 +1,1135 @@
+{
+  "revision": "2026-10-26-seated-glazing-skirt-cooler",
+  "checks": [
+    {
+      "contactAreaMm2": 4.965022074302373,
+      "distanceMm": 0,
+      "first": "42e16384-bd69-5aeb-a00a-d07f971467f2",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.682477796077141,
+      "distanceMm": 0,
+      "first": "80ac7885-4f3f-5863-a9fe-4fdbcca8ad06",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302303,
+      "distanceMm": 0,
+      "first": "f5d19a13-dbc3-560f-846b-255ac6e1c9a3",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.562477796076905,
+      "distanceMm": 0,
+      "first": "1fc3df5d-f0d3-5871-9604-a08b0e4d2b0d",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.22410086102704,
+      "distanceMm": 0,
+      "first": "70eef96d-0db2-522f-9b99-7f833842d44b",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345881,
+      "distanceMm": 0,
+      "first": "31d24aee-5340-5880-ba86-af226839636e",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.22410086102704,
+      "distanceMm": 0,
+      "first": "d1cee835-29cd-5c70-b405-17d5d2692fdf",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345853,
+      "distanceMm": 0,
+      "first": "523d1dd5-976f-552b-ad8d-cc461e37ccb3",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.8707692191301675,
+      "distanceMm": 0,
+      "first": "36eab36f-133e-56f6-a43d-9f378423144a",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 5.83796513639067,
+      "distanceMm": 0,
+      "first": "d9ca5d46-0814-50e8-bbf1-94265832e445",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302448,
+      "distanceMm": 0,
+      "first": "8833e4ed-b1cb-5919-a87f-d64a9a110867",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.5624777960768155,
+      "distanceMm": 0,
+      "first": "c1e92369-0052-576b-8298-33b4630c75d7",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026766,
+      "distanceMm": 0,
+      "first": "db345af0-4005-5ed5-81b4-4baa398d1d3a",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.61952208334539,
+      "distanceMm": 0,
+      "first": "fb4eb3bd-1ab6-5c29-b52c-e720e37bbd84",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026769,
+      "distanceMm": 0,
+      "first": "a96351ee-8263-5c8e-b054-79cdf472ef9a",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345379,
+      "distanceMm": 0,
+      "first": "811ea4f6-6e8e-57ea-a21a-721aae99e3ca",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.8707692191303167,
+      "distanceMm": 0,
+      "first": "6617d6ae-2626-51d9-86a5-3689ee1f3c53",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 5.837965136390522,
+      "distanceMm": 0,
+      "first": "0f8c9421-ebbc-54ae-bdbd-da143ea9e2c2",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302429,
+      "distanceMm": 0,
+      "first": "ce8a53a9-2672-5479-83f4-5d04e3e2ea4e",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.562477796076833,
+      "distanceMm": 0,
+      "first": "8c9d455b-e373-5eda-8d5c-93e83c9888fc",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026766,
+      "distanceMm": 0,
+      "first": "38f90da6-4299-5512-9734-2a6c6d068923",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345306,
+      "distanceMm": 0,
+      "first": "bf9b054b-3fe7-5516-a983-af4e5adf6d33",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.464800842940374,
+      "distanceMm": 0,
+      "first": "5e644a49-f585-5ff0-b922-320a6bbd0f00",
+      "label": "独立運転室窓枠の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.206400842940358,
+      "distanceMm": 0,
+      "first": "53e1e75d-a1a7-5d43-93c3-3376a9540201",
+      "label": "独立運転室ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.154668071567426,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "408d445b-6092-52a2-88ef-1b75d022ea64",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "757ae7e5-03c1-514f-9202-3552ea082ea1"
+    },
+    {
+      "contactAreaMm2": 4.154668071567426,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "2b513038-dc46-5309-b60b-a535d099fec7",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "757ae7e5-03c1-514f-9202-3552ea082ea1"
+    },
+    {
+      "contactAreaMm2": 4.154668071567424,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "33a91022-c4df-53a4-b7e7-7ebcbdf74f81",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "2ea9da25-6709-553a-8a4b-7b0c8c557aa7"
+    },
+    {
+      "contactAreaMm2": 4.154668071567417,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "2651fca4-0a05-5a69-ae5e-7b168ef873f7",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "2ea9da25-6709-553a-8a4b-7b0c8c557aa7"
+    },
+    {
+      "contactAreaMm2": 4.154668071567388,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "4bb2edf8-e26a-5671-8d30-f0981343c0bd",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "bb79f668-01c3-5126-ad38-e4f3eb09321f"
+    },
+    {
+      "contactAreaMm2": 4.154668071567417,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "db7630f6-dcb6-5f47-b1f6-b7ca62e3d2de",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "bb79f668-01c3-5126-ad38-e4f3eb09321f"
+    },
+    {
+      "contactAreaMm2": 4.154668071567112,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "b277b900-6adf-572e-9cdb-bd9222ea5cbd",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "5e2c099a-1e9a-58e3-83dd-2b93be1e2d16"
+    },
+    {
+      "contactAreaMm2": 4.154668071567119,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "e6989f2f-ac8d-5016-8e21-3f08af43589a",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "5e2c099a-1e9a-58e3-83dd-2b93be1e2d16"
+    },
+    {
+      "contactAreaMm2": 4.154668071566952,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "a8bd3acf-a0ad-55f1-9bcb-155c7c808420",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "b17c529b-e6ef-5638-b897-c0e93a23097f"
+    },
+    {
+      "contactAreaMm2": 4.154668071566952,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "63d8c9f4-e0f5-5756-b376-d4570c068661",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "b17c529b-e6ef-5638-b897-c0e93a23097f"
+    },
+    {
+      "contactAreaMm2": 4.154668071566953,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "855c4966-a82e-5e02-bb66-d5775694beab",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "378b7f6a-96ba-5f84-9d87-89e88d2bed6b"
+    },
+    {
+      "contactAreaMm2": 4.154668071566953,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "92ebbd3e-ea5c-53b9-a79b-72a4942edb54",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "378b7f6a-96ba-5f84-9d87-89e88d2bed6b"
+    },
+    {
+      "contactAreaMm2": 4.53517519189489,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "5b08eb6b-e3fb-5224-8a04-9e8b8cd4c149",
+      "label": "乗務員扉の裏ガラス接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "a4643bb3-a938-56f0-b47a-eced876f91f8"
+    },
+    {
+      "contactAreaMm2": 3.745575191894897,
+      "distanceMm": 9.237055564881302e-14,
+      "first": "e0804d0e-3b86-542f-8517-a725e78cb844",
+      "label": "乗務員扉の窓枠接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "a4643bb3-a938-56f0-b47a-eced876f91f8"
+    },
+    {
+      "contactAreaMm2": 4.33260086102698,
+      "distanceMm": 0,
+      "first": "c7ffc021-4fcb-57e1-9f1d-6ef3683e1798",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.709522083345598,
+      "distanceMm": 0,
+      "first": "0b349f5a-64b5-5df1-b054-d0dfdafde940",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.990022074302402,
+      "distanceMm": 0,
+      "first": "a1e66526-b50b-5c12-9214-1724ffd63ec9",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.182477796077016,
+      "distanceMm": 0,
+      "first": "803c0a82-da65-5e46-879b-c8b28264357b",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302181,
+      "distanceMm": 0,
+      "first": "20ecc825-6c57-57a6-b325-dc007ad7f781",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.562477796076947,
+      "distanceMm": 0,
+      "first": "819fbced-b05f-5a06-80a4-6c0e09fd5587",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.22410086102675,
+      "distanceMm": 0,
+      "first": "db8eccc2-be2a-5609-a025-84ab7dc0c743",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345704,
+      "distanceMm": 0,
+      "first": "ea13d232-38b2-54a8-b837-c773ad4a22e2",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026901,
+      "distanceMm": 0,
+      "first": "98a2c305-d1d9-5367-8097-872db859b6ae",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345693,
+      "distanceMm": 0,
+      "first": "e9094bc9-36b5-5bbe-a5a0-d7d046e67c84",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.8707692191301772,
+      "distanceMm": 0,
+      "first": "d35f2218-e553-5e85-83dc-d4bf5702fcdc",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 5.837965136390607,
+      "distanceMm": 0,
+      "first": "65112c6c-35db-56ab-8562-f8aaba6e4ee2",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302423,
+      "distanceMm": 0,
+      "first": "c2f0e258-84e5-52b7-b4f5-734781c872ae",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.562477796076821,
+      "distanceMm": 0,
+      "first": "bd73e2cc-3ea6-50b4-8f65-0de10ad1ca5d",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026756,
+      "distanceMm": 0,
+      "first": "b65c5dd9-c2ae-5f8f-aa8c-15d061aca40a",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345487,
+      "distanceMm": 0,
+      "first": "61512b04-5bc4-5b5c-89c0-675473f47641",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.224100861026756,
+      "distanceMm": 0,
+      "first": "14e3ac37-ac1e-549d-8162-67a97116075a",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.619522083345494,
+      "distanceMm": 0,
+      "first": "c1957e81-636d-5018-9ee9-1894c1880401",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.8707692191303105,
+      "distanceMm": 0,
+      "first": "145df31f-edad-5458-b978-3fef3e5c48b5",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 5.837965136390578,
+      "distanceMm": 0,
+      "first": "fd0269f2-d840-59a1-b1e4-e7b5c4f451ad",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.887022074302436,
+      "distanceMm": 0,
+      "first": "02c87c11-ceda-502a-8d2b-0ee0c6f4faf6",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.562477796080984,
+      "distanceMm": 0,
+      "first": "ea426a72-cb47-51ce-a023-d6328220a69c",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.215600861026857,
+      "distanceMm": 0,
+      "first": "d699f157-3210-5ea1-bffb-407ae54852e3",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 6.529522083345427,
+      "distanceMm": 0,
+      "first": "5d872300-f7d4-5e74-bda9-a1d66a93073f",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 2.8200220743022495,
+      "distanceMm": 0,
+      "first": "f64f6835-5ecc-5068-9cce-59188df6ed89",
+      "label": "側窓枠の外壁への接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.382477796076864,
+      "distanceMm": 0,
+      "first": "a67c840c-4f2e-53e5-b185-dba38087628a",
+      "label": "側窓ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 3.4648008429404005,
+      "distanceMm": 0,
+      "first": "3e816dfb-7a92-55ed-92a3-7da74ca74216",
+      "label": "独立運転室窓枠の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.206400842940388,
+      "distanceMm": 0,
+      "first": "eeb5ae33-6b1b-5e2e-a5aa-84d91eb95dff",
+      "label": "独立運転室ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 4.154668071567414,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "33766ad5-9e59-502f-a03b-554778952132",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "c2fd43e8-8025-544b-bcb5-104a51cd21e3"
+    },
+    {
+      "contactAreaMm2": 4.154668071567417,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "e8dd36bb-d9f0-51f7-8929-4506ac1f884b",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "c2fd43e8-8025-544b-bcb5-104a51cd21e3"
+    },
+    {
+      "contactAreaMm2": 4.154668071567426,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "729cb276-c519-5bf8-9d39-ef7dfa2ce476",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "3b44ab93-2440-5d23-83e3-6c455455471b"
+    },
+    {
+      "contactAreaMm2": 4.154668071567419,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "cfea36aa-db71-5dd7-b1d9-e6cc47c3e355",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "3b44ab93-2440-5d23-83e3-6c455455471b"
+    },
+    {
+      "contactAreaMm2": 4.154668071567379,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "f91111e4-c0a0-526a-884d-bdd8e29df88a",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "b3130486-8cdc-555d-bc56-cd36f76a62d8"
+    },
+    {
+      "contactAreaMm2": 4.1546680715674205,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "ab678737-f67b-5081-a750-81402084256a",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "b3130486-8cdc-555d-bc56-cd36f76a62d8"
+    },
+    {
+      "contactAreaMm2": 4.154668071567115,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "5b9068b1-6cde-51d4-9239-9154179b6b2c",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "703a51ae-618a-5ed6-9ef7-f5fc49f782cf"
+    },
+    {
+      "contactAreaMm2": 4.154668071567122,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "b24a6729-2410-5dba-90f5-e46ad592c622",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "703a51ae-618a-5ed6-9ef7-f5fc49f782cf"
+    },
+    {
+      "contactAreaMm2": 4.154668071566952,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "70e51cd1-3e77-5485-b83e-8705b38c3364",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "9ea4a51d-5646-5a48-8837-7340c0c4f593"
+    },
+    {
+      "contactAreaMm2": 4.154668071566952,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "59b7c85e-d1df-5213-952d-b4d773991dbd",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "9ea4a51d-5646-5a48-8837-7340c0c4f593"
+    },
+    {
+      "contactAreaMm2": 4.154668071566949,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "9df23729-63a6-5957-a0f4-e94e2636274f",
+      "label": "客扉ガラスと扉裏の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "93d222d4-2f0d-5fa1-a9d2-bcd318cea3a3"
+    },
+    {
+      "contactAreaMm2": 4.154668071566949,
+      "distanceMm": 3.161915174132446e-13,
+      "first": "9f6e6105-a4a9-50ab-871d-16651d8e441d",
+      "label": "客扉Hゴムと扉表の接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "93d222d4-2f0d-5fa1-a9d2-bcd318cea3a3"
+    },
+    {
+      "contactAreaMm2": 4.535175191894887,
+      "distanceMm": 9.592326932761353e-14,
+      "first": "55d33017-4d4c-5267-a587-4099d7bc81e5",
+      "label": "乗務員扉の裏ガラス接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "4a6b43d4-5c5d-5194-b86d-243385cca559"
+    },
+    {
+      "contactAreaMm2": 3.7455751918948947,
+      "distanceMm": 9.237055564881302e-14,
+      "first": "b0aacc9e-8b2c-58b7-8795-77dc0ad75f31",
+      "label": "乗務員扉の窓枠接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "4a6b43d4-5c5d-5194-b86d-243385cca559"
+    },
+    {
+      "contactAreaMm2": 9.48475950036237,
+      "distanceMm": 0,
+      "first": "36828d11-100a-5717-b0a3-0b1fcc538338",
+      "label": "パノラミックHゴムと車体",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.5,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.551716719774172,
+      "distanceMm": 0,
+      "first": "edce603c-c701-51ba-90df-e0873e605b0b",
+      "label": "パノラミックガラスと曲面接着受け",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.5,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 9.484825159204831,
+      "distanceMm": 0,
+      "first": "feb53ff7-06c5-5a94-90dc-dd670390d6d5",
+      "label": "パノラミックHゴムと車体",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.5,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 7.551716705483814,
+      "distanceMm": 0,
+      "first": "6d0a5fa0-7da8-512d-a3ea-33eed7fb2711",
+      "label": "パノラミックガラスと曲面接着受け",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.5,
+      "passed": true,
+      "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0"
+    },
+    {
+      "contactAreaMm2": 5.569893698497339,
+      "distanceMm": 5.551115123125783e-17,
+      "first": "61a3a66d-1037-5193-941c-410ef6ac19a4",
+      "label": "貫通扉ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "f0e7865c-f245-515e-b6bb-d5e4ca503b25"
+    },
+    {
+      "contactAreaMm2": 5.050973355292342,
+      "distanceMm": 7.271960811294775e-15,
+      "first": "ee1e0573-a993-5b6b-b20c-d07470de1583",
+      "label": "貫通扉Hゴムの接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "f0e7865c-f245-515e-b6bb-d5e4ca503b25"
+    },
+    {
+      "contactAreaMm2": 5.005309649148741,
+      "distanceMm": 4.035882739117369e-12,
+      "first": "7c8bbb25-526e-572e-bb07-b1852a75c36e",
+      "label": "後妻扉ガラスの裏貼り接着",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 0.2,
+      "passed": true,
+      "second": "99d27e32-6f33-504f-9f6c-4f251c921854"
+    },
+    {
+      "contactAreaMm2": 20.436182750039652,
+      "distanceMm": 6.217248937900877e-15,
+      "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+      "label": "冷房サドルの前後左右支持",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 12,
+      "passed": true,
+      "region": [
+        102.99,
+        -12.5,
+        42,
+        106.61,
+        -7,
+        46.3
+      ],
+      "second": "6905d22d-c811-5acd-a87c-3f7e221ded67"
+    },
+    {
+      "contactAreaMm2": 20.436182750039652,
+      "distanceMm": 2.1628557899130955e-14,
+      "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+      "label": "冷房サドルの前後左右支持",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 12,
+      "passed": true,
+      "region": [
+        102.99,
+        7,
+        42,
+        106.61,
+        12.5,
+        46.3
+      ],
+      "second": "6905d22d-c811-5acd-a87c-3f7e221ded67"
+    },
+    {
+      "contactAreaMm2": 20.436182750039652,
+      "distanceMm": 6.217248937900877e-15,
+      "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+      "label": "冷房サドルの前後左右支持",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 12,
+      "passed": true,
+      "region": [
+        136.99,
+        -12.5,
+        42,
+        140.61,
+        -7,
+        46.3
+      ],
+      "second": "6905d22d-c811-5acd-a87c-3f7e221ded67"
+    },
+    {
+      "contactAreaMm2": 20.436182750039652,
+      "distanceMm": 2.1628557899130955e-14,
+      "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+      "label": "冷房サドルの前後左右支持",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 12,
+      "passed": true,
+      "region": [
+        136.99,
+        7,
+        42,
+        140.61,
+        12.5,
+        46.3
+      ],
+      "second": "6905d22d-c811-5acd-a87c-3f7e221ded67"
+    },
+    {
+      "contactAreaMm2": 3.9000000000000004,
+      "distanceMm": 5.551115123125783e-17,
+      "first": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+      "label": "スカート左右の床板接着腕",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 3,
+      "passed": true,
+      "region": [
+        -0.1,
+        -12.01,
+        9,
+        0.5,
+        -8.99,
+        10.7
+      ],
+      "second": "1ecca70c-6848-5e2b-8760-4307880b1d5f"
+    },
+    {
+      "contactAreaMm2": 3.9000000000000004,
+      "distanceMm": 5.551115123125783e-17,
+      "first": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+      "label": "スカート左右の床板接着腕",
+      "maximumDistanceMm": 1e-05,
+      "minimumAreaMm2": 3,
+      "passed": true,
+      "region": [
+        -0.1,
+        8.99,
+        9,
+        0.5,
+        12.01,
+        10.7
+      ],
+      "second": "1ecca70c-6848-5e2b-8760-4307880b1d5f"
+    }
+  ],
+  "models": [
+    {
+      "name": "full",
+      "file": "kuha115-ho80-revised.kcd2",
+      "sourceSha256": "768eb12dece20a378e6eb4416bf9daf5607c9a9e1c44c1630876f6d20e992e99",
+      "cadExeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+      "nativeSeconds": 137.1720000000205,
+      "parts": 233,
+      "features": 1496,
+      "groups": 16,
+      "assemblyChecks": 171,
+      "pointChecks": 476,
+      "splitReassemblyChecks": 0,
+      "attachmentChecks": 93,
+      "totalPartPairs": 27028,
+      "brepInterferenceCandidates": 414,
+      "maximumPartExtentMm": 243.7500002000002,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    },
+    {
+      "name": "split",
+      "file": "kuha115-ho80-revised-split.kcd2",
+      "sourceSha256": "c120df36b8de366ee880c1c0eae11aa3ba798816795d40f5855de0314bb3dcae",
+      "cadExeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+      "nativeSeconds": 180.21799999999348,
+      "parts": 240,
+      "features": 1522,
+      "groups": 17,
+      "assemblyChecks": 321,
+      "pointChecks": 476,
+      "splitReassemblyChecks": 6,
+      "attachmentChecks": 93,
+      "totalPartPairs": 28680,
+      "brepInterferenceCandidates": 407,
+      "maximumPartExtentMm": 121.87500020000023,
+      "closedBrep": true,
+      "stepRoundTrips": true,
+      "stlManifold": true,
+      "nativeArchiveRoundTripStructure": true
+    }
+  ],
+  "negative": {
+    "passed": true,
+    "preparedSha256": "44ba2cff6b7843b043c2588c0a156ad02e678900d35a6cd0cd910c3c10b0160f",
+    "designSha256": "eb7a69452e39510a74fe47296c8a8e90cc4dcbdcddcfa4212062195d418adc4c",
+    "exporterSha256": "b06ee377e7b76f62d36a9a2e8e4262fdc5e45f127af034d91b416950c0570616",
+    "cases": [
+      {
+        "case": "skirt-gap",
+        "translationMm": [
+          -0.5,
+          0,
+          0
+        ],
+        "seconds": 12.109000000054948,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 1e+30,
+          "first": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+          "label": "スカート左右の床板接着腕",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 3,
+          "passed": false,
+          "region": [
+            -0.1,
+            -12.01,
+            9,
+            0.5,
+            -8.99,
+            10.7
+          ],
+          "second": "1ecca70c-6848-5e2b-8760-4307880b1d5f",
+          "secondTranslationMm": [
+            -0.5,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "case": "glazing-gap",
+        "translationMm": [
+          0,
+          -0.2,
+          0
+        ],
+        "seconds": 11.797000000020489,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 0.1999999999999993,
+          "first": "80ac7885-4f3f-5863-a9fe-4fdbcca8ad06",
+          "label": "側窓ガラスの裏貼り接着",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 0.2,
+          "passed": false,
+          "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0",
+          "secondTranslationMm": [
+            0,
+            -0.2,
+            0
+          ]
+        }
+      },
+      {
+        "case": "cooler-gap",
+        "translationMm": [
+          0,
+          0,
+          -0.5
+        ],
+        "seconds": 12.016000000061467,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 0.47526047333025406,
+          "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+          "label": "冷房サドルの前後左右支持",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 12,
+          "passed": false,
+          "region": [
+            102.99,
+            -12.5,
+            42,
+            106.61,
+            -7,
+            46.3
+          ],
+          "second": "6905d22d-c811-5acd-a87c-3f7e221ded67",
+          "secondTranslationMm": [
+            0,
+            0,
+            -0.5
+          ]
+        }
+      }
+    ]
+  },
+  "limits": [
+    "Model construction dimensions are estimates, not measured prototype fittings.",
+    "No physical printing, adhesive strength or running trial."
+  ],
+  "removedFiles": [],
+  "sourceSha256": {
+    "tools/modeling/kuha115_ho/assemble_fit.py": "efe1e23971fbc431f80584119d8d1e012663f723c4ea2b228e06f025179eb29b",
+    "tools/modeling/kuha115_ho/fit_details.py": "4f09f6aa9090c1662b8e6ae4a4d92433154f21608579333f50d2181f16c2eb09",
+    "tools/modeling/kuha115_ho/revised.py": "8dd8a7239ee4898e2eb2375aa6aa753d67612399841c6188d25ff7a967e60975",
+    "tools/modeling/kuha115_ho/render_fit.py": "cc9cf9a25d22079cd7f5290b25be342b901cfb17e12bf3557bf647cec4f15e4c",
+    "tools/modeling/kuha115_ho/test_attachment_fit.py": "94191d1bef7eaf4776b035e2cd0afed18e320f43305264722fcff88f0503453b"
+  }
+}

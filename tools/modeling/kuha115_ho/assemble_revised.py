@@ -12,7 +12,8 @@ def main():
     proof=json.loads((w/'review-result.json').read_text(encoding='utf-8'))
     assert proof['passed'] and len(proof['models'])==2
     negative=json.loads((w/'review-negative-tests.json').read_text(encoding='utf-8'))
-    assert negative['passed'] and len(negative['rejected'])==4 and negative['reviewResultSha256']==sha(w/'review-result.json')
+    fitted=json.loads((w/('candidate'+run)/'design.json').read_text(encoding='utf-8')).get('attachmentRevision')
+    assert negative['passed'] and len(negative['rejected'])==(7 if fitted else 4) and negative['reviewResultSha256']==sha(w/'review-result.json')
     a.samples.mkdir(parents=True,exist_ok=False);a.package.mkdir(parents=True,exist_ok=False)
     for path in (w/('candidate'+run)).iterdir():
         if '-all-pairs' not in path.name:shutil.copy2(path,a.samples/path.name)
@@ -91,7 +92,7 @@ STEPは組立座標のまま。ZIP内の`full-car/parts.csv`と`small-printer/pa
 Windows配布済みCADで両版を生成。全{full['parts']+split['parts']}部品が各1閉ソリッド・有効BRep・正体積。
 全STEPを再読込、全STLを閉鎖性・面向き・退化・体積差で検査した。STLの体積差上限は0.2%のまま。
 通常の弦誤差0.025 mm、通風器のみ0.006 mm。分割版6組は元形状との再組立比較に成功した。
-各版227点で窓の開口や柱を確認した。
+各版{full['pointChecks']}点で窓の開口や柱を確認した。
 全可視部品対のAABBを1e-5 mmのすき間まで候補化し、通常版{full['brepInterferenceCandidates']}組／
 分割版{split['brepInterferenceCandidates']}組の実BRep共通体積が1e-6 mm³以下であることを確認した。
 候補集合は最新の出力AABBから再計算し、古い候補リストを受け付けない。

@@ -28,7 +28,7 @@ def clip(poly,axis,bound,greater):
     return output
 
 def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=(),
-           paint_bands=None,roof_forehead_mm=None,part_ids=None,studio=False,decals=(),surface_color=None):
+           paint_bands=None,roof_forehead_mm=None,part_ids=None,studio=False,decals=(),surface_color=None,clip_bounds=None):
     width,height=size or ((1300,1100) if front else (2600,1050))
     im=Image.new('RGB',(width,height),'#edf1f2');draw=ImageDraw.Draw(im)
     camera=camera or ((-.91,-.32,.26) if front else (-.35,-.75,.56))
@@ -46,6 +46,9 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
         if roof_forehead_mm is not None and part['name']=='貫通扉':paint=False
         dz=(17 if '02 屋根' in path or '07 屋根' in path else (-13 if '08 床板' in path or '09 床下' in path or '10 台車' in path or '11 室内' in path else 0)) if explode else 0
         for poly,normal in triangles(base/part['stl']):
+            if clip_bounds is not None:
+                for axis in range(3):poly=clip(clip(poly,axis,clip_bounds[axis],True),axis,clip_bounds[axis+3],False)
+                if len(poly)<3:continue
             if front:
                 poly=clip(poly,0,36,False)
                 if len(poly)<3:continue

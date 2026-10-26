@@ -38,6 +38,7 @@ public:
     static QString KeyOf(const QTreeWidgetItem* item);
     void BeginRebuild(const QString& documentId);
     void EndRebuild();
+    void RegisterAppendedRow(QTreeWidgetItem* item);
     bool BeginFilter(const QString& term);
     static bool AncestorsExpanded(const QTreeWidgetItem* item);
     QTreeWidgetItem* FindKey(const QString& key) const;

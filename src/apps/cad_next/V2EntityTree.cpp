@@ -127,6 +127,10 @@ bool V2EntityTree::AncestorsExpanded(const QTreeWidgetItem* item) {
 QTreeWidgetItem* V2EntityTree::FindKey(const QString& key) const {
     const auto found=rows_.find(key);return found==rows_.end()||!found->second.isValid()?nullptr:itemFromIndex(found->second);
 }
+void V2EntityTree::RegisterAppendedRow(QTreeWidgetItem* item) {
+    if(!item)return;
+    rows_.insert_or_assign(KeyOf(item),QPersistentModelIndex(indexFromItem(item)));
+}
 void V2EntityTree::SetChangeHandler(std::function<void(QTreeWidgetItem*)> handler){changed_=std::move(handler);}
 void V2EntityTree::FlushChanges(){
     changeQueued_=false;const auto pending=std::exchange(changes_,{});

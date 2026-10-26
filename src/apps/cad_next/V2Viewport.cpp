@@ -1,6 +1,8 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
 #include "V2Viewport.h"
+#include "V2TransformPreview.h"
+#include "V2DrawingCommit.h"
 #include "V2RenderSelection.h"
 #include "V2NavigatorHighlight.h"
 #include "V2QuickDisplayControls.h"
@@ -863,6 +865,7 @@ void V2Viewport::HoverAt(const QPointF& position)
             }
         }
     }
+    if(!V2ToolSelection::Active(*this))v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
     const auto pickTime=hoverTimer.nsecsElapsed();
     // 掴めないものの上に来たら、カーソルでそう言う(§5.1 禁止対象)。
     RefreshForbiddenHover(position);
@@ -961,6 +964,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     selection_ = std::move(selection);
     if(selection_.entityIds.empty())V2DrawingSelection::Of(*this).ResumeInput();
     V2RenderSelectionOf(*this).Update(selection_);
+    v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
     ApplyVisibilityFilter();
     if (selectionChangedCallback_) {
         selectionChangedCallback_();
@@ -979,8 +983,12 @@ void V2Viewport::PruneSelection()
     // もう文書に無いものが入っているかもしれない。
     CancelBoxSelect();
     // 消えたものを選んだままにしない。無いものを選んでいることになる。
-    SetSelection(kachakacha::v2::app::PruneSelection(selection_,
-        session_->GetDocument().Snapshot()));
+    auto pruned=kachakacha::v2::app::PruneSelection(selection_,session_->GetDocument().Snapshot());
+    if(!window()->property("drawingAppendIds").toStringList().empty()
+        &&pruned.entityIds==selection_.entityIds&&pruned.ordered.size()==selection_.ordered.size()){
+        ApplyVisibilityFilter();update();return;
+    }
+    SetSelection(std::move(pruned));
 }
 
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
@@ -1224,9 +1232,7 @@ void V2Viewport::ClickAt(const QPointF& position)
     if (statusCallback_) {
         statusCallback_(status_);
     }
-    if (result.committed && documentChangedCallback_) {
-        documentChangedCallback_();
-    }
+    v2ui::NotifyDrawingCommit(*this,*session_,result,documentChangedCallback_);
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
     }
@@ -1246,9 +1252,7 @@ void V2Viewport::FinishTool()
     if (statusCallback_) {
         statusCallback_(status_);
     }
-    if (result.committed && documentChangedCallback_) {
-        documentChangedCallback_();
-    }
+    v2ui::NotifyDrawingCommit(*this,*session_,result,documentChangedCallback_);
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
     }
@@ -1351,6 +1355,9 @@ bool V2Viewport::EditCursorFieldForKey(int key)
 
 void V2Viewport::keyPressEvent(QKeyEvent* event)
 {
+    if(property("transformTargetPicking").toBool()&&(event->key()==Qt::Key_Return||event->key()==Qt::Key_Enter||event->key()==Qt::Key_Escape)){
+        CancelBoxSelect();setProperty("transformTargetPicking",false);SetSelection(selection_);event->accept();return;
+    }
     // S で吸着を止め、Shift で水平・垂直へ寄せる。
     // 押しっぱなしのあいだ効くので、押した瞬間と離した瞬間の両方で見る。
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);

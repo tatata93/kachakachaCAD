@@ -24,6 +24,8 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVariant>
+#include <QSignalBlocker>
+#include <QStringList>
 
 #include <array>
 #include <functional>
@@ -67,6 +69,25 @@ void MarkIfActiveWorkPlane(QTreeWidgetItem* item, bool active)
     return item;
 }
 
+bool AppendDrawingRows(V2MainWindow& window,const QStringList& ids,
+    const std::function<QTreeWidgetItem*(QTreeWidgetItem*,const kachakacha::v2::domain::Entity&)>& add){
+    std::vector<const kachakacha::v2::domain::Entity*> added;
+    for(const auto& text:ids){auto id=kachakacha::v2::base::EntityId::Parse(text.toStdString());
+        const auto* entity=id?window.Session().GetDocument().FindEntity(*id):nullptr;
+        if(!entity||(entity->kind!=EntityKind::Wire&&entity->kind!=EntityKind::Point)||window.ItemOfEntity(*id))return false;
+        added.push_back(entity);}
+    auto* tree=window.EntityTree();QSignalBlocker block(tree);const auto& groups=window.GroupItems();
+    for(const auto* entity:added){auto* parent=tree->topLevelItem(0);
+        if(entity->groupId){const auto found=std::find_if(groups.begin(),groups.end(),[&](auto row){return row.second==*entity->groupId;});
+            if(found==groups.end())return false;parent=found->first;}
+        auto ungrouped=*entity;ungrouped.groupId.reset();const auto section=kachakacha::v2::app::SectionForEntity(window.Session().GetDocument().Snapshot(),ungrouped);
+        const auto key=V2EntityTree::KeyOf(parent)+"/section:"+QString::number(int(section));QTreeWidgetItem* category=nullptr;
+        for(int i=0;i<parent->childCount();++i)if(V2EntityTree::KeyOf(parent->child(i))==key){category=parent->child(i);break;}
+        if(!category){category=MakeSectionItem(parent,section);tree->RegisterAppendedRow(category);category->setExpanded(true);}
+        tree->RegisterAppendedRow(add(category,*entity));}
+    window.setProperty("explorerAppends",window.property("explorerAppends").toInt()+int(added.size()));return true;
+}
+
 } // namespace
 
 //! 文書の行の名前。開いた文書ならその名前、まだなら「文書」。
@@ -85,6 +106,17 @@ void V2MainWindow::RefreshEntityList()
     if (!entityTree_) {
         return;
     }
+    const auto appendIds=property("drawingAppendIds").toStringList();
+    const auto& current=session_->GetDocument().Snapshot();
+    // A direct DrawingSession wire/point append cannot change older rows, group
+    // state or workplanes. Keep their widgets, selection, scroll and fold state.
+    if(!appendIds.empty()&&entityTree_->topLevelItemCount()==1
+        &&property("explorerDocumentId").toString()==QString::fromStdString(current.id.ToString())
+        &&entityItems_.size()+appendIds.size()==current.entities.size()){
+        if(AppendDrawingRows(*this,appendIds,[this](auto* category,const auto& entity){return AddEntityRow(category,entity);})){
+            RefreshExplorerCategoryChecks();ApplyEntityTreeFilter();return;}
+    }
+    setProperty("explorerDocumentId",QString::fromStdString(current.id.ToString()));
     setProperty("explorerBuilds",property("explorerBuilds").toInt()+1);
     // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
     // 「名前が変わった」と誤って伝わり、名前が入れ替わる。

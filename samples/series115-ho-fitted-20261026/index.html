@@ -1,0 +1,15 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>クハ115 1/80 取付修正版</title>
+<style>body{max-width:1200px;margin:30px auto;padding:0 22px;font:17px/1.8 sans-serif;color:#25333b}img{max-width:100%;height:auto}section{margin:36px 0}table{border-collapse:collapse}td,th{padding:8px;border:1px solid #aab5bb}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:12px 0}@media(max-width:700px){.pair{display:block}}</style>
+<h1>クハ115-1000 長野色・1/80 HO16.5<br>ガラス・スカート・クーラーの取り付けを修正</h1>
+<p>前版の外観を保ち、離れていた取付面と接着代を修正しました。通常版233部品／前後分割版240部品。局所寸法は写真に基づく模型設計値で、実車の完全な実測復元ではありません。</p>
+<p><a href="kuha115-ho80-revised-saved.kcd2">通常版CADを開く</a> ／ <a href="kuha115-ho80-revised-split-saved.kcd2">前後分割版CAD</a> ／ <a href="README.md">組立と制限</a> ／ <a href="attachment-review.json">取付の検査記録</a></p>
+<img src="overview.png" alt="改訂したクハ115の実CAD形状">
+<section><h2>屋根に沿うクーラーの支持座</h2><p>以前にも奥まった4本の脚はありましたが、側面から浮いて見えました。2本の横断サドルをキセへ一体化し、実際の屋根曲面で底を切っています。前後・左右の4領域で接触面積を検査しました。</p><img src="cooler-seats.png" alt="屋根曲面で底を切ったクーラー支持座"><p>形を見分けるため、屋根を青くした実CAD形状の部分表示です。実車写真やAI予想図ではありません。</p></section>
+<section><h2>床板からスカートへつながる支持腕</h2><p>床板下面から左右の立上りと水平腕を一体で伸ばしました。スカート裏面には各3.9 mm²の接着面が接します。中央の連結器位置を避けています。</p><img src="skirt-arms.png" alt="床板の支持腕とスカートの接触"><p>青が床板と一体の支持腕、茶がスカート。前端だけを切り出した表示です。</p></section>
+<section><h2>ガラスを内側へ納め、接着受けを設ける</h2><p>側窓・客扉・乗務員扉・貫通扉・後妻扉のガラスを相手の裏面に合わせました。パノラミックガラスは外面を車体より0.22 mm内側に保ち、裏側の曲面受けで支えます。窓の視界を塞がず、Hゴムも対応面へ接触させています。</p><div class="pair"><figure><img src="before-front.png"><figcaption>前版の実形状</figcaption></figure><figure><img src="front-detail.png"><figcaption>取付修正版の実形状</figcaption></figure></div></section>
+<section><h2>実形状による検査</h2><p>各版で93か所の接触を検査しました。距離だけでなく、元の境界面同士に十分な共通面積があることを確認しています。領域で切った人工面を接触面積には数えません。</p>
+<table><tr><th>取付箇所</th><th>距離 mm</th><th>接触面積 mm²</th></tr><tr><td>冷房サドルの前後左右支持</td><td>6.21725e-15</td><td>20.4362</td></tr><tr><td>冷房サドルの前後左右支持</td><td>2.16286e-14</td><td>20.4362</td></tr><tr><td>冷房サドルの前後左右支持</td><td>6.21725e-15</td><td>20.4362</td></tr><tr><td>冷房サドルの前後左右支持</td><td>2.16286e-14</td><td>20.4362</td></tr><tr><td>スカート左右の床板接着腕</td><td>5.55112e-17</td><td>3.9000</td></tr><tr><td>スカート左右の床板接着腕</td><td>5.55112e-17</td><td>3.9000</td></tr></table>
+<p>スカートを0.5 mm、ガラスを0.2 mm、屋根を0.5 mm離す3つの負の試験は、すべて不合格になりました。通常版・分割版の全閉ソリッド、有効BRep、正体積、全STEP再読込、全STL閉鎖性・面向き、各476点、全対候補の干渉、分割6組の再組立、保存・再読込も検査しました。</p>
+<p><a href="validation-summary.json">全体検査</a> ／ <a href="review-negative-tests.json">欠落・古い証拠を拒否する検査</a> ／ <a href="attachment-negative-tests.json">部品を離す試験</a></p></section>
+<section><h2>実際のWindows版での表示</h2><img src="cad-screen.png" alt="Windows版CADで改訂モデルを開いた画面"><p>通常のWindowsイベントループで表示を確認した画面です。全モデリング工程をOSのマウスで作り直した証拠ではありません。</p></section>
+<p>実印刷、接着強度、走行、旋回する台車の動的干渉、市販動力との互換は未試験です。以前のモデル・ユーザーの原本・旧配布は削除していません。</p></html>

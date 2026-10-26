@@ -5,6 +5,8 @@
 //! 中身は動かしていない(欄の決め方も解き方も core の app/CursorInput にある)。
 
 #include "V2Viewport.h"
+#include "V2DrawingCommit.h"
+#include "V2TransformPreview.h"
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
 
@@ -39,7 +41,8 @@ bool V2Viewport::OpenCursorInput()
     const bool spatial = !session_->DrawingPlaneOnly()
         && (tool == kachakacha::v2::modeling::DrawingTool::Line
             || tool == kachakacha::v2::modeling::DrawingTool::Polyline);
-    const auto begun = kachakacha::v2::app::BeginCursorInput(tool, !spatial);
+    const auto begun = kachakacha::v2::app::BeginCursorInput(
+        tool==kachakacha::v2::modeling::DrawingTool::Copy?kachakacha::v2::modeling::DrawingTool::Move:tool, !spatial);
     if (!begun.HasValue()) {
         viewMessage_ = begun.FirstSummaryJa();
         return false;
@@ -85,8 +88,8 @@ void V2Viewport::SyncCursorInputWithTool(bool placedPoint, bool committed)
         }
         return;
     }
-    if (placedPoint && kachakacha::v2::app::ToolUsesCursorInput(session_->CurrentTool(),
-                           session_->CurrentToolSettings())) {
+    if (placedPoint && (session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Copy
+        || kachakacha::v2::app::ToolUsesCursorInput(session_->CurrentTool(), session_->CurrentToolSettings()))) {
         (void)OpenCursorInput();
     }
 }
@@ -134,9 +137,7 @@ bool V2Viewport::PlacePointFromCursorInput()
     if (statusCallback_) {
         statusCallback_(status_);
     }
-    if (result.committed && documentChangedCallback_) {
-        documentChangedCallback_();
-    }
+    v2ui::NotifyDrawingCommit(*this,*session_,result,documentChangedCallback_);
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
     }
@@ -175,6 +176,7 @@ void V2Viewport::DiscardHoverState()
 
 void V2Viewport::OnToolChanged()
 {
+    setProperty("transformTargetPicking",false);CancelBoxSelect();
     V2ToolSelection::Reset(*this);
     V2DrawingSelection::Of(*this).CancelInputs();
     CancelReferencePick();
@@ -267,6 +269,7 @@ bool V2Viewport::FocusNextCursorField(bool backward)
         return false;
     }
     cursorPanel_ = moved.Value();
+    v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
     update();
     return true;
 }
@@ -281,6 +284,7 @@ bool V2Viewport::TypeIntoCursorField(const QString& text)
     }
     cursorPanel_ = typed.Value();
     V2DrawingSelection::Of(*this).ResumeInput();
+    v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
     update();
     return true;
 }
@@ -305,6 +309,7 @@ bool V2Viewport::CommitCursorField()
         return false;
     }
     cursorPanel_ = committed.Value().panel;
+    v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
     viewMessage_.clear();
     update();
     // 主要欄(長さ・半径)が決まれば形は決まる。決まっていなければ次の欄へ。
@@ -358,4 +363,81 @@ void V2Viewport::DrawCursorInput(QPainter& painter) const
                 kachakacha::v2::app::FieldDisplayJa(field, state)));
     }
     painter.restore();
+}
+
+std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
+{
+    if(property("transformTargetPicking").toBool()){
+        CancelBoxSelect();setProperty("transformTargetPicking",false);SetSelection(selection_);
+        return {kachakacha::v2::app::EscapeStep::CancelPick};
+    }
+    if (ReferencePickPending()) {
+        CancelReferencePick();
+        return {kachakacha::v2::app::EscapeStep::CancelPick};
+    }
+    kachakacha::v2::app::EscapeContext context;
+    context.draggingGadget = gadgetDrag_.has_value();
+    context.draggingCube = cubeDrag_.active;
+    context.waitingForPick = PickPending();
+    context.cursorInputOpen = cursorPanel_.active;
+    context.toolHasPoints = session_->HasPlacedPoints();
+    context.hasSelection = !selection_.entityIds.empty();
+    context.toolIsSelect =
+        session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select;
+    context.measuringOverRunningTool =
+        session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
+        && measureResumeAvailable_ && measureResumeAvailable_();
+    const auto steps = kachakacha::v2::app::PlanEscape(context);
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
+        ClearMeasurePicks();
+    }
+    for (const kachakacha::v2::app::EscapeStep step : steps) {
+        switch (step) {
+        case kachakacha::v2::app::EscapeStep::CancelGadgetDrag:
+            gadgetDrag_.reset();
+            break;
+        case kachakacha::v2::app::EscapeStep::CancelCubeDrag:
+            cubeDrag_ = kachakacha::v2::view::ViewCubeDrag{};
+            cubeMoved_ = false;
+            break;
+        case kachakacha::v2::app::EscapeStep::CancelPick:
+            CancelPointPick();
+            break;
+        case kachakacha::v2::app::EscapeStep::CloseCursorInput:
+            V2DrawingSelection::Of(*this).CancelInputs();
+            CloseCursorInput();
+            session_->CancelTool();
+            hover_.preview.clear();
+            break;
+        case kachakacha::v2::app::EscapeStep::CancelDrawing:
+            V2DrawingSelection::Of(*this).CancelInputs();
+            session_->CancelTool();
+            hover_.preview.clear();
+            break;
+        case kachakacha::v2::app::EscapeStep::ClearSelection:
+            SetSelection(kachakacha::v2::app::SelectionSet{});
+            break;
+        case kachakacha::v2::app::EscapeStep::BackToSelectTool:
+            if (backToSelect_) {
+                backToSelect_();
+            }
+            break;
+        case kachakacha::v2::app::EscapeStep::ResumeToolAfterMeasure:
+            ClearMeasurePicks();
+            if (backToSelect_) {
+                backToSelect_();   // 窓が戻り先を知っている(BackToSelectOrResume)
+            }
+            break;
+        }
+    }
+    const std::string_view message = kachakacha::v2::app::EscapeMessageJa(steps);
+    if (!message.empty()) {
+        status_ = std::string(message);
+        if (statusCallback_) {
+            statusCallback_(status_);
+        }
+    }
+    RefreshCursorShape();
+    update();
+    return steps;
 }

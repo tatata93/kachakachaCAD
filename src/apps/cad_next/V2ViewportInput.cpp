@@ -1,5 +1,6 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
+#include "V2TransformPreview.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
 //! ここに集めたのは、V1にあって V2 に無かったものである。
@@ -190,79 +191,6 @@ kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
     const auto squared = kachakacha::v2::modeling::SnapDirectionToRightAngle(
         session_->CurrentTool(), workPlane_, anchor, point);
     return squared.value_or(point);
-}
-
-std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
-{
-    if (ReferencePickPending()) {
-        CancelReferencePick();
-        return {kachakacha::v2::app::EscapeStep::CancelPick};
-    }
-    kachakacha::v2::app::EscapeContext context;
-    context.draggingGadget = gadgetDrag_.has_value();
-    context.draggingCube = cubeDrag_.active;
-    context.waitingForPick = PickPending();
-    context.cursorInputOpen = cursorPanel_.active;
-    context.toolHasPoints = session_->HasPlacedPoints();
-    context.hasSelection = !selection_.entityIds.empty();
-    context.toolIsSelect =
-        session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select;
-    context.measuringOverRunningTool =
-        session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
-        && measureResumeAvailable_ && measureResumeAvailable_();
-    const auto steps = kachakacha::v2::app::PlanEscape(context);
-    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
-        ClearMeasurePicks();
-    }
-    for (const kachakacha::v2::app::EscapeStep step : steps) {
-        switch (step) {
-        case kachakacha::v2::app::EscapeStep::CancelGadgetDrag:
-            gadgetDrag_.reset();
-            break;
-        case kachakacha::v2::app::EscapeStep::CancelCubeDrag:
-            cubeDrag_ = kachakacha::v2::view::ViewCubeDrag{};
-            cubeMoved_ = false;
-            break;
-        case kachakacha::v2::app::EscapeStep::CancelPick:
-            CancelPointPick();
-            break;
-        case kachakacha::v2::app::EscapeStep::CloseCursorInput:
-            V2DrawingSelection::Of(*this).CancelInputs();
-            CloseCursorInput();
-            session_->CancelTool();
-            hover_.preview.clear();
-            break;
-        case kachakacha::v2::app::EscapeStep::CancelDrawing:
-            V2DrawingSelection::Of(*this).CancelInputs();
-            session_->CancelTool();
-            hover_.preview.clear();
-            break;
-        case kachakacha::v2::app::EscapeStep::ClearSelection:
-            SetSelection(kachakacha::v2::app::SelectionSet{});
-            break;
-        case kachakacha::v2::app::EscapeStep::BackToSelectTool:
-            if (backToSelect_) {
-                backToSelect_();
-            }
-            break;
-        case kachakacha::v2::app::EscapeStep::ResumeToolAfterMeasure:
-            ClearMeasurePicks();
-            if (backToSelect_) {
-                backToSelect_();   // 窓が戻り先を知っている(BackToSelectOrResume)
-            }
-            break;
-        }
-    }
-    const std::string_view message = kachakacha::v2::app::EscapeMessageJa(steps);
-    if (!message.empty()) {
-        status_ = std::string(message);
-        if (statusCallback_) {
-            statusCallback_(status_);
-        }
-    }
-    RefreshCursorShape();
-    update();
-    return steps;
 }
 
 void V2Viewport::ApplySnapSettings()
@@ -925,6 +853,7 @@ bool V2Viewport::ReleaseBoxSelect(const QPointF& position)
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
+    v2ui::FilterTransformCandidates(*session_,candidates,!V2ToolSelection::Active(*this)&&!ReferencePickPending());
     SetSelection(kachakacha::v2::app::ApplyBoxSelection(base, candidates, mode));
     // 離した場所の候補を集め直す。矩形の前の候補を出したままだと、
     // 次の Tab がどこの候補を送っているのか読めない。
@@ -979,6 +908,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
+    v2ui::FilterTransformCandidates(*session_,candidates,!V2ToolSelection::Active(*this)&&!ReferencePickPending());
     if (ReferencePickPending()&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) {
             if (elementPickFilter_) return !elementPickFilter_(c);
@@ -1370,6 +1300,11 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     // 順は PressViewNavigator が持っている。ここで書き写さない。
     if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
         return;
+    }
+    // Copy/Move targets are additive Ctrl picks, not temporary deletion inputs.
+    if(v2ui::TransformTargetPick(*this,*session_,*event)){
+        auto modifiers=event->modifiers()|Qt::ControlModifier;
+        BeginBoxSelect(event->position(),modifiers);SelectAt(event->position(),modifiers);return;
     }
     // The visible navigator is in front of extrusion handles as well as model edges.
     const bool editPick=V2ToolSelection::Active(*this)||((event->modifiers()&Qt::ControlModifier)

@@ -14,6 +14,11 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <GProp_GProps.hxx>
 #include <Bnd_Box.hxx>
@@ -27,6 +32,7 @@
 #include <sstream>
 #include <iostream>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <cmath>
 
@@ -46,6 +52,55 @@ TopoDS_Shape ReadShape(const std::map<std::string,std::string>& shapes,const QSt
 double Volume(const TopoDS_Shape& shape) {
     GProp_GProps prop;if(!shape.IsNull())BRepGProp::VolumeProperties(shape,prop,1e-10);
     return std::abs(prop.Mass());
+}
+
+TopoDS_Shape ContactIntersection(const TopoDS_Shape& a,const TopoDS_Shape& b){
+    BRepAlgoAPI_Common operation;TopTools_ListOfShape args,tools;args.Append(a);tools.Append(b);
+    operation.SetArguments(args);operation.SetTools(tools);operation.SetNonDestructive(true);operation.Build();
+    if(!operation.IsDone())throw std::runtime_error("contact intersection failed");return operation.Shape();
+}
+TopoDS_Shape ContactShape(const QJsonObject& check,const QString& key,const std::map<std::string,std::string>& shapes){
+    if(!check.contains(key+"Parts"))return ReadShape(shapes,check[key].toString());
+    const auto ids=check[key+"Parts"].toArray();if(ids.isEmpty())throw std::runtime_error("empty contact assembly");
+    TopoDS_Shape result;std::set<QString> unique;
+    for(const auto id:ids){if(!unique.insert(id.toString()).second)throw std::runtime_error("duplicate contact part");
+        const auto part=ReadShape(shapes,id.toString());if(result.IsNull())result=part;
+        else {BRepAlgoAPI_Fuse join(result,part);join.Build();if(!join.IsDone())throw std::runtime_error("contact assembly failed");
+            join.SimplifyResult();result=join.Shape();}}
+    return result;
+}
+struct ContactFace {TopoDS_Shape shape;double b[6];};
+std::vector<ContactFace> ContactFaces(const TopoDS_Shape& shape){
+    std::vector<ContactFace> faces;
+    for(TopExp_Explorer ex(shape,TopAbs_FACE);ex.More();ex.Next()){
+        ContactFace face;face.shape=ex.Current();Bnd_Box box;BRepBndLib::AddOptimal(face.shape,box,false,false);
+        if(box.IsVoid())continue;box.Get(face.b[0],face.b[1],face.b[2],face.b[3],face.b[4],face.b[5]);faces.push_back(face);}
+    return faces;
+}
+QJsonArray CheckContacts(const QJsonObject& design,const std::map<std::string,std::string>& shapes,int& failures){
+    QJsonArray results;
+    for(const auto value:design["attachmentChecks"].toArray()){
+        auto check=value.toObject();const double maximum=check["maximumDistanceMm"].toDouble(-1),minimum=check["minimumAreaMm2"].toDouble(-1);
+        if(!std::isfinite(maximum)||maximum<=0||!std::isfinite(minimum)||minimum<=0)throw std::runtime_error("invalid contact limits");
+        auto a=ContactShape(check,"first",shapes),b=ContactShape(check,"second",shapes);
+        if(check.contains("secondTranslationMm")){const auto p=check["secondTranslationMm"].toArray();if(p.size()!=3)throw std::runtime_error("invalid contact perturbation");
+            gp_Trsf t;t.SetTranslation(gp_Vec(p[0].toDouble(),p[1].toDouble(),p[2].toDouble()));b=BRepBuilderAPI_Transform(b,t,true).Shape();}
+        const auto left=ContactFaces(a),right=ContactFaces(b);TopoDS_Shape region;
+        if(check.contains("region")){const auto r=check["region"].toArray();if(r.size()!=6)throw std::runtime_error("invalid contact region");
+            for(int i=0;i<3;++i)if(!std::isfinite(r[i].toDouble())||!std::isfinite(r[i+3].toDouble())||r[i+3].toDouble()<=r[i].toDouble())throw std::runtime_error("invalid contact box");
+            region=BRepPrimAPI_MakeBox(gp_Pnt(r[0].toDouble(),r[1].toDouble(),r[2].toDouble()),gp_Pnt(r[3].toDouble(),r[4].toDouble(),r[5].toDouble())).Shape();
+            a=ContactIntersection(a,region);b=ContactIntersection(b,region);}
+        BRepExtrema_DistShapeShape distance(a,b);double gap=1e30,area=0;
+        if(distance.IsDone()&&distance.NbSolution()>0)gap=distance.Value();
+        if(gap<=maximum){
+            for(const auto& f:left)for(const auto& g:right){bool close=true;
+                for(int i=0;i<3;++i)if(std::min(f.b[i+3],g.b[i+3])-std::max(f.b[i],g.b[i]) < -maximum){close=false;break;}
+                if(!close)continue;auto surface=ContactIntersection(f.shape,g.shape);
+                if(!region.IsNull())surface=ContactIntersection(surface,region);
+                GProp_GProps props;BRepGProp::SurfaceProperties(surface,props);area+=std::abs(props.Mass());}}
+        check["distanceMm"]=gap;check["contactAreaMm2"]=area;check["passed"]=gap<=maximum&&area>=minimum;
+        if(!check["passed"].toBool())++failures;results.append(check);
+    }return results;
 }
 
 QJsonArray CheckAssembly(const QJsonObject& design,const std::map<std::string,std::string>& shapes,int& failures) {
@@ -119,6 +174,7 @@ int main(int argc,char** argv) {
         const auto assembly=CheckAssembly(design,shapes,failures);
         const auto split=CheckSplit(design,shapes,failures);
         const auto points=CheckPoints(design,shapes,failures);
+        const auto contacts=CheckContacts(design,shapes,failures);
         Interface_Static::SetCVal("write.step.unit","MM");
         for(const auto value:design["entities"].toArray()) {
             const auto entity=value.toObject();if(entity["kind"]!="part"||entity["visibility"]!="visible")continue;
@@ -164,7 +220,7 @@ int main(int argc,char** argv) {
         }
         if(index==0)throw std::runtime_error("zero visible parts");
         QJsonObject report{{"preparedToken",QString::fromStdString(token)},{"cadShapes",int(count)},{"visibleParts",index},
-            {"failures",failures},{"checkOnly",checkOnly},{"chordMm",chord},{"assemblyChecks",assembly},{"splitChecks",split},{"pointChecks",points},{"parts",results}};
+            {"failures",failures},{"checkOnly",checkOnly},{"chordMm",chord},{"assemblyChecks",assembly},{"splitChecks",split},{"pointChecks",points},{"attachmentChecks",contacts},{"parts",results}};
         QFile result(out.filePath("print-parts.json"));if(!result.open(QIODevice::WriteOnly))return 4;result.write(QJsonDocument(report).toJson());
         std::cout<<"visible="<<index<<" failures="<<failures<<std::endl;return failures?1:0;
     }catch(const std::exception& e){std::cerr<<e.what()<<std::endl;return 5;}

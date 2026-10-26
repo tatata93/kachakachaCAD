@@ -21,6 +21,10 @@ def main():
     reused=dict(reportSha256=hashlib.sha256(a.report.read_bytes()).hexdigest(),preparedToken=r['preparedToken'],
         pointChecks=len(r['pointChecks']),splitChecks=len(r['splitChecks']))
     assert not r['failures'] and all(c['passed'] for k in ['pointChecks','splitChecks'] for c in r[k])
+    if d.get('attachmentRevision'):
+        assert d['attachmentChecks'] and len(d['attachmentChecks'])==len(r['attachmentChecks'])
+        assert all(c['passed'] for c in r['attachmentChecks'])
+        reused['attachmentChecks']=len(r['attachmentChecks']);d['attachmentChecks']=[]
     d['pointChecks']=[];d['splitChecks']=[]
     d['broadPhase']=dict(method='CAD BRep AABB gaps <= 1e-5 mm on every axis (expanded bounds)',
                          potentialPairs=len(r['parts'])*(len(r['parts'])-1)//2,candidates=len(checks),

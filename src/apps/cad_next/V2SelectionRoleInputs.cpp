@@ -9,6 +9,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVBoxLayout>
+#include <QLayout>
 #include <QWidget>
 #include <QScrollArea>
 #include <QShowEvent>
@@ -24,7 +25,7 @@ public:
     SelectionRoles(V2MainWindow& window, QWidget* body, int kind)
         : QWidget(body), window_(window), corner_(kind==1), kind_(kind) {
         setObjectName(kind==1?"cornerSelectionRoles":kind==2?"transformSelectionRoles":kind==3?"approxSelectionRoles":"arraySelectionRoles");
-        auto* layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);
+        auto* layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);layout->setSizeConstraint(QLayout::SetMinimumSize);
         for(int i=0;i<(corner_?3:1);++i) {
             auto* role=new V2RoleInput(this,corner_?(i==0?QStringLiteral("線 A"):i==1?QStringLiteral("線 B"):QStringLiteral("一括加工の追加辺")):kind==2?QStringLiteral("移動・複写する対象"):kind==3?QStringLiteral("近似する面・立体"):QStringLiteral("並べる対象"));
             roles_[i]=role;layout->addWidget(role);
@@ -37,9 +38,16 @@ public:
                 Cancel();inputs_[i].ordered.erase(inputs_[i].ordered.begin()+row);Publish();
             };
         }
+        if(kind_==2){
+            done_=new QPushButton(QStringLiteral("選択終了 → 基準点を指定"),this);
+            done_->setObjectName("transformTargetsDone");layout->addWidget(done_);done_->hide();
+            connect(done_,&QPushButton::clicked,this,[this]{Cancel();});
+            roles_[0]->arm->setToolTip(QStringLiteral("複数の線・部品をクリックや範囲で追加します。Ctrlでも追加・解除できます。"));
+        }
     }
     void Sync() {
         if(!isVisible()||writing_||V2ToolSelection::Active(window_.Viewport()))return;
+        if(kind_==2&&!window_.Viewport().property("transformTargetPicking").toBool())active_=-1;
         auto selection=window_.Viewport().Selection();
         if(selection.ordered.empty())for(const auto& id:selection.entityIds){app::SelectionRef ref;ref.entityId=id;selection.ordered.push_back(ref);}
         const bool polyline = PolylineMode();
@@ -66,8 +74,13 @@ private:
         const auto* entity=window_.Session().GetDocument().FindEntity(id);
         return entity&&((kind_==3?entity->kind==domain::EntityKind::GuideSurface:entity->kind==domain::EntityKind::Wire)||(!corner_&&entity->kind==domain::EntityKind::Part));
     }
-    void Cancel() {if(active_>=0)window_.Viewport().CancelReferencePick();active_=-1;Refresh();}
+    void Cancel() {
+        if(kind_==2)window_.Viewport().setProperty("transformTargetPicking",false);
+        else if(active_>=0)window_.Viewport().CancelReferencePick();
+        active_=-1;Refresh();
+    }
     void Arm(int index) {
+        if(kind_==2){const bool active=active_==index;Cancel();if(!active){active_=index;window_.Viewport().setProperty("transformTargetPicking",true);}Refresh();return;}
         Cancel();active_=index;Refresh();
         window_.Viewport().BeginElementPick([this](const app::PickCandidate& pick){return Accept(pick.entityId);},
             [this,index](std::optional<app::PickCandidate> pick){
@@ -91,6 +104,7 @@ private:
     }
     void Refresh() {
         const bool polyline = PolylineMode();
+        if(done_)done_->setVisible(active_>=0);
         if (corner_) roles_[0]->name->setText(polyline ? QStringLiteral("加工するワイヤー全体") : QStringLiteral("線 A"));
         for(int i=0;i<(corner_?3:1);++i) {
             roles_[i]->setVisible(!polyline || i == 0);
@@ -101,6 +115,7 @@ private:
         }
     }
     V2MainWindow& window_;bool corner_=false,writing_=false,lastPolyline_=false;int kind_=0,active_=-1;
+    QPushButton* done_=nullptr;
     std::vector<app::SelectionRef> last_;
     std::array<V2RoleInput*,3> roles_{};std::array<app::SelectionSet,3> inputs_{};
 };

@@ -41,6 +41,7 @@
 
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> DrawingSelectionCases();
+std::vector<SelfTestCase> CopyDrawingCases();
 namespace {
 
 using kachakacha::v2::app::WireEditShape;
@@ -684,6 +685,7 @@ std::vector<SelfTestCase> EditCases()
         {"編集の棚で作業平面を動かし原点面は断る", &CaseEditDockMovesWorkPlaneAndRefusesOrigin},
     };
     const auto drawingSelection=DrawingSelectionCases();cases.insert(cases.end(),drawingSelection.begin(),drawingSelection.end());
+    const auto copyDrawing=CopyDrawingCases();cases.insert(cases.end(),copyDrawing.begin(),copyDrawing.end());
     if(!qEnvironmentVariable("KACHACAD_SECTION_OWNER_FILE").isEmpty())cases.push_back({"OWNER-SECTION 115 workplane7 display and grid",CaseOwnerSectionDisplay});
     return cases;
 }

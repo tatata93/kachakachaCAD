@@ -38,6 +38,16 @@ def main():
         if path.parent.name=='exports'+a.run and path.name=='print-parts.json':d['parts']=[];d['visibleParts']=0
         return d
     reject('zero visible parts',loader=zero)
+    for kind in ['missing','failed','stale']:
+        def bad_contacts(path,kind=kind):
+            d=copy.deepcopy(original_load(path))
+            if path.parent.name=='exports'+a.run and path.name=='print-parts.json':
+                if kind=='missing':d['attachmentChecks']=[]
+                elif kind=='failed':d['attachmentChecks'][0]['passed']=False
+                else:d['attachmentChecks'][0]['first']='stale entity'
+            return d
+        if original_load(a.workspace/('candidate'+a.run)/'design.json').get('attachmentRevision'):
+            reject(kind+' attachment evidence',loader=bad_contacts)
     (a.workspace/'review-negative-tests.json').write_text(json.dumps(dict(passed=True,rejected=results,
         reviewResultSha256=review.sha(a.workspace/'review-result.json')),indent=2),encoding='utf-8',newline='\n')
 

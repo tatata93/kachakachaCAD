@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse, copy, hashlib, json, math, sys, uuid, shutil
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build import Train, vec, expr
+from fit_details import contact,replace_checks
 
 NS = uuid.UUID('174cd80a-e073-4ff4-9000-115122208024')
 L, SIDE, WALL, FLOOR = 243.75, 18.125, 1.0, 15.3125
@@ -122,7 +123,7 @@ def side_details(m,root):
     for sign,label in [(-1,'運転士側'),(1,'助手側')]:
         for j,w in enumerate(m.layout[sign]):
             x,ww,z,h=w['x'],w['w'],w['z'],w['h'];sash=w['type']=='sash'
-            r=.28 if sash else .65;pos=sign*(SIDE+.38)
+            r=.28 if sash else .65;pos=sign*(SIDE+.35)
             o=m.rounded('窓枠外',(x-ww/2-.13,pos,z-.13),(1,0,0),(0,0,1),ww+.26,h+.26,r+.13,frames)
             q=m.rounded('窓枠内',(x-ww/2+.25,pos,z+.25),(1,0,0),(0,0,1),ww-.5,h-.5,max(.12,r-.25),frames)
             a=m.extrude(label+f'窓{j+1} '+('二段サッシ' if sash else '固定Hゴム'),[o,q],(0,-sign,0),.35,frames)
@@ -130,24 +131,28 @@ def side_details(m,root):
                 rail=m.box('上下サッシ中桟',x-ww/2+.15,min(pos,pos-sign*.35),z+h*.49,ww-.3,.35,.4,frames)
                 a=m.boolean(label+f'窓{j+1} 中桟一体',a,[rail],0,frames,'アルミ銀')
             m.finish(a,'アルミ銀' if sash else '黒',.35);m.keyparts['frames'].append(a)
-            p=m.rounded('客室透明板',(x-ww/2-.2,sign*(SIDE-1.12),z-.2),(1,0,0),(0,0,1),ww+.4,h+.4,r+.2,glasses)
+            p=m.rounded('客室透明板',(x-ww/2-.2,sign*(SIDE-1.0),z-.2),(1,0,0),(0,0,1),ww+.4,h+.4,r+.2,glasses)
             pane=m.finish(m.extrude(label+f'透明板{j+1}',[p],(0,-sign,0),.4,glasses),'透明',.4)
             m.keyparts['glasses'].append(pane);m.clear(m.finished['body'],a,'外板と窓枠');m.clear(m.finished['body'],pane,'外板と透明板')
+            contact(m,a,m.finished['body'],'側窓枠の外壁への接着');contact(m,pane,m.finished['body'],'側窓ガラスの裏貼り接着')
             for dz in [.3,h/2,h-.3]:
                 for depth in [.15,.65,.95]:m.points.append(dict(entity=m.finished['body'],label=label+f'窓{j+1}開口',
                     point=[x,sign*(SIDE-depth),z+dz],expectedInside=False))
         # One independent cab side window per side, not two.
         for x,z,ww,h,name in [(10,30.4,4.1,7.6,'独立運転室窓'),(18.0,28.8,4.5,8.0,'乗務員扉窓')]:
-            pos=sign*(SIDE+.25 if name=='独立運転室窓' else SIDE-.01)
+            pos=sign*(SIDE+.23 if name=='独立運転室窓' else SIDE-.05)
             o=m.rounded(name+'枠外',(x-.15,pos,z-.15),(1,0,0),(0,0,1),ww+.3,h+.3,.6,frames)
             q=m.rounded(name+'枠内',(x+.18,pos,z+.18),(1,0,0),(0,0,1),ww-.36,h-.36,.27,frames)
             frame=m.finish(m.extrude(label+name+'枠',[o,q],(0,-sign,0),.23,frames),'アルミ銀' if name=='独立運転室窓' else '黒',.23)
             m.keyparts['frames'].append(frame)
             m.clear(m.finished['body'],frame,'運転室窓枠と車体')
-            pos=sign*(SIDE-1.12)
+            pos=sign*(SIDE-1.0 if name=='独立運転室窓' else SIDE-.83)
             p=m.rounded(name+'透明板',(x-.18,pos,z-.18),(1,0,0),(0,0,1),ww+.36,h+.36,.6,glasses)
             pane=m.finish(m.extrude(label+name+'透明板',[p],(0,-sign,0),.4,glasses),'透明',.4)
             m.keyparts['glasses'].append(pane)
+            if name=='独立運転室窓':
+                contact(m,frame,m.finished['body'],'独立運転室窓枠の接着');contact(m,pane,m.finished['body'],'独立運転室ガラスの裏貼り接着')
+            else:crew_glass,crew_frame=pane,frame
         for index,cx in enumerate(DOORS):
             for half in [-1,1]:
                 x=cx-7.98 if half<0 else cx+.08;pos=sign*(SIDE-.28)
@@ -157,10 +162,11 @@ def side_details(m,root):
                 m.keyparts['doors'].append(leaf);m.clear(m.finished['body'],leaf,'客扉と車体')
                 o=m.rounded('客扉ゴム外',(x+1.1,sign*(SIDE-.01),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,doors)
                 q=m.rounded('客扉ゴム内',(x+1.48,sign*(SIDE-.01),27.93),(1,0,0),(0,0,1),4.94,8.44,.57,doors)
-                rubber=m.finish(m.extrude('客扉Hゴム',[o,q],(0,-sign,0),.22,doors),'黒',.22)
+                rubber=m.finish(m.extrude('客扉Hゴム',[o,q],(0,-sign,0),.27,doors),'黒',.27)
                 m.clear(leaf,rubber,'客扉と窓Hゴム')
-                p=m.rounded('客扉裏ガラス',(x+1.1,sign*(SIDE-1.13),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,glasses)
+                p=m.rounded('客扉裏ガラス',(x+1.1,sign*(SIDE-.83),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,glasses)
                 pane=m.finish(m.extrude('客扉透明板',[p],(0,-sign,0),.4,glasses),'透明',.4);m.keyparts['glasses'].append(pane)
+                contact(m,pane,leaf,'客扉ガラスと扉裏の接着');contact(m,rubber,leaf,'客扉Hゴムと扉表の接着')
                 handle=m.ring('半自動手掛け',(x+(6.9 if half<0 else 1),sign*(SIDE-.1),25.5),(0,sign,0),.30,.16,.15,doors)
                 m.finish(handle,'アルミ銀',.15)
             m.finish(m.box('客扉踏板',cx-8.1,-SIDE-.10 if sign<0 else SIDE-.65,FLOOR-.15,16.2,.75,.18,doors),'アルミ銀',.18)
@@ -171,6 +177,7 @@ def side_details(m,root):
         details=[m.box('乗務員ヒンジ',17.13,min(pos,pos+sign*.25),z,.4,.25,.8,doors) for z in [19,27,35]]
         details.append(m.box('乗務員取手',22.7,min(pos,pos+sign*.25),23.0,.35,.25,1.0,doors))
         leaf=m.joined(label+'乗務員扉ヒンジ・取手',details+[leaf],doors)
+        contact(m,crew_glass,leaf,'乗務員扉の裏ガラス接着');contact(m,crew_frame,leaf,'乗務員扉の窓枠接着')
         m.clear(m.finished['body'],leaf,'乗務員扉と外板');m.keyparts['doors'].append(leaf)
         for x in [16.1,24.1]:
             bars=[m.tube('乗務員手すり',(x,sign*(SIDE+.45),20.0),(x,sign*(SIDE+.45),29.2),.17,doors)]
@@ -185,8 +192,11 @@ def front(m,root):
     g=m.group('06 前頭部｜横長貫通扉窓・折妻・縦桟',root)
     bottom=30.38 if m.detailed else 29.13; height=8.04 if m.detailed else 9.49
     for side in [-1,1]:
+        if m.detailed:
+            from fit_details import panorama_seat
+            panorama_seat(m,g,side)
         y=5.12 if side>0 else -18.55
-        shell=m.shell('前面Hゴム素材',g,-.32,-.03,bottom,bottom+height)
+        shell=m.shell('前面Hゴム素材',g,-.32,0.0,bottom,bottom+height)
         o=m.rounded('ゴム外マスク',(-3,y,bottom),(0,1,0),(0,0,1),13.43,height,1.0,g)
         q=m.rounded('ゴム内マスク',(-3,y+.4,bottom+.4),(0,1,0),(0,0,1),12.63,height-.8,.6,g)
         tool=m.extrude('前面窓ゴム切出工具',[o,q],(1,0,0),11.4,g)
@@ -194,11 +204,13 @@ def front(m,root):
         cap=m.box('回込窓端の縦ゴム',8.05,min(side*(SIDE+.32),side*(SIDE+.03)),bottom+.2,.35,.29,height-.39,g)
         rim=m.joined('パノラミック窓ゴム一体'+str(side),[rim,cap],g,'黒')
         m.clear(m.finished['body'],rim,'パノラミックゴムと車体')
+        if m.detailed:contact(m,rim,m.finished['body'],'パノラミックHゴムと車体',.5)
         shell=m.shell('前面透明板素材',g,.22 if m.detailed else 1.08,.62 if m.detailed else 1.48,bottom+.27,bottom+height-.27)
         p=m.rounded('前面ガラスマスク',(-3,5.35 if side>0 else -18.2,bottom+.27),(0,1,0),(0,0,1),12.85,height-.54,.8,g)
-        tool=m.extrude('透明板切出工具',[p],(1,0,0),11.0,g)
+        tool=m.extrude('透明板切出工具',[p],(1,0,0),11.35,g)
         pane=m.boolean('前面曲面透明板'+str(side),shell,[tool],2,g,'透明')
         m.keyparts['glasses'].append(pane);m.clear(m.finished['body'],pane,'前面透明板と車体')
+        if m.detailed:contact(m,pane,m.finished['body'],'パノラミックガラスと曲面接着受け',.5)
         # Divider lies on the flat/curved transition rather than bisecting the window.
         yy=14.6*side;xx=math.tan(math.radians(8))*(14.6-5.3)-.14
         divider=m.tube('前面窓の銀色縦桟',(xx,yy,bottom+.37),(xx,yy,bottom+height-.32),.13,g)
@@ -219,8 +231,9 @@ def front(m,root):
             GW['width']+2*pad,GW['height']+2*pad,GW['radius']+pad,g)
     q=gw('横長貫通扉窓開口',-.20,0)
     door=m.finish(m.extrude('貫通扉',[o,q],(1,0,0),.70,g),thickness=.70)
-    rim=m.finish(m.extrude('横長貫通扉窓Hゴム',[gw('Hゴム外',-.52,.20),gw('Hゴム内',-.52,-.16)],(1,0,0),.26,g),'黒',.26)
-    pane=m.finish(m.extrude('横長貫通扉窓透明板',[gw('貫通扉裏透明板',.64,.22)],(1,0,0),.40,g),'透明',.40)
+    rim=m.finish(m.extrude('横長貫通扉窓Hゴム',[gw('Hゴム外',-.52,.20),gw('Hゴム内',-.52,-.16)],(1,0,0),.32,g),'黒',.32)
+    pane=m.finish(m.extrude('横長貫通扉窓透明板',[gw('貫通扉裏透明板',.50,.22)],(1,0,0),.40,g),'透明',.40)
+    contact(m,pane,door,'貫通扉ガラスの裏貼り接着');contact(m,rim,door,'貫通扉Hゴムの接着')
     m.keyparts['gangway']=[door,rim,pane];m.keyparts['glasses'].append(pane)
     m.clear(m.finished['body'],door,'前面貫通扉と車体');m.clear(door,pane,'貫通扉と透明板')
     for y in [-2.8,0,2.8]:
@@ -275,8 +288,9 @@ def front(m,root):
     q=m.rounded('後妻扉窓',(L+.1,-3,30),(0,1,0),(0,0,1),6,6.8,.7,rg)
     rear=m.finish(m.extrude('後妻貫通扉',[o,q],(-1,0,0),.70,rg),thickness=.7)
     m.clear(m.finished['body'],rear,'後妻扉と車体')
-    p=m.rounded('後妻透明板',(L-.75,-3.2,29.8),(0,1,0),(0,0,1),6.4,7.2,.9,rg)
-    m.finish(m.extrude('後妻透明板',[p],(-1,0,0),.4,rg),'透明',.4)
+    p=m.rounded('後妻透明板',(L-.6,-3.2,29.8),(0,1,0),(0,0,1),6.4,7.2,.9,rg)
+    pane=m.finish(m.extrude('後妻透明板',[p],(-1,0,0),.4,rg),'透明',.4)
+    contact(m,pane,rear,'後妻扉ガラスの裏貼り接着')
     o=m.rounded('後妻幌外',(L+.5,-4.8,FLOOR-.2),(0,1,0),(0,0,1),9.6,23.4,.8,rg)
     q=m.rounded('後妻幌内',(L+.5,-4.4,FLOOR+.2),(0,1,0),(0,0,1),8.8,22.6,.4,rg)
     m.finish(m.extrude('後妻幌受け',[o,q],(-1,0,0),.35,rg),'床下グレー')
@@ -374,9 +388,12 @@ def roof(m,root):
                 details.append(m.box('キセのルーバー',x,sign*13.1-.10,z0+.5,.22,.20,2.3,eg))
     ac=m.joined('AU75G ステンレスキセ・ファン格子',details,eg,'アルミ銀',note='製造者の外形寸法。ファン中心・格子・脚は写真推定。')
     # A thick foot spans to the curved roof; trim its bottom with actual roof solid.
-    feet=[m.box('冷房装置の取付脚',x,y,44.8,3.6,1.0,1.4,eg) for x in [x0+4,x0+38] for y in [-7.5,6.5]]
+    feet=[m.box('冷房装置の横断支持サドル',x,-12.5,43.0,3.6,25.0,3.2,eg) for x in [x0+4,x0+38]]
     ac=m.joined('AU75G・脚一体',[ac]+feet,eg,'アルミ銀')
     ac=m.boolean('AU75G脚底を屋根に合わせる',ac,[outside],1,eg,'アルミ銀')
+    for x in [x0+4,x0+38]:
+        for low,high in [(-12.5,-7.0),(7.0,12.5)]:
+            contact(m,ac,m.finished['roof'],'冷房サドルの前後左右支持',12.,[x-.01,low,42.,x+3.61,high,46.3])
     if m.detailed:
         fans=[]
         for fan in m.keyparts['climateFans']:
@@ -651,9 +668,13 @@ def front_underframe(m):
     floor=m.finished['floor'];g=m.entities[floor]['groupId']
     webs=[m.box('前端台枠の奥まった縦板',3.4,y,11.0,2.2,10.6,2.70,g)
           for y in [-12.7,2.1]]
+    for y in [-12.,9.]:
+        webs += [m.box('スカート接着用の水平支持腕',.2,y,9.2,4.6,3.,1.3,g),
+                 m.box('スカート支持腕の台枠立上り',3.4,y,9.2,1.4,3.,4.5,g)]
     floor=m.joined('床板・前端台枠一体',[floor]+webs,g,'床下グレー',
         note='前端台枠は写真の奥まった支持構造を模型用に簡略化。実測寸法ではない。中央は連結器逃げ。')
     m.finished['floor']=floor
+    for y in [-12.,9.]:contact(m,floor,m.finished['skirt'],'スカート左右の床板接着腕',3.,[-.1,y-.01,9.,.5,y+3.01,10.7])
     m.clear(floor,m.finished['body'],'前端台枠付き床板と外板')
     m.clear(floor,m.finished['interior'],'前端台枠付き床板と室内')
     for y in [-6,6]:
@@ -674,6 +695,8 @@ def manifest(m):
         stlChordMm=.025,stlChordByEntity=m.mesh_chords,colors=m.colors,groups=m.d['groups'],
         assemblyChecks=m.checks,pointChecks=m.points,keyParts=m.keyparts,
         entities=[{k:e[k] for k in ['id','kind','displayName','visibility','groupId','partProperties']} for e in m.d['entities']])
+    from fit_details import REVISION as FIT_REVISION
+    data.update(attachmentRevision=FIT_REVISION,attachmentChecks=getattr(m,'attachment_checks',[]))
     if m.detailed:
         from bogie_details import REVISION
         data['bogieRevision']=REVISION
@@ -708,6 +731,9 @@ def split_model(original,root,output):
         for first in replacements.get(c['first'],[c['first']]):
             for second in replacements.get(c['second'],[c['second']]):expanded.append(dict(c,first=first,second=second))
     m.checks=expanded
+    for c in getattr(m,'attachment_checks',[]):
+        for key in ['first','second']:
+            if c[key] in replacements:c[key+'Parts']=replacements[c[key]]
     for c in m.points:
         if c['entity'] in replacements:c['entity']=replacements[c['entity']][int(c['point'][0]>mid)]
     bridge=m.finish(m.box('床板継ぎ目の添え板',mid-6,-4,12.9,12,8,.75,g),'床下グレー',.75)

@@ -6,6 +6,7 @@
 #include <QString>
 #include <QWidget>
 #include <algorithm>
+#include <unordered_set>
 using namespace kachakacha::v2;
 bool V2Viewport::IsolationActive() const {
     return isolationActive_&&isolationDocument_==session_->GetDocument().Snapshot().id;
@@ -40,11 +41,17 @@ void V2Viewport::ClearIsolation() {
 void V2Viewport::ApplyVisibilityFilter() {
     if(!PlaneWireDisplayActive(*this)&&!sectionView_&&!IsolationActive()&&!display_.selectionOnly){session_->SetSnapEntityFilter({});return;}
     QPointer<V2Viewport> alive(this);
-    session_->SetSnapEntityFilter([alive](base::EntityId id){
+    std::unordered_set<base::EntityId> blocked,section;
+    if(IsolationActive())blocked.insert(isolationExcluded_.begin(),isolationExcluded_.end());
+    for(const auto& entity:session_->GetDocument().Snapshot().entities){
+        if(sectionView_&&(entity.kind==domain::EntityKind::Part||entity.kind==domain::EntityKind::GuideSurface))section.insert(entity.id);
+        if(!PlaneWireDisplayAllows(*this,entity.id)||(display_.selectionOnly&&!V2RenderSelectionOf(*this).Entity(entity.id)))blocked.insert(entity.id);
+    }
+    // Build membership once when display state changes, never FindEntity for
+    // every curve on every pointer move. Delete-preview emphasis stays live.
+    session_->SetSnapEntityFilter([alive,blocked=std::move(blocked),section=std::move(section)](base::EntityId id){
         if(!alive)return true;
-        if(alive->sectionView_){const auto* e=alive->session_->GetDocument().FindEntity(id);
-            if(e&&(e->kind==domain::EntityKind::Part||e->kind==domain::EntityKind::GuideSurface))return false;}
-        return alive->EntityShown(id);
+        return !section.contains(id)&&(alive->DeletionPreviewContains(id)||!blocked.contains(id));
     });
     DiscardHoverState();
 }

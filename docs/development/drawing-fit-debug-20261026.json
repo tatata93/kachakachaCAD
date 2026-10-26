@@ -1,0 +1,1176 @@
+{
+  "updatedUtc": "2026-10-26T12:53:12.535549+00:00",
+  "gateStatus": "passed",
+  "gate": "out/verification/drawing-fit-accepted2-20261026/result.json",
+  "rounds": [
+    {
+      "round": 1,
+      "purpose": "reproduce Copy failures and baseline drawing latency"
+    },
+    {
+      "round": 2,
+      "purpose": "Ctrl multi-target selection, ghost and append implementation"
+    },
+    {
+      "round": 3,
+      "purpose": "rectangle Escape, tool changes, numeric entry, appended-row checkbox/rename/folding/history"
+    },
+    {
+      "round": 4,
+      "purpose": "catalog transitions, alternate extrusion routes, real owner model, large scenes and native attachment checks"
+    },
+    {
+      "round": 5,
+      "purpose": "full Windows, packaged application, legacy self-test, normal desktop startup"
+    }
+  ],
+  "latency": {
+    "before": {
+      "measure": "synchronous real Qt mouse input, no screenshot or GPU wait",
+      "results": [
+        {
+          "explorer_rebuilds": 0,
+          "maximum_ms": 6.9738,
+          "median_ms": 4.7923,
+          "operation": "line-hover",
+          "p95_ms": 6.686,
+          "samples": 48
+        },
+        {
+          "explorer_rebuilds": 12,
+          "maximum_ms": 134.5901,
+          "median_ms": 100.081,
+          "operation": "line-commit",
+          "p95_ms": 134.5901,
+          "samples": 12
+        }
+      ],
+      "viewport_height": 594,
+      "viewport_width": 478,
+      "wire_count": 1000
+    },
+    "after": {
+      "isolation": false,
+      "measure": "synchronous real Qt mouse input, no screenshot or GPU wait",
+      "plane_wire_only": false,
+      "results": [
+        {
+          "explorer_rebuilds": 0,
+          "maximum_ms": 6.085,
+          "median_ms": 3.9871,
+          "operation": "line-hover",
+          "p95_ms": 4.5552,
+          "samples": 48
+        },
+        {
+          "explorer_rebuilds": 0,
+          "maximum_ms": 30.3595,
+          "median_ms": 29.1114,
+          "operation": "line-commit",
+          "p95_ms": 30.3595,
+          "samples": 12
+        }
+      ],
+      "section_view": false,
+      "viewport_height": 594,
+      "viewport_width": 478,
+      "wire_count": 1000
+    },
+    "largeScene": {
+      "measure": "synchronous real Qt mouse input, no screenshot or GPU wait",
+      "results": [
+        {
+          "explorer_rebuilds": 0,
+          "maximum_ms": 30.0089,
+          "median_ms": 20.9049,
+          "operation": "line-hover",
+          "p95_ms": 27.1863,
+          "samples": 48
+        },
+        {
+          "explorer_rebuilds": 0,
+          "maximum_ms": 165.348,
+          "median_ms": 125.2192,
+          "operation": "line-commit",
+          "p95_ms": 165.348,
+          "samples": 12
+        }
+      ],
+      "viewport_height": 594,
+      "viewport_width": 478,
+      "wire_count": 2000
+    },
+    "caveat": "Single runs of synchronous Qt input, not GPU presentation or a constant-60fps claim. Large-scene values are a separate 2000-wire condition."
+  },
+  "focused": [
+    {
+      "run": "baseline-copy",
+      "total": 2,
+      "failed": 2,
+      "exeSha256": "ff6c2340888a0bb05fd94282c5d2132a333fad27e10b7b52a0cf4cd2ea302970",
+      "cases": [
+        {
+          "name": "HP-COPY-01 Ctrl target selection keeps transform inputs",
+          "status": "failed",
+          "duration_ms": 1672.6138,
+          "start": "2026-10-26T07:43:23.340Z",
+          "end": "2026-10-26T07:43:25.017Z"
+        },
+        {
+          "name": "HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",
+          "status": "failed",
+          "duration_ms": 952.0324,
+          "start": "2026-10-26T07:43:25.018Z",
+          "end": "2026-10-26T07:43:25.969Z"
+        }
+      ]
+    },
+    {
+      "run": "round2-copy",
+      "total": 2,
+      "failed": 0,
+      "exeSha256": "5e11976dd22cfec504f4fbd101a028da4742872e383e4bedf2ed89059284485e",
+      "cases": [
+        {
+          "name": "HP-COPY-01 Ctrl target selection keeps transform inputs",
+          "status": "passed",
+          "duration_ms": 2821.2935,
+          "start": "2026-10-26T07:58:51.814Z",
+          "end": "2026-10-26T07:58:54.633Z"
+        },
+        {
+          "name": "HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",
+          "status": "passed",
+          "duration_ms": 1497.882,
+          "start": "2026-10-26T07:58:54.633Z",
+          "end": "2026-10-26T07:58:56.134Z"
+        }
+      ]
+    },
+    {
+      "run": "round3-copy",
+      "total": 4,
+      "failed": 0,
+      "exeSha256": "2b5b5cb32d2ac6398309ad57e989b90b3e899b5d90033cde3dd4854834e7117d",
+      "cases": [
+        {
+          "name": "HP-COPY-01 Ctrl target selection keeps transform inputs",
+          "status": "passed",
+          "duration_ms": 1818.0455,
+          "start": "2026-10-26T08:28:19.928Z",
+          "end": "2026-10-26T08:28:21.751Z"
+        },
+        {
+          "name": "HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",
+          "status": "passed",
+          "duration_ms": 1112.846,
+          "start": "2026-10-26T08:28:21.752Z",
+          "end": "2026-10-26T08:28:22.863Z"
+        },
+        {
+          "name": "HP-COPY-03 role rectangle Escape and tool switch",
+          "status": "passed",
+          "duration_ms": 1089.5145,
+          "start": "2026-10-26T08:28:22.863Z",
+          "end": "2026-10-26T08:28:23.953Z"
+        },
+        {
+          "name": "HP-COPY-04 numeric ghost matches Enter",
+          "status": "passed",
+          "duration_ms": 1660.1034,
+          "start": "2026-10-26T08:28:23.953Z",
+          "end": "2026-10-26T08:28:25.617Z"
+        }
+      ]
+    },
+    {
+      "run": "round3-drawing-fixed",
+      "total": 1,
+      "failed": 0,
+      "exeSha256": "b28d5cda3819a5606ee5dc454eb1b57c081555007ec18529a4d72517426cee83",
+      "cases": [
+        {
+          "name": "HP-DRAW-01 appended rows visibility rename and fold state",
+          "status": "passed",
+          "duration_ms": 2151.498,
+          "start": "2026-10-26T08:38:31.714Z",
+          "end": "2026-10-26T08:38:33.862Z"
+        }
+      ]
+    },
+    {
+      "run": "round3-explorer",
+      "total": 9,
+      "failed": 0,
+      "exeSha256": "2b5b5cb32d2ac6398309ad57e989b90b3e899b5d90033cde3dd4854834e7117d",
+      "cases": [
+        {
+          "name": "HP-FP-01 folder mouse keyboard naming and empty creation",
+          "status": "passed",
+          "duration_ms": 531.4092,
+          "start": "2026-10-26T08:29:03.548Z",
+          "end": "2026-10-26T08:29:04.079Z"
+        },
+        {
+          "name": "HP-FP-02 source wires remain pickable under displayed faces",
+          "status": "passed",
+          "duration_ms": 937.9035,
+          "start": "2026-10-26T08:29:04.079Z",
+          "end": "2026-10-26T08:29:05.017Z"
+        },
+        {
+          "name": "HP-FP-03 surface grid is optional and keeps native topology",
+          "status": "passed",
+          "duration_ms": 701.6848,
+          "start": "2026-10-26T08:29:05.018Z",
+          "end": "2026-10-26T08:29:05.718Z"
+        },
+        {
+          "name": "HP-FP-04 folder delete cancel dissolve Undo and save",
+          "status": "passed",
+          "duration_ms": 1499.4509,
+          "start": "2026-10-26T08:29:05.718Z",
+          "end": "2026-10-26T08:29:07.214Z"
+        },
+        {
+          "name": "HP-FP-05 inline rename cannot confirm an armed modeling tool",
+          "status": "passed",
+          "duration_ms": 415.528,
+          "start": "2026-10-26T08:29:07.214Z",
+          "end": "2026-10-26T08:29:07.636Z"
+        },
+        {
+          "name": "HP-FP-06 folder pick remains safe when a pending command rebuilds rows",
+          "status": "passed",
+          "duration_ms": 401.5643,
+          "start": "2026-10-26T08:29:07.637Z",
+          "end": "2026-10-26T08:29:08.039Z"
+        },
+        {
+          "name": "HP-FP-07 folder deletion includes members filtered by an active tool",
+          "status": "passed",
+          "duration_ms": 1278.569,
+          "start": "2026-10-26T08:29:08.039Z",
+          "end": "2026-10-26T08:29:09.317Z"
+        },
+        {
+          "name": "HP-FP-08 ancestor drag keeps nested hierarchy and Undo",
+          "status": "passed",
+          "duration_ms": 1016.8077,
+          "start": "2026-10-26T08:29:09.317Z",
+          "end": "2026-10-26T08:29:10.335Z"
+        },
+        {
+          "name": "HP-FP-09 move menu distinguishes paths and survives row rebuild",
+          "status": "passed",
+          "duration_ms": 1329.0335,
+          "start": "2026-10-26T08:29:10.336Z",
+          "end": "2026-10-26T08:29:11.655Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-lifecycle",
+      "total": 9,
+      "failed": 0,
+      "exeSha256": "b28d5cda3819a5606ee5dc454eb1b57c081555007ec18529a4d72517426cee83",
+      "cases": [
+        {
+          "name": "HP-TOOLS all catalog toolbar activations have input or reason",
+          "status": "passed",
+          "duration_ms": 46029.3998,
+          "start": "2026-10-26T08:38:34.115Z",
+          "end": "2026-10-26T08:39:20.142Z"
+        },
+        {
+          "name": "HP-TOOLS distinct tool illustrations",
+          "status": "passed",
+          "duration_ms": 268.7663,
+          "start": "2026-10-26T08:39:20.142Z",
+          "end": "2026-10-26T08:39:20.414Z"
+        },
+        {
+          "name": "HP-TOOLS exclusive tool transition matrix and shortcuts",
+          "status": "passed",
+          "duration_ms": 194088.6115,
+          "start": "2026-10-26T08:39:20.415Z",
+          "end": "2026-10-26T08:42:34.490Z"
+        },
+        {
+          "name": "HP-TOOLS modal dialog keys stay in dialog",
+          "status": "passed",
+          "duration_ms": 286.0112,
+          "start": "2026-10-26T08:42:34.490Z",
+          "end": "2026-10-26T08:42:34.790Z"
+        },
+        {
+          "name": "HP-TOOLS preview shape ownership stays bounded",
+          "status": "passed",
+          "duration_ms": 3186.5452,
+          "start": "2026-10-26T08:42:34.790Z",
+          "end": "2026-10-26T08:42:37.977Z"
+        },
+        {
+          "name": "HP-TOOLS alternate shortcut routes preserve inputs",
+          "status": "passed",
+          "duration_ms": 355.8287,
+          "start": "2026-10-26T08:42:37.977Z",
+          "end": "2026-10-26T08:42:38.324Z"
+        },
+        {
+          "name": "HP-TOOLS alternate view routes preserve pending targets",
+          "status": "passed",
+          "duration_ms": 286.9498,
+          "start": "2026-10-26T08:42:38.324Z",
+          "end": "2026-10-26T08:42:38.621Z"
+        },
+        {
+          "name": "HP-TOOLS first drawing point Undo without document history",
+          "status": "passed",
+          "duration_ms": 535.1494,
+          "start": "2026-10-26T08:42:38.621Z",
+          "end": "2026-10-26T08:42:39.156Z"
+        },
+        {
+          "name": "HP-TOOLS save and save-as preserve pending targets",
+          "status": "passed",
+          "duration_ms": 445.4113,
+          "start": "2026-10-26T08:42:39.156Z",
+          "end": "2026-10-26T08:42:39.594Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-owner-fixed",
+      "total": 1,
+      "failed": 0,
+      "exeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+      "cases": [
+        {
+          "name": "HP-TOOLS actual owner model thickness and history",
+          "status": "passed",
+          "duration_ms": 95292.4665,
+          "start": "2026-10-26T09:01:30.651Z",
+          "end": "2026-10-26T09:03:05.944Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-explorer",
+      "total": 20,
+      "failed": 0,
+      "exeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+      "cases": [
+        {
+          "name": "HP-EX-01 拾って押して確定すると立体になる",
+          "status": "passed",
+          "duration_ms": 552.416,
+          "start": "2026-10-26T08:55:43.035Z",
+          "end": "2026-10-26T08:55:43.588Z"
+        },
+        {
+          "name": "HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+          "status": "passed",
+          "duration_ms": 717.7259,
+          "start": "2026-10-26T08:55:43.588Z",
+          "end": "2026-10-26T08:55:44.306Z"
+        },
+        {
+          "name": "HP-EX-OUTPUT-06 全部 OFF は確定できない",
+          "status": "passed",
+          "duration_ms": 316.3404,
+          "start": "2026-10-26T08:55:44.306Z",
+          "end": "2026-10-26T08:55:44.623Z"
+        },
+        {
+          "name": "HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+          "status": "passed",
+          "duration_ms": 474.675,
+          "start": "2026-10-26T08:55:44.623Z",
+          "end": "2026-10-26T08:55:45.098Z"
+        },
+        {
+          "name": "HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+          "status": "passed",
+          "duration_ms": 497.1263,
+          "start": "2026-10-26T08:55:45.099Z",
+          "end": "2026-10-26T08:55:45.596Z"
+        },
+        {
+          "name": "HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+          "status": "passed",
+          "duration_ms": 539.1885,
+          "start": "2026-10-26T08:55:45.597Z",
+          "end": "2026-10-26T08:55:46.135Z"
+        },
+        {
+          "name": "HP-EX-03 立体の面を画面から拾って押す",
+          "status": "passed",
+          "duration_ms": 523.1806,
+          "start": "2026-10-26T08:55:46.136Z",
+          "end": "2026-10-26T08:55:46.659Z"
+        },
+        {
+          "name": "HP-EX-WIRES stop wire only Undo save",
+          "status": "passed",
+          "duration_ms": 1565.104,
+          "start": "2026-10-26T08:55:46.688Z",
+          "end": "2026-10-26T08:55:48.253Z"
+        },
+        {
+          "name": "HP-EX-WIRES stop wire plus solid Undo save",
+          "status": "passed",
+          "duration_ms": 1343.0183,
+          "start": "2026-10-26T08:55:48.253Z",
+          "end": "2026-10-26T08:55:49.597Z"
+        },
+        {
+          "name": "HP-EX-WIRES stop end-only Undo save",
+          "status": "passed",
+          "duration_ms": 1274.3506,
+          "start": "2026-10-26T08:55:49.598Z",
+          "end": "2026-10-26T08:55:50.871Z"
+        },
+        {
+          "name": "HP-EX-REPEAT commit and lost mouse release",
+          "status": "passed",
+          "duration_ms": 468.746,
+          "start": "2026-10-26T08:55:50.872Z",
+          "end": "2026-10-26T08:55:51.341Z"
+        },
+        {
+          "name": "HP-EX-CAP distance orientation Undo save",
+          "status": "passed",
+          "duration_ms": 1238.9047,
+          "start": "2026-10-26T08:55:51.342Z",
+          "end": "2026-10-26T08:55:52.581Z"
+        },
+        {
+          "name": "HP-EX-CAP native face orientation save",
+          "status": "passed",
+          "duration_ms": 3077.8975,
+          "start": "2026-10-26T08:55:52.581Z",
+          "end": "2026-10-26T08:55:55.659Z"
+        },
+        {
+          "name": "HP-EX-UI tool first settings and direction pick",
+          "status": "passed",
+          "duration_ms": 366.2057,
+          "start": "2026-10-26T08:55:55.659Z",
+          "end": "2026-10-26T08:55:56.025Z"
+        },
+        {
+          "name": "HP-EX-UI target solid first",
+          "status": "passed",
+          "duration_ms": 1648.688,
+          "start": "2026-10-26T08:55:56.026Z",
+          "end": "2026-10-26T08:55:57.674Z"
+        },
+        {
+          "name": "HP-EX-UI face and direction independent",
+          "status": "passed",
+          "duration_ms": 1404.9128,
+          "start": "2026-10-26T08:55:57.675Z",
+          "end": "2026-10-26T08:55:59.080Z"
+        },
+        {
+          "name": "HP-EX-UI hovered face fill",
+          "status": "passed",
+          "duration_ms": 911.6961,
+          "start": "2026-10-26T08:55:59.080Z",
+          "end": "2026-10-26T08:55:59.993Z"
+        },
+        {
+          "name": "HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存",
+          "status": "passed",
+          "duration_ms": 2125.2063,
+          "start": "2026-10-26T08:55:59.994Z",
+          "end": "2026-10-26T08:56:02.119Z"
+        },
+        {
+          "name": "HP-EX-LINE 曲面フェイスから線まで・非表示・冷再計算・保存",
+          "status": "passed",
+          "duration_ms": 2172.1864,
+          "start": "2026-10-26T08:56:02.119Z",
+          "end": "2026-10-26T08:56:04.291Z"
+        },
+        {
+          "name": "HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存",
+          "status": "passed",
+          "duration_ms": 2248.727,
+          "start": "2026-10-26T08:56:04.292Z",
+          "end": "2026-10-26T08:56:06.540Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-layout",
+      "total": 4,
+      "failed": 0,
+      "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+      "cases": [
+        {
+          "name": "HP-COPY-01 Ctrl target selection keeps transform inputs",
+          "status": "passed",
+          "duration_ms": 4333.8661,
+          "start": "2026-10-26T09:21:09.203Z",
+          "end": "2026-10-26T09:21:13.536Z"
+        },
+        {
+          "name": "HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",
+          "status": "passed",
+          "duration_ms": 1574.0865,
+          "start": "2026-10-26T09:21:13.537Z",
+          "end": "2026-10-26T09:21:15.108Z"
+        },
+        {
+          "name": "HP-COPY-03 role rectangle Escape and tool switch",
+          "status": "passed",
+          "duration_ms": 1608.0326,
+          "start": "2026-10-26T09:21:15.108Z",
+          "end": "2026-10-26T09:21:16.714Z"
+        },
+        {
+          "name": "HP-COPY-04 numeric ghost matches Enter",
+          "status": "passed",
+          "duration_ms": 1376.1957,
+          "start": "2026-10-26T09:21:16.714Z",
+          "end": "2026-10-26T09:21:18.097Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-drawing-accepted",
+      "total": 1,
+      "failed": 0,
+      "exeSha256": "de1772e9f9087f6174a5dad8c96650e835efa68bb830407b6b86dd10e9c05f93",
+      "cases": [
+        {
+          "name": "HP-DRAW-01 appended rows visibility rename and fold state",
+          "status": "passed",
+          "duration_ms": 2181.1818,
+          "start": "2026-10-26T09:06:22.631Z",
+          "end": "2026-10-26T09:06:24.812Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-tree-accepted",
+      "total": 9,
+      "failed": 0,
+      "exeSha256": "de1772e9f9087f6174a5dad8c96650e835efa68bb830407b6b86dd10e9c05f93",
+      "cases": [
+        {
+          "name": "HP-FP-01 folder mouse keyboard naming and empty creation",
+          "status": "passed",
+          "duration_ms": 554.2341,
+          "start": "2026-10-26T09:06:25.089Z",
+          "end": "2026-10-26T09:06:25.646Z"
+        },
+        {
+          "name": "HP-FP-02 source wires remain pickable under displayed faces",
+          "status": "passed",
+          "duration_ms": 970.4876,
+          "start": "2026-10-26T09:06:25.646Z",
+          "end": "2026-10-26T09:06:26.617Z"
+        },
+        {
+          "name": "HP-FP-03 surface grid is optional and keeps native topology",
+          "status": "passed",
+          "duration_ms": 792.5921,
+          "start": "2026-10-26T09:06:26.617Z",
+          "end": "2026-10-26T09:06:27.411Z"
+        },
+        {
+          "name": "HP-FP-04 folder delete cancel dissolve Undo and save",
+          "status": "passed",
+          "duration_ms": 1630.6159,
+          "start": "2026-10-26T09:06:27.412Z",
+          "end": "2026-10-26T09:06:29.039Z"
+        },
+        {
+          "name": "HP-FP-05 inline rename cannot confirm an armed modeling tool",
+          "status": "passed",
+          "duration_ms": 611.3021,
+          "start": "2026-10-26T09:06:29.039Z",
+          "end": "2026-10-26T09:06:29.654Z"
+        },
+        {
+          "name": "HP-FP-06 folder pick remains safe when a pending command rebuilds rows",
+          "status": "passed",
+          "duration_ms": 472.1373,
+          "start": "2026-10-26T09:06:29.654Z",
+          "end": "2026-10-26T09:06:30.120Z"
+        },
+        {
+          "name": "HP-FP-07 folder deletion includes members filtered by an active tool",
+          "status": "passed",
+          "duration_ms": 1332.011,
+          "start": "2026-10-26T09:06:30.128Z",
+          "end": "2026-10-26T09:06:31.460Z"
+        },
+        {
+          "name": "HP-FP-08 ancestor drag keeps nested hierarchy and Undo",
+          "status": "passed",
+          "duration_ms": 1870.0869,
+          "start": "2026-10-26T09:06:31.461Z",
+          "end": "2026-10-26T09:06:33.331Z"
+        },
+        {
+          "name": "HP-FP-09 move menu distinguishes paths and survives row rebuild",
+          "status": "passed",
+          "duration_ms": 1286.328,
+          "start": "2026-10-26T09:06:33.332Z",
+          "end": "2026-10-26T09:06:34.609Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-section",
+      "total": 1,
+      "failed": 0,
+      "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+      "cases": [
+        {
+          "name": "HP-SECTION-01 workplane section clips triangles and restores geometry",
+          "status": "passed",
+          "duration_ms": 312.8562,
+          "start": "2026-10-26T11:55:58.028Z",
+          "end": "2026-10-26T11:55:58.340Z"
+        }
+      ]
+    },
+    {
+      "run": "round4-isolation",
+      "total": 1,
+      "failed": 0,
+      "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+      "cases": [
+        {
+          "name": "HP-UX-03 solid selection focus",
+          "status": "passed",
+          "duration_ms": 338.055,
+          "start": "2026-10-26T11:55:58.578Z",
+          "end": "2026-10-26T11:55:58.919Z"
+        }
+      ]
+    }
+  ],
+  "model": {
+    "timeUtc": "2026-10-26T09:26:12.348999+00:00",
+    "models": [
+      {
+        "name": "full",
+        "file": "kuha115-ho80-revised.kcd2",
+        "sourceSha256": "768eb12dece20a378e6eb4416bf9daf5607c9a9e1c44c1630876f6d20e992e99",
+        "cadExeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+        "nativeSeconds": 137.1720000000205,
+        "parts": 233,
+        "features": 1496,
+        "groups": 16,
+        "assemblyChecks": 171,
+        "pointChecks": 476,
+        "splitReassemblyChecks": 0,
+        "attachmentChecks": 93,
+        "totalPartPairs": 27028,
+        "brepInterferenceCandidates": 414,
+        "maximumPartExtentMm": 243.7500002000002,
+        "closedBrep": true,
+        "stepRoundTrips": true,
+        "stlManifold": true,
+        "nativeArchiveRoundTripStructure": true
+      },
+      {
+        "name": "split",
+        "file": "kuha115-ho80-revised-split.kcd2",
+        "sourceSha256": "c120df36b8de366ee880c1c0eae11aa3ba798816795d40f5855de0314bb3dcae",
+        "cadExeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+        "nativeSeconds": 180.21799999999348,
+        "parts": 240,
+        "features": 1522,
+        "groups": 17,
+        "assemblyChecks": 321,
+        "pointChecks": 476,
+        "splitReassemblyChecks": 6,
+        "attachmentChecks": 93,
+        "totalPartPairs": 28680,
+        "brepInterferenceCandidates": 407,
+        "maximumPartExtentMm": 121.87500020000023,
+        "closedBrep": true,
+        "stepRoundTrips": true,
+        "stlManifold": true,
+        "nativeArchiveRoundTripStructure": true
+      }
+    ],
+    "savedReopen": {
+      "passed": true,
+      "maximumVolumeDeltaMm3": 2.2593038551121936e-14,
+      "parts": 233,
+      "seconds": 115.85900000005495
+    },
+    "desktopStartup": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 1000,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+      "visible": true,
+      "width": 1600,
+      "seconds": 20.85999999998603,
+      "sourceSha256": "830e1fc05c25aad034a9f3095cbb8f585edd8c135602f9c245d4d98fb6ef1011",
+      "exeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+      "exitCode": 0,
+      "validatedCacheReuse": true,
+      "cacheHitConfirmed": true
+    },
+    "gangwayOpeningMm": [
+      7.2,
+      5.8
+    ],
+    "gangwayAspectRatio": 1.2413793103448276,
+    "passed": true,
+    "sourceFilesSha256": {
+      "tools/modeling/kuha115_ho/revised.py": "8dd8a7239ee4898e2eb2375aa6aa753d67612399841c6188d25ff7a967e60975",
+      "tools/modeling/kuha115_ho/build.py": "c8d9322a6f67b11683036912d555d1fb49717aa7cee181faf5cd98f78acb94d4",
+      "tools/modeling/native_kcd.py": "6c3b27072b7f9c5a3abb302aa22ca47855fee4f0eb155f72cea940b08673e885",
+      "tools/modeling/kuha115_ho/fit_details.py": "4f09f6aa9090c1662b8e6ae4a4d92433154f21608579333f50d2181f16c2eb09",
+      "tools/modeling/kuha115_ho/review_revised.py": "4d7085cddc4e359aed2e0b5a05e095d3f9e6761585adc2a91ac8bf22e5819d17",
+      "tools/modeling/kuha115_ho/assembly_candidates.py": "73b69af6d863eeade9bc3c15c562d8ed3ed88ffe8e7855abe5d0df563a240d32",
+      "tools/modeling/series115_print/export_native.cpp": "bcd5addae5e0ebe418b3b967835c97df0b6fbe403ff1370d9df86b19330d188a",
+      "tools/modeling/series115_print/check_stl.py": "2e4f882302e895f7be66ab399e2d1929f98e20da88c4659e0102c0c912494314",
+      "tools/modeling/kuha115_ho/render_revised.py": "4186002feeaff69f477b32a851e60b915c4f414529d2f9e5e7f3656f38e13799",
+      "tools/modeling/series115_print/render_preview.py": "d536da232e6c2e6759c48efd3bdf919c13838c61e4e00e53b98b53f367073c2f",
+      "tools/modeling/kuha115_ho/detail_parts.py": "998386a83efc113e7d791958a69b4ee3e881721a0b84dd6093155ee793a89a3f",
+      "tools/modeling/kuha115_ho/front_roof.py": "e4a1f47d64a06fe75eece0cc39936015fb3f4aca22ed02089f38564ed6c860f5",
+      "tools/modeling/kuha115_ho/render_detailed.py": "af809c2ee7e22aafc6f5258728253ed95ef61a907e1944f0879e57c0f004c433",
+      "tools/modeling/kuha115_ho/assemble_detailed.py": "72a05b44eddea44a53aceaa584ce298e1b8b1f02d21d635869527f7689b8fff9",
+      "tools/modeling/kuha115_ho/bogie_details.py": "532f39769bc2860cf1e2690913c5b6eeb37230e83c541a363637bd7a1607a881",
+      "tools/modeling/kuha115_ho/bogie_library.py": "82f5c1c9709fd7f613db056bdab6dbf124ae1cb8ca5a1ac43ab0badaa473ea96",
+      "tools/modeling/kuha115_ho/standalone_bogie.py": "df480ad134aefa1ac43c14f28596d2b4144903de094db1b73f7f926e137cf380",
+      "tools/modeling/kuha115_ho/test_bogie_library.py": "70b08d1474dde000921a30231b50647a28bfd2af1cbf01d416f2341bd60b35db",
+      "tools/modeling/kuha115_ho/desktop_model.py": "a2096d886a6134705914560158290b851ed5826293d97545e2b6cfdf2296a755"
+    }
+  },
+  "finalApplicationModelCheck": {
+    "passed": true,
+    "modelSha256": "830e1fc05c25aad034a9f3095cbb8f585edd8c135602f9c245d4d98fb6ef1011",
+    "cadExeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+    "initialGenerationCadExeSha256": "90bcda7f8d0ea2958c6baa84ac8f5575732ed87c888d7cde52b7bf74af0c64fe",
+    "note": "Final application independently rebuilt the saved model after UI-only changes; all full-car interference candidates, points and contacts were recomputed.",
+    "parts": 233,
+    "maximumVolumeDeltaMm3": 2.2593038551121936e-14,
+    "pointChecks": 476,
+    "attachmentChecks": 93,
+    "allPairCandidates": 414,
+    "desktop": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 1000,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — kuha115-ho80-revised-saved.kcd2",
+      "visible": true,
+      "width": 1600,
+      "seconds": 23.56200000003446,
+      "sourceSha256": "830e1fc05c25aad034a9f3095cbb8f585edd8c135602f9c245d4d98fb6ef1011",
+      "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+      "exitCode": 0,
+      "validatedCacheReuse": true,
+      "cacheHitConfirmed": true
+    },
+    "steps": [
+      {
+        "step": "final-cad-reopen",
+        "start": 1793016076.6014848,
+        "end": 1793016179.100855,
+        "exit": 0
+      },
+      {
+        "step": "final-cad-geometry",
+        "start": 1793016179.1403563,
+        "end": 1793016303.2189782,
+        "exit": 0
+      },
+      {
+        "step": "final-cad-desktop",
+        "start": 1793016303.2360222,
+        "end": 1793016327.0140877,
+        "exit": 0
+      }
+    ]
+  },
+  "attachmentNegative": {
+    "passed": true,
+    "preparedSha256": "44ba2cff6b7843b043c2588c0a156ad02e678900d35a6cd0cd910c3c10b0160f",
+    "designSha256": "eb7a69452e39510a74fe47296c8a8e90cc4dcbdcddcfa4212062195d418adc4c",
+    "exporterSha256": "b06ee377e7b76f62d36a9a2e8e4262fdc5e45f127af034d91b416950c0570616",
+    "cases": [
+      {
+        "case": "skirt-gap",
+        "translationMm": [
+          -0.5,
+          0,
+          0
+        ],
+        "seconds": 12.109000000054948,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 1e+30,
+          "first": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+          "label": "スカート左右の床板接着腕",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 3,
+          "passed": false,
+          "region": [
+            -0.1,
+            -12.01,
+            9,
+            0.5,
+            -8.99,
+            10.7
+          ],
+          "second": "1ecca70c-6848-5e2b-8760-4307880b1d5f",
+          "secondTranslationMm": [
+            -0.5,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "case": "glazing-gap",
+        "translationMm": [
+          0,
+          -0.2,
+          0
+        ],
+        "seconds": 11.797000000020489,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 0.1999999999999993,
+          "first": "80ac7885-4f3f-5863-a9fe-4fdbcca8ad06",
+          "label": "側窓ガラスの裏貼り接着",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 0.2,
+          "passed": false,
+          "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0",
+          "secondTranslationMm": [
+            0,
+            -0.2,
+            0
+          ]
+        }
+      },
+      {
+        "case": "cooler-gap",
+        "translationMm": [
+          0,
+          0,
+          -0.5
+        ],
+        "seconds": 12.016000000061467,
+        "result": {
+          "contactAreaMm2": 0,
+          "distanceMm": 0.47526047333025406,
+          "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+          "label": "冷房サドルの前後左右支持",
+          "maximumDistanceMm": 1e-05,
+          "minimumAreaMm2": 12,
+          "passed": false,
+          "region": [
+            102.99,
+            -12.5,
+            42,
+            106.61,
+            -7,
+            46.3
+          ],
+          "second": "6905d22d-c811-5acd-a87c-3f7e221ded67",
+          "secondTranslationMm": [
+            0,
+            0,
+            -0.5
+          ]
+        }
+      }
+    ]
+  },
+  "evidenceNegative": {
+    "passed": true,
+    "rejected": [
+      "a consistently stale candidate pair list",
+      "a changed saved group",
+      "a changed saved part visibility",
+      "zero visible parts",
+      "missing attachment evidence",
+      "failed attachment evidence",
+      "stale attachment evidence"
+    ],
+    "reviewResultSha256": "d0ad616c843d7956600f75fe2f119168c3b70a79fc9e1a277b8541034a790c84"
+  },
+  "initialPreflightFailures": [
+    "File/function-size and explicit Qt include checks caught before long tests.",
+    "New manual images needed the documented v2 prefix, image references and capture-name registration."
+  ],
+  "fixtureCorrections": [
+    "Inline rename needed a real event-loop turn for the queued model update.",
+    "Optional owner-model test needs its output environment variable; helper corrected.",
+    "Case-sensitive focused filters rejected zero cases; rerun using inventory names."
+  ],
+  "removedExistingFiles": [],
+  "preserved": [
+    "user models",
+    "prior releases",
+    "prior samples",
+    "unrelated worktrees and untracked files"
+  ],
+  "limits": [
+    "Not every possible tool/input combination or a complete OS-mouse walkthrough.",
+    "Large scenes still have input latency; normal hover has full-scene scans and snapping can cost more.",
+    "Native screen capture timed out twice; screenshots use actual Windows Qt test events and product desktop rendering.",
+    "No physical print, adhesive-strength, dynamic bogie or running trial. Local model dimensions remain estimates."
+  ],
+  "modelPackage": {
+    "passed": true,
+    "archive": "kuha115-ho80-fitted-20261026.zip",
+    "sha256": "ae08180e3f7295aee0c6950aa357116f3645cbea7e396e15329208b2d3baa2f7",
+    "bytes": 88745172,
+    "normalizedStlParts": [
+      233,
+      240
+    ],
+    "files": 995
+  },
+  "publishedModelStartup": {
+    "cold": {
+      "normalStartupPassed": true,
+      "validatedWarmCacheCheckPassed": false,
+      "cacheHit": false,
+      "openSeconds": 114.5329598,
+      "note": "The copied published runtime did not reuse the earlier validation cache on its first launch. Original failed warm-check assertion and trace retained; this is a cold open, not a warm timing.",
+      "desktop": {
+        "event_loop": true,
+        "exposed": true,
+        "height": 1000,
+        "on_screen": true,
+        "platform": "windows",
+        "ready": true,
+        "rendered": true,
+        "schema": 1,
+        "title": "kachakachaCAD 0.1.0 — kuha115-ho80-revised-saved.kcd2",
+        "visible": true,
+        "width": 1600
+      }
+    },
+    "warm": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 1000,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — kuha115-ho80-revised-saved.kcd2",
+      "visible": true,
+      "width": 1600,
+      "seconds": 19.125,
+      "sourceSha256": "830e1fc05c25aad034a9f3095cbb8f585edd8c135602f9c245d4d98fb6ef1011",
+      "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+      "exitCode": 0,
+      "validatedCacheReuse": true,
+      "cacheHitConfirmed": true
+    }
+  },
+  "releaseApplication": "out/releases/drawing-fit-accepted2-20261026/package/kachakacha_cad_next.exe",
+  "fullGate": {
+    "start": "2026-10-26T12:06:27.133722+00:00",
+    "end": "2026-10-26T12:36:25.495544+00:00",
+    "ctest": {
+      "total": 195,
+      "skipped": []
+    },
+    "uiCases": [
+      600,
+      600
+    ],
+    "applicationSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+    "sourceSha256": "a73397f8fe8644fca99bc5e83272174e2e06b285b6c11955aab4b757c68b4335",
+    "steps": [
+      {
+        "name": "doctor",
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${REPOSITORY}\\scripts\\doctor.ps1"
+        ],
+        "start": "2026-10-26T12:06:29.502891+00:00",
+        "end": "2026-10-26T12:06:30.834859+00:00",
+        "seconds": 1.3354947000043467,
+        "exit_code": 0,
+        "log": "doctor.log"
+      },
+      {
+        "name": "configure",
+        "command": [
+          "cmake",
+          "--preset",
+          "windows-msvc"
+        ],
+        "start": "2026-10-26T12:06:30.834859+00:00",
+        "end": "2026-10-26T12:06:41.716593+00:00",
+        "seconds": 10.87877829989884,
+        "exit_code": 0,
+        "log": "configure.log"
+      },
+      {
+        "name": "inventory",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--show-only=json-v1"
+        ],
+        "start": "2026-10-26T12:06:41.716593+00:00",
+        "end": "2026-10-26T12:06:41.850935+00:00",
+        "seconds": 0.13530880003236234,
+        "exit_code": 0,
+        "log": "inventory.log"
+      },
+      {
+        "name": "build-3",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "2",
+          "--target",
+          "kachakacha_v2_architecture_tests",
+          "kachakacha_v2_command_availability_tests",
+          "kachakacha_v2_command_catalog_tests",
+          "kachakacha_v2_core_ui_wiring_tests",
+          "kachakacha_v2_coverage_tests",
+          "kachakacha_v2_harness_tests",
+          "kachakacha_v2_manual_tests",
+          "kachakacha_v2_scaffold_tests"
+        ],
+        "start": "2026-10-26T12:06:43.933837+00:00",
+        "end": "2026-10-26T12:06:54.431256+00:00",
+        "seconds": 10.497391800046898,
+        "exit_code": 0,
+        "log": "build-3.log"
+      },
+      {
+        "name": "preflight",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "2",
+          "--output-junit",
+          "${REPOSITORY}\\out\\verification\\drawing-fit-accepted2-20261026\\preflight.xml",
+          "-R",
+          "^(v2_harness_tests|v2_architecture_tests|v2_scaffold_tests|v2_command_catalog_tests|v2_command_availability_tests|v2_core_ui_wiring_tests|v2_coverage_tests|v2_manual_tests|verification_infrastructure_tests)$"
+        ],
+        "start": "2026-10-26T12:06:54.431256+00:00",
+        "end": "2026-10-26T12:06:59.025366+00:00",
+        "seconds": 4.597225499921478,
+        "exit_code": 0,
+        "log": "preflight.log"
+      },
+      {
+        "name": "build-5",
+        "command": [
+          "cmake",
+          "--build",
+          "--preset",
+          "windows-msvc",
+          "--config",
+          "Release",
+          "--parallel",
+          "2"
+        ],
+        "start": "2026-10-26T12:06:59.033462+00:00",
+        "end": "2026-10-26T12:07:27.340174+00:00",
+        "seconds": 28.306917799985968,
+        "exit_code": 0,
+        "log": "build-5.log"
+      },
+      {
+        "name": "ui-inventory",
+        "command": [
+          "${REPOSITORY}\\build-msvc2022-x64\\Release\\kachakacha_cad_next.exe",
+          "--self-test-list",
+          "${REPOSITORY}\\out\\verification\\drawing-fit-accepted2-20261026\\ui-inventory.json"
+        ],
+        "start": "2026-10-26T12:07:27.341172+00:00",
+        "end": "2026-10-26T12:07:27.419580+00:00",
+        "seconds": 0.08430539991240948,
+        "exit_code": 0,
+        "log": "ui-inventory.log"
+      },
+      {
+        "name": "tests",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "${REPOSITORY}\\build-msvc2022-x64",
+          "-C",
+          "Release",
+          "--output-on-failure",
+          "--no-tests=error",
+          "--parallel",
+          "2",
+          "--output-junit",
+          "${REPOSITORY}\\out\\verification\\drawing-fit-accepted2-20261026\\tests.xml",
+          "-R",
+          "^(qt_cad_smoke|qt_surface_sample_smoke|qt_acceptance_model_smoke|plate_pdf_tests|numeric_expression_tests|workplane_tests|sketch_wire_tests|project_script_tests|wire_operations_tests|measurement_tests|output_mesh_tests|planar_export_tests|plate_flat_pattern_tests|part_model_tests|surface_tests|plate_tests|body_tests|occt_body_export_tests|verification_infrastructure_tests|v2_harness_tests|v2_architecture_tests|v2_scaffold_tests|v2_foundation_tests|v2_curve_tests|v2_expression_tests|v2_wire_chain_tests|v2_arc_builder_tests|v2_wire_connect_tests|v2_wire_edit_tests|v2_loop_faces_tests|v2_wire_facts_tests|v2_document_ids_tests|v2_corner_curves_tests|v2_curve_sampling_tests|v2_profile_region_tests|v2_guide_surface_tests|v2_image_placement_tests|v2_work_plane_tests|v2_extrude_tests|v2_wire_cage_tests|v2_snap_tests|v2_snap_hysteresis_tests|v2_grid_tests|v2_loft_input_tests|v2_gordon_grid_tests|v2_curve_fit_tests|v2_surface_edit_input_state_tests|v2_surface_analysis_tests|v2_surface_role_assist_tests|v2_fabrication_tests|v2_opening_clip_tests|v2_assembly_tests|v2_closed_loop_tests|v2_freeze_state_tests|v2_pattern_tests|v2_panel_strategy_tests|v2_planar_panel_tests|v2_export_tests|v2_tool_tests|v2_pdf_tests|v2_session_tests|v2_coverage_tests|v2_diagnostic_catalog_tests|v2_command_catalog_tests|v2_operation_guide_tests|v2_ui_mode_tests|v2_view_orientation_tests|v2_facing_plan_tests|v2_bend_radius_tests|v2_band_bend_radius_tests|v2_band_partition_tests|v2_group_tree_tests|v2_railway_nose_ho_tests|v2_shelf_layout_tests|v2_status_line_tests|v2_drawing_method_cards_tests|v2_tool_keys_tests|v2_extrude_input_state_tests|v2_extrude_preview_tests|v2_surface_input_state_tests|v2_surface_preview_tests|v2_approx_input_tests|v2_boolean_input_tests|v2_thicken_input_state_tests|v2_ribbon_tests|v2_explorer_model_tests|v2_surface_deviation_limit_tests|v2_tool_role_labels_tests|v2_tool_footer_tests|v2_panel_frame_tests|v2_solid_input_tests|v2_solid_input_state_tests|v2_edge_finish_input_state_tests|v2_shell_split_input_state_tests|v2_curve_trim_tests|v2_hover_edit_plan_tests|v2_name_filter_tests|v2_plane_focus_tests|v2_shape_mesh_tests|v2_pattern_view_tests|v2_array_plan_tests|v2_tool_targeting_tests|v2_guide_surface_table_tests|v2_cursor_input_tests|v2_evaluation_queue_tests|v2_feature_reevaluation_tests|v2_active_group_tests|v2_broken_reference_tests|v2_process_step_tests|v2_export_content_tests|v2_command_availability_tests|v2_curved_panel_tests|v2_command_parameter_tests|v2_input_scheme_tests|v2_transform_input_tests|v2_grab_to_move_tests|v2_pointer_gesture_tests|v2_drawing_shelf_rows_tests|v2_diagnostic_report_tests|v2_extrude_plan_tests|v2_extrude_drag_tests|v2_control_point_edit_tests|v2_entity_naming_tests|v2_core_ui_wiring_tests|v2_shape_rebuild_tests|v2_extrude_options_tests|v2_work_plane_options_tests|v2_band_approximation_tests|v2_surface_projection_tests|v2_fabrication_openings_tests|v2_fabrication_evaluate_tests|v2_guide_table_build_tests|v2_origin_planes_tests|v2_direct_wire_entry_tests|v2_intersection_points_tests|v2_entity_edit_tests|v2_revolve_surface_tests|v2_fabrication_options_tests|v2_surface_jig_tests|v2_wrap_projection_tests|v2_polyline_corners_tests|v2_kcd_import_tests|v2_sub_document_tests|v2_display_settings_tests|v2_curve_projection_tests|v2_dimension_tests|v2_measure_panel_tests|v2_manual_tests|v2_sample_document_tests|v2_railway_nose_sample_tests|v2_scene_builder_tests|v2_selection_tests|v2_semantic_state_tests|v2_export_panel_tests|v2_export_service_tests|v2_acceptance_er_tests|v2_theme_layout_tests|v2_plane_follow_tests|v2_point_source_tests|v2_robustness_tests|v2_scale_tests|v2_measurement_tests|v2_document_tests|v2_compound_abort_tests|v2_json_tests|v2_zip_tests|v2_document_file_tests|v2_feature_definition_tests|v2_atomic_file_tests|v2_kernel_surface_tests|v2_gpt_surface_tests|v2_gpt_fabrication_tests|v2_kernel_loft_tests|v2_kernel_dome_tests|v2_kernel_surface_edit_tests|v2_kernel_wire_projection_tests|v2_kernel_surface_analysis_tests|v2_kernel_extrude_tests|v2_curved_emboss_tests|v2_kernel_boolean_tests|v2_kernel_region_split_tests|v2_kernel_place_tests|v2_kernel_solid_tests|v2_kernel_thicken_quality_tests|v2_kernel_warped_thicken_tests|v2_kernel_loft_envelope_tests|v2_kernel_edge_finish_tests|v2_kernel_shell_split_tests|v2_kernel_wire_cage_tests|v2_kernel_curve_round_trip_tests|v2_kernel_er_export_tests|v2_kernel_export_tests|v2_cad_next_smoke|v2_desktop_startup|v2_package_zip)$"
+        ],
+        "start": "2026-10-26T12:07:28.895162+00:00",
+        "end": "2026-10-26T12:35:51.927173+00:00",
+        "seconds": 1703.0384989000158,
+        "exit_code": 0,
+        "log": "tests.log"
+      },
+      {
+        "name": "legacy-self-test",
+        "command": [
+          "${USER_HOME}\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+          "${REPOSITORY}\\scripts\\verification\\isolated_test.py",
+          "--name",
+          "legacy-final",
+          "--",
+          "${REPOSITORY}\\build-msvc2022-x64\\Release\\kachakacha_cad.exe",
+          "--self-test"
+        ],
+        "start": "2026-10-26T12:35:51.957606+00:00",
+        "end": "2026-10-26T12:36:02.364606+00:00",
+        "seconds": 10.40923460002523,
+        "exit_code": 0,
+        "log": "legacy-self-test.log"
+      }
+    ],
+    "zipSha256": "4b0d3704e4352a6640650c3317e9af2db690644694a7d81e3358ebf2e895fe27"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "passed": true,
+  "preparedSha256": "44ba2cff6b7843b043c2588c0a156ad02e678900d35a6cd0cd910c3c10b0160f",
+  "designSha256": "eb7a69452e39510a74fe47296c8a8e90cc4dcbdcddcfa4212062195d418adc4c",
+  "exporterSha256": "b06ee377e7b76f62d36a9a2e8e4262fdc5e45f127af034d91b416950c0570616",
+  "cases": [
+    {
+      "case": "skirt-gap",
+      "translationMm": [
+        -0.5,
+        0,
+        0
+      ],
+      "seconds": 12.109000000054948,
+      "result": {
+        "contactAreaMm2": 0,
+        "distanceMm": 1e+30,
+        "first": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+        "label": "スカート左右の床板接着腕",
+        "maximumDistanceMm": 1e-05,
+        "minimumAreaMm2": 3,
+        "passed": false,
+        "region": [
+          -0.1,
+          -12.01,
+          9,
+          0.5,
+          -8.99,
+          10.7
+        ],
+        "second": "1ecca70c-6848-5e2b-8760-4307880b1d5f",
+        "secondTranslationMm": [
+          -0.5,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "case": "glazing-gap",
+      "translationMm": [
+        0,
+        -0.2,
+        0
+      ],
+      "seconds": 11.797000000020489,
+      "result": {
+        "contactAreaMm2": 0,
+        "distanceMm": 0.1999999999999993,
+        "first": "80ac7885-4f3f-5863-a9fe-4fdbcca8ad06",
+        "label": "側窓ガラスの裏貼り接着",
+        "maximumDistanceMm": 1e-05,
+        "minimumAreaMm2": 0.2,
+        "passed": false,
+        "second": "792f4bb7-6b88-575c-847d-34bdac74ebf0",
+        "secondTranslationMm": [
+          0,
+          -0.2,
+          0
+        ]
+      }
+    },
+    {
+      "case": "cooler-gap",
+      "translationMm": [
+        0,
+        0,
+        -0.5
+      ],
+      "seconds": 12.016000000061467,
+      "result": {
+        "contactAreaMm2": 0,
+        "distanceMm": 0.47526047333025406,
+        "first": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+        "label": "冷房サドルの前後左右支持",
+        "maximumDistanceMm": 1e-05,
+        "minimumAreaMm2": 12,
+        "passed": false,
+        "region": [
+          102.99,
+          -12.5,
+          42,
+          106.61,
+          -7,
+          46.3
+        ],
+        "second": "6905d22d-c811-5acd-a87c-3f7e221ded67",
+        "secondTranslationMm": [
+          0,
+          0,
+          -0.5
+        ]
+      }
+    }
+  ]
+}

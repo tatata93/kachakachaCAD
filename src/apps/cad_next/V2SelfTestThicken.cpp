@@ -302,6 +302,50 @@ bool ExerciseComplexSurfaceStop(V2MainWindow& window,bool crash)
 }
 bool CaseCancelComplexSurface(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,false);}
 bool CaseFailedThicknessProcess(V2MainWindow& window){return ExerciseComplexSurfaceStop(window,true);}
+bool ExerciseThicknessTransferStop(V2MainWindow& window,bool corrupt)
+{
+    // Exercise the actual child output while the validated binary reader pumps
+    // UI events. No production delay or fault-injection hook is needed.
+    modeling::GuideChain chain;chain.role=modeling::ChainRole::OuterBoundary;chain.closed=true;
+    chain.segments={geometry::CurveSegment::MakeCircle({},{0,0,1},{1,0,0},25).Value()};
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;request.chains={chain};
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,{});
+    if(!Explain((std::string("transfer fixture analysis: ")+analysis.FirstSummaryJa()).c_str(),analysis.HasValue()))return false;
+    const auto source=kernel::BuildGuideSurface(request,analysis.Value(),{});
+    if(!Explain((std::string("transfer fixture native surface: ")+source.FirstSummaryJa()).c_str(),source.HasValue()))return false;
+    const auto handle=source.Value().handle;
+    auto release=qScopeGuard([&]{kernel::ReleaseShape(handle);});
+    const auto before=kernel::CaptureOutputShape(handle);const auto count=kernel::CachedShapeCount();
+    const auto revision=window.Session().GetDocument().Revision();bool interrupted=false;int ticks=0;
+    QTimer timer;timer.setInterval(0);
+    QObject::connect(&timer,&QTimer::timeout,&window,[&]{
+        if(interrupted)return;
+        auto* dialog=window.findChild<QDialog*>("geometryJobDialog");if(!dialog)return;++ticks;
+        bool reading=false;for(auto* label:dialog->findChildren<QLabel*>())
+            reading=reading||label->text()==QStringLiteral("計算結果を読み込んでいます…");
+        if(!reading)return;
+        if(corrupt){
+            auto* child=dialog->findChild<QProcess*>("geometryJobProcess");if(!child)return;
+            QFile file(QDir(child->workingDirectory()).filePath("prepared.bin"));
+            interrupted=file.open(QIODevice::ReadWrite)&&file.resize(1);
+        }else if(auto* button=dialog->findChild<QPushButton*>("geometryJobCancel")){
+            interrupted=true;button->click();
+        }
+    });
+    modeling::ShapeMesh mesh;timer.start();
+    const auto result=V2GeometryJob::Thicken(&window,handle,.673,ThicknessPlacement::Inside,std::nullopt,{},false,false,&mesh);
+    timer.stop();if(result.HasValue())kernel::ReleaseShape(result.Value().handle);
+    const auto after=kernel::CaptureOutputShape(handle);
+    if(!Explain("interrupted prepared thickness is rejected without adopting geometry",interrupted&&ticks>0&&!result.HasValue()
+        &&result.FirstDiagnostic().code==(corrupt?"JOB-001":"JOB-002")&&mesh.Empty()&&!V2GeometryJob::Active()
+        &&kernel::CachedShapeCount()==count&&window.Session().GetDocument().Revision()==revision
+        &&before.HasValue()&&after.HasValue()&&before.Value()==after.Value()))return false;
+    const auto retry=V2GeometryJob::Thicken(&window,handle,.673,ThicknessPlacement::Inside,std::nullopt,{},false,false,&mesh);
+    const bool ok=retry.HasValue()&&!mesh.Empty();if(retry.HasValue())kernel::ReleaseShape(retry.Value().handle);
+    return Explain("normal thickness retry works after an interrupted prepared transfer",ok);
+}
+bool CaseCancelThicknessTransfer(V2MainWindow& window){return ExerciseThicknessTransferStop(window,false);}
+bool CaseCorruptThicknessTransfer(V2MainWindow& window){return ExerciseThicknessTransferStop(window,true);}
 bool CaseInteractiveThicknessChanges(V2MainWindow& window)
 {
     if(!ArmThickenOnFreshSurface(window))return false;
@@ -674,6 +718,8 @@ std::vector<SelfTestCase> ThickenCases()
         {"HP-TH-05 running job cancellation, UI response and saved retry",CaseCancelRunningThickness},
         {"HP-TH-06 crashed calculation process preserves document and supports retry",CaseFailedThicknessProcess},
         {"HP-TH-07 actual complex smooth surface cancellation during kernel calculation",CaseCancelComplexSurface},
+        {"HP-TH-TRANSFER cancel during prepared mesh transfer preserves document",CaseCancelThicknessTransfer},
+        {"HP-TH-TRANSFER truncated prepared mesh rejects result and permits retry",CaseCorruptThicknessTransfer},
         {"HP-TH-04 thickness preview release, cancel and retry",CaseThickenPreviewOwnership},
         {"HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
             CaseHumanPathThickenManySurfaces},

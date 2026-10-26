@@ -316,7 +316,10 @@ bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
 bool V2MainWindow::eventFilter(QObject* target, QEvent* event)
 {
     if(viewport_&&V2ToolSelection::Active(*viewport_)&&event&&event->type()==QEvent::MouseButtonPress)
-        if(auto* widget=qobject_cast<QWidget*>(target);widget&&operationHost_&&operationHost_->isAncestorOf(widget))V2ToolSelection::End(*viewport_);
+        if(auto* widget=qobject_cast<QWidget*>(target);widget&&operationHost_&&operationHost_->isAncestorOf(widget)){
+            const auto* notice=operationHost_->findChild<QWidget*>("toolSelectionNotice");
+            if(!notice||(widget!=notice&&!notice->isAncestorOf(widget)))V2ToolSelection::End(*viewport_);
+        }
     if(event && (event->type()==QEvent::Polish || event->type()==QEvent::FocusIn || event->type()==QEvent::KeyPress))
         if(auto* field=NumericField(target))field->setKeyboardTracking(false);
     if(V2GeometryJob::Active()) {

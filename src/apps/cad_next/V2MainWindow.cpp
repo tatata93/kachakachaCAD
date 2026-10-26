@@ -275,7 +275,7 @@ void V2MainWindow::HandleSelectionChanged()
 {
     // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
     HighlightTreeForSelection();
-    if(V2ToolSelection::Active(*viewport_)){RefreshCommandVisibility();return;}
+    if(V2ToolSelection::Active(*viewport_)){V2ToolSelection::Refresh(*viewport_);RefreshCommandVisibility();return;}
     if (gptFabrication_ != nullptr) { gptFabrication_->HandleSelectionChanged(); }
     if (gptSurface_ != nullptr) { gptSurface_->HandleSelectionChanged(); }
     if (loopFaces_ != nullptr) { loopFaces_->HandleSelectionChanged(); }

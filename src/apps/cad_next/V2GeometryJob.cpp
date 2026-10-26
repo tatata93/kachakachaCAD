@@ -1,4 +1,5 @@
 #include "V2GeometryJob.h"
+#include "V2PreparedDocument.h"
 #include "kachakacha/app/GeometryJobDiagnostic.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -13,6 +14,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -44,7 +46,7 @@ constexpr auto busyProperty="geometryJobActive";
 constexpr auto failedCode=app::kGeometryJobFailed;
 constexpr auto cancelledCode=app::kGeometryJobCancelled;
 using JsonResult=base::Result<QJsonObject>;
-struct PreviewCacheEntry {QByteArray key;QJsonObject result;qsizetype bytes=0;};
+struct PreviewCacheEntry {QByteArray key;QJsonObject result;qsizetype bytes=0;std::shared_ptr<V2PreparedDocument> prepared;};
 std::deque<PreviewCacheEntry>& PreviewCache(){static std::deque<PreviewCacheEntry> entries;return entries;}
 QByteArray PreviewKey(const QJsonObject& request,modeling::KernelShapeHandle source) {
     const auto captured=kernel::CaptureOutputShape(source);if(!captured.HasValue())return {};
@@ -52,16 +54,17 @@ QByteArray PreviewKey(const QJsonObject& request,modeling::KernelShapeHandle sou
     hash.addData(QJsonDocument(request).toJson(QJsonDocument::Compact));
     hash.addData(QByteArray::fromStdString(captured.Value()));return hash.result();
 }
-void CachePreview(const QByteArray& key,const QJsonObject& result) {
+void CachePreview(const QByteArray& key,const QJsonObject& result,const std::shared_ptr<V2PreparedDocument>& prepared,qsizetype preparedSize) {
     // Retain only validated geometry bytes, never live document IDs or handles.
-    // Four entries / 16 MiB bound the cost for repeated placement/value changes.
-    constexpr qsizetype limit=16*1024*1024;
-    const qsizetype bytes=result.value("brep").toString().size()*sizeof(QChar);
+    // Include native bytes, curves and meshes. No IDs or live handles are kept.
+    // Four entries / 64 MiB also cover a detailed projected window on redo.
+    constexpr qsizetype limit=64*1024*1024;
+    const qsizetype bytes=2*QJsonDocument(result).toJson(QJsonDocument::Compact).size()+2*preparedSize;
     if(key.isEmpty()||bytes>limit)return;
     auto& entries=PreviewCache();qsizetype total=bytes;
     for(const auto& entry:entries)total+=entry.bytes;
     while(!entries.empty()&&(entries.size()>=4||total>limit)){total-=entries.front().bytes;entries.pop_front();}
-    entries.push_back({key,result,bytes});
+    entries.push_back({key,result,bytes,prepared});
 }
 base::Diagnostic Failed(const QString& detail) {
     return base::MakeError(failedCode,"計算を完了できませんでした。文書は変更していません。",detail.toStdString());
@@ -109,6 +112,7 @@ JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const 
 // writable outputs are scratch files; it never receives the document or a save path.
 JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::KernelShapeHandle>& inputs,
     const DocumentReader& reader={}, bool interactivePreview=false) {
+    const bool documentJob=request.contains("source")&&!request.contains("operation");
     if(Active())return JsonResult::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     struct Busy {
         Busy(){qApp->setProperty(busyProperty,true);}
@@ -126,7 +130,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     request["version"]=1;request["token"]=token;request["shapes"]=shapes;
     if(!WriteJson(scratch.filePath("request.json"),request))return JsonResult::Failure(Failed(QStringLiteral("計算用入力を書き込めません。")));
     JobDialog dialog(parent);dialog.setObjectName("geometryJobDialog");
-    dialog.setWindowTitle(reader?QStringLiteral("文書を開く"):QStringLiteral("形状を計算"));
+    dialog.setWindowTitle(documentJob?QStringLiteral("文書を開く"):QStringLiteral("形状を計算"));
     dialog.setWindowModality(interactivePreview?Qt::NonModal:Qt::ApplicationModal);
     dialog.setProperty("interactiveGeometryPreview",interactivePreview);
     if(interactivePreview)dialog.setAttribute(Qt::WA_ShowWithoutActivating,true);
@@ -175,7 +179,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     });
     process.setWorkingDirectory(scratch.path());
     if(reader){auto environment=QProcessEnvironment::systemEnvironment();environment.insert("QT_QPA_PLATFORM","offscreen");process.setProcessEnvironment(environment);}
-    QTimer::singleShot(0,&dialog,[&]{if(!cancelled)process.start(QCoreApplication::applicationFilePath(),{reader?"--document-job":"--geometry-job",scratch.path()});});
+    QTimer::singleShot(0,&dialog,[&]{if(!cancelled)process.start(QCoreApplication::applicationFilePath(),{documentJob?"--document-job":"--geometry-job",scratch.path()});});
     timer.start();
     if(interactivePreview) {
         // Keep the viewport and parameter pane usable while the private child
@@ -249,6 +253,33 @@ int Worker(const QString& directory) {
                 {"volume",volume},{"thickness",thickness},{"previous",previous},
                 {"corrected",wall.corrected},{"normalMin",wall.normalThicknessMinMm},{"normalMax",wall.normalThicknessMaxMm},
                 {"maxDeviation",wall.maxOffsetDeviationMm},{"rmsDeviation",wall.rmsOffsetDeviationMm}};
+            if(response.value("ok").toBool()&&request.value("operation").toString()=="thicken"){
+                Phase("境界ワイヤーを準備しています…");
+                V2PreparedDocument prepared;prepared.parts["result"]=captured.Value();
+                const auto wires=kernel::OutputBoundaryWires(result,request.value("linear").toDouble());
+                QJsonArray notes;
+                const auto diagnostics=wires.HasValue()?wires.Diagnostics():std::vector<base::Diagnostic>{
+                    base::MakeWarning("EXP-W002","境界ワイヤーを取り出せませんでした。",wires.FirstSummaryJa())};
+                for(const auto& note:diagnostics)notes.append(QJsonObject{{"code",QString::fromStdString(note.code)},
+                    {"severity",static_cast<int>(note.severity)},{"summary",QString::fromStdString(note.summaryJa)},
+                    {"details",QString::fromStdString(note.detailsJa)}});
+                response["boundaryDiagnostics"]=notes;
+                response["boundaryCount"]=wires.HasValue()?static_cast<int>(wires.Value().size()):0;
+                if(wires.HasValue())for(std::size_t i=0;i<wires.Value().size();++i)
+                    prepared.partEdges["wire-"+std::to_string(i)]=wires.Value()[i];
+                if(request.value("displayMesh").toBool()){
+                    Phase("表示用の形を準備しています…");
+                    const auto mesh=kernel::BuildShapeMesh(result);
+                    if(!mesh.HasValue())response=Diagnostic(mesh.FirstDiagnostic());
+                    else prepared.meshes["result"]=mesh.Value();
+                }
+                if(response.value("ok").toBool()){
+                    const auto path=dir.filePath("prepared.bin");
+                    if(!WritePreparedDocument(path,request.value("token").toString(),prepared))
+                        response=Diagnostic(Failed(QStringLiteral("厚みの表示結果を書き込めませんでした。")));
+                    else response["preparedBytes"]=QFileInfo(path).size();
+                }
+            }
         }
         if(response.isEmpty())response=Diagnostic(Failed(QStringLiteral("計算の入力が不正です。")));
     }catch(const std::exception& e){response=Diagnostic(Failed(QString::fromUtf8(e.what())));}
@@ -259,29 +290,62 @@ int Worker(const QString& directory) {
 
 base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelShapeHandle source,
     double thickness,fabrication::ThicknessPlacement placement,const std::optional<modeling::WorkPlaneFrame>& plane,
-    const geometry::GeometryTolerance& tolerance,bool interactivePreview,bool correctOpposite) {
+    const geometry::GeometryTolerance& tolerance,bool interactivePreview,bool correctOpposite,modeling::ShapeMesh* displayMesh,bool cachedOnly,
+    std::vector<std::vector<geometry::CurveSegment>>* boundaryWires) {
     using Out=base::Result<kernel::ThickenedSolid>;
     if(Active())return Out::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     QJsonObject request{{"operation","thicken"},{"correctOpposite",correctOpposite},{"thickness",thickness},{"placement",static_cast<int>(placement)},
-        {"linear",tolerance.modelLinearMm},{"angular",tolerance.modelAngularRad},{"epsilon",tolerance.numericEpsilon},{"toPlane",plane.has_value()}};
+        {"linear",tolerance.modelLinearMm},{"angular",tolerance.modelAngularRad},{"epsilon",tolerance.numericEpsilon},{"toPlane",plane.has_value()},
+        {"displayMesh",displayMesh!=nullptr}};
     if(plane){request["origin"]=Point(plane->origin);request["normal"]=Point(plane->normal);}
-    const auto key=interactivePreview?PreviewKey(request,source):QByteArray{};
+    const auto key=(interactivePreview||cachedOnly)?PreviewKey(request,source):QByteArray{};
     std::optional<QJsonObject> cached;
-    if(!key.isEmpty())for(const auto& entry:PreviewCache())if(entry.key==key){cached=entry.result;break;}
-    const auto response=cached?JsonResult::Success(*cached):Run(parent,request,{source},{},interactivePreview);
+    std::shared_ptr<V2PreparedDocument> prepared;
+    qsizetype preparedSize=0;
+    if(!key.isEmpty())for(const auto& entry:PreviewCache())if(entry.key==key){cached=entry.result;prepared=entry.prepared;break;}
+    if(cachedOnly&&!cached)return Out::Failure(Failed(QStringLiteral("同じ形状・設定の厚み計算結果はありません。")));
+    const DocumentReader read=[&](const auto& path,const auto& token,const auto& pulse){
+        auto loaded=ReadPreparedDocument(path,token,pulse);
+        if(!loaded.HasValue())return base::Result<bool>::Failure(loaded.Diagnostics());
+        preparedSize=static_cast<qsizetype>(QFileInfo(path).size());
+        prepared=std::make_shared<V2PreparedDocument>(std::move(*loaded.Value()));return base::Result<bool>::Success(true);
+    };
+    const auto response=cached?JsonResult::Success(*cached):Run(parent,request,{source},read,interactivePreview);
     if(!response.HasValue())return Out::Failure(response.Diagnostics());
     const auto& data=response.Value();
-    const auto handle=kernel::RestoreOutputShape(QByteArray::fromBase64(data.value("brep").toString().toLatin1()).toStdString());
+    const auto brep=QByteArray::fromBase64(data.value("brep").toString().toLatin1()).toStdString();
+    const int boundaryCount=data.value("boundaryCount").toInt(-1);
+    if(!prepared||prepared->parts.size()!=1||!prepared->parts.contains("result")||prepared->parts.at("result")!=brep
+        ||boundaryCount<0||boundaryCount>1000000||prepared->partEdges.size()!=static_cast<std::size_t>(boundaryCount)
+        ||!prepared->archive.empty()||!prepared->guides.empty()||!prepared->flatBoundaries.empty()||!prepared->guideEdges.empty()
+        ||!prepared->samples.empty()||!prepared->fabrication.empty()||!prepared->guideTable.rows.empty()
+        ||prepared->meshes.size()!=(displayMesh?1u:0u)||(displayMesh&&(!prepared->meshes.contains("result")||prepared->meshes.at("result").Empty())))
+        return Out::Failure(Failed(QStringLiteral("厚みの形状・境界・表示の結果が一致しません。")));
+    for(int i=0;i<boundaryCount;++i)if(!prepared->partEdges.contains("wire-"+std::to_string(i))
+        ||prepared->partEdges.at("wire-"+std::to_string(i)).empty())return Out::Failure(Failed(QStringLiteral("厚みの境界結果が不完全です。")));
+    std::vector<base::Diagnostic> notes;
+    if(!data.value("boundaryDiagnostics").isArray())return Out::Failure(Failed(QStringLiteral("厚みの境界診断が不完全です。")));
+    for(const auto value:data.value("boundaryDiagnostics").toArray()){
+        const auto note=value.toObject();const int severity=note.value("severity").toInt(-1);
+        if(severity<0||severity>1||note.value("code").toString().isEmpty()||note.value("summary").toString().isEmpty())
+            return Out::Failure(Failed(QStringLiteral("厚みの境界診断が不正です。")));
+        base::Diagnostic diagnostic;diagnostic.code=note.value("code").toString().toStdString();diagnostic.severity=static_cast<base::Severity>(severity);
+        diagnostic.summaryJa=note.value("summary").toString().toStdString();diagnostic.detailsJa=note.value("details").toString().toStdString();notes.push_back(std::move(diagnostic));
+    }
+    const auto handle=kernel::RestoreOutputShape(brep);
     if(!handle.HasValue())return Out::Failure(handle.Diagnostics());
-    if(!cached)CachePreview(key,data);
+    if(!cached)CachePreview(key,data,prepared,preparedSize);
     kernel::ThickenedSolid made;made.handle=handle.Value();made.volumeMm3=data.value("volume").toDouble();made.thicknessMm=data.value("thickness").toDouble();
     made.corrected=data.value("corrected").toBool();
     made.normalThicknessMinMm=data.value("normalMin").toDouble();made.normalThicknessMaxMm=data.value("normalMax").toDouble();
     made.maxOffsetDeviationMm=data.value("maxDeviation").toDouble();made.rmsOffsetDeviationMm=data.value("rmsDeviation").toDouble();
-    const auto edges=kernel::OutputEdges(made.handle,tolerance.modelLinearMm);
-    if(edges.HasValue())made.edges=edges.Value();
-    return Out::Success(std::move(made),edges.HasValue()?edges.Diagnostics():std::vector<base::Diagnostic>{
-        base::MakeWarning("EXP-W002","境界ワイヤーを取り出せませんでした。",edges.FirstSummaryJa())});
+    if(boundaryWires)boundaryWires->clear();
+    for(int i=0;i<boundaryCount;++i){
+        const auto& wire=prepared->partEdges.at("wire-"+std::to_string(i));
+        made.edges.insert(made.edges.end(),wire.begin(),wire.end());if(boundaryWires)boundaryWires->push_back(wire);
+    }
+    if(displayMesh)*displayMesh=prepared->meshes.at("result");
+    return Out::Success(std::move(made),std::move(notes));
 }
 base::Result<kernel::BooleanBuildResult> Boolean(QWidget* parent,kernel::BooleanOperation operation,
     modeling::KernelShapeHandle first,const std::vector<modeling::KernelShapeHandle>& tools,double tolerance) {

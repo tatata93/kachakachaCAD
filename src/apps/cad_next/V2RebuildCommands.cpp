@@ -15,6 +15,7 @@
 #include "V2ShapeLifetime.h"
 #include "V2DocumentOpen.h"
 #include "V2DocumentTiming.h"
+#include "V2GeometryJob.h"
 #include "V2GuideBuildJobs.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
@@ -281,11 +282,17 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
         const auto target=guideShapes_.find(definition->targetPlane->ToString());
         if(target!=guideShapes_.end())stop=target->second;
     }
-    const auto built = definition->targetPlane.has_value()
-        ? kachakacha::v2::kernel::ThickenSurfaceToFace(found->second,stop,frame,definition->targetOffsetMm,tolerance)
-        : kachakacha::v2::kernel::ThickenSurface(found->second, definition->thickness.value,
-              static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(definition->placement),
-              tolerance, definition->correctOpposite);
+    kachakacha::v2::modeling::ShapeMesh preparedMesh;
+    const auto built = [&]{
+        if(definition->targetPlane.has_value())return kachakacha::v2::kernel::ThickenSurfaceToFace(found->second,stop,frame,definition->targetOffsetMm,tolerance);
+        const auto placement=static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(definition->placement);
+        if(!V2DocumentOpen::IsWorker()){
+            const auto cached=V2GeometryJob::Thicken(this,found->second,definition->thickness.value,
+                placement,std::nullopt,tolerance,false,definition->correctOpposite,&preparedMesh,true);
+            if(cached.HasValue())return cached;
+        }
+        return kachakacha::v2::kernel::ThickenSurface(found->second,definition->thickness.value,placement,tolerance,definition->correctOpposite);
+    }();
     if(snapshot)kachakacha::v2::kernel::ReleaseShape(stop);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
@@ -293,6 +300,7 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
     }
     partShapes_[output.ToString()] = built.Value().handle;
     partEdges_[output.ToString()] = built.Value().edges;
+    if(!preparedMesh.Empty())shapeMeshes_[built.Value().handle.value]=std::move(preparedMesh);
     return true;
 }
 

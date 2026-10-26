@@ -1307,12 +1307,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         BeginBoxSelect(event->position(),modifiers);SelectAt(event->position(),modifiers);return;
     }
     // The visible navigator is in front of extrusion handles as well as model edges.
-    const bool editPick=V2ToolSelection::Active(*this)||((event->modifiers()&Qt::ControlModifier)
-        &&!V2DrawingSelection::IsDrawing(session_->CurrentTool())
-        &&session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Measure
-        &&(toolPickActive_||ReferencePickPending()||V2ToolSelection::HasTool(*this)||session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Select));
-    if(event->button()==Qt::LeftButton&&editPick){
-        V2ToolSelection::Begin(*this);BeginBoxSelect(event->position(),event->modifiers());
+    // Ctrl is the active tool's additive selection. Enter scratch deletion only
+    // through its explicit button; otherwise Ctrl silently disconnects all inputs.
+    if(event->button()==Qt::LeftButton&&V2ToolSelection::Active(*this)){
+        BeginBoxSelect(event->position(),event->modifiers());
         SelectAt(event->position(),event->modifiers());return;
     }
     if (!ReferencePickPending() && BeginExtrudeDrag(event->position())) return;

@@ -6,7 +6,12 @@
 #include "V2PlanarCurves.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "V2ThickenDock.h"
+#include "V2ThickenPreviewState.h"
 #include "V2LoopFacesTool.h"
+#include "V2LoopFacesDock.h"
+#include "V2ToolSelection.h"
+#include "V2GeometryJob.h"
+#include "V2EntityTree.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctSurfaceRegion.h"
 #include <QFile>
@@ -14,9 +19,12 @@
 #include <QPointF>
 #include "kachakacha/geometry/WireChain.h"
 #include <QDoubleSpinBox>
+#include <QCheckBox>
 #include <QListWidget>
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/ProfileRegion.h"
+#include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/modeling/MeshPick.h"
@@ -27,9 +35,13 @@
 #include <QDir>
 #include <QPushButton>
 #include <QPixmap>
+#include <QMouseEvent>
+#include <QEvent>
+#include <QTreeWidgetItem>
 #include <QString>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 using namespace kachakacha::v2;
 class V2WindowHoleExercise {
@@ -37,9 +49,106 @@ public:
     static bool Run(V2MainWindow& w,bool curved);
     static bool PlanarGeneration(V2MainWindow& w);
     static bool Panorama(V2MainWindow& w);
-    static bool PreparePanorama(V2MainWindow& w,std::vector<base::EntityId>& input,base::EntityId& perimeter,std::vector<geometry::CurveSegment>& outer);
+    static bool PreparePanorama(V2MainWindow& w,std::vector<base::EntityId>& input,base::EntityId& perimeter,std::vector<geometry::CurveSegment>& outer,bool left=false,bool makeSources=true);
     static bool ShowOnly(V2MainWindow& w,base::EntityId keep);
+    static bool Existing(V2MainWindow& w,bool curved,bool left=false);
+    static bool PreviewMeshReuse(V2MainWindow& w);
 };
+bool V2WindowHoleExercise::Existing(V2MainWindow& w,bool curved,bool left) {
+    const auto path=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT");
+    const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue()||!w.OpenDocumentFile(path))return false;
+    const auto id=[](const char* suffix){return *base::EntityId::Parse(std::string("00000000-0000-4000-8000-00000000")+suffix);};
+    std::vector<base::EntityId> selected;
+    if(curved){
+        std::vector<base::EntityId> unused;base::EntityId perimeter;std::vector<geometry::CurveSegment> outer;
+        if(!PreparePanorama(w,unused,perimeter,outer,left,false))return false;
+        selected={perimeter,id(left?"16ae":"169a"),id(left?"16b7":"16a5")};
+    }else selected={id("172a"),id("173e")};
+    w.AdoptCurrentDocument();w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);
+    if(curved){
+        std::vector<app::RoleWire> wires;modeling::SnapScene scene;
+        for(const auto which:selected){
+            auto chosen=app::GuideSelectionOf(w.Session().GetDocument(),w.Session().Scene(),which);if(!chosen)return false;
+            wires.push_back({which,chosen->segments});
+            for(const auto& curve:chosen->segments){scene.curves.push_back({which,{},curve});
+                const auto a=curve.StartPoint(),b=curve.EndPoint();
+                std::cout<<which.ToString().substr(32)<<" edge "<<int(curve.Kind())<<" "<<a.x<<","<<a.y<<","<<a.z<<" -> "<<b.x<<","<<b.y<<","<<b.z<<std::endl;
+            }
+        }
+        const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;
+        for(int i:{0,6}){
+            const auto& a=wires[1].segments[i];const auto& b=wires[2].segments[6-i];double forward=0,backward=0;
+            for(int j=0;j<=32;++j){forward=std::max(forward,a.ClosestPoint(b.Evaluate(j/32.)).distance);backward=std::max(backward,b.ClosestPoint(a.Evaluate(j/32.)).distance);}
+            std::cout<<"overlap "<<i<<" contained="<<forward<<" reverse="<<backward<<std::endl;
+        }
+        std::cout<<"existing spatial boundaries="<<app::DetectSpatialBoundaries(scene,tolerance).size()<<" network tables="<<app::PlanSurfaceNetwork(wires,tolerance).tables.size()<<std::endl;
+    }
+    w.Viewport().FitToDocument();w.Viewport().SetSelection({});w.RunCommand("surface.from_lines");QApplication::processEvents();
+    for(std::size_t i=0;i<selected.size();++i){
+        QTreeWidgetItem* item=nullptr;for(const auto& row:w.entityItems_)if(row.second==selected[i])item=row.first;
+        if(!item)return false;w.entityTree_->scrollToItem(item);QApplication::processEvents();
+        const auto p=QPointF(w.entityTree_->visualItemRect(item).center());
+        const auto modifiers=i?Qt::ControlModifier:Qt::NoModifier;
+        for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+            QMouseEvent event(type,p,QPointF(w.entityTree_->viewport()->mapToGlobal(p.toPoint())),Qt::LeftButton,
+                type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,modifiers);
+            QApplication::sendEvent(w.entityTree_->viewport(),&event);
+        }
+    }
+    const auto output=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_OUTPUT")+(curved?(left?"/existing-panorama-left":"/existing-panorama"):"/existing-planar");QDir().mkpath(output);
+    const auto capture=[&](const char* file){QApplication::processEvents();w.grab().save(output+"/"+file);};
+    capture("01-selected-preview.png");
+    std::cout<<w.LoopFacesTool().Dock()->SummaryTextJa().toStdString()<<std::endl;
+    if(!selftest::Explain("original projected wires reach one face row through Ctrl tree clicks",!V2ToolSelection::Active(w.Viewport())
+        &&w.LoopFacesTool().Plan()&&w.LoopFacesTool().Plan()->faces.size()==1&&w.LoopFacesTool().Dock()->FaceRowCount()==1))return false;
+    const int before=selftest::CountOfKind(w,domain::EntityKind::GuideSurface);
+    if(!w.HandleToolKey(Qt::Key_Return,nullptr)||selftest::CountOfKind(w,domain::EntityKind::GuideSurface)!=before+1){std::cout<<w.StatusText().toStdString()<<std::endl;return false;}
+    const auto made=w.Session().GetDocument().Snapshot().entities.back().id;
+    std::cout<<"OWNER stage: face committed"<<std::endl;
+    const auto hasMaterial=[&](base::EntityId which,geometry::Vector3 origin){
+        for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==which)for(const auto& t:shape.mesh.triangles)
+            if(modeling::RayHitsTriangle(origin,{0,-1,0},t))return true;return false;
+    };
+    const double probeX=curved?(left?-10.:10.):0.;
+    const geometry::Vector3 opening{probeX,0,21.5},beside{probeX,0,curved?16.:8.};
+    if(!selftest::Explain("original window is a hole with material around it",!hasMaterial(made,opening)&&hasMaterial(made,beside)))return false;
+    app::SelectionSet face;face.entityIds={made};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");capture("02-hole-face.png");
+    if(!ShowOnly(w,made))return false;
+    const auto savedFace=output+"/hole-face.kcd2";w.SetPathChooser([&](bool){return savedFace;});w.RunCommand("file.save_as");
+    std::cout<<"OWNER stage: reopening saved face"<<std::endl;
+    if(!selftest::Explain("saved face retains the empty window and surrounding material",w.OpenDocumentFile(savedFace)
+        &&w.RebuildProblems().isEmpty()&&!hasMaterial(made,opening)&&hasMaterial(made,beside)))return false;
+    w.Viewport().SetSelection(face);
+    std::cout<<"OWNER stage: thicken entry"<<std::endl;
+    w.RunCommand("part.thicken");auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
+    std::cout<<"OWNER stage: thicken confirm"<<std::endl;
+    if(w.thicken_->built.size()!=1)return false;
+    const auto previewHandle=w.thicken_->built.front().value;
+    const auto mesh=w.thicken_->builtMeshes.find(previewHandle);
+    if(mesh==w.thicken_->builtMeshes.end()||mesh->second.triangles.empty())return false;
+    const auto* previewTriangles=mesh->second.triangles.data();
+    if(!w.ThickenDock().ClickConfirm())return false;
+    if(!selftest::Explain("thickness confirmation adopts the preview mesh without rebuilding",w.shapeMeshes_.contains(previewHandle)
+        &&w.shapeMeshes_.at(previewHandle).triangles.data()==previewTriangles))return false;
+    std::cout<<"OWNER stage: solid quality check"<<std::endl;
+    const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto checked=kernel::CheckSolidForExport(w.partShapes_.at(part.ToString()),.001);
+    if(!selftest::Explain("original projected window thickens to a closed hollowed solid",checked.HasValue()&&checked.Value().Ok()
+        &&checked.Value().volumeMm3>0&&!hasMaterial(part,opening)&&hasMaterial(part,beside)))return false;
+    face.entityIds={part};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");capture("03-hole-solid.png");
+    std::cout<<"OWNER stage: solid undo redo"<<std::endl;
+    const int count=selftest::CountOfKind(w,domain::EntityKind::Part);w.RunCommand("edit.undo");if(selftest::CountOfKind(w,domain::EntityKind::Part)!=count-1)return false;
+    w.RunCommand("edit.redo");if(selftest::CountOfKind(w,domain::EntityKind::Part)!=count)return false;
+    if(!ShowOnly(w,part))return false;
+    const auto saved=output+"/hole-solid.kcd2";w.SetPathChooser([&](bool){return saved;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    std::cout<<"OWNER stage: reopening solid"<<std::endl;
+    if(!w.OpenDocumentFile(saved)||!w.RebuildProblems().isEmpty())return false;
+    const auto native=w.partShapes_.find(part.ToString());if(native==w.partShapes_.end())return false;
+    const auto restored=kernel::CheckSolidForExport(native->second,.001);
+    return selftest::Explain("original unchanged; reopened solid retains hole, wall, closedness and volume",restored.HasValue()&&restored.Value().Ok()
+        &&std::abs(restored.Value().volumeMm3-checked.Value().volumeMm3)<=std::max(1e-6,checked.Value().volumeMm3*1e-7)
+        &&!hasMaterial(part,opening)&&hasMaterial(part,beside)&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
+}
 bool V2WindowHoleExercise::Panorama(V2MainWindow& w) {
     const auto path=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT");
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue()||!w.OpenDocumentFile(path))return false;
@@ -136,9 +245,9 @@ bool V2WindowHoleExercise::ShowOnly(V2MainWindow& w,base::EntityId keep) {
     w.AdoptCurrentDocument();return true;
 }
 
-bool V2WindowHoleExercise::PreparePanorama(V2MainWindow& w,std::vector<base::EntityId>& input,base::EntityId& perimeter,std::vector<geometry::CurveSegment>& outer) {
+bool V2WindowHoleExercise::PreparePanorama(V2MainWindow& w,std::vector<base::EntityId>& input,base::EntityId& perimeter,std::vector<geometry::CurveSegment>& outer,bool left,bool makeSources) {
     const auto id=[](const char* suffix){return *base::EntityId::Parse(std::string("00000000-0000-4000-8000-000000000")+suffix);};
-    const auto support=id("433");const auto* e=w.Session().GetDocument().FindEntity(support);
+    const auto support=id(left?"43f":"433");const auto* e=w.Session().GetDocument().FindEntity(support);
     const auto* feature=e?w.Session().GetDocument().FindFeature(e->createdBy):nullptr;
     const auto* definition=feature?std::get_if<domain::CreateGuideSurfaceDefinition>(&feature->definition):nullptr;
     if(!definition)return selftest::Explain("owner current 115 surface fixture is available",false);
@@ -149,9 +258,10 @@ bool V2WindowHoleExercise::PreparePanorama(V2MainWindow& w,std::vector<base::Ent
     std::vector<geometry::CurveSegment> expanded;
     for(const auto& c:outer) {
         const auto a=c.StartPoint(),b=c.EndPoint();
-        if(c.Kind()==geometry::CurveKind::Line&&std::abs(a.x-6)<1e-7&&std::abs(b.x-6)<1e-7
+        const double x=left?-6.:6.;
+        if(c.Kind()==geometry::CurveKind::Line&&std::abs(a.x-x)<1e-7&&std::abs(b.x-x)<1e-7
             &&std::abs(a.y+27)<1e-7&&std::abs(b.y+27)<1e-7&&std::abs(a.z-b.z)>19.9) {
-            const auto aa=a+geometry::Vector3{-1,0,0},bb=b+geometry::Vector3{-1,0,0};
+            const auto aa=a+geometry::Vector3{left?1.:-1.,0,0},bb=b+geometry::Vector3{left?1.:-1.,0,0};
             expanded.push_back(geometry::CurveSegment::MakeLine(a,aa).Value());
             expanded.push_back(geometry::CurveSegment::MakeLine(aa,bb).Value());
             expanded.push_back(geometry::CurveSegment::MakeLine(bb,b).Value());
@@ -159,6 +269,11 @@ bool V2WindowHoleExercise::PreparePanorama(V2MainWindow& w,std::vector<base::Ent
     }
     if(expanded.size()!=outer.size()+2)return selftest::Explain("owner perimeter includes 1mm of the adjacent central face",false);
     outer=std::move(expanded);
+    if(!makeSources){
+        const auto boundary=w.Session().AddWire(outer,false,"穴付き面の外周");if(!boundary.committed)return false;
+        perimeter=boundary.createdEntityIds.front();
+        return w.Session().GetDocument().Run(document::SetVisibilityCommand({support},domain::Visibility::Visible)).committed;
+    }
     std::vector<std::vector<geometry::CurveSegment>> sources;
     for(int side=0;side<2;++side) {
         const auto chosen=app::GuideSelectionOf(w.Session().GetDocument(),w.Session().Scene(),id(side?"4a2":"057"));
@@ -233,8 +348,8 @@ bool V2WindowHoleExercise::Run(V2MainWindow& w,bool curved) {
     w.RunCommand("edit.undo");
     if(!selftest::Explain("owner hole generation is one undo",selftest::CountOfKind(w,domain::EntityKind::GuideSurface)==before))return false;
     w.RunCommand("edit.redo");
-    std::vector<base::EntityId> hidden;for(const auto& entity:w.session_->GetDocument().Snapshot().entities)
-        if(entity.id!=made)hidden.push_back(entity.id);
+    std::vector<base::EntityId> hidden;for(const auto& row:w.session_->GetDocument().Snapshot().entities)
+        if(row.id!=made)hidden.push_back(row.id);
     if(!w.session_->GetDocument().Run(document::SetVisibilityCommand(hidden,domain::Visibility::Hidden)).committed)return false;
     w.AdoptCurrentDocument();
     const auto saved=output+"/115-"+name+"-window-hole.kcd2";
@@ -298,10 +413,50 @@ bool V2WindowHoleExercise::PlanarGeneration(V2MainWindow& w) {
     }
     return selftest::Explain("tilted and reversed planar outlines preserve curves, holes and lengths at 0 37 100 percent",true);
 }
+bool V2WindowHoleExercise::PreviewMeshReuse(V2MainWindow& w){
+    using geometry::CurveSegment;
+    for(const bool independent:{false,true}){
+        w.RunCommand("file.new");
+        const std::vector<CurveSegment> curves={CurveSegment::MakeLine({-10,-5,0},{10,-5,0}).Value(),
+            CurveSegment::MakeLine({10,-5,0},{10,5,0}).Value(),CurveSegment::MakeLine({10,5,0},{-10,5,0}).Value(),
+            CurveSegment::MakeLine({-10,5,0},{-10,-5,0}).Value()};
+        const auto wire=w.Session().AddWire(curves,false,"mesh転送の回帰");if(!wire.committed)return false;
+        app::SelectionSet selected;selected.entityIds=wire.createdEntityIds;w.Viewport().SetSelection(selected);
+        w.RunCommand("surface.from_lines");if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
+        const auto surface=w.Session().GetDocument().Snapshot().entities.back().id;
+        selected.entityIds={surface};w.Viewport().SetSelection(selected);w.RunCommand("part.thicken");
+        auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
+        auto* output=w.findChild<QComboBox*>("thickenOutput");auto* separate=w.findChild<QCheckBox*>("thickenIndependent");
+        if(!output||!separate||w.thicken_->built.size()!=1)return false;output->setCurrentIndex(independent?0:2);separate->setChecked(independent);
+        const auto handle=w.thicken_->built.front().value;
+        const auto preview=w.thicken_->builtMeshes.find(handle);if(preview==w.thicken_->builtMeshes.end()||preview->second.triangles.empty())return false;
+        const auto* triangles=preview->second.triangles.data();
+        const auto groups=w.thicken_->builtWires.find(handle);if(groups==w.thicken_->builtWires.end()||groups->second.empty())return false;
+        const auto wireCount=groups->second.size();
+        if(!w.ThickenDock().ClickConfirm()||!w.shapeMeshes_.contains(handle)||w.shapeMeshes_.at(handle).triangles.data()!=triangles)return false;
+        if(selftest::CountOfKind(w,domain::EntityKind::Wire)!=static_cast<int>(1+(independent?0:wireCount)))return false;
+        const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;modeling::ShapeMesh restoredMesh;
+        const auto cached=V2GeometryJob::Thicken(&w,w.guideShapes_.at(surface.ToString()),.5,
+            w.thicknessPlacement_,std::nullopt,tolerance,false,false,&restoredMesh,true);
+        if(!cached.HasValue()||restoredMesh.Empty())return false;kernel::ReleaseShape(cached.Value().handle);
+        const auto different=V2GeometryJob::Thicken(&w,w.guideShapes_.at(surface.ToString()),.617,
+            w.thicknessPlacement_,std::nullopt,tolerance,false,false,&restoredMesh,true);
+        if(different.HasValue()){kernel::ReleaseShape(different.Value().handle);return false;}
+        w.RunCommand("edit.undo");if(selftest::CountOfKind(w,domain::EntityKind::Part)!=0)return false;
+        w.RunCommand("edit.redo");if(selftest::CountOfKind(w,domain::EntityKind::Part)!=1||!w.RebuildProblems().isEmpty())return false;
+        separate->setChecked(false);
+    }
+    return selftest::Explain("worker display transfers to dependent and independent parts; redo cache rejects changed settings",true);
+}
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> WindowHoleOwnerCases(){
-    std::vector<SelfTestCase> cases={{"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration}};
+    std::vector<SelfTestCase> cases={{"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration},
+        {"HP-TH-MESH worker preview mesh moves to confirmed part",V2WindowHoleExercise::PreviewMeshReuse}};
     if(!qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT").isEmpty()) {
+        if(qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_EXISTING"))return {
+            {"PROJ OWNER existing projected planar window face and solid",[](auto& w){return V2WindowHoleExercise::Existing(w,false);}},
+            {"PROJ OWNER existing projected panorama face and solid",[](auto& w){return V2WindowHoleExercise::Existing(w,true);}},
+            {"PROJ OWNER existing projected left panorama face and solid",[](auto& w){return V2WindowHoleExercise::Existing(w,true,true);}}};
         if(qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_PANORAMA"))return {{"PROJ OWNER panorama curves hole face and solid",V2WindowHoleExercise::Panorama}};
         cases.push_back({"PROJ OWNER selected outer and planar window hole",[](auto& w){return V2WindowHoleExercise::Run(w,false);}});
         cases.push_back({"PROJ OWNER selected outer and curved window hole",[](auto& w){return V2WindowHoleExercise::Run(w,true);}});

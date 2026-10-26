@@ -45,10 +45,32 @@ using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::fabrication::ThicknessPlacement;
 
 namespace {
-void ReleaseThickenPreview(std::vector<kachakacha::v2::modeling::KernelShapeHandle>& handles)
+void ReleaseThickenPreview(V2ThickenPreviewState& state)
 {
-    for(const auto handle:handles)kachakacha::v2::kernel::ReleaseShape(handle);
-    handles.clear();
+    for(const auto handle:state.built)kachakacha::v2::kernel::ReleaseShape(handle);
+    state.built.clear();state.builtMeshes.clear();state.builtWires.clear();
+}
+auto BoundaryWiresFor(const V2ThickenPreviewState& state,
+    kachakacha::v2::modeling::KernelShapeHandle handle,double tolerance)
+{
+    using namespace kachakacha::v2;
+    using Result=base::Result<std::vector<std::vector<geometry::CurveSegment>>>;
+    const auto found=state.builtWires.find(handle.value);
+    if(found==state.builtWires.end())return kernel::OutputBoundaryWires(handle,tolerance);
+    if(found->second.empty())return Result::Failure(base::MakeWarning("EXP-W002",
+        "厚みの境界ワイヤーを作れません。","ソリッドのみを選んでください。"));
+    return Result::Success(found->second);
+}
+void AddThickenMeasurements(kachakacha::v2::app::ThickenPreviewOutcome& outcome,
+    const kachakacha::v2::kernel::ThickenedSolid& built,bool first)
+{
+    outcome.volumeMm3+=built.volumeMm3;
+    outcome.thicknessMm=std::max(outcome.thicknessMm,built.thicknessMm);
+    outcome.corrected=outcome.corrected||built.corrected;
+    outcome.normalThicknessMinMm=first?built.normalThicknessMinMm:std::min(outcome.normalThicknessMinMm,built.normalThicknessMinMm);
+    outcome.normalThicknessMaxMm=std::max(outcome.normalThicknessMaxMm,built.normalThicknessMaxMm);
+    outcome.maxOffsetDeviationMm=std::max(outcome.maxOffsetDeviationMm,built.maxOffsetDeviationMm);
+    outcome.rmsOffsetDeviationMm=std::max(outcome.rmsOffsetDeviationMm,built.rmsOffsetDeviationMm);
 }
 }
 
@@ -148,7 +170,7 @@ void V2MainWindow::RefreshThickenPreview()
 {
     const auto input=thicken_->input;
     thicken_->outcome = kachakacha::v2::app::ThickenPreviewOutcome{};
-    ReleaseThickenPreview(thicken_->built);
+    ReleaseThickenPreview(*thicken_);
     thicken_->builtEdges.clear();
     thicken_->builtThickness.clear();
     thicken_->builtMesh = {};
@@ -177,7 +199,7 @@ void V2MainWindow::RefreshThickenPreview()
         const std::string name = entity != nullptr ? entity->displayName : std::string("面");
         if (found == guideShapes_.end()) {
             thicken_->outcome.refusalJa = name + ": 面の形がまだありません";
-            ReleaseThickenPreview(thicken_->built);
+            ReleaseThickenPreview(*thicken_);
             return;
         }
         kachakacha::v2::modeling::KernelShapeHandle stop;
@@ -187,11 +209,13 @@ void V2MainWindow::RefreshThickenPreview()
             if (!restored.HasValue()) { thicken_->outcome.refusalJa=restored.FirstSummaryJa(); return; }
             stop=restored.Value();
         } else if (const auto end=guideShapes_.find(input.targetPlane.ToString());end!=guideShapes_.end()) stop=end->second;
+        kachakacha::v2::modeling::ShapeMesh preparedMesh;
+        std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> preparedWires;
         const auto built = input.toPlane ? V2Calculation::Call(this,"終端の面まで計算しています…",
             [](const auto&... args){return kachakacha::v2::kernel::ThickenSurfaceToFace(args...);},
             found->second,stop,frame,input.targetOffsetMm,tolerance)
             : V2GeometryJob::Thicken(this,found->second,input.thicknessMm,
-                input.placement,frame,tolerance,true,input.correctOpposite);
+                input.placement,frame,tolerance,true,input.correctOpposite,&preparedMesh,false,&preparedWires);
         if(snapshot)kachakacha::v2::kernel::ReleaseShape(stop);
         if(thicken_->refreshPending||!thicken_->shelfShown||input.surfaces!=thicken_->input.surfaces
             ||input.thicknessMm!=thicken_->input.thicknessMm||input.placement!=thicken_->input.placement
@@ -199,11 +223,11 @@ void V2MainWindow::RefreshThickenPreview()
             ||input.toPlane!=thicken_->input.toPlane||input.targetPlane!=thicken_->input.targetPlane
             ||input.targetOffsetMm!=thicken_->input.targetOffsetMm||input.targetFaceBrep!=thicken_->input.targetFaceBrep) {
             if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
-            ReleaseThickenPreview(thicken_->built);return;
+            ReleaseThickenPreview(*thicken_);return;
         }
         if(session_->GetDocument().Revision()!=revision) {
             if(built.HasValue())kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
-            ReleaseThickenPreview(thicken_->built);
+            ReleaseThickenPreview(*thicken_);
             thicken_->outcome.refusalJa="文書が変更されたため、古い計算結果を採用しませんでした。";
             return;
         }
@@ -212,29 +236,25 @@ void V2MainWindow::RefreshThickenPreview()
                 + built.FirstSummaryJa();
             if(!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())
                 thicken_->outcome.refusalJa += "\n" + built.Diagnostics().front().detailsJa;
-            ReleaseThickenPreview(thicken_->built);
+            ReleaseThickenPreview(*thicken_);
             thicken_->builtEdges.clear();
             thicken_->builtThickness.clear();
             return;
         }
-        thicken_->outcome.volumeMm3 += built.Value().volumeMm3;
         for(const auto& note:built.Diagnostics())thicken_->outcome.boundaryNotesJa.push_back(note.summaryJa);
-        thicken_->outcome.thicknessMm = std::max(thicken_->outcome.thicknessMm, built.Value().thicknessMm);
-        thicken_->outcome.corrected = thicken_->outcome.corrected || built.Value().corrected;
-        thicken_->outcome.normalThicknessMinMm = thicken_->built.empty() ? built.Value().normalThicknessMinMm
-            : std::min(thicken_->outcome.normalThicknessMinMm,built.Value().normalThicknessMinMm);
-        thicken_->outcome.normalThicknessMaxMm = std::max(thicken_->outcome.normalThicknessMaxMm,built.Value().normalThicknessMaxMm);
-        thicken_->outcome.maxOffsetDeviationMm = std::max(thicken_->outcome.maxOffsetDeviationMm,built.Value().maxOffsetDeviationMm);
-        thicken_->outcome.rmsOffsetDeviationMm = std::max(thicken_->outcome.rmsOffsetDeviationMm,built.Value().rmsOffsetDeviationMm);
+        AddThickenMeasurements(thicken_->outcome,built.Value(),thicken_->built.empty());
         thicken_->built.push_back(built.Value().handle);
         thicken_->builtEdges.push_back(built.Value().edges);
         thicken_->builtThickness.push_back(built.Value().thicknessMm);
+        if(!input.toPlane)thicken_->builtWires.emplace(built.Value().handle.value,std::move(preparedWires));
         // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
-        const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle);
+        auto mesh = preparedMesh.Empty()?kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle)
+            :kachakacha::v2::base::Result<kachakacha::v2::modeling::ShapeMesh>::Success(std::move(preparedMesh));
         if (mesh.HasValue()) {
             lines.insert(lines.end(), mesh.Value().edges.begin(), mesh.Value().edges.end());
             thicken_->builtMesh.triangles.insert(thicken_->builtMesh.triangles.end(),
                 mesh.Value().triangles.begin(), mesh.Value().triangles.end());
+            thicken_->builtMeshes.emplace(built.Value().handle.value,std::move(mesh.Value()));
         }
     }
     thicken_->outcome.available = true;
@@ -369,7 +389,7 @@ void V2MainWindow::EndThicken(bool keepTool)
     V2GeometryJob::CancelPreview(this);
     thicken_->shelfShown = keepTool;
     if (keepTool) { thicken_->input.surfaces.clear(); thicken_->input.targetPlane = {}; thicken_->input.targetFaceBrep.clear(); }
-    ReleaseThickenPreview(thicken_->built);
+    ReleaseThickenPreview(*thicken_);
     thicken_->builtEdges.clear();
     thicken_->builtThickness.clear();
     thicken_->builtMesh = {};
@@ -411,9 +431,18 @@ void V2MainWindow::ConfirmThicken()
     const auto* choice=findChild<QCheckBox*>(QStringLiteral("thickenIndependent"));
     const bool independent=choice&&choice->isChecked();
     std::vector<std::string> independentParts;
-    auto cleanup=qScopeGuard([&]{for(const auto& id:independentParts){partShapes_.erase(id);partEdges_.erase(id);}});
+    std::vector<std::uint64_t> transferredMeshes;
+    auto cleanup=qScopeGuard([&]{for(const auto& id:independentParts){partShapes_.erase(id);partEdges_.erase(id);}
+        for(const auto handle:transferredMeshes)shapeMeshes_.erase(handle);});
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
+        const auto reuseMesh=[&]{
+            const auto mesh=thicken_->builtMeshes.find(built[index].value);
+            if(mesh!=thicken_->builtMeshes.end()&&!mesh->second.Empty()){
+                shapeMeshes_[mesh->first]=std::move(mesh->second);transferredMeshes.push_back(mesh->first);
+                thicken_->builtMeshes.erase(mesh);
+            }
+        };
         kachakacha::v2::domain::ThickenSurfaceDefinition definition;
         definition.surface = surfaces[index];
         definition.correctOpposite = !toPlane && thicken_->input.correctOpposite;
@@ -427,7 +456,7 @@ void V2MainWindow::ConfirmThicken()
             definition.placement = static_cast<int>(thicken_->input.placement);
         }
         if(kachakacha::v2::app::IncludesWires(outputMode)) {
-            const auto wires=kachakacha::v2::kernel::OutputBoundaryWires(built[index],
+            const auto wires=BoundaryWiresFor(*thicken_,built[index],
                 session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
             if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());return;}
             for(const auto& wire:wires.Value())if(AddPlainWire(wire,"厚みの境界").IsNil())return;
@@ -445,10 +474,12 @@ void V2MainWindow::ConfirmThicken()
             feature.outputs.push_back({"part",entity.id,entity.kind});
             const auto added=session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},label));
             if(!added.committed){ReportDiagnostics(added.diagnostics);return;}
+            reuseMesh();
             const auto key=entity.id.ToString();partShapes_[key]=built[index];partEdges_[key]=edges[index];independentParts.push_back(key);
         } else if(kachakacha::v2::app::IncludesSolid(outputMode)) {
             std::vector<EntityId> inputs{surfaces[index]};
             if(toPlane)inputs.push_back(thicken_->input.targetPlane);
+            reuseMesh();
             const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
                 std::move(definition), built[index], edges[index], label, inputs);
             if (madeId.IsNil()) return;

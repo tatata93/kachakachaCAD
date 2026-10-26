@@ -7,6 +7,7 @@
 #include <functional>
 class QWidget;
 class QString;
+namespace kachakacha::v2::modeling { struct ShapeMesh; }
 
 namespace V2GeometryJob {
 bool Active();
@@ -19,7 +20,9 @@ kachakacha::v2::base::Result<kachakacha::v2::kernel::ThickenedSolid> Thicken(
     QWidget* parent, kachakacha::v2::modeling::KernelShapeHandle source,
     double thickness, kachakacha::v2::fabrication::ThicknessPlacement placement,
     const std::optional<kachakacha::v2::modeling::WorkPlaneFrame>& plane,
-    const kachakacha::v2::geometry::GeometryTolerance& tolerance, bool interactivePreview = false, bool correctOpposite = false);
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance, bool interactivePreview = false, bool correctOpposite = false,
+    kachakacha::v2::modeling::ShapeMesh* displayMesh = nullptr, bool cachedOnly = false,
+    std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>* boundaryWires = nullptr);
 kachakacha::v2::base::Result<kachakacha::v2::kernel::BooleanBuildResult> Boolean(
     QWidget* parent, kachakacha::v2::kernel::BooleanOperation operation,
     kachakacha::v2::modeling::KernelShapeHandle first,

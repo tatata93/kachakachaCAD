@@ -4,6 +4,7 @@
 #include "kachakacha/modeling/ShapeMesh.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include <vector>
+#include <map>
 
 //! 厚みツールの欄・下見・実行状態を一緒に持つ。確定までは文書へ入れない。
 //! built のハンドルは V2ThickenCommands の取消・入力変更・確定で解放する。
@@ -16,6 +17,8 @@ struct V2ThickenPreviewState {
     std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> builtEdges;
     std::vector<double> builtThickness;
     kachakacha::v2::modeling::ShapeMesh builtMesh;
+    std::map<std::uint64_t,kachakacha::v2::modeling::ShapeMesh> builtMeshes;
+    std::map<std::uint64_t,std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> builtWires;
     // 3D選択に映した面の写し。差分を読むための前回値。
     std::vector<kachakacha::v2::base::EntityId> mirror;
     bool mirroring = false;

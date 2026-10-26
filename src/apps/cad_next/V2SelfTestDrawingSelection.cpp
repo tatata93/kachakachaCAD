@@ -4,7 +4,9 @@
 #include "V2SelfTestDeleteDialog.h"
 #include "V2ToolSelection.h"
 #include "V2LoopFacesTool.h"
+#include "V2LoopFacesDock.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/modeling/MeshPick.h"
 #include <QApplication>
 #include <QDialog>
 #include <QEvent>
@@ -15,12 +17,16 @@
 #include <QDir>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QLabel>
+#include <QPushButton>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QTimer>
 #include <QTemporaryDir>
 #include <QToolButton>
+#include <QWidget>
+#include <algorithm>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -50,6 +56,15 @@ void Key(V2Viewport& v,int key,Qt::KeyboardModifiers modifiers=Qt::NoModifier,QS
     v.setFocus();QKeyEvent press(QEvent::KeyPress,key,modifiers,text);
     QApplication::sendEvent(&v,&press);
     QKeyEvent release(QEvent::KeyRelease,key,modifiers);QApplication::sendEvent(&v,&release);
+}
+void PressButton(QPushButton& button)
+{
+    const QPointF point=button.rect().center();
+    for(const auto kind:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+        QMouseEvent event(kind,point,QPointF(button.mapToGlobal(point.toPoint())),Qt::LeftButton,
+            kind==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&button,&event);
+    }
 }
 bool Setup(V2MainWindow& w)
 {
@@ -229,6 +244,7 @@ bool SelectDuringModelTools(V2MainWindow& w){
         if(!Setup(w))return false;auto& v=w.Viewport();w.RunCommand("selection.activate");v.SetSelection({});w.RunCommand(command);
         const auto tool=w.Session().CurrentTool();const auto pending=w.PendingCommandLabel();
         auto* button=w.findChild<QToolButton*>("toolEditSelection");if(!button||!button->isVisible())return false;
+        button->click();
         Mouse(v,QEvent::MouseButtonPress,Pixel(v,{-20,20,0}),Qt::LeftButton,Qt::LeftButton,Qt::ControlModifier);
         Mouse(v,QEvent::MouseButtonRelease,Pixel(v,{-20,20,0}),Qt::LeftButton,Qt::NoButton,Qt::ControlModifier);
         if(!Explain("Ctrl selects an exact edge without feeding the modeling tool",V2ToolSelection::Active(v)&&v.Selection().ordered.size()==1
@@ -244,6 +260,108 @@ bool SelectDuringModelTools(V2MainWindow& w){
             &&w.Session().CurrentTool()==tool&&w.PendingCommandLabel()==pending))return false;
     }
     return true;
+}
+bool CtrlAddsFaceInputs(V2MainWindow& w){
+    if(!Setup(w))return false;
+    w.RunCommand("selection.activate");w.RunCommand("file.new");
+    const geometry::Vector3 points[]={{-30,-20,0},{30,-20,0},{0,30,0}};
+    for(int i=0;i<3;++i)
+        if(!w.Session().AddWire({geometry::CurveSegment::MakeLine(points[i],points[(i+1)%3]).Value()},false,"輪郭").committed)return false;
+    auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(160);
+    v.SetSelection({});w.RunCommand("surface.from_lines");QApplication::processEvents();
+    for(int i=0;i<3;++i)Click(v,(points[i]+points[(i+1)%3])*.5,Qt::ControlModifier);
+    if(!Explain("Ctrl adds to the face tool instead of entering deletion selection",!V2ToolSelection::Active(v)
+        &&v.Selection().entityIds.size()==3&&w.LoopFacesTool().Plan()&&w.LoopFacesTool().Plan()->faces.size()==1
+        &&w.LoopFacesTool().Dock()->FaceRowCount()==1))return false;
+    Key(v,Qt::Key_Return);
+    return Explain("Ctrl-selected contour commits a face",CountOfKind(w,domain::EntityKind::GuideSurface)==1);
+}
+bool ScratchSelectionFaceInput(V2MainWindow& w){
+    if(!Setup(w))return false;w.RunCommand("selection.activate");w.RunCommand("file.new");
+    const geometry::Vector3 points[]={{-30,-20,0},{30,-20,0},{0,30,0}};
+    app::SelectionSet input;
+    for(int i=0;i<3;++i){
+        const auto added=w.Session().AddWire({geometry::CurveSegment::MakeLine(points[i],points[(i+1)%3]).Value()},false,"輪郭");
+        if(!added.committed)return false;input.entityIds.push_back(added.createdEntityIds.front());
+    }
+    auto& v=w.Viewport();v.SetSelection({});w.RunCommand("surface.from_lines");
+    auto* toggle=w.findChild<QToolButton*>("toolEditSelection");toggle->click();
+    auto* use=w.findChild<QPushButton*>("toolSelectionUseInput");
+    auto* resume=w.findChild<QPushButton*>("toolSelectionResume");
+    auto* notice=w.findChild<QLabel*>("toolSelectionMessage");
+    auto* pages=w.findChild<QWidget*>("operationPages");
+    if(!Explain("scratch input is clearly paused and empty transfer is disabled",use&&resume&&notice&&notice->isVisible()
+        &&notice->text().contains(QStringLiteral("一時停止"))&&!use->isEnabled()&&pages&&!pages->isEnabled()))return false;
+    v.SetSelection(input);if(!use->isEnabled())return false;PressButton(*use);
+    if(!Explain("explicitly transferred wires rebuild the face rows",!V2ToolSelection::Active(v)&&!notice->isVisible()
+        &&w.LoopFacesTool().Plan()&&w.LoopFacesTool().Plan()->faces.size()==1&&w.LoopFacesTool().Dock()->FaceRowCount()==1))return false;
+    for(const int key:{Qt::Key_Escape,Qt::Key_Return,Qt::Key_Enter}){
+        toggle->click();v.SetSelection({});Key(v,key);
+        if(V2ToolSelection::Active(v)||v.Selection().entityIds!=input.entityIds||!w.LoopFacesTool().Plan()
+            ||w.LoopFacesTool().Dock()->FaceRowCount()!=1)return false;
+    }
+    toggle->click();v.SetSelection({});PressButton(*resume);
+    if(!w.LoopFacesTool().Plan()||w.LoopFacesTool().Dock()->FaceRowCount()!=1)return false;
+    Key(v,Qt::Key_Return);
+    if(!Explain("restored nonempty face inputs still commit",CountOfKind(w,domain::EntityKind::GuideSurface)==1))return false;
+    toggle->click();w.RunCommand("file.new");
+    return Explain("new document clears the suspended input state",!V2ToolSelection::Active(v)&&!notice->isVisible()&&pages->isEnabled());
+}
+bool OverlappingWindowInputs(V2MainWindow& w){
+    if(!Setup(w))return false;w.RunCommand("selection.activate");w.RunCommand("file.new");
+    using geometry::Vector3;using geometry::CurveSegment;
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    app::SelectionSet input;
+    const std::vector<std::vector<CurveSegment>> loops={
+        {line({-30,-20,0},{30,-20,0}),line({30,-20,0},{30,20,0}),line({30,20,0},{-30,20,0}),line({-30,20,0},{-30,-20,0})},
+        {line({-10,-5,0},{10,-5,0}),line({10,-5,0},{10,5,0}),line({10,5,0},{-10,5,0})},
+        {line({10,5,0},{-10,5,0}),line({-10,5,0},{-10,-5,0}),line({-10,-5,0},{9.997,-5,0})}};
+    for(const auto& curves:loops){
+        const auto added=w.Session().AddWire(curves,false,"重複投影の回帰");if(!added.committed)return false;
+        input.entityIds.push_back(added.createdEntityIds.front());
+    }
+    auto& v=w.Viewport();v.SetSelection(input);const auto original=w.Session().Scene().curves;
+    w.RunCommand("surface.from_lines");
+    if(!Explain("duplicate edge and dangling overlap keep one holed face",w.LoopFacesTool().Plan()
+        &&w.LoopFacesTool().Plan()->faces.size()==1&&w.LoopFacesTool().Dock()->FaceRowCount()==1))return false;
+    Key(v,Qt::Key_Return);
+    const auto made=w.Session().GetDocument().Snapshot().entities.back().id;bool hole=false,wall=false;
+    for(const auto& shape:v.ShapeViews())if(shape.entityId==made)for(const auto& triangle:shape.mesh.triangles){
+        hole=hole||modeling::RayHitsTriangle({0,0,10},{0,0,-1},triangle).has_value();
+        wall=wall||modeling::RayHitsTriangle({20,0,10},{0,0,-1},triangle).has_value();
+    }
+    const auto& after=w.Session().Scene().curves;
+    const bool unchanged=std::all_of(original.begin(),original.end(),[&](const auto& source){
+        const auto found=std::find_if(after.begin(),after.end(),[&](const auto& c){return c.entityId==source.entityId&&c.segmentId==source.segmentId;});
+        if(found==after.end()||found->segment.Kind()!=source.segment.Kind())return false;
+        for(const double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),source.segment.Evaluate(t))>1e-12)return false;
+        return true;
+    });
+    return Explain("window stays empty and original source intervals are unchanged",!hole&&wall
+        &&CountOfKind(w,domain::EntityKind::GuideSurface)==1&&unchanged
+        &&std::count_if(after.begin(),after.end(),[&](const auto& c){return std::find(input.entityIds.begin(),input.entityIds.end(),c.entityId)!=input.entityIds.end();})==static_cast<int>(original.size()));
+}
+bool NonredundantNetworkInputs(V2MainWindow& w,bool openHole){
+    if(!Setup(w))return false;w.RunCommand("selection.activate");w.RunCommand("file.new");
+    using geometry::Vector3;using geometry::CurveSegment;
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    std::vector<CurveSegment> curves={line({-30,-20,0},{30,-20,0}),line({30,-20,0},{30,20,0}),
+        line({30,20,0},{-30,20,0}),line({-30,20,0},{-30,-20,0})};
+    if(openHole){
+        const std::vector<CurveSegment> inner={line({-10,-5,0},{10,-5,0}),line({10,-5,0},{10,5,0}),
+            line({10,5,0},{-10,5,0}),line({-10,5,0},{-10,-4.995,0})};
+        curves.insert(curves.end(),inner.begin(),inner.end());
+    }else curves.push_back(line({0,-20,0},{0,20,0}));
+    const auto added=w.Session().AddWire(curves,false,"外周と内部線を同じワイヤーに保存");if(!added.committed)return false;
+    app::SelectionSet selected;selected.entityIds={added.createdEntityIds.front()};w.Viewport().SetSelection(selected);
+    w.RunCommand("surface.from_lines");
+    const auto& plan=w.LoopFacesTool().Plan();
+    if(openHole){
+        const bool gap=plan&&!plan->gaps.empty();
+        Key(w.Viewport(),Qt::Key_Return);
+        return Explain("an open inner boundary is not discarded or silently filled",gap&&CountOfKind(w,domain::EntityKind::GuideSurface)==0);
+    }
+    return Explain("a divider touching edge interiors still creates two regions",plan&&plan->faces.size()==2);
 }
 bool ExplicitSelectionKeepsDrawing(V2MainWindow& w){
     if(!Setup(w))return false;auto& v=w.Viewport();Click(v,{-40,-30,0});
@@ -263,6 +381,8 @@ bool ReferencePickSurvivesSelection(V2MainWindow& w){
     bool called=false;v.BeginElementPick([](const auto&){return true;},[&](auto){called=true;});
     auto* button=w.findChild<QToolButton*>("toolEditSelection");button->click();Click(v,{-20,20,0});
     if(!Explain("edit selection does not fill the pending reference role",!called&&v.ReferencePickPending()&&!v.Selection().entityIds.empty()))return false;
+    auto* use=w.findChild<QPushButton*>("toolSelectionUseInput");
+    if(!Explain("pending reference cannot accidentally replace tool inputs",use&&!use->isEnabled()))return false;
     button->click();if(!v.ReferencePickPending()||called)return false;
     Click(v,{-20,20,0});return Explain("the original reference role resumes on return",called);
 }
@@ -282,6 +402,11 @@ bool DocumentCaption(V2MainWindow& w){
 std::vector<SelfTestCase> DrawingSelectionCases()
 {
     return {
+        {"HP-UX-FACE-CTRL Ctrl selection remains face input and creates a face",CtrlAddsFaceInputs},
+        {"HP-UX-FACE-RESUME explicit input transfer and filled face resume",ScratchSelectionFaceInput},
+        {"HP-UX-FACE-BRANCH overlapping projected intervals retain the window hole",OverlappingWindowInputs},
+        {"HP-UX-FACE-DIVIDER compound wire retains an internal divider",[](auto& w){return NonredundantNetworkInputs(w,false);}},
+        {"HP-UX-FACE-OPEN compound wire does not fill an open window",[](auto& w){return NonredundantNetworkInputs(w,true);}},
         {"HP-UX-SELECT modeling tools retain inputs through selection Delete and history",SelectDuringModelTools},
         {"HP-UX-DRAW explicit selection preserves draft and empty Delete",ExplicitSelectionKeepsDrawing},
         {"HP-UX-REF reference role pauses during arbitrary selection",ReferencePickSurvivesSelection},

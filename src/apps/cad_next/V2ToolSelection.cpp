@@ -6,6 +6,10 @@
 #include "kachakacha/app/Selection.h"
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QLabel>
+#include <QPushButton>
+#include <QStackedWidget>
+#include <QVBoxLayout>
 #include <QObject>
 #include <QString>
 #include <QSignalBlocker>
@@ -23,6 +27,10 @@ public:
     kachakacha::v2::app::SelectionSet previous;
     kachakacha::v2::base::DocumentId document;
     QToolButton* button=nullptr;
+    QWidget* notice=nullptr;
+    QLabel* message=nullptr;
+    QPushButton* useSelection=nullptr;
+    QStackedWidget* pages=nullptr;
 };
 State* Of(const V2Viewport& view){return static_cast<State*>(view.findChild<QObject*>("toolEditSelectionState"));}
 void Show(V2Viewport& view,bool on){
@@ -32,6 +40,7 @@ void Show(V2Viewport& view,bool on){
         state->button->setText(on?QStringLiteral("ツールに戻る"):QStringLiteral("選択・削除"));
     }
     view.CancelBoxSelect();view.RefreshCursorShape();view.update();
+    Refresh(view);
 }
 }
 bool Active(const V2Viewport& view){return view.property(property).toBool();}
@@ -48,8 +57,39 @@ void Install(V2Viewport& view,QToolBar& bar){
     auto* button=state->button;button->setObjectName("toolEditSelection");button->setCheckable(true);
     button->setFocusPolicy(Qt::NoFocus);button->setText(QStringLiteral("選択・削除"));
     button->setMinimumWidth(button->fontMetrics().horizontalAdvance(QStringLiteral("ツールに戻る"))+16);
-    button->setToolTip(QStringLiteral("道具の入力と設定を保って、任意の線・面・部品を選択します。Deleteで削除、Ctrlで選び足し、もう一度押すかEscで道具へ戻ります。"));
+    button->setToolTip(QStringLiteral("道具の入力と設定を保って、任意の線・面・部品を選択します。Deleteで削除、Ctrlで選び足し、もう一度押すかEscで元の入力へ戻ります。選んだ対象を入力へ渡すには右の『選択を入力に使う』を押します。"));
     bar.addWidget(button);QObject::connect(button,&QToolButton::toggled,&view,[&view](bool on){if(on)Begin(view);else End(view);});
+    Refresh(view);
+}
+void Refresh(V2Viewport& view){
+    auto* state=Of(view);if(!state)return;
+    auto* host=dynamic_cast<V2OperationPanelHost*>(view.window()->findChild<QWidget*>("currentOperationPanel"));
+    if(!host)return; // The mode toolbar is built before the operation panels.
+    if(!state->notice){
+    state->notice=new QWidget(host);state->notice->setObjectName("toolSelectionNotice");
+    auto* layout=new QVBoxLayout(state->notice);layout->setContentsMargins(0,0,0,0);
+    state->message=new QLabel(state->notice);state->message->setObjectName("toolSelectionMessage");
+    state->message->setWordWrap(true);layout->addWidget(state->message);
+    state->useSelection=new QPushButton(QStringLiteral("選択を入力に使う"),state->notice);
+    state->useSelection->setObjectName("toolSelectionUseInput");layout->addWidget(state->useSelection);
+    auto* resume=new QPushButton(QStringLiteral("元の入力へ戻る"),state->notice);
+    resume->setObjectName("toolSelectionResume");layout->addWidget(resume);
+    state->pages=host->findChild<QStackedWidget*>("operationPages");
+    static_cast<QVBoxLayout*>(host->layout())->insertWidget(2,state->notice);
+    QObject::connect(resume,&QPushButton::clicked,&view,[&view]{End(view);});
+    QObject::connect(state->useSelection,&QPushButton::clicked,&view,[&view]{
+        const auto selected=view.Selection();End(view);view.SetSelection(selected);
+    });
+    }
+    const bool active=Active(view);state->notice->setVisible(active);
+    if(state->pages)state->pages->setEnabled(!active);
+    const bool picking=view.ReferencePickPending()||view.PickPending();
+    const bool canTransfer=!picking&&view.ToolPickActive()&&HasTool(view);
+    state->message->setText(QStringLiteral("選択・削除中（%1件）。ツールの入力は一時停止しています。")
+        .arg(static_cast<int>(view.Selection().entityIds.size()))+(!canTransfer
+            ?QStringLiteral("『元の入力へ戻る』を押してから対象や参照を指定してください。")
+            :QStringLiteral("対象を入力に使うか、元の入力へ戻って続けてください。")));
+    state->useSelection->setEnabled(active&&canTransfer&&!view.Selection().entityIds.empty());
 }
 void Begin(V2Viewport& view){
     if(Active(view))return;auto* state=Of(view);if(!state)return;

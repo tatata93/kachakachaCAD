@@ -1,6 +1,6 @@
 """Render the actual detailed CAD mesh with glazing, paint decals and studio light."""
 from pathlib import Path
-import argparse, json, math, sys
+import argparse, json, math, sys, hashlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'series115_print'))
 from render_preview import render
 
@@ -31,14 +31,21 @@ def main():
            ('assistant-side',dict(camera=(0,1,0),size=(2700,650))),
            ('top',dict(camera=(0,0,1),size=(2700,650))),('exploded',dict(explode=True,size=(2600,1400)))]
     if a.diagnostic_front:views=views[1:4]
+    written=[]
     for name,kw in views:
         render(a.exports,report,**options,**kw).save(a.output/(name+'.png'));print(name,flush=True)
+        written.append(name+'.png')
     if not a.diagnostic_front:
         ids={p['id'] for p in report['parts'] if '/10 台車' in p['groupPath'] and '/前台車' in p['groupPath']};assert ids
         render(a.exports,report,camera=(-.4,-.9,.35),size=(1400,950),part_ids=ids,studio=True,surface_color=wheel_paint).save(a.output/'bogie.png')
+        written.append('bogie.png')
         if design.get('bogieComponent'):
             for name,camera in [('bogie-side',(0,-1,0)),('bogie-underside',(-.25,-.65,-.65))]:
                 render(a.exports,report,camera=camera,size=(1500,1000),part_ids=ids,studio=True,surface_color=wheel_paint).save(a.output/(name+'.png'))
+                written.append(name+'.png')
+    sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+    (a.output/'render-proof.json').write_text(json.dumps(dict(nativeReportSha256=sha(a.exports/'print-parts.json'),
+        designSha256=sha(a.design),rendererSha256=sha(Path(__file__)),imagesSha256={name:sha(a.output/name) for name in written}),indent=2),encoding='utf-8',newline='\n')
 
 
 if __name__=='__main__':main()

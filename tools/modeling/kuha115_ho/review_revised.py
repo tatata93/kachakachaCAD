@@ -87,6 +87,13 @@ def main():
             assert design['contours']['addedPointChecks']==473
             assert len(design['contours']['doorSections'])==14
             expected_points+=473
+        if design.get('appearance'):
+            from appearance import REVISION as APPEARANCE_REVISION
+            ap=design['appearance'];assert ap['revision']==APPEARANCE_REVISION and ap['passNumber']==5
+            assert ap['skirtSetbackMm']==2. and ap['frontFittingsFollowFold'] and ap['rectangularPassengerHandles']
+            assert ap['passengerWindow']==dict(bottomMm=26.1,heightMm=10.5)
+            assert ap['sideWindowLoweringMm']==2.4 and ap['jumperSocketCount']==5
+            expected_points+=6+48+50+10
         assert len(r['pointChecks'])==len(design['pointChecks'])==expected_points
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
@@ -97,6 +104,15 @@ def main():
             assert all(c['entity'] in expected for c in design['contours']['doorSections'])
             assert len(design['keyParts']['integratedFloorApron'])==(2 if split else 1)
             assert set(design['keyParts']['integratedFloorApron'])<=expected
+        if design.get('appearance'):
+            checks=r['pointChecks']
+            for label,count in [('折妻に沿う手掛け中央',4),('折妻に沿うステップ中央',2),
+                ('客扉指掛けの凹みと残る肉厚',48),('側窓の旧上端と新下端',46),
+                ('側面行先表示の板と枠',4),('ジャンパ栓箱と曲管の形状',10)]:
+                assert sum(c['label']==label for c in checks)==count
+            assert len(design['keyParts']['sideDestination'])==2
+            assert set(design['keyParts']['sideDestination'])<=expected
+            assert len(design['keyParts']['jumpers'])==5 and set(design['keyParts']['jumpers'])<=expected
         if design.get('attachmentRevision'):
             contacts(design,r)
             assert not all_design['attachmentChecks'] and not all_report['attachmentChecks']
@@ -211,6 +227,10 @@ def main():
     result['sourceFilesSha256']={p:sha(repo/p) for p in ['tools/modeling/kuha115_ho/revised.py',
         'tools/modeling/kuha115_ho/build.py','tools/modeling/native_kcd.py','tools/modeling/kuha115_ho/fit_details.py',
         'tools/modeling/kuha115_ho/contour_details.py',
+        'tools/modeling/kuha115_ho/appearance.py','tools/modeling/kuha115_ho/inspect_appearance.py',
+        'tools/modeling/kuha115_ho/audit_appearance_geometry.py',
+        'tools/modeling/kuha115_ho/validate_appearance.py','tools/modeling/kuha115_ho/assemble_appearance.py',
+        'tools/modeling/kuha115_ho/test_appearance_delivery.py',
         'tools/modeling/kuha115_ho/review_revised.py','tools/modeling/kuha115_ho/assembly_candidates.py',
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',
@@ -220,6 +240,19 @@ def main():
         'tools/modeling/kuha115_ho/test_bogie_library.py','tools/modeling/kuha115_ho/desktop_model.py',
         'tools/modeling/kuha115_ho/render_contours.py','tools/modeling/kuha115_ho/test_contour_geometry.py',
         'tools/modeling/kuha115_ho/assemble_contoured.py']}
+    if load(w/('candidate'+run)/'design.json').get('appearance'):
+        evidence={}
+        for prefix in ['', 'split-']:
+            suffix='-split' if prefix else ''
+            paths=[w/('candidate'+run)/('kuha115-ho80-revised'+suffix+'.kcd2'),
+                w/('candidate'+run)/('design'+suffix+'.json'),w/(prefix+'native'+run)/'cad-serialized.kcd2']
+            for directory in [prefix+'exports'+run,prefix+'all-pairs'+run]:paths+=list((w/directory).glob('*'))
+            for p in paths:
+                if p.is_file():evidence[p.relative_to(w).as_posix()]=sha(p)
+        for directory in ['reopen'+run,'reopen-geometry'+run,'desktop'+run]:
+            for p in (w/directory).glob('*.json*'):
+                if p.is_file():evidence[p.relative_to(w).as_posix()]=sha(p)
+        result['evidenceSha256']=evidence
     (w/'review-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     print(json.dumps(result,ensure_ascii=True,indent=2))
 

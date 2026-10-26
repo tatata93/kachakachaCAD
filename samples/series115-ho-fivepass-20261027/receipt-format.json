@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "scope": "LF-only newline normalization; JSON values unchanged.",
+  "changes": [
+    {
+      "file": "tr62-native-validation.json",
+      "beforeSha256": "b1ea81e3fa2b25bd66a59fb535d590c65aebfc2c10b6b0c9fee7e7466a2b533b",
+      "afterSha256": "6895695b3ec49df23d07c0f6504a843676bb3a2bf001564f36857145774dda80"
+    },
+    {
+      "file": "round00/source.json",
+      "beforeSha256": "d40dc58661dfe84e73b11a91a7e0a2fca659113aeb1f7fa7e5d8b26561e2557c",
+      "afterSha256": "1d84b096251342a0ba2cb685753076bdbfe66f18bea1af2e23cc345f80d5af3c"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "rejected": [
+    "a consistently stale candidate pair list",
+    "a changed saved group",
+    "a changed saved part visibility",
+    "zero visible parts",
+    "stale point geometry with a retained passed flag",
+    "missing attachment evidence",
+    "failed attachment evidence",
+    "stale attachment evidence"
+  ],
+  "reviewResultSha256": "9d461813360e6a6f9c9860224eed8276c5a5a0a7c05469243f2a0fc8feaa83be"
+}

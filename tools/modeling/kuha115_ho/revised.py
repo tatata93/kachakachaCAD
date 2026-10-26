@@ -88,6 +88,8 @@ def body(m,root):
         return m.joined('外板' if inset==0 else '内側空間',[lower,upper],g)
     a=m.boolean('中空車体・裾絞り',hull(0,13.8,JOINT),[hull(WALL,13.6,JOINT+.15)],1,g)
     m.layout=window_layout()
+    from appearance import lower_side_windows
+    lower_side_windows(m)
     for sign,label in [(-1,'運転士側'),(1,'助手側')]:
         profiles=[]
         for j,w in enumerate(m.layout[sign]):
@@ -155,29 +157,33 @@ def side_details(m,root):
             else:crew_glass,crew_frame=pane,frame
         for index,cx in enumerate(DOORS):
             for half in [-1,1]:
+                from appearance import enabled,passenger_window,passenger_handle
+                wz,wh=passenger_window(m)
                 x=cx-7.98 if half<0 else cx+.08;pos=sign*(SIDE-.28)
                 o=m.rounded('扉葉',(x,pos,FLOOR+.12),(1,0,0),(0,0,1),7.90,22.5,.3,doors)
-                q=m.rounded('扉窓',(x+1.25,pos,27.7),(1,0,0),(0,0,1),5.4,8.9,.8,doors)
+                q=m.rounded('扉窓',(x+1.25,pos,wz),(1,0,0),(0,0,1),5.4,wh,.8,doors)
                 if getattr(m,'contoured',False):
                     from contour_details import door
                     # A broad mask includes the shifted lower part; its outline
                     # and window remain the same X/Z rounded curves.
                     m.entities[o]['visibility']='hidden';m.entities[q]['visibility']='hidden'
                     o=m.rounded('裾絞り扉外形マスク',(x,sign*(SIDE+.4),FLOOR+.12),(1,0,0),(0,0,1),7.90,22.5,.3,doors)
-                    q=m.rounded('裾絞り扉窓マスク',(x+1.25,sign*(SIDE+.4),27.7),(1,0,0),(0,0,1),5.4,8.9,.8,doors)
+                    q=m.rounded('裾絞り扉窓マスク',(x+1.25,sign*(SIDE+.4),wz),(1,0,0),(0,0,1),5.4,wh,.8,doors)
                     leaf=door(m,label+f'客扉{index+1}葉{half}',doors,sign,x,7.90,[o,q],FLOOR+.12,22.5)
                 else:
                     leaf=m.finish(m.extrude(label+f'客扉{index+1}葉{half}',[o,q],(0,-sign,0),.55,doors),thickness=.55)
+                if enabled(m,3):leaf=passenger_handle(m,leaf,doors,sign,x,half)
                 m.keyparts['doors'].append(leaf);m.clear(m.finished['body'],leaf,'客扉と車体')
-                o=m.rounded('客扉ゴム外',(x+1.1,sign*(SIDE-.01),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,doors)
-                q=m.rounded('客扉ゴム内',(x+1.48,sign*(SIDE-.01),27.93),(1,0,0),(0,0,1),4.94,8.44,.57,doors)
+                o=m.rounded('客扉ゴム外',(x+1.1,sign*(SIDE-.01),wz-.15),(1,0,0),(0,0,1),5.7,wh+.3,.95,doors)
+                q=m.rounded('客扉ゴム内',(x+1.48,sign*(SIDE-.01),wz+.23),(1,0,0),(0,0,1),4.94,wh-.46,.57,doors)
                 rubber=m.finish(m.extrude('客扉Hゴム',[o,q],(0,-sign,0),.27,doors),'黒',.27)
                 m.clear(leaf,rubber,'客扉と窓Hゴム')
-                p=m.rounded('客扉裏ガラス',(x+1.1,sign*(SIDE-.83),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,glasses)
+                p=m.rounded('客扉裏ガラス',(x+1.1,sign*(SIDE-.83),wz-.15),(1,0,0),(0,0,1),5.7,wh+.3,.95,glasses)
                 pane=m.finish(m.extrude('客扉透明板',[p],(0,-sign,0),.4,glasses),'透明',.4);m.keyparts['glasses'].append(pane)
                 contact(m,pane,leaf,'客扉ガラスと扉裏の接着');contact(m,rubber,leaf,'客扉Hゴムと扉表の接着')
-                handle=m.ring('半自動手掛け',(x+(6.9 if half<0 else 1),sign*(SIDE-.1),25.5),(0,sign,0),.30,.16,.15,doors)
-                m.finish(handle,'アルミ銀',.15)
+                if not enabled(m,3):
+                    handle=m.ring('半自動手掛け',(x+(6.9 if half<0 else 1),sign*(SIDE-.1),25.5),(0,sign,0),.30,.16,.15,doors)
+                    m.finish(handle,'アルミ銀',.15)
             step_side=SIDE
             if getattr(m,'contoured',False):
                 from contour_details import shrink
@@ -215,6 +221,8 @@ def side_details(m,root):
         # Max envelope 36.875 mm includes these gutters.
         gutter=m.finish(m.box(label+'雨樋',8,min(sign*18.4375,sign*18.125),38.7,L-8,.3125,.35,doors),thickness=.35)
         m.finished['gutter'+str(sign)]=gutter
+    from appearance import side_destination
+    side_destination(m,doors)
 
 
 def front(m,root):
@@ -307,10 +315,13 @@ def front(m,root):
             upper=m.box('シャッター上部覆い',xx-.58,side*y-.7,26.55,.40,1.4,.7,g)
             m.joined('丸形タイフォン覆い',[cover,upper],g,'アドバンスブルー')
             m.finish(m.tube('シャッター中央線',(xx-.79,side*y,24.55),(xx-.79,side*y,26.8),.045,g),'黒')
-        for z,w in [(28.55,6.8),(21.4,1.7)]:
-            cy=side*(10.7 if w>3 else 9.7)
-            m.finish(m.tube('前面横手掛け',(-.14,cy-w/2,z),(-.14,cy+w/2,z),.13,g),'アドバンスブルー' if z>26 else 'フォギーグレー')
-        m.finish(m.box('前面裾ステップ',.0,side*12.3-2.7,17.0,.60,5.4,.2,g),'アルミ銀')
+        from appearance import enabled,front_fittings
+        if enabled(m,2):front_fittings(m,g,side)
+        else:
+            for z,w in [(28.55,6.8),(21.4,1.7)]:
+                cy=side*(10.7 if w>3 else 9.7)
+                m.finish(m.tube('前面横手掛け',(-.14,cy-w/2,z),(-.14,cy+w/2,z),.13,g),'アドバンスブルー' if z>26 else 'フォギーグレー')
+            m.finish(m.box('前面裾ステップ',.0,side*12.3-2.7,17.0,.60,5.4,.2,g),'アルミ銀')
     # Rear door deliberately uses its own, unconfirmed prototype shape.
     rg=m.group('後妻｜貫通扉・渡り板',g)
     o=m.rounded('後妻扉輪郭',(L+.1,-4.3,FLOOR+.12),(0,1,0),(0,0,1),8.6,22.7,.5,rg)
@@ -529,13 +540,15 @@ def chassis(m,root):
         o=m.poly('スカート外周',pts,g);skirt=m.extrude('スカート素材',[o],(1,0,0),.75,g)
     q=m.rounded('連結器切欠',(-2,-3.1,10.0),(0,1,0),(0,0,1),6.2,4.6,.5,g)
     skirt=m.cut('スカート 中央下縁連続',skirt,[q],(1,0,0),5,g,'床下グレー')
+    from appearance import shift_skirt,skirt_setback
+    skirt=shift_skirt(m,skirt,g);skirt_dx=skirt_setback(m)
     m.finished['skirt']=skirt
     if m.detailed:
         for side in [-1,1]:
-            m.points.extend([dict(entity=skirt,label='スカートの下絞り内側',point=[.85,side*15.4,7.0],expectedInside=True),
-                             dict(entity=skirt,label='スカート下絞りの外側は空間',point=[1.2,side*16.7,7.0],expectedInside=False)])
+            m.points.extend([dict(entity=skirt,label='スカートの下絞り内側',point=[.85+skirt_dx,side*15.4,7.0],expectedInside=True),
+                             dict(entity=skirt,label='スカート下絞りの外側は空間',point=[1.2+skirt_dx,side*16.7,7.0],expectedInside=False)])
             for y in [6,10]:
-                m.points.append(dict(entity=skirt,label='ジャンパ栓の背後に開いたスカート上部',point=[-.3,side*y,12],expectedInside=False))
+                m.points.append(dict(entity=skirt,label='ジャンパ栓の背後に開いたスカート上部',point=[-.3+skirt_dx,side*y,12],expectedInside=False))
     for front,x in [(True,-3.125),(False,L+2.325)]:
         head=m.box('連結器頭',x,-1.7 if m.detailed else -1.35,10.35 if m.detailed else 10.6,
                    1.2 if m.detailed else .85,3.4 if m.detailed else 2.7,2.3 if m.detailed else 1.8,g)
@@ -549,10 +562,14 @@ def chassis(m,root):
         mount=m.box('連結器支持台',2.8 if front else L-3.8,-1,11.4,1,2,2.25,g)
         m.joined('密着連結器・取付座',[head,stem,mount],g,'床下グレー')
     for y in [-7,-4.4,4.4,7,9.2]:
-        socket=m.cylinder('前面ジャンパ栓',(-.8,y,12.0),(-1,0,0),.50,.5,g)
-        pipe=m.tube('ジャンパ管',(-1.2,y,11.7),(-1.1,y+.7,9.7),.15,g)
+        from appearance import enabled,jumper as appearance_jumper
+        if enabled(m,5):
+            appearance_jumper(m,g,y,skirt)
+            continue
+        socket=m.cylinder('前面ジャンパ栓',(-.8+skirt_dx,y,12.0),(-1,0,0),.50,.5,g)
+        pipe=m.tube('ジャンパ管',(-1.2+skirt_dx,y,11.7),(-1.1+skirt_dx,y+.7,9.7),.15,g)
         bits=[socket,pipe]
-        if m.detailed:bits.append(m.tube('ジャンパ管のスカート取付足',(-1.1,y+.7,9.7),(-.54,y+.7,9.7),.18,g))
+        if m.detailed:bits.append(m.tube('ジャンパ管のスカート取付足',(-1.1+skirt_dx,y+.7,9.7),(-.54+skirt_dx,y+.7,9.7),.18,g))
         jumper=m.joined('前面ジャンパ栓・管・取付足一体' if m.detailed else '前面ジャンパ栓・管一体',bits,g,'床下グレー')
         if m.detailed:
             m.boolean('取付足をスカート前面で合わせる',jumper,[skirt],1,g,'床下グレー')
@@ -733,6 +750,9 @@ def manifest(m):
     if getattr(m,'contoured',False):
         from contour_details import manifest as contour_manifest
         data['contours']=contour_manifest(m)
+    if getattr(m,'appearance_pass',0):
+        from appearance import manifest as appearance_manifest
+        data['appearance']=appearance_manifest(m)
     if m.detailed:
         from bogie_details import REVISION
         data['bogieRevision']=REVISION
@@ -789,9 +809,12 @@ def main():
     ap.add_argument('--detailed',action='store_true',help='Use photo-reviewed front, roof equipment and bogie details')
     ap.add_argument('--bogie-component',type=Path,help='Exact separately validated native bogie component; its editable source is shipped alongside')
     ap.add_argument('--contoured',action='store_true',help='Continuous roof casing, floor-integrated skirt and tapered doors')
+    ap.add_argument('--appearance-pass',type=int,choices=range(1,6),help='Cumulative researched appearance revision 1 through 5')
     a=ap.parse_args();a.output.mkdir(parents=True,exist_ok=False)
     if a.contoured and not a.detailed:ap.error('--contoured requires --detailed')
+    if a.appearance_pass and not a.contoured:ap.error('--appearance-pass requires --contoured')
     m=Revised(a.detailed);m.bogie_library=a.bogie_component;m.contoured=a.contoured
+    m.appearance_pass=a.appearance_pass or 0
     root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
     if m.detailed:

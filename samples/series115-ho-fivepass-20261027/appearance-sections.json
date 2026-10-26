@@ -1,0 +1,170 @@
+{
+  "passed": true,
+  "scope": "Nine comparable STL ray sections; section planes are deliberately different heights.",
+  "baseline": {
+    "reportSha256": "e11560935a04d4d3b202c86711835ca26c12a2723a231614b3aadac1f736fa0d",
+    "designSha256": "d5945c94a6efa5eab2a0df314a204a1ee76d095e08a4cbf6f59c4210dfd285fd",
+    "meshSha256": {
+      "part-124-6277a696.stl": "a6d859edaa2a75d4fdac20af827587e9855da5968bc7b3c8671c5507d235db11",
+      "part-232-28d65ebb.stl": "de8b416e6cd2dd6c1ad49ef217fb75d9a1d56e456168d0aa0d53aeaa6fdf9c7a"
+    },
+    "sections": [
+      {
+        "yMm": -14.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.2296417921782752,
+        "skirtFrontXMm": -0.03295458929020978,
+        "setbackMm": -1.262596381468485
+      },
+      {
+        "yMm": -12.7,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.0400022187091211,
+        "skirtFrontXMm": -0.549999936060488,
+        "setbackMm": -1.5900021547696093
+      },
+      {
+        "yMm": -10.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.6605419393389764,
+        "skirtFrontXMm": -0.550000011920929,
+        "setbackMm": -1.2105419512599054
+      },
+      {
+        "yMm": -6.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.09837856249431774,
+        "skirtFrontXMm": -0.550000011920929,
+        "setbackMm": -0.6483785744152467
+      },
+      {
+        "yMm": 0.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.0,
+        "skirtFrontXMm": -0.550000011920929,
+        "setbackMm": -0.550000011920929
+      },
+      {
+        "yMm": 6.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.09837856249431765,
+        "skirtFrontXMm": -0.550000011920929,
+        "setbackMm": -0.6483785744152466
+      },
+      {
+        "yMm": 10.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.6605419393389765,
+        "skirtFrontXMm": -0.550000011920929,
+        "setbackMm": -1.2105419512599056
+      },
+      {
+        "yMm": 12.7,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.0400022187091211,
+        "skirtFrontXMm": -0.549999936060488,
+        "setbackMm": -1.5900021547696093
+      },
+      {
+        "yMm": 14.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.2296417921782752,
+        "skirtFrontXMm": -0.03295458929020978,
+        "setbackMm": -1.262596381468485
+      }
+    ]
+  },
+  "candidate": {
+    "reportSha256": "1f883668bfc8dbcc9d335c7cc2ee16da42d1d8e8036e3d1174ab03ce4cdcf583",
+    "designSha256": "13b748b93082c9b55449406deff61883cb333beda110bf427ce77239270dbc42",
+    "meshSha256": {
+      "part-126-9fc673b8.stl": "9ecd21f79bc5b6a8ad9191876c32c9691972329808535615f3cc459230157677",
+      "part-234-0557de7f.stl": "fda3b23542c61a247904ec2e0b5bf88198d6f57836aac5f7d252fdd48346922e"
+    },
+    "sections": [
+      {
+        "yMm": -14.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.2296417921782752,
+        "skirtFrontXMm": 1.9670454110380793,
+        "setbackMm": 0.7374036188598041
+      },
+      {
+        "yMm": -12.7,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.0400022187091211,
+        "skirtFrontXMm": 1.450000123544148,
+        "setbackMm": 0.40999790483502685
+      },
+      {
+        "yMm": -10.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.6605419393389764,
+        "skirtFrontXMm": 1.4500000476837158,
+        "setbackMm": 0.7894581083447394
+      },
+      {
+        "yMm": -6.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.09837856249431774,
+        "skirtFrontXMm": 1.4500000476837158,
+        "setbackMm": 1.3516214851893982
+      },
+      {
+        "yMm": 0.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.0,
+        "skirtFrontXMm": 1.4500000476837158,
+        "setbackMm": 1.4500000476837158
+      },
+      {
+        "yMm": 6.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.09837856249431765,
+        "skirtFrontXMm": 1.4500000476837158,
+        "setbackMm": 1.3516214851893982
+      },
+      {
+        "yMm": 10.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 0.6605419393389765,
+        "skirtFrontXMm": 1.4500000476837158,
+        "setbackMm": 0.7894581083447393
+      },
+      {
+        "yMm": 12.7,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.0400022187091211,
+        "skirtFrontXMm": 1.450000123544148,
+        "setbackMm": 0.40999790483502685
+      },
+      {
+        "yMm": 14.0,
+        "bodyZMm": 14.0,
+        "skirtZMm": 7.0,
+        "bodyFrontXMm": 1.2296417921782752,
+        "skirtFrontXMm": 1.9670454110380793,
+        "setbackMm": 0.7374036188598041
+      }
+    ]
+  },
+  "minimumSetbackMm": 0.40999790483502685,
+  "limitations": "Photo-estimated setback, not measured real-car mounting geometry; STL chord error applies."
+}

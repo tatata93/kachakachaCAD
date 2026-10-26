@@ -1,0 +1,80 @@
+{
+  "passed": true,
+  "scope": "Final native export; mesh/all-pairs/save gates pending.",
+  "passNumber": 5,
+  "sourceModelSha256": "66278bdb2123c8b3a91fba933326a8a428fece4937b3ee965fc575d5f6741296",
+  "designSha256": "13b748b93082c9b55449406deff61883cb333beda110bf427ce77239270dbc42",
+  "cadExeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+  "preparedToken": "9b949d8e-1840-41a8-b517-86d2149e3360",
+  "nativeSeconds": 117.20299999997951,
+  "seconds": 263.2316699028015,
+  "parts": 234,
+  "points": 1063,
+  "contacts": 119,
+  "specifiedInterferenceChecks": 169,
+  "sourceFilesSha256": {
+    "appearance.py": "7d85e5c8492bdbcec4fb45c479049b2cecb782a695c66e0eadbe6c6a746c96d2",
+    "assemble_appearance.py": "70ce9ed6d7919732c5976665704e131ab05bf4a3afb89f4218ab22601dd47f07",
+    "assemble_contoured.py": "fa7af96d0ad7ceebe1b361e55c336b8eb9d384f6ace240c19553b2c34a0b10e3",
+    "assemble_delivery.py": "48ac7547bf343986ca7d4c7782050777ce4a62c398675e0b0c73fd2bfb955f89",
+    "assemble_detailed.py": "72a05b44eddea44a53aceaa584ce298e1b8b1f02d21d635869527f7689b8fff9",
+    "assemble_fit.py": "efe1e23971fbc431f80584119d8d1e012663f723c4ea2b228e06f025179eb29b",
+    "assemble_revised.py": "75e8ff7422eb47afe4f5a4392e22951a6ed4b183bbc1f17a613d1b198fc3d7fa",
+    "assembly_candidates.py": "73b69af6d863eeade9bc3c15c562d8ed3ed88ffe8e7855abe5d0df563a240d32",
+    "audit_appearance_geometry.py": "f664f31584b6a423a57180945f5e887b521220b9f3f9c305875cb37c053943e8",
+    "audit_report.py": "775e997ffb0897b0ed92d7a2672303a723c03b39fda9c09fa941ac095a3bebc4",
+    "bogie_details.py": "532f39769bc2860cf1e2690913c5b6eeb37230e83c541a363637bd7a1607a881",
+    "bogie_library.py": "82f5c1c9709fd7f613db056bdab6dbf124ae1cb8ca5a1ac43ab0badaa473ea96",
+    "build.py": "c8d9322a6f67b11683036912d555d1fb49717aa7cee181faf5cd98f78acb94d4",
+    "contour_details.py": "76fec7afe27466da3e185cafc34c13d4d3fe6a172c8fb411fc3c9c72af812543",
+    "desktop_model.py": "a2096d886a6134705914560158290b851ed5826293d97545e2b6cfdf2296a755",
+    "detail_parts.py": "998386a83efc113e7d791958a69b4ee3e881721a0b84dd6093155ee793a89a3f",
+    "fit_details.py": "4f09f6aa9090c1662b8e6ae4a4d92433154f21608579333f50d2181f16c2eb09",
+    "front_roof.py": "e4a1f47d64a06fe75eece0cc39936015fb3f4aca22ed02089f38564ed6c860f5",
+    "inspect_appearance.py": "30826f4975f604b920a68e0b8cb513ad87d8c9fc5b6b559ab0e4bf23424c078c",
+    "render.py": "b816268c2e0a9658ef20869b1fb4f50496911f53383c4eb296a64e25fd298fe7",
+    "render_contours.py": "66355126c18f69b39f4496a12ceb4d02d3df3a706b5ed6b72b64e818fa9d97a2",
+    "render_detailed.py": "af809c2ee7e22aafc6f5258728253ed95ef61a907e1944f0879e57c0f004c433",
+    "render_fit.py": "cc9cf9a25d22079cd7f5290b25be342b901cfb17e12bf3557bf647cec4f15e4c",
+    "render_revised.py": "4186002feeaff69f477b32a851e60b915c4f414529d2f9e5e7f3656f38e13799",
+    "review.py": "8993d157970236d8a7cb2608b45291a9007888de8093ee039115bbf022c9685c",
+    "review_revised.py": "8b6bf1ae7f495fc79cd0756b2ad47c506c8a8f0d3ececf580153b173f138fbfc",
+    "revised.py": "17c2420db46731843f37c823bfbdc2fac4030eb2142be81f5b9f91ea13ec7075",
+    "standalone_bogie.py": "df480ad134aefa1ac43c14f28596d2b4144903de094db1b73f7f926e137cf380",
+    "test_attachment_fit.py": "94191d1bef7eaf4776b035e2cd0afed18e320f43305264722fcff88f0503453b",
+    "test_bogie_library.py": "70b08d1474dde000921a30231b50647a28bfd2af1cbf01d416f2341bd60b35db",
+    "test_contour_geometry.py": "f5e6e7f0e3231a33ff4db41027290b9368b5e85f6a685b15517c68e0401867ba",
+    "test_revised_review.py": "5b0707d973e8f3ad8604153870cdfa4a81bb9ce46105c54b78fbbe90d7e1569e",
+    "validate_appearance.py": "2d426b44069bc3fbe0602f92c5f2bfd7b8e5f6f95a53937b00fae93d82b987ad"
+  },
+  "metadataOnlyCorrection": {
+    "changes": [
+      {
+        "file": "candidate05/design.json",
+        "beforeSha256": "847f8900bae2c6249f887df3c21908c9cf3e571eec6055bd7424c38f600c0028",
+        "afterSha256": "13b748b93082c9b55449406deff61883cb333beda110bf427ce77239270dbc42",
+        "field": "appearance.observations",
+        "previous": [
+          "Side profile and oblique original photos; no inferred absolute photo measurements."
+        ],
+        "replacement": [
+          "Relative proportions estimated from original photos; local dimensions are model design estimates, not measured prototype dimensions."
+        ]
+      },
+      {
+        "file": "candidate05/design-split.json",
+        "beforeSha256": "803fb10c5038cb0f009caefdef9b8a2de64e8fe0e28251af5f30432b494b338d",
+        "afterSha256": "29f93f6c5f4aaf46f6a6b35d4b9634e5f9620c034868bf7d66aa3c3a16476625",
+        "field": "appearance.observations",
+        "previous": [
+          "Side profile and oblique original photos; no inferred absolute photo measurements."
+        ],
+        "replacement": [
+          "Relative proportions estimated from original photos; local dimensions are model design estimates, not measured prototype dimensions."
+        ]
+      }
+    ],
+    "geometryBytesUnchanged": true,
+    "timeUtc": "2026-10-26T16:48:17.905297+00:00"
+  }
+}

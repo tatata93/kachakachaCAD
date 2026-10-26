@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "rejected": [
+    "changed verified CAD/export bytes",
+    "missing required overview image",
+    "changed rendered image bytes"
+  ],
+  "reviewResultSha256": "9d461813360e6a6f9c9860224eed8276c5a5a0a7c05469243f2a0fc8feaa83be"
+}

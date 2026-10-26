@@ -1,0 +1,872 @@
+{
+    "assemblyChecks": [
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と床板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "23ea6e31-a3b1-5eb6-9dd0-a8791c4ca83d"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と輪軸",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "92115f81-313b-5ed9-a172-f310b51fb8ef"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と輪軸",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "bf67b911-6361-5745-9a70-8f59a7ac32db"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と着脱輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "81518a4e-857d-5b0b-a4ba-e86c7c23e040"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と着脱輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "f8c8f569-8ba4-5b80-9367-f0e55d511655"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と着脱輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "87fb942c-4bd3-591f-a3ad-75b8a7b0da1c"
+        },
+        {
+            "first": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "label": "前台車と着脱輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "00169639-df5a-58e1-a348-60c8b072cb92"
+        },
+        {
+            "first": "416cc002-198d-5cd6-a450-d8e7afdd4e42",
+            "label": "前プロウと輪軸",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "92115f81-313b-5ed9-a172-f310b51fb8ef"
+        },
+        {
+            "first": "416cc002-198d-5cd6-a450-d8e7afdd4e42",
+            "label": "前プロウと輪軸",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "bf67b911-6361-5745-9a70-8f59a7ac32db"
+        }
+    ],
+    "cadShapes": 214,
+    "checkOnly": false,
+    "chordMm": 0.025,
+    "failures": 0,
+    "parts": [
+        {
+            "bounds": [
+                18.6249999,
+                -13.7500001,
+                4.300000000000001,
+                52.6250001,
+                13.750000099999998,
+                13.5
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前心皿穴を貫通",
+            "solids": 1,
+            "sourceIntegrationError": 2.2494319821578935e-10,
+            "step": "part-001-c1926b87.step",
+            "stepIntegrationError": 8.340042049884997e-10,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 1.9309195977257332e-05,
+            "stl": "part-001-c1926b87.stl",
+            "valid": true,
+            "volumeMm3": 887.8519496769123,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                16.85,
+                -11.85,
+                -0.27500000000000036,
+                28.15,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.286414925192506e-15,
+            "step": "part-002-92115f81.step",
+            "stepIntegrationError": 2.2864149251925258e-15,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 8.640199666842818e-12,
+            "stl": "part-002-92115f81.stl",
+            "valid": true,
+            "volumeMm3": 593.4082201034497,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                43.1,
+                -11.85,
+                -0.27500000000000036,
+                54.4,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.286414925192506e-15,
+            "step": "part-003-bf67b911.step",
+            "stepIntegrationError": 2.2864149251925258e-15,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 8.753886504564434e-12,
+            "stl": "part-003-bf67b911.stl",
+            "valid": true,
+            "volumeMm3": 593.4082201034494,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                20.7,
+                -12.7,
+                3.7,
+                24.3,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "81518a4e-857d-5b0b-a4ba-e86c7c23e040",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.98236029920822e-16,
+            "step": "part-004-81518a4e.step",
+            "stepIntegrationError": 3.08395284618099e-16,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 4.440892098500626e-14,
+            "stl": "part-004-81518a4e.stl",
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                46.95,
+                -12.7,
+                3.7,
+                50.550000000000004,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "f8c8f569-8ba4-5b80-9367-f0e55d511655",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.982360299208253e-16,
+            "step": "part-005-f8c8f569.step",
+            "stepIntegrationError": 2.3054009862321415e-16,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 7.016609515630989e-14,
+            "stl": "part-005-f8c8f569.stl",
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                20.7,
+                10.3,
+                3.7,
+                24.3,
+                12.700000000000001,
+                4.500000000000004
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "87fb942c-4bd3-591f-a3ad-75b8a7b0da1c",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 1.392193482164263e-16,
+            "step": "part-006-87fb942c.step",
+            "stepIntegrationError": 3.08395284618099e-16,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 8.348877145181177e-14,
+            "stl": "part-006-87fb942c.stl",
+            "valid": true,
+            "volumeMm3": 6.835381918088497,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                46.95,
+                10.3,
+                3.7,
+                50.550000000000004,
+                12.700000000000001,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "00169639-df5a-58e1-a348-60c8b072cb92",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.7125159524380267e-16,
+            "step": "part-007-00169639.step",
+            "stepIntegrationError": 2.305400986232142e-16,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 7.460698725481052e-14,
+            "stl": "part-007-00169639.stl",
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                15.125,
+                -13.6,
+                3.799999999999998,
+                25.625,
+                13.6,
+                6.8
+            ],
+            "chordMm": 0.025,
+            "exported": true,
+            "groupPath": "TR62独立検証/10 台車｜TR62系構造・HO16.5機構/前台車",
+            "id": "416cc002-198d-5cd6-a450-d8e7afdd4e42",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前台車プロウ・折返し・支持腕",
+            "solids": 1,
+            "sourceIntegrationError": 7.048551637229536e-16,
+            "step": "part-008-416cc002.step",
+            "stepIntegrationError": 7.048551637211753e-16,
+            "stepRoundTrip": true,
+            "stepVolumeDeltaMm3": 4.284572696633404e-12,
+            "stl": "part-008-416cc002.stl",
+            "valid": true,
+            "volumeMm3": 46.11578844317727,
+            "withinModelEnvelope": true
+        }
+    ],
+    "pointChecks": [
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                -12.3,
+                4.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                -12.3,
+                5.65
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                12.3,
+                4.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                12.3,
+                5.65
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                -12.3,
+                4.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                -12.3,
+                5.65
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                12.3,
+                4.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "黒い軸箱外蓋を残す",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                12.3,
+                5.65
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "横向きシリンダの中央下側",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                32.325,
+                0,
+                8.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "縦向きシリンダを置かない空間",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                29.625,
+                0,
+                8.5
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "側枠の連続した平らな上縁",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                27.625,
+                -11.5,
+                11.3
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "軸箱上の浅い独立開口",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                -11.5,
+                9.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.7,
+                -4.8100000000000005,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.7,
+                -3.5900000000000003,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "側枠の連続した平らな上縁",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                27.625,
+                11.5,
+                11.3
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "軸箱上の浅い独立開口",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                22.5,
+                11.5,
+                9.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.7,
+                3.5900000000000003,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.7,
+                4.8100000000000005,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "横向きシリンダの中央下側",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                38.925,
+                0,
+                8.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "縦向きシリンダを置かない空間",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                41.625,
+                0,
+                8.5
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "側枠の連続した平らな上縁",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                43.625,
+                -11.5,
+                11.3
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "軸箱上の浅い独立開口",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                -11.5,
+                9.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                46.55,
+                -4.8100000000000005,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                46.55,
+                -3.5900000000000003,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "側枠の連続した平らな上縁",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                43.625,
+                11.5,
+                11.3
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": false,
+            "inside": false,
+            "label": "軸箱上の浅い独立開口",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                48.75,
+                11.5,
+                9.6
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                46.55,
+                3.5900000000000003,
+                7.8
+            ]
+        },
+        {
+            "entity": "c1926b87-ac14-5323-8be8-7f2f77475461",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの両面を挟むパッド",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                46.55,
+                4.8100000000000005,
+                7.8
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": false,
+            "inside": false,
+            "label": "ディスク中央の放射状通気孔",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.914814565722672,
+                -4.2,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの二面式摩擦板",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.914814565722672,
+                -3.93,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスク内部の放射状リブ",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                25,
+                -4.2,
+                5.375
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": false,
+            "inside": false,
+            "label": "ディスク中央の放射状通気孔",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.914814565722672,
+                4.2,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの二面式摩擦板",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                24.914814565722672,
+                4.470000000000001,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスク内部の放射状リブ",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                25,
+                4.2,
+                5.375
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": false,
+            "inside": false,
+            "label": "ディスク中央の放射状通気孔",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.16481456572267,
+                -4.2,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの二面式摩擦板",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.16481456572267,
+                -3.93,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスク内部の放射状リブ",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.25,
+                -4.2,
+                5.375
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": false,
+            "inside": false,
+            "label": "ディスク中央の放射状通気孔",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.16481456572267,
+                4.2,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスクの二面式摩擦板",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.16481456572267,
+                4.470000000000001,
+                6.022047612756301
+            ]
+        },
+        {
+            "entity": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+            "expectedInside": true,
+            "inside": true,
+            "label": "ディスク内部の放射状リブ",
+            "onBoundary": false,
+            "passed": true,
+            "point": [
+                51.25,
+                4.2,
+                5.375
+            ]
+        }
+    ],
+    "preparedToken": "a8b42963-07d6-4cd9-9731-b4f4d372a40f",
+    "splitChecks": [
+    ],
+    "visibleParts": 8
+}

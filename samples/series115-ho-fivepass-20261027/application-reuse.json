@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "timeUtc": "2026-10-26T16:31:29.008159+00:00",
+  "matchedApplicationSourceFiles": 1162,
+  "matchedDistributionFiles": 948,
+  "mismatches": [],
+  "distributionMismatches": [],
+  "exeSha256": "972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9",
+  "priorGate": "out\\verification\\drawing-fit-accepted2-20261026\\result.json",
+  "priorGateSha256": "6d07c5ce1c5c22b9317bc761fb266b538a986d6b1be50044b8560af98033abc1",
+  "scope": "Byte-identical verified application and source/test/build inventory. Current work changes model generation, validation and documentation only; product-wide gate was not rerun."
+}

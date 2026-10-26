@@ -61,12 +61,14 @@ def cooler(m, g, ac, outside, x, z):
 
 def floor_apron(m):
     """Model-print integration, not a claim that the real apron is a monocoque."""
+    from appearance import skirt_setback
+    dx=skirt_setback(m)
     floor, skirt = m.finished['floor'], m.finished['skirt']
     g=m.entities[floor]['groupId'];returns=[]
     for sign in [-1,1]:
         # Wide horizontal returns follow the folded skirt's rear and overlap
         # the floor underside; preserve the open centre and jumper recesses.
-        def front(y): return -.55+1.75*(y-12.7)/4.4+.75-.20
+        def front(y): return -.55+1.75*(y-12.7)/4.4+.75-.20+dx
         p=m.poly('スカート上縁から床板へ連続する返し',
             [(front(12.85),sign*12.85,13.0),(6.,sign*12.85,13.0),
              (6.,sign*16.,13.0),(front(16.),sign*16.,13.0)],g)
@@ -78,12 +80,12 @@ def floor_apron(m):
     m.finished['floor']=combined;m.finished['skirt']=combined
     m.keyparts['integratedFloorApron']=[combined]
     for sign in [-1,1]:
-        for x in [1.4,2.5,3.5,4.5,5.5]:
+        for x in ([1.4,2.5,3.5,4.5,5.5] if not dx else [front(14.)+.1,front(14.)+.5,4.2,4.9,5.5]):
             m.points.append(dict(entity=combined,label='床板とスカートの連続返し',
                 point=[x,sign*14.,13.4],expectedInside=True))
     for y in [-6.,0.,6.]:
         m.points.append(dict(entity=combined,label='スカート上部の開放維持',
-            point=[1.,y,12.],expectedInside=False))
+            point=[1.+dx,y,12.],expectedInside=False))
 
 
 def manifest(m):

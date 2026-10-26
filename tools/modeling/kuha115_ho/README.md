@@ -85,7 +85,7 @@ CAD保存後の再読込と通常デスクトップ表示、全対候補の干�
 
 ## 2026-10-26 取付修正版
 
-最新は `samples/series115-ho-fitted-20261026/`。スカートの床板一体支持腕、窓ガラスの裏貼り面と
+この時点の版は `samples/series115-ho-fitted-20261026/`。スカートの床板一体支持腕、窓ガラスの裏貼り面と
 回込窓の接着受け、屋根曲面に沿うAU75Gの2本の横断サドルを追加した。通常233／分割240部品。
 接触は各93か所を距離1e-5 mm以下と面積で検査し、離す負の試験も実BRepで実施する。
 実印刷・接着強度・走行の検証とは区別する。局所寸法は模型設計値。
@@ -103,3 +103,29 @@ python tools/modeling/kuha115_ho/assemble_fit.py RUN SAMPLES --run 03
 全対干渉の追加パスは、同一prepared tokenと全体レポートのSHAが一致する場合だけ、点・分割・接触の
 済んだ検査を参照する。レビューは接触結果の欠落・0件・失敗・古い入力を拒否する。
 `assemble_fit.py` は先に生成済みのsampleへ取付拡大画像と検査表を付ける。旧版を上書きしない。
+
+## 2026-10-26 外形修正版（最新）
+
+最新は `samples/series115-ho-contoured-20261026/`。前の版は接触していても、クーラーの
+下部の隙間や全高平板の扉を残していた。`--contoured` を追加して、AU75G本体を低く納め、
+下部キセの全面を屋根で切り合わせる。細いスカート支持腕を廃し、左右の上縁返しから床へ
+つながる1閉ソリッドとする。実車が床板の一枚板を延長した構造だとの主張ではない。
+客扉12枚と乗務員扉2枚は、車体と同じ下部断面則を使用する。通常232／分割239部品。
+旧版の再現は `--contoured` を付けずに行う。既存の保存モデルを上書きしない。
+
+上の生成・全BRep・STEP/STL・干渉候補・保存再読込・Windows表示の手順を実施した後に、
+以下で比較と梱包を行う。BASELINEは前版のnative03とcandidate03の検証作業フォルダー。
+以前の証拠がない環境では、`--contoured` なしの前版も検証済みCADで再生成して用意する。
+
+```text
+python tools/modeling/kuha115_ho/revised.py --detailed --contoured --bogie-component COMPONENT/tr62-component.kcd2 --output RUN/candidate04
+python tools/modeling/kuha115_ho/test_contour_geometry.py BASELINE RUN NATIVE_EXPORT --run 04 --work RUN/negative-old-geometry04
+python tools/modeling/kuha115_ho/render_detailed.py RUN/exports04 RUN/candidate04/design.json RUN/previews04
+python tools/modeling/kuha115_ho/render_contours.py RUN/exports04 BASELINE/exports03 RUN/sections04
+python tools/modeling/kuha115_ho/assemble_contoured.py RUN SAMPLES PACKAGE --run 04
+```
+
+各版949点の断面・開口、全可視部品の1閉ソリッド、接触・全対候補を検査する。
+旧モデルへ新しい断面検査を適用して、クーラー空隙・非連続床・14枚の平板扉の計16件を拒否する。
+乗務員扉の検査はヒンジ等との結合後の可視ID、分割床は前後の可視IDを参照する。
+詳細断面の画像は実CADのSTLと平面の交線であり、実車実測図や操作画面ではない。

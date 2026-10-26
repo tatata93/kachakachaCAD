@@ -1,0 +1,50 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>115系の外形修正と検証（2026-10-27）</title>
+<style>body{max-width:1100px;margin:32px auto;padding:0 22px;font:17px/1.8 sans-serif;color:#253540}img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #b0bbc2;padding:9px}code{overflow-wrap:anywhere}</style>
+<h1>クーラー・スカート・ドアの外形を修正</h1>
+<p>着手2026-10-26、検証完了2026-10-27。基点55a62b54c、着手記録6c199b5a3。
+<a href="../../samples/series115-ho-contoured-20261026/index.html">比較画像と改訂モデル</a> ／
+<a href="../../out/models/kuha115-contour-review-20261026/review-result.json">検査の原記録</a></p>
+<p>前版は取付面の接触を確認したが、キセ本体の下の大きな隙間、柱でつないだスカート、平板のドアを残していた。
+接触成功と、実車らしい外形・製作しやすい部品構成は別の受入条件として扱う。</p>
+<table><tr><th>対象</th><th>前版の問題</th><th>今回</th><th>残る推定</th></tr>
+<tr><td>AU75G</td><td>高い水平底をサドル2本で屋根へ接続</td><td>本体を低くし、端板と長辺下縁を連続させ、下面を屋根曲面で切断</td><td>平滑キセ上端Z48.15 mm。補強帯を含む上端は48.3 mm。取付高さは模型設計値</td></tr>
+<tr><td>スカート</td><td>細い腕と立上りに接着する別部品</td><td>左右の上縁返しから床へ連続する1閉ソリッド。中央開放維持</td><td>模型用の一体印刷構造。実車の床板がそのまま一枚板で延びるとの主張ではない</td></tr>
+<tr><td>客扉・乗務員扉</td><td>全高が一定Yで、下端が周囲外板より突出</td><td>14枚を車体と同じ裾絞り則で作る。上部位置を保ち下端を約0.924 mm内側へ</td><td>Z24以下の線形断面則。実車の局所曲げRを実測復元したものではない</td></tr></table>
+<h2>実形状で見直す</h2>
+<p>以下は実CADから出力したSTLの描画・平面交線。実車写真、AI予想図、操作画面とは区別する。青は取付形状を判別するための色。</p>
+<img src="../../samples/series115-ho-contoured-20261026/cooler-end.png" alt="屋根へ納まるクーラー端板">
+<img src="../../samples/series115-ho-contoured-20261026/floor-apron.png" alt="床板と一体のスカート">
+<img src="../../samples/series115-ho-contoured-20261026/door-sections.png" alt="ドアの下部断面比較">
+<h2>検証した範囲</h2>
+<table><tr><th>版</th><th>可視部品</th><th>点検査</th><th>接触</th><th>全対の実BRep候補</th><th>分割再組立</th></tr>
+<tr><td>通常</td><td>232</td><td>949</td><td>93</td><td>417</td><td>0</td></tr>
+<tr><td>前後分割</td><td>239</td><td>949</td><td>93</td><td>410</td><td>6</td></tr></table>
+<ul>
+<li>全部品の1閉ソリッド・有効BRep・正体積、全STEP再読込、全STLの閉鎖性・面向き・退化・体積差を検査。</li>
+<li>印刷原点へ移動した梱包後のSTLも232／239件を再検査し、退化三角形0。</li>
+<li>保存後のUUID・定義・グループ・材質・表示状態を比較。再読込した232部品の体積差は最大3.55e-15 mm³、境界箱も一致。</li>
+<li>ドア両端と複数高さ、キセの長手・幅方向の複数位置、床への返しの連続性を検査。乗務員扉はヒンジ結合後の可視部品を参照。</li>
+<li>新しい断面検査を旧モデルへ適用し、クーラー空隙・床への非連続・14枚の平板ドアの計16件を全件拒否。</li>
+<li>0件・古い候補・保存での変更・欠落/失敗/古い接触・成功フラグを残した古い点を8件の負の検査で拒否。</li>
+</ul>
+<p>干渉の許容値1e-6 mm³、STL体積差上限0.2%は緩和していない。候補03は客扉踏板と外板の6箇所の干渉を検出した。
+踏板裏面を外板で切り合わせた候補04で全対検査に成功。候補01〜03と失敗ログを保全した。
+候補03では検査マニフェストだけを修正した段階があり、ネイティブ文書バイト一致の証拠を付けて準備済み形状を再利用した。
+完成候補04は形状変更後なので、通常／分割を新たに冷再構築している。</p>
+<h2>CAD本体との区別</h2>
+<p>今回の変更はtools/modeling/kuha115_ho、模型データと説明資料。CADのC++・コア・UI・保存形式は変更していない。
+以前の全体ゲートと現在の製品ソース967ファイル、および使用実行ファイルのバイト一致を照合した。
+SHA-256は<code>972b8b84567adffd1cdf1310f1cc30ee30d9b4a0a184965aa41896c369511bc9</code>。
+以前の195 CTest・開発/配布各600 UI・旧self-test成功を、今回新規実行したとは報告しない。</p>
+<p>今回もWindows通常イベントループで保存モデルを表示した。20.2秒は検証済みキャッシュのhitを確認した表示時間。
+生成時の冷再構築は通常109.14秒／分割113.59秒（並列での単発観測）。全ユーザー操作をOSマウスで作り直した証拠ではない。</p>
+<h2>資料、構成、保全</h2>
+<p><a href="../../samples/series115-ho-contoured-20261026/index.html">モデルページ</a>に同車の2013年原写真と三菱電機技報のリンクを記載。
+訓練車時代の資料なので営業時代の全細部は確定しない。第三者写真は再配布しない。</p>
+<p>新しい生成分岐は<code>--detailed --contoured --bogie-component …</code>。
+<code>contour_details.py</code>に断面・連続キセ・一体床板を分離し、既存の生成入口は旧版の再現用に残した。
+<code>render_contours.py</code>が比較と実断面、<code>test_contour_geometry.py</code>が旧形状拒否、
+<code>assemble_contoured.py</code>が入力SHAと検証済み候補を照合して梱包する。</p>
+<p>削除ファイルなし。旧samples、旧配布、ユーザー原本、別worktree、未追跡の他担当ファイルを保全。
+実印刷、接着強度、走行、動く台車の干渉、市販動力との適合は未試験。</p></html>

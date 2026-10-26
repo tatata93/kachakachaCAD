@@ -158,7 +158,16 @@ def side_details(m,root):
                 x=cx-7.98 if half<0 else cx+.08;pos=sign*(SIDE-.28)
                 o=m.rounded('扉葉',(x,pos,FLOOR+.12),(1,0,0),(0,0,1),7.90,22.5,.3,doors)
                 q=m.rounded('扉窓',(x+1.25,pos,27.7),(1,0,0),(0,0,1),5.4,8.9,.8,doors)
-                leaf=m.finish(m.extrude(label+f'客扉{index+1}葉{half}',[o,q],(0,-sign,0),.55,doors),thickness=.55)
+                if getattr(m,'contoured',False):
+                    from contour_details import door
+                    # A broad mask includes the shifted lower part; its outline
+                    # and window remain the same X/Z rounded curves.
+                    m.entities[o]['visibility']='hidden';m.entities[q]['visibility']='hidden'
+                    o=m.rounded('裾絞り扉外形マスク',(x,sign*(SIDE+.4),FLOOR+.12),(1,0,0),(0,0,1),7.90,22.5,.3,doors)
+                    q=m.rounded('裾絞り扉窓マスク',(x+1.25,sign*(SIDE+.4),27.7),(1,0,0),(0,0,1),5.4,8.9,.8,doors)
+                    leaf=door(m,label+f'客扉{index+1}葉{half}',doors,sign,x,7.90,[o,q],FLOOR+.12,22.5)
+                else:
+                    leaf=m.finish(m.extrude(label+f'客扉{index+1}葉{half}',[o,q],(0,-sign,0),.55,doors),thickness=.55)
                 m.keyparts['doors'].append(leaf);m.clear(m.finished['body'],leaf,'客扉と車体')
                 o=m.rounded('客扉ゴム外',(x+1.1,sign*(SIDE-.01),27.55),(1,0,0),(0,0,1),5.7,9.2,.95,doors)
                 q=m.rounded('客扉ゴム内',(x+1.48,sign*(SIDE-.01),27.93),(1,0,0),(0,0,1),4.94,8.44,.57,doors)
@@ -169,14 +178,34 @@ def side_details(m,root):
                 contact(m,pane,leaf,'客扉ガラスと扉裏の接着');contact(m,rubber,leaf,'客扉Hゴムと扉表の接着')
                 handle=m.ring('半自動手掛け',(x+(6.9 if half<0 else 1),sign*(SIDE-.1),25.5),(0,sign,0),.30,.16,.15,doors)
                 m.finish(handle,'アルミ銀',.15)
-            m.finish(m.box('客扉踏板',cx-8.1,-SIDE-.10 if sign<0 else SIDE-.65,FLOOR-.15,16.2,.75,.18,doors),'アルミ銀',.18)
+            step_side=SIDE
+            if getattr(m,'contoured',False):
+                from contour_details import shrink
+                step_side-=shrink(FLOOR)
+            if getattr(m,'contoured',False):
+                inner=step_side-.06
+                step=m.box('客扉踏板素材',cx-8.1,min(sign*inner,sign*(inner+.85)),FLOOR-.15,16.2,.85,.18,doors)
+                m.finish(m.boolean('客扉踏板・外板に沿う裏面',step,[m.finished['body']],1,doors,'アルミ銀'),'アルミ銀',.18)
+                m.entities[m.finished['body']]['visibility']='visible'
+            else:m.finish(m.box('客扉踏板',cx-8.1,-step_side-.10 if sign<0 else step_side-.65,FLOOR-.15,16.2,.75,.18,doors),'アルミ銀',.18)
         pos=sign*(SIDE-.28)
         o=m.rounded('乗務員扉葉',(17.12,pos,FLOOR+.12),(1,0,0),(0,0,1),6.26,22.5,.3,doors)
         q=m.rounded('乗務員扉ガラス開口',(18.0,pos,28.8),(1,0,0),(0,0,1),4.5,8.0,.5,doors)
-        leaf=m.finish(m.extrude(label+'乗務員扉',[o,q],(0,-sign,0),.55,doors),thickness=.55)
-        details=[m.box('乗務員ヒンジ',17.13,min(pos,pos+sign*.25),z,.4,.25,.8,doors) for z in [19,27,35]]
-        details.append(m.box('乗務員取手',22.7,min(pos,pos+sign*.25),23.0,.35,.25,1.0,doors))
+        if getattr(m,'contoured',False):
+            from contour_details import door,shrink
+            o=m.rounded('乗務員扉外形マスク',(17.12,sign*(SIDE+.4),FLOOR+.12),(1,0,0),(0,0,1),6.26,22.5,.3,doors)
+            q=m.rounded('乗務員扉窓マスク',(18.,sign*(SIDE+.4),28.8),(1,0,0),(0,0,1),4.5,8.,.5,doors)
+            leaf=door(m,label+'乗務員扉',doors,sign,17.12,6.26,[o,q],FLOOR+.12,22.5)
+        else:leaf=m.finish(m.extrude(label+'乗務員扉',[o,q],(0,-sign,0),.55,doors),thickness=.55)
+        face=lambda z:pos-sign*shrink(z) if getattr(m,'contoured',False) else pos
+        edge=.04 if getattr(m,'contoured',False) else 0.
+        details=[m.box('乗務員ヒンジ',17.13,min(face(z),face(z)+sign*.25)-edge,z,.4,.25+2*edge,.8,doors) for z in [19,27,35]]
+        details.append(m.box('乗務員取手',22.7,min(face(23.5),face(23.5)+sign*.25)-edge,23.0,.35,.25+2*edge,1.0,doors))
+        source_leaf=leaf
         leaf=m.joined(label+'乗務員扉ヒンジ・取手',details+[leaf],doors)
+        if getattr(m,'contoured',False):
+            replace_checks(m,source_leaf,leaf)
+            next(row for row in m.contour_doors if row['entity']==source_leaf)['entity']=leaf
         contact(m,crew_glass,leaf,'乗務員扉の裏ガラス接着');contact(m,crew_frame,leaf,'乗務員扉の窓枠接着')
         m.clear(m.finished['body'],leaf,'乗務員扉と外板');m.keyparts['doors'].append(leaf)
         for x in [16.1,24.1]:
@@ -366,7 +395,7 @@ def roof(m,root):
         p=m.rounded('前面表示面',(-.10,-4.25,40.55),(0,1,0),(0,0,1),8.5,1.7,.25,g)
         m.finish(m.extrude('前面表示面',[p],(-1,0,0),.15,g),'黒')
     eg=m.group('07 屋根機器｜AU75G・通風器・歩み板',root)
-    x0=L/2-45.75/2;z0=CROWN+.40
+    x0=L/2-45.75/2;z0=43.6 if getattr(m,'contoured',False) else CROWN+.40
     if m.detailed:
         from detail_parts import climate_unit
         ac=climate_unit(m,eg,x0,z0)
@@ -388,12 +417,16 @@ def roof(m,root):
                 details.append(m.box('キセのルーバー',x,sign*13.1-.10,z0+.5,.22,.20,2.3,eg))
     ac=m.joined('AU75G ステンレスキセ・ファン格子',details,eg,'アルミ銀',note='製造者の外形寸法。ファン中心・格子・脚は写真推定。')
     # A thick foot spans to the curved roof; trim its bottom with actual roof solid.
-    feet=[m.box('冷房装置の横断支持サドル',x,-12.5,43.0,3.6,25.0,3.2,eg) for x in [x0+4,x0+38]]
-    ac=m.joined('AU75G・脚一体',[ac]+feet,eg,'アルミ銀')
-    ac=m.boolean('AU75G脚底を屋根に合わせる',ac,[outside],1,eg,'アルミ銀')
-    for x in [x0+4,x0+38]:
-        for low,high in [(-12.5,-7.0),(7.0,12.5)]:
-            contact(m,ac,m.finished['roof'],'冷房サドルの前後左右支持',12.,[x-.01,low,42.,x+3.61,high,46.3])
+    if getattr(m,'contoured',False):
+        from contour_details import cooler
+        ac=cooler(m,eg,ac,outside,x0,z0)
+    else:
+        feet=[m.box('冷房装置の横断支持サドル',x,-12.5,43.0,3.6,25.0,3.2,eg) for x in [x0+4,x0+38]]
+        ac=m.joined('AU75G・脚一体',[ac]+feet,eg,'アルミ銀')
+        ac=m.boolean('AU75G脚底を屋根に合わせる',ac,[outside],1,eg,'アルミ銀')
+        for x in [x0+4,x0+38]:
+            for low,high in [(-12.5,-7.0),(7.0,12.5)]:
+                contact(m,ac,m.finished['roof'],'冷房サドルの前後左右支持',12.,[x-.01,low,42.,x+3.61,high,46.3])
     if m.detailed:
         fans=[]
         for fan in m.keyparts['climateFans']:
@@ -697,6 +730,9 @@ def manifest(m):
         entities=[{k:e[k] for k in ['id','kind','displayName','visibility','groupId','partProperties']} for e in m.d['entities']])
     from fit_details import REVISION as FIT_REVISION
     data.update(attachmentRevision=FIT_REVISION,attachmentChecks=getattr(m,'attachment_checks',[]))
+    if getattr(m,'contoured',False):
+        from contour_details import manifest as contour_manifest
+        data['contours']=contour_manifest(m)
     if m.detailed:
         from bogie_details import REVISION
         data['bogieRevision']=REVISION
@@ -710,6 +746,9 @@ def manifest(m):
         data['estimated'].update(skirtOutline=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6,centreTopZ=10.7),
                                  flareCapRadius=.78,frontGlazingInset=.22,greenPaintBandZMm=[22.4,24.0],
                                  frontUnderframeWeb=dict(x=[3.4,5.6],z=[11.0,13.70],centralClearance=4.2))
+        if getattr(m,'contoured',False):
+            del data['estimated']['frontUnderframeWeb']
+            data['estimated']['frontApronReturns']=dict(yRanges=[[-16.,-12.85],[12.85,16.]],backX=6.,zRange=[13.,13.78])
     return data
 
 
@@ -736,6 +775,8 @@ def split_model(original,root,output):
             if c[key] in replacements:c[key+'Parts']=replacements[c[key]]
     for c in m.points:
         if c['entity'] in replacements:c['entity']=replacements[c['entity']][int(c['point'][0]>mid)]
+    if getattr(m,'contoured',False):
+        m.keyparts['integratedFloorApron']=[v for source in m.keyparts['integratedFloorApron'] for v in replacements.get(source,[source])]
     bridge=m.finish(m.box('床板継ぎ目の添え板',mid-6,-4,12.9,12,8,.75,g),'床下グレー',.75)
     for p in replacements[original.finished['floor']]:m.clear(bridge,p,'添え板と床板')
     data=manifest(m);data.update(splitChecks=checks,splitAtX=mid)
@@ -747,12 +788,17 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--output',required=True,type=Path)
     ap.add_argument('--detailed',action='store_true',help='Use photo-reviewed front, roof equipment and bogie details')
     ap.add_argument('--bogie-component',type=Path,help='Exact separately validated native bogie component; its editable source is shipped alongside')
+    ap.add_argument('--contoured',action='store_true',help='Continuous roof casing, floor-integrated skirt and tapered doors')
     a=ap.parse_args();a.output.mkdir(parents=True,exist_ok=False)
-    m=Revised(a.detailed);m.bogie_library=a.bogie_component
+    if a.contoured and not a.detailed:ap.error('--contoured requires --detailed')
+    m=Revised(a.detailed);m.bogie_library=a.bogie_component;m.contoured=a.contoured
     root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
     if m.detailed:
-        front_underframe(m)
+        if a.contoured:
+            from contour_details import floor_apron
+            floor_apron(m)
+        else:front_underframe(m)
         from detail_parts import lettering
         lettering(m,root,a.output)
     m.d['activeGroupId']=root;m.d['uiState']={'activeMode':'part','theme':'windows95'}

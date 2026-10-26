@@ -12,8 +12,10 @@ def main():
     proof=json.loads((w/'review-result.json').read_text(encoding='utf-8'))
     assert proof['passed'] and len(proof['models'])==2
     negative=json.loads((w/'review-negative-tests.json').read_text(encoding='utf-8'))
-    fitted=json.loads((w/('candidate'+run)/'design.json').read_text(encoding='utf-8')).get('attachmentRevision')
-    assert negative['passed'] and len(negative['rejected'])==(7 if fitted else 4) and negative['reviewResultSha256']==sha(w/'review-result.json')
+    candidate_design=json.loads((w/('candidate'+run)/'design.json').read_text(encoding='utf-8'))
+    fitted=candidate_design.get('attachmentRevision')
+    expected_negative=8 if candidate_design.get('contours') else 7 if fitted else 4
+    assert negative['passed'] and len(negative['rejected'])==expected_negative and negative['reviewResultSha256']==sha(w/'review-result.json')
     a.samples.mkdir(parents=True,exist_ok=False);a.package.mkdir(parents=True,exist_ok=False)
     for path in (w/('candidate'+run)).iterdir():
         if '-all-pairs' not in path.name:shutil.copy2(path,a.samples/path.name)

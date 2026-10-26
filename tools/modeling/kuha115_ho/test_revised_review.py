@@ -38,6 +38,12 @@ def main():
         if path.parent.name=='exports'+a.run and path.name=='print-parts.json':d['parts']=[];d['visibleParts']=0
         return d
     reject('zero visible parts',loader=zero)
+    if original_load(a.workspace/('candidate'+a.run)/'design.json').get('contours'):
+        def stale_point(path):
+            d=copy.deepcopy(original_load(path))
+            if path.parent.name=='exports'+a.run and path.name=='print-parts.json':d['pointChecks'][0]['point'][0]+=1.
+            return d
+        reject('stale point geometry with a retained passed flag',loader=stale_point)
     for kind in ['missing','failed','stale']:
         def bad_contacts(path,kind=kind):
             d=copy.deepcopy(original_load(path))

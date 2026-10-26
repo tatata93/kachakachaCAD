@@ -80,9 +80,23 @@ def main():
         assert not r['checkOnly'] and all_report['checkOnly']
         assert len(r['assemblyChecks'])==len(design['assemblyChecks'])>140
         refined=design.get('detailRevision')=='2026-10-25-shoulder-refinement'
-        assert len(r['pointChecks'])==len(design['pointChecks'])==(476 if design.get('bogieComponent') else 412 if refined else 314 if design.get('detailRevision') else 227)
+        expected_points=476 if design.get('bogieComponent') else 412 if refined else 314 if design.get('detailRevision') else 227
+        if design.get('contours'):
+            from contour_details import REVISION
+            assert design['contours']['revision']==REVISION
+            assert design['contours']['addedPointChecks']==473
+            assert len(design['contours']['doorSections'])==14
+            expected_points+=473
+        assert len(r['pointChecks'])==len(design['pointChecks'])==expected_points
         assert len(r['splitChecks'])==(6 if split else 0)
         assert all(c['passed'] for k in ['assemblyChecks','pointChecks','splitChecks'] for c in r[k])
+        for key in ['assemblyChecks','pointChecks','splitChecks']:
+            assert len(design.get(key,[]))==len(r[key])
+            assert all(all(actual.get(k)==v for k,v in source.items()) for source,actual in zip(design.get(key,[]),r[key])), 'stale geometry probes'
+        if design.get('contours'):
+            assert all(c['entity'] in expected for c in design['contours']['doorSections'])
+            assert len(design['keyParts']['integratedFloorApron'])==(2 if split else 1)
+            assert set(design['keyParts']['integratedFloorApron'])<=expected
         if design.get('attachmentRevision'):
             contacts(design,r)
             assert not all_design['attachmentChecks'] and not all_report['attachmentChecks']
@@ -143,7 +157,12 @@ def main():
                 assert design['estimated']['roofNominalThickness']==1.0
                 assert sum('法線方向0.85mm' in c['label'] for c in checks)==54
                 assert sum('ジャンパ栓の背後' in c['label'] for c in checks)==4
-                assert sum('前端台枠' in c['label'] for c in checks)==4
+                if design.get('contours'):
+                    assert sum('裾絞り扉' in c['label'] for c in checks)==434
+                    assert sum('キセ下縁の連続' in c['label'] or 'キセ下面の屋根' in c['label'] for c in checks)==30
+                    assert sum('床板とスカートの連続返し' in c['label'] for c in checks)==10
+                    assert sum('スカート上部の開放維持' in c['label'] for c in checks)==3
+                else:assert sum('前端台枠' in c['label'] for c in checks)==4
             assert sum('短縮した前面窓' in c['label'] for c in checks)==18
             assert sum('黒い軸箱外蓋' in c['label'] for c in checks)==16
             if design.get('bogieComponent'):
@@ -191,13 +210,16 @@ def main():
     repo=Path(__file__).resolve().parents[3]
     result['sourceFilesSha256']={p:sha(repo/p) for p in ['tools/modeling/kuha115_ho/revised.py',
         'tools/modeling/kuha115_ho/build.py','tools/modeling/native_kcd.py','tools/modeling/kuha115_ho/fit_details.py',
+        'tools/modeling/kuha115_ho/contour_details.py',
         'tools/modeling/kuha115_ho/review_revised.py','tools/modeling/kuha115_ho/assembly_candidates.py',
         'tools/modeling/series115_print/export_native.cpp','tools/modeling/series115_print/check_stl.py',
         'tools/modeling/kuha115_ho/render_revised.py','tools/modeling/series115_print/render_preview.py',
         'tools/modeling/kuha115_ho/detail_parts.py','tools/modeling/kuha115_ho/front_roof.py','tools/modeling/kuha115_ho/render_detailed.py',
         'tools/modeling/kuha115_ho/assemble_detailed.py','tools/modeling/kuha115_ho/bogie_details.py',
         'tools/modeling/kuha115_ho/bogie_library.py','tools/modeling/kuha115_ho/standalone_bogie.py',
-        'tools/modeling/kuha115_ho/test_bogie_library.py','tools/modeling/kuha115_ho/desktop_model.py']}
+        'tools/modeling/kuha115_ho/test_bogie_library.py','tools/modeling/kuha115_ho/desktop_model.py',
+        'tools/modeling/kuha115_ho/render_contours.py','tools/modeling/kuha115_ho/test_contour_geometry.py',
+        'tools/modeling/kuha115_ho/assemble_contoured.py']}
     (w/'review-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8',newline='\n')
     print(json.dumps(result,ensure_ascii=True,indent=2))
 

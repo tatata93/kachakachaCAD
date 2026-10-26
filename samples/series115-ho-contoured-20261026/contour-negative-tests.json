@@ -1,0 +1,218 @@
+{
+  "passed": true,
+  "newPositiveSectionProbes": 459,
+  "rejectedOldGeometryProbes": [
+    {
+      "entity": "16841403-04a3-5c4c-ae45-07ef3c753fb3",
+      "expectedInside": true,
+      "inside": false,
+      "label": "old cooler has an exposed gap",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        121,
+        12,
+        43.95256805667782
+      ]
+    },
+    {
+      "entity": "805d15ed-c032-5700-a24d-d76b4aab8e6a",
+      "expectedInside": true,
+      "inside": false,
+      "label": "old apron has no continuous return",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        2.5,
+        -14,
+        13.4
+      ]
+    },
+    {
+      "entity": "757ae7e5-03c1-514f-9202-3552ea082ea1",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 43.269999999999996",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        43.919999999999995,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "2ea9da25-6709-553a-8a4b-7b0c8c557aa7",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 51.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        51.98,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "bb79f668-01c3-5126-ad38-e4f3eb09321f",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 118.27",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        118.92,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "5e2c099a-1e9a-58e3-83dd-2b93be1e2d16",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 126.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        126.98,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "b17c529b-e6ef-5638-b897-c0e93a23097f",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 193.27",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        193.92000000000002,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "378b7f6a-96ba-5f84-9d87-89e88d2bed6b",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 201.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        201.98000000000002,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "a4643bb3-a938-56f0-b47a-eced876f91f8",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat -1 17.12",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        17.77,
+        -17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "c2fd43e8-8025-544b-bcb5-104a51cd21e3",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 43.269999999999996",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        43.919999999999995,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "3b44ab93-2440-5d23-83e3-6c455455471b",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 51.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        51.98,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "b3130486-8cdc-555d-bc56-cd36f76a62d8",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 118.27",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        118.92,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "703a51ae-618a-5ed6-9ef7-f5fc49f782cf",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 126.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        126.98,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "9ea4a51d-5646-5a48-8837-7340c0c4f593",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 193.27",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        193.92000000000002,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "93d222d4-2f0d-5fa1-a9d2-bcd318cea3a3",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 201.33",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        201.98000000000002,
+        17.725,
+        15.9325
+      ]
+    },
+    {
+      "entity": "4a6b43d4-5c5d-5194-b86d-243385cca559",
+      "expectedInside": false,
+      "inside": true,
+      "label": "old door is flat 1 17.12",
+      "onBoundary": false,
+      "passed": false,
+      "point": [
+        17.77,
+        17.725,
+        15.9325
+      ]
+    }
+  ],
+  "baselinePreparedSha256": "44ba2cff6b7843b043c2588c0a156ad02e678900d35a6cd0cd910c3c10b0160f",
+  "candidateDesignSha256": "d5945c94a6efa5eab2a0df314a204a1ee76d095e08a4cbf6f59c4210dfd285fd",
+  "candidateExportReportSha256": "e11560935a04d4d3b202c86711835ca26c12a2723a231614b3aadac1f736fa0d",
+  "exporterSha256": "b06ee377e7b76f62d36a9a2e8e4262fdc5e45f127af034d91b416950c0570616"
+}

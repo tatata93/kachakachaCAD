@@ -3,7 +3,7 @@ from pathlib import Path
 import re, json, html, argparse
 from urllib.parse import unquote
 from tool_recipes import RECIPES
-from tool_procedures import build_pages
+from tool_procedures import build_pages, audit_pages
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -113,7 +113,9 @@ def audit(text):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');args=parser.parse_args()
-    print(build_pages(commands(),check=args.check))
+    # New command pages link to anchors in manual.html. Validate those links only
+    # after both sides have been generated, so adding a command works in one run.
+    print(build_pages(commands(),check=args.check,audit=False))
     output=build();audit(output)
     target=ROOT/'docs/manual.html'
     if args.check:assert target.read_text(encoding='utf-8')==output,'Run build_manual.py to regenerate'
@@ -121,3 +123,4 @@ if __name__=='__main__':
         temporary=target.with_suffix('.html.tmp')
         temporary.write_text(output,encoding='utf-8',newline='\n')
         temporary.replace(target)
+    audit_pages(commands())

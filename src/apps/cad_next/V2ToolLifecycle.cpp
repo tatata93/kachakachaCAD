@@ -10,10 +10,13 @@
 #include "V2GptSurfaceTool.h"
 #include "V2GptFabricationTool.h"
 #include "V2LoopFacesTool.h"
+#include "V2OutputTool.h"
 #include <QString>
 
 void V2MainWindow::EndArmedTools()
 {
+    V2OutputTool::CancelViewportPick(*this);
+    ForgetPendingPartition();
     ClearPendingCommand();
     viewport_->CancelPointPick();
     viewport_->CancelReferencePick();
@@ -40,6 +43,7 @@ void V2MainWindow::EndArmedTools()
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
         viewport_->SetRoleColors({});   // 境界辺などの紫の色分けも残さない(オーナー報告 2026-09-28)
+        viewport_->SetToolCandidateFilter({});
         viewport_->SetToolPickActive(false);
         viewport_->SetToolPickToggle(false);
     }
@@ -49,6 +53,8 @@ void V2MainWindow::EndArmedTools()
 
 void V2MainWindow::EndOwnedToolsBut(const void* keep)
 {
+    V2OutputTool::CancelViewportPick(*this);
+    ForgetPendingPartition();
     ClearPendingCommand();
     viewport_->CancelPointPick();
     viewport_->CancelReferencePick();
@@ -75,5 +81,8 @@ void V2MainWindow::EndOwnedToolsBut(const void* keep)
         && (loopFaces_->Active() || loopFaces_->HasRecent())) {
         loopFaces_->End();
     }
+    // A temporary page may have restricted picking to faces. The next owner's
+    // Refresh installs its own filter; a tool without a filter must see wires too.
+    viewport_->SetToolCandidateFilter({});
     viewport_->SetSelection(selection);
 }

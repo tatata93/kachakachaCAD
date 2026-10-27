@@ -1174,5 +1174,12 @@
     "at": "2026-10-17T08:23:08.714Z",
     "phase": "command returned; not proof of committed geometry",
     "executable_sha256": "9618e6091e37c25c21b151b17a47ee4d9546939ae4e09a16b0dfbab2af524d57"
+  },
+  "wire.spaced_points": {
+    "case": "HP-CURVEPOINTS multiple edges preview commit history save and next tool",
+    "case_result": "passed",
+    "at": "2026-10-27T15:04:44.299Z",
+    "phase": "Windows Qt widget input: selected edges and preview; commit/history/save separately asserted in the same case",
+    "executable_sha256": "49fe58e93c081610cb566f80f2f60c0cc7bfb9b906aa839fbe5b929593f11091"
   }
 }

@@ -33,6 +33,7 @@
 #include <QString>
 #include <array>
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> ToolContinuityCases();
 bool AlternateShortcutRoutes(V2MainWindow&);
 bool AlternateViewDuringInput(V2MainWindow&);
 bool AlternateFirstPointUndo(V2MainWindow&);
@@ -192,6 +193,7 @@ bool PreviewLifetime(V2MainWindow& w) {
 std::vector<SelfTestCase> ToolContractCases(){std::vector<SelfTestCase> cases={{"HP-TOOLS all catalog toolbar activations have input or reason",ActivationAudit},{"HP-TOOLS distinct tool illustrations",Illustrations},{"HP-TOOLS exclusive tool transition matrix and shortcuts",Lifecycle},
     {"HP-TOOLS modal dialog keys stay in dialog",ModalKeys},{"HP-TOOLS preview shape ownership stays bounded",PreviewLifetime},{"HP-TOOLS alternate shortcut routes preserve inputs",AlternateShortcutRoutes},{"HP-TOOLS alternate view routes preserve pending targets",AlternateViewDuringInput},
     {"HP-TOOLS first drawing point Undo without document history",AlternateFirstPointUndo},{"HP-TOOLS save and save-as preserve pending targets",AlternateSaveDuringInput}};
+    const auto continuity=ToolContinuityCases();cases.insert(cases.end(),continuity.begin(),continuity.end());
     if(qEnvironmentVariableIsSet("KACHACAD_MODELING_OWNER_INPUT"))cases.push_back({"HP-TOOLS actual owner model thickness and history",AlternateOwnerModel});
     return cases;}
 }

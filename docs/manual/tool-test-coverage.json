@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "total": 168,
+  "total": 169,
   "test_cases": 511,
   "commands": {
     "derived.freeze": {
@@ -3328,7 +3328,34 @@
         "作業平面を作って作業中にできる"
       ],
       "interpretation": "A passing containing case and selected input do not by themselves prove a successful geometry result."
+    },
+    "wire.spaced_points": {
+      "cases": [
+        "HP-CURVEPOINTS multiple edges preview commit history save and next tool",
+        "HP-CURVEPOINTS three dimensional spline arc length spacing",
+        "HP-CURVEPOINTS output bound cancel and closed curve deduplication",
+        "HP-CURVEPOINTS mixed segments preserve exact selection rows",
+        "HP-CURVEPOINTS 999 1000 and 1001 output boundaries",
+        "HP-CURVEPOINTS first numeric Enter previews second confirms",
+        "HP-CURVEPOINTS tree label Enter and Escape never generate points"
+      ],
+      "selected_input_cases": [
+        "HP-CURVEPOINTS multiple edges preview commit history save and next tool",
+        "HP-CURVEPOINTS three dimensional spline arc length spacing",
+        "HP-CURVEPOINTS output bound cancel and closed curve deduplication",
+        "HP-CURVEPOINTS mixed segments preserve exact selection rows",
+        "HP-CURVEPOINTS 999 1000 and 1001 output boundaries",
+        "HP-CURVEPOINTS first numeric Enter previews second confirms",
+        "HP-CURVEPOINTS tree label Enter and Escape never generate points"
+      ],
+      "interpretation": "Windows Qt widget input, point positions, bounds, commit/history/save asserted; not native OS mouse coverage."
     }
   },
-  "limits": "Catalogue reachability is distinct from functional cases. Unsupported UI methods are documented, not claimed to pass."
+  "limits": "Catalogue reachability is distinct from functional cases. Unsupported UI methods are documented, not claimed to pass.",
+  "incremental_evidence_20261027": {
+    "executed": 16,
+    "passed": 16,
+    "inventory": 623,
+    "scope": "New command and UI tool continuity. Historical entries and their baseline test_cases are preserved."
+  }
 }

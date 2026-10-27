@@ -47,6 +47,7 @@ std::string Kind(std::string_view id,std::string_view label){
     if(id=="guide.revolve")return "revolve-surface";
     if(id=="wire.project_surface")return "project-surface";
     if(id=="wire.wrap_project")return "wrap-project";
+    if(id=="wire.spaced_points")return "spaced-points";
     if(id=="part.curved_emboss")return "curved-emboss";
     if(id=="instructions.scene_editor")return "scene-editor";
     if(id=="instructions.sheet_editor")return "sheet-editor";
@@ -94,7 +95,8 @@ void Curve(QPainter& p,bool spline){
 }
 void Cube(QPainter& p){p.drawPolygon(QPolygonF{P(4,8),P(13,3),P(21,7),P(12,12)});p.drawPolyline(QPolygonF{P(4,8),P(4,18),P(12,23),P(21,18),P(21,7)});Line(p,12,12,12,23);}
 bool Basic(QPainter& p,const std::string& k,int variant){
-    if(k=="arrow")Arrow(p,4,20,20,4);
+    if(k=="spaced-points"){p.drawArc(QRectF(3,3,18,18),0,180*16);for(int i=0;i<5;++i){const double a=i*3.141592653589793/4;Dot(p,12+9*std::cos(a),12-9*std::sin(a));}}
+    else if(k=="arrow")Arrow(p,4,20,20,4);
     else if(k=="line"){Line(p,4,20,20,4);Dot(p,4,20);Dot(p,20,4);}
     else if(k=="point"){Line(p,12,3,12,21);Line(p,3,12,21,12);Dot(p,12,12);}
     else if(k=="circle"){p.drawEllipse(QRectF(4,4,16,16));if(variant==2){Dot(p,4,12);Dot(p,12,4);Dot(p,20,12);}else if(variant==1){Arrow(p,4,12,20,12);}else{Dot(p,12,12);Line(p,12,12,19,7);}}

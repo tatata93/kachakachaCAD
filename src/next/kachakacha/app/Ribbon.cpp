@@ -64,6 +64,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Extra("角を落とす", "wire.corner_chamfer"), Extra("角を丸める", "wire.corner_fillet"),
                 Extra("交点を点に", "wire.intersection_points"),
                 Extra("中心を点に", "wire.center_points"), Extra("主要点を点に", "wire.key_points"),
+                Extra("曲線に等間隔の点", "wire.spaced_points"),
                 Extra("平面へ投影", "wire.project"), Extra("面へ投影", "wire.project_surface"),
                 Extra("巻き付け投影", "wire.wrap_project"),
                 Extra("基準線にする", "wire.set_datum"), Extra("基準線を外す", "wire.clear_datum"),

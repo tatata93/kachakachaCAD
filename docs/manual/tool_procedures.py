@@ -21,7 +21,7 @@ def write(path,text,check):
         try:os.replace(temporary,path)
         finally:temporary.unlink(missing_ok=True)
 
-def build_pages(commands,check=False):
+def build_pages(commands,check=False,audit=True):
     assert set(RECIPES)==set(DETAILS)=={r[0] for r in commands},'Every command needs authored preparation, settings and recovery notes'
     build_foundations(write,check,commands)
     evidence=json.loads((HERE/'tool-evidence.json').read_text(encoding='utf-8')) if (HERE/'tool-evidence.json').is_file() else {}
@@ -34,7 +34,7 @@ def build_pages(commands,check=False):
         page=render_page((ident,name,mode,icon,shortcut,predicate,failure,guide),r,VARIANTS.get(ident,[]),evidence,variant_figures)
         write(HERE/'tools'/f'{ident}.html',page,check)
     write(HERE/'tool-procedures-index.json',json.dumps(counts,ensure_ascii=False,indent=2)+'\n',check)
-    audit_pages(commands)
+    if audit:audit_pages(commands)
     return counts
 
 def audit_pages(commands):

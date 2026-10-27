@@ -3,6 +3,7 @@
 #include "V2ImageTool.h"
 #include "V2CurvedEmbossTool.h"
 #include "V2ProjectionTool.h"
+#include "V2CurvePointsTool.h"
 //! 「足す・引く」を道具から始める(引継ぎ 2026-09-17 の 4)。
 //!
 //! 足す/引くを押す → 土台待ち → 3D で部品を押すと土台に入り、自動で相手待ちへ →
@@ -74,6 +75,7 @@ bool AcceptTrimEntity(kachakacha::v2::app::BooleanKind mode,EntityKind kind) {
 
 bool OpenTemporaryTool(V2MainWindow& window,std::string_view id)
 {
+    if (id == "wire.spaced_points") { V2CurvePointsTool::Open(window); return true; }
     if (id == "wire.project_surface" || id == "wire.wrap_project") { V2ProjectionTool::Open(window,id=="wire.wrap_project"); return true; }
     if (id == "part.curved_emboss") { V2CurvedEmbossTool::Open(window); return true; } if (id == "image.place") { V2ImageTool::Open(window); return true; }
     if (V2FaceActions::Run(window,id)) return true;

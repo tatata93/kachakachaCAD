@@ -90,6 +90,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `help.copy_diagnostics` | 診断情報をコピー | いつでも | いまの状態を短い文にして貼り板へ。文書は変えない | AT-UIX-011 |
 | `wire.center_points` | 中心に点 | ワイヤー1以上 | 円・円弧の中心に CreatePoint。線は変えない | AT-MEA-005 |
 | `wire.key_points` | 端点と中点に点 | ワイヤー1以上 | 始点・終点・中点に CreatePoint。線は変えない | AT-MEA-005 |
+| `wire.spaced_points` | 曲線に等間隔の点 | 辺を複数選択、間隔mm／等分数、端点有無、向き反転、下見→確定 | 各辺の弧長に沿う座標固定のCreatePointをまとめて1回のUndo。最大1,000点。元線への依存なし。辺をまたがず、閉曲線の重複終点は作らない | AT-MEA-005 |
 | `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)を線ごとに 1 つ(まとめて 1 回で戻る)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |
 | `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径、同上 | TransformWire(CornerFillet、cornerIndex)を線ごとに 1 つ(まとめて 1 回で戻る) | AT-WIR-006 |
 | `wire.array_linear` | 直線に並べる | ワイヤー1つ以上、個数(2〜200)、間隔または端から端まで | 個数-1 だけ TransformWire(Copy)。元は残す。まとめて1回で戻せる。UI-A001〜A003 | AT-WIR-006 |

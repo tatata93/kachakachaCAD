@@ -29,6 +29,7 @@ struct V2OutputAsset {
 class V2OutputTool final:public QDialog {
 public:
     static V2OutputTool* Open(V2MainWindow& window,int format=-1);
+    static void CancelViewportPick(V2MainWindow& window);
     static void Generate(V2MainWindow& window,std::string_view command);
     explicit V2OutputTool(V2MainWindow& window,int format);
     void TakeSelection();

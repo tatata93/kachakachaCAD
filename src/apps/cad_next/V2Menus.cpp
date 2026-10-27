@@ -65,7 +65,7 @@ void V2MainWindow::BuildMenus()
         "wire.coincident", "wire.tangent", "wire.curvature", "wire.chamfer",
         "wire.fillet", "wire.offset", "wire.meet_lines", "wire.array_linear",
         "wire.array_circular", "wire.intersection_points", "wire.center_points",
-        "wire.key_points", "wire.corner_chamfer", "wire.corner_fillet",
+        "wire.key_points", "wire.spaced_points", "wire.corner_chamfer", "wire.corner_fillet",
         "wire.set_datum", "wire.clear_datum", "wire.move", "wire.copy",
         "wire.mirror", "wire.rotate", "wire.scale", "wire.project", "wire.project_surface",
         "wire.wrap_project"});

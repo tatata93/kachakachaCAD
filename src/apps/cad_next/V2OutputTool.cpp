@@ -25,6 +25,7 @@ void V2OutputAsset::OwnShape(modeling::KernelShapeHandle handle) {
         [](auto* owned){kernel::ReleaseShape(*owned);delete owned;});
 }
 V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
+    window.EndArmedTools();window.SelectTool(modeling::DrawingTool::Select);
     for (auto* child : window.findChildren<QDialog*>()) {
         if (auto* active=dynamic_cast<V2OutputTool*>(child); active && active->isVisible()) {
             if (active->documentId_ != window.session_->GetDocument().Snapshot().id) {
@@ -35,7 +36,6 @@ V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
             return active;
         }
     }
-    window.EndArmedTools();window.SelectTool(modeling::DrawingTool::Select);
     auto* dialog=new V2OutputTool(window,format);dialog->TakeSelection();dialog->show();return dialog;
 }
 V2OutputTool::V2OutputTool(V2MainWindow& window,int format):QDialog(&window),window_(window) {

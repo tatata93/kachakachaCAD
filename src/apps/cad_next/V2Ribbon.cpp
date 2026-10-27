@@ -93,6 +93,7 @@ void V2Ribbon::SetBlockedHandler(std::function<void(const RibbonTool&)> handler)
 
 void V2Ribbon::ShowMode(UiMode mode)
 {
+    if(mode==mode_&&!categoryButtons_.empty())return;
     remembered_[mode_] = current_;
     mode_ = mode;
     for (QToolButton* button : categoryButtons_) {
@@ -119,11 +120,12 @@ void V2Ribbon::ShowMode(UiMode mode)
         categoryButtons_.push_back(button);
     }
     const auto seen = remembered_.find(mode);
-    current_ = seen == remembered_.end() ? 0 : seen->second;
-    if (current_ < 0 || current_ >= static_cast<int>(categories.size())) {
-        current_ = 0;
+    int chosen = seen == remembered_.end() ? 0 : seen->second;
+    if (chosen < 0 || chosen >= static_cast<int>(categories.size())) {
+        chosen = 0;
     }
-    ShowCategory(current_);
+    current_=-1; // A new mode must rebuild even when its category number matches.
+    ShowCategory(chosen);
 }
 
 void V2Ribbon::ShowCategory(int index)
@@ -135,11 +137,12 @@ void V2Ribbon::ShowCategory(int index)
     if (index < 0 || index >= static_cast<int>(categories.size())) {
         index = 0;
     }
+    const bool reuse=index==current_&&!toolButtons_.empty();
     current_ = index;
     for (std::size_t at = 0; at < categoryButtons_.size(); ++at) {
         categoryButtons_[at]->setChecked(static_cast<int>(at) == index);
     }
-    RebuildTools();
+    if(!reuse)RebuildTools();
 }
 
 void V2Ribbon::RebuildTools()

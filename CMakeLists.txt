@@ -1185,6 +1185,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2QuickDisplayControls.cpp
         src/apps/cad_next/V2ViewFocus.cpp
         src/apps/cad_next/V2SelfTestToolContracts.cpp
+        src/apps/cad_next/V2SelfTestToolContinuity.cpp
+        src/apps/cad_next/V2CurvePointsTool.cpp
         src/apps/cad_next/V2SelfTestUsability.cpp
         src/apps/cad_next/V2ImageTool.cpp
         src/apps/cad_next/V2InstructionWorkspace.cpp

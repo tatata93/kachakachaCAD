@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QSizePolicy>
+#include <QSignalBlocker>
 #include <algorithm>
 using namespace kachakacha::v2::app;
 namespace {
@@ -27,7 +28,14 @@ void V2OperationPanelHost::SetActionLookup(std::function<QAction*(std::string_vi
     chooserMode_.reset();SetToolMode(mode);
 }
 void V2OperationPanelHost::SetToolMode(UiMode mode) {
-    if(chooserMode_==mode)return;chooserMode_=mode;
+    if(chooserMode_==mode)return;
+    const bool reuse=chooser_&&chooserMode_.has_value();chooserMode_=mode;
+    // The chooser already contains every mode. Only its filter changes; action
+    // availability is kept current by the existing QAction::changed connections.
+    // SetActionLookup resets chooserMode_ to force rebinding when needed.
+    if(reuse){QSignalBlocker searchBlock(search_),allBlock(allModes_);
+        search_->clear();allModes_->setChecked(false);FilterTools();
+        if(current_==Shelf::None)pages_->setCurrentWidget(chooser_);return;}
     if(chooser_){chooser_->setObjectName(QStringLiteral("retiredToolChooser"));for(auto* child:chooser_->findChildren<QWidget*>())child->setObjectName(QStringLiteral("retired"));pages_->removeWidget(chooser_);chooser_->hide();chooser_->deleteLater();}
     searchEntries_.clear();
     auto* container=new QWidget(pages_);container->setObjectName(QStringLiteral("toolChooserPage"));

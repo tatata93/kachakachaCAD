@@ -23,6 +23,7 @@ EXAMPLES={
  'part.thicken':[('section-and-delete.html','元面に依存しない厚み部品を作る')]
 }
 PHOTO_SETS={
+ 'wire.spaced_points':[('v2-spaced-points-preview.png','Qt入力試験の実画面：10mm直線と半径10mm・90度円弧を選び、2mm間隔と端点を指定。下見15点。'),('v2-spaced-points-result.png','同じ入力の確定結果：直線6点と円弧9点。1回のUndo、Redo、保存・再読込も検査。')],
  'part.extrude':[('v2-headlight-lamp-faces-preview.png','準備：車体へ投影した小さなライト面。'),('v2-headlight-lamp-central-plane-pick.png','終端選択：中央面を選ぶ役割へ切り替え、候補面を確認します。'),('v2-headlight-lamp-central-plane-preview.png','下見：範囲・方向・平面延長を確認した状態。'),('v2-headlight-lamp-central-plane-detail.png','完成形：同じ生成ライトを単独表示した拡大図。')],
  'wire.project_surface':[('v2-panorama-01-two-planes.png','準備：正面と側面の別々の作図面。'),('v2-panorama-02-front-direction.png','正面側の行だけに投影方向を設定。'),('v2-panorama-03-side-direction.png','側面側の行だけに別方向を設定。'),('v2-panorama-04-preview.png','下見：正面・角R・側面を回る輪郭。'),('v2-panorama-05-result.png','確定した閉じた窓輪郭。')],
  'part.trim_overlap':[('v2-trim-window-01-input.png','加工前の対象と窓輪郭。'),('v2-trim-window-02-regions.png','分割で得られた区画。'),('v2-trim-window-03-keep-body.png','車体側を残す選択。'),('v2-trim-window-04-result.png','再読込後の穴と境界ワイヤー。')],
@@ -67,7 +68,7 @@ def finish(ident):
     if ident in FILE or ident.startswith('export.') or ident=='output.copy':
         return '保存・出力先と対象を確認して実行ボタンを押します。出力棚を使う場合は、対象と形式を選び、出す先を選んでから出力します。','ファイル選択中は取消できます。書出したファイルは図面のCtrl+Zでは消えません。同じ文書へ生成した形状は文書のUndoを使います。'
     if ident in ('fabrication.split_part','fabrication.merge_parts','fabrication.edit_part'):
-        return '条件を入力後、分割／結合をプレビューを押し、前後の形と警告を確認します。同じ条件の下見が表示された後に「編集を確定」を押すと適用します。下見なしでの初回確定は下見作成になります。','Escは案内を出し、条件や編集案を保持します。操作を終える時は選択（V）または別の道具へ切り替えます。確定した部材編集はCtrl+Zで戻します。'
+        return '条件を入力後、分割／結合をプレビューを押し、前後の形と警告を確認します。同じ条件の下見が表示された後に「編集を確定」を押すと適用します。下見なしでの初回確定は下見作成になります。','Escは条件を保ったまま未確定の分割・結合案を破棄します。モードや道具を切り替えても古い案は残しません。確定した部材編集はCtrl+Zで戻します。'
     if ident=='fabrication.create_pattern':
         return '現在の近似モデル全体を対象に「展開」を押します。基準辺指定では部材番号を指定してから展開します。','Escは条件を消さず案内を表示します。操作を終えるには選択または別の道具へ切り替えます。出力先に書いたファイルは図面のUndo対象ではありません。'
     if ident=='workplane.create':

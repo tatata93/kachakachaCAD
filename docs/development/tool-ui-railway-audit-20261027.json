@@ -1,0 +1,246 @@
+{
+  "schema": 1,
+  "base_commit": "400aa648f",
+  "gate_status": "passed",
+  "full_evidence": "out\\verification\\tool-ui-reuse-accepted-20261028\\result.json",
+  "gate_start": "2026-10-27T15:06:00.730470+00:00",
+  "gate_end": "2026-10-27T15:33:55.329930+00:00",
+  "steps": [
+    {
+      "name": "doctor",
+      "start": "2026-10-27T15:06:04.631063+00:00",
+      "end": "2026-10-27T15:06:06.389143+00:00",
+      "seconds": 1.7580125000094995,
+      "exit_code": 0
+    },
+    {
+      "name": "configure",
+      "start": "2026-10-27T15:06:06.389143+00:00",
+      "end": "2026-10-27T15:06:20.190756+00:00",
+      "seconds": 13.801943800062872,
+      "exit_code": 0
+    },
+    {
+      "name": "inventory",
+      "start": "2026-10-27T15:06:20.190756+00:00",
+      "end": "2026-10-27T15:06:20.334435+00:00",
+      "seconds": 0.14314960001502186,
+      "exit_code": 0
+    },
+    {
+      "name": "build-3",
+      "start": "2026-10-27T15:06:23.007739+00:00",
+      "end": "2026-10-27T15:06:34.015660+00:00",
+      "seconds": 11.007496499922127,
+      "exit_code": 0
+    },
+    {
+      "name": "preflight",
+      "start": "2026-10-27T15:06:34.015660+00:00",
+      "end": "2026-10-27T15:06:39.099178+00:00",
+      "seconds": 5.083910600049421,
+      "exit_code": 0
+    },
+    {
+      "name": "build-5",
+      "start": "2026-10-27T15:06:39.104165+00:00",
+      "end": "2026-10-27T15:07:09.413945+00:00",
+      "seconds": 30.31052619998809,
+      "exit_code": 0
+    },
+    {
+      "name": "ui-inventory",
+      "start": "2026-10-27T15:07:09.414942+00:00",
+      "end": "2026-10-27T15:07:09.568167+00:00",
+      "seconds": 0.15318629995454103,
+      "exit_code": 0
+    },
+    {
+      "name": "tests",
+      "start": "2026-10-27T15:07:09.728901+00:00",
+      "end": "2026-10-27T15:33:39.068367+00:00",
+      "seconds": 1589.3411399000324,
+      "exit_code": 0
+    },
+    {
+      "name": "legacy-self-test",
+      "start": "2026-10-27T15:33:39.076252+00:00",
+      "end": "2026-10-27T15:33:50.122565+00:00",
+      "seconds": 11.040566600044258,
+      "exit_code": 0
+    }
+  ],
+  "windows_focused_cases": [
+    {
+      "duration_ms": 2491.0448,
+      "end": "2026-10-27T15:04:15.266Z",
+      "name": "HP-TOOLS distinct tool illustrations",
+      "start": "2026-10-27T15:04:12.774Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1380.0135,
+      "end": "2026-10-27T15:04:16.647Z",
+      "name": "HP-CONTINUITY support-face pick to loft wire via ribbon",
+      "start": "2026-10-27T15:04:15.266Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1135.008,
+      "end": "2026-10-27T15:04:17.776Z",
+      "name": "HP-CONTINUITY output destination pick to drawing via ribbon",
+      "start": "2026-10-27T15:04:16.647Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2223.1673,
+      "end": "2026-10-27T15:04:20.006Z",
+      "name": "HP-CONTINUITY output point and face picks reuse and close safely",
+      "start": "2026-10-27T15:04:17.783Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1689.3877,
+      "end": "2026-10-27T15:04:21.696Z",
+      "name": "HP-CONTINUITY face action pauses during selection editing",
+      "start": "2026-10-27T15:04:20.006Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1677.2751,
+      "end": "2026-10-27T15:04:23.374Z",
+      "name": "HP-CONTINUITY fabrication partition Escape and mode change",
+      "start": "2026-10-27T15:04:21.696Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 15239.3406,
+      "end": "2026-10-27T15:04:38.612Z",
+      "name": "HP-CONTINUITY visible ribbon tool variants allow the next drawing operation",
+      "start": "2026-10-27T15:04:23.374Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1084.3652,
+      "end": "2026-10-27T15:04:39.699Z",
+      "name": "HP-CONTINUITY copy base retake and destination roles",
+      "start": "2026-10-27T15:04:38.612Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4599.2221,
+      "end": "2026-10-27T15:04:44.299Z",
+      "name": "HP-CURVEPOINTS multiple edges preview commit history save and next tool",
+      "start": "2026-10-27T15:04:39.699Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4488.8166,
+      "end": "2026-10-27T15:04:48.788Z",
+      "name": "HP-CURVEPOINTS three dimensional spline arc length spacing",
+      "start": "2026-10-27T15:04:44.299Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2539.2852,
+      "end": "2026-10-27T15:04:51.326Z",
+      "name": "HP-CURVEPOINTS output bound cancel and closed curve deduplication",
+      "start": "2026-10-27T15:04:48.788Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1749.4823,
+      "end": "2026-10-27T15:04:53.077Z",
+      "name": "HP-CURVEPOINTS mixed segments preserve exact selection rows",
+      "start": "2026-10-27T15:04:51.326Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2315.3886,
+      "end": "2026-10-27T15:04:55.393Z",
+      "name": "HP-CURVEPOINTS 999 1000 and 1001 output boundaries",
+      "start": "2026-10-27T15:04:53.077Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1955.6604,
+      "end": "2026-10-27T15:04:57.345Z",
+      "name": "HP-CURVEPOINTS first numeric Enter previews second confirms",
+      "start": "2026-10-27T15:04:55.394Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1951.3481,
+      "end": "2026-10-27T15:04:59.302Z",
+      "name": "HP-CURVEPOINTS tree label Enter and Escape never generate points",
+      "start": "2026-10-27T15:04:57.345Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 797.8834,
+      "end": "2026-10-27T15:05:00.100Z",
+      "name": "HP-CONTINUITY mode and category reuse preserves commands and search",
+      "start": "2026-10-27T15:04:59.303Z",
+      "status": "passed"
+    }
+  ],
+  "ribbon_tool_variants": 43,
+  "catalogue_commands": 169,
+  "maximum_point_commit": {
+    "commit_and_ui_settle_ms": 138,
+    "points": 1000
+  },
+  "point_commit_before": {
+    "commit_and_ui_settle_ms": 4685,
+    "points": 1000,
+    "evidence": "out/tool-continuity-20261027/windows3/maximum-point-commit.json"
+  },
+  "native_os_input": {
+    "at": "2026-10-27T15:32:51.828205+00:00",
+    "application": "out/verification/tool-ui-reuse-accepted-20261028/package/kachakacha_cad_next.exe",
+    "window_id": 14291188,
+    "title": "kachakachaCAD 0.1.0 — 無題",
+    "observations": {
+      "uia_search_value": "曲線に等間隔",
+      "uia_search_result": "1件 — 上下の道具は同じ操作です",
+      "uia_tool_button": "曲線に等間隔の点",
+      "ctrl_k_focus_change": "not repeated in final candidate; prior candidate unconfirmed",
+      "tab_focus_change": "not repeated in final candidate; prior candidate unconfirmed",
+      "close_own_empty_window_alt_f4": "passed; target window absent from list afterwards",
+      "native_mouse": "not available: coordinate input geometry unavailable",
+      "native_capture": "not available: Windows Graphics Capture timed out"
+    },
+    "scope": "UI Automation search filtering and owned-window close only; not a native modeling workflow pass.",
+    "executable_sha256": "49fe58e93c081610cb566f80f2f60c0cc7bfb9b906aa839fbe5b929593f11091"
+  },
+  "initial_full_failure": {
+    "evidence": "out/verification/tool-ui-final-accepted-20261027/result.json",
+    "reason": "Both UI processes hit the unchanged 900-second timeout; package 573/622, application 611/622 finished with no case failure. Earlier progress commentary incorrectly called package coverage complete and was corrected."
+  },
+  "switching_timings": {
+    "before_application_ms": {
+      "HP-TOOLS all catalog toolbar activations have input or reason": 56700.6074,
+      "HP-TOOLS exclusive tool transition matrix and shortcuts": 178022.7635
+    },
+    "after_evidence": "out/tool-continuity-20261027/switch-speed/report.json",
+    "scope": "Same Windows machine, Release and Qt offscreen; single samples, all assertions preserved."
+  },
+  "published_startup": {
+    "evidence": "out/tool-continuity-20261027/published-startup",
+    "conditions": [
+      "windows",
+      "offscreen inherited; corrected to Windows by normal startup"
+    ],
+    "status": "passed"
+  },
+  "deleted_files": [],
+  "preserved": "Unrelated dirty fitted model, existing releases, user CAD windows and worktrees.",
+  "ctest": {
+    "total": 195,
+    "skipped": []
+  },
+  "ui_cases": [
+    623,
+    623
+  ]
+}

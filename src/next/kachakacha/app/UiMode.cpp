@@ -70,7 +70,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
         "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
         "help.copy_diagnostics",
-        "wire.intersection_points", "wire.center_points", "wire.key_points",
+        "wire.intersection_points", "wire.center_points", "wire.key_points", "wire.spaced_points",
         "wire.corner_chamfer", "wire.corner_fillet",
         "wire.array_linear", "wire.array_circular",
         "wire.set_datum", "wire.clear_datum", "edit.numeric",

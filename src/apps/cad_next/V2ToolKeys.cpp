@@ -81,6 +81,13 @@ bool CommitNumericEntry(QObject* target,int key)
     return true; // First Enter applies the value and previews; the next confirms the tool.
 }
 
+bool HandleFabricationKey(V2MainWindow& window,V2FabricationDock* dock,int key)
+{
+    if(!dock)return false;
+    if(key==Qt::Key_Escape)window.ForgetPendingPartition();
+    return dock->HandleKey(key);
+}
+
 } // namespace
 
 //! いま Enter と Esc を引き受ける道具が動いているか。
@@ -173,7 +180,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
     }
-    if (fabricationDock_ != nullptr && fabricationDock_->HandleKey(key)) return true;
+    if (HandleFabricationKey(*this,fabricationDock_,key)) return true;
     if (partDock_ != nullptr && partDock_->HandleKey(key)) return true;
     if (HandleCornerToolKey(key)) {
         return true;

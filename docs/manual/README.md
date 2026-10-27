@@ -5,6 +5,23 @@
 プラ板と紙で鉄道模型を作るための CAD です。
 この説明書は、実際の画面を撮ったものと一緒に、全部の機能を順に説明します。
 
+## 曲線に沿う手摺脚・リベットの位置決め（2026-10-27）
+
+「作図→編集→曲線に等間隔の点」で辺を複数選び、間隔mmか等分数を指定します。
+3D曲線にも対応し、元の線を保って座標固定の作図点を作ります。下見を確認して確定し、1回のUndoで戻せます。
+対象を外す行、端点の扱い、1,000点の上限は[画像付き手順](tools/wire.spaced_points.html)を参照してください。
+移動・コピーには基準点座標と移動先の手順表示があり、「基準点を取り直す」で対象を保って指定し直せます。
+
+![基準点と移動先を区別するコピー操作](images/v2-copy-explicit-roles.png)
+![複数の辺に等間隔の点を作る下見](images/v2-spaced-points-preview.png)
+![確定して残った作図点](images/v2-spaced-points-result.png)
+
+`copy-explicit-roles`、`spaced-points-preview`、`spaced-points-result` は
+2026-10-27のWindows用Qt入力試験の実画面です。`KACHACAD_CONTINUITY_EVIDENCE` を指定して
+`HP-CONTINUITY copy base retake and destination roles` と
+`HP-CURVEPOINTS multiple edges preview commit history save and next tool` を実行します。
+結果画像の元名は `spaced-points-committed.png` です。`--manual-state` の引数ではありません。
+
 ## 複数の線をコピーする（2026-10-26）
 
 コピーを開き「移動・複写する対象」の「選ぶ・追加」で線をクリック、または範囲で追加します。

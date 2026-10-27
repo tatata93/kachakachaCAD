@@ -8,6 +8,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QComboBox>
+#include <QDialog>
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFormLayout>
@@ -55,11 +56,22 @@ void V2OutputTool::SetPickedFrame(int role,const geometry::OutputFrame& frame) {
     pickRole_=0;SetPlacement(value);show();raise();
 }
 void V2OutputTool::Pick(int role) {
+    window_.EndArmedTools();
+    window_.SelectTool(modeling::DrawingTool::Select);
     if(pickRole_==1)window_.viewport_->CancelPointPick();pickRole_=0;
     if(role==4){for(const auto& id:window_.viewport_->Selection().entityIds){const auto frame=window_.WorkPlaneFrameOf(id);if(frame.has_value()){SetPickedFrame(3,{frame->origin,frame->normal,frame->uAxis});return;}}
         status_->setText(QStringLiteral("左ペインか3Dで配置先の作業平面を選んでください。"));return;}
     pickRole_=role;status_->setText(QStringLiteral("CADの3Dビューで%1をクリックしてください。").arg(role==1?QStringLiteral("基準点"):QStringLiteral("面上の点")));
     if(role==1){QPointer<V2OutputTool> guard(this);window_.viewport_->BeginPointPick([guard](const V2Viewport::PickedPoint& point){if(guard)guard->SetPickedFrame(1,{point.point,{0,0,1},{1,0,0}});},"出力の基準点を指定してください。");}
+}
+void V2OutputTool::CancelViewportPick(V2MainWindow& window) {
+    for(auto* child:window.findChildren<QDialog*>(QString(),Qt::FindDirectChildrenOnly)) {
+        auto* tool=dynamic_cast<V2OutputTool*>(child);
+        if(!tool || tool->pickRole_==0)continue;
+        if(tool->pickRole_==1)window.Viewport().CancelPointPick();
+        tool->pickRole_=0;
+        tool->status_->setText(QStringLiteral("別の道具へ切り替えたため、3Dでの指定を終了しました。配置の値は保持しています。"));
+    }
 }
 bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
     if(V2ToolSelection::Active(*window_.viewport_))return false;

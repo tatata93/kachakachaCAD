@@ -4,6 +4,8 @@
 #include "V2RoleInput.h"
 #include "V2ToolSelection.h"
 #include <QDockWidget>
+#include <QLabel>
+#include <QObject>
 #include <QComboBox>
 #include <QPushButton>
 #include <QString>
@@ -15,6 +17,9 @@
 #include <QShowEvent>
 #include <QHideEvent>
 #include <QSignalBlocker>
+#include <QApplication>
+#include <QEvent>
+#include <QTimer>
 #include <algorithm>
 #include <array>
 
@@ -43,6 +48,11 @@ public:
             done_->setObjectName("transformTargetsDone");layout->addWidget(done_);done_->hide();
             connect(done_,&QPushButton::clicked,this,[this]{Cancel();});
             roles_[0]->arm->setToolTip(QStringLiteral("複数の線・部品をクリックや範囲で追加します。Ctrlでも追加・解除できます。"));
+            base_=new QLabel(this);base_->setObjectName("transformBasePoint");base_->setWordWrap(true);layout->addWidget(base_);
+            destination_=new QLabel(this);destination_->setObjectName("transformDestination");destination_->setWordWrap(true);layout->addWidget(destination_);
+            resetBase_=new QPushButton(QStringLiteral("基準点を取り直す"),this);resetBase_->setObjectName("transformResetBase");layout->addWidget(resetBase_);
+            connect(resetBase_,&QPushButton::clicked,this,[this]{Cancel();window_.Viewport().StepBackInputPoint();Refresh();window_.Viewport().setFocus();});
+            qApp->installEventFilter(this);
         }
     }
     void Sync() {
@@ -63,6 +73,11 @@ public:
         Refresh();
     }
 protected:
+    bool eventFilter(QObject* object,QEvent* event) override {
+        if(kind_==2 && isVisible() && ((object==&window_.Viewport()&&event->type()==QEvent::MouseButtonRelease)
+            || event->type()==QEvent::KeyRelease))QTimer::singleShot(0,this,[this]{Sync();});
+        return false;
+    }
     void showEvent(QShowEvent* event) override {QWidget::showEvent(event);Sync();}
     void hideEvent(QHideEvent* event) override {Cancel();QWidget::hideEvent(event);}
 private:
@@ -105,6 +120,14 @@ private:
     void Refresh() {
         const bool polyline = PolylineMode();
         if(done_)done_->setVisible(active_>=0);
+        if(base_){const auto tool=window_.Session().CurrentTool();const bool translating=tool==modeling::DrawingTool::Move||tool==modeling::DrawingTool::Copy;
+            base_->setVisible(translating);destination_->setVisible(translating);resetBase_->setVisible(translating);
+            const bool placed=window_.Session().HasPlacedPoints();const auto p=window_.Session().ConstraintAnchor();
+            base_->setText(placed?QStringLiteral("② 基準点：X %1 / Y %2 / Z %3 mm").arg(p.x,0,'f',3).arg(p.y,0,'f',3).arg(p.z,0,'f',3)
+                :QStringLiteral("② 基準点：対象を選び終えたら3Dでクリック"));
+            destination_->setText(placed?QStringLiteral("③ 移動先：3Dでクリック。下見がカーソルに追従します。")
+                :QStringLiteral("③ 移動先：基準点を決めた後に指定"));resetBase_->setEnabled(placed);
+        }
         if (corner_) roles_[0]->name->setText(polyline ? QStringLiteral("加工するワイヤー全体") : QStringLiteral("線 A"));
         for(int i=0;i<(corner_?3:1);++i) {
             roles_[i]->setVisible(!polyline || i == 0);
@@ -116,6 +139,7 @@ private:
     }
     V2MainWindow& window_;bool corner_=false,writing_=false,lastPolyline_=false;int kind_=0,active_=-1;
     QPushButton* done_=nullptr;
+    QLabel* base_=nullptr;QLabel* destination_=nullptr;QPushButton* resetBase_=nullptr;
     std::vector<app::SelectionRef> last_;
     std::array<V2RoleInput*,3> roles_{};std::array<app::SelectionSet,3> inputs_{};
 };

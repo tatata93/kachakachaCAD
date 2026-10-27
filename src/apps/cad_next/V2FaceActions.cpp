@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
+#include "V2ToolSelection.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -52,7 +53,7 @@ V2FaceActions::V2FaceActions(V2MainWindow& window,std::string command)
 }
 bool V2FaceActions::eventFilter(QObject* object,QEvent* event)
 {
-    if(!isVisible())return false;
+    if(!isVisible() || V2ToolSelection::Active(*window_.viewport_))return false;
     if(event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape) {
         auto* widget=qobject_cast<QWidget*>(object);if(!widget || widget->window()!=window())return false;
         status_->setText(QStringLiteral("フェイスを選んで続けられます。"));return true;

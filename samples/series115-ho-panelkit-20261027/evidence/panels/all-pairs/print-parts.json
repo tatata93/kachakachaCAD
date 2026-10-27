@@ -1,0 +1,4347 @@
+{
+    "assemblyChecks": [
+        {
+            "first": "70eef96d-0db2-522f-9b99-7f833842d44b",
+            "label": "運転士側窓3 中桟一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "d1cee835-29cd-5c70-b405-17d5d2692fdf",
+            "label": "運転士側窓4 中桟一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "db345af0-4005-5ed5-81b4-4baa398d1d3a",
+            "label": "運転士側窓7 中桟一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "a96351ee-8263-5c8e-b054-79cdf472ef9a",
+            "label": "運転士側窓8 中桟一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "38f90da6-4299-5512-9734-2a6c6d068923",
+            "label": "運転士側窓11 中桟一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "2be6ef88-cf48-53c7-a0d6-de71e3550d10",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "0fd6fcc6-c81c-5ed5-99e8-42ef06a58fbd",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "c566dfb8-64fe-5aea-84db-577bd5b1cfbc",
+            "label": "客扉踏板・外板に沿う裏面 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "0bee3429-bc6e-5d17-afc9-3dd40db91315",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "27534bd5-a5c2-53d0-8c28-6f693ec8f1f8",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "43a762f8-12a4-5410-a233-166fe21fcd1e",
+            "label": "客扉踏板・外板に沿う裏面 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "f2db0b58-92b8-5c92-8dbb-f08c6d0fc3c8",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "167adfac-092e-5917-85f0-9bcb8eaf920a",
+            "label": "半自動扉の縦長手掛け枠 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "20e86adc-f5fa-58e7-b4e7-11f7768476e5",
+            "label": "客扉踏板・外板に沿う裏面 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "cb6cccb8-e43b-51eb-9739-0eaeb29d8542",
+            "label": "運転士側雨樋 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "cb6cccb8-e43b-51eb-9739-0eaeb29d8542",
+            "label": "運転士側雨樋 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "cb6cccb8-e43b-51eb-9739-0eaeb29d8542",
+            "label": "運転士側雨樋 / 後妻",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "2c4a79d3-9670-5857-8d06-474d86dba9c3"
+        },
+        {
+            "first": "cb6cccb8-e43b-51eb-9739-0eaeb29d8542",
+            "label": "運転士側雨樋 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "a67c840c-4f2e-53e5-b185-dba38087628a",
+            "label": "助手側窓1 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "e8dd36bb-d9f0-51f7-8929-4506ac1f884b",
+            "label": "助手側窓4 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "f42b0d94-6726-5d08-bfa4-c6cd6f0bf2b7",
+            "label": "助手側窓5 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "c14b0fa2-b35a-522b-b26e-405d9aabccd4",
+            "label": "助手側窓8 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "b24a6729-2410-5dba-90f5-e46ad592c622",
+            "label": "助手側窓9 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "aa95a9ed-37fa-5c8b-9d1f-19b71a6d59cd",
+            "label": "助手側窓12 中桟一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "e448d2c9-b8d6-5ced-817d-4ceb1f0ee4fd",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "ccb419cb-0be3-51ac-8921-9f3d4526bd9d",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "a0354222-b7a8-5ca6-803f-32f65ee40010",
+            "label": "客扉踏板・外板に沿う裏面 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "5e105094-1ec7-50fb-9b8c-6cd6b96463bb",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "5a0ab190-06fc-5300-b4dd-b9354f9def26",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "a54048cc-0e66-5276-9456-b2c2a86ce204",
+            "label": "客扉踏板・外板に沿う裏面 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "f36ab409-9762-5629-9ab7-2cd76cc6880b",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "66f23e3a-ef04-5701-8f9c-52a1a7d171b1",
+            "label": "半自動扉の縦長手掛け枠 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "aaad1bbc-88cd-5cf0-a307-2ceb7b7d963d",
+            "label": "客扉踏板・外板に沿う裏面 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "441d16fc-b25b-5005-9dd7-37e8149cd654",
+            "label": "助手側雨樋 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "441d16fc-b25b-5005-9dd7-37e8149cd654",
+            "label": "助手側雨樋 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "441d16fc-b25b-5005-9dd7-37e8149cd654",
+            "label": "助手側雨樋 / 後妻",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "2c4a79d3-9670-5857-8d06-474d86dba9c3"
+        },
+        {
+            "first": "441d16fc-b25b-5005-9dd7-37e8149cd654",
+            "label": "助手側雨樋 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "48b94b37-bf64-51a2-ab63-a18ac184246a",
+            "label": "後部側面行先表示・空白幕 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "48b94b37-bf64-51a2-ab63-a18ac184246a",
+            "label": "後部側面行先表示・空白幕 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "label": "パノラミック窓ゴム一体-1 / 前面曲面透明板-1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "32db257c-0a40-5d06-a731-70c472a03c23"
+        },
+        {
+            "first": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "label": "パノラミック窓ゴム一体-1 / 幌受け・締結耳一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0"
+        },
+        {
+            "first": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "label": "パノラミック窓ゴム一体-1 / 室内トレー・床板に接する支持座一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d39043c2-90f8-5666-aae6-9f1fdb97f661"
+        },
+        {
+            "first": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "label": "パノラミック窓ゴム一体-1 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "label": "パノラミック窓ゴム一体-1 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "32db257c-0a40-5d06-a731-70c472a03c23",
+            "label": "前面曲面透明板-1 / 室内トレー・床板に接する支持座一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d39043c2-90f8-5666-aae6-9f1fdb97f661"
+        },
+        {
+            "first": "32db257c-0a40-5d06-a731-70c472a03c23",
+            "label": "前面曲面透明板-1 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "32db257c-0a40-5d06-a731-70c472a03c23",
+            "label": "前面曲面透明板-1 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "label": "パノラミック窓ゴム一体1 / 前面曲面透明板1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "bc23b579-ed7b-5e95-bf36-0090028f48e9"
+        },
+        {
+            "first": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "label": "パノラミック窓ゴム一体1 / 幌受け・締結耳一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0"
+        },
+        {
+            "first": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "label": "パノラミック窓ゴム一体1 / 室内トレー・床板に接する支持座一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d39043c2-90f8-5666-aae6-9f1fdb97f661"
+        },
+        {
+            "first": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "label": "パノラミック窓ゴム一体1 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "label": "パノラミック窓ゴム一体1 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "bc23b579-ed7b-5e95-bf36-0090028f48e9",
+            "label": "前面曲面透明板1 / 室内トレー・床板に接する支持座一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d39043c2-90f8-5666-aae6-9f1fdb97f661"
+        },
+        {
+            "first": "bc23b579-ed7b-5e95-bf36-0090028f48e9",
+            "label": "前面曲面透明板1 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "bc23b579-ed7b-5e95-bf36-0090028f48e9",
+            "label": "前面曲面透明板1 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ceba0aa1-af9d-5bcf-a8c7-f0e7aa49f8a2",
+            "label": "横長貫通扉窓透明板 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "ceba0aa1-af9d-5bcf-a8c7-f0e7aa49f8a2",
+            "label": "横長貫通扉窓透明板 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 貫通扉取手",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "143b9c54-a790-558e-b78f-14d6fa59558f"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 斜め隅の渡り板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "ea716f47-41d7-56ee-9c60-25a6c59a3e4a"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "4ee64752-259c-5f5f-a66a-63ef6f7f403d"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "2e9c3721-0537-5b34-8a08-a07b855214dd"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "8144f9b1-bed7-5182-8bd9-0247926b6d10"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "250f456a-7dde-5aa1-b93f-d497660be0f0"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "765aecd4-b3ac-5def-a638-3b9a34a83f3f"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 幌受の締結金具",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "165d7d97-8edc-52a9-882c-3fc2aa368b1a"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "label": "幌受け・締結耳一体 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "143b9c54-a790-558e-b78f-14d6fa59558f",
+            "label": "貫通扉取手 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ea716f47-41d7-56ee-9c60-25a6c59a3e4a",
+            "label": "斜め隅の渡り板 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "label": "前照灯の背面を折妻外板に密着 / 前照灯前縁金属リング",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "c8aa57ab-352b-5242-9faa-3a698840033f"
+        },
+        {
+            "first": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "label": "前照灯の背面を折妻外板に密着 / 反射鏡・環状接着座",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "55c4aad6-7b8d-5f56-9843-b39de8b39661"
+        },
+        {
+            "first": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "label": "前照灯の背面を折妻外板に密着 / 前照灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "4bfa7816-5130-56d6-aaaa-1f64b0f6ee6e"
+        },
+        {
+            "first": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "label": "前照灯の背面を折妻外板に密着 / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a00f7964-cf87-596c-871f-e34e98feb282"
+        },
+        {
+            "first": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "label": "前照灯の背面を折妻外板に密着 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "c8aa57ab-352b-5242-9faa-3a698840033f",
+            "label": "前照灯前縁金属リング / 反射鏡・環状接着座",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "55c4aad6-7b8d-5f56-9843-b39de8b39661"
+        },
+        {
+            "first": "c8aa57ab-352b-5242-9faa-3a698840033f",
+            "label": "前照灯前縁金属リング / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a00f7964-cf87-596c-871f-e34e98feb282"
+        },
+        {
+            "first": "c8aa57ab-352b-5242-9faa-3a698840033f",
+            "label": "前照灯前縁金属リング / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "55c4aad6-7b8d-5f56-9843-b39de8b39661",
+            "label": "反射鏡・環状接着座 / 前照灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "4bfa7816-5130-56d6-aaaa-1f64b0f6ee6e"
+        },
+        {
+            "first": "55c4aad6-7b8d-5f56-9843-b39de8b39661",
+            "label": "反射鏡・環状接着座 / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a00f7964-cf87-596c-871f-e34e98feb282"
+        },
+        {
+            "first": "55c4aad6-7b8d-5f56-9843-b39de8b39661",
+            "label": "反射鏡・環状接着座 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "4bfa7816-5130-56d6-aaaa-1f64b0f6ee6e",
+            "label": "前照灯電球 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "a00f7964-cf87-596c-871f-e34e98feb282",
+            "label": "凸レンズ・枠内の円筒受け / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯前縁金属リング",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "ddf987c3-d354-5e15-b9a8-0ee22f0414fd"
+        },
+        {
+            "first": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯奥の反射鏡",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "e4e1c0c4-e5ca-5987-aa3d-95f4a02c2851"
+        },
+        {
+            "first": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "c1f52be5-0ca7-55e5-8654-ae7d55fdc1b7"
+        },
+        {
+            "first": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯透明レンズ",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "48e2a6ea-ef58-5e95-9bbf-722021b3bcf4"
+        },
+        {
+            "first": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "label": "尾灯の背面を折妻外板に密着 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ddf987c3-d354-5e15-b9a8-0ee22f0414fd",
+            "label": "尾灯前縁金属リング / 尾灯透明レンズ",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "48e2a6ea-ef58-5e95-9bbf-722021b3bcf4"
+        },
+        {
+            "first": "ddf987c3-d354-5e15-b9a8-0ee22f0414fd",
+            "label": "尾灯前縁金属リング / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "e4e1c0c4-e5ca-5987-aa3d-95f4a02c2851",
+            "label": "尾灯奥の反射鏡 / 尾灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "c1f52be5-0ca7-55e5-8654-ae7d55fdc1b7"
+        },
+        {
+            "first": "e4e1c0c4-e5ca-5987-aa3d-95f4a02c2851",
+            "label": "尾灯奥の反射鏡 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "c1f52be5-0ca7-55e5-8654-ae7d55fdc1b7",
+            "label": "尾灯電球 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "48e2a6ea-ef58-5e95-9bbf-722021b3bcf4",
+            "label": "尾灯透明レンズ / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "fe0c9235-c4ee-5d69-8c0b-868f4fc39dbe",
+            "label": "タイフォン背面を外板に合わせる / シャッター線の食込みを除く",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "07977468-bee2-579d-b985-15d6a85f4111"
+        },
+        {
+            "first": "fe0c9235-c4ee-5d69-8c0b-868f4fc39dbe",
+            "label": "タイフォン背面を外板に合わせる / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "07977468-bee2-579d-b985-15d6a85f4111",
+            "label": "シャッター線の食込みを除く / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "74b7dd78-9786-5a80-9b66-3ba3d92a3a1d",
+            "label": "ステップ背面を外板に合わせる / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "label": "前照灯の背面を折妻外板に密着 / 前照灯前縁金属リング",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "271f2a35-69a8-514b-bbaa-79ebe19eecd8"
+        },
+        {
+            "first": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "label": "前照灯の背面を折妻外板に密着 / 反射鏡・環状接着座",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "672fec97-d23a-517a-a982-3888987ff0ec"
+        },
+        {
+            "first": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "label": "前照灯の背面を折妻外板に密着 / 前照灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6615f77d-7209-5273-9168-dca4e49d1d7b"
+        },
+        {
+            "first": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "label": "前照灯の背面を折妻外板に密着 / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "50bf340d-a517-553b-993e-a1a4a58673f7"
+        },
+        {
+            "first": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "label": "前照灯の背面を折妻外板に密着 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "271f2a35-69a8-514b-bbaa-79ebe19eecd8",
+            "label": "前照灯前縁金属リング / 反射鏡・環状接着座",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "672fec97-d23a-517a-a982-3888987ff0ec"
+        },
+        {
+            "first": "271f2a35-69a8-514b-bbaa-79ebe19eecd8",
+            "label": "前照灯前縁金属リング / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "50bf340d-a517-553b-993e-a1a4a58673f7"
+        },
+        {
+            "first": "271f2a35-69a8-514b-bbaa-79ebe19eecd8",
+            "label": "前照灯前縁金属リング / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "672fec97-d23a-517a-a982-3888987ff0ec",
+            "label": "反射鏡・環状接着座 / 前照灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6615f77d-7209-5273-9168-dca4e49d1d7b"
+        },
+        {
+            "first": "672fec97-d23a-517a-a982-3888987ff0ec",
+            "label": "反射鏡・環状接着座 / 凸レンズ・枠内の円筒受け",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "50bf340d-a517-553b-993e-a1a4a58673f7"
+        },
+        {
+            "first": "672fec97-d23a-517a-a982-3888987ff0ec",
+            "label": "反射鏡・環状接着座 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "6615f77d-7209-5273-9168-dca4e49d1d7b",
+            "label": "前照灯電球 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "50bf340d-a517-553b-993e-a1a4a58673f7",
+            "label": "凸レンズ・枠内の円筒受け / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯前縁金属リング",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "ce184a36-ab84-53de-9776-a5aec9c79b2c"
+        },
+        {
+            "first": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯奥の反射鏡",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "72e8959b-cc37-5c63-ada7-ccd7302537a8"
+        },
+        {
+            "first": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "35cefd3e-ea83-57f1-a9a8-1f5b56885262"
+        },
+        {
+            "first": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "label": "尾灯の背面を折妻外板に密着 / 尾灯透明レンズ",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "41d322e3-f037-5a3e-b770-eec3b91b2fd9"
+        },
+        {
+            "first": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "label": "尾灯の背面を折妻外板に密着 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ce184a36-ab84-53de-9776-a5aec9c79b2c",
+            "label": "尾灯前縁金属リング / 尾灯透明レンズ",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "41d322e3-f037-5a3e-b770-eec3b91b2fd9"
+        },
+        {
+            "first": "ce184a36-ab84-53de-9776-a5aec9c79b2c",
+            "label": "尾灯前縁金属リング / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "72e8959b-cc37-5c63-ada7-ccd7302537a8",
+            "label": "尾灯奥の反射鏡 / 尾灯電球",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "35cefd3e-ea83-57f1-a9a8-1f5b56885262"
+        },
+        {
+            "first": "72e8959b-cc37-5c63-ada7-ccd7302537a8",
+            "label": "尾灯奥の反射鏡 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "35cefd3e-ea83-57f1-a9a8-1f5b56885262",
+            "label": "尾灯電球 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "41d322e3-f037-5a3e-b770-eec3b91b2fd9",
+            "label": "尾灯透明レンズ / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ac3a4883-c0f9-5b23-b516-b18d3f3e2241",
+            "label": "タイフォン背面を外板に合わせる / シャッター線の食込みを除く",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3ee611a7-50f7-5b49-8659-707175a17189"
+        },
+        {
+            "first": "ac3a4883-c0f9-5b23-b516-b18d3f3e2241",
+            "label": "タイフォン背面を外板に合わせる / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "3ee611a7-50f7-5b49-8659-707175a17189",
+            "label": "シャッター線の食込みを除く / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "ddaadf5a-7a5f-5e77-be35-761a077917d7",
+            "label": "ステップ背面を外板に合わせる / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "8936a2c4-eb7b-504f-9083-f48d794884ee",
+            "label": "後妻透明板 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "8936a2c4-eb7b-504f-9083-f48d794884ee",
+            "label": "後妻透明板 / 後妻",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "2c4a79d3-9670-5857-8d06-474d86dba9c3"
+        },
+        {
+            "first": "ac470252-16de-5b05-a4d4-63b909cc60de",
+            "label": "密着連結器・取付座 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "4bfc75a1-e1c3-5898-8175-fd43a82c7450",
+            "label": "密着連結器・取付座 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前輪軸・内側二枚ディスク",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前輪軸・内側二枚ディスク",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "efd6c7e6-76be-599a-9b5e-ff0e92259c29"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "066c1009-7d3d-58c6-8b40-3805a9309335"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "888baf60-2637-5f34-ac09-31a639054603"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "aa1fc628-0d73-51b3-9443-d76535773524"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "535940f8-a330-52c6-b05d-29a11bbffd10"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 前台車プロウ・折返し・支持腕",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "604f863e-4942-5fff-b6a3-3f3767ee7419"
+        },
+        {
+            "first": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "label": "前心皿穴を貫通 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe",
+            "label": "前輪軸・内側二枚ディスク / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "066c1009-7d3d-58c6-8b40-3805a9309335"
+        },
+        {
+            "first": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe",
+            "label": "前輪軸・内側二枚ディスク / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "aa1fc628-0d73-51b3-9443-d76535773524"
+        },
+        {
+            "first": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe",
+            "label": "前輪軸・内側二枚ディスク / 前台車プロウ・折返し・支持腕",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "604f863e-4942-5fff-b6a3-3f3767ee7419"
+        },
+        {
+            "first": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe",
+            "label": "前輪軸・内側二枚ディスク / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "efd6c7e6-76be-599a-9b5e-ff0e92259c29",
+            "label": "前輪軸・内側二枚ディスク / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "888baf60-2637-5f34-ac09-31a639054603"
+        },
+        {
+            "first": "efd6c7e6-76be-599a-9b5e-ff0e92259c29",
+            "label": "前輪軸・内側二枚ディスク / 前局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "535940f8-a330-52c6-b05d-29a11bbffd10"
+        },
+        {
+            "first": "efd6c7e6-76be-599a-9b5e-ff0e92259c29",
+            "label": "前輪軸・内側二枚ディスク / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "066c1009-7d3d-58c6-8b40-3805a9309335",
+            "label": "前局所輪軸押え / 前台車プロウ・折返し・支持腕",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "604f863e-4942-5fff-b6a3-3f3767ee7419"
+        },
+        {
+            "first": "aa1fc628-0d73-51b3-9443-d76535773524",
+            "label": "前局所輪軸押え / 前台車プロウ・折返し・支持腕",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "604f863e-4942-5fff-b6a3-3f3767ee7419"
+        },
+        {
+            "first": "604f863e-4942-5fff-b6a3-3f3767ee7419",
+            "label": "前台車プロウ・折返し・支持腕 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後輪軸・内側二枚ディスク",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "1916e7c1-53db-5aa7-868f-13f741097fe7"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後輪軸・内側二枚ディスク",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "561179f1-f454-5833-bac3-5547cb4ae98a"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "9e20382a-09a3-5fb5-8823-e85b9f160bae"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d089b156-17b7-539a-82a4-e1f43fb66b53"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "575cf1c8-e90d-5bee-976a-2653f7974728"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "9c107c66-f3cf-5894-b3d0-e015b6514939"
+        },
+        {
+            "first": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "label": "後心皿穴を貫通 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "1916e7c1-53db-5aa7-868f-13f741097fe7",
+            "label": "後輪軸・内側二枚ディスク / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "9e20382a-09a3-5fb5-8823-e85b9f160bae"
+        },
+        {
+            "first": "1916e7c1-53db-5aa7-868f-13f741097fe7",
+            "label": "後輪軸・内側二枚ディスク / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "575cf1c8-e90d-5bee-976a-2653f7974728"
+        },
+        {
+            "first": "1916e7c1-53db-5aa7-868f-13f741097fe7",
+            "label": "後輪軸・内側二枚ディスク / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "561179f1-f454-5833-bac3-5547cb4ae98a",
+            "label": "後輪軸・内側二枚ディスク / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d089b156-17b7-539a-82a4-e1f43fb66b53"
+        },
+        {
+            "first": "561179f1-f454-5833-bac3-5547cb4ae98a",
+            "label": "後輪軸・内側二枚ディスク / 後局所輪軸押え",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "9c107c66-f3cf-5894-b3d0-e015b6514939"
+        },
+        {
+            "first": "561179f1-f454-5833-bac3-5547cb4ae98a",
+            "label": "後輪軸・内側二枚ディスク / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "d39043c2-90f8-5666-aae6-9f1fdb97f661",
+            "label": "室内トレー・床板に接する支持座一体 / 屋根・表示器・通風器・支持座一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a20e52cc-3d42-5b20-a899-001bb1404fc4"
+        },
+        {
+            "first": "d39043c2-90f8-5666-aae6-9f1fdb97f661",
+            "label": "室内トレー・床板に接する支持座一体 / 床板・スカート・床下箱一体原形",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "cba6180b-27a5-5176-929d-4712af518b6e"
+        },
+        {
+            "first": "d39043c2-90f8-5666-aae6-9f1fdb97f661",
+            "label": "室内トレー・床板に接する支持座一体 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / AU75G・ファン一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "d281a02f-073f-53c2-8961-8323f97cae9f"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 後妻",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "2c4a79d3-9670-5857-8d06-474d86dba9c3"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 側面の窓をまとめた透明材 -1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "45e10f59-2363-5600-81b5-54563713ff57"
+        },
+        {
+            "first": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "label": "屋根・表示器・通風器・支持座一体原形 / 側面の窓をまとめた透明材 1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a6b1e613-5a3e-5d4f-ab0c-d3ee653c2ad1"
+        },
+        {
+            "first": "cba6180b-27a5-5176-929d-4712af518b6e",
+            "label": "床板・スカート・床下箱一体原形 / 前妻｜パノラミック窓の回込まで一体",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "0300e0e8-cf47-583b-bfac-4ee14e14cd15"
+        },
+        {
+            "first": "cba6180b-27a5-5176-929d-4712af518b6e",
+            "label": "床板・スカート・床下箱一体原形 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "cba6180b-27a5-5176-929d-4712af518b6e",
+            "label": "床板・スカート・床下箱一体原形 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "0300e0e8-cf47-583b-bfac-4ee14e14cd15",
+            "label": "前妻｜パノラミック窓の回込まで一体 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "0300e0e8-cf47-583b-bfac-4ee14e14cd15",
+            "label": "前妻｜パノラミック窓の回込まで一体 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "2c4a79d3-9670-5857-8d06-474d86dba9c3",
+            "label": "後妻 / 運転士側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "6a90be3d-036e-559f-ac3b-b608925a1b43"
+        },
+        {
+            "first": "2c4a79d3-9670-5857-8d06-474d86dba9c3",
+            "label": "後妻 / 助手側の側板",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "3494369c-4187-5b87-b0b1-25b02c8600e5"
+        },
+        {
+            "first": "6a90be3d-036e-559f-ac3b-b608925a1b43",
+            "label": "運転士側の側板 / 側面の窓をまとめた透明材 -1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "45e10f59-2363-5600-81b5-54563713ff57"
+        },
+        {
+            "first": "3494369c-4187-5b87-b0b1-25b02c8600e5",
+            "label": "助手側の側板 / 側面の窓をまとめた透明材 1",
+            "noOverlap": true,
+            "overlapMm3": 0,
+            "passed": true,
+            "second": "a6b1e613-5a3e-5d4f-ab0c-d3ee653c2ad1"
+        }
+    ],
+    "attachmentChecks": [
+    ],
+    "cadShapes": 923,
+    "checkOnly": true,
+    "chordMm": 0.025,
+    "failures": 0,
+    "insertionChecks": [
+    ],
+    "parts": [
+        {
+            "bounds": [
+                73.6075,
+                -18.475,
+                24.770000000000003,
+                87.3925,
+                -18.125,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "70eef96d-0db2-522f-9b99-7f833842d44b",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側窓3 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.628525582290449e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799798,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                92.2325,
+                -18.475,
+                24.770000000000003,
+                106.0175,
+                -18.125,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "d1cee835-29cd-5c70-b405-17d5d2692fdf",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側窓4 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.628525582290449e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799791,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                148.60750000000002,
+                -18.475,
+                24.770000000000003,
+                162.3925,
+                -18.125,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "db345af0-4005-5ed5-81b4-4baa398d1d3a",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側窓7 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904492e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799805,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                167.23250000000002,
+                -18.475,
+                24.770000000000003,
+                181.0175,
+                -18.125,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "a96351ee-8263-5c8e-b054-79cdf472ef9a",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側窓8 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904492e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799802,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                223.60750000000002,
+                -18.475,
+                24.770000000000003,
+                237.3925,
+                -18.125,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "38f90da6-4299-5512-9734-2a6c6d068923",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側窓11 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904504e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799796,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                49.56999999999999,
+                -18.005,
+                24.35,
+                50.21999999999999,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "2be6ef88-cf48-53c7-a0d6-de71e3550d10",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418540613e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686174,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                52.33,
+                -18.005,
+                24.35,
+                52.98,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "0fd6fcc6-c81c-5ed5-99e8-42ef06a58fbd",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 4.341611416554373e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686179,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                43.1499999,
+                -17.978112845098043,
+                15.162499899999997,
+                59.350000099999995,
+                -17.12811264509804,
+                15.342500099999999
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "c566dfb8-64fe-5aea-84db-577bd5b1cfbc",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 4.080297966471747e-15,
+            "valid": true,
+            "volumeMm3": 2.3516072318834103,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                124.57,
+                -18.005,
+                24.35,
+                125.22,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "0bee3429-bc6e-5d17-afc9-3dd40db91315",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580727e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686129,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                127.33,
+                -18.005,
+                24.35,
+                127.98,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "27534bd5-a5c2-53d0-8c28-6f693ec8f1f8",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580727e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686129,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                118.14999990000001,
+                -17.978112845098043,
+                15.162499899999997,
+                134.3500001,
+                -17.12811264509804,
+                15.342500100002024
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "43a762f8-12a4-5410-a233-166fe21fcd1e",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 3.670722200430367e-15,
+            "valid": true,
+            "volumeMm3": 2.351607248598775,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                199.57000000000002,
+                -18.005,
+                24.35,
+                200.22000000000003,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "f2db0b58-92b8-5c92-8dbb-f08c6d0fc3c8",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580327e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686081,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                202.33,
+                -18.005,
+                24.35,
+                202.98000000000002,
+                -17.845,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "167adfac-092e-5917-85f0-9bcb8eaf920a",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580337e-16,
+            "valid": true,
+            "volumeMm3": 0.0873139822368608,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                193.1499999,
+                -17.978112845098043,
+                15.162499899999997,
+                209.3500001,
+                -17.12811264509804,
+                15.342500100011529
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "20e86adc-f5fa-58e7-b4e7-11f7768476e5",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 4.2657660548570795e-15,
+            "valid": true,
+            "volumeMm3": 2.3516072319230266,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                8,
+                -18.4375,
+                38.7,
+                243.75,
+                -18.125,
+                39.050000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "cb6cccb8-e43b-51eb-9739-0eaeb29d8542",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側雨樋",
+            "solids": 1,
+            "sourceIntegrationError": 1.2917001710531263e-16,
+            "valid": true,
+            "volumeMm3": 25.785156250000032,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                26.245,
+                18.125,
+                24.770000000000003,
+                32.755,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "a67c840c-4f2e-53e5-b185-dba38087628a",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓1 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 7.378172358295424e-16,
+            "valid": true,
+            "volumeMm3": 5.137181976799845,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                73.6075,
+                18.125,
+                24.770000000000003,
+                87.3925,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "e8dd36bb-d9f0-51f7-8929-4506ac1f884b",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓4 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904478e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799812,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                92.2325,
+                18.125,
+                24.770000000000003,
+                106.0175,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "f42b0d94-6726-5d08-bfa4-c6cd6f0bf2b7",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓5 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904504e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799794,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                148.60750000000002,
+                18.125,
+                24.770000000000003,
+                162.3925,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "c14b0fa2-b35a-522b-b26e-405d9aabccd4",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓8 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904504e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799802,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                167.23250000000002,
+                18.125,
+                24.770000000000003,
+                181.0175,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "b24a6729-2410-5dba-90f5-e46ad592c622",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓9 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.6285255822904492e-15,
+            "valid": true,
+            "volumeMm3": 8.090831976799809,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                222.97,
+                18.125,
+                24.770000000000003,
+                229.03,
+                18.475,
+                35.480000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "aa95a9ed-37fa-5c8b-9d1f-19b71a6d59cd",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側窓12 中桟一体",
+            "solids": 1,
+            "sourceIntegrationError": 3.655610969813992e-16,
+            "valid": true,
+            "volumeMm3": 4.954481976799832,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                49.56999999999999,
+                17.845,
+                24.35,
+                50.21999999999999,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "e448d2c9-b8d6-5ced-817d-4ceb1f0ee4fd",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 3.9399119971214175e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686178,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                52.33,
+                17.845,
+                24.35,
+                52.98,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ccb419cb-0be3-51ac-8921-9f3d4526bd9d",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.956306041854062e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686176,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                43.14999989999999,
+                17.12811264509804,
+                15.162499899999997,
+                59.350000099999995,
+                17.978112845098043,
+                15.342500099999999
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "a0354222-b7a8-5ca6-803f-32f65ee40010",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 4.265766055947836e-15,
+            "valid": true,
+            "volumeMm3": 2.3516072327648736,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                124.57,
+                17.845,
+                24.35,
+                125.22,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "5e105094-1ec7-50fb-9b8c-6cd6b96463bb",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580727e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686129,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                127.33,
+                17.845,
+                24.35,
+                127.98,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "5a0ab190-06fc-5300-b4dd-b9354f9def26",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 4.3416114165544554e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686129,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                118.1499999,
+                17.12811264509804,
+                15.162499899999997,
+                134.3500001,
+                17.978112845098043,
+                15.342500100006571
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "a54048cc-0e66-5276-9456-b2c2a86ce204",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 3.709361786122688e-15,
+            "valid": true,
+            "volumeMm3": 2.3516072328782487,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                199.57000000000002,
+                17.845,
+                24.35,
+                200.22000000000003,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "f36ab409-9762-5629-9ab7-2cd76cc6880b",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 2.9563060418580327e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686081,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                202.33,
+                17.845,
+                24.35,
+                202.98000000000002,
+                18.005,
+                25.75
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "66f23e3a-ef04-5701-8f9c-52a1a7d171b1",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "半自動扉の縦長手掛け枠",
+            "solids": 1,
+            "sourceIntegrationError": 4.132343764117237e-16,
+            "valid": true,
+            "volumeMm3": 0.08731398223686081,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                193.1499999,
+                17.12811264509804,
+                15.162499899999997,
+                209.3500001,
+                17.978112845098043,
+                15.342500100016077
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "aaad1bbc-88cd-5cf0-a307-2ceb7b7d963d",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "客扉踏板・外板に沿う裏面",
+            "solids": 1,
+            "sourceIntegrationError": 4.443506291712071e-15,
+            "valid": true,
+            "volumeMm3": 2.351607233321446,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                8,
+                18.125,
+                38.7,
+                243.75,
+                18.4375,
+                39.050000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "441d16fc-b25b-5005-9dd7-37e8149cd654",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.35,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側雨樋",
+            "solids": 1,
+            "sourceIntegrationError": 1.2917001710531263e-16,
+            "valid": true,
+            "volumeMm3": 25.785156250000032,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                226.79999999999998,
+                -18.225,
+                36.2,
+                234.2,
+                -18.125,
+                38.400000000000006
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "48b94b37-bf64-51a2-ab63-a18ac184246a",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.1,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後部側面行先表示・空白幕",
+            "solids": 1,
+            "sourceIntegrationError": 1.8350793795457124e-16,
+            "valid": true,
+            "volumeMm3": 1.6142654824574467,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.3200000000000194,
+                -18.4450001,
+                30.379999899999998,
+                8.4000007,
+                -5.120000000000001,
+                38.42000010000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "0fd18056-6803-585d-a926-30dfd111d3a6",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "パノラミック窓ゴム一体-1",
+            "solids": 1,
+            "sourceIntegrationError": 1.5019631027208226e-15,
+            "valid": true,
+            "volumeMm3": 14.144215273436027,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.22702704173511978,
+                -17.905000100000002,
+                30.649999899999997,
+                8.350000099999999,
+                -5.349999999999999,
+                38.1500001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "32db257c-0a40-5d06-a731-70c472a03c23",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前面曲面透明板-1",
+            "solids": 1,
+            "sourceIntegrationError": 3.477219688178919e-16,
+            "valid": true,
+            "volumeMm3": 52.16443555635469,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.32000000000001927,
+                5.12,
+                30.379999899999998,
+                8.4000007,
+                18.4450001,
+                38.42000010000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "43ee97d2-fcfd-5fab-b85a-f64acad965f1",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "パノラミック窓ゴム一体1",
+            "solids": 1,
+            "sourceIntegrationError": 1.5796263508858262e-15,
+            "valid": true,
+            "volumeMm3": 14.144215273704754,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.2270270417351199,
+                5.35,
+                30.649999899999997,
+                8.350000099999999,
+                17.905000100000002,
+                38.1500001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "bc23b579-ed7b-5e95-bf36-0090028f48e9",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前面曲面透明板1",
+            "solids": 1,
+            "sourceIntegrationError": 3.975163540425001e-16,
+            "valid": true,
+            "volumeMm3": 52.16443555627814,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.5,
+                -3.8200000000000003,
+                31.23,
+                0.9,
+                3.8200000000000007,
+                37.470000000000006
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "ceba0aa1-af9d-5bcf-a8c7-f0e7aa49f8a2",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.4,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "横長貫通扉窓透明板",
+            "solids": 1,
+            "sourceIntegrationError": 4.017539520288779e-16,
+            "valid": true,
+            "volumeMm3": 18.712205198717935,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.9,
+                -5.12,
+                15.112499999999999,
+                -0.29999999999999993,
+                5.12,
+                39.4
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "bf05aeb6-755a-56ce-9aac-e7c4f3723bf0",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受け・締結耳一体",
+            "solids": 1,
+            "sourceIntegrationError": 8.652389302323746e-16,
+            "valid": true,
+            "volumeMm3": 10.68794177365779,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.56,
+                3.6,
+                27.2,
+                -0.21000000000000008,
+                4.25,
+                27.5
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "143b9c54-a790-558e-b78f-14d6fa59558f",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "貫通扉取手",
+            "solids": 1,
+            "sourceIntegrationError": 2.1350442781255735e-16,
+            "valid": true,
+            "volumeMm3": 0.06825000000000006,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.95,
+                -4.150000000000002,
+                15.62,
+                -0.25,
+                4.15,
+                19.200000000000003
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ea716f47-41d7-56ee-9c60-25a6c59a3e4a",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.7,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "斜め隅の渡り板",
+            "solids": 1,
+            "sourceIntegrationError": 3.2591710098469267e-16,
+            "valid": true,
+            "volumeMm3": 20.056050000000006,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -1.13,
+                -3.4299999999999997,
+                15.65,
+                -0.9699999999999999,
+                -3.17,
+                16.2
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "9a92608c-bec7-52c7-a3a4-7d7dfaa71ece",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "渡り板ヒンジ",
+            "solids": 1,
+            "sourceIntegrationError": 1.25100250671404e-16,
+            "valid": true,
+            "volumeMm3": 0.022879999999999977,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -1.13,
+                -1.7799999999999998,
+                15.65,
+                -0.9699999999999999,
+                -1.5199999999999998,
+                16.2
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "249698d5-55e0-5eaa-93f2-1b13334ee4f2",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "渡り板ヒンジ",
+            "solids": 1,
+            "sourceIntegrationError": 1.2510025067140379e-16,
+            "valid": true,
+            "volumeMm3": 0.02287999999999999,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -1.13,
+                1.52,
+                15.65,
+                -0.9699999999999999,
+                1.78,
+                16.2
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "21827c25-e632-5e27-9f92-6621fe7a7f5f",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "渡り板ヒンジ",
+            "solids": 1,
+            "sourceIntegrationError": 2.502005013428081e-16,
+            "valid": true,
+            "volumeMm3": 0.02287999999999999,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -1.13,
+                3.17,
+                15.65,
+                -0.9699999999999999,
+                3.4299999999999997,
+                16.2
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "5b9e7ef9-ebe0-5c4d-b823-8121693bb083",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "渡り板ヒンジ",
+            "solids": 1,
+            "sourceIntegrationError": 1.25100250671404e-16,
+            "valid": true,
+            "volumeMm3": 0.022879999999999977,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                -5.12,
+                20.6,
+                -0.75,
+                -4.86,
+                21.080000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "4ee64752-259c-5f5f-a66a-63ef6f7f403d",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999998,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                -5.12,
+                28.9,
+                -0.75,
+                -4.86,
+                29.38
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "2e9c3721-0537-5b34-8a08-a07b855214dd",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999994,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                -5.12,
+                35.8,
+                -0.75,
+                -4.86,
+                36.279999999999994
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "8144f9b1-bed7-5182-8bd9-0247926b6d10",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999942,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                4.86,
+                20.6,
+                -0.75,
+                5.12,
+                21.080000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "250f456a-7dde-5aa1-b93f-d497660be0f0",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999998,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                4.86,
+                28.9,
+                -0.75,
+                5.12,
+                29.38
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "765aecd4-b3ac-5def-a638-3b9a34a83f3f",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999994,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.93,
+                4.86,
+                35.8,
+                -0.75,
+                5.12,
+                36.279999999999994
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "165d7d97-8edc-52a9-882c-3fc2aa368b1a",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.18,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "幌受の締結金具",
+            "solids": 1,
+            "sourceIntegrationError": 3.3360066845707915e-16,
+            "valid": true,
+            "volumeMm3": 0.022463999999999942,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.4755901981408521,
+                -14.50496466398426,
+                24.06,
+                1.2682460623722045,
+                -11.075960367263823,
+                27.34
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "574785cf-f495-55bc-8196-03f79d3425b1",
+            "manufacturing": {
+                "colorName": "アドバンスブルー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯の背面を折妻外板に密着",
+            "solids": 1,
+            "sourceIntegrationError": 1.014875473856355e-15,
+            "valid": true,
+            "volumeMm3": 2.7493962267156435,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.5930306353802398,
+                -14.511762755412052,
+                24.07,
+                -0.020494158001437973,
+                -11.266788079199324,
+                27.33
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "c8aa57ab-352b-5242-9faa-3a698840033f",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯前縁金属リング",
+            "solids": 1,
+            "sourceIntegrationError": 1.8055930012769687e-15,
+            "valid": true,
+            "volumeMm3": 0.24146281135491188,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.36575067043031206,
+                -14.27597184078431,
+                24.2799999,
+                0.8564548851838755,
+                -11.453868308491046,
+                27.1200001
+            ],
+            "chordMm": 0.001,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "55c4aad6-7b8d-5f56-9843-b39de8b39661",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "反射鏡・環状接着座",
+            "solids": 1,
+            "sourceIntegrationError": 5.719113917886632e-12,
+            "valid": true,
+            "volumeMm3": 1.0372647672109148,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.39263442994750714,
+                -13.023951659093216,
+                25.46,
+                0.6971018549063156,
+                -12.515221441866847,
+                25.939999999999998
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "4bfa7816-5130-56d6-aaaa-1f64b0f6ee6e",
+            "manufacturing": {
+                "colorName": "電球色",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.24,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯電球",
+            "solids": 1,
+            "sourceIntegrationError": 3.45112270124079e-16,
+            "valid": true,
+            "volumeMm3": 0.04342937684322532,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.5234549122770603,
+                -14.295456155808024,
+                24.2799999,
+                -0.029915047828220274,
+                -11.471960811615855,
+                27.1200001
+            ],
+            "chordMm": 0.001,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "a00f7964-cf87-596c-871f-e34e98feb282",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "凸レンズ・枠内の円筒受け",
+            "solids": 1,
+            "sourceIntegrationError": 5.5354641628644126e-15,
+            "valid": true,
+            "volumeMm3": 0.9323115830013391,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.1692618723582561,
+                -13.715426448962292,
+                19.279999999999998,
+                1.1680414296809571,
+                -11.788953376757755,
+                21.12
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "8ee0d940-44ea-5dfa-82cb-b3dd7a618e68",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯の背面を折妻外板に密着",
+            "solids": 1,
+            "sourceIntegrationError": 6.230207770062566e-16,
+            "valid": true,
+            "volumeMm3": 0.8397477163045513,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.05182143511887076,
+                -13.722224540390084,
+                19.29,
+                0.4239486471151783,
+                -11.90323588316522,
+                21.11
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ddf987c3-d354-5e15-b9a8-0ee22f0414fd",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯前縁金属リング",
+            "solids": 1,
+            "sourceIntegrationError": 6.841066650800324e-16,
+            "valid": true,
+            "volumeMm3": 0.12746069714144467,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.5860845013786854,
+                -13.443289964464723,
+                19.5,
+                0.879953649596934,
+                -12.042997358130517,
+                20.9
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "e4e1c0c4-e5ca-5987-aa3d-95f4a02c2851",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.1,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯奥の反射鏡",
+            "solids": 1,
+            "sourceIntegrationError": 2.832201593431585e-16,
+            "valid": true,
+            "volumeMm3": 0.15393804002589997,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.48020626150443657,
+                -12.953401726891917,
+                20.02,
+                0.7085568302235431,
+                -12.571854063972141,
+                20.38
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "c1f52be5-0ca7-55e5-8654-ae7d55fdc1b7",
+            "manufacturing": {
+                "colorName": "電球色",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯電球",
+            "solids": 1,
+            "sourceIntegrationError": 3.718114446109674e-16,
+            "valid": true,
+            "volumeMm3": 0.018321768355735627,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.10085314769531596,
+                -13.511484783935154,
+                19.5,
+                0.414527657288396,
+                -12.108408715581747,
+                20.9
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "48e2a6ea-ef58-5e95-9bbf-722021b3bcf4",
+            "manufacturing": {
+                "colorName": "赤透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯透明レンズ",
+            "solids": 1,
+            "sourceIntegrationError": 2.1636426404513702e-16,
+            "valid": true,
+            "volumeMm3": 0.18472564803107977,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.4721526702982497,
+                -10.843285515416191,
+                24.47,
+                0.7614544199309256,
+                -8.281970275447868,
+                27.250000000000007
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "fe0c9235-c4ee-5d69-8c0b-868f4fc39dbe",
+            "manufacturing": {
+                "colorName": "アドバンスブルー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "タイフォン背面を外板に合わせる",
+            "solids": 1,
+            "sourceIntegrationError": 2.9871185331488926e-16,
+            "valid": true,
+            "volumeMm3": 4.864588880235163,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.3855804788670319,
+                -9.675822714902461,
+                24.55,
+                -0.2981006291395736,
+                -9.585822714902461,
+                26.55000000000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "07977468-bee2-579d-b985-15d6a85f4111",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "シャッター線の食込みを除く",
+            "solids": 1,
+            "sourceIntegrationError": 4.3834305087389127e-11,
+            "valid": true,
+            "volumeMm3": 0.012445369386165112,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.045674510779717126,
+                -15.0000001,
+                16.999999899999995,
+                1.4789239870754762,
+                -9.599999899999998,
+                17.2000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "74b7dd78-9786-5a80-9b66-3ba3d92a3a1d",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "ステップ背面を外板に合わせる",
+            "solids": 1,
+            "sourceIntegrationError": 6.035035934212578e-16,
+            "valid": true,
+            "volumeMm3": 0.708598641620495,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.47559019814085113,
+                11.075960367263823,
+                24.06,
+                1.2682460623722038,
+                14.50496466398426,
+                27.34
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "c83bbf95-03cf-5819-b737-50d7b5a2bd61",
+            "manufacturing": {
+                "colorName": "アドバンスブルー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯の背面を折妻外板に密着",
+            "solids": 1,
+            "sourceIntegrationError": 1.522313210784523e-15,
+            "valid": true,
+            "volumeMm3": 2.749396226715646,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.5930306353802394,
+                11.266788079199324,
+                24.07,
+                -0.020494158001437973,
+                14.511762755412052,
+                27.33
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "271f2a35-69a8-514b-bbaa-79ebe19eecd8",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯前縁金属リング",
+            "solids": 1,
+            "sourceIntegrationError": 7.222372005108437e-16,
+            "valid": true,
+            "volumeMm3": 0.24146281135491177,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.36575067043031206,
+                11.453868308491046,
+                24.2799999,
+                0.8564548860539343,
+                14.27597184078431,
+                27.1200001
+            ],
+            "chordMm": 0.001,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "672fec97-d23a-517a-a982-3888987ff0ec",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "反射鏡・環状接着座",
+            "solids": 1,
+            "sourceIntegrationError": 5.719113917885623e-12,
+            "valid": true,
+            "volumeMm3": 1.0372647672108712,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.39263442994750714,
+                12.515221441866847,
+                25.46,
+                0.6971018549063156,
+                13.023951659093216,
+                25.939999999999998
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "6615f77d-7209-5273-9168-dca4e49d1d7b",
+            "manufacturing": {
+                "colorName": "電球色",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.24,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前照灯電球",
+            "solids": 1,
+            "sourceIntegrationError": 5.751871168734648e-16,
+            "valid": true,
+            "volumeMm3": 0.04342937684322533,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.5234549101541041,
+                11.471960811615855,
+                24.2799999,
+                -0.029915047828220274,
+                14.29545617491874,
+                27.1200001
+            ],
+            "chordMm": 0.001,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "50bf340d-a517-553b-993e-a1a4a58673f7",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "凸レンズ・枠内の円筒受け",
+            "solids": 1,
+            "sourceIntegrationError": 5.535464162860949e-15,
+            "valid": true,
+            "volumeMm3": 0.9323115830013307,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.1692618723582561,
+                11.788953376757755,
+                19.279999999999998,
+                1.1680414296809567,
+                13.715426448962292,
+                21.12
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "5a9220e1-341a-57f0-88e5-5208612c61b6",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯の背面を折妻外板に密着",
+            "solids": 1,
+            "sourceIntegrationError": 4.3272852809027415e-16,
+            "valid": true,
+            "volumeMm3": 0.8397477163045508,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.05182143511887119,
+                11.90323588316522,
+                19.29,
+                0.4239486471151783,
+                13.722224540390084,
+                21.11
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ce184a36-ab84-53de-9776-a5aec9c79b2c",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯前縁金属リング",
+            "solids": 1,
+            "sourceIntegrationError": 6.841066650801393e-16,
+            "valid": true,
+            "volumeMm3": 0.12746069714144456,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.5860845013786854,
+                12.042997358130517,
+                19.5,
+                0.879953649596934,
+                13.443289964464723,
+                20.9
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "72e8959b-cc37-5c63-ada7-ccd7302537a8",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.1,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯奥の反射鏡",
+            "solids": 1,
+            "sourceIntegrationError": 4.3272852809027425e-16,
+            "valid": true,
+            "volumeMm3": 0.15393804002589995,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.48020626150443657,
+                12.571854063972141,
+                20.02,
+                0.7085568302235431,
+                12.953401726891917,
+                20.38
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "35cefd3e-ea83-57f1-a9a8-1f5b56885262",
+            "manufacturing": {
+                "colorName": "電球色",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.16,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯電球",
+            "solids": 1,
+            "sourceIntegrationError": 4.0902194977668727e-16,
+            "valid": true,
+            "volumeMm3": 0.018321768355735624,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.10085314769531639,
+                12.108408715581747,
+                19.5,
+                0.414527657288396,
+                13.511484783935154,
+                20.9
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "41d322e3-f037-5a3e-b770-eec3b91b2fd9",
+            "manufacturing": {
+                "colorName": "赤透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.12,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "尾灯透明レンズ",
+            "solids": 1,
+            "sourceIntegrationError": 2.3601679945265707e-16,
+            "valid": true,
+            "volumeMm3": 0.18472564803107971,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.4721526702982497,
+                8.281970275447868,
+                24.47,
+                0.7614544199309248,
+                10.843285515416191,
+                27.250000000000007
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ac3a4883-c0f9-5b23-b516-b18d3f3e2241",
+            "manufacturing": {
+                "colorName": "アドバンスブルー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "タイフォン背面を外板に合わせる",
+            "solids": 1,
+            "sourceIntegrationError": 4.925530590638837e-16,
+            "valid": true,
+            "volumeMm3": 4.864588757062567,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.3855804788670319,
+                9.585822714902461,
+                24.55,
+                -0.2981006291398148,
+                9.675822714902461,
+                26.55000000000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "3ee611a7-50f7-5b49-8659-707175a17189",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "シャッター線の食込みを除く",
+            "solids": 1,
+            "sourceIntegrationError": 2.147578894330494e-16,
+            "valid": true,
+            "volumeMm3": 0.012445369386161828,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.04567451077971657,
+                9.5999999,
+                16.999999899999995,
+                1.4789239870754807,
+                15.000000100000003,
+                17.2000001
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "ddaadf5a-7a5f-5e77-be35-761a077917d7",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "ステップ背面を外板に合わせる",
+            "solids": 1,
+            "sourceIntegrationError": 3.486647713557185e-15,
+            "valid": true,
+            "volumeMm3": 0.7085986416204947,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                242.75,
+                -3.2,
+                29.8,
+                243.15,
+                3.2,
+                37
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "8936a2c4-eb7b-504f-9083-f48d794884ee",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "nominalThicknessMm": 0.4,
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後妻透明板",
+            "solids": 1,
+            "sourceIntegrationError": 2.3080180132138574e-16,
+            "valid": true,
+            "volumeMm3": 18.153876019763185,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                243.9,
+                -4.8,
+                15.1125,
+                244.25,
+                4.8,
+                38.5125
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/07 塗装後に接着する別部品",
+            "id": "706bf8d8-8de1-55aa-a553-85d19eb5c19d",
+            "manufacturing": {
+                "colorName": "床下グレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後妻幌受け",
+            "solids": 1,
+            "sourceIntegrationError": 1.201352146607893e-15,
+            "valid": true,
+            "volumeMm3": 8.871787565803043,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -3.375,
+                -1.7000000000000028,
+                10.35,
+                4.1,
+                1.7000000000000002,
+                13.65
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/04 着脱する連結器",
+            "id": "ac470252-16de-5b05-a4d4-63b909cc60de",
+            "manufacturing": {
+                "colorName": "床下グレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "密着連結器・取付座",
+            "solids": 1,
+            "sourceIntegrationError": 3.6805970063064505e-16,
+            "valid": true,
+            "volumeMm3": 19.498860692354537,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                239.75,
+                -1.7000000000000028,
+                10.35,
+                247.27499999999998,
+                1.7000000000000002,
+                13.65
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/04 着脱する連結器",
+            "id": "4bfc75a1-e1c3-5898-8175-fd43a82c7450",
+            "manufacturing": {
+                "colorName": "床下グレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "密着連結器・取付座",
+            "solids": 1,
+            "sourceIntegrationError": 4.0876393179384105e-16,
+            "valid": true,
+            "volumeMm3": 19.55301301302315,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                18.6249999,
+                -13.7500001,
+                4.300000000000001,
+                52.6250001,
+                13.750000099999998,
+                13.5
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "55609d9f-2a0d-5bef-92ed-7da0bd173135",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前心皿穴を貫通",
+            "solids": 1,
+            "sourceIntegrationError": 2.2494319821578935e-10,
+            "valid": true,
+            "volumeMm3": 887.8519496769123,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                16.85,
+                -11.85,
+                -0.27500000000000036,
+                28.15,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "02b3a86e-dd1c-5b48-98f3-8ab4d43c1dfe",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.286414925192506e-15,
+            "valid": true,
+            "volumeMm3": 593.4082201034497,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                43.1,
+                -11.85,
+                -0.27500000000000036,
+                54.4,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "efd6c7e6-76be-599a-9b5e-ff0e92259c29",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.286414925192506e-15,
+            "valid": true,
+            "volumeMm3": 593.4082201034494,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                20.7,
+                -12.7,
+                3.7,
+                24.3,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "066c1009-7d3d-58c6-8b40-3805a9309335",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.98236029920822e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                46.95,
+                -12.7,
+                3.7,
+                50.550000000000004,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "888baf60-2637-5f34-ac09-31a639054603",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.982360299208253e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                20.7,
+                10.3,
+                3.7,
+                24.3,
+                12.700000000000001,
+                4.500000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "aa1fc628-0d73-51b3-9443-d76535773524",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 1.392193482164263e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088497,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                46.95,
+                10.3,
+                3.7,
+                50.550000000000004,
+                12.700000000000001,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "535940f8-a330-52c6-b05d-29a11bbffd10",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.7125159524380267e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088499,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                15.125,
+                -13.6,
+                3.799999999999998,
+                25.625,
+                13.6,
+                6.8
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "604f863e-4942-5fff-b6a3-3f3767ee7419",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前台車プロウ・折返し・支持腕",
+            "solids": 1,
+            "sourceIntegrationError": 7.048551637229536e-16,
+            "valid": true,
+            "volumeMm3": 46.11578844317727,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                191.1249999,
+                -13.7500001,
+                4.300000000000001,
+                225.1250001,
+                13.750000099999998,
+                13.5
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "de628bb3-d281-5ee7-bb4e-5fdab8bf8683",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後心皿穴を貫通",
+            "solids": 1,
+            "sourceIntegrationError": 2.249431328988856e-10,
+            "valid": true,
+            "volumeMm3": 887.8519496769111,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                189.35,
+                -11.85,
+                -0.27500000000000036,
+                200.65,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "1916e7c1-53db-5aa7-868f-13f741097fe7",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.2864149251924496e-15,
+            "valid": true,
+            "volumeMm3": 593.4082201034497,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                215.6,
+                -11.85,
+                -0.27500000000000036,
+                226.9,
+                11.85,
+                11.025
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "561179f1-f454-5833-bac3-5547cb4ae98a",
+            "manufacturing": {
+                "colorName": "金属銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "HO16.5用機構。ディスク径は未確定の外観設計値。絶縁・走行未試験。",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後輪軸・内側二枚ディスク",
+            "solids": 1,
+            "sourceIntegrationError": 2.2864149251924496e-15,
+            "valid": true,
+            "volumeMm3": 593.4082201034502,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                193.2,
+                -12.7,
+                3.7,
+                196.8,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "9e20382a-09a3-5fb5-8823-e85b9f160bae",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.0839528461810194e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088528,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                219.45,
+                -12.7,
+                3.7,
+                223.05,
+                -10.299999999999999,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "d089b156-17b7-539a-82a4-e1f43fb66b53",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 4.360944391417233e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088542,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                193.2,
+                10.3,
+                3.7,
+                196.8,
+                12.700000000000001,
+                4.500000000000004
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "575cf1c8-e90d-5bee-976a-2653f7974728",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.1858882393665887e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088523,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                219.45,
+                10.3,
+                3.7,
+                223.05,
+                12.700000000000001,
+                4.500000000000002
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/03 台車・輪軸・押え",
+            "id": "9c107c66-f3cf-5894-b3d0-e015b6514939",
+            "manufacturing": {
+                "colorName": "黒",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後局所輪軸押え",
+            "solids": 1,
+            "sourceIntegrationError": 3.469446951953616e-16,
+            "valid": true,
+            "volumeMm3": 6.835381918088542,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                4,
+                -15.5,
+                14.95,
+                240.5,
+                15.5,
+                37.55
+            ],
+            "chordMm": 0.025,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "d39043c2-90f8-5666-aae6-9f1fdb97f661",
+            "manufacturing": {
+                "colorName": "室内クリーム",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "室内トレー・床板に接する支持座一体",
+            "solids": 1,
+            "sourceIntegrationError": 7.988188171164705e-15,
+            "valid": true,
+            "volumeMm3": 6652.560911288138,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.8500000999999999,
+                -18.12500010000002,
+                36.7451364499201,
+                243.75000010000042,
+                18.125000100000243,
+                48.6
+            ],
+            "chordMm": 0.006,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "a20e52cc-3d42-5b20-a899-001bb1404fc4",
+            "manufacturing": {
+                "colorName": "屋根グレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "屋根・表示器・通風器・支持座一体原形",
+            "solids": 1,
+            "sourceIntegrationError": 1.1822501218389774e-10,
+            "valid": true,
+            "volumeMm3": 10518.109293332356,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                0.6599999,
+                -16.966512002402883,
+                6.599999899999999,
+                241.55,
+                16.966512002402883,
+                14.950000000000001
+            ],
+            "chordMm": 0.01,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "cba6180b-27a5-5176-929d-4712af518b6e",
+            "manufacturing": {
+                "colorName": "床下グレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "床板・スカート・床下箱一体原形",
+            "solids": 1,
+            "sourceIntegrationError": 2.986037165569625e-11,
+            "valid": true,
+            "volumeMm3": 16582.19699723831,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                99,
+                -13.255290934180156,
+                43.82789637444216,
+                144.75,
+                13.25529093418024,
+                48.300000100000005
+            ],
+            "chordMm": 0.002,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "d281a02f-073f-53c2-8961-8323f97cae9f",
+            "manufacturing": {
+                "colorName": "アルミ銀",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "AU75G・ファン一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.192607527157632e-13,
+            "valid": true,
+            "volumeMm3": 2425.961386686308,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                -0.52,
+                -18.125000100000005,
+                13.799999899999998,
+                9.200000100000016,
+                18.125000100000005,
+                39.0000001
+            ],
+            "chordMm": 0.006,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "0300e0e8-cf47-583b-bfac-4ee14e14cd15",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "前妻｜パノラミック窓の回込まで一体",
+            "solids": 1,
+            "sourceIntegrationError": 1.939530623576035e-15,
+            "valid": true,
+            "volumeMm3": 822.8183827720923,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                242.74999989999984,
+                -18.1250001,
+                13.7999999,
+                243.85,
+                18.1250001,
+                39.0000001
+            ],
+            "chordMm": 0.006,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "2c4a79d3-9670-5857-8d06-474d86dba9c3",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "後妻",
+            "solids": 1,
+            "sourceIntegrationError": 4.2641242760579396e-16,
+            "valid": true,
+            "volumeMm3": 806.2472478414792,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                9.199999899999982,
+                -18.475,
+                13.7999999,
+                242.7500001,
+                -15.649999900000003,
+                39.0000001
+            ],
+            "chordMm": 0.006,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "6a90be3d-036e-559f-ac3b-b608925a1b43",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "運転士側の側板",
+            "solids": 1,
+            "sourceIntegrationError": 9.73685102397277e-15,
+            "valid": true,
+            "volumeMm3": 3846.926228576852,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                9.19999989999999,
+                15.649999900000001,
+                13.7999999,
+                242.75000010000022,
+                18.475,
+                39.0000001
+            ],
+            "chordMm": 0.006,
+            "groupPath": "板組キット｜印刷・仮組・接着/01 外板と製造用連結座",
+            "id": "3494369c-4187-5b87-b0b1-25b02c8600e5",
+            "manufacturing": {
+                "colorName": "フォギーグレー",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "助手側の側板",
+            "solids": 1,
+            "sourceIntegrationError": 6.043637909831208e-15,
+            "valid": true,
+            "volumeMm3": 3872.8249328735574,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                9.819999999999997,
+                -17.295,
+                24,
+                237.46250000000003,
+                -16.7,
+                38.18
+            ],
+            "chordMm": 0.002,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "45e10f59-2363-5600-81b5-54563713ff57",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "側面の窓をまとめた透明材 -1",
+            "solids": 1,
+            "sourceIntegrationError": 1.3476570529093693e-15,
+            "valid": true,
+            "volumeMm3": 760.5412659280075,
+            "withinModelEnvelope": true
+        },
+        {
+            "bounds": [
+                9.819999999999997,
+                16.7,
+                24,
+                238.45000000000002,
+                17.295,
+                38.18
+            ],
+            "chordMm": 0.002,
+            "groupPath": "板組キット｜印刷・仮組・接着/02 透明材・切り出し形状",
+            "id": "a6b1e613-5a3e-5d4f-ab0c-d3ee653c2ad1",
+            "manufacturing": {
+                "colorName": "透明",
+                "layerCount": 1,
+                "materialName": "光造形レジン",
+                "notes": "",
+                "processName": "3Dプリント・塗装・接着",
+                "referenceScaleDenominator": 80
+            },
+            "name": "側面の窓をまとめた透明材 1",
+            "solids": 1,
+            "sourceIntegrationError": 1.691089817451255e-15,
+            "valid": true,
+            "volumeMm3": 754.65132538385,
+            "withinModelEnvelope": true
+        }
+    ],
+    "pointChecks": [
+    ],
+    "preparedToken": "318d759a-f508-4d6a-99a9-f754b7344ebb",
+    "previewOnly": false,
+    "splitChecks": [
+    ],
+    "visibleParts": 105
+}

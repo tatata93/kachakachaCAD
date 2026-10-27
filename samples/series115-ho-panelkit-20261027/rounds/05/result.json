@@ -1,0 +1,28 @@
+{
+  "stage": 5,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "ecc4f3ddccf7ec6f290e0d5686c71e61d6975ea4b6e70975e0179c14020152c1",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "ecc4f3ddccf7ec6f290e0d5686c71e61d6975ea4b6e70975e0179c14020152c1",
+    "candidate/design.json": "270571ea0bfd5fcde2d46f18242a905200a90f1d08f6e558dc218ac3f23e7458",
+    "native/validation.json": "7709367cb50b6512705a3aada9948c914759ecc0175be323f3cfc52d3a21016f",
+    "exports/print-parts.json": "ac1f57d5555e068502d1ba3338d846b87cdafb1f89014d6aa02192c019bb1a2c",
+    "exports/stl-validation.json": "7cd04ede0e350672c0212a66b3ec89f67ee65f3b833000967ca0f1c1d05035e0",
+    "inspection.json": "d584956bfd3eb49a85e7b3072895fe991c93fcab48eb43b341aea243278c31f0",
+    "previews/render-proof.json": "c4aae97904ad2f2b3f20bd08ebce252f6c9a188813321114d608f9c7b8ce03d1"
+  },
+  "endUtc": "2026-10-26T23:27:14.795517+00:00",
+  "reviewUtc": "2026-10-26T23:27:57.307667+00:00",
+  "observations": [
+    "Metal rings now start at the lamp barrel end faces without the old 0.02 mm gap.",
+    "Lenses have cylindrical seating edges; reflectors have body-wall seats; finite contact checks pass for all four lamp stacks.",
+    "Front and side images retain the shallow lens appearance; fine optical parts remain separate materials."
+  ],
+  "imageSha256": {
+    "front-detail.png": "d698d4e211bd9d2e64581de0a0b4da8ad3a9eaca252ec3b9f91517aa5b933388",
+    "front-profile.png": "5f3d0959931c840af47e90fbb1033236d1116d7eb0dfa177f5f36308389a840f",
+    "front.png": "6b56b52565c8ed8b10dbc2787a1150ae14b6b942c4d3754cd6c67253acc18d75"
+  }
+}

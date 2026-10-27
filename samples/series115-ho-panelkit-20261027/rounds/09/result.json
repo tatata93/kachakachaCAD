@@ -1,0 +1,26 @@
+{
+  "stage": 9,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "8587aa188f51397c9cc0abe4ae6da7e7b694d43beff49632f289760eef022571",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "8587aa188f51397c9cc0abe4ae6da7e7b694d43beff49632f289760eef022571",
+    "candidate/design.json": "5e5f91d810237e035d896a7b28572bea9bac933306e01f31237b4881533756a0",
+    "native/validation.json": "16b2f43bdc6efb7c24219ac264f5fc069d136c78421efa99f828bd5531fadeab",
+    "exports/print-parts.json": "91cd2edba8a560c6a84f960352940cb700063e3c0ce3057178cbf7a4f7136f46",
+    "exports/stl-validation.json": "b0e21570a1e97a6281f05b7ce4cfd690ec16803398ca0f5c04ad533c471c4a6a",
+    "inspection.json": "99446e10802d985bf82b3716328e60fc2c3a9715d1b935444dc0d703e1cea904",
+    "previews/render-proof.json": "2982a7362c0f0cf69a4caf415b72e40ab1115b7e7b740447fa990f3c517b5784"
+  },
+  "endUtc": "2026-10-26T23:56:18.928385+00:00",
+  "reviewUtc": "2026-10-27T00:04:02.026381+00:00",
+  "observations": [
+    "床板の受け座は側壁の内側へ突出し、裾外観から飛び出していない。断面画像で左右の受け座と壁の連続を確認。",
+    "接着面積は六つの受け座それぞれで検査済み。画像だけで接着強度や材料収縮を保証するものではない。"
+  ],
+  "imageSha256": {
+    "floor-receivers.png": "eaa58fa977bafd533fc8a50bd3f50b46ad644dc1b85ea7ede06867292d617d29",
+    "receiver-end.png": "1e408b8c09f93bbb56e0cbe4acd62c99b2b81fda984276b7fc6bb907aecac3b8"
+  }
+}

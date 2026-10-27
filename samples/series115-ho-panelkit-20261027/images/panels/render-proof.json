@@ -1,0 +1,48 @@
+{
+  "scope": "Native-exported STL with explicitly recorded display-only translations; not app screenshots",
+  "nativeReportSha256": "5ff17ab65dd3044110a4ec57790ed1270fcf5acc9abbf513f78c00bc822977b6",
+  "designSha256": "c5c294d5fd74c32637eec795d6b77b0664eca22cd2420a2b155e383ed2a8e73d",
+  "offsetsMm": {
+    "0300e0e8-cf47-583b-bfac-4ee14e14cd15": [
+      -18,
+      0,
+      0
+    ],
+    "2c4a79d3-9670-5857-8d06-474d86dba9c3": [
+      18,
+      0,
+      0
+    ],
+    "6a90be3d-036e-559f-ac3b-b608925a1b43": [
+      0,
+      -18,
+      0
+    ],
+    "3494369c-4187-5b87-b0b1-25b02c8600e5": [
+      0,
+      18,
+      0
+    ],
+    "a20e52cc-3d42-5b20-a899-001bb1404fc4": [
+      0,
+      0,
+      20
+    ],
+    "cba6180b-27a5-5176-929d-4712af518b6e": [
+      0,
+      0,
+      -15
+    ],
+    "d39043c2-90f8-5666-aae6-9f1fdb97f661": [
+      0,
+      0,
+      -5
+    ]
+  },
+  "imagesSha256": {
+    "panels.png": "db35052d0156ffafdc34c5a2270776ffee49ed0ce998a4e32f26af390b4d3e51",
+    "front-panel.png": "3deb25473fcfd42afd0131036ebf3df8558937399ed204fc48f65e94aa50d6f0",
+    "assembled-shell.png": "c438eb5eff7750496da50753df842e8f0828367ee24db634eedf7d96be767ab3",
+    "glazing.png": "c4fbb05f4162716dde389b5bdb5643effb34908d75f9e0f5f4faaaa14e983386"
+  }
+}

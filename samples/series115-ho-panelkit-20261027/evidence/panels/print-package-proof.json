@@ -1,0 +1,13 @@
+{
+  "parts": 105,
+  "printParts": 72,
+  "referenceParts": 33,
+  "compact": false,
+  "maximumNativeExtentMm": 244.6000002000004,
+  "maximumPrintExtentMm": 244.6000002000004,
+  "maximumVertexRoundTripErrorMm": 3.814697265625e-06,
+  "partReportSha256": "ffb5e84379bf74caf8a8cfdbb016c68cb21896aa002116632fc1dc7d88bc815b",
+  "stlValidationSha256": "a47831fea2f4b517937b66ce1e56c391afdfff2a6187a79dc9cfc52fbe7e7264",
+  "physicalPrintingTested": false,
+  "runningTested": false
+}

@@ -1,0 +1,24 @@
+{
+  "stage": 1,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "evidence": {
+    "candidate01/kuha115-ho80-revised.kcd2": "40270e5b335164574fae1ed4fd6bafaf6398b33ab0e0c4ea1d78d010d01591db",
+    "candidate01/design.json": "15e8bbbcbece105068217b252f26c3930db9076fba650212355b6642f816204a",
+    "native01/validation.json": "2f7a3ee392d5d46316b2323606faac6211b8a5cfc7c41e93f90e6c386a237f65",
+    "exports01/print-parts.json": "b8c3a48dc07441574e4878c573ada27ff5631bd5b036a55805d72d249f29437c",
+    "exports01/stl-validation.json": "1f91132d98223866f9773bb8490eb16af1a87a456ca1a4810f15b903a2789de6",
+    "inspection01.json": "879ec911dee5d63f7165da2b018263b3c5888c57a891cfd53c219d1df8c38f20",
+    "previews01/render-proof.json": "9b2a13fead68070f28dc09959156f9c09f2f2525f02b199783a0114df068b5cf",
+    "previews01/front.png": "38823c1955ef658098957ccea364f0a162b6ab17dd4f832a8949c5d7ad486c89",
+    "previews01/front-detail.png": "46320e05dad7f66485204914cd0d1700faee338e701f44b7704e65617e5bfe03",
+    "previews01/front-profile.png": "3703f4ecc5aaf5064197e50ea1c09a5a8f58b9e9ae3008ff9ccaa8c43a72bc0c"
+  },
+  "observations": [
+    "The old forehead/body ledge is removed in the native mesh section and all three diagnostic views.",
+    "The transverse roof shoulder is still too tight; the next trial keeps width, crown and eave and enlarges its tangent shoulder.",
+    "Headlight barrel back and destination display plane still need seating correction."
+  ],
+  "reviewUtc": "2026-10-26T22:21:41.962152+00:00"
+}

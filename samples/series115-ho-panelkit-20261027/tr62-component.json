@@ -1,0 +1,743 @@
+{
+  "version": 1,
+  "sourceSha256": "74b7db8d77496fa6d812d3282fffe5021cecd80a7c001e438158527e980492da",
+  "preparedSha256": "8742326759f666427583aaacf2e686d7f9841cd80c9c5458c19fffe5e2b979bf",
+  "evaluatorSha256": "c2234be6f9e923a9be9761556c86c05c280b5f17d115e1ae2d9c9263077b7d9a",
+  "validationToken": "a8b42963-07d6-4cd9-9731-b4f4d372a40f",
+  "componentSha256": "56b490351e31731d5cb6b87eae6f0d2c158a056b7111d2bd1f7a4f200539c83b",
+  "shapeSha256": {
+    "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1": "dd2894525ef72a0c46e73a15f8d141f8b1dc9943974e32816b46213452fca072",
+    "fa818fea-647a-5d47-925b-4bec32d0ae0c": "f078e6cef036f20ffbdc14ea94efa7bbad680ac2f1cb479a82ad6c6453ddfab1",
+    "a0bc236a-9529-5369-b62d-3df26f20e8f7": "9a32ada4197710a156e54e19937f62171c910e92ceb67298105fe920f0a8edd7",
+    "4692ecf0-b441-5a64-b2ba-4344f47d3c9e": "735107a559c017d355fae980819e0a2407c581e5fe3775ce3c50600bc07f4ac8",
+    "7ac84bfd-6b93-5cd3-b326-2bd0f994f4e7": "36a56ff4c04a8ff74888aeb5d685e2814ec43b3217db13748e8f60aa6df35a08",
+    "7ed862c3-d0fe-5589-b28a-aa2579c148d2": "9918cac9addda1d3f6ee55868a7ff13d7b281e98c5733f4c7773f7846a8fd927",
+    "55ab55ab-0347-5513-a097-ca9e41145a69": "05e8afe70ee658e2e3d55ae1292a3708578507f780990f1a91424e9ea734dd47",
+    "c183da9a-e665-5c74-9fd3-039eed432d2b": "c7a6c8e66c4c80eb1c8f29876799f01ea77dba4918503f78122c580ac654c529"
+  },
+  "sourceEntities": {
+    "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1": "c1926b87-ac14-5323-8be8-7f2f77475461",
+    "fa818fea-647a-5d47-925b-4bec32d0ae0c": "92115f81-313b-5ed9-a172-f310b51fb8ef",
+    "a0bc236a-9529-5369-b62d-3df26f20e8f7": "bf67b911-6361-5745-9a70-8f59a7ac32db",
+    "4692ecf0-b441-5a64-b2ba-4344f47d3c9e": "81518a4e-857d-5b0b-a4ba-e86c7c23e040",
+    "7ac84bfd-6b93-5cd3-b326-2bd0f994f4e7": "f8c8f569-8ba4-5b80-9367-f0e55d511655",
+    "7ed862c3-d0fe-5589-b28a-aa2579c148d2": "87fb942c-4bd3-591f-a3ad-75b8a7b0da1c",
+    "55ab55ab-0347-5513-a097-ca9e41145a69": "00169639-df5a-58e1-a348-60c8b072cb92",
+    "c183da9a-e665-5c74-9fd3-039eed432d2b": "416cc002-198d-5cd6-a450-d8e7afdd4e42"
+  },
+  "roles": {
+    "frame": [
+      "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1"
+    ],
+    "wheelset": [
+      "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "a0bc236a-9529-5369-b62d-3df26f20e8f7"
+    ],
+    "keeper": [
+      "4692ecf0-b441-5a64-b2ba-4344f47d3c9e",
+      "7ac84bfd-6b93-5cd3-b326-2bd0f994f4e7",
+      "7ed862c3-d0fe-5589-b28a-aa2579c148d2",
+      "55ab55ab-0347-5513-a097-ca9e41145a69"
+    ],
+    "plow": [
+      "c183da9a-e665-5c74-9fd3-039eed432d2b"
+    ]
+  },
+  "colors": {
+    "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1": "黒",
+    "fa818fea-647a-5d47-925b-4bec32d0ae0c": "金属銀",
+    "a0bc236a-9529-5369-b62d-3df26f20e8f7": "金属銀",
+    "4692ecf0-b441-5a64-b2ba-4344f47d3c9e": "黒",
+    "7ac84bfd-6b93-5cd3-b326-2bd0f994f4e7": "黒",
+    "7ed862c3-d0fe-5589-b28a-aa2579c148d2": "黒",
+    "55ab55ab-0347-5513-a097-ca9e41145a69": "黒",
+    "c183da9a-e665-5c74-9fd3-039eed432d2b": "黒"
+  },
+  "pointChecks": [
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        -12.3,
+        4.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        -12.3,
+        5.65
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        12.3,
+        4.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        12.3,
+        5.65
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        -12.3,
+        4.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        -12.3,
+        5.65
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        12.3,
+        4.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "黒い軸箱外蓋を残す",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        12.3,
+        5.65
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "横向きシリンダの中央下側",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        32.325,
+        0,
+        8.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "縦向きシリンダを置かない空間",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        29.625,
+        0,
+        8.5
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "側枠の連続した平らな上縁",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        27.625,
+        -11.5,
+        11.3
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "軸箱上の浅い独立開口",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        -11.5,
+        9.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.7,
+        -4.8100000000000005,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.7,
+        -3.5900000000000003,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "側枠の連続した平らな上縁",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        27.625,
+        11.5,
+        11.3
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "軸箱上の浅い独立開口",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        22.5,
+        11.5,
+        9.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.7,
+        3.5900000000000003,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.7,
+        4.8100000000000005,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "横向きシリンダの中央下側",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        38.925,
+        0,
+        8.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "縦向きシリンダを置かない空間",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        41.625,
+        0,
+        8.5
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "側枠の連続した平らな上縁",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        43.625,
+        -11.5,
+        11.3
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "軸箱上の浅い独立開口",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        -11.5,
+        9.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        46.55,
+        -4.8100000000000005,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        46.55,
+        -3.5900000000000003,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "側枠の連続した平らな上縁",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        43.625,
+        11.5,
+        11.3
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": false,
+      "inside": false,
+      "label": "軸箱上の浅い独立開口",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        48.75,
+        11.5,
+        9.6
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        46.55,
+        3.5900000000000003,
+        7.8
+      ]
+    },
+    {
+      "entity": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの両面を挟むパッド",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        46.55,
+        4.8100000000000005,
+        7.8
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": false,
+      "inside": false,
+      "label": "ディスク中央の放射状通気孔",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.914814565722672,
+        -4.2,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの二面式摩擦板",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.914814565722672,
+        -3.93,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスク内部の放射状リブ",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        25,
+        -4.2,
+        5.375
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": false,
+      "inside": false,
+      "label": "ディスク中央の放射状通気孔",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.914814565722672,
+        4.2,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの二面式摩擦板",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        24.914814565722672,
+        4.470000000000001,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "fa818fea-647a-5d47-925b-4bec32d0ae0c",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスク内部の放射状リブ",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        25,
+        4.2,
+        5.375
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": false,
+      "inside": false,
+      "label": "ディスク中央の放射状通気孔",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.16481456572267,
+        -4.2,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの二面式摩擦板",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.16481456572267,
+        -3.93,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスク内部の放射状リブ",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.25,
+        -4.2,
+        5.375
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": false,
+      "inside": false,
+      "label": "ディスク中央の放射状通気孔",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.16481456572267,
+        4.2,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスクの二面式摩擦板",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.16481456572267,
+        4.470000000000001,
+        6.022047612756301
+      ]
+    },
+    {
+      "entity": "a0bc236a-9529-5369-b62d-3df26f20e8f7",
+      "expectedInside": true,
+      "inside": true,
+      "label": "ディスク内部の放射状リブ",
+      "onBoundary": false,
+      "passed": true,
+      "point": [
+        51.25,
+        4.2,
+        5.375
+      ]
+    }
+  ],
+  "assemblyChecks": [
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と輪軸",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "fa818fea-647a-5d47-925b-4bec32d0ae0c"
+    },
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と輪軸",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "a0bc236a-9529-5369-b62d-3df26f20e8f7"
+    },
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と着脱輪軸押え",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "4692ecf0-b441-5a64-b2ba-4344f47d3c9e"
+    },
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と着脱輪軸押え",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "7ac84bfd-6b93-5cd3-b326-2bd0f994f4e7"
+    },
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と着脱輪軸押え",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "7ed862c3-d0fe-5589-b28a-aa2579c148d2"
+    },
+    {
+      "first": "fcc721ac-6fcb-5fd0-b9e3-72e0209c4ed1",
+      "label": "前台車と着脱輪軸押え",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "55ab55ab-0347-5513-a097-ca9e41145a69"
+    },
+    {
+      "first": "c183da9a-e665-5c74-9fd3-039eed432d2b",
+      "label": "前プロウと輪軸",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "fa818fea-647a-5d47-925b-4bec32d0ae0c"
+    },
+    {
+      "first": "c183da9a-e665-5c74-9fd3-039eed432d2b",
+      "label": "前プロウと輪軸",
+      "noOverlap": true,
+      "overlapMm3": 0,
+      "passed": true,
+      "second": "a0bc236a-9529-5369-b62d-3df26f20e8f7"
+    }
+  ],
+  "springPathChecks": [
+    {
+      "path": "a95fff72-6f0a-500d-abc4-8963025613d4",
+      "maximumMm": 0.0006074644911174718,
+      "rmsMm": 0.0004234470091980791,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "37e1f54d-b53d-5d89-9985-551d3c2834bd",
+      "maximumMm": 0.0006074644911174718,
+      "rmsMm": 0.0004234470091980404,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "f4cda0ca-8203-5f98-bcc7-b463c8e6a72f",
+      "maximumMm": 0.0006074644911168343,
+      "rmsMm": 0.00042344700919788873,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "ba5fe014-3292-56e6-9df5-a2c55a9c774f",
+      "maximumMm": 0.0006074644911172526,
+      "rmsMm": 0.0004234470091979181,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "114c45d5-ac57-54aa-8f51-4e7abb08cc1b",
+      "maximumMm": 0.0008314704205725705,
+      "rmsMm": 0.0005743408531412023,
+      "samples": 1300,
+      "turns": 5,
+      "segments": 20
+    },
+    {
+      "path": "13d9acda-d6b1-59e1-9c4b-28149996ed63",
+      "maximumMm": 0.0008314704205725705,
+      "rmsMm": 0.000574340853141188,
+      "samples": 1300,
+      "turns": 5,
+      "segments": 20
+    },
+    {
+      "path": "1f35945f-c14c-572f-9dac-a70ecd9c71b5",
+      "maximumMm": 0.0006074644911174718,
+      "rmsMm": 0.0004234470091980767,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "bca64f97-6d2d-5194-9540-982271de74da",
+      "maximumMm": 0.0006074644911174718,
+      "rmsMm": 0.000423447009198038,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "d64aefa2-5b46-58f7-8604-ba372722960e",
+      "maximumMm": 0.0006074644911168343,
+      "rmsMm": 0.00042344700919788716,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "3a8e97a4-36dd-5b09-bf7c-72b04729fc55",
+      "maximumMm": 0.0006074644911172526,
+      "rmsMm": 0.0004234470091979166,
+      "samples": 1040,
+      "turns": 4,
+      "segments": 16
+    },
+    {
+      "path": "35351cdb-0904-5db1-b711-dd8695ca0dae",
+      "maximumMm": 0.0008314704205725705,
+      "rmsMm": 0.0005743408531411956,
+      "samples": 1300,
+      "turns": 5,
+      "segments": 20
+    },
+    {
+      "path": "8e923acb-1cbe-57ca-ab7c-e755143dd028",
+      "maximumMm": 0.0008314704205725705,
+      "rmsMm": 0.000574340853141182,
+      "samples": 1300,
+      "turns": 5,
+      "segments": 20
+    }
+  ],
+  "note": "Exact CAD BReps. Native detailed source is shipped separately. Rear bogie uses a rigid translation of common parts, without front plow."
+}

@@ -1,0 +1,28 @@
+{
+  "stage": 4,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "9c8c068145cce2545ec8b0502905481b581839b4499f419b8574a5580dbd81fd",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "9c8c068145cce2545ec8b0502905481b581839b4499f419b8574a5580dbd81fd",
+    "candidate/design.json": "f5d9df160300a2bc4fbd2a41dc804effe60ed64328fbc2ee209093ce624f5241",
+    "native/validation.json": "6281be3b9614144a5f50ed750a8717b0747fccc7c734ebd528d8bd5aa68ba69f",
+    "exports/print-parts.json": "99cb19eb7e78ffd255acb447026fc0dbc3790cb3172f891aa5e3865c29102c24",
+    "exports/stl-validation.json": "e3bab80dafd288b56aabc6720ce3134ac35c5b19868d1ea4314eceb0c0997c25",
+    "inspection.json": "e9e915fa8a41595d34f34bf965b2dbb5e3f359e0891ce9d35d94620be2dbf681",
+    "previews/render-proof.json": "3a4997939b41ba7a3fc059fc1b9db3cd6ac10f2f7884342ab024c41baa823c70"
+  },
+  "endUtc": "2026-10-26T23:20:17.274326+00:00",
+  "reviewUtc": "2026-10-26T23:20:58.464104+00:00",
+  "observations": [
+    "All four lamp barrels now extend to the outer body instead of starting 0.15 mm ahead of it.",
+    "Finite barrel/body contact and negative/positive wall probes pass.",
+    "Visible overall proportions preserved; next stage seats metal rings, reflectors and lenses."
+  ],
+  "imageSha256": {
+    "front-detail.png": "6fbfe42b89e7367008463736734ab6a9d91f705a2b07dcb1dfc6c960fbb4bcfa",
+    "front-profile.png": "cb2be1acc21138175f4bf35a70226ddfabeea29b96403adb16d7478abf3a644a",
+    "front.png": "b8324807307ca645423101c08e5078655f8b64c539332b024f1117709b0034aa"
+  }
+}

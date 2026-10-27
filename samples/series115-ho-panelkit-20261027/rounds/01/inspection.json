@@ -1,0 +1,2729 @@
+{
+  "passed": true,
+  "allowedMaximumStepMm": 0.04,
+  "scope": "Actual STL X-ray sections on either side of the Z39 joint; exact BRep point probes are recorded separately.",
+  "candidate": {
+    "nativeReportSha256": "b8c3a48dc07441574e4878c573ada27ff5631bd5b036a55805d72d249f29437c",
+    "meshes": {
+      "part-126-9fc673b8.stl": "9ecd21f79bc5b6a8ad9191876c32c9691972329808535615f3cc459230157677",
+      "part-183-64985e45.stl": "1ef3760f729f788adf9d667e82096d3b27b3a4ad91a3e387e4100f7d9ba6e5e4"
+    },
+    "rows": [
+      {
+        "yMm": -18.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 4.14453170694487,
+        "roofFrontXMm": 4.144454289389453,
+        "stepMm": -7.741755541701423e-05
+      },
+      {
+        "yMm": -17.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.5156528415376065,
+        "roofFrontXMm": 3.515671107690274,
+        "stepMm": 1.826615266731224e-05
+      },
+      {
+        "yMm": -17.55,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.0987318143426945,
+        "roofFrontXMm": 3.0987181110394775,
+        "stepMm": -1.370330321703861e-05
+      },
+      {
+        "yMm": -17.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.7741333093432603,
+        "roofFrontXMm": 2.774113123215448,
+        "stepMm": -2.018612781240492e-05
+      },
+      {
+        "yMm": -17.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.5120463361994148,
+        "roofFrontXMm": 2.5120269406173388,
+        "stepMm": -1.9395582075976137e-05
+      },
+      {
+        "yMm": -16.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.288422685696984,
+        "roofFrontXMm": 2.2883932973161905,
+        "stepMm": -2.938838079336037e-05
+      },
+      {
+        "yMm": -16.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.1017733558758733,
+        "roofFrontXMm": 2.101757580066548,
+        "stepMm": -1.5775809325546675e-05
+      },
+      {
+        "yMm": -16.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9906021961047673,
+        "roofFrontXMm": 1.99060186857078,
+        "stepMm": -3.2753398726548255e-07
+      },
+      {
+        "yMm": -16.425,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.940725332705989,
+        "roofFrontXMm": 1.9407250051720017,
+        "stepMm": -3.2753398726548255e-07
+      },
+      {
+        "yMm": -16.2,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.802193665493673,
+        "roofFrontXMm": 1.8021797575931846,
+        "stepMm": -1.390790048838575e-05
+      },
+      {
+        "yMm": -15.975,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.6838057391301624,
+        "roofFrontXMm": 1.6837842317102891,
+        "stepMm": -2.1507419873278977e-05
+      },
+      {
+        "yMm": -15.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.583717312804149,
+        "roofFrontXMm": 1.5836944596984206,
+        "stepMm": -2.285310572847088e-05
+      },
+      {
+        "yMm": -15.525,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.5004896208900973,
+        "roofFrontXMm": 1.5004747243366963,
+        "stepMm": -1.4896553401033685e-05
+      },
+      {
+        "yMm": -15.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.4330044989045108,
+        "roofFrontXMm": 1.4329797808010718,
+        "stepMm": -2.471810343895875e-05
+      },
+      {
+        "yMm": -15.075,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.380541262014552,
+        "roofFrontXMm": 1.380516175135305,
+        "stepMm": -2.5086879247071536e-05
+      },
+      {
+        "yMm": -14.85,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.342164951440778,
+        "roofFrontXMm": 1.3421649515132918,
+        "stepMm": 7.251377276418225e-11
+      },
+      {
+        "yMm": -14.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.310543264405225,
+        "roofFrontXMm": 1.3105432631767295,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -14.4,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2789215764364537,
+        "roofFrontXMm": 1.2789215752079581,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -14.175,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2472998884676827,
+        "roofFrontXMm": 1.247299887239187,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": -14.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2227052422697493,
+        "roofFrontXMm": 1.2227052410412538,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -13.95,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.215678200498911,
+        "roofFrontXMm": 1.2156781992704158,
+        "stepMm": -1.2284953054830794e-09
+      },
+      {
+        "yMm": -13.725,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.18405651253014,
+        "roofFrontXMm": 1.1840565113016444,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": -13.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1524348245613687,
+        "roofFrontXMm": 1.1524348233328732,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -13.274999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1208131365925973,
+        "roofFrontXMm": 1.1208131353641018,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -13.05,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.0891914486238266,
+        "roofFrontXMm": 1.089191447395331,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -12.825,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.057569760655055,
+        "roofFrontXMm": 1.0575697594265594,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -12.6,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.025948072686284,
+        "roofFrontXMm": 1.0259480714577884,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -12.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9943263847175124,
+        "roofFrontXMm": 0.9943263834890169,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -12.149999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9627046967487412,
+        "roofFrontXMm": 0.9627046955202455,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": -11.925,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9310830087799701,
+        "roofFrontXMm": 0.9310830075514747,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": -11.7,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8994613208111986,
+        "roofFrontXMm": 0.899461319582703,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -11.475,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8678396328424275,
+        "roofFrontXMm": 0.8678396316139321,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": -11.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8362179448736562,
+        "roofFrontXMm": 0.8362179436451607,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -11.024999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8045962569048849,
+        "roofFrontXMm": 0.8045962556763893,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": -10.8,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7729745689361139,
+        "roofFrontXMm": 0.7729745677076184,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -10.575,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7413528809673423,
+        "roofFrontXMm": 0.7413528797388468,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -10.35,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7097311929985712,
+        "roofFrontXMm": 0.7097311917700758,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": -10.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6781095050297999,
+        "roofFrontXMm": 0.6781095038013045,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": -10.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6605419006027049,
+        "roofFrontXMm": 0.6605418993742094,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -9.9,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6464878170610289,
+        "roofFrontXMm": 0.6464878158325332,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": -9.674999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6148661290922574,
+        "roofFrontXMm": 0.6148661278637618,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -9.45,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5832444411234862,
+        "roofFrontXMm": 0.5832444398949906,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -9.225,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.551622753154715,
+        "roofFrontXMm": 0.5516227519262195,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -9.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5200010651859438,
+        "roofFrontXMm": 0.5200010639574483,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -8.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4883793772171727,
+        "roofFrontXMm": 0.4883793759886772,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -8.549999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4567576892484012,
+        "roofFrontXMm": 0.4567576880199056,
+        "stepMm": -1.2284955830388355e-09
+      },
+      {
+        "yMm": -8.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.42513600127963,
+        "roofFrontXMm": 0.42513600005113444,
+        "stepMm": -1.2284955830388355e-09
+      },
+      {
+        "yMm": -8.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.39351431331085884,
+        "roofFrontXMm": 0.3935143120823633,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -7.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.36189262534208766,
+        "roofFrontXMm": 0.361892624113592,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": -7.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.3302709373733165,
+        "roofFrontXMm": 0.33027093614482095,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -7.424999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.29864924940454507,
+        "roofFrontXMm": 0.2986492481760495,
+        "stepMm": -1.2284955830388355e-09
+      },
+      {
+        "yMm": -7.199999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2670275614357739,
+        "roofFrontXMm": 0.26702756020727825,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": -6.975,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.23540587346700267,
+        "roofFrontXMm": 0.2354058722385071,
+        "stepMm": -1.2284955830388355e-09
+      },
+      {
+        "yMm": -6.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.20378418549823146,
+        "roofFrontXMm": 0.2037841842697359,
+        "stepMm": -1.22849555528326e-09
+      },
+      {
+        "yMm": -6.525,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.17216249752946028,
+        "roofFrontXMm": 0.17216249630096472,
+        "stepMm": -1.22849555528326e-09
+      },
+      {
+        "yMm": -6.299999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.14054080956068882,
+        "roofFrontXMm": 0.1405408083321933,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": -6.074999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.10891912159191762,
+        "roofFrontXMm": 0.10891912036342208,
+        "stepMm": -1.2284955414054721e-09
+      },
+      {
+        "yMm": -5.85,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.07729743362314642,
+        "roofFrontXMm": 0.07729743239465088,
+        "stepMm": -1.2284955414054721e-09
+      },
+      {
+        "yMm": -5.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.04567574565437523,
+        "roofFrontXMm": 0.04567574442587969,
+        "stepMm": -1.2284955414054721e-09
+      },
+      {
+        "yMm": -5.4,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.014054057685604037,
+        "roofFrontXMm": 0.014054056457108496,
+        "stepMm": -1.2284955414054721e-09
+      },
+      {
+        "yMm": -5.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -5.174999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -4.949999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -4.725,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -4.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -4.275,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -4.049999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -3.8249999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -3.5999999999999996,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -3.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -3.1500000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -2.924999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -2.6999999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -2.4749999999999996,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -2.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -2.0250000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -1.8000000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -1.5749999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -1.3499999999999979,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -1.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -0.8999999999999986,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -0.6750000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -0.4499999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": -0.22499999999999787,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 0.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 0.22500000000000142,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 0.4499999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 0.6750000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 0.9000000000000021,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 1.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 1.3500000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 1.5749999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 1.8000000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 2.025000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 2.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 2.4750000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 2.6999999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 2.9250000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 3.150000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 3.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 3.6000000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 3.8249999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 4.050000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 4.275000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 4.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 4.725000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 4.949999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 5.175000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 5.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.0,
+        "stepMm": 0.0
+      },
+      {
+        "yMm": 5.400000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.014054057685604304,
+        "roofFrontXMm": 0.014054056457108666,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 5.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.045675745654375044,
+        "roofFrontXMm": 0.04567574442587963,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 5.850000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.07729743362314667,
+        "roofFrontXMm": 0.07729743239465126,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 6.074999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.10891912159191763,
+        "roofFrontXMm": 0.10891912036342222,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 6.300000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.14054080956068904,
+        "roofFrontXMm": 0.1405408083321934,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 6.525000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.17216249752946045,
+        "roofFrontXMm": 0.17216249630096503,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 6.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2037841854982314,
+        "roofFrontXMm": 0.203784184269736,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 6.975000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2354058734670028,
+        "roofFrontXMm": 0.2354058722385074,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 7.199999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2670275614357738,
+        "roofFrontXMm": 0.26702756020727836,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 7.425000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2986492494045452,
+        "roofFrontXMm": 0.29864924817604976,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 7.650000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.3302709373733167,
+        "roofFrontXMm": 0.33027093614482117,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 7.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.36189262534208755,
+        "roofFrontXMm": 0.361892624113592,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 8.100000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.39351431331085907,
+        "roofFrontXMm": 0.39351431208236365,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 8.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4251360012796299,
+        "roofFrontXMm": 0.4251360000511345,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 8.55,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.45675768924840154,
+        "roofFrontXMm": 0.4567576880199059,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 8.775000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.48837937721717295,
+        "roofFrontXMm": 0.4883793759886774,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 9.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5200010651859438,
+        "roofFrontXMm": 0.5200010639574483,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 9.225000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5516227531547153,
+        "roofFrontXMm": 0.5516227519262199,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 9.45,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5832444411234862,
+        "roofFrontXMm": 0.5832444398949908,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 9.675,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6148661290922577,
+        "roofFrontXMm": 0.6148661278637622,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 9.900000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6464878170610291,
+        "roofFrontXMm": 0.6464878158325337,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 10.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6605419006027049,
+        "roofFrontXMm": 0.6605418993742094,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 10.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6781095050298,
+        "roofFrontXMm": 0.6781095038013045,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 10.350000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7097311929985716,
+        "roofFrontXMm": 0.709731191770076,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 10.575,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7413528809673425,
+        "roofFrontXMm": 0.7413528797388469,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 10.8,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7729745689361139,
+        "roofFrontXMm": 0.7729745677076184,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 11.025000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8045962569048853,
+        "roofFrontXMm": 0.8045962556763898,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 11.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8362179448736562,
+        "roofFrontXMm": 0.8362179436451608,
+        "stepMm": -1.2284954165053819e-09
+      },
+      {
+        "yMm": 11.475000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8678396328424278,
+        "roofFrontXMm": 0.8678396316139322,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 11.7,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8994613208111988,
+        "roofFrontXMm": 0.8994613195827031,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 11.925,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9310830087799702,
+        "roofFrontXMm": 0.9310830075514746,
+        "stepMm": -1.2284956385499868e-09
+      },
+      {
+        "yMm": 12.150000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9627046967487416,
+        "roofFrontXMm": 0.9627046955202461,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 12.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9943263847175124,
+        "roofFrontXMm": 0.9943263834890169,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 12.600000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.025948072686284,
+        "roofFrontXMm": 1.0259480714577882,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": 12.825,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.057569760655055,
+        "roofFrontXMm": 1.0575697594265594,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 13.05,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.0891914486238263,
+        "roofFrontXMm": 1.0891914473953306,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": 13.275000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1208131365925977,
+        "roofFrontXMm": 1.1208131353641022,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 13.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1524348245613687,
+        "roofFrontXMm": 1.1524348233328734,
+        "stepMm": -1.2284953054830794e-09
+      },
+      {
+        "yMm": 13.725000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.18405651253014,
+        "roofFrontXMm": 1.1840565113016446,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 13.95,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.215678200498911,
+        "roofFrontXMm": 1.2156781992704158,
+        "stepMm": -1.2284953054830794e-09
+      },
+      {
+        "yMm": 14.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2227052422697493,
+        "roofFrontXMm": 1.2227052410412536,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": 14.175000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2472998884676831,
+        "roofFrontXMm": 1.2472998872391874,
+        "stepMm": -1.2284957495722892e-09
+      },
+      {
+        "yMm": 14.399999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2789215764364534,
+        "roofFrontXMm": 1.2789215752079581,
+        "stepMm": -1.2284953054830794e-09
+      },
+      {
+        "yMm": 14.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3105432644052248,
+        "roofFrontXMm": 1.3105432631767293,
+        "stepMm": -1.2284955275276843e-09
+      },
+      {
+        "yMm": 14.850000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3421649514407783,
+        "roofFrontXMm": 1.342164951513292,
+        "stepMm": 7.251377276418225e-11
+      },
+      {
+        "yMm": 15.075000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3805412620145527,
+        "roofFrontXMm": 1.3805160484224248,
+        "stepMm": -2.5213592127926177e-05
+      },
+      {
+        "yMm": 15.300000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.4330044989045119,
+        "roofFrontXMm": 1.4329883418889897,
+        "stepMm": -1.615701552215576e-05
+      },
+      {
+        "yMm": 15.524999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.5004896208900966,
+        "roofFrontXMm": 1.500467599286175,
+        "stepMm": -2.2021603921729138e-05
+      },
+      {
+        "yMm": 15.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.583717312804149,
+        "roofFrontXMm": 1.5836933697325373,
+        "stepMm": -2.3943071611798317e-05
+      },
+      {
+        "yMm": 15.975000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.6838057391301633,
+        "roofFrontXMm": 1.683783838843563,
+        "stepMm": -2.1900286600207153e-05
+      },
+      {
+        "yMm": 16.200000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.802193665493675,
+        "roofFrontXMm": 1.802177253597064,
+        "stepMm": -1.641189661105713e-05
+      },
+      {
+        "yMm": 16.425000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9407253327059917,
+        "roofFrontXMm": 1.9407047620051672,
+        "stepMm": -2.057070082450707e-05
+      },
+      {
+        "yMm": 16.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9906021961047673,
+        "roofFrontXMm": 1.990581625403943,
+        "stepMm": -2.0570700824285026e-05
+      },
+      {
+        "yMm": 16.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.1017733558758733,
+        "roofFrontXMm": 2.101757580066548,
+        "stepMm": -1.5775809325546675e-05
+      },
+      {
+        "yMm": 16.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.2884226856969834,
+        "roofFrontXMm": 2.2883932973161905,
+        "stepMm": -2.938838079291628e-05
+      },
+      {
+        "yMm": 17.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.5120463361994148,
+        "roofFrontXMm": 2.5120269406173388,
+        "stepMm": -1.9395582075976137e-05
+      },
+      {
+        "yMm": 17.325000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.7741333093432647,
+        "roofFrontXMm": 2.774113123215452,
+        "stepMm": -2.018612781284901e-05
+      },
+      {
+        "yMm": 17.550000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.0987318143427,
+        "roofFrontXMm": 3.0987181144305187,
+        "stepMm": -1.3699912181142082e-05
+      },
+      {
+        "yMm": 17.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.515635538834774,
+        "roofFrontXMm": 3.515671111323446,
+        "stepMm": 3.557248867158691e-05
+      },
+      {
+        "yMm": 18.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 4.144440663090799,
+        "roofFrontXMm": 4.144454271827357,
+        "stepMm": 1.3608736558090584e-05
+      }
+    ],
+    "maximumAbsoluteStepMm": 7.741755541701423e-05
+  },
+  "baseline": {
+    "nativeReportSha256": "1f883668bfc8dbcc9d335c7cc2ee16da42d1d8e8036e3d1174ab03ce4cdcf583",
+    "meshes": {
+      "part-126-9fc673b8.stl": "9ecd21f79bc5b6a8ad9191876c32c9691972329808535615f3cc459230157677",
+      "part-183-64985e45.stl": "4b08d56f23a070167d99cc70fcca9bfe21bddfdd35340451acc98b3cad57e5ec"
+    },
+    "rows": [
+      {
+        "yMm": -18.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 4.14453170694487,
+        "roofFrontXMm": 4.1816298401851375,
+        "stepMm": 0.03709813324026712
+      },
+      {
+        "yMm": -17.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.5156528415376065,
+        "roofFrontXMm": 3.513485769090656,
+        "stepMm": -0.002167072446950691
+      },
+      {
+        "yMm": -17.55,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.0987318143426945,
+        "roofFrontXMm": 3.0964659946014814,
+        "stepMm": -0.002265819741213093
+      },
+      {
+        "yMm": -17.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.7741333093432603,
+        "roofFrontXMm": 2.774134658479616,
+        "stepMm": 1.3491363555218072e-06
+      },
+      {
+        "yMm": -17.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.5120463361994148,
+        "roofFrontXMm": 2.550612980339793,
+        "stepMm": 0.03856664414037825
+      },
+      {
+        "yMm": -16.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.288422685696984,
+        "roofFrontXMm": 2.394060179852949,
+        "stepMm": 0.10563749415596524
+      },
+      {
+        "yMm": -16.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.1017733558758733,
+        "roofFrontXMm": 2.2749762886912115,
+        "stepMm": 0.17320293281533816
+      },
+      {
+        "yMm": -16.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9906021961047673,
+        "roofFrontXMm": 2.2101935421063037,
+        "stepMm": 0.2195913460015364
+      },
+      {
+        "yMm": -16.425,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.940725332705989,
+        "roofFrontXMm": 2.1812702768693435,
+        "stepMm": 0.24054494416335448
+      },
+      {
+        "yMm": -16.2,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.802193665493673,
+        "roofFrontXMm": 2.0979840512367,
+        "stepMm": 0.2957903857430271
+      },
+      {
+        "yMm": -15.975,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.6838057391301624,
+        "roofFrontXMm": 2.0147447004334915,
+        "stepMm": 0.3309389613033291
+      },
+      {
+        "yMm": -15.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.583717312804149,
+        "roofFrontXMm": 1.9376648253839832,
+        "stepMm": 0.35394751257983414
+      },
+      {
+        "yMm": -15.525,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.5004896208900973,
+        "roofFrontXMm": 1.8634375532605563,
+        "stepMm": 0.36294793237045897
+      },
+      {
+        "yMm": -15.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.4330044989045108,
+        "roofFrontXMm": 1.790747183519964,
+        "stepMm": 0.3577426846154532
+      },
+      {
+        "yMm": -15.075,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.380541262014552,
+        "roofFrontXMm": 1.723938599141106,
+        "stepMm": 0.34339733712655396
+      },
+      {
+        "yMm": -14.85,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.342164951440778,
+        "roofFrontXMm": 1.6571699495503818,
+        "stepMm": 0.3150049981096037
+      },
+      {
+        "yMm": -14.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.310543264405225,
+        "roofFrontXMm": 1.5973213033593718,
+        "stepMm": 0.2867780389541468
+      },
+      {
+        "yMm": -14.4,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2789215764364537,
+        "roofFrontXMm": 1.537636125100332,
+        "stepMm": 0.25871454866387844
+      },
+      {
+        "yMm": -14.175,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2472998884676827,
+        "roofFrontXMm": 1.4779787178716122,
+        "stepMm": 0.23067882940392948
+      },
+      {
+        "yMm": -14.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2227052422697493,
+        "roofFrontXMm": 1.4367142970633318,
+        "stepMm": 0.21400905479358245
+      },
+      {
+        "yMm": -13.95,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.215678200498911,
+        "roofFrontXMm": 1.4251094905854755,
+        "stepMm": 0.20943129008656447
+      },
+      {
+        "yMm": -13.725,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.18405651253014,
+        "roofFrontXMm": 1.3728878614351223,
+        "stepMm": 0.1888313489049822
+      },
+      {
+        "yMm": -13.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1524348245613687,
+        "roofFrontXMm": 1.3206662322847693,
+        "stepMm": 0.16823140772340062
+      },
+      {
+        "yMm": -13.274999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1208131365925973,
+        "roofFrontXMm": 1.2735691275556913,
+        "stepMm": 0.152755990963094
+      },
+      {
+        "yMm": -13.05,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.0891914486238266,
+        "roofFrontXMm": 1.2282422798341703,
+        "stepMm": 0.13905083121034378
+      },
+      {
+        "yMm": -12.825,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.057569760655055,
+        "roofFrontXMm": 1.1829154321126487,
+        "stepMm": 0.1253456714575938
+      },
+      {
+        "yMm": -12.6,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.025948072686284,
+        "roofFrontXMm": 1.1393917341204993,
+        "stepMm": 0.11344366143421536
+      },
+      {
+        "yMm": -12.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9943263847175124,
+        "roofFrontXMm": 1.0988680615314363,
+        "stepMm": 0.1045416768139239
+      },
+      {
+        "yMm": -12.149999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9627046967487412,
+        "roofFrontXMm": 1.0591424094876425,
+        "stepMm": 0.09643771273890134
+      },
+      {
+        "yMm": -11.925,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9310830087799701,
+        "roofFrontXMm": 1.02161428226363,
+        "stepMm": 0.09053127348365997
+      },
+      {
+        "yMm": -11.7,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8994613208111986,
+        "roofFrontXMm": 0.9861454520593923,
+        "stepMm": 0.08668413124819374
+      },
+      {
+        "yMm": -11.475,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8678396328424275,
+        "roofFrontXMm": 0.9515257740602662,
+        "stepMm": 0.08368614121783868
+      },
+      {
+        "yMm": -11.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8362179448736562,
+        "roofFrontXMm": 0.9189211320405817,
+        "stepMm": 0.08270318716692548
+      },
+      {
+        "yMm": -11.024999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8045962569048849,
+        "roofFrontXMm": 0.8871161108449892,
+        "stepMm": 0.0825198539401043
+      },
+      {
+        "yMm": -10.8,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7729745689361139,
+        "roofFrontXMm": 0.8570648994819092,
+        "stepMm": 0.08409033054579529
+      },
+      {
+        "yMm": -10.575,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7413528809673423,
+        "roofFrontXMm": 0.8289046620805567,
+        "stepMm": 0.08755178111321438
+      },
+      {
+        "yMm": -10.35,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7097311929985712,
+        "roofFrontXMm": 0.8007444246792045,
+        "stepMm": 0.09101323168063324
+      },
+      {
+        "yMm": -10.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6781095050297999,
+        "roofFrontXMm": 0.7727347516914972,
+        "stepMm": 0.09462524666169725
+      },
+      {
+        "yMm": -10.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6605419006027049,
+        "roofFrontXMm": 0.7589570339192804,
+        "stepMm": 0.09841513331657548
+      },
+      {
+        "yMm": -9.9,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6464878170610289,
+        "roofFrontXMm": 0.7483068898140072,
+        "stepMm": 0.1018190727529783
+      },
+      {
+        "yMm": -9.674999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6148661290922574,
+        "roofFrontXMm": 0.724344065577142,
+        "stepMm": 0.10947793648488469
+      },
+      {
+        "yMm": -9.45,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5832444411234862,
+        "roofFrontXMm": 0.7003812413402772,
+        "stepMm": 0.11713680021679107
+      },
+      {
+        "yMm": -9.225,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.551622753154715,
+        "roofFrontXMm": 0.6768337679511987,
+        "stepMm": 0.12521101479648367
+      },
+      {
+        "yMm": -9.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5200010651859438,
+        "roofFrontXMm": 0.6559482527831548,
+        "stepMm": 0.13594718759721103
+      },
+      {
+        "yMm": -8.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4883793772171727,
+        "roofFrontXMm": 0.6350627376151109,
+        "stepMm": 0.14668336039793817
+      },
+      {
+        "yMm": -8.549999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4567576892484012,
+        "roofFrontXMm": 0.6156140517706988,
+        "stepMm": 0.15885636252229762
+      },
+      {
+        "yMm": -8.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.42513600127963,
+        "roofFrontXMm": 0.596933868004842,
+        "stepMm": 0.17179786672521202
+      },
+      {
+        "yMm": -8.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.39351431331085884,
+        "roofFrontXMm": 0.5785047484594775,
+        "stepMm": 0.18499043514861868
+      },
+      {
+        "yMm": -7.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.36189262534208766,
+        "roofFrontXMm": 0.5619265959756145,
+        "stepMm": 0.2000339706335268
+      },
+      {
+        "yMm": -7.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.3302709373733165,
+        "roofFrontXMm": 0.5453484434917513,
+        "stepMm": 0.2150775061184348
+      },
+      {
+        "yMm": -7.424999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.29864924940454507,
+        "roofFrontXMm": 0.5296696390174414,
+        "stepMm": 0.23102038961289628
+      },
+      {
+        "yMm": -7.199999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2670275614357739,
+        "roofFrontXMm": 0.5150889018509349,
+        "stepMm": 0.24806134041516104
+      },
+      {
+        "yMm": -6.975,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.23540587346700267,
+        "roofFrontXMm": 0.5005081646844284,
+        "stepMm": 0.2651022912174257
+      },
+      {
+        "yMm": -6.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.20378418549823146,
+        "roofFrontXMm": 0.487227176174786,
+        "stepMm": 0.28344299067655454
+      },
+      {
+        "yMm": -6.525,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.17216249752946028,
+        "roofFrontXMm": 0.47454651964280065,
+        "stepMm": 0.30238402211334037
+      },
+      {
+        "yMm": -6.299999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.14054080956068882,
+        "roofFrontXMm": 0.4618658631108153,
+        "stepMm": 0.32132505355012647
+      },
+      {
+        "yMm": -6.074999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.10891912159191762,
+        "roofFrontXMm": 0.45045938327513996,
+        "stepMm": 0.3415402616832223
+      },
+      {
+        "yMm": -5.85,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.07729743362314642,
+        "roofFrontXMm": 0.43958169604981995,
+        "stepMm": 0.36228426242667355
+      },
+      {
+        "yMm": -5.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.04567574565437523,
+        "roofFrontXMm": 0.4287040088245001,
+        "stepMm": 0.3830282631701249
+      },
+      {
+        "yMm": -5.4,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.014054057685604037,
+        "roofFrontXMm": 0.41895695316025855,
+        "stepMm": 0.4049028954746545
+      },
+      {
+        "yMm": -5.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.41488423826560755,
+        "stepMm": 0.41488423826560755
+      },
+      {
+        "yMm": -5.174999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.40979334464729367,
+        "stepMm": 0.40979334464729367
+      },
+      {
+        "yMm": -4.949999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.40062973613432884,
+        "stepMm": 0.40062973613432884
+      },
+      {
+        "yMm": -4.725,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3918529862906529,
+        "stepMm": 0.3918529862906529
+      },
+      {
+        "yMm": -4.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.38431883374563924,
+        "stepMm": 0.38431883374563924
+      },
+      {
+        "yMm": -4.275,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3767846812006256,
+        "stepMm": 0.3767846812006256
+      },
+      {
+        "yMm": -4.049999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3693961908556116,
+        "stepMm": 0.3693961908556116
+      },
+      {
+        "yMm": -3.8249999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.36331217299443563,
+        "stepMm": 0.36331217299443563
+      },
+      {
+        "yMm": -3.5999999999999996,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3573324372473723,
+        "stepMm": 0.3573324372473723
+      },
+      {
+        "yMm": -3.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.35135270150030906,
+        "stepMm": 0.35135270150030906
+      },
+      {
+        "yMm": -3.1500000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.34601700665453433,
+        "stepMm": 0.34601700665453433
+      },
+      {
+        "yMm": -2.924999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.34152918700748236,
+        "stepMm": 0.34152918700748236
+      },
+      {
+        "yMm": -2.6999999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3370413673604305,
+        "stepMm": 0.3370413673604305
+      },
+      {
+        "yMm": -2.4749999999999996,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3325535477133786,
+        "stepMm": 0.3325535477133786
+      },
+      {
+        "yMm": -2.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3290549654277132,
+        "stepMm": 0.3290549654277132
+      },
+      {
+        "yMm": -2.0250000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.32600757372689637,
+        "stepMm": 0.32600757372689637
+      },
+      {
+        "yMm": -1.8000000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3229601820260795,
+        "stepMm": 0.3229601820260795
+      },
+      {
+        "yMm": -1.5749999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3199127903252626,
+        "stepMm": 0.3199127903252626
+      },
+      {
+        "yMm": -1.3499999999999979,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.317911421480054,
+        "stepMm": 0.317911421480054
+      },
+      {
+        "yMm": -1.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3162792207803828,
+        "stepMm": 0.3162792207803828
+      },
+      {
+        "yMm": -0.8999999999999986,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3146470200807115,
+        "stepMm": 0.3146470200807115
+      },
+      {
+        "yMm": -0.6750000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31301481938104025,
+        "stepMm": 0.31301481938104025
+      },
+      {
+        "yMm": -0.4499999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.312461000069323,
+        "stepMm": 0.312461000069323
+      },
+      {
+        "yMm": -0.22499999999999787,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31222901163714656,
+        "stepMm": 0.31222901163714656
+      },
+      {
+        "yMm": 0.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3119970232049702,
+        "stepMm": 0.3119970232049702
+      },
+      {
+        "yMm": 0.22500000000000142,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31176503477279377,
+        "stepMm": 0.31176503477279377
+      },
+      {
+        "yMm": 0.4499999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31237064375970713,
+        "stepMm": 0.31237064375970713
+      },
+      {
+        "yMm": 0.6750000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31356516347718616,
+        "stepMm": 0.31356516347718616
+      },
+      {
+        "yMm": 0.9000000000000021,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3147596831946652,
+        "stepMm": 0.3147596831946652
+      },
+      {
+        "yMm": 1.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31595420291214416,
+        "stepMm": 0.31595420291214416
+      },
+      {
+        "yMm": 1.3500000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.31786622951399984,
+        "stepMm": 0.31786622951399984
+      },
+      {
+        "yMm": 1.5749999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3204431244327297,
+        "stepMm": 0.3204431244327297
+      },
+      {
+        "yMm": 1.8000000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3230200193514597,
+        "stepMm": 0.3230200193514597
+      },
+      {
+        "yMm": 2.025000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3255969142701896,
+        "stepMm": 0.3255969142701896
+      },
+      {
+        "yMm": 2.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3291663776859088,
+        "stepMm": 0.3291663776859088
+      },
+      {
+        "yMm": 2.4750000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.33311298855812943,
+        "stepMm": 0.33311298855812943
+      },
+      {
+        "yMm": 2.6999999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.33705959943035,
+        "stepMm": 0.33705959943035
+      },
+      {
+        "yMm": 2.9250000000000007,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3409949737931749,
+        "stepMm": 0.3409949737931749
+      },
+      {
+        "yMm": 3.150000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.34619890662023567,
+        "stepMm": 0.34619890662023567
+      },
+      {
+        "yMm": 3.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3515700898470354,
+        "stepMm": 0.3515700898470354
+      },
+      {
+        "yMm": 3.6000000000000014,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.35694127307383533,
+        "stepMm": 0.35694127307383533
+      },
+      {
+        "yMm": 3.8249999999999993,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3631941767399646,
+        "stepMm": 0.3631941767399646
+      },
+      {
+        "yMm": 4.050000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3700684959229481,
+        "stepMm": 0.3700684959229481
+      },
+      {
+        "yMm": 4.275000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3769428151059316,
+        "stepMm": 0.3769428151059316
+      },
+      {
+        "yMm": 4.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.38381713428891495,
+        "stepMm": 0.38381713428891495
+      },
+      {
+        "yMm": 4.725000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.3923497397146781,
+        "stepMm": 0.3923497397146781
+      },
+      {
+        "yMm": 4.949999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.4008026550674442,
+        "stepMm": 0.4008026550674442
+      },
+      {
+        "yMm": 5.175000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.40925557042021055,
+        "stepMm": 0.40925557042021055
+      },
+      {
+        "yMm": 5.3,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.0,
+        "roofFrontXMm": 0.4145585353258292,
+        "stepMm": 0.4145585353258292
+      },
+      {
+        "yMm": 5.400000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.014054057685604304,
+        "roofFrontXMm": 0.41905553147724095,
+        "stepMm": 0.40500147379163665
+      },
+      {
+        "yMm": 5.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.045675745654375044,
+        "roofFrontXMm": 0.429173772817917,
+        "stepMm": 0.383498027163542
+      },
+      {
+        "yMm": 5.850000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.07729743362314667,
+        "roofFrontXMm": 0.43929201415859315,
+        "stepMm": 0.3619945805354465
+      },
+      {
+        "yMm": 6.074999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.10891912159191763,
+        "roofFrontXMm": 0.45038160118618553,
+        "stepMm": 0.3414624795942679
+      },
+      {
+        "yMm": 6.300000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.14054080956068904,
+        "roofFrontXMm": 0.4622524079205761,
+        "stepMm": 0.32171159835988705
+      },
+      {
+        "yMm": 6.525000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.17216249752946045,
+        "roofFrontXMm": 0.4741232146549666,
+        "stepMm": 0.30196071712550615
+      },
+      {
+        "yMm": 6.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2037841854982314,
+        "roofFrontXMm": 0.48725504565953626,
+        "stepMm": 0.28347086016130485
+      },
+      {
+        "yMm": 6.975000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2354058734670028,
+        "roofFrontXMm": 0.5009682874145994,
+        "stepMm": 0.2655624139475966
+      },
+      {
+        "yMm": 7.199999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2670275614357738,
+        "roofFrontXMm": 0.5146815291696625,
+        "stepMm": 0.2476539677338887
+      },
+      {
+        "yMm": 7.425000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.2986492494045452,
+        "roofFrontXMm": 0.5298172422584787,
+        "stepMm": 0.23116799285393352
+      },
+      {
+        "yMm": 7.650000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.3302709373733167,
+        "roofFrontXMm": 0.5454667076788774,
+        "stepMm": 0.2151957703055607
+      },
+      {
+        "yMm": 7.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.36189262534208755,
+        "roofFrontXMm": 0.5615865757551712,
+        "stepMm": 0.1996939504130837
+      },
+      {
+        "yMm": 8.100000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.39351431331085907,
+        "roofFrontXMm": 0.5790648675076339,
+        "stepMm": 0.1855505541967748
+      },
+      {
+        "yMm": 8.325,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.4251360012796299,
+        "roofFrontXMm": 0.5967428298612161,
+        "stepMm": 0.17160682858158616
+      },
+      {
+        "yMm": 8.55,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.45675768924840154,
+        "roofFrontXMm": 0.6158818396195288,
+        "stepMm": 0.15912415037112726
+      },
+      {
+        "yMm": 8.775000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.48837937721717295,
+        "roofFrontXMm": 0.6356862812247301,
+        "stepMm": 0.1473069040075572
+      },
+      {
+        "yMm": 9.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5200010651859438,
+        "roofFrontXMm": 0.6554993020053832,
+        "stepMm": 0.1354982368194394
+      },
+      {
+        "yMm": 9.225000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5516227531547153,
+        "roofFrontXMm": 0.6774192099609211,
+        "stepMm": 0.12579645680620577
+      },
+      {
+        "yMm": 9.45,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.5832444411234862,
+        "roofFrontXMm": 0.6994452062352504,
+        "stepMm": 0.11620076511176425
+      },
+      {
+        "yMm": 9.675,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6148661290922577,
+        "roofFrontXMm": 0.723105961983397,
+        "stepMm": 0.10823983289113936
+      },
+      {
+        "yMm": 9.900000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6464878170610291,
+        "roofFrontXMm": 0.7474549962716336,
+        "stepMm": 0.1009671792106045
+      },
+      {
+        "yMm": 10.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6605419006027049,
+        "roofFrontXMm": 0.7582767892886273,
+        "stepMm": 0.0977348886859224
+      },
+      {
+        "yMm": 10.125,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.6781095050298,
+        "roofFrontXMm": 0.7732376894697829,
+        "stepMm": 0.09512818443998283
+      },
+      {
+        "yMm": 10.350000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7097311929985716,
+        "roofFrontXMm": 0.8000080407328273,
+        "stepMm": 0.0902768477342557
+      },
+      {
+        "yMm": 10.575,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7413528809673425,
+        "roofFrontXMm": 0.8275248707920423,
+        "stepMm": 0.08617198982469976
+      },
+      {
+        "yMm": 10.8,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.7729745689361139,
+        "roofFrontXMm": 0.8568217014526637,
+        "stepMm": 0.08384713251654974
+      },
+      {
+        "yMm": 11.025000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8045962569048853,
+        "roofFrontXMm": 0.8870395988698797,
+        "stepMm": 0.08244334196499437
+      },
+      {
+        "yMm": 11.25,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8362179448736562,
+        "roofFrontXMm": 0.9189628828347793,
+        "stepMm": 0.08274493796112314
+      },
+      {
+        "yMm": 11.475000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8678396328424278,
+        "roofFrontXMm": 0.9514487128871995,
+        "stepMm": 0.08360908004477163
+      },
+      {
+        "yMm": 11.7,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.8994613208111988,
+        "roofFrontXMm": 0.9860727373030114,
+        "stepMm": 0.08661141649181259
+      },
+      {
+        "yMm": 11.925,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9310830087799702,
+        "roofFrontXMm": 1.0216554437740484,
+        "stepMm": 0.09057243499407819
+      },
+      {
+        "yMm": 12.150000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9627046967487416,
+        "roofFrontXMm": 1.0591484366803632,
+        "stepMm": 0.09644373993162159
+      },
+      {
+        "yMm": 12.375,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 0.9943263847175124,
+        "roofFrontXMm": 1.0995981208060364,
+        "stepMm": 0.10527173608852392
+      },
+      {
+        "yMm": 12.600000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.025948072686284,
+        "roofFrontXMm": 1.1415661009543263,
+        "stepMm": 0.11561802826804235
+      },
+      {
+        "yMm": 12.825,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.057569760655055,
+        "roofFrontXMm": 1.1835340811026158,
+        "stepMm": 0.1259643204475609
+      },
+      {
+        "yMm": 13.05,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.0891914486238263,
+        "roofFrontXMm": 1.2258883008296122,
+        "stepMm": 0.13669685220578587
+      },
+      {
+        "yMm": 13.275000000000002,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1208131365925977,
+        "roofFrontXMm": 1.2738557877910357,
+        "stepMm": 0.15304265119843796
+      },
+      {
+        "yMm": 13.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.1524348245613687,
+        "roofFrontXMm": 1.3221727505236842,
+        "stepMm": 0.16973792596231552
+      },
+      {
+        "yMm": 13.725000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.18405651253014,
+        "roofFrontXMm": 1.3704897132563338,
+        "stepMm": 0.18643320072619374
+      },
+      {
+        "yMm": 13.95,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.215678200498911,
+        "roofFrontXMm": 1.4251115849556493,
+        "stepMm": 0.2094333844567382
+      },
+      {
+        "yMm": 14.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2227052422697493,
+        "roofFrontXMm": 1.4373666312768596,
+        "stepMm": 0.2146613890071103
+      },
+      {
+        "yMm": 14.175000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2472998884676831,
+        "roofFrontXMm": 1.4802592934010967,
+        "stepMm": 0.2329594049334136
+      },
+      {
+        "yMm": 14.399999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.2789215764364534,
+        "roofFrontXMm": 1.5354070018465418,
+        "stepMm": 0.25648542541008834
+      },
+      {
+        "yMm": 14.625,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3105432644052248,
+        "roofFrontXMm": 1.5968068419233334,
+        "stepMm": 0.2862635775181086
+      },
+      {
+        "yMm": 14.850000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3421649514407783,
+        "roofFrontXMm": 1.6593013114597837,
+        "stepMm": 0.31713636001900536
+      },
+      {
+        "yMm": 15.075000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.3805412620145527,
+        "roofFrontXMm": 1.7224607175528601,
+        "stepMm": 0.3419194555383074
+      },
+      {
+        "yMm": 15.300000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.4330044989045119,
+        "roofFrontXMm": 1.7927733665321037,
+        "stepMm": 0.35976886762759186
+      },
+      {
+        "yMm": 15.524999999999999,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.5004896208900966,
+        "roofFrontXMm": 1.8631719519748944,
+        "stepMm": 0.36268233108479775
+      },
+      {
+        "yMm": 15.75,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.583717312804149,
+        "roofFrontXMm": 1.9372262290344149,
+        "stepMm": 0.3535089162302658
+      },
+      {
+        "yMm": 15.975000000000001,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.6838057391301633,
+        "roofFrontXMm": 2.0150152946034408,
+        "stepMm": 0.33120955547327746
+      },
+      {
+        "yMm": 16.200000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.802193665493675,
+        "roofFrontXMm": 2.096579122165508,
+        "stepMm": 0.29438545667183313
+      },
+      {
+        "yMm": 16.425000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9407253327059917,
+        "roofFrontXMm": 2.1811784227755897,
+        "stepMm": 0.24045309006959803
+      },
+      {
+        "yMm": 16.5,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 1.9906021961047673,
+        "roofFrontXMm": 2.2101798301814277,
+        "stepMm": 0.21957763407666042
+      },
+      {
+        "yMm": 16.65,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.1017733558758733,
+        "roofFrontXMm": 2.2748236137664417,
+        "stepMm": 0.17305025789056838
+      },
+      {
+        "yMm": 16.875,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.2884226856969834,
+        "roofFrontXMm": 2.3944830883061043,
+        "stepMm": 0.10606040260912097
+      },
+      {
+        "yMm": 17.1,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.5120463361994148,
+        "roofFrontXMm": 2.5501198123849735,
+        "stepMm": 0.038073476185558786
+      },
+      {
+        "yMm": 17.325000000000003,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 2.7741333093432647,
+        "roofFrontXMm": 2.77413465847962,
+        "stepMm": 1.349136355077718e-06
+      },
+      {
+        "yMm": 17.550000000000004,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.0987318143427,
+        "roofFrontXMm": 3.096465994601487,
+        "stepMm": -0.002265819741212649
+      },
+      {
+        "yMm": 17.775,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 3.515635538834774,
+        "roofFrontXMm": 3.513485769090656,
+        "stepMm": -0.0021497697441184016
+      },
+      {
+        "yMm": 18.0,
+        "bodyZMm": 38.98,
+        "roofZMm": 39.02,
+        "bodyFrontXMm": 4.144440663090799,
+        "roofFrontXMm": 4.185511110947933,
+        "stepMm": 0.041070447857133985
+      }
+    ],
+    "maximumAbsoluteStepMm": 0.41488423826560755
+  }
+}

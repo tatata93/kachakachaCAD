@@ -1,0 +1,28 @@
+{
+  "stage": 2,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "f0cf786539d5d4951e486eac90113e96e43c12f816ab717bad5f39ed06505e2d",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "f0cf786539d5d4951e486eac90113e96e43c12f816ab717bad5f39ed06505e2d",
+    "candidate/design.json": "b1ad2e6f1805a84ee1da30acfc3774675fb373438dda7f6c64682fd5ea6f8503",
+    "native/validation.json": "68b6d211f0e28230a4fc4c33649ad194e8e6d53fbe970f01687970c58d85b011",
+    "exports/print-parts.json": "1f57af6b6b78e745a501571fbdb584eeeb1cbe5d577109ffda215703ada72a39",
+    "exports/stl-validation.json": "4f852033b485a22e6d386a4154120758081bbbe25448b20129817d8fe6c45fbb",
+    "inspection.json": "b620770ecab33a8b1c5ce502791fd0b1c5a7c67575d6c083a917c0996a79803a",
+    "previews/render-proof.json": "319110c4a4dde061e34c98b109f7b57f7051ce11db988c34838d0ab71c7bcadf"
+  },
+  "endUtc": "2026-10-26T22:54:17.902982+00:00",
+  "reviewUtc": "2026-10-26T22:55:37.473928+00:00",
+  "observations": [
+    "The larger tangent shoulder is continuous at the body joint in all three views.",
+    "Native points 1063, contact and part checks pass, 234 STL pass after chord refinement.",
+    "Destination film remains too recessed; headlight barrel/ring seating remains to correct."
+  ],
+  "imageSha256": {
+    "front-detail.png": "5d7455a85d5f5047ca5df655dd83acc3c849018aad76778bee5061bab344215e",
+    "front-profile.png": "4088de9df0cf441fca184757acda228a3c77caa95651d9396aa1722e433c22b4",
+    "front.png": "97cc7478096d582ecc5929efd1830e40280d61b04359db169c2f2c9e2525db9b"
+  }
+}

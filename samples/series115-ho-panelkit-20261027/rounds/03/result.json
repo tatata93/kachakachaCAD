@@ -1,0 +1,28 @@
+{
+  "stage": 3,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "8f25651b5117e7fb9b548a327b338b20071af05aff2a2351ac6e56b7fe28781b",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "8f25651b5117e7fb9b548a327b338b20071af05aff2a2351ac6e56b7fe28781b",
+    "candidate/design.json": "7171804504ff1b313b1a0121cfb8531f4c154ded9d8fdfdceadd3dc659d61df1",
+    "native/validation.json": "05772d6398ae83bc3cf7960ceaf69984b163c3a85f92201055bcfe3f4984fa9a",
+    "exports/print-parts.json": "10737075aeacd6d0b8dc72b6d1b157354a3822e78574371c011ef0fd1767060e",
+    "exports/stl-validation.json": "e001eabfd08f5720db7ec71de41a4e0fbe58cd2058e27b853392d048abf5b71f",
+    "inspection.json": "3cb4f1cfa5552eb9eb0fa6d92421cd4b60b061be7f00b76ae971c1bcac10d639",
+    "previews/render-proof.json": "f970bd54a82d92eccbd567d743148517d57f5e1f76716e48a9a1d140b9707fb4"
+  },
+  "endUtc": "2026-10-26T23:12:53.035787+00:00",
+  "reviewUtc": "2026-10-26T23:13:49.667051+00:00",
+  "observations": [
+    "Destination film now lies near the housing lip; the existing character decal was moved to the same face.",
+    "Both housing/roof and film/housing finite contact checks pass.",
+    "Lamp barrels and optics still show separate seating issues addressed next."
+  ],
+  "imageSha256": {
+    "front-detail.png": "c0f7d3020cf255a48a13509f6b0ec61edff5e2280b5d2cab38e09e94a0516b60",
+    "front-profile.png": "4088de9df0cf441fca184757acda228a3c77caa95651d9396aa1722e433c22b4",
+    "front.png": "c2f55ed53915718cf82368d82d5820cdd875d8a771b79cad993e99c37fea4acf"
+  }
+}

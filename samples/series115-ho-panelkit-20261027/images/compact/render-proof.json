@@ -1,0 +1,189 @@
+{
+  "scope": "Native-exported STL with explicitly recorded display-only translations; not app screenshots",
+  "nativeReportSha256": "7561bfe5e95e3d2a782877422a43d91420986361ad16466af6d000b6a700384c",
+  "designSha256": "780c079dd8a1057da8de35a51eaede4ed992aa2ae985f6510e235d51e1fbd014",
+  "offsetsMm": {
+    "d78529ca-0f8c-5a9b-83b4-00b41e82195e": [
+      -18,
+      0,
+      0
+    ],
+    "55994e09-605b-5a04-9b02-d562e2ded0a7": [
+      18,
+      0,
+      0
+    ],
+    "9f53e0e1-2bc1-508b-bfe2-648ae2432e52": [
+      -7,
+      -18,
+      0
+    ],
+    "ac9aea0d-4f52-5987-b087-cd27c369d95d": [
+      7,
+      -18,
+      0
+    ],
+    "22ac98e4-2d1c-51a4-b1eb-040a4c974cc5": [
+      -7,
+      18,
+      0
+    ],
+    "097f0e91-7199-5844-a942-8098c7c47fe3": [
+      7,
+      18,
+      0
+    ],
+    "a94d5095-76ab-59c4-852f-a92480b1b59d": [
+      -7,
+      0,
+      20
+    ],
+    "34e7c5d4-a6ea-59e3-9d77-d494876ac6f8": [
+      7,
+      0,
+      20
+    ],
+    "3db926a9-6d9a-562d-b7b7-b4519eae3464": [
+      -7,
+      0,
+      -15
+    ],
+    "44a93214-f6f1-50a4-b657-d46c6f7af6c5": [
+      7,
+      0,
+      -15
+    ],
+    "2f3016e2-0365-5f81-8520-ffe9408da7fd": [
+      -7,
+      0,
+      -5
+    ],
+    "e69866d1-c951-570e-ad57-76ce3de8cd0a": [
+      7,
+      0,
+      -5
+    ]
+  },
+  "offsetsByImage": {
+    "panels.png": {
+      "d78529ca-0f8c-5a9b-83b4-00b41e82195e": [
+        -18,
+        0,
+        0
+      ],
+      "55994e09-605b-5a04-9b02-d562e2ded0a7": [
+        18,
+        0,
+        0
+      ],
+      "9f53e0e1-2bc1-508b-bfe2-648ae2432e52": [
+        -7,
+        -18,
+        0
+      ],
+      "ac9aea0d-4f52-5987-b087-cd27c369d95d": [
+        7,
+        -18,
+        0
+      ],
+      "22ac98e4-2d1c-51a4-b1eb-040a4c974cc5": [
+        -7,
+        18,
+        0
+      ],
+      "097f0e91-7199-5844-a942-8098c7c47fe3": [
+        7,
+        18,
+        0
+      ],
+      "a94d5095-76ab-59c4-852f-a92480b1b59d": [
+        -7,
+        0,
+        20
+      ],
+      "34e7c5d4-a6ea-59e3-9d77-d494876ac6f8": [
+        7,
+        0,
+        20
+      ],
+      "3db926a9-6d9a-562d-b7b7-b4519eae3464": [
+        -7,
+        0,
+        -15
+      ],
+      "44a93214-f6f1-50a4-b657-d46c6f7af6c5": [
+        7,
+        0,
+        -15
+      ],
+      "2f3016e2-0365-5f81-8520-ffe9408da7fd": [
+        -7,
+        0,
+        -5
+      ],
+      "e69866d1-c951-570e-ad57-76ce3de8cd0a": [
+        7,
+        0,
+        -5
+      ]
+    },
+    "front-panel.png": {},
+    "assembled-shell.png": {},
+    "glazing.png": {
+      "ad708d48-07ca-5704-bbb7-b3eae726ad0a": [
+        -7,
+        0,
+        0
+      ],
+      "7f0bf387-490c-5dd2-a75d-f7b5d4a4d86d": [
+        7,
+        0,
+        0
+      ],
+      "1b429836-7973-5358-9db4-c5a0c4db8f6c": [
+        -7,
+        0,
+        0
+      ],
+      "8f18d5af-a8a0-52ac-bb3c-59bb1e62e385": [
+        7,
+        0,
+        0
+      ]
+    },
+    "backers.png": {
+      "f0eb9486-426f-5493-84bb-8b1f0087993a": [
+        -12,
+        0,
+        0
+      ],
+      "fe706b4a-144e-59bc-8a7d-c7a222e77e26": [
+        12,
+        0,
+        0
+      ],
+      "e70e628d-9e97-5560-a2b6-4c083a0b3bb2": [
+        0,
+        0,
+        8
+      ],
+      "e70b65ef-fd47-548e-ba63-b539d59796b2": [
+        0,
+        -6,
+        0
+      ],
+      "8a569672-def4-5640-b4f5-84a8ee91e0e5": [
+        0,
+        6,
+        0
+      ]
+    }
+  },
+  "imagesSha256": {
+    "panels.png": "9adc9278e6ede73cf9f0adbbeb1e6b9f90861f625edfdfa4fdcc286101b69feb",
+    "front-panel.png": "3deb25473fcfd42afd0131036ebf3df8558937399ed204fc48f65e94aa50d6f0",
+    "assembled-shell.png": "df20b28f5a6cfbdd39b270062242cba0e235f2cc3faf5f6eaeeb1d164c43d4f6",
+    "glazing.png": "2b47e2db0c874b75dbed7817d88ea9f3f5bc996e32a0eebbd35c3d8704118e2f",
+    "backers.png": "cbe8acd2e01811f9d6ef43cb0c0919e2d8e045a6ff41cd065abde69923cbe4da"
+  }
+}

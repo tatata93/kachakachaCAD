@@ -1,0 +1,127 @@
+[
+  {
+    "stage": 1,
+    "title": "前頭部と屋根の段差",
+    "change": "長手Rを9から6.3 mmへ改訂。折妻との最大継目段差を約0.415 mmから0.00008 mm未満へ。モデル内の整合値であり実車精度ではない。",
+    "reviewUtc": "2026-10-26T22:21:41.962152+00:00",
+    "images": [
+      "front-detail.png",
+      "front-profile.png",
+      "front.png"
+    ],
+    "modelSha256": "40270e5b335164574fae1ed4fd6bafaf6398b33ab0e0c4ea1d78d010d01591db",
+    "sourceArchiveSha256": "a6bdeb93abbf73c4cb3b206c2768caf338120e964144c930e96929630c4595f7"
+  },
+  {
+    "stage": 2,
+    "title": "屋根肩の丸み",
+    "change": "車幅・軒・頂点高さを保ち、横断Rを40から48 mmへ。歩み板等のSTL分割精度も上げた。局所Rは写真からの設計値。",
+    "reviewUtc": "2026-10-26T22:55:37.473928+00:00",
+    "images": [
+      "front-detail.png",
+      "front-profile.png",
+      "front.png"
+    ],
+    "modelSha256": "f0cf786539d5d4951e486eac90113e96e43c12f816ab717bad5f39ed06505e2d",
+    "sourceArchiveSha256": "e7b4c2effdf0ca453e916ffbe9cf8270322eac896c2f7243896c97ef56da6779"
+  },
+  {
+    "stage": 3,
+    "title": "行先表示の奥まり",
+    "change": "表示膜を枠の口元へ移動し、厚みと有限接触を確保。文字画像も表示面へ追従。",
+    "reviewUtc": "2026-10-26T23:13:49.667051+00:00",
+    "images": [
+      "front-detail.png",
+      "front-profile.png",
+      "front.png"
+    ],
+    "modelSha256": "8f25651b5117e7fb9b548a327b338b20071af05aff2a2351ac6e56b7fe28781b",
+    "sourceArchiveSha256": "381620094b17a30c35f9c9927a43163f37dd73a62fa414943f8486a3b7ce7d2a"
+  },
+  {
+    "stage": 4,
+    "title": "灯具と外板の隙間",
+    "change": "前照灯・尾灯の筒を実際の折妻外板まで延ばして切り合わせ。4か所の接触と内外分類を確認。",
+    "reviewUtc": "2026-10-26T23:20:58.464104+00:00",
+    "images": [
+      "front-detail.png",
+      "front-profile.png",
+      "front.png"
+    ],
+    "modelSha256": "9c8c068145cce2545ec8b0502905481b581839b4499f419b8574a5580dbd81fd",
+    "sourceArchiveSha256": "381620094b17a30c35f9c9927a43163f37dd73a62fa414943f8486a3b7ce7d2a"
+  },
+  {
+    "stage": 5,
+    "title": "灯具内部の取り付き",
+    "change": "金属リングの0.02 mm隙間を解消。レンズの差込み縁と反射板の座を追加し、各材料を別部品のまま保持。",
+    "reviewUtc": "2026-10-26T23:27:57.307667+00:00",
+    "images": [
+      "front-detail.png",
+      "front-profile.png",
+      "front.png"
+    ],
+    "modelSha256": "ecc4f3ddccf7ec6f290e0d5686c71e61d6975ea4b6e70975e0179c14020152c1",
+    "sourceArchiveSha256": "48d8487ba59efea23325fb9fb59f2bf47c588b8736b004841985d25ba2c6371f"
+  },
+  {
+    "stage": 6,
+    "title": "窓と扉の細すぎる柱",
+    "change": "左右計4か所の固定窓を0.8 mm移動し、最小柱幅を0.025から0.825 mmへ。隣の窓との干渉も確認。",
+    "reviewUtc": "2026-10-26T23:39:49.686835+00:00",
+    "images": [
+      "pillar-assistant.png",
+      "pillar-driver.png"
+    ],
+    "modelSha256": "a4c3f78c165588a1251a5af8c5b71377d438233cb138b2e01ad020b191727c4f",
+    "sourceArchiveSha256": "48d8487ba59efea23325fb9fb59f2bf47c588b8736b004841985d25ba2c6371f"
+  },
+  {
+    "stage": 7,
+    "title": "クーラーと歩み板",
+    "change": "クーラー下縁の屋根への納まりを維持。歩み板に0.3 mmの板厚を確保し、8脚の接触を確認。",
+    "reviewUtc": "2026-10-26T23:46:28.981003+00:00",
+    "images": [
+      "cooler-roof.png",
+      "walkway-side.png"
+    ],
+    "modelSha256": "3c8a0cee57d6469677c58cad7fa238843ba95eb0968f66db867378114553e35b",
+    "sourceArchiveSha256": "767cc8ab949faca213390f0384ad3c06d03a33dd165d4a9a8c5fbcf609488538"
+  },
+  {
+    "stage": 8,
+    "title": "屋根の位置決め",
+    "change": "左右5か所ずつに一体の案内脚。側面の設計隙間0.2 mm。屋根は単一閉ソリッドを維持。",
+    "reviewUtc": "2026-10-26T23:52:01.544513+00:00",
+    "images": [
+      "roof-keys-end.png",
+      "roof-keys.png"
+    ],
+    "modelSha256": "9f3023e07aca7e03d1484e16bb88b86c19c1f1509b132b2f7d3ead0e16811211",
+    "sourceArchiveSha256": "9d0bf83f77cd6a4140056c70e3738ecdccbdd9f90c78a2dc414a6bf4c757892d"
+  },
+  {
+    "stage": 9,
+    "title": "床板の受け",
+    "change": "左右3か所ずつに内向きの受け座を追加。6か所を個別に接触検査し、室内トレーとの隙間を確保。",
+    "reviewUtc": "2026-10-27T00:04:02.026381+00:00",
+    "images": [
+      "floor-receivers.png",
+      "receiver-end.png"
+    ],
+    "modelSha256": "8587aa188f51397c9cc0abe4ae6da7e7b694d43beff49632f289760eef022571",
+    "sourceArchiveSha256": "9d0bf83f77cd6a4140056c70e3738ecdccbdd9f90c78a2dc414a6bf4c757892d"
+  },
+  {
+    "stage": 10,
+    "title": "室内床の浮き",
+    "change": "室内床の高さを変えず、8か所に支持パッド。床板への接触面と中心点の内外分類を確認。",
+    "reviewUtc": "2026-10-27T00:12:33.413670+00:00",
+    "images": [
+      "tray-pad-side.png",
+      "tray-pads.png"
+    ],
+    "modelSha256": "ffeecf37314dfd9be3197f9341e07d368cd5850df2ae808ca83637203bda2a9a",
+    "sourceArchiveSha256": "a2e66d912eff19fec0c95a0597933ce2be0e5c28dcecc7e1f8cc0615fdc8326d"
+  }
+]

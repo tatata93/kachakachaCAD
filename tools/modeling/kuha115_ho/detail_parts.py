@@ -62,15 +62,28 @@ def gangway_fittings(m,g):
 
 
 def lamp(m,g,side,name,y,z,r,color):
+    from refinements import enabled
+    from fit_details import contact
     n=(-math.cos(math.radians(8)),side*math.sin(math.radians(8)),0)
     xx=face_x(y)
     def at(d):return (xx+n[0]*d,side*y+n[1]*d,z)
     depth=1.15 if name=='前照灯' else .60
     inner_radius=r-.10
-    body=m.ring(name+'塗装胴',at(.15),n,r+.12,inner_radius,depth,g)
+    seated=enabled(m,4);optics=enabled(m,5)
+    body=m.ring(name+'塗装胴',at(-.35 if seated else .15),n,r+.12,inner_radius,depth+(.5 if seated else 0),g)
+    if seated:
+        shell=m.finished['body']
+        body=m.boolean(name+'の背面を折妻外板に密着',body,[shell],1,g)
+        m.entities[shell]['visibility']='visible';m.clear(body,shell,name+'と前面外板')
+        contact(m,body,shell,name+'の胴背面と外板の接着',.2)
+        tangent=(n[1],-n[0],0)
+        for d,inside in [(-.08,False),(.08,True)]:
+            m.points.append(dict(entity=body,label=name+'の背面の空間と残存肉厚',
+                point=[v+(r+.01)*t for v,t in zip(at(d),tangent)],expectedInside=inside))
     m.finish(body,'アドバンスブルー' if name=='前照灯' else 'フォギーグレー')
-    ring=m.ring(name+'前縁金属リング',at(depth+.17),n,r+.11,inner_radius,.12,g)
+    ring=m.ring(name+'前縁金属リング',at(depth+(.15 if optics else .17)),n,r+.11,inner_radius,.12,g)
     m.finish(ring,'アルミ銀',.12);m.clear(body,ring,name+'胴と金属リング')
+    if optics:contact(m,body,ring,name+'胴と前縁リングの連続した端面',.2)
     if name=='前照灯':
         outer=[m.circle('反射鏡外側断面',at(d),n,rr,g) for d,rr in
                [(.25,.46),(.45,.76),(.78,1.08),(1.22,r-.12)]]
@@ -79,31 +92,57 @@ def lamp(m,g,side,name,y,z,r,color):
         reflector=m.loft('椀状反射鏡の外側',outer,g)
         cavity=m.loft('椀状反射鏡の凹部',inner,g)
         reflector=m.boolean('椀状の前照灯反射鏡',reflector,[cavity],1,g,'金属銀')
+        if optics:
+            lip=m.ring('反射鏡を胴内壁で受ける環状座',at(1.15),n,inner_radius,1.25,.07,g)
+            reflector=m.joined('反射鏡・環状接着座',[reflector,lip],g,'金属銀')
+            m.clear(body,reflector,'前照灯胴と反射鏡');contact(m,body,reflector,'反射鏡の環状座と胴内壁',.2)
         bulb=m.cylinder(name+'電球',at(.38),n,.24,.24,g)
         m.finish(bulb,'電球色',.24)
+        if optics:contact(m,bulb,reflector,'前照灯電球と反射鏡底面',.05)
         # Keep the clear face shallowly convex; the centre cap is only 0.2 mm wide.
-        sections=[m.circle('凸レンズ断面',at(depth+d),n,rr,g) for d,rr in
-                  [(.13,r-.11),(.20,r-.16),(.27,1.13),(.31,.45),(.32,.10)]]
+        section_data=[(.21,inner_radius),(.27,1.13),(.31,.45),(.32,.10)] if optics else [(.13,r-.11),(.20,r-.16),(.27,1.13),(.31,.45),(.32,.10)]
+        sections=[m.circle('凸レンズ断面',at(depth+d),n,rr,g) for d,rr in section_data]
         lens=m.loft('前照灯の浅い凸レンズ',sections,g)
+        if optics:
+            collar=m.cylinder('レンズを金属枠で受ける円筒縁',at(depth+.13),n,inner_radius,.08,g)
+            lens=m.joined('凸レンズ・枠内の円筒受け',[lens,collar],g,color)
         m.finish(lens,color,.12);m.mesh_chords[lens]=.001
         m.mesh_chords[reflector]=.001
     else:
-        reflector=m.cylinder(name+'奥の反射鏡',at(.26),n,r-.27,.10,g)
+        reflector=m.cylinder(name+'奥の反射鏡',at(.26),n,inner_radius if optics else r-.27,.10,g)
         m.finish(reflector,'金属銀',.1)
-        bulb=m.cylinder(name+'電球',at(.38),n,.18,.16,g)
+        bulb=m.cylinder(name+'電球',at(.36 if optics else .38),n,.18,.18 if optics else .16,g)
         m.finish(bulb,'電球色',.16)
-        lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,r-.11,.12,g)
+        lens=m.cylinder(name+'透明レンズ',at(depth+.13),n,inner_radius if optics else r-.11,.12,g)
         m.finish(lens,color,.12)
+        if optics:
+            m.clear(body,reflector,'尾灯胴と反射鏡');contact(m,body,reflector,'尾灯反射鏡と胴内壁',.05)
+            contact(m,bulb,reflector,'尾灯電球と反射鏡底面',.05)
+    if optics:
+        m.clear(ring,lens,name+'金属枠とレンズ');contact(m,ring,lens,name+'レンズの円筒縁と金属枠',.1)
+    if seated:
+        if not hasattr(m,'lamp_stacks'):m.lamp_stacks=[]
+        m.lamp_stacks.append(dict(name=name,side=side,body=body,ring=ring,lens=lens,reflector=reflector,bulb=bulb))
 
 
 def destination(m,g,roof_outer):
+    from refinements import enabled
+    from fit_details import contact
     o=m.rounded('表示器ハウジング外',(-.85,-4.65,39.65),(0,1,0),(0,0,1),9.3,3.95,.6,g)
     q=m.rounded('表示器ハウジング開口',(-.85,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
     housing=m.extrude('前面表示器ハウジング素材',[o,q],(1,0,0),4.8,g)
     housing=m.boolean('表示箱背面を丸い額に合わせる',housing,[roof_outer],1,g)
     m.mesh_chords[housing]=.006
-    p=m.rounded('前面表示面',(-.12,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
-    m.finish(m.extrude('前面表示面',[p],(1,0,0),.05,g),'黒',.05)
+    x,thickness=(-.78,.2) if enabled(m,3) else (-.12,.05)
+    p=m.rounded('前面表示面',(x,-4.25,40.08),(0,1,0),(0,0,1),8.5,3.09,.35,g)
+    board=m.finish(m.extrude('前面表示面',[p],(1,0,0),thickness,g),'黒',thickness)
+    if enabled(m,3):
+        m.clear(housing,board,'表示幕と枠');m.clear(m.finished['roof'],housing,'表示器と屋根')
+        contact(m,board,housing,'表示幕の周囲がハウジングへ接する',.5)
+        contact(m,housing,m.finished['roof'],'表示箱の背面が額に接する',.5)
+        m.points.extend([dict(entity=board,label='表示幕の前面位置と厚さ',point=[x+thickness/2,0,41.5],expectedInside=True),
+            dict(entity=board,label='表示幕の前方空間',point=[x-.05,0,41.5],expectedInside=False)])
+        m.keyparts['frontDestination']=[housing,board]
 
 
 def climate_unit(m,g,x,z):
@@ -207,7 +246,8 @@ def lettering(m,root,output):
         entity=m.image(name,path,g,origin,u,v,(0,h),width/pixels);m.entities[entity]['visibility']='visible'
         m.decals.append(dict(name=name,pngBase64=base64.b64encode(path.read_bytes()).decode(),origin=list(origin),
             u=list(u),v=list(v),widthMm=width,heightMm=h*width/pixels,entity=entity))
-    label('前面普通幕','普 通',7.8,2.7,(-.145,3.9,40.28),(0,-1,0),(0,0,1),(238,235,218,255))
+    from refinements import enabled
+    label('前面普通幕','普 通',7.8,2.7,(-.805 if enabled(m,3) else -.145,3.9,40.28),(0,-1,0),(0,0,1),(238,235,218,255))
     for side in [-1,1]:
         z=19.4;slope=1.1/10.2;norm=math.sqrt(1+slope*slope)
         y=side*(18.125-slope*(24-z)+.01)

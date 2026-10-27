@@ -1,0 +1,27 @@
+{
+  "stage": 8,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "9f3023e07aca7e03d1484e16bb88b86c19c1f1509b132b2f7d3ead0e16811211",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "9f3023e07aca7e03d1484e16bb88b86c19c1f1509b132b2f7d3ead0e16811211",
+    "candidate/design.json": "678b4f18a37e30442c5a1508f899e4d8332fccba89ddd971c532c20a834d0fe6",
+    "native/validation.json": "6f1518668d3a196786499ecbc8b207cbe7175e25d15c316d93a1d3f159be6caf",
+    "exports/print-parts.json": "87c6aca642964cf1352099fd50f6540ea362b1404b70727f10deee511766f7a5",
+    "exports/stl-validation.json": "8105ac8d19032704d2982df2cd12b2b4e194aa4c86a4e0d4e0bf2d0857c7982e",
+    "inspection.json": "96b4e4a20cfaa520ba42da7db544fbeb3062e2e9afbaa423f698f1cd4b341177",
+    "previews/render-proof.json": "95b80c995c74626bb7c0d4fb7c0ea28ed83728ee1dd7f5746044196cf8ee1611"
+  },
+  "endUtc": "2026-10-26T23:50:54.088121+00:00",
+  "reviewUtc": "2026-10-26T23:52:01.544513+00:00",
+  "observations": [
+    "Underside close-ups show the alignment legs joining roof shoulders through solid overlapping heads.",
+    "The roof remains one closed solid; all ten leg-centre probes and body/roof contact pass.",
+    "Nominal side clearance is 0.2 mm; physical resin fit remains untested."
+  ],
+  "imageSha256": {
+    "roof-keys-end.png": "8d966747aff5c6dac1131da274e30f0ae4639df172f829130569cf79ddf0a732",
+    "roof-keys.png": "744ed2bcc618a69be8ffb994998a8b170ccd65cf66bbb8fe6c6fcbc71208b6e9"
+  }
+}

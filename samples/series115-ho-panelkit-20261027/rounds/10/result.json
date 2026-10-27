@@ -1,0 +1,26 @@
+{
+  "stage": 10,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "ffeecf37314dfd9be3197f9341e07d368cd5850df2ae808ca83637203bda2a9a",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "ffeecf37314dfd9be3197f9341e07d368cd5850df2ae808ca83637203bda2a9a",
+    "candidate/design.json": "e19e2ae771e646173641646b1b86168e830038fb7d3613fc53fb6b448e7195ad",
+    "native/validation.json": "3d87a3377eed13d8975299babb4dbc3eadba1c36bdbd8c06810016d7ca5b59c6",
+    "exports/print-parts.json": "2b7397fa0cc20c5a400bf37ffe72d9fd9db07e43ffc5bd5e4e8a95d0faafc35f",
+    "exports/stl-validation.json": "d91897edc7312f229c75e7ebcc0f1ca960bcbec001623afc5da0982856f6219f",
+    "inspection.json": "073699e8c6a9ed30e2715c1554b9fd6061008e44bb9b11478a86b7a1a11c34ad",
+    "previews/render-proof.json": "6ac10d65d87126f3b8e8e0ffe5101899000507e5bd6ade33b87596e94069a996"
+  },
+  "endUtc": "2026-10-27T00:08:21.319416+00:00",
+  "reviewUtc": "2026-10-27T00:12:33.413670+00:00",
+  "observations": [
+    "室内トレーの裏の支持パッドと床板の接触を断面で確認。床全体を下げず、窓に対する座席高さを保持した。",
+    "8か所それぞれの接触面積とパッド中心の内外分類を確認。実際の造形後の反り・収縮・組立強度は未試験。"
+  ],
+  "imageSha256": {
+    "tray-pad-side.png": "a18ada6774b0f4ae79c6a22e992d90a823ad950be21c6e35197a09c97be88a40",
+    "tray-pads.png": "cef24a3e0761dcfd6892582818bfda19fd1e36026166fe33967c022498373844"
+  }
+}

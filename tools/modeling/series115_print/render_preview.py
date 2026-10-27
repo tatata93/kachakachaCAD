@@ -28,7 +28,7 @@ def clip(poly,axis,bound,greater):
     return output
 
 def render(base,report,front=False,explode=False,camera=None,size=None,paint_names=(),
-           paint_bands=None,roof_forehead_mm=None,part_ids=None,studio=False,decals=(),surface_color=None,clip_bounds=None):
+           paint_bands=None,roof_forehead_mm=None,part_ids=None,studio=False,decals=(),surface_color=None,clip_bounds=None,part_offsets=None):
     width,height=size or ((1300,1100) if front else (2600,1050))
     im=Image.new('RGB',(width,height),'#edf1f2');draw=ImageDraw.Draw(im)
     camera=camera or ((-.91,-.32,.26) if front else (-.35,-.75,.56))
@@ -72,7 +72,8 @@ def render(base,report,front=False,explode=False,camera=None,size=None,paint_nam
                 specular=(.24 if '銀' in colorname else .10)*max(0,dot(normal,half))**28
             for poly,col in layers:
                 if surface_color is not None:col=surface_color(part,tuple(sum(p[i] for p in poly)/len(poly) for i in range(3)),normal,col)
-                poly=[(p[0],p[1],p[2]+dz) for p in poly]
+                shift=(part_offsets or {}).get(part['id'],(0,0,0))
+                poly=[(p[0]+shift[0],p[1]+shift[1],p[2]+dz+shift[2]) for p in poly]
                 points=[(dot(p,horizontal),dot(p,up)) for p in poly]
                 xs.extend(p[0] for p in points);ys.extend(p[1] for p in points)
                 polygon_color=tuple(min(255,round(c*shade+255*specular)) for c in col)

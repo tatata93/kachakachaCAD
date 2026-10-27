@@ -90,6 +90,8 @@ def body(m,root):
     m.layout=window_layout()
     from appearance import lower_side_windows
     lower_side_windows(m)
+    from refinements import side_pillars,pillar_checks
+    side_pillars(m)
     for sign,label in [(-1,'運転士側'),(1,'助手側')]:
         profiles=[]
         for j,w in enumerate(m.layout[sign]):
@@ -109,6 +111,7 @@ def body(m,root):
     p=m.rounded('後妻貫通開口',(L+1,-4.45,FLOOR),(0,1,0),(0,0,1),8.9,23.0,.6,g)
     a=m.cut('後妻貫通開口を抜く',a,[p],(-1,0,0),3.5,g)
     m.finished['body']=m.finish(a,thickness=1,notes='裾絞り1.1mm、折妻8度、隅R3.8mmは写真による推定設計値。実測値ではない。')
+    pillar_checks(m,a)
     if m.detailed:
         for side in [-1,1]:
             for z,inside in [(30.2,True),(31.0,False),(38.5,True)]:
@@ -338,7 +341,8 @@ def front(m,root):
 
 def roof_profile(m,g,x,top,inset=0,hollow=False,shift=0):
     """Tangent central/shoulder arcs; concentric normal offset for inner profile."""
-    rt=40.0;h=top-EAVE;rs=(2*rt*h-SIDE*SIDE-h*h)/(2*(rt-SIDE))
+    from refinements import transverse_radius
+    rt=transverse_radius(m);h=top-EAVE;rs=(2*rt*h-SIDE*SIDE-h*h)/(2*(rt-SIDE))
     cy=SIDE-rs;zc=top-rt;theta=math.atan2(EAVE-zc,cy)
     zc+=shift
     r1,r2=rt-inset,rs-inset
@@ -378,7 +382,9 @@ def roof(m,root):
         return m.joined(name,parts,g,'屋根グレー')
     if m.detailed:
         from front_roof import Forehead
-        spec=Forehead(L,SIDE,EAVE,CROWN,JOINT)
+        from refinements import longitudinal_radius,transverse_radius
+        spec=Forehead(L,SIDE,EAVE,CROWN,JOINT,radius=longitudinal_radius(m),transverse=transverse_radius(m))
+        m.roof_spec=spec
         outside,a=spec.build(m,g)
     else:
         outside=spans('屋根外形',False)
@@ -450,12 +456,19 @@ def roof(m,root):
             m.points.append(dict(entity=ac,label='AU75Gの幅方向アーチを実形状で確認',
                 point=[x0+22,y,z0+4.2],expectedInside=inside))
     for y in [-15.2,13.7]:
-        plate=m.box('クーラー脇歩み板',x0+2,y,43.4,41.7,1.5,.3,eg)
+        top=max(spec.height(y),spec.height(y+1.5))+.32 if getattr(m,'refinement_pass',0)>=7 else 43.7
+        base=top-.3 if getattr(m,'refinement_pass',0)>=7 else 43.4
+        plate=m.box('クーラー脇歩み板',x0+2,y,base,41.7,1.5,.3,eg)
         if m.detailed:
-            legs=[m.box('歩み板の支持脚',x,y+.35,42.2,.65,.8,1.35,eg) for x in [x0+3,x0+15,x0+28,x0+42]]
+            legs=[m.box('歩み板の支持脚',x,y+.35,42.2,.65,.8,top-.3+.15-42.2,eg) for x in [x0+3,x0+15,x0+28,x0+42]] if getattr(m,'refinement_pass',0)>=7 else [m.box('歩み板の支持脚',x,y+.35,42.2,.65,.8,1.35,eg) for x in [x0+3,x0+15,x0+28,x0+42]]
             plate=m.joined('歩み板・四本の支持脚',[plate]+legs,eg,'屋根グレー')
             plate=m.boolean('屋根に接する脚付き歩み板',plate,[outside],1,eg,'屋根グレー')
             m.entities[a]['visibility']='visible';m.clear(a,plate,'屋根と脚付き歩み板')
+            if getattr(m,'refinement_pass',0)>=2:m.mesh_chords[plate]=.002
+            if getattr(m,'refinement_pass',0)>=7:
+                for x in [x0+3,x0+15,x0+28,x0+42]:contact(m,plate,a,'歩み板の各支持脚と屋根',.2,[x-.01,y+.34,42.,x+.66,y+1.16,top])
+                m.points.extend([dict(entity=plate,label='歩み板の0.3mm厚い板中心',point=[x0+10,y+.75,top-.15],expectedInside=True),
+                    dict(entity=plate,label='歩み板の下の空間',point=[x0+10,y+.75,top-.31],expectedInside=False)])
         else:m.finish(plate,'屋根グレー',.3)
     # Rounded open-mouthed ventilators, not solid trapezoids.
     for x in [28.5,58.5,83,166.5,192,222.5]:
@@ -470,7 +483,7 @@ def roof(m,root):
             vent=m.joined('押込通風器 開口と仕切付き',[vent]+ribs,eg,'屋根グレー')
         # Remove overlap using the same evaluated roof as contact tool.
         vent=m.boolean('屋根曲率に合わせた通風器',vent,[outside],1,eg,'屋根グレー')
-        m.clear(a,vent,'屋根と通風器');m.mesh_chords[vent]=.006
+        m.clear(a,vent,'屋根と通風器');m.mesh_chords[vent]=.003 if getattr(m,'refinement_pass',0)>=2 else .006
         m.entities[a]['visibility']='visible'
     if m.detailed:
         base=m.box('列車無線アンテナの角形架台',9.2,-1.8,46.05,4.6,3.6,.45,eg)
@@ -753,6 +766,9 @@ def manifest(m):
     if getattr(m,'appearance_pass',0):
         from appearance import manifest as appearance_manifest
         data['appearance']=appearance_manifest(m)
+    if getattr(m,'refinement_pass',0):
+        from refinements import manifest as refinement_manifest
+        data['refinements']=refinement_manifest(m)
     if m.detailed:
         from bogie_details import REVISION
         data['bogieRevision']=REVISION
@@ -761,7 +777,7 @@ def manifest(m):
         data['paintDecals']=m.decals
         data['estimated'].update(panoramicWindow=dict(bottom=30.6,height=7.6),destination=dict(width=9.3,height=3.95),
             climateCrossSection='YZ arch extruded along X',wheelsetAxleLength=23.7,localAxleKeepers=True,
-            foreheadLongitudinalRadius=9.0,foreheadCurveOriginZ=CROWN-9.0,roofNominalThickness=1.0,
+            foreheadLongitudinalRadius=m.roof_spec.radius,foreheadCurveOriginZ=CROWN-m.roof_spec.radius,roofNominalThickness=1.0,
             foreheadConstruction='short identical analytic transverse arcs translated on a concentric longitudinal arc')
         data['estimated'].update(skirtOutline=dict(topHalfWidth=17.1,bottomHalfWidth=16.0,bottomZ=6.6,centreTopZ=10.7),
                                  flareCapRadius=.78,frontGlazingInset=.22,greenPaintBandZMm=[22.4,24.0],
@@ -810,11 +826,17 @@ def main():
     ap.add_argument('--bogie-component',type=Path,help='Exact separately validated native bogie component; its editable source is shipped alongside')
     ap.add_argument('--contoured',action='store_true',help='Continuous roof casing, floor-integrated skirt and tapered doors')
     ap.add_argument('--appearance-pass',type=int,choices=range(1,6),help='Cumulative researched appearance revision 1 through 5')
+    ap.add_argument('--refinement-pass',type=int,choices=range(1,11),help='Internal sequential review candidate; not a finished print kit')
     a=ap.parse_args();a.output.mkdir(parents=True,exist_ok=False)
     if a.contoured and not a.detailed:ap.error('--contoured requires --detailed')
     if a.appearance_pass and not a.contoured:ap.error('--appearance-pass requires --contoured')
+    if a.refinement_pass and a.appearance_pass!=5:ap.error('--refinement-pass requires --appearance-pass 5')
     m=Revised(a.detailed);m.bogie_library=a.bogie_component;m.contoured=a.contoured
     m.appearance_pass=a.appearance_pass or 0
+    m.refinement_pass=a.refinement_pass or 0
+    if m.refinement_pass:
+        m.d['documentId']=str(uuid.uuid5(m.namespace,'ten-round-candidate-'+str(m.refinement_pass)))
+        m.d['metadata']['title']+=f'｜10回照合・段階{m.refinement_pass:02d}（検査用）'
     root=m.group('クハ115 長野色｜調査反映の新規設計 1/80 HO16.5')
     body(m,root);side_details(m,root);front(m,root);roof(m,root);chassis(m,root);bogies(m,root);interior(m,root)
     if m.detailed:
@@ -824,6 +846,9 @@ def main():
         else:front_underframe(m)
         from detail_parts import lettering
         lettering(m,root,a.output)
+    if m.refinement_pass:
+        from refinements import mounting_features
+        mounting_features(m)
     m.d['activeGroupId']=root;m.d['uiState']={'activeMode':'part','theme':'windows95'}
     m.d['grid']=dict(visible=False,workPlaneId=None,originUvMm=dict(x=0,y=0),majorSpacingMm=10.0,subdivision='none')
     m.save(a.output/'kuha115-ho80-revised.kcd2')

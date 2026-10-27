@@ -3,9 +3,9 @@ import math
 
 
 class Forehead:
-    def __init__(self,length,side,eave,crown,joint,thickness=1.0):
+    def __init__(self,length,side,eave,crown,joint,thickness=1.0,radius=9.0,transverse=40.0):
         self.length,self.side,self.eave,self.crown,self.joint=length,side,eave,crown,joint
-        self.thickness=thickness;self.radius=9.0;self.end=10.5;self.rt=40.0
+        self.thickness=thickness;self.radius=radius;self.end=10.5;self.rt=transverse
         h=crown-eave;self.rs=(2*self.rt*h-side*side-h*h)/(2*(self.rt-side))
         self.cy=side-self.rs;self.zc=crown-self.rt
         self.theta=math.atan2(eave-self.zc,self.cy)
@@ -39,6 +39,9 @@ class Forehead:
         return outer,m.boolean('額の平面帯を減らした中空屋根',outer,[inner],1,g,'屋根グレー')
 
     def checks(self,m,roof):
+        if getattr(m,'refinement_pass',0):
+            from refinements import forehead_checks
+            forehead_checks(m,self,roof);return
         for y in [-16.5,-14,-10,-6,0,6,10,14,16.5]:
             zo=self.height(y)-self.radius;zi=self.height(y,self.thickness)-(self.radius-self.thickness)
             for z in [self.joint+.5,self.joint+1,self.joint+1.5]:

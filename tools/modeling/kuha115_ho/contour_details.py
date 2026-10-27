@@ -48,7 +48,7 @@ def cooler(m, g, ac, outside, x, z):
     roof = m.finished['roof']
     for xx in [x+.8,x+22.,x+44.5]:
         for y in [-12.,-8.,0.,8.,12.]:
-            roof_z = 5.675+math.sqrt(40.**2-y*y)
+            roof_z = m.roof_spec.height(y) if getattr(m,'refinement_pass',0) else 5.675+math.sqrt(40.**2-y*y)
             m.points.extend([
                 dict(entity=ac,label='キセ下縁の連続・屋根直上',point=[xx,y,roof_z+.12],expectedInside=True),
                 dict(entity=ac,label='キセ下面の屋根空間',point=[xx,y,roof_z-.12],expectedInside=False)])

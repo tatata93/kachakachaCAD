@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "parts": 234,
+  "pointChecks": 1131,
+  "attachmentChecks": 165,
+  "splitChecks": 0,
+  "insertionChecks": 0,
+  "totalPairs": 27261,
+  "brepPairs": 389,
+  "maximumReopenVolumeDeltaMm3": 2.2593038551121936e-14,
+  "provenanceSha256": "61dfd3a035cb25f7d53a65268a2ed3e19bb4887da40cf0f5e193bd0dc973b4d0",
+  "reportSha256": "bb2b3f6c5511bceb4fdc27c5eb245bf5f03214de5ba12b1b4e642f6d7e2d010b",
+  "stlProofSha256": "d91897edc7312f229c75e7ebcc0f1ca960bcbec001623afc5da0982856f6219f",
+  "timeUtc": "2026-10-27T00:27:34.693569+00:00"
+}

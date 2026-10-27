@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "parts": 117,
+  "pointChecks": 1131,
+  "attachmentChecks": 185,
+  "splitChecks": 8,
+  "insertionChecks": 2,
+  "totalPairs": 6786,
+  "brepPairs": 221,
+  "maximumReopenVolumeDeltaMm3": 0.0,
+  "provenanceSha256": "8a87e5adef2f755e5e337a56daf55a56709dbb71969351a4108c6ff075fb738a",
+  "reportSha256": "7561bfe5e95e3d2a782877422a43d91420986361ad16466af6d000b6a700384c",
+  "stlProofSha256": "58ecc13107228cdf5004cd15e6c261672cf79c4629f201c06bb6f9678f1838b8",
+  "canonicalArchiveSha256": "e1ff78822afdca151fc5e2c523215480e3c0a231c68ca7f870cfac6b9f536d8c",
+  "sourceOrderNormalizedGroups": 1,
+  "canonicalOrderPreserved": true,
+  "resumeSourceSha256": null,
+  "timeUtc": "2026-10-27T02:09:32.256707+00:00"
+}

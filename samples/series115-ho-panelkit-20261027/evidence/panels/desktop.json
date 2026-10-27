@@ -1,0 +1,19 @@
+{
+  "event_loop": true,
+  "exposed": true,
+  "height": 1000,
+  "on_screen": true,
+  "platform": "windows",
+  "ready": true,
+  "rendered": true,
+  "schema": 1,
+  "title": "kachakachaCAD 0.1.0 — cad-serialized.kcd2",
+  "visible": true,
+  "width": 1600,
+  "seconds": 176.53100000007544,
+  "sourceSha256": "58e2e52a577ec5f8c7760622ee8e0cd02b01255bc20767659b07781f9d164fcf",
+  "exeSha256": "5654528664a23735d5a883bd18be2a397befb9d4b95a6feadece6ab31c59535f",
+  "exitCode": 0,
+  "validatedCacheReuse": false,
+  "cacheHitConfirmed": false
+}

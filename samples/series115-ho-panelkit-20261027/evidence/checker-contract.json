@@ -1,0 +1,87 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "name": "positive",
+      "expectedExit": 0,
+      "actualExit": 0,
+      "passed": true
+    },
+    {
+      "name": "legacy-two-piece",
+      "expectedExit": 0,
+      "actualExit": 0,
+      "passed": true
+    },
+    {
+      "name": "missing-piece",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "passed": true
+    },
+    {
+      "name": "path-obstruction",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "passed": true
+    },
+    {
+      "name": "duplicate-piece",
+      "expectedExit": 5,
+      "actualExit": 5,
+      "passed": true
+    },
+    {
+      "name": "overlapping-different-ids",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "passed": true
+    },
+    {
+      "name": "empty-pieces",
+      "expectedExit": 5,
+      "actualExit": 5,
+      "passed": true
+    },
+    {
+      "name": "empty-path",
+      "expectedExit": 5,
+      "actualExit": 5,
+      "passed": true
+    },
+    {
+      "name": "curved-safe",
+      "expectedExit": 0,
+      "actualExit": 0,
+      "passed": true
+    },
+    {
+      "name": "curved-obstructed",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "passed": true
+    },
+    {
+      "name": "nongraph-through-opening",
+      "expectedExit": 0,
+      "actualExit": 0,
+      "passed": true
+    },
+    {
+      "name": "graph-roof",
+      "expectedExit": 0,
+      "actualExit": 0,
+      "passed": true
+    },
+    {
+      "name": "graph-obstructed",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "passed": true
+    }
+  ],
+  "exeSha256": "5654528664a23735d5a883bd18be2a397befb9d4b95a6feadece6ab31c59535f",
+  "exporterSha256": "2926ed7e280118f9a5f2c59d0367611a8ec6e1d692008744b9455e39ac416c0f",
+  "modelSha256": "d38f57e269a677236ded95a5326d4579669b0dc0d05fade7fe3bbee958d60759",
+  "timeUtc": "2026-10-27T01:55:24.369422+00:00"
+}

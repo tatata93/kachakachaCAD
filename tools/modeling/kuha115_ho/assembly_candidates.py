@@ -25,6 +25,9 @@ def main():
         assert d['attachmentChecks'] and len(d['attachmentChecks'])==len(r['attachmentChecks'])
         assert all(c['passed'] for c in r['attachmentChecks'])
         reused['attachmentChecks']=len(r['attachmentChecks']);d['attachmentChecks']=[]
+    if d.get('insertionChecks'):
+        assert len(d['insertionChecks'])==len(r['insertionChecks']) and all(c['passed'] and c['complete'] for c in r['insertionChecks'])
+        reused['insertionChecks']=len(r['insertionChecks']);d['insertionChecks']=[]
     d['pointChecks']=[];d['splitChecks']=[]
     d['broadPhase']=dict(method='CAD BRep AABB gaps <= 1e-5 mm on every axis (expanded bounds)',
                          potentialPairs=len(r['parts'])*(len(r['parts'])-1)//2,candidates=len(checks),

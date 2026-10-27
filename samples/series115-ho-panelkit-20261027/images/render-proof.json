@@ -1,0 +1,18 @@
+{
+  "nativeReportSha256": "2b7397fa0cc20c5a400bf37ffe72d9fd9db07e43ffc5bd5e4e8a95d0faafc35f",
+  "designSha256": "e19e2ae771e646173641646b1b86168e830038fb7d3613fc53fb6b448e7195ad",
+  "rendererSha256": "df0adf3ebe710e6025bd065bab164c2981601ad33f1aed67b59f64d82ae3bb5f",
+  "imagesSha256": {
+    "overview.png": "0f671b04b94b60a614d5725f8fbae5c97205276f81a96e048bcf5ae67888e16a",
+    "front-detail.png": "d698d4e211bd9d2e64581de0a0b4da8ad3a9eaca252ec3b9f91517aa5b933388",
+    "front.png": "6b56b52565c8ed8b10dbc2787a1150ae14b6b942c4d3754cd6c67253acc18d75",
+    "front-profile.png": "114b96e5d8f3b923a76286584231932da89ed6586591913310f037dafeb57aed",
+    "driver-side.png": "77524ad1e71287411ffe00ea1017a755477365c80736ac70987a75910f6d65aa",
+    "assistant-side.png": "bc464d94193e8a80fed0ed1c61b2b904d17569bd007a87b76d2adbd81c23f207",
+    "top.png": "7bdf5874967b42c58fbd444714ce9cc076a36098ad2db7faaa63e07c8c821b8b",
+    "exploded.png": "537c4887d6b18f10c0db66b33b808093b734b823b775d6ab6809652117703516",
+    "bogie.png": "7cee9ccf77067c377b965e055cd77208eedb3f34ef16925c912b8685ef33bd1c",
+    "bogie-side.png": "bf8c251707621f8ece19ce0296c02fe33b8db8af7149dd7dee36f29e05cdef43",
+    "bogie-underside.png": "92a1930e8ffd0f55363fa6450c081dfe84e9887a4acf7919cfdfae1284abe048"
+  }
+}

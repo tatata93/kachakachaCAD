@@ -1,0 +1,27 @@
+{
+  "stage": 7,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "3c8a0cee57d6469677c58cad7fa238843ba95eb0968f66db867378114553e35b",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "3c8a0cee57d6469677c58cad7fa238843ba95eb0968f66db867378114553e35b",
+    "candidate/design.json": "56111decb37536f80675866e5212fc47c4de3cf780ce8f9a17c285f37c6866d9",
+    "native/validation.json": "1c4cb0b57ae6aa949f294185cc9faf6bb1135542513a10d5c83ca7e8926754a7",
+    "exports/print-parts.json": "c1c5254a308ccf1e4bed9b2a60ca100f7f82ed08066f46fc2695e98b27900b2d",
+    "exports/stl-validation.json": "a510069e8d230843be7979d9574e2236b68fae94fbd2173bf546ef4ef6a46b56",
+    "inspection.json": "8f5aaba5931e38ea94fe90d451799723ebbad63656db96265329d81da9e9dabf",
+    "previews/render-proof.json": "401cad3f368afc5ebb3ebd1159e79dad4bee407914adda33f886367e39a9c608"
+  },
+  "endUtc": "2026-10-26T23:44:53.258881+00:00",
+  "reviewUtc": "2026-10-26T23:46:28.981003+00:00",
+  "observations": [
+    "The AU75 lower casing follows the roof without isolated mounting pedestals.",
+    "Walkway boards now retain a full 0.3 mm thickness above the larger transverse crown, and all eight feet pass regional contact checks.",
+    "Clipped native mesh close-ups confirm the casing and walkway placement; clipping is for inspection only."
+  ],
+  "imageSha256": {
+    "cooler-roof.png": "f8ff7d23302166f02a92d62d57ca68e240ae92cbf7ed84d8c8bd78dfb03dbf2b",
+    "walkway-side.png": "faf6ddb11cbf36b1417bb11ce6a58096d3639e96e3465a5a886ca60ae761ef62"
+  }
+}

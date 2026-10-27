@@ -1,0 +1,27 @@
+{
+  "stage": 6,
+  "geometryPassed": true,
+  "visualReview": "reviewed",
+  "finalPrintRelease": false,
+  "modelSha256": "a4c3f78c165588a1251a5af8c5b71377d438233cb138b2e01ad020b191727c4f",
+  "evidence": {
+    "candidate/kuha115-ho80-revised.kcd2": "a4c3f78c165588a1251a5af8c5b71377d438233cb138b2e01ad020b191727c4f",
+    "candidate/design.json": "a8850fa0858d37ef965f3903b18b4f2f88830b5815ee77ea5f534be460539164",
+    "native/validation.json": "77446013cee9d46b34abf1f285f751a225c14d5911dd68f653977cd16a95f1a7",
+    "exports/print-parts.json": "e041c564e79e2370cc6f7a481b1897b31c6d7a18243202c2d07a03796dd8bb3c",
+    "exports/stl-validation.json": "16084939628de6accd99c9ef0605d531e1f20bc86446a62e719d9b315b326913",
+    "inspection.json": "8502d855a290f353df851145596b7792628ad3d9e678bd9edef6793169469c74",
+    "previews/render-proof.json": "cfffb371231beab3be4a8e1b2fdd0d02c02237b6b818adfeeb79a4c32cc590a8"
+  },
+  "endUtc": "2026-10-26T23:32:45.045126+00:00",
+  "reviewUtc": "2026-10-26T23:39:49.686835+00:00",
+  "observations": [
+    "Both side close-ups show a continuous pillar between the fixed window and passenger door.",
+    "Four pillar widths are now 0.825 mm instead of 0.025; adjacent windows remain open in positive/negative native probes.",
+    "The shifted fixed window remains clear of the preceding sash."
+  ],
+  "imageSha256": {
+    "pillar-assistant.png": "3502389b9169d54bae97f4047f11a93339aac4ec2eec1037e73f62122979baea",
+    "pillar-driver.png": "432b83198cdb9586e674a8c59d1ce4ca443add24f283a808750e964fc1399048"
+  }
+}

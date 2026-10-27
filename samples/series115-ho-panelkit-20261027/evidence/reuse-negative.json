@@ -1,0 +1,55 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "case": "stale-model",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "missing-part",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "zero-paths",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "failed-path",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "wrong-token",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "changed-bounds",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "failed-point",
+      "rejected": true,
+      "reason": ""
+    },
+    {
+      "case": "unbound-step",
+      "rejected": true,
+      "reason": "Unbound legacy exports cannot be reused"
+    },
+    {
+      "case": "changed-step",
+      "rejected": true,
+      "reason": "Export changed after its validation"
+    },
+    {
+      "case": "changed-stl",
+      "rejected": true,
+      "reason": "Export changed after its validation"
+    }
+  ]
+}

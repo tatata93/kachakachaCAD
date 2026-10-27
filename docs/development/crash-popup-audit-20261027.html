@@ -1,0 +1,31 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2026-10-27 エラー表示の時刻照合と配布版再確認</title>
+<style>body{max-width:1000px;margin:32px auto;padding:0 24px;font:17px/1.8 "Yu Gothic UI",sans-serif;color:#263742}table{border-collapse:collapse;width:100%;font-size:15px}th,td{padding:10px;border:1px solid #afbdc6;text-align:left}aside{background:#edf3f6;padding:18px}img{max-width:100%}code{overflow-wrap:anywhere}a{color:#075d89}</style>
+<h1>アプリケーションエラーの照合と配布版の再確認</h1>
+<p>2026-10-27。オーナーが気づいた時点で表示されていたメモリアクセス違反を調査した。操作のきっかけは不明。</p>
+<aside>画像の障害アドレスと一致するWindows記録は03:05:57で、修正途中の面作成テストが停止した時刻と対応する。
+最新配布版では同じ8試験と通常Windows起動2回を再実行し、いずれも成功。新しい障害ポップアップの記録はなかった。
+修正前テストの表示が残っていた可能性が高い。ただし障害元PID・スタックは記録されておらず、画像だけで実行ファイルを完全に断定はできない。</aside>
+<h2>Windows記録と当時のログ</h2>
+<table><tr><th>日本時間</th><th>Windows System / Application Popup ID 26</th><th>対応するテストログ</th></tr>
+<tr><td>03:05:57.620</td><td><code>0x00007FFF3B1B655C</code> が <code>0x8</code> をread。画像と一致。</td><td><code>focused01/ui.log</code> 最終更新03:05:57.417。面のCtrl追加試験の開始後に停止。</td></tr>
+<tr><td>03:11:34.918</td><td><code>0x00007FFF3D0B1860</code> が <code>0x20</code> をread。</td><td><code>focused02/ui.log</code> 最終更新03:11:34.720。Ctrl追加成功後、選択転送・復帰試験の開始後に停止。</td></tr>
+<tr><td>03:14:44以降</td><td>上記後の修正候補。</td><td><code>focused03/receipt.json</code> は同じ8件・終了0。その後、配布候補を全体検証。</td></tr></table>
+<p>ログは <code>out/face-input-recovery-20261027/</code> 内。古い停止試験を成功結果へ書き換えていない。
+今回の照合後、最新配布版以外の古い版が複数起動していることも確認したが、作業中のアプリを終了・更新しなかった。
+現在のプロセスのモジュールからは当時の障害アドレスを特定できず、例外の正確な関数名は未確定。</p>
+<h2>最新配布版の再試験</h2>
+<p>対象は <code>out/releases/face-input-final2-accepted-20261027/package/kachakacha_cad_next.exe</code>。
+SHA256 <code>5654528664a23735d5a883bd18be2a397befb9d4b95a6feadece6ab31c59535f</code>。
+前回の全体検証・通常表示で確認した実行ファイルと同一バイト列。</p>
+<ul><li>当時のCtrl追加、選択入力転送・復帰、選択削除とUndo/Redo、作図保持、参照選択、投影入力保持、面作成の入口と閉輪郭生成の8試験：8件成功、skipなし、終了0、5.625秒。</li>
+<li>通常Windows起動：Qtプラットフォーム環境がwindows／offscreenの両方から実行。どちらも実Windowsの表示・描画・イベントループ・終了0を確認。</li>
+<li>再試験開始後の新しいCADエラーポップアップ記録なし。元の作業中CADは終了していない。</li></ul>
+<p>今回、製品コードや配布exeの変更は行っていない。新しい原因を修正したとの報告ではなく、過去の障害表示との対応調査と既存修復版の再確認である。
+元の全体ゲート195 CTest・開発／配布UI各608件を今回すべて再実行した意味ではない。</p>
+<p><a href="crash-popup-audit-20261027.json">障害記録・対象SHA・再試験証拠</a>。
+詳細ログは <code>out/crash-popup-audit-20261027/</code>。
+<a href="face-input-recovery-20261027.html">面作成の修復内容と通常起動先</a>。</p>
+<p><a href="../../out/releases/face-input-final2-accepted-20261027/package/kachakacha_cad_next.exe">検証済みCADの起動先</a>。
+エラー窓の「OK」は異常終了した当該プロセスを閉じる操作であり、別に起動しているCADをまとめて終了させる操作ではない。</p>
+</html>

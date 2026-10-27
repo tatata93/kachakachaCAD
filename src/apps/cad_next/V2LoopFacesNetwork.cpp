@@ -54,6 +54,24 @@ double ChordDistance(geometry::Vector3 p,geometry::Vector3 a,geometry::Vector3 b
     const auto d=b-a;const auto length=d.LengthSquared();
     return geometry::Distance(p,a+d*(length>0?std::clamp(geometry::Dot(p-a,d)/length,0.,1.):0.));
 }
+
+// Bounds() is sampled, so it cannot prove that a whole spline is exterior.
+// Use the exact convex hull for polynomial curves and a containing sphere box
+// for arcs/circles. Loose boxes only defer to the detailed intersection check.
+std::pair<geometry::Vector3,geometry::Vector3> ContainingBox(const geometry::CurveSegment& curve)
+{
+    if(curve.Kind()==geometry::CurveKind::Circle||curve.Kind()==geometry::CurveKind::CircularArc){
+        const auto center=curve.Center();const double r=curve.Radius();
+        return {{center.x-r,center.y-r,center.z-r},{center.x+r,center.y+r,center.z+r}};
+    }
+    const double infinity=std::numeric_limits<double>::infinity();
+    geometry::Vector3 minimum{infinity,infinity,infinity},maximum{-infinity,-infinity,-infinity};
+    for(const auto p:curve.ControlPoints()){
+        minimum={std::min(minimum.x,p.x),std::min(minimum.y,p.y),std::min(minimum.z,p.z)};
+        maximum={std::max(maximum.x,p.x),std::max(maximum.y,p.y),std::max(maximum.z,p.z)};
+    }
+    return {minimum,maximum};
+}
 // A branch can be omitted only when its entire sampled chords are covered by
 // retained intervals within the existing user join tolerance. Test both ends
 // against the SAME reference chord, recursively splitting as needed; isolated
@@ -207,17 +225,17 @@ app::SurfaceNetworkPlan SelectedNotches(const std::vector<app::RoleWire>& source
             plane.normal=geometry::Normalized(area);const auto frame=geometry::MakeFrame(plane);
             const double infinity=std::numeric_limits<double>::infinity();
             geometry::Vector3 minimum{infinity,infinity,infinity},maximum{-infinity,-infinity,-infinity};
-            for(std::size_t i=0;i<edges.size();++i)if(edges[i].alive){const auto box=curves[i].segment.Bounds(tolerance.modelLinearMm);
-                minimum={std::min(minimum.x,box.minimum.x),std::min(minimum.y,box.minimum.y),std::min(minimum.z,box.minimum.z)};
-                maximum={std::max(maximum.x,box.maximum.x),std::max(maximum.y,box.maximum.y),std::max(maximum.z,box.maximum.z)};}
+            for(std::size_t i=0;i<edges.size();++i)if(edges[i].alive){const auto box=ContainingBox(curves[i].segment);
+                minimum={std::min(minimum.x,box.first.x),std::min(minimum.y,box.first.y),std::min(minimum.z,box.first.z)};
+                maximum={std::max(maximum.x,box.second.x),std::max(maximum.y,box.second.y),std::max(maximum.z,box.second.z)};}
             std::vector<std::vector<geometry::Point2>> polygons;
             for(const auto& cycle:cycles)if(app::EnclosedArea(compactEdges,cycle)>tolerance.modelLinearMm*tolerance.modelLinearMm)
                 polygons.push_back(geometry::ProjectToFrame(app::CycleRing(compactEdges,cycle),frame));
             for(std::size_t i=0;i<edges.size();++i)if(!edges[i].alive){
                 const auto& curve=curves[i].segment;
-                const auto box=curve.Bounds(tolerance.modelLinearMm);const auto eps=tolerance.modelLinearMm;
-                if(box.maximum.x<minimum.x-eps||box.minimum.x>maximum.x+eps||box.maximum.y<minimum.y-eps
-                    ||box.minimum.y>maximum.y+eps||box.maximum.z<minimum.z-eps||box.minimum.z>maximum.z+eps)continue;
+                const auto box=ContainingBox(curve);const auto eps=tolerance.modelLinearMm;
+                if(box.second.x<minimum.x-eps||box.first.x>maximum.x+eps||box.second.y<minimum.y-eps
+                    ||box.first.y>maximum.y+eps||box.second.z<minimum.z-eps||box.first.z>maximum.z+eps)continue;
                 const auto points=geometry::SampleCurve(curve,tolerance.interactiveJoinMm*.125,16384);
                 if(points.size()>=16384)return std::vector<Run>{};
                 bool covered=true;for(std::size_t j=1;j<points.size();++j)
@@ -250,8 +268,8 @@ app::SurfaceNetworkPlan SelectedNotches(const std::vector<app::RoleWire>& source
     app::LoopGraph graph(exact.modelLinearMm);std::vector<app::LoopEdge> edges;
     for(std::size_t i=0;i<chains.size();++i)edges.push_back(app::MakeLoopEdge(i,chains[i].curves,graph));
     auto cycles=app::FindLoopCycles(edges);
-    std::stable_sort(cycles.begin(),cycles.end(),[&](const auto& a,const auto& b){return app::EnclosedArea(edges,a)<app::EnclosedArea(edges,b);});
     if(cycles.empty()||cycles.size()>=20000)return {};
+    std::stable_sort(cycles.begin(),cycles.end(),[&](const auto& a,const auto& b){return app::EnclosedArea(edges,a)<app::EnclosedArea(edges,b);});
     const auto enclosingRing=app::CycleRing(edges,cycles.back());auto plane=geometry::FitPlane(enclosingRing);
     geometry::Vector3 area{};for(std::size_t i=0;i<enclosingRing.size();++i)area=area+geometry::Cross(enclosingRing[i],enclosingRing[(i+1)%enclosingRing.size()]);
     if(!plane.valid||area.LengthSquared()<1e-20)return {};

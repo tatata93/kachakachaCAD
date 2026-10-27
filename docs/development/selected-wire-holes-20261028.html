@@ -1,0 +1,40 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>選択ワイヤーから窓の切り欠きと複数穴を作る：検証記録</title>
+<style>body{max-width:1100px;margin:30px auto;padding:0 20px;font:16px/1.8 "Yu Gothic UI",sans-serif;color:#203040}table{border-collapse:collapse;width:100%}td,th{border:1px solid #b7c7d0;padding:9px;text-align:left}img{width:100%;border:1px solid #b7c7d0}.note{background:#eef4f7;padding:12px}code{overflow-wrap:anywhere}h1,h2{line-height:1.5}</style>
+<h1>選択した線から、窓を抜いた面・部品を作る</h1>
+<p id="final-status">2026-10-28 完了。Windows全体195件（skip 0）、本体・配布版UI各626件、旧CAD自己試験、配布コピーの通常起動2条件が成功しました。添付モデルの原外周によるコの字切り欠き・隣の窓穴と厚み付き部品も確認しました。</p>
+<p>対象：添付115投影.kcd2の元ワイヤー。ファイルは930,001バイト、SHA-256は <code>e0c577a41c55a3817db247b86f6675d17fb23358bee94a4da9e72b35f68e10d6</code>。原本を上書きせず、出力はout内の別ファイルへ保存しました。</p>
+<h2>求められる形</h2>
+<p>窓が左外周に接するため、パノラミック窓は左側が開いたコの字の切り欠きになります。独立して閉じている隣の窓は穴になります。テールライトの円の中心を面の境界が通る場合は、それぞれの面に半円の切り欠きができ、隣の面と組み合わせると丸い開口になります。中心からずれた境界なら、その位置に対応する円弧の切り欠きです。</p>
+<table><tr><th>条件</th><th>従来の問題</th><th>今回の処理</th></tr>
+<tr><td>窓と外周が途中で接する</td><td>小さな重複区画や窓を埋める候補が先に選ばれ、目的の面が作れない</td><td>実3D接点の一時区間を組み直し、窓の内側を除いた境界を作る</td></tr>
+<tr><td>独立した複数穴</td><td>区間数によって分岐探索の上限に当たる</td><td>閉輪群の包含判定を先に使い、各穴と穴内の島を区別する</td></tr>
+<tr><td>複合ワイヤー全体を選ぶ</td><td>反対側に含まれる余りが面生成を妨げる</td><td>閉じた境界に関係しない外側部分を識別し、元のワイヤー自体は保持</td></tr>
+<tr><td>右ペイン</td><td>寄せる・T字・連続などが最初から並ぶ</td><td>面の候補と確定を前面にし、補正・作り方・連続を折り畳める詳細設定へ移す</td></tr></table>
+<h2>実モデルでの確認</h2>
+<p>原本の169a・16a5（パノラミック窓）、03a7・03ba・03d3・032e・001f（車体外周）を選択し、16cd（隣の窓）を追加した条件も確認しました。03baの右側区間だけを選ぶ場合と、反対側の曲線まで含めてワイヤー全体を選ぶ場合を分けています。過去の試験のように外周を1 mm広げていません。</p>
+<p>試験は製品の面作成・厚み・保存・Undo/Redoを使用しています。選択セットの投入には文書・選択APIも使っています。既存のCtrlクリック・ツール内選択・詳細設定操作のQt試験と、WindowsのOS入力試験は同じ意味ではありません。</p>
+<figure><img src="../manual/images/v2-115-original-notch-face.png" alt="切り欠きと隣の窓穴を持つ面"><figcaption>元外周から作った面。左が開いたパノラミック窓と隣の独立した穴。</figcaption></figure>
+<figure><img src="../manual/images/v2-115-original-notch-solid.png" alt="切り欠きと窓穴のある厚み付き部品"><figcaption>中央0.5 mmで厚みを付けた部品。</figcaption></figure>
+<table><tr><th>検査</th><th>個別試験の結果</th></tr>
+<tr><td>パノラミック窓</td><td>X=10 mm、Z=21.5 mmをY方向に検査して空洞。同じXのZ=16 mmには材料が残る</td></tr>
+<tr><td>隣の窓</td><td>Y=-17 mm、Z=21.5 mmをX方向に検査して空洞。Z=16 mmには材料が残る</td></tr>
+<tr><td>厚み</td><td>0.5 mm、閉鎖性・正の体積・ソリッド品質検査、各開口の保持</td></tr>
+<tr><td>保存と履歴</td><td>保存・再読み込み、Undo/Redo後の開口と材料を確認</td></tr>
+<tr><td>元の線</td><td>元UUID・曲線形式・評価位置を照合。原本ファイルのSHA-256も不変</td></tr>
+<tr><td>境界の精度</td><td>既存の0.010 mm設定内。実モデルの標本最大ずれは約0.000404 mm。許容値は自動で増やしていない</td></tr></table>
+<h2>追加した試験と範囲</h2>
+<p>一つの面に6穴、半円切り欠きと2穴、切り欠きと穴内の島の3条件で面・ソリッドを検査。半円は境界上に中心を置いた半径3 mmの円による平面の代表例で、添付モデルの尾灯位置を直接操作した試験とは区別します。既存の関連UI24件ではCtrl選択、ツール内選択からの復帰、開内周の拒否、仕切線の保持、重複投影区間、補正・取消・履歴等を確認しました。最終全体ゲートはこれらの既定ケースも含む全626件を本体・配布版の両方で再確認しています。</p>
+<p>新しい中間境界は作業用の値です。曲線を折れ線へ置換せず、元のワイヤーを文書内で分割・移動しません。連続する直線の一時区間は同じ幾何形状の一本にまとめます。閉路探索の上限を増やさず、単純な閉輪と分岐網を分けます。</p>
+<h2>変更したファイル</h2>
+<p><code>V2LoopFacesNetwork.cpp</code>（境界の組立）、<code>V2LoopFacesDock.cpp/.h</code>（詳細の折り畳み）、<code>V2LoopFacesPreview.cpp</code>（失敗理由の詳細）、<code>V2SelfTestWindowHoleOwner.cpp</code>（実モデルと複数穴の試験）。マニュアルREADME・パノラミック窓手順と実画面2枚を更新しました。</p>
+<p>削除したファイルは0。元モデル、他担当の未コミット模型、旧リリース、worktree、失敗・中断した試験ログを保全しています。Core公開API・保存形式・許容差の変更はありません。</p>
+<h2>失敗・中断も保存</h2>
+<p>最初の短い検査で画像登録の不足を検出し、READMEへの画像と撮影名登録を直しました。全体試験の最初の実行は、レビューで曲線の包含箱の問題を指摘されたため試験用プロセスだけを停止しました。標本から作る箱を、制御点の凸包または円を含む箱へ置き換え、実モデルの複合ワイヤー全選択を再試験してから全体ゲートをやり直しました。中断を成功として再利用していません。</p>
+<h2>最終全体ゲートと起動</h2>
+<p>検証対象ソースは <code>d865f241ffcecab5ea857b7071a39e61ba841103</code>。主変更は <code>22958ef40</code>、包含箱の修正は <code>d865f241f</code>。資料と進捗の追記は検証対象の製品入力から除外されます。全体ゲートは日本時間2026-10-28 02:40:18〜03:04:53、約24分35秒。短い整合検査9件、CTest195件（失敗0・skip 0）、UI本体626件・配布版626件（各失敗0）、旧CAD自己試験が成功。CTest全体は1396.80秒、配布版試験693.23秒、本体UI試験648.86秒です。</p>
+<p>正式入口：<code>python scripts/verify.py full --preset windows-msvc --parallel 2 --run-id selected-wire-holes-final-20261028</code>。<a href="../../out/verification/selected-wire-holes-final-20261028/result.json">最終結果JSON</a>とCTest XML・UI全件台帳を照合してから、<code>python scripts/verify.py publish --preset windows-msvc --parallel 2 --evidence out/verification/selected-wire-holes-final-20261028/result.json</code>で配布コピーを作りました。ソース・設定・環境・生成物のSHAを照合し、コピー後の同一性も確認しました。</p>
+<p>配布コピーは通常のWindowsウィンドウで起動し、可視・露出・描画・イベントループへの到達を確認。継承設定がwindowsの場合とoffscreenの場合の2条件が成功しています。検査用に起動したプロセスだけを終了し、ユーザーのアプリは操作していません。</p>
+<p>起動先：<a href="../../out/releases/selected-wire-holes-final-20261028/package/kachakacha_cad_next.exe"><code>out/releases/selected-wire-holes-final-20261028/package/kachakacha_cad_next.exe</code></a>。<a href="../../out/selected-wire-holes-20261028/published-startup/windows.json">通常起動の証拠</a>。全ての数学的な輪郭やOSマウス入力を網羅した保証ではなく、上に記載した実モデル・代表形状・製品UI回帰試験の結果です。</p>
+<p><a href="../manual/panorama-window-holes.html">画像付き操作手順</a> ／ <a href="../../out/selected-wire-holes-20261028/">個別試験ログ</a></p>
+</html>

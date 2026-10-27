@@ -17,6 +17,7 @@
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QToolButton>
 
 #include <algorithm>
 #include <utility>
@@ -118,7 +119,27 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作り方")));
+    auto* help=new QLabel(QStringLiteral("外周と窓の輪郭を選んでください。閉じた内周は穴、外周に接する窓は切り欠きとして残します。"),body);
+    help->setWordWrap(true);layout->addWidget(help);
+    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作る面")));
+    auto* facesContainer = new QWidget(body);
+    facesLayout_ = new QVBoxLayout(facesContainer);
+    facesLayout_->setContentsMargins(0, 0, 0, 0);
+    facesLayout_->setSpacing(2);
+    layout->addWidget(facesContainer);
+    summary_ = new QLabel(body);
+    summary_->setWordWrap(true);layout->addWidget(summary_);
+    detailsToggle_=new QToolButton(body);
+    detailsToggle_->setObjectName("loopFacesDetails");
+    detailsToggle_->setText(QStringLiteral("詳細設定（作り方・端の補正・連続）"));
+    detailsToggle_->setCheckable(true);detailsToggle_->setArrowType(Qt::RightArrow);
+    detailsToggle_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    layout->addWidget(detailsToggle_);
+    auto* details=new QWidget(body);auto* detailLayout=new QVBoxLayout(details);
+    detailLayout->setContentsMargins(0,0,0,0);details->hide();layout->addWidget(details);
+    QObject::connect(detailsToggle_,&QToolButton::toggled,details,&QWidget::setVisible);
+    QObject::connect(detailsToggle_,&QToolButton::toggled,this,[this](bool open){detailsToggle_->setArrowType(open?Qt::DownArrow:Qt::RightArrow);});
+    detailLayout->addWidget(MakePanelSectionTitle(body, QStringLiteral("端の許容差")));
     auto* toleranceRow = new QHBoxLayout();
     toleranceRow->addWidget(new QLabel(QStringLiteral("許容(端)"), body));
     tolerance_ = new V2NumericSpinBox(body);
@@ -127,31 +148,19 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     tolerance_->setDecimals(3);
     tolerance_->setSuffix(QStringLiteral(" mm"));
     toleranceRow->addWidget(tolerance_, 1);
-    layout->addLayout(toleranceRow);
+    detailLayout->addLayout(toleranceRow);
     QObject::connect(tolerance_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         if (!loading_ && toleranceHandler_) {
             toleranceHandler_(value);
         }
     });
 
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("輪")));
-    auto* facesContainer = new QWidget(body);
-    facesLayout_ = new QVBoxLayout(facesContainer);
-    facesLayout_->setContentsMargins(0, 0, 0, 0);
-    facesLayout_->setSpacing(2);
-    layout->addWidget(facesContainer);
-
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("ずれ・T 字")));
+    detailLayout->addWidget(MakePanelSectionTitle(body, QStringLiteral("端の補正・交点")));
     auto* gapsContainer = new QWidget(body);
     gapsLayout_ = new QVBoxLayout(gapsContainer);
     gapsLayout_->setContentsMargins(0, 0, 0, 0);
     gapsLayout_->setSpacing(2);
-    layout->addWidget(gapsContainer);
-
-    layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
-    summary_ = new QLabel(body);
-    summary_->setWordWrap(true);
-    layout->addWidget(summary_);
+    detailLayout->addWidget(gapsContainer);
     layout->addStretch(1);
     layout->addLayout(MakeCancelConfirmRow(body, &cancel_, &confirm_));
     QObject::connect(cancel_, &QPushButton::clicked, this, [this] {
@@ -186,6 +195,8 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
         widgets.method->addItem(choice);
     }
     widgets.method->setCurrentIndex(face.methodIndex);
+    widgets.method->setVisible(detailsToggle_->isChecked());
+    QObject::connect(detailsToggle_,&QToolButton::toggled,widgets.method,&QWidget::setVisible);
     line->addWidget(widgets.method, 1);
     widgets.edges = new QLabel(face.lineCount > 0 && face.lineCount != face.edgeCount
             ? QStringLiteral("辺 %1(線 %2)").arg(face.edgeCount).arg(face.lineCount)
@@ -199,7 +210,10 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     line->addWidget(widgets.make);
     widgets.column->addWidget(widgets.status);
     if (face.styleIndex>=0) {
-        auto* styleLine=new QHBoxLayout();
+        auto* styleGroup=new QWidget(widgets.row);
+        auto* styleLine=new QHBoxLayout(styleGroup);styleLine->setContentsMargins(0,0,0,0);
+        styleGroup->setVisible(detailsToggle_->isChecked());
+        QObject::connect(detailsToggle_,&QToolButton::toggled,styleGroup,&QWidget::setVisible);
         styleLine->addWidget(new QLabel(CircledNumber(face.number)+QStringLiteral("の張り方（近似）"),widgets.row));
         widgets.style=new QComboBox(widgets.row);
         widgets.style->addItem(QStringLiteral("標準"));
@@ -209,11 +223,13 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
         widgets.style->setCurrentIndex(face.styleIndex);
         widgets.style->setToolTip(QStringLiteral("同じ境界を保って比較します。滑らかなドームは断面の丸みを広げる近似です。内部ガイド・支持面G1/G2は標準などを選んでください。不要な区画は「作る」を外します。"));
         styleLine->addWidget(widgets.style,1);
-        widgets.column->addLayout(styleLine);
+        widgets.column->addWidget(styleGroup);
         widgets.applyStyle=new QPushButton(QStringLiteral("この張り方を作る曲面すべてに適用"),widgets.row);
         widgets.applyStyle->setEnabled(face.make);
         widgets.applyStyle->setToolTip(QStringLiteral("張り方は区画ごとの設定です。「作る」が有効な四辺面・境界面に適用します。平面・ロフトや「作る」を外した区画は変更しません。"));
         widgets.column->addWidget(widgets.applyStyle);
+        widgets.applyStyle->setVisible(detailsToggle_->isChecked());
+        QObject::connect(detailsToggle_,&QToolButton::toggled,widgets.applyStyle,&QWidget::setVisible);
     }
     return widgets;
 }
@@ -252,6 +268,8 @@ void V2LoopFacesDock::AddEdgeLine(FaceRowWidgets& widgets, int faceIndex, const 
     }
     line->addStretch(1);
     widgets.column->addWidget(widgets.edgeLine);
+    widgets.edgeLine->setVisible(detailsToggle_->isChecked());
+    QObject::connect(detailsToggle_,&QToolButton::toggled,widgets.edgeLine,&QWidget::setVisible);
 }
 
 V2LoopFacesDock::GapRowWidgets V2LoopFacesDock::MakeGapRow(int gap, const V2LoopGapRow& row)
@@ -411,6 +429,7 @@ bool V2LoopFacesDock::ClickCancel()
 
 bool V2LoopFacesDock::ClickCloseGap(int gap)
 {
+    detailsToggle_->setChecked(true);
     if (gap < 0 || gap >= static_cast<int>(gapRows_.size())) {
         return false;
     }
@@ -419,6 +438,7 @@ bool V2LoopFacesDock::ClickCloseGap(int gap)
 
 bool V2LoopFacesDock::ClickLeaveGap(int gap)
 {
+    detailsToggle_->setChecked(true);
     if (gap < 0 || gap >= static_cast<int>(gapRows_.size())) {
         return false;
     }
@@ -427,6 +447,7 @@ bool V2LoopFacesDock::ClickLeaveGap(int gap)
 
 bool V2LoopFacesDock::ChooseMethod(int face, int methodIndex)
 {
+    detailsToggle_->setChecked(true);
     if (face < 0 || face >= static_cast<int>(faceRows_.size())) {
         return false;
     }
@@ -443,6 +464,7 @@ bool V2LoopFacesDock::ToggleMake(int face)
 
 bool V2LoopFacesDock::TypeTolerance(double joinMm)
 {
+    detailsToggle_->setChecked(true);
     return TypeIfUsable(tolerance_, joinMm);
 }
 
@@ -486,6 +508,7 @@ void V2LoopFacesDock::SetContinuityHandler(std::function<void(int, int)> handler
 
 bool V2LoopFacesDock::CycleContinuity(int face, int edge)
 {
+    detailsToggle_->setChecked(true);
     if (face < 0 || face >= static_cast<int>(faceRows_.size())) {
         return false;
     }
@@ -581,11 +604,13 @@ void V2LoopFacesDock::SetApplyStyleHandler(std::function<void(int)> handler)
 
 bool V2LoopFacesDock::ChooseStyle(int face,int style)
 {
+    detailsToggle_->setChecked(true);
     return face>=0&&face<static_cast<int>(faceRows_.size())&&ChooseIfUsable(faceRows_[static_cast<std::size_t>(face)].style,style);
 }
 
 bool V2LoopFacesDock::ClickApplyStyleToAll(int face)
 {
+    detailsToggle_->setChecked(true);
     if(face<0 || static_cast<std::size_t>(face)>=faceRows_.size())return false;
     return ClickIfUsable(faceRows_[static_cast<std::size_t>(face)].applyStyle);
 }

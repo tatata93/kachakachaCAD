@@ -25,6 +25,7 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/SurfaceNetwork.h"
+#include "kachakacha/app/ProfileNetwork.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/modeling/MeshPick.h"
@@ -53,7 +54,129 @@ public:
     static bool ShowOnly(V2MainWindow& w,base::EntityId keep);
     static bool Existing(V2MainWindow& w,bool curved,bool left=false);
     static bool PreviewMeshReuse(V2MainWindow& w);
+    static bool RawSelection(V2MainWindow& w,bool extra=false);
+    static bool MultipleHoles(V2MainWindow& w,bool notch,bool island=false);
 };
+bool V2WindowHoleExercise::RawSelection(V2MainWindow& w,bool extra) {
+    const auto path=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT");
+    if(!w.OpenDocumentFile(path))return false;
+    const auto id=[](const char* s){return *base::EntityId::Parse(std::string("00000000-0000-4000-8000-00000000")+s);};
+    app::SelectionSet selected;
+    std::vector<const char*> suffixes={"169a","16a5","03a7","03ba","03d3","032e","001f"};
+    if(extra)suffixes.push_back("16cd");
+    for(const auto* suffix:suffixes) {
+        const auto which=id(suffix);auto chosen=app::GuideSelectionOf(w.Session().GetDocument(),w.Session().Scene(),which);
+        if(!chosen)return false;
+        selected.entityIds.push_back(which);
+        for(std::size_t i=0;i<chosen->segments.size();++i) {
+            const auto& c=chosen->segments[i];const auto a=c.StartPoint(),b=c.EndPoint();
+            std::cout<<suffix<<"["<<i<<"] kind="<<int(c.Kind())<<" "<<a.x<<","<<a.y<<","<<a.z<<" -> "<<b.x<<","<<b.y<<","<<b.z<<std::endl;
+        }
+        app::SelectionRef ref;ref.entityId=which;
+        if(std::string(suffix)=="03ba"&&!qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_WHOLE")) {
+            ref.kind=app::SelectionElementKind::Edge;
+            for(const auto& c:w.Session().Scene().curves)if(c.entityId==which)ref.segmentId=c.segmentId;
+        }
+        selected.ordered.push_back(ref);
+    }
+    w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
+    modeling::SnapScene raw;
+    for(const auto& ref:selected.ordered)for(const auto& c:w.Session().Scene().curves)
+        if(c.entityId==ref.entityId&&(!ref.segmentId||*ref.segmentId==c.segmentId))raw.curves.push_back(c);
+    auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;tolerance.interactiveJoinMm=tolerance.modelLinearMm;
+    auto split=app::detail::SplitProfileNetwork(raw.curves,tolerance);
+    std::vector<app::RoleWire> unique;
+    for(const auto& c:split) {
+        bool dup=false;for(const auto& p:unique){bool same=true,reverse=true;
+            for(double t:{0.,.25,.5,.75,1.}){same=same&&geometry::Distance(c.segment.Evaluate(t),p.segments.front().Evaluate(t))<1e-6;
+                reverse=reverse&&geometry::Distance(c.segment.Evaluate(t),p.segments.front().Evaluate(1-t))<1e-6;}dup=dup||same||reverse;}
+        if(!dup)unique.push_back({c.entityId,{c.segment}});
+    }
+    std::cout<<"raw="<<raw.curves.size()<<" split="<<split.size()<<" unique="<<unique.size()<<" tables="<<app::PlanSurfaceNetwork(unique,tolerance).tables.size()<<std::endl;
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");QApplication::processEvents();
+    const auto output=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_OUTPUT")+(extra?"/raw-multiple":"/raw-single");QDir().mkpath(output);
+    w.grab().save(output+"/raw-selection.png");
+    std::cout<<w.LoopFacesTool().Dock()->SummaryTextJa().toStdString()<<std::endl;
+    for(int i=0;i<w.LoopFacesTool().Dock()->FaceRowCount();++i)std::cout<<w.LoopFacesTool().Dock()->FaceRowTextJa(i).toStdString()<<std::endl;
+    const auto originals=w.Session().Scene().curves;
+    const int before=selftest::CountOfKind(w,domain::EntityKind::GuideSurface);
+    if(!selftest::Explain("raw selected original wires produce and commit one region",w.LoopFacesTool().Plan()
+        &&w.LoopFacesTool().Plan()->faces.size()==1&&w.HandleToolKey(Qt::Key_Return,nullptr)
+        &&selftest::CountOfKind(w,domain::EntityKind::GuideSurface)==before+1))return false;
+    const auto made=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto material=[&](base::EntityId which,geometry::Vector3 p,geometry::Vector3 direction=geometry::Vector3{0,-1,0}){
+        for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==which)for(const auto& t:shape.mesh.triangles)
+            if(modeling::RayHitsTriangle(p,direction,t))return true;return false;
+    };
+    if(!selftest::Explain("the panoramic opening is empty and the lower body remains",!material(made,{10,0,21.5})&&material(made,{10,0,16})))return false;
+    if(extra&&!selftest::Explain("the separate side window is also empty",!material(made,{30,-17,21.5},{-1,0,0})&&material(made,{30,-17,16},{-1,0,0})))return false;
+    app::SelectionSet face;face.entityIds={made};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");
+    auto display=w.Viewport().DisplaySettingsNow();display.gridVisible=false;w.Viewport().SetDisplaySettings(display);
+    QApplication::processEvents();w.grab().save(output+"/raw-notch-face.png");
+    for(const auto& original:originals){
+        const auto* source=w.Session().GetDocument().FindEntity(original.entityId);
+        if(!source||source->kind!=domain::EntityKind::Wire)continue;
+        const auto& now=w.Session().Scene().curves;
+        const auto found=std::find_if(now.begin(),now.end(),[&](const auto& c){return c.entityId==original.entityId&&c.segmentId==original.segmentId;});
+        if(found==now.end()||found->segment.Kind()!=original.segment.Kind()){std::cout<<"original missing "<<original.entityId.ToString()<<std::endl;return false;}
+        for(const double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),original.segment.Evaluate(t))>1e-12){std::cout<<"source changed "<<original.entityId.ToString()<<std::endl;return false;}
+    }
+    w.RunCommand("part.thicken");auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
+    if(!w.ThickenDock().ClickConfirm()){std::cout<<"raw thicken failed: "<<w.StatusText().toStdString()<<std::endl;return false;}
+    const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto check=kernel::CheckSolidForExport(w.partShapes_.at(part.ToString()),.001);
+    if(!selftest::Explain("raw notch makes a closed positive-volume solid without filling the window",check.HasValue()&&check.Value().Ok()
+        &&check.Value().volumeMm3>0&&!material(part,{10,0,21.5})&&material(part,{10,0,16})))return false;
+    if(extra&&(!material(part,{30,-17,16},{-1,0,0})||material(part,{30,-17,21.5},{-1,0,0})))return false;
+    face.entityIds={part};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");
+    QApplication::processEvents();w.grab().save(output+"/raw-notch-solid.png");
+    const int count=selftest::CountOfKind(w,domain::EntityKind::Part);w.RunCommand("edit.undo");
+    if(selftest::CountOfKind(w,domain::EntityKind::Part)!=count-1)return false;
+    w.RunCommand("edit.redo");if(selftest::CountOfKind(w,domain::EntityKind::Part)!=count)return false;
+    if(!ShowOnly(w,part))return false;
+    const auto saved=output+"/115-original-wire-notch-solid.kcd2";
+    w.SetPathChooser([&](bool){return saved;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    return selftest::Explain("raw notch survives save and reopen",w.OpenDocumentFile(saved)&&w.RebuildProblems().isEmpty()
+        &&!material(part,{10,0,21.5})&&material(part,{10,0,16}));
+}
+
+bool V2WindowHoleExercise::MultipleHoles(V2MainWindow& w,bool notch,bool island){
+    w.RunCommand("selection.activate");w.RunCommand("file.new");
+    using geometry::CurveSegment;using geometry::Vector3;
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto rectangle=[&](double x,double y,double a,double b){return std::vector<CurveSegment>{
+        line({x,y,0},{x+a,y,0}),line({x+a,y,0},{x+a,y+b,0}),line({x+a,y+b,0},{x,y+b,0}),line({x,y+b,0},{x,y,0})};};
+    app::SelectionSet selected;
+    const auto add=[&](const auto& curves){const auto made=w.Session().AddWire(curves,false,"窓と開口の試験");
+        if(!made.committed)return false;selected.entityIds.push_back(made.createdEntityIds.front());return true;};
+    if(!add(rectangle(-20,-20,40,40)))return false;
+    std::vector<Vector3> holes;
+    for(int i=0;i<(notch?2:6);++i){const double x=-9.+(i%3)*8.,y=-8.+(i/3)*13.;
+        if(!add(rectangle(x,y,4,5)))return false;holes.push_back({x+2,y+2.5,10});}
+    if(notch&&!add(std::vector<CurveSegment>{CurveSegment::MakeCircle({-20,6,0},{0,0,1},{1,0,0},3).Value()}))return false;
+    if(island&&!add(rectangle(-8.5,-7.5,1,1)))return false;
+    w.AdoptCurrentDocument();w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");
+    const std::size_t regions=island?2:1;
+    if(!w.LoopFacesTool().Plan()||w.LoopFacesTool().Plan()->faces.size()!=regions||!w.HandleToolKey(Qt::Key_Return,nullptr)
+        ||selftest::CountOfKind(w,domain::EntityKind::GuideSurface)!=regions){std::cout<<w.LoopFacesTool().Dock()->SummaryTextJa().toStdString()<<std::endl;return false;}
+    const auto hit=[&](domain::EntityKind kind,Vector3 p){for(const auto& shape:w.Viewport().ShapeViews())
+        if(const auto* e=w.Session().GetDocument().FindEntity(shape.entityId);e&&e->kind==kind)
+        for(const auto& t:shape.mesh.triangles)if(modeling::RayHitsTriangle(p,{0,0,-1},t))return true;return false;};
+    const auto openings=[&](domain::EntityKind kind){
+        if(!hit(kind,{15,15,10}))return false;for(const auto p:holes)if(hit(kind,p))return false;
+        if(island&&!hit(kind,{-8,-7,10}))return false;
+        return !notch||(!hit(kind,{-19,6,10})&&hit(kind,{-16,6,10})&&hit(kind,{-19,10,10}));
+    };
+    if(!selftest::Explain("each hole and notch remains empty, while islands remain material",openings(domain::EntityKind::GuideSurface)))return false;
+    selected={};for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::GuideSurface)selected.entityIds.push_back(e.id);
+    w.Viewport().SetSelection(selected);w.RunCommand("part.thicken");
+    auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
+    if(!w.ThickenDock().ClickConfirm())return false;
+    const auto part=w.Session().GetDocument().Snapshot().entities.back().id;const auto quality=kernel::CheckSolidForExport(w.partShapes_.at(part.ToString()),.001);
+    return selftest::Explain("all openings survive thickness and solid validity checks",quality.HasValue()&&quality.Value().Ok()
+        &&quality.Value().volumeMm3>0&&openings(domain::EntityKind::Part)
+        &&selftest::CountOfKind(w,domain::EntityKind::Part)==regions&&selftest::CountOfKind(w,domain::EntityKind::Wire)==static_cast<int>(notch?(island?5:4):7));
+}
 bool V2WindowHoleExercise::Existing(V2MainWindow& w,bool curved,bool left) {
     const auto path=qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT");
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue()||!w.OpenDocumentFile(path))return false;
@@ -451,8 +574,14 @@ bool V2WindowHoleExercise::PreviewMeshReuse(V2MainWindow& w){
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> WindowHoleOwnerCases(){
     std::vector<SelfTestCase> cases={{"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration},
-        {"HP-TH-MESH worker preview mesh moves to confirmed part",V2WindowHoleExercise::PreviewMeshReuse}};
+        {"HP-TH-MESH worker preview mesh moves to confirmed part",V2WindowHoleExercise::PreviewMeshReuse},
+        {"HP-LF-HOLES six holes from original wires face and solid",[](auto& w){return V2WindowHoleExercise::MultipleHoles(w,false);}},
+        {"HP-LF-HOLES semicircular notch and two holes face and solid",[](auto& w){return V2WindowHoleExercise::MultipleHoles(w,true);}},
+        {"HP-LF-HOLES notch and nested island retain material",[](auto& w){return V2WindowHoleExercise::MultipleHoles(w,true,true);}}};
     if(!qEnvironmentVariable("KACHACAD_WINDOW_OWNER_INPUT").isEmpty()) {
+        if(qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_RAW"))return {
+            {"PROJ OWNER raw selected original boundaries",[](auto& w){return V2WindowHoleExercise::RawSelection(w);}},
+            {"PROJ OWNER raw selected original boundaries and side window",[](auto& w){return V2WindowHoleExercise::RawSelection(w,true);}}};
         if(qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_EXISTING"))return {
             {"PROJ OWNER existing projected planar window face and solid",[](auto& w){return V2WindowHoleExercise::Existing(w,false);}},
             {"PROJ OWNER existing projected panorama face and solid",[](auto& w){return V2WindowHoleExercise::Existing(w,true);}},

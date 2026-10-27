@@ -25,6 +25,7 @@ class QLabel;
 class QPushButton;
 class QVBoxLayout;
 class QWidget;
+class QToolButton;
 
 //! 輪の辺 1 つ(連続の欄)。隣が無い辺は出さない。
 struct V2LoopEdgeCell {
@@ -155,6 +156,7 @@ private:
     QPushButton* cancel_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;
+    QToolButton* detailsToggle_ = nullptr;
 
     std::vector<FaceRowWidgets> faceRows_;
     std::vector<GapRowWidgets> gapRows_;

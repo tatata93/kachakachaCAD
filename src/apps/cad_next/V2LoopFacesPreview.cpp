@@ -108,6 +108,8 @@ void V2LoopFacesTool::BuildSurfacePreview()
                     const auto built=V2Calculation::Call(nullptr, "面を生成しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildGuideSurface(values...); }, filled,analysis.Value(),ToleranceNow());
                     error=built.FirstSummaryJa();
+                    if(!built.HasValue()&&!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())
+                        error+=" "+built.Diagnostics().front().detailsJa;
                     if (built.HasValue()) {
                         temporary.handles.push_back(built.Value().handle);
                         builtIds[at]=ids.NextTyped<base::IdKind::Entity>();

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>赤い区間だけをトリムし、周囲のRを残す — 2026-10-29</title>
+<style>
+body{font:16px/1.85 system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 22px;color:#202020}
+h1{font-size:28px}h2{font-size:21px;margin-top:38px}a{color:#1755a6}code{background:#eee;padding:2px 5px;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:10px;text-align:left;vertical-align:top}th{background:#eee}
+figure{margin:24px 0}img{width:100%;height:auto;border:1px solid #bbb}figcaption{font-size:14px}.note{padding:14px;background:#f4f4f4;border-left:4px solid #777}
+</style>
+<h1>赤い区間だけを消し、周囲の直線・R・窓を残す</h1>
+<p>2026-10-29。添付の115投影モデルで、トリムの赤い下見は1 mmなのに周囲のRまで消える問題を修正した。
+「元の線を残す」は既定オフのまま、残る形状へ直接反映する。変更前の線を非表示にして追加する処理には戻さない。</p>
+<p class="note" id="state">修正版を公開済み。重点42件、Windows全195 CTest（skip 0）、開発版・配布版UI各647件、旧CAD自己試験、公開したコピーの通常起動2条件が成功。</p>
+
+<h2>この修正で変わるものと残すもの</h2>
+<table><tr><th>変える対象</th><th>維持する対象</th></tr>
+<tr><td>赤い下見で示す削除区間。添付例では扉右下のはみ出し1 mm。</td><td>他の直線、完成済みのR・曲線、窓輪郭、面・立体、グループ、未編集線分のIDと寸法参照。</td></tr>
+<tr><td>線が2本に分かれる場合は、残す鎖をそれぞれ保存する。</td><td>未編集の線分IDは正しい結果へ引き継ぐ。形を変えた線分へ無関係な旧IDを移さない。</td></tr></table>
+
+<h2>添付モデルの実画面</h2>
+<figure><a href="trim-preview-preservation-20261029/115-before.png"><img src="trim-preview-preservation-20261029/115-before.png" alt="扉右下の1 mmだけが赤い下見になっている実モデルの画面"></a>
+<figcaption>1　作図 → 編集 → トリム。「元の線を残す」はオフ。扉右下の短いはみ出しを指す。
+状態欄の「直線の1.000 mmが消えます」と、赤い下見区間を確認する。重なりがある場合はTabで対象を替える。</figcaption></figure>
+<figure><a href="trim-preview-preservation-20261029/115-after.png"><img src="trim-preview-preservation-20261029/115-after.png" alt="1 mmだけを削除し、扉の周囲のRと窓を維持した実モデルの画面"></a>
+<figcaption>2　クリックすると赤い区間だけが消える。扉の周囲のR、窓、他の線・面を残す。
+確定直後の他の全曲線データとIDは編集前と一致。Undo → Redo → 保存 → 再読込後も、保存ワイヤーのIDと形状を確認した。</figcaption></figure>
+<p>原本をコピーして検証した。形状の準備とファイル読込には文書APIを使用し、下見・候補切替・確定には実Qtビューポートの操作経路を使用した。
+画像は実際のアプリが描画した画面。OSマウスで全ツールを手動操作した証拠とは区別する。</p>
+
+<h2>原因と修正</h2>
+<table><tr><th>原因</th><th>修正後の処理</th></tr>
+<tr><td>部分トリムでも元の作成操作を連鎖削除していた。完成済みのRが過去の元線への履歴参照を持つと、そのRまで削除した。</td>
+<td>元ワイヤーの形状を局所更新する。線全体を消す場合も、実形状を既に持つ完成済みRの歴史的な入力リンクだけを整理し、Rを残す。</td></tr>
+<tr><td>Rの接点や、同一直線上で重なる区間の端を境界として拾えず、添付モデルの下見が6.5 mmになった。</td>
+<td>実際の3D位置で一致する開曲線の端と、重なり区間の端を境界にする。閉曲線の任意の継ぎ目や、画面上で重なるだけの別平面の線は境界にしない。</td></tr>
+<tr><td>分かれた鎖の未編集線分と寸法参照を失う危険があった。</td><td>全ての残る鎖で未編集線分IDを引き継ぎ、寸法の参照先を正しいワイヤーへ移す。</td></tr>
+<tr><td>参照面・立体を作り直せない編集が途中で残る危険があった。</td><td>文書と表示を一緒に戻す。開いた輪郭になるなど再計算できない場合は、理由を表示して変更を取り消す。</td></tr></table>
+<p>既存の幾何許容差と保存形式を維持した。共有する複数出力を他へ影響せず編集できない場合は、明示的に断って変更しない。</p>
+
+<h2>検証</h2>
+<p id="verification">重点42件が成功。内訳は既存のトリム・削除・区画トリム・Boolean操作と、周囲保全5例、添付モデル1例。
+コアのトリム15例も成功。Windows全195 CTest（skip 0）、開発版・配布版UI各647件、旧CAD自己試験、公開コピーの通常起動2条件も成功した。全体検証：2026-10-29 03:33:12〜04:03:19 JST（約30分07秒）。</p>
+<ul><li>添付例：248要素を維持し、削除長は下見・確定とも1 mm。他の保存ワイヤーのIDと種類を維持。</li>
+<li>確定直後は他の曲線データを完全一致で照合。保存再読込後は文書既存の許容差内で曲線位置を照合し、保存ワイヤーのIDは一致必須とした。</li>
+<li>面・立体の表示用エッジは読込時に一時IDを再生成するため、同じ要素のエッジ形状を照合。保存ワイヤーのIDの検査とは区別する。</li>
+<li>保持オン/オフ、他の完成済み曲線の保持、2本への分割と寸法、削除確認の取消、生成失敗時の文書・表示の復元、Undo/Redo、保存再読込を検証。</li>
+<li>接線、重複区間の両方向、別平面で近いだけの線、端点のゼロ長断片をコア回帰へ追加。</li></ul>
+<p><a href="../../out/trim-local-20261029/owner-final3/result.json">実モデルを含む重点試験</a> ／
+<a href="../../out/trim-local-20261029/core-trim2.log">コア試験</a> ／
+<a href="../../out/verification/trim-preview-final-20261029/result.json">Windows全体の証拠</a></p>
+
+<h2>構成・削除ファイル・保全</h2>
+<ul><li><code>V2TrimSourcePolicy</code>：保持選択、元ワイヤーの局所更新、全鎖の線分IDと寸法参照、必要な削除確認、文書と表示の取消。</li>
+<li><code>V2HoverEditTool</code> / <code>V2MixedTrim</code>：通常と区画トリムの確定へ接続。参照先の形状を再計算。</li>
+<li><code>CurveTrim</code>：接点・重複端の実3D境界。公開APIと許容差の変更なし。</li>
+<li><code>V2SelfTestTrimPreservation</code>：周囲のR・ID・寸法・失敗時復元・添付モデルの回帰試験を独立したファイルに収めた。</li>
+<li>削除ファイル0件。元モデル、バックアップ、旧配布版、他のworktree、編集中の115系サンプルは変更・コミットしていない。</li></ul>
+<p>実装：<code>687184613</code>、幾何境界：<code>a1e36a2b4</code>、実モデル検証と説明：<code>314a13cca</code>。</p>
+<p id="launch">検証済み配布：<code>out/releases/trim-preview-final-20261029/package/kachakacha_cad_next.exe</code>。<a href="../../out/trim-local-20261029/result.json">起動・ハッシュの照合記録</a>。</p>
+<p><a href="../manual/tools/wire.trim.html">通常トリムの操作</a> ／ <a href="../manual/solid-trim.html">区画トリムの操作</a></p>
+</html>

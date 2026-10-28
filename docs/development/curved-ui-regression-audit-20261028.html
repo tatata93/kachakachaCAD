@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>曲面近似の操作・旧モデル・出力の回帰監査</title>
+<style>body{font:17px/1.8 "Yu Gothic UI",sans-serif;max-width:1120px;margin:30px auto;padding:0 24px;color:#243449}h1,h2{line-height:1.5}table{border-collapse:collapse;width:100%}th,td{border:1px solid #acbdcc;padding:10px;text-align:left;vertical-align:top}code{font-size:.9em;overflow-wrap:anywhere}.note{padding:16px;background:#edf3f7}img{max-width:100%;border:1px solid #acbdcc}a{color:#126393}</style>
+</head><body>
+<p><a href="../manual/curved-window-approximation.html">画像付き操作手順</a> ／ <a href="curved-material-results-20261028.html">前段の曲面開口の修正</a></p>
+<h1>曲面近似の操作・旧モデル・出力の回帰監査</h1>
+<p>2026-10-28。基点 f01477fe6、修正 ee301335b。穴付き曲面の改編後に、従来の穴なし3次元曲面、保存済み近似モデル、操作の順序、各生成形式と書き出しが使えるかを調査した。機能の正常系だけでなく、取消、失敗、Undo、別文書、再開始の経路を含む。</p>
+<div id="release-status" class="note">Windows全体195 CTest、開発版UI636件、配布版UI636件、旧CAD自己試験が成功。配布コピーのWindows通常起動も2条件で確認済み。</div>
+<h2>見つけた問題と修正</h2>
+<table><tr><th>操作・条件</th><th>問題</th><th>対応と確認</th></tr>
+<tr><td>近似を始める前／確定後に枚数や1枚指定を変える</td><td>下見を構えていないのに候補選択が走り、開始操作の状態が壊れる。</td><td>待機中の候補適用を止め、開始ボタンを維持。確定後に再設定→次の近似も確認。</td></tr>
+<tr><td>Escで取消→対象を押す／Enterで再開</td><td>内部に保持した対象名や札が消え、次のクリック結果が分かりにくい。Enterが開始手順を飛ばす。</td><td>保持する対象を名前と3Dの札で表示。Enterの1回目は再計算、下見後の2回目で確定。</td></tr>
+<tr><td>部材分割・Undo・元形状変更・別ファイルを開く</td><td>古い型紙が表示・書き出しに残る。</td><td>文書IDと近似入力の依存集合を照合して失効。表示切替、組立率、生成プレビューの取消、失敗した読込では有効な型紙を保持。途中まで作れた型紙を公開しない。</td></tr>
+<tr><td>近似を保存→通常の読込→現在状態から生成</td><td>別プロセスからの評価結果転送に部材領域・帯対応・帯部材数が含まれず、固定生成が失敗する。</td><td>全評価項目を搬送。一時転送形式を3へ更新し旧キャッシュを拒否。KCD2保存形式は変更しない。正常転送、旧形式、不正フラグ、保存後の実生成を試験。</td></tr>
+<tr><td>わずかにねじれた穴なし曲面を1帯に近似→37%で厚み生成</td><td>穴付きだけに適用していた母線調整が穴なしでは適用されず、厚み処理が拒否する。</td><td>既存の「残りの近似誤差予算内の調整」を1帯の穴なし面にも適用。調整分は最大偏差へ加算し、予算不足なら原形を保持。許容値は緩和しない。</td></tr></table>
+<h2>追加した回帰試験</h2>
+<p><code>V2SelfTestHumanPathApprox.cpp</code> に8ケースを追加。既存の近似・出力・展開・製作・GPT近似等と合わせた重点48件は、開始2026-10-28T11:37:35.573176Z、終了11:40:17.298103Z、161.72秒、失敗0。記録はUTCで、日本時間は9時間を加える。</p>
+<table><tr><th>検査</th><th>条件</th><th>証拠</th></tr>
+<tr><td>穴なしの従来形式の近似・保存再読込</td><td>自動方向・1枚、0／37／100%。ワイヤーのみ、ワイヤー＋近似面、部品のみ、両方の4形式を全て生成。部品を作る3形式×3姿勢でSTEP・STL・独立KCD2の27出力。Undoで生成前へ戻る。</td><td><a href="../../out/curved-ui-audit-20261028/final-focused2/result.json">重点結果</a>、<a href="../../out/curved-ui-audit-20261028/final-focused2/ui.json">ケース別時刻</a></td></tr>
+<tr><td>人の作図手順で作った大きな曲面</td><td>上と同じ出力行列を、従来の大きな作図fixtureで別途実行。試験自体338.30秒。通常ゲートは同じ精度の小さいfixtureで33.94秒。形状・規模が異なるため、この2値を高速化率とはしない。</td><td><a href="../../out/curved-ui-audit-20261028/untrimmed-green/ui.json">大きなfixture結果</a>、<a href="../../out/curved-ui-audit-20261028/legacy-one-piece-fixed/">生成物</a></td></tr>
+<tr><td>型紙の有効性</td><td>分割／Undo／新規文書／成功した読込で旧型紙を拒否。失敗・取消した読込、生成取消、組立率変更で型紙とSVG・DXF・PDF出力を維持。</td><td><a href="../../out/curved-ui-audit-20261028/final-focused2/ui.log">重点ログ</a></td></tr>
+<tr><td>曲面の穴を保持する読込</td><td>既存の6窓と切り欠き＋2窓の試験にも、近似保存→通常読込の段階を追加。その後の厚み部品・開口検査を継続する。</td><td><code>V2SelfTestWindowHoleOwner.cpp</code>、全体・配布UIに含む。</td></tr>
+<tr><td>誤差と異常入力</td><td>1帯の平行母線化を穴なし面で確認。調整分の偏差報告、足りない誤差予算では調整しないことも確認。転送の旧形式／不正boolを拒否。</td><td><a href="../../out/curved-ui-audit-20261028/core-and-preflight.xml">関連コア・事前検査18件</a></td></tr></table>
+<h2>以前から存在する保存モデル</h2>
+<p>全て確認用コピーを使い、前後SHA256で原本不変を検査した。旧モデルの下記確認は既定の全体ゲートとは別実行であり、既定試験に環境変数を残していない。</p>
+<table><tr><th>モデル</th><th>実行した確認</th><th>結果</th></tr>
+<tr><td><code>samples/railway_streamlined_nose_ho.kcd2</code><br>6断面のロフト</td><td>通常読込、0%で部品のみ／両方、STEP・STL、Undo/Redo、保存再読込。型紙SVG・DXF・PDF。途中30%の厚み生成。</td><td>0%生成・出力・型紙は成功。30%の複数帯厚みは既知のKER-T001制約で拒否。<a href="../../out/curved-ui-audit-20261028/legacy-ho-freeze/result.json">失敗を含む元記録</a>、<a href="../../out/curved-ui-audit-20261028/legacy-ho-pattern/result.json">型紙成功</a>。</td></tr>
+<tr><td><code>samples/streamlined-railway-nose-1-87.kcd2</code><br>7断面、開口役割ワイヤー7本</td><td>通常読込、近似型紙、SVG・DXF・PDF。</td><td>成功。<a href="../../out/curved-ui-audit-20261028/legacy-openings-pattern/result.json">結果と原本ハッシュ</a>。</td></tr>
+<tr><td>2026-10-23の<code>generation-selected.kcd2</code><br>2円弧、個別曲げ率を保存した3帯</td><td>0／30／50／100%×部品のみ／両方。各回STEP・STL、Undo/Redo、KCD2保存再読込、部品数。</td><td>8組全て成功、65.92秒。<a href="../../out/curved-ui-audit-20261028/legacy-progress-freeze/result.json">結果</a>、<a href="../../out/curved-ui-audit-20261028/legacy-progress-freeze/artifacts/">実生成物</a>。保存元の昔の検証runは中断されており、そのrun自体が成功していたとは扱わない。</td></tr></table>
+<p>全体ビルドでexeが再リンクされたため、公開コピーの同一バイト列でも最終照合した。個別曲げ率を持つ旧モデルの8組の固定・STEP・STL・保存再読込が成功（66.66秒）。HO見本と7開口役割の旧モデルのSVG・DXF・PDFも成功。<a href="../../out/curved-ui-audit-20261028/published-progress-freeze/result.json">公開コピーの8組</a>、<a href="../../out/curved-ui-audit-20261028/published-ho-pattern/result.json">HO型紙</a>、<a href="../../out/curved-ui-audit-20261028/published-openings-pattern/result.json">7開口型紙</a>。原本ハッシュは前述の確認と一致した。</p>
+<figure><img src="../../out/curved-ui-audit-20261028/published-progress-freeze/artifacts/freeze-30-parts.png" alt="以前の保存モデルを30%で部品へ固定した実Qtアプリ画面"><figcaption>公開コピーで以前の保存モデルを読み込み、30%で部品に固定した実アプリ画面。選択投入にはAPIも使う。</figcaption></figure>
+<h2>残る制約と、何を保証しないか</h2>
+<p>複数帯がねじれた面で折れ目につながる場合の厚み生成は、以前からKER-T001で拒否する。<a href="../v2/warped-band-thickness-safety.md">2026-10-11の安全条件</a>と <code>kernel_warped_thicken_tests.cpp</code> に根拠がある。HO見本では旧配布が0%ですでに固定生成失敗し、今回の転送修正後は0%が成功した。同一ファイルの30%を旧配布で成功させた比較ではないため、「あらゆる3次元曲面・姿勢で厚み生成できる」とは結論しない。平面固定や部材分割を使う。</p>
+<p>実Qtボタン・キー・ビュー入力と文書／選択APIを組み合わせた試験である。Windowsの確認専用インスタンスは起動・アクセシビリティ応答を確認したが、OS画面取得がタイムアウトしクリック座標も取得できなかった。確認用インスタンスだけをAlt+F4で閉じ、OSマウスの全経路が通ったとは記録しない。既存の編集中アプリは操作していない。</p>
+<p>全ツールの全入力順序を有限の試験で保証するものではない。既存の全ツール入口・切替・連続操作試験に今回の回帰8件を加え、検査した経路を証拠へ残す。実プリント・組付け、連続曲面全域の数学的偏差上限は未確認。最大偏差とRMSは標本評価。</p>
+<p>読取専用の最終差分レビューでは、駆動寸法の名前・ラベル位置だけの変更も照合キーへ入るため、形が変わらなくても型紙を再作成する必要がある点が残った。<code>V2PatternDock.cpp</code> の駆動寸法全体を含む保守的な照合が根拠で、形状の誤出力ではなく過剰な失効である。コード上の確認であり、この名前変更だけの実機再現試験は未実施。表示用フィールドを除く最適化は後続とする。</p>
+<h2>配置と保全</h2>
+<p>UIの状態は <code>src/apps/cad_next/</code>、近似誤差内の調整は <code>src/next/kachakacha/app/FabricationEvaluate.cpp</code>。型紙の照合状態は主窓を増やさず <code>V2PatternDock</code> が所有する。コア公開API、KCD2保存形式、外部依存の追加はない。調査・失敗・成功・生成物は <code>out/curved-ui-audit-20261028/</code>、正式全体証拠は別runに格納する。</p>
+<p>削除したファイルは0。旧版、バックアップ、入力原本、他worktree、編集中115系模型、増分ビルド資産は保全した。他担当の未コミット模型はコミットしない。古い一時転送キャッシュは新exeの識別と転送版照合で不採用にし、容量を理由に消していない。</p>
+<h2>正式ゲートと起動先</h2>
+<div id="final-proof"><p><a href="../../out/verification/curved-ui-audit-final-20261028/result.json">正式全体結果</a>。開始2026-10-28T11:57:50.590794+00:00、終了2026-10-28T12:28:15.800598+00:00、経過30.42分。CTest195件、開発版・配布版UI各636件、失敗・skip・欠落0。旧CAD自己試験と配布コピーのWindows通常起動2条件が成功。</p><p>対象ソース集合SHA256：<code>fee19d3ade9ba0ae32ba0d0dfb978a16b9f1e41fc45f7cc5b0f506d5d23f905f</code>。起動先：<a href="../../out/releases/curved-ui-audit-final-20261028/package/kachakacha_cad_next.exe">検証済みCAD</a>。<a href="../../out/curved-ui-audit-20261028/summary.json">集計JSON</a>。既存試験を削除せず、許容誤差や時間切れを緩和していない。</p></div>
+</body></html>

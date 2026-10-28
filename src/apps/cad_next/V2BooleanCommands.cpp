@@ -1,4 +1,5 @@
 #include <QStringList>
+#include <QCheckBox>
 #include "V2FaceActions.h"
 #include "V2ImageTool.h"
 #include "V2CurvedEmbossTool.h"
@@ -244,6 +245,9 @@ void V2MainWindow::RunBooleanTool(kachakacha::v2::app::BooleanKind kind)
         return;
     }
     SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (auto* keep = findChild<QCheckBox*>(QStringLiteral("trimKeepOriginalMixed"))) {
+        const bool blocked = keep->blockSignals(true); keep->setChecked(false); keep->blockSignals(blocked);
+    }
     // 選んであった部品は、選んだ順に土台・相手へ入れる(選んでから押す道も残す)。
     booleanInput_ = kachakacha::v2::app::BooleanInputState{};
     booleanInput_.kind = kind;

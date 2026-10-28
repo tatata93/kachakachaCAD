@@ -4,6 +4,7 @@
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2TrimSourcePolicy.h"
 
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/app/Selection.h"
@@ -172,7 +173,19 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
     const std::string baseName = source->displayName;
     const auto groupId = source->groupId;
     const bool datum = source->datum;
+    const bool trim = window_.session_->CurrentTool() == DrawingTool::Trim;
+    const bool keep = trim && v2ui::TrimKeepsOriginal(window_, "trimKeepOriginal");
+    auto removal = v2ui::PrepareTrimSourceRemoval(window_, {outcome.source.entityId}, !trim || keep,
+        [this] { window_.RefreshShapeViews(); });
+    if (!removal.accepted) { window_.SetStatus(removal.message); return; }
+    if (keep && outcome.chains.empty()) {
+        Clear(); window_.SetStatus(QStringLiteral("トリム後に残る線はありません。元の線は残しました。")); return;
+    }
     kachakacha::v2::document::Document::Transaction transaction(document, label);
+    if (removal.command) {
+        const auto removed = document.Run(*removal.command);
+        if (!removed.committed) { window_.ReportDiagnostics(removed.diagnostics); return; }
+    }
     for (std::size_t index = 0; index < outcome.chains.size(); ++index) {
         Feature feature;
         feature.id = window_.ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
@@ -205,7 +218,7 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
             return;   // Transaction が捨てる
         }
     }
-    window_.RemoveConsumedWires({outcome.source.entityId});
+    if (!trim) window_.RemoveConsumedWires({outcome.source.entityId});
     if (!transaction.Commit()) {
         window_.SetStatus(LabelJa() + QStringLiteral(": 途中で失敗したので、何も変えていません。"));
         window_.AdoptCurrentDocument();
@@ -214,5 +227,6 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
     Clear();
     window_.AdoptCurrentDocument();
     window_.SetStatus(LabelJa() + QStringLiteral(": ") + Text(outcome.summaryJa)
+        + (trim ? (keep ? QStringLiteral(" 元の線を残しました。") : QStringLiteral(" 元の線を削除しました。")) : QString())
         + QStringLiteral(" 続けて押せます。Esc でやめます。"));
 }

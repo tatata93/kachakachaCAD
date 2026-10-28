@@ -561,7 +561,8 @@ bool CaseMixedTrim(V2MainWindow& window)
     selected.entityIds={surface,tool.createdEntityIds.front()};window.Viewport().SetSelection(selected);
     window.RunCommand("part.split_overlap");
     auto* regions=window.findChild<QListWidget*>("contactRegions");
-    if(!Explain("surface and wire produce two selectable regions",regions&&regions->count()==2))return false;
+    const auto* keep=window.findChild<QCheckBox*>(QStringLiteral("trimKeepOriginalMixed"));
+    if(!Explain("surface and wire produce two selectable regions without wire retention option",regions&&regions->count()==2&&keep&&!keep->isVisible()))return false;
     const auto shapes=kernel::CachedShapeCount();
     for(int i=0;i<6;++i)regions->item(1)->setCheckState(i%2?Qt::Unchecked:Qt::Checked);
     if(!Explain("changing selected regions reuses native preview",kernel::CachedShapeCount()==shapes))return false;
@@ -572,6 +573,33 @@ bool CaseMixedTrim(V2MainWindow& window)
     window.RunCommand("edit.redo");
     return Explain("surface trim save/reopen and Undo/Redo",window.SaveAndReopen("surface-region-trim.kcd2")
         &&CountOfKind(window,EntityKind::GuideSurface)==count+1&&window.RebuildProblems().isEmpty());
+}
+
+bool CaseWireTrimOriginal(V2MainWindow& window, bool keepOriginal)
+{
+    using namespace kachakacha::v2;
+    window.RunCommand("file.new");
+    const auto a = window.Session().AddWire({geometry::CurveSegment::MakeLine({-10,0,0},{10,0,0}).Value()}, false, "元の線");
+    const auto b = window.Session().AddWire({geometry::CurveSegment::MakeLine({0,-5,0},{0,5,0}).Value()}, false, "切断線");
+    if (!a.committed || !b.committed) return false;
+    const auto original = a.createdEntityIds.front(), boundary = b.createdEntityIds.front();
+    app::SelectionSet selected; selected.entityIds = {original, boundary}; window.Viewport().SetSelection(selected);
+    window.RunCommand("part.split_overlap");
+    auto* regions = window.findChild<QListWidget*>(QStringLiteral("contactRegions"));
+    auto* keep = window.findChild<QCheckBox*>(QStringLiteral("trimKeepOriginalMixed"));
+    const auto state = QStringLiteral("保持欄 visible=%1 checked=%2 / 区画=%3 / %4").arg(keep && keep->isVisible()).arg(keep && keep->isChecked()).arg(regions ? regions->count() : -1).arg(window.ToolFooterTextJa()).toStdString();
+    if (!Explain(state.c_str(), keep && keep->isVisible() && !keep->isChecked()
+        && regions && regions->count() == 2)) return false;
+    keep->setChecked(keepOriginal); regions->item(1)->setCheckState(Qt::Unchecked);
+    if (!window.BooleanDock().ClickConfirm()) return false;
+    auto& doc = window.Session().GetDocument(); const int count = keepOriginal ? 3 : 2;
+    if (!Explain("選択に従い元を保持または実削除し切断線を残す", (doc.FindEntity(original) != nullptr) == keepOriginal
+        && doc.FindEntity(boundary) && CountOfKind(window, EntityKind::Wire) == count)) return false;
+    if (keepOriginal && doc.FindEntity(original)->visibility != domain::Visibility::Visible) return false;
+    window.RunCommand("edit.undo"); if (!doc.FindEntity(original) || CountOfKind(window, EntityKind::Wire) != 2) return false;
+    window.RunCommand("edit.redo");
+    return window.SaveAndReopen(keepOriginal ? "region-trim-keep.kcd2" : "region-trim-delete.kcd2")
+        && (doc.FindEntity(original) != nullptr) == keepOriginal && CountOfKind(window, EntityKind::Wire) == count && window.RebuildProblems().isEmpty();
 }
 
 bool CaseWindowWireTrim(V2MainWindow& window)
@@ -750,6 +778,8 @@ bool CaseCancelRunningBoolean(V2MainWindow& window)
 std::vector<SelfTestCase> HumanPathBooleanCases()
 {
     return {
+        {"HP-CT-TRIM default removes original wire with saved Undo Redo", [](auto& w) { return CaseWireTrimOriginal(w, false); }},
+        {"HP-CT-TRIM keep checkbox retains original visible wire", [](auto& w) { return CaseWireTrimOriginal(w, true); }},
         {"HP-CT-07 surface and wire trim, cached regions and saved Undo",CaseMixedTrim},
         {"HP-CT-08 window wire cuts solid and retains boundaries",CaseWindowWireTrim},
         {"HP-CT-09 single picked solid face trims as an independent surface",CaseSingleFaceTrim},

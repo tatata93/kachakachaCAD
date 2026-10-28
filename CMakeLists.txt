@@ -1339,6 +1339,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2TreeCommands.cpp
         src/apps/cad_next/V2ViewCommands.cpp
         src/apps/cad_next/V2DeleteCommands.cpp
+        src/apps/cad_next/V2DeletionConfirmation.cpp
+        src/apps/cad_next/V2TrimSourcePolicy.cpp
         src/apps/cad_next/V2SectionView.cpp
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExtrudeDialog.cpp

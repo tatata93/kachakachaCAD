@@ -1,6 +1,8 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2BooleanDock.h"
+#include "V2TrimSourcePolicy.h"
+#include <QCheckBox>
 #include "V2Calculation.h"
 #include "kachakacha/kernel/OcctRegionSplit.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -30,6 +32,8 @@ bool V2MainWindow::RefreshMixedTrimPreview() {
     }
     const auto finish=[&](const QString& text,bool ready){
         booleanDock_->ShowInput(input,QString::fromStdString(target->displayName),QString::fromStdString(tool->displayName),{text},ready);
+        if (auto* keep = findChild<QCheckBox*>(QStringLiteral("trimKeepOriginalMixed")))
+            keep->setVisible(target->kind == domain::EntityKind::Wire);
         ShowRoleLabels({{input.target,"対象"},{input.tools.front(),"切断要素"}});ShowToolFooter(text);
     };
     const auto curves=[&](base::EntityId id){std::vector<geometry::CurveSegment> values;
@@ -88,7 +92,9 @@ bool V2MainWindow::RefreshMixedTrimPreview() {
         for(const auto& t:mesh.Value().triangles)faces.push_back({t.points[0],t.points[1],t.points[2]});
     }
     viewport_->ShowToolPreview(std::move(lines));viewport_->SetToolPreviewFaces(std::move(faces));
-    finish(QStringLiteral("残す区画をチェックしてください。切断要素と元形状は保持し、確定結果を独立形状として保存します。"),
+    finish(target->kind == domain::EntityKind::Wire
+        ? QStringLiteral("残す区画をチェックしてください。元の線は「元の線を残す」がオフなら削除します。切断要素は残し、結果は独立した線にします。")
+        : QStringLiteral("残す区画をチェックしてください。切断要素と元形状は保持し、確定結果を独立形状として保存します。"),
         std::any_of(chosen.begin(),chosen.end(),[](bool value){return value;}));return true;
 }
 bool V2MainWindow::ConfirmMixedTrim() {
@@ -96,7 +102,15 @@ bool V2MainWindow::ConfirmMixedTrim() {
     if(!contactBuilt_||!contactBuilt_->frozen)return true;
     const auto built=*contactBuilt_;const auto chosen=booleanDock_->ContactRegions();
     if(std::none_of(chosen.begin(),chosen.end(),[](bool value){return value;}))return true;
-    auto& document=session_->GetDocument();document::Document::Transaction transaction(document,"区画トリム");
+    auto& document=session_->GetDocument();
+    const auto* original = document.FindEntity(booleanInput_.target);
+    const bool wireTarget = original && original->kind == domain::EntityKind::Wire;
+    const bool keep = v2ui::TrimKeepsOriginal(*this, "trimKeepOriginalMixed");
+    auto removal = v2ui::PrepareTrimSourceRemoval(*this, {booleanInput_.target}, !wireTarget || keep,
+        [this] { RefreshShapeViews(); });
+    if (!removal.accepted) { SetStatus(removal.message); return true; }
+    v2ui::TrimGenerationTransaction transaction(*session_,"区画トリム");
+    if (removal.command && !document.Run(*removal.command).committed) return true;
     std::vector<std::pair<base::EntityId,modeling::KernelShapeHandle>> surfaces;
     for(std::size_t i=0;i<built.pieces.size();++i)if(i<chosen.size()&&chosen[i]) {
         const auto& piece=built.pieces[i];
@@ -118,7 +132,7 @@ bool V2MainWindow::ConfirmMixedTrim() {
         surfaces.push_back({entity.id,piece.handle});
     }
     for(const auto& wire:built.wires)if(!session_->AddWire(wire,false,"切断境界ワイヤー（独立）").committed)return true;
-    if(!document.Run(document::SetVisibilityCommand({booleanInput_.target},domain::Visibility::Hidden)).committed)return true;
+    if(!wireTarget && !document.Run(document::SetVisibilityCommand({booleanInput_.target},domain::Visibility::Hidden)).committed)return true;
     if(!transaction.Commit())return true;
     for(const auto& [id,handle]:surfaces) {
         if(document.FindEntity(id)->kind==domain::EntityKind::Part)partShapes_[id.ToString()]=handle;

@@ -4,6 +4,7 @@
 #include <QString>
 #include <QWidget>
 #include "V2BooleanDock.h"
+#include "V2TrimSourcePolicy.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
@@ -27,6 +28,9 @@ void V2BooleanDock::BuildContactRows(QVBoxLayout* layout)
     contactRegions_->setMaximumHeight(180);
     layout->addWidget(swap_);
     layout->addWidget(contactWire_);
+    auto* keep = v2ui::MakeTrimKeepOriginal(widget(), "trimKeepOriginalMixed");
+    layout->addWidget(keep);
+    QObject::connect(keep, &QCheckBox::toggled, this, [this] { if (!loading_ && contactUpdate_) contactUpdate_(); });
     layout->addWidget(contactHint_);
     layout->addWidget(contactRegions_);
     for(auto entry:{std::pair{"trimTargetScope",&trimTargetScope_},std::pair{"trimToolScope",&trimToolScope_}}) {
@@ -76,6 +80,7 @@ void V2BooleanDock::ShowContactOptions(BooleanKind kind)
     if(trimToolScope_)trimToolScope_->setVisible(kind==BooleanKind::SplitOverlap);
     swap_->setVisible(contact);
     contactWire_->setVisible(contact && !wire);
+    if (auto* keep = contactWire_->parentWidget()->findChild<QCheckBox*>(QStringLiteral("trimKeepOriginalMixed"))) keep->hide();
     contactRegions_->setVisible(contact);
     contactHint_->setVisible(contact);
     contactHint_->setText(wire

@@ -1,5 +1,6 @@
 #include "V2NumericSpinBox.h"
 #include "V2DrawingDock.h"
+#include "V2TrimSourcePolicy.h"
 #include "V2ToolIcons.h"
 #include <QSize>
 #include "V2PanelFrame.h"
@@ -127,6 +128,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     interactiveLayout->addWidget(hint_);
 
     interactiveLayout->addWidget(MakePanelSectionTitle(interactivePage, QStringLiteral("オプション")));
+    interactiveLayout->addWidget(v2ui::MakeTrimKeepOriginal(interactivePage, "trimKeepOriginal"));
     construction_ = new QCheckBox(QStringLiteral("補助線として作図"), interactivePage);
     interactiveLayout->addWidget(construction_);
     keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), interactivePage);
@@ -270,6 +272,10 @@ void V2DrawingDock::SetTool(kachakacha::v2::modeling::DrawingTool tool)
     const bool changed = tool_ != tool;
     tool_ = tool;
     using Tool=kachakacha::v2::modeling::DrawingTool;
+    if (auto* keep = body_->findChild<QCheckBox*>(QStringLiteral("trimKeepOriginal"))) {
+        keep->setVisible(tool == Tool::Trim);
+        if (changed && tool == Tool::Trim) keep->setChecked(false);
+    }
     if(auto* role=body_->findChild<QWidget*>("transformSelectionRoles"))role->setVisible(
         tool==Tool::Move||tool==Tool::Copy||tool==Tool::Rotate||tool==Tool::Mirror||tool==Tool::Scale);
     activeTool_->setText(QStringLiteral("使用中: %1").arg(Text(

@@ -9,6 +9,8 @@
 #include "V2MainWindow.h"
 #include "V2Ribbon.h"
 #include "V2Viewport.h"
+#include "V2TrimSourcePolicy.h"
+#include "kachakacha/document/Commands.h"
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
@@ -17,6 +19,14 @@
 
 #include <QPointF>
 #include <QString>
+#include <QCheckBox>
+#include <QDialog>
+#include <QListWidget>
+#include <QTimer>
+#include <QObject>
+#include <QApplication>
+#include <QDir>
+#include <QPixmap>
 
 #include <cmath>
 #include <optional>
@@ -131,6 +141,8 @@ using kachakacha::v2::modeling::DrawingTool;
     const Vector3 bottom = ring->Center() + Vector3{0.0, -ring->Radius(), 0.0};
     const Vector3 top = ring->Center() + Vector3{0.0, ring->Radius(), 0.0};
     auto& tool = window.HoverEditTool();
+    const auto* keep = window.findChild<QCheckBox*>(QStringLiteral("trimKeepOriginal"));
+    if (!Explain("元の線を残すはトリムで表示され既定オフ", keep && keep->isVisible() && !keep->isChecked())) return false;
     if (!Explain("円の下側に置ける", HoverWorld(window, bottom))
         || !Explain((std::string("消える区間の下見が出る(") + window.ToolFooterTextJa().toStdString()
                         + ")").c_str(),
@@ -158,6 +170,7 @@ using kachakacha::v2::modeling::DrawingTool;
         }
     }
     if (!Explain("円が円弧になる", arc.has_value())
+        || !Explain("元の円は非表示でなく削除される", !window.Session().GetDocument().FindEntity(circle))
         || !Explain("線の数は変わらない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
         || !Explain("残った円弧は半周", std::abs(std::abs(arc->SweepAngleRad()) - 3.14159265358979323846) < 1.0e-6)
         || !Explain("残ったのは上半分", geometry::Distance(arc->Evaluate(0.5), top) < 1.0e-3)
@@ -206,11 +219,136 @@ using kachakacha::v2::modeling::DrawingTool;
     return Explain("線ごと消える(全部で 3 本)", CountOfKind(window, EntityKind::Wire) == 3);
 }
 
+struct TrimFixture {
+    EntityId circle, boundary;
+    Vector3 bottom;
+};
+std::optional<TrimFixture> PrepareTrim(V2MainWindow& w)
+{
+    w.RunCommand("file.new"); w.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    TrimFixture f;
+    f.circle = DrawTwoClicks(w, DrawingTool::Circle, .50, .50, .65, .50);
+    f.boundary = DrawTwoClicks(w, DrawingTool::Line, .20, .50, .80, .50);
+    const auto circle = FirstSegmentOf(w, f.circle);
+    if (!circle || f.boundary.IsNil()) return std::nullopt;
+    f.bottom = circle->Center() + Vector3{0, -circle->Radius(), 0};
+    w.RunCommand("wire.trim");
+    return f;
+}
+void CaptureTrim(V2MainWindow& w, const QString& name)
+{
+    const auto path = qEnvironmentVariable("KACHACAD_TRIM_CAPTURE_DIR");
+    if (path.isEmpty()) return;
+    QDir dir(path); dir.mkpath("."); w.grab().save(dir.filePath(name));
+}
+bool TrimWithConfirmation(V2MainWindow& w, Vector3 point, bool accept,
+    const std::function<void(QDialog*)>& inspect)
+{
+    bool seen = false; QTimer timer; timer.setInterval(5);
+    QObject::connect(&timer, &QTimer::timeout, &w, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog || dialog->objectName() != QStringLiteral("confirmDependentDelete")) return;
+        seen = true; inspect(dialog); if (accept) dialog->accept(); else dialog->reject();
+    });
+    timer.start(); const bool clicked = ClickWorld(w, point); timer.stop(); return clicked && seen;
+}
+bool CaseTrimKeepOriginal(V2MainWindow& w)
+{
+    const auto f = PrepareTrim(w); if (!f) return false;
+    auto* keep = w.findChild<QCheckBox*>(QStringLiteral("trimKeepOriginal"));
+    if (!keep || !keep->isVisible() || keep->isChecked()) return false;
+    CaptureTrim(w, "trim-delete-default.png"); keep->click();
+    if (!keep->isChecked() || !HoverWorld(w, f->bottom) || !ClickWorld(w, f->bottom)) return false;
+    const auto* source = w.Session().GetDocument().FindEntity(f->circle);
+    if (!Explain("オンでは元の円を表示したまま円弧を追加", source
+        && source->visibility == kachakacha::v2::domain::Visibility::Visible && CountOfKind(w, EntityKind::Wire) == 3)) return false;
+    CaptureTrim(w, "trim-keep-original.png");
+    w.RunCommand("edit.undo"); if (CountOfKind(w, EntityKind::Wire) != 2) return false;
+    w.RunCommand("edit.redo");
+    if (!w.SaveAndReopen("trim-keep-original.kcd2") || CountOfKind(w, EntityKind::Wire) != 3
+        || !w.Session().GetDocument().FindEntity(f->circle)) return false;
+    w.SelectTool(DrawingTool::Line); if (keep->isVisible()) return false;
+    w.RunCommand("wire.trim");
+    return Explain("トリムを開始し直すと既定の削除へ戻る", keep->isVisible() && !keep->isChecked());
+}
+bool CaseTrimDependent(V2MainWindow& w, bool keepOriginal)
+{
+    using namespace kachakacha::v2;
+    const auto f = PrepareTrim(w); if (!f) return false;
+    base::DeterministicIdGenerator ids(990000);
+    domain::Feature feature; feature.id = ids.NextTyped<base::IdKind::Feature>();
+    feature.type = domain::FeatureType::CreatePoint; feature.displayName = "依存点";
+    feature.inputEntityIds = {f->circle}; feature.definition = domain::CreatePointDefinition{};
+    domain::Entity point; point.id = ids.NextTyped<base::IdKind::Entity>(); point.kind = EntityKind::Point; point.displayName = "依存点";
+    feature.outputs = {{"point", point.id, point.kind}};
+    auto& doc = w.Session().GetDocument();
+    if (!doc.Run(document::AddFeatureCommand(feature, {point}, "依存点")).committed) return false;
+    document::ReferenceDimension dimension; dimension.id = ids.NextTyped<base::IdKind::Dimension>();
+    dimension.label = "円の寸法"; dimension.targets = {f->circle}; dimension.kind = "length"; dimension.unit = "mm";
+    if (!doc.Run(document::AddReferenceDimensionCommand(dimension)).committed) return false;
+    auto* keep = w.findChild<QCheckBox*>(QStringLiteral("trimKeepOriginal")); if (!keep) return false;
+    keep->setChecked(keepOriginal);
+    if (!HoverWorld(w, f->bottom)) return false;
+    if (keepOriginal) {
+        if (!ClickWorld(w, f->bottom)) return false;
+        return Explain("保持オンは参照元・依存点・寸法を保ち、結果だけ追加", doc.FindEntity(f->circle)
+            && doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.size() == 1 && CountOfKind(w, EntityKind::Wire) == 3);
+    }
+    const auto revision = doc.Revision(); bool highlighted = false, listed = false, unmodified = false;
+    const auto inspect = [&](QDialog* dialog) {
+        highlighted = w.Viewport().DeletionPreviewContains(f->circle) && w.Viewport().DeletionPreviewContains(point.id);
+        const auto* list = dialog->findChild<QListWidget*>(); listed = list && list->count() == 3;
+        unmodified = doc.Revision() == revision; CaptureTrim(w, "trim-dependent-preview.png");
+    };
+    if (!TrimWithConfirmation(w, f->bottom, false, inspect) || !highlighted || !listed || !unmodified
+        || doc.Revision() != revision || !doc.FindEntity(point.id) || w.Viewport().DeletionPreviewContains(point.id)) return false;
+    if (!HoverWorld(w, f->bottom) || !TrimWithConfirmation(w, f->bottom, true, inspect)) return false;
+    if (!Explain("承認後は元線・依存点・寸法を削除し境界と円弧を保つ", !doc.FindEntity(f->circle)
+        && !doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.empty() && CountOfKind(w, EntityKind::Wire) == 2)) return false;
+    w.RunCommand("edit.undo");
+    if (!doc.FindEntity(f->circle) || !doc.FindEntity(point.id) || doc.Snapshot().referenceDimensions.size() != 1) return false;
+    w.RunCommand("edit.redo");
+    return Explain("削除と生成を1回でUndo/Redoし保存再読込できる", !doc.FindEntity(f->circle)
+        && !doc.FindEntity(point.id) && w.SaveAndReopen("trim-delete-dependents.kcd2") && w.RebuildProblems().isEmpty());
+}
+bool CaseTrimRemovalGuards(V2MainWindow& w)
+{
+    using namespace kachakacha::v2;
+    const auto f = PrepareTrim(w); if (!f) return false;
+    auto plan = v2ui::PrepareTrimSourceRemoval(w, {f->circle}, false, [] {});
+    auto& doc = w.Session().GetDocument();
+    if (!plan.accepted || !plan.command) return false;
+    const auto extra = w.Session().AddWire({geometry::CurveSegment::MakeLine({70,70,0},{80,70,0}).Value()}, false, "追加線");
+    if (!extra.committed) return false;
+    const auto revision = doc.Revision(); const auto rejected = doc.Run(*plan.command);
+    if (!Explain("確認後に文書が変わった古い削除計画は適用しない", !rejected.committed
+        && doc.Revision() == revision && doc.FindEntity(f->circle) && doc.FindEntity(extra.createdEntityIds.front()))) return false;
+    auto fresh = v2ui::PrepareTrimSourceRemoval(w, {f->circle}, false, [] {});
+    if (!fresh.command) return false;
+    {
+        v2ui::TrimGenerationTransaction transaction(w.Session(), "トリム生成の失敗を検査");
+        if (!doc.Run(*fresh.command).committed || doc.FindEntity(f->circle)) return false;
+        if (!w.Session().AddWire({geometry::CurveSegment::MakeLine({70,80,0},{80,80,0}).Value()}, false, "生成途中").committed) return false;
+        // A failed generation leaves the compound transaction uncommitted.
+        const auto* original = doc.FindEntity(extra.createdEntityIds.front());
+        const auto* feature = doc.FindFeature(original->createdBy);
+        if (doc.Run(document::AddFeatureCommand(*feature, {*original}, "重複した生成")).committed) return false;
+    }
+    return Explain("生成失敗時は元線・履歴・描画を戻す", doc.FindEntity(f->circle) && doc.Revision() == revision
+        && std::none_of(w.Session().Scene().curves.begin(), w.Session().Scene().curves.end(), [](const auto& c) {
+            return c.segment.StartPoint().y == 80 && c.segment.EndPoint().y == 80;
+        }));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HoverEditCases()
 {
     return {
+        {"HP-TR-03 keep original checkbox preserves visible circle and saved Undo Redo", CaseTrimKeepOriginal},
+        {"HP-TR-04 default delete confirms dependents and dimensions with cancel and atomic Undo", [](auto& w) { return CaseTrimDependent(w, false); }},
+        {"HP-TR-05 keep original preserves dependent objects and dimensions", [](auto& w) { return CaseTrimDependent(w, true); }},
+        {"HP-TR-06 stale removal and failed generation restore the original", CaseTrimRemovalGuards},
         {"HP-TR-01 トリムは何も選ばず円の下側に置くと消える区間が見え押すと上半分の円弧になり1回で戻る",
             CaseTrimCircleBecomesArc},
         {"HP-TR-02 トリムは真ん中を押すと2本に分かれ交点の無い線は線ごと消える",

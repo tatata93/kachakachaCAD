@@ -170,7 +170,7 @@ using kachakacha::v2::modeling::DrawingTool;
         }
     }
     if (!Explain("円が円弧になる", arc.has_value())
-        || !Explain("元の円は非表示でなく削除される", !window.Session().GetDocument().FindEntity(circle))
+        || !Explain("元の円形状は残らず同じ線が円弧になる", window.Session().GetDocument().FindEntity(circle) && arcWire == circle)
         || !Explain("線の数は変わらない", CountOfKind(window, EntityKind::Wire) == wiresBefore)
         || !Explain("残った円弧は半周", std::abs(std::abs(arc->SweepAngleRad()) - 3.14159265358979323846) < 1.0e-6)
         || !Explain("残ったのは上半分", geometry::Distance(arc->Evaluate(0.5), top) < 1.0e-3)
@@ -294,6 +294,14 @@ bool CaseTrimDependent(V2MainWindow& w, bool keepOriginal)
         return Explain("保持オンは参照元・依存点・寸法を保ち、結果だけ追加", doc.FindEntity(f->circle)
             && doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.size() == 1 && CountOfKind(w, EntityKind::Wire) == 3);
     }
+    if (!ClickWorld(w, f->bottom) || !Explain("部分トリムは同じ線・依存点・寸法を残す",
+        doc.FindEntity(f->circle) && doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.size() == 1
+        && CountOfKind(w, EntityKind::Wire) == 2)) return false;
+    w.RunCommand("edit.undo");
+    // Only an actual entire-wire deletion confirms genuine consumers.
+    if (!doc.Run(document::SetVisibilityCommand({f->boundary}, domain::Visibility::Hidden)).committed) return false;
+    auto scene = w.Session().Scene(); std::erase_if(scene.curves, [&](const auto& c) { return c.entityId == f->boundary; }); w.Session().SetScene(std::move(scene));
+    if (!HoverWorld(w, f->bottom)) return false;
     const auto revision = doc.Revision(); bool highlighted = false, listed = false, unmodified = false;
     const auto inspect = [&](QDialog* dialog) {
         highlighted = w.Viewport().DeletionPreviewContains(f->circle) && w.Viewport().DeletionPreviewContains(point.id);
@@ -303,8 +311,8 @@ bool CaseTrimDependent(V2MainWindow& w, bool keepOriginal)
     if (!TrimWithConfirmation(w, f->bottom, false, inspect) || !highlighted || !listed || !unmodified
         || doc.Revision() != revision || !doc.FindEntity(point.id) || w.Viewport().DeletionPreviewContains(point.id)) return false;
     if (!HoverWorld(w, f->bottom) || !TrimWithConfirmation(w, f->bottom, true, inspect)) return false;
-    if (!Explain("承認後は元線・依存点・寸法を削除し境界と円弧を保つ", !doc.FindEntity(f->circle)
-        && !doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.empty() && CountOfKind(w, EntityKind::Wire) == 2)) return false;
+    if (!Explain("全線削除の承認後だけ元線・依存点・寸法を削除する", !doc.FindEntity(f->circle)
+        && !doc.FindEntity(point.id) && doc.Snapshot().referenceDimensions.empty() && CountOfKind(w, EntityKind::Wire) == 1)) return false;
     w.RunCommand("edit.undo");
     if (!doc.FindEntity(f->circle) || !doc.FindEntity(point.id) || doc.Snapshot().referenceDimensions.size() != 1) return false;
     w.RunCommand("edit.redo");

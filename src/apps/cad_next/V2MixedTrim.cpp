@@ -106,17 +106,26 @@ bool V2MainWindow::ConfirmMixedTrim() {
     const auto* original = document.FindEntity(booleanInput_.target);
     const bool wireTarget = original && original->kind == domain::EntityKind::Wire;
     const bool keep = v2ui::TrimKeepsOriginal(*this, "trimKeepOriginalMixed");
-    auto removal = v2ui::PrepareTrimSourceRemoval(*this, {booleanInput_.target}, !wireTarget || keep,
-        [this] { RefreshShapeViews(); });
+    std::vector<std::vector<geometry::CurveSegment>> wirePieces;
+    for (std::size_t i = 0; i < built.pieces.size(); ++i) if (i < chosen.size() && chosen[i] && built.pieces[i].dimension == 1) {
+        const auto curves = kernel::OutputEdges(built.pieces[i].handle, document.Snapshot().settings.tolerance.modelLinearMm);
+        if (!curves.HasValue()) { SetStatus(QString::fromStdString(curves.FirstMessageJa())); return true; }
+        wirePieces.push_back(curves.Value());
+    }
+    auto removal = v2ui::PrepareTrimSourceReplacement(*this, booleanInput_.target,
+        wireTarget ? wirePieces : std::vector<std::vector<geometry::CurveSegment>>{},
+        !wireTarget || keep, *ids_, [this] { RefreshShapeViews(); });
     if (!removal.accepted) { SetStatus(removal.message); return true; }
     v2ui::TrimGenerationTransaction transaction(*session_,"区画トリム");
     if (removal.command && !document.Run(*removal.command).committed) return true;
     std::vector<std::pair<base::EntityId,modeling::KernelShapeHandle>> surfaces;
+    std::size_t wireIndex = 0;
     for(std::size_t i=0;i<built.pieces.size();++i)if(i<chosen.size()&&chosen[i]) {
         const auto& piece=built.pieces[i];
         if(piece.dimension==1) {
-            const auto curves=kernel::OutputEdges(piece.handle,document.Snapshot().settings.tolerance.modelLinearMm);
-            if(!curves.HasValue()||!session_->AddWire(curves.Value(),false,"トリムしたワイヤー").committed)return true;
+            const auto& curves = wirePieces[wireIndex++];
+            if (removal.reusesSource) continue;
+            if (!session_->AddWire(curves,false,"トリムしたワイヤー").committed) return true;
             continue;
         }
         const auto bytes=kernel::CaptureOutputShape(piece.handle);if(!bytes.HasValue())return true;
@@ -133,7 +142,15 @@ bool V2MainWindow::ConfirmMixedTrim() {
     }
     for(const auto& wire:built.wires)if(!session_->AddWire(wire,false,"切断境界ワイヤー（独立）").committed)return true;
     if(!wireTarget && !document.Run(document::SetVisibilityCommand({booleanInput_.target},domain::Visibility::Hidden)).committed)return true;
-    if(!transaction.Commit())return true;
+    if (removal.rebuildShapes) {
+        AdoptCurrentDocument();
+        RebuildKernelShapes();
+        if (!RebuildProblems().isEmpty()) {
+            const auto problems = RebuildProblems(); transaction.Rollback(); RebuildKernelShapes();
+            SetStatus(QStringLiteral("参照先を再計算できないため、線を変更していません。 ") + problems); return true;
+        }
+    }
+    if(!transaction.Commit()) { transaction.Rollback(); if(removal.rebuildShapes)RebuildKernelShapes(); return true; }
     for(const auto& [id,handle]:surfaces) {
         if(document.FindEntity(id)->kind==domain::EntityKind::Part)partShapes_[id.ToString()]=handle;
         else guideShapes_[id.ToString()]=handle;

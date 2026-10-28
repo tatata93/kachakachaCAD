@@ -34,6 +34,7 @@ std::vector<SelfTestCase> DocumentOpenCases();
 std::vector<SelfTestCase> FaceExtrudeCases();
 std::vector<SelfTestCase> ProjectionCases();
 std::vector<SelfTestCase> NavigationCases();
+std::vector<SelfTestCase> TrimPreservationCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -140,6 +141,8 @@ namespace {
     cases.insert(cases.end(), edgeFinish.begin(), edgeFinish.end());
     const std::vector<SelfTestCase> shellSplit = WithSuite(ShellSplitCases(), "ShellSplit");
     cases.insert(cases.end(), shellSplit.begin(), shellSplit.end());
+    const auto trimPreservation = WithSuite(TrimPreservationCases(), "HoverEdit");
+    cases.insert(cases.end(), trimPreservation.begin(), trimPreservation.end());
     const std::vector<SelfTestCase> hoverEdit = WithSuite(HoverEditCases(), "HoverEdit");
     cases.insert(cases.end(), hoverEdit.begin(), hoverEdit.end());
     const std::vector<SelfTestCase> generate = WithSuite(GenerateCases(), "Generate");

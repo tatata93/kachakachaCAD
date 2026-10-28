@@ -593,13 +593,13 @@ bool CaseWireTrimOriginal(V2MainWindow& window, bool keepOriginal)
     keep->setChecked(keepOriginal); regions->item(1)->setCheckState(Qt::Unchecked);
     if (!window.BooleanDock().ClickConfirm()) return false;
     auto& doc = window.Session().GetDocument(); const int count = keepOriginal ? 3 : 2;
-    if (!Explain("選択に従い元を保持または実削除し切断線を残す", (doc.FindEntity(original) != nullptr) == keepOriginal
+    if (!Explain("選択に従い別結果を作るか対象を局所更新し切断線を残す", doc.FindEntity(original)
         && doc.FindEntity(boundary) && CountOfKind(window, EntityKind::Wire) == count)) return false;
     if (keepOriginal && doc.FindEntity(original)->visibility != domain::Visibility::Visible) return false;
     window.RunCommand("edit.undo"); if (!doc.FindEntity(original) || CountOfKind(window, EntityKind::Wire) != 2) return false;
     window.RunCommand("edit.redo");
     return window.SaveAndReopen(keepOriginal ? "region-trim-keep.kcd2" : "region-trim-delete.kcd2")
-        && (doc.FindEntity(original) != nullptr) == keepOriginal && CountOfKind(window, EntityKind::Wire) == count && window.RebuildProblems().isEmpty();
+        && doc.FindEntity(original) && CountOfKind(window, EntityKind::Wire) == count && window.RebuildProblems().isEmpty();
 }
 
 bool CaseWindowWireTrim(V2MainWindow& window)

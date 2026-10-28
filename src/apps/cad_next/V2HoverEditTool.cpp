@@ -175,18 +175,21 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
     const bool datum = source->datum;
     const bool trim = window_.session_->CurrentTool() == DrawingTool::Trim;
     const bool keep = trim && v2ui::TrimKeepsOriginal(window_, "trimKeepOriginal");
-    auto removal = v2ui::PrepareTrimSourceRemoval(window_, {outcome.source.entityId}, !trim || keep,
-        [this] { window_.RefreshShapeViews(); });
+    auto removal = trim
+        ? v2ui::PrepareTrimSourceReplacement(window_, outcome.source.entityId,
+            outcome.chains,
+            keep, *window_.ids_, [this] { window_.RefreshShapeViews(); })
+        : v2ui::TrimSourceRemoval{};
     if (!removal.accepted) { window_.SetStatus(removal.message); return; }
     if (keep && outcome.chains.empty()) {
         Clear(); window_.SetStatus(QStringLiteral("トリム後に残る線はありません。元の線は残しました。")); return;
     }
-    kachakacha::v2::document::Document::Transaction transaction(document, label);
+    v2ui::TrimGenerationTransaction transaction(*window_.session_, label);
     if (removal.command) {
         const auto removed = document.Run(*removal.command);
         if (!removed.committed) { window_.ReportDiagnostics(removed.diagnostics); return; }
     }
-    for (std::size_t index = 0; index < outcome.chains.size(); ++index) {
+    for (std::size_t index = removal.reusesSource ? outcome.chains.size() : 0; index < outcome.chains.size(); ++index) {
         Feature feature;
         feature.id = window_.ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
         feature.type = FeatureType::TransformWire;
@@ -219,7 +222,16 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
         }
     }
     if (!trim) window_.RemoveConsumedWires({outcome.source.entityId});
+    if (removal.rebuildShapes) {
+        window_.AdoptCurrentDocument();
+        window_.RebuildKernelShapes();
+        if (!window_.RebuildProblems().isEmpty()) {
+            const auto problems = window_.RebuildProblems(); transaction.Rollback(); window_.RebuildKernelShapes();
+            window_.SetStatus(QStringLiteral("参照先を再計算できないため、線を変更していません。 ") + problems); return;
+        }
+    }
     if (!transaction.Commit()) {
+        transaction.Rollback(); if (removal.rebuildShapes) window_.RebuildKernelShapes();
         window_.SetStatus(LabelJa() + QStringLiteral(": 途中で失敗したので、何も変えていません。"));
         window_.AdoptCurrentDocument();
         return;
@@ -227,6 +239,6 @@ void V2HoverEditTool::Apply(const kachakacha::v2::app::HoverEditOutcome& outcome
     Clear();
     window_.AdoptCurrentDocument();
     window_.SetStatus(LabelJa() + QStringLiteral(": ") + Text(outcome.summaryJa)
-        + (trim ? (keep ? QStringLiteral(" 元の線を残しました。") : QStringLiteral(" 元の線を削除しました。")) : QString())
+        + (trim ? (keep ? QStringLiteral(" 元の線を残しました。") : QStringLiteral(" 下見した区間だけを削除しました。")) : QString())
         + QStringLiteral(" 続けて押せます。Esc でやめます。"));
 }

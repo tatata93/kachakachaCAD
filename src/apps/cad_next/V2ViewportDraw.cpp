@@ -524,10 +524,12 @@ void V2Viewport::DrawKeptDimensions(QPainter& painter) const
 }
 
 void V2Viewport::SetFoldPreview(
-    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails, std::vector<int> emphasis)
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails, std::vector<int> emphasis,
+    std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops)
 {
     foldPreview_ = std::move(rails);
     foldEmphasis_ = std::move(emphasis);
+    foldMaterialLoops_=std::move(materialLoops);
     update();
 }
 
@@ -568,6 +570,16 @@ void V2Viewport::DrawFoldBands(QPainter& painter, int level) const
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
         if (FoldPreviewEmphasis(static_cast<int>(index / 2)) != level) {
             continue;
+        }
+        if(index/2<foldMaterialLoops_.size()&&foldMaterialLoops_[index/2].has_value()){
+            QPainterPath material;material.setFillRule(Qt::OddEvenFill);
+            for(const auto& loop:*foldMaterialLoops_[index/2]){
+                bool first=true;for(const auto& point:loop)if(const auto screen=ToScreen(point)){
+                    if(first){material.moveTo(*screen);first=false;}else material.lineTo(*screen);
+                }
+                if(!first)material.closeSubpath();
+            }
+            painter.drawPath(material);continue;
         }
         const auto& bottom = foldPreview_[index];
         const auto& top = foldPreview_[index + 1];

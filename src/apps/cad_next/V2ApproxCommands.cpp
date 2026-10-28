@@ -15,6 +15,7 @@
 
 #include "V2MainWindow.h"
 #include "V2ApproxPreview.h"
+#include "V2FabricationMaterial.h"
 
 #include "V2FabricationDock.h"
 #include "V2FaceActions.h"
@@ -153,7 +154,16 @@ void V2MainWindow::ShowApproxPreview()
             }
         }
     }
-    if(evaluation.bandMesh)ShowBandApproxPreview(*viewport_,lines);
+    if(evaluation.bandMesh){std::string error;
+        if(!ShowBandApproxPreview(*viewport_,lines,evaluation,error)){
+            approxOutcomes_[chosen].available=false;approxOutcomes_[chosen].refusalJa=error;approxEvaluations_[chosen].reset();return;
+        }
+        if(!evaluation.materialPanels.empty()){
+            const auto rails=lines;lines.clear();for(const auto& piece:evaluation.materialPanels)for(auto loop:V2MaterialLoops(piece,rails)){
+                if(!loop.empty())loop.push_back(loop.front());lines.push_back(std::move(loop));
+            }
+        }
+    }
     viewport_->ShowToolPreview(std::move(lines));
 }
 

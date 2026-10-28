@@ -2,6 +2,7 @@
 #include "kachakacha/fabrication/BandApproximation.h"
 
 namespace kachakacha::v2::fabrication {
+void CompactMaterialLoop(std::vector<geometry::Point2>& loop);
 // Pure parameter-space material, outer boundary first and holes thereafter.
 // The support rectangle is only a chart, never the material outline.
 struct BandMaterialRegion {

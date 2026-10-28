@@ -146,7 +146,12 @@ bool V2MainWindow::PickFoldBandFromLastClick(const std::optional<QPointF>& point
     }
     if (chosen != nullptr) {
         const auto& group = *chosen;
-        const int number = static_cast<int>(local) + 1;
+        const auto evaluated=fabricationModels_.find(group.model.ToString());
+        std::vector<std::size_t> panels{local};
+        if(evaluated!=fabricationModels_.end()&&local<evaluated->second.bandPanels.size())panels=evaluated->second.bandPanels[local];
+        if(panels.empty())return false;
+        const int number=static_cast<int>(panels.front())+1;
+        QString numbers;for(auto panel:panels){if(!numbers.isEmpty())numbers+=QStringLiteral(", ");numbers+=QString::number(panel+1);}
         if (!(current == group.model)) {
             // 帯が元の面から離れて(曲げ 0% で持ち上がって)いても、押した帯のモデルを選ぶ。
             kachakacha::v2::app::SelectionSet one;
@@ -155,7 +160,7 @@ bool V2MainWindow::PickFoldBandFromLastClick(const std::optional<QPointF>& point
             viewport_->SetSelection(one);
             foldBandPicking_ = false;
         }
-        fabricationDock_->SetPartNumbersText(QString::number(number));
+        fabricationDock_->SetPartNumbersText(numbers);
         RefreshFabricationPartInfo(group.model);
         RefreshFoldEmphasis();
         SetStatus(QStringLiteral("部材 %1 を対象にしました(曲げ状態・部材の編集はこの部材に当たります)。")
@@ -174,6 +179,8 @@ bool V2MainWindow::CurrentBandPartition(std::vector<double>& railParameters,
         || !found->second.bandMesh.has_value()) {
         return false;
     }
+    for(std::size_t band=0;band<found->second.bandPanels.size();++band)
+        if(found->second.bandPanels[band]!=std::vector<std::size_t>{band})return false;
     railParameters = found->second.bands->railParameters;
     widthsMm.clear();
     const auto& mesh = *found->second.bandMesh;

@@ -9,7 +9,18 @@
 - AT-FAB-R003（WP-09）: 円筒の弧長、同じ三角区間上の境界の展開前後の辺長が一致。
   material_region/cylinder_cut_paths_have_equal_lengths_when_developed。
 - AT-FAB-R004（WP-10）: 実モデルのコの字窓と独立窓穴を含む曲面について、1枚指定、
-  下見、0/30/100%の輪郭、型紙、固定面と厚み、保存再読込、Undo/Redo、取消復帰を検査。
+  下見、0/35/100%の輪郭、型紙、固定面と厚み、保存再読込、Undo/Redo、取消復帰を検査。
+
+- AT-FAB-R005（WP-10）: 6窓、コの字＋2窓について実Qtウィジェットから近似・型紙・
+  固定面・厚み・保存を操作。`HP-FAB-REGION`。OSマウスの網羅操作とは区別する。
+- AT-FAB-R006（WP-10）: 1帯から2部材、空帯と後続の平面部材、非線形UVの穴位置を検査。
+  `fabrication_openings_tests` material_evaluation群。部材数と支持帯数を取り違えない。
+
+- AT-FAB-R007（WP-09）: 切り欠きだけの面を矩形で埋めない。戻り曲げの穴側壁、
+  ねじれた平面パッチの接合、外・中・内の厚みと穴で除かれる解析体積を検査。
+  `kernel_dome_tests` fabrication_surface群。外周外の穴・重複穴の拒否も含める。
+- AT-FAB-R008（WP-10）: 組立率の保存値と0%の平面性、現在姿勢全体が表示範囲に入ることを検査。
+  `HP-FAB-REGION` と実モデルの任意試験で確認する。
 
 ## 1. 完了の原則
 

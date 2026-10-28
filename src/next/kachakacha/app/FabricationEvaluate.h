@@ -24,6 +24,7 @@
 #include "kachakacha/fabrication/BandFold.h"
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/fabrication/SurfacePatch.h"
+#include "kachakacha/fabrication/BandMaterialRegion.h"
 #include "kachakacha/geometry/CurveSegment.h"
 
 #include <optional>
@@ -61,6 +62,9 @@ struct FabricationSource {
     //! 3D で押した面(EX-02 と同じ pickedFaceIndex)を、どの部材に当てるかを
     //! 決めるためだけに持つ。分けていなければ値を持たない。
     std::optional<std::size_t> faceIndex;
+    //! Native material boundaries in the SAME normalized UV as evaluate.
+    std::vector<fabrication::BandMaterialRegion> materialRegionsUv;
+    double boundarySamplingDeviationMm=0;
 };
 
 //! 開口・折り線にする線。どの部材のものかは、外周と同じ平面に載っているかで決める。
@@ -103,6 +107,20 @@ struct FabricationEvaluation {
         fabrication::BandMesh mesh;
     };
     std::vector<BandedFace> bandFaces;
+    struct MaterialPanel {
+        std::size_t panelIndex=0;
+        std::size_t bandIndex=0; //!< Flattened index in FoldedRailsOf / 2.
+        fabrication::BandSplitAxis axis=fabrication::BandSplitAxis::U;
+        double low=0,high=1;
+        std::vector<double> longitudinal;
+        std::vector<std::vector<geometry::Point2>> loopsUv;
+    };
+    std::vector<MaterialPanel> materialPanels;
+    //! Every support band, including bands with no material after cropping.
+    std::vector<bool> materialBands;
+    //! Pattern panel indices belonging to each support band (zero or more).
+    std::vector<std::vector<std::size_t>> bandPanels;
+    std::size_t bandPanelCount=0;
     double maximumDeviationMm = 0.0;
     bool reachedTolerance = true;
     double rmsDeviationMm = 0.0;

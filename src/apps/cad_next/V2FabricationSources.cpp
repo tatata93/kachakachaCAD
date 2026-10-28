@@ -1,5 +1,6 @@
 #include "V2FabricationSources.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
+#include "kachakacha/kernel/OcctFabricationRegion.h"
 
 void AppendNativeFabricationSources(kachakacha::v2::modeling::KernelShapeHandle handle,
     kachakacha::v2::base::EntityId entity,const std::string& name,
@@ -34,7 +35,14 @@ void AppendNativeFabricationSources(kachakacha::v2::modeling::KernelShapeHandle 
                 if(boundary.HasValue()) {
                     source.samples.reset();source.flatBoundary=boundary.Value().outerLoop;
                     source.flatOpenings=boundary.Value().holeLoops;
-                } else source.samplingDiagnostics=native.Diagnostics();
+                } else {
+                    const auto region=kernel::FabricationRegionOf(handle,face,.0005);
+                    if(region.HasValue()) {
+                        source.samples=region.Value().samples;source.evaluate=region.Value().evaluate;
+                        source.materialRegionsUv.push_back({region.Value().loops});
+                        source.boundarySamplingDeviationMm=region.Value().boundarySamplingDeviationMm;
+                    } else source.samplingDiagnostics=region.Diagnostics();
+                }
             }
         }
         sources.push_back(std::move(source));

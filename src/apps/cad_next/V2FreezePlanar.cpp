@@ -20,7 +20,7 @@ bool V2MainWindow::FreezePlanarPanels(const domain::CreateFabricationModelDefini
     const auto selected=SelectedPartNumbers();
     const auto markings=FabricationMarkingsFor(definition);
     const auto tolerance=session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    std::size_t first=0;for(const auto& face:evaluated.bandFaces)first+=face.mesh.BandCount();
+    const std::size_t first=evaluated.bandPanelCount;
     const double progress=std::clamp(definition.masterPercent/100.0,0.0,1.0);
     for(std::size_t index=first;index<evaluated.panels.size();++index) {
         if(!selected.empty()&&std::find(selected.begin(),selected.end(),index)==selected.end())continue;

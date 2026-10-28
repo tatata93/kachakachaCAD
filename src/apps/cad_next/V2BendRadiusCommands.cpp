@@ -97,6 +97,8 @@ std::vector<kachakacha::v2::fabrication::BendRadius> V2MainWindow::BendRadiiNow(
         || !found->second.bandMesh.has_value()) {
         return {};
     }
+    for(std::size_t band=0;band<found->second.bandPanels.size();++band)
+        if(found->second.bandPanels[band]!=std::vector<std::size_t>{band})return {};
     return kachakacha::v2::app::ResolveFoldState(*definition, *found->second.bandMesh).bends;
 }
 
@@ -330,7 +332,15 @@ void V2MainWindow::SetUnfoldBaseRail()
         return;
     }
     const int rails = found->second.bandMesh->rows;
-    const int wanted = static_cast<int>(numbers.front());
+    auto wanted=static_cast<int>(numbers.front());
+    if(!found->second.bandPanels.empty()){
+        const auto& groups=found->second.bandPanels;
+        const auto at=std::find_if(groups.begin(),groups.end(),[&](const auto& panels){return std::find(panels.begin(),panels.end(),numbers.front())!=panels.end();});
+        if(at==groups.end()||at->size()!=1||at-groups.begin()>=found->second.bandMesh->BandCount()){
+            SetStatus(QStringLiteral("この部材は単独の帯に対応しないため基準辺を指定できません。全体の自動展開を使ってください。"));return;
+        }
+        wanted=static_cast<int>(at-groups.begin());
+    }
     if (wanted < 0 || wanted >= rails) {
         SetStatus(QStringLiteral("展開の基準にする辺: 1 から %1 までの番号を"
                                  "書いてください。")

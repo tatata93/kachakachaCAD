@@ -685,7 +685,8 @@ public:
     //! emphasis は帯(レール 2 本の組)ごとの強調: 0 = ほか、1 = いまの近似モデル、
     //! 2 = 「対象部材」に挙げた部材(塗って目立たせる。オーナー指示 2026-09-28)。足りない分は 0。
     void SetFoldPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails,
-        std::vector<int> emphasis = {});
+        std::vector<int> emphasis = {},
+        std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops = {});
     [[nodiscard]] int FoldPreviewRailCount() const
     {
         return static_cast<int>(foldPreview_.size());
@@ -1202,6 +1203,7 @@ private:
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> foldPreview_;
     std::vector<int> foldEmphasis_;   //!< 帯ごとの強調(SetFoldPreview)
+    std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> foldMaterialLoops_;
     std::optional<QPointF> lastSelectPoint_;   //!< 最後に押した画面の位置(SelectAt)
     std::vector<KeptDimensionView> keptDimensions_;
     std::optional<KeptDimensionView> dimensionPreview_;

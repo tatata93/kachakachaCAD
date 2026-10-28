@@ -305,6 +305,13 @@ void V2Viewport::FitToDocument(bool selectedOnly)
         for (const auto& point : triangle.mesh.points) include(point);
     for(const auto& shape:shapeViews_) if(shown(shape.entityId)) for(const auto& triangle:shape.mesh.triangles)
         for(const auto& point:triangle.points) include(point);
+    // A manufacturing model is drawn by fold preview rather than ShapeViews.
+    // Include that actual pose when fitting an unfolded or partly assembled sheet.
+    for(std::size_t rail=0;rail<foldPreview_.size();++rail){
+        const auto band=rail/2;
+        if(selectedOnly&&(band>=foldEmphasis_.size()||foldEmphasis_[band]==0))continue;
+        for(const auto& point:foldPreview_[rail])include(point);
+    }
     if(!any&&selectedOnly)return;
     if (!any) {
         center_ = Vector3{};
@@ -1049,6 +1056,17 @@ std::vector<int> V2Viewport::FoldBandsAt(const QPointF& position) const
     // 帯の輪(下レール → 上レールの逆順)を画面へ映し、偶奇則で内側かを見る。
     std::vector<int> hits;
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
+        if(index/2<foldMaterialLoops_.size()&&foldMaterialLoops_[index/2]){
+            QPainterPath material;material.setFillRule(Qt::OddEvenFill);
+            for(const auto& loop:*foldMaterialLoops_[index/2]){
+                bool first=true;for(const auto& p:loop)if(const auto screen=ToScreen(p)){
+                    if(first){material.moveTo(*screen);first=false;}else material.lineTo(*screen);
+                }
+                if(!first)material.closeSubpath();
+            }
+            if(material.contains(position))hits.push_back(static_cast<int>(index/2));
+            continue;
+        }
         std::vector<QPointF> ring;
         const auto append = [&](const std::vector<kachakacha::v2::geometry::Vector3>& rail,
                                 bool reverse) {

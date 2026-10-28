@@ -14,6 +14,10 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepLib.hxx>
+#include <BRepClass_FaceClassifier.hxx>
+#include <ShapeFix_Edge.hxx>
+#include <BRepTools_WireExplorer.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
@@ -96,8 +100,9 @@ double CheckBoundary(const TopoDS_Shape& result,const std::vector<std::vector<ge
     double maximum=0,squared=0;std::size_t count=0;
     BRep_Builder builder;TopoDS_Compound edges;builder.MakeCompound(edges);
     for(TopExp_Explorer e(result,TopAbs_EDGE);e.More();e.Next())builder.Add(edges,e.Current());
+    BRepExtrema_DistShapeShape distance;distance.LoadS2(edges);
     for(const auto& loop:loops)for(const auto& curve:loop)for(int i=0;i<=32;++i) {
-        BRepExtrema_DistShapeShape distance(BRepBuilderAPI_MakeVertex(ToPoint(curve.Evaluate(i/32.0))).Vertex(),edges);
+        distance.LoadS1(BRepBuilderAPI_MakeVertex(ToPoint(curve.Evaluate(i/32.0))).Vertex());distance.Perform();
         Require(distance.IsDone(),"輪郭と支持面の距離を計算できません。");
         if(distance.Value()>eps)throw std::runtime_error(std::string(&loop==&loops.front()?"外周":"穴の輪郭")+"と支持面境界のずれ "+std::to_string(distance.Value())
             +" mm が許容差 "+std::to_string(eps)+" mm を超えています。投影先の面を確認してください。");
@@ -179,6 +184,53 @@ Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
     catch(const std::exception& e){return Out::Failure(base::MakeError("EXT-008","面上の輪郭を切り出せません。",e.what()));}
 #else
     (void)supports;(void)inputLoops;(void)tolerance;(void)boundaryApproximationMm;(void)maximumDeviationMm;(void)rmsDeviationMm;
+    return Out::Failure(base::MakeError("KER-E005","幾何カーネルが必要です。",{}));
+#endif
+}
+Out TrimFabricationFace(modeling::KernelShapeHandle support,
+    const std::vector<std::vector<geometry::CurveSegment>>& loops,const geometry::GeometryTolerance& tolerance) {
+#ifdef KACHACAD_V2_WITH_OCCT
+    try {
+        TopoDS_Shape shape;Require(LookupShape(support,shape),"製作の支持面がありません。");
+        TopExp_Explorer faces(shape,TopAbs_FACE);Require(faces.More(),"製作の支持面がありません。");
+        auto face=TopoDS::Face(faces.Current());faces.Next();Require(!faces.More(),"製作境界の直接生成には1枚の支持面を指定してください。");
+        const auto orientation=face.Orientation();face.Orientation(TopAbs_FORWARD);
+        const auto surface=BRep_Tool::Surface(face);Require(!surface.IsNull()&&!loops.empty(),"製作の支持曲面と外周が必要です。");
+        std::vector<TopoDS_Wire> wires;
+        auto exact=tolerance;exact.interactiveJoinMm=exact.modelLinearMm;
+        for(std::size_t loop=0;loop<loops.size();++loop){
+            const auto ordered=OrderedLoop(loops[loop],exact);BRepBuilderAPI_MakeWire wire;double area=0;
+            for(const auto& curve:ordered){
+                const auto converted=ToEdge(curve);Require(converted.HasValue(),"製作境界の辺を変換できません。");
+                auto edge=converted.Value();ShapeFix_Edge fix;
+                (void)fix.FixAddPCurve(edge,face,false,tolerance.modelLinearMm);
+                double first,last;const auto pc=BRep_Tool::CurveOnSurface(edge,face,first,last);
+                Require(!pc.IsNull(),"製作境界を支持曲面へ対応付けできません。");
+                auto previous=pc->Value(first);
+                for(int i=1;i<=16;++i){const auto p=pc->Value(first+(last-first)*i/16.);area+=(edge.Orientation()==TopAbs_REVERSED?-1:1)*(previous.X()*p.Y()-p.X()*previous.Y());previous=p;}
+                wire.Add(edge);Require(wire.IsDone(),"製作境界の辺がつながりません。");
+            }
+            auto made=wire.Wire();Require(made.Closed(),"製作境界が閉じていません。");
+            if((area>0)!=(loop==0))made.Reverse();wires.push_back(made);
+        }
+        BRepBuilderAPI_MakeFace made(surface,wires.front(),true);Require(made.IsDone(),"製作外周から面を作れません。");
+        for(std::size_t i=1;i<wires.size();++i){
+            for(BRepTools_WireExplorer edges(wires[i],face);edges.More();edges.Next()){
+                double first,last;const auto pc=BRep_Tool::CurveOnSurface(edges.Current(),face,first,last);
+                Require(!pc.IsNull(),"窓の面上境界がありません。");
+                for(int k=0;k<=8;++k){BRepClass_FaceClassifier classified(made.Face(),pc->Value(first+(last-first)*k/8.),tolerance.modelLinearMm);
+                    Require(classified.State()==TopAbs_IN,"窓が外周や他の窓と交わるか、材料の外にあります。");}
+            }
+            made.Add(wires[i]);
+        }
+        Require(made.IsDone(),"製作の穴を追加できません。");auto result=made.Face();result.Orientation(orientation);
+        BRepLib::SameParameter(result,tolerance.modelLinearMm,true);
+        Require(BRepCheck_Analyzer(result).IsValid(),"製作境界から作った面が不正です。自己交差や面から離れた辺を確認してください。");
+        return Out::Success(StoreShape(result));
+    }catch(const Standard_Failure& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.GetMessageString()));}
+    catch(const std::exception& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.what()));}
+#else
+    (void)support;(void)loops;(void)tolerance;
     return Out::Failure(base::MakeError("KER-E005","幾何カーネルが必要です。",{}));
 #endif
 }

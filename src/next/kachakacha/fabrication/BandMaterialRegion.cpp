@@ -52,7 +52,7 @@ base::Result<std::vector<BandMaterialRegion>> ClipBandMaterial(
     for(std::size_t i=0;i<input.size();++i){
         total+=input[i].size();if(total>20000)return fail();
         Loop loop;for(auto p:input[i]){
-            if(!std::isfinite(p.u)||!std::isfinite(p.v))return fail();
+            if(!std::isfinite(p.u)||!std::isfinite(p.v)||std::abs(p.u)>1e6||std::abs(p.v)>1e6)return fail();
             p=Coordinates(p,axis);if(loop.empty()||Dist(loop.back(),p)>eps)loop.push_back(p);
         }
         if(loop.size()>1&&Dist(loop.front(),loop.back())<eps)loop.pop_back();
@@ -128,6 +128,14 @@ base::Result<std::vector<BandMaterialRegion>> ClipBandMaterial(
     }
     for(auto& region:regions)for(auto& loop:region.loops)for(auto& p:loop)p=Coordinates(p,axis);
     return Out::Success(std::move(regions));
+}
+void CompactMaterialLoop(Loop& loop){
+    Loop out;
+    const auto redundant=[](Point2 a,Point2 b,Point2 c){const auto x=b.u-a.u,y=b.v-a.v,xx=c.u-b.u,yy=c.v-b.v;
+        return x*xx+y*yy>=0&&std::abs(x*yy-y*xx)<=1e-12*std::min(std::hypot(x,y),std::hypot(xx,yy));};
+    for(auto p:loop){while(out.size()>1&&redundant(out[out.size()-2],out.back(),p))out.pop_back();out.push_back(p);}
+    while(out.size()>3&&redundant(out.back(),out[0],out[1]))out.erase(out.begin());
+    while(out.size()>3&&redundant(out[out.size()-2],out.back(),out.front()))out.pop_back();loop=std::move(out);
 }
 std::vector<Vector3> MapBandMaterialLoop(const Loop& loop,BandSplitAxis axis,double low,double high,
     const std::vector<double>& longitudinal,const std::vector<std::vector<Vector3>>& rails)

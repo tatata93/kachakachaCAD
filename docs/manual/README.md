@@ -889,3 +889,26 @@ WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入�
 `tool-edit-selection`: ![投影ツールを保った線分選択の実Qt画面](images/v2-tool-edit-selection.png)
 
 左一覧のチェックは選択状態を変えず、その行の表示だけを一度切り替えます。タイトルには現在のファイル名を表示します。
+
+
+## 2026-10-28 窓を保持する1枚の曲面近似
+
+[準備から展開・生成までの手順](curved-window-approximation.html)。115投影の確認用コピーによる実Qt操作画面です。
+
+`material-115-source`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-source.png)
+
+`material-115-preview`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-preview.png)
+
+`material-115-flat`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-flat.png)
+
+`material-115-35`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-35.png)
+
+`material-115-100`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-100.png)
+
+`material-115-surface`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-surface.png)
+
+`material-115-solid`: ![曲面の窓と切り欠きを保つ操作画面](images/v2-material-115-solid.png)
+
+`material-six-flat`: ![6窓を保つ近似と生成の実Qt操作画面](images/v2-material-six-flat.png)
+
+`material-six-solid`: ![6窓を保つ近似と生成の実Qt操作画面](images/v2-material-six-solid.png)

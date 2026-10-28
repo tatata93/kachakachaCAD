@@ -12,6 +12,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctFoldedBandThicken.h"
+#include "kachakacha/kernel/OcctPlanarSheetThicken.h"
 #include "kachakacha/kernel/OcctRevolvedThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
@@ -272,6 +273,12 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         // construction and validity checks below retain their existing refusal.
     }
     auto folded=detail::ThickenFoldedBand(face,thicknessMm,placement,tolerance);
+    if(!folded){
+        const auto planar=detail::ThickenPlanarSheet(face,thicknessMm,placement,tolerance);
+        if(planar&&planar->HasValue())folded=planar;
+        // Topology changes at an offset may defeat fixed facet intersections.
+        // Retain the general native offset path and its authoritative checks.
+    }
     if(!folded)folded=detail::ThickenRevolvedProfile(face,thicknessMm,placement,tolerance);
     TopoDS_Shape base = face;
     if (!folded && startOffset != 0.0) {

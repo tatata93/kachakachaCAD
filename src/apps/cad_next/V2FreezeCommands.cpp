@@ -11,6 +11,8 @@
 
 #include "V2MainWindow.h"
 #include "V2GeneratedCurves.h"
+#include "V2FabricationMaterial.h"
+#include "V2Calculation.h"
 #include "V2OutputTool.h"
 #include <QComboBox>
 
@@ -494,9 +496,37 @@ bool V2MainWindow::FreezeWithDefinition(
     sourceShapes.insert(partShapes_.begin(), partShapes_.end());
     const auto selected=SelectedPartNumbers();
     for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
-        if (!selected.empty() && std::find(selected.begin(),selected.end(),band/2)==selected.end()) { continue; }
+        const bool trimmed=band/2<evaluated.materialBands.size()&&evaluated.materialBands[band/2];
+        for(const auto& material:evaluated.materialPanels)if(material.bandIndex==band/2){
+            if(!selected.empty()&&std::find(selected.begin(),selected.end(),material.panelIndex)==selected.end())continue;
+            const auto loops=V2MaterialLoops(material,rails);
+            const auto label=modelName+" 部材"+std::to_string(material.panelIndex+1)+" ("+stateName+")";
+            std::vector<kachakacha::v2::geometry::CurveSegment> edges;
+            for(std::size_t loop=0;loop<loops.size();++loop){const auto curves=V2MaterialCurves(loops[loop],true,session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+                if(curves.empty()||AddPlainWire(curves,(label+(loop?" 窓":" 外周")).c_str()).IsNil())return false;
+                edges.insert(edges.end(),curves.begin(),curves.end());++wires;
+            }
+            if(freezeOutput_==FreezeOutput::WiresOnly)continue;
+            const auto normal=FrozenBandNormal(evaluated,band/2,rails[band],rails[band+1],sourceShapes);
+            const auto built=V2Calculation::Call(nullptr,"窓と切り欠きを保つ部材を生成しています…",V2BuildMaterialSurface,
+                std::vector<std::vector<kachakacha::v2::geometry::Vector3>>{rails[band],rails[band+1]},loops,
+                session_->GetDocument().Snapshot().settings.tolerance,.001,normal);
+            if(!built.HasValue()){ReportDiagnostics(built.Diagnostics());return false;}
+            const auto stored=V2StoreMaterialGuide(session_->GetDocument(),*ids_,built.Value().handle,label);
+            if(!stored.HasValue()){kachakacha::v2::kernel::ReleaseShape(built.Value().handle);ReportDiagnostics(stored.Diagnostics());return false;}
+            const auto entity=stored.Value();guideShapes_[entity.ToString()]=built.Value().handle;guideSamples_[entity.ToString()]=built.Value().samples;
+            guideEdges_[entity.ToString()]=std::move(edges);++surfaces;AdoptCurrentDocument();
+            if(freezeOutput_==FreezeOutput::PartsOnly||freezeOutput_==FreezeOutput::Both){
+                viewport_->SetSelection(kachakacha::v2::app::SelectionSet{{entity}});const auto before=partShapes_.size();
+                RunThickenSurface(definition.materialThickness.value);if(partShapes_.size()<=before)return false;++parts;
+            }
+        }
+        if(trimmed)continue;
+        const auto panelIndex=band/2<evaluated.bandPanels.size()&&!evaluated.bandPanels[band/2].empty()
+            ?evaluated.bandPanels[band/2].front():band/2;
+        if (!selected.empty() && std::find(selected.begin(),selected.end(),panelIndex)==selected.end()) { continue; }
         const std::string label = modelName + " 部材"
-            + std::to_string(band / 2 + 1) + " (" + stateName + ")";
+            + std::to_string(panelIndex + 1) + " (" + stateName + ")";
         // Preserve correspondence while removing redundant subdivisions of an
         // exactly straight band. Hundreds of collinear B-Rep edges made even a
         // rectangular cylinder panel need minutes for offset/fuse validation.
@@ -520,8 +550,7 @@ bool V2MainWindow::FreezeWithDefinition(
         if (freezeOutput_ == FreezeOutput::WiresOnly) {
             continue;
         }
-        // 面: 2本のレールを断面にしたルールド面。作り方はワイヤーを指すので、
-        // 開き直しても作り直せる。
+        // 通常の帯は、保存後も2本のレールを参照するルールド面として残す。
         AdoptCurrentDocument();
         const auto normal = FrozenBandNormal(evaluated, band / 2, rails[band], rails[band+1], sourceShapes);
         if (normal.LengthSquared() < 1e-18) {
@@ -546,29 +575,9 @@ bool V2MainWindow::FreezeWithDefinition(
             } else return false;
         }
     }
-    // 接続スコープの線も、この曲げ状態の形へ寄せて固定する(V1 の PartFoldState と同じ)。
     if (!FreezePlanarPanels(definition,evaluated,wires,surfaces,parts)) return false;
-    if (evaluated.bandMesh) {
-    const auto state = kachakacha::v2::app::ResolveFoldState(definition, *evaluated.bandMesh);
-    const auto folded = kachakacha::v2::fabrication::FoldBandMesh(
-        *evaluated.bandMesh, state.masterProgress, state.creaseFactors,
-        state.unfoldBaseRail);
-    if (selected.empty()) {
-    const auto originals=ConnectionScopeCurves(definition);
-    std::size_t sourceIndex=0;
-    for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
-             *evaluated.bandMesh, folded, originals,
-             evaluated.maximumDeviationMm + 0.35)) {
-        while(sourceIndex<originals.size()&&originals[sourceIndex].second.empty())++sourceIndex;
-        const auto curves=wire.snappedPoints==0&&sourceIndex<originals.size()?originals[sourceIndex].second:PolylineOf(wire.points);
-        ++sourceIndex;
-        if (!AddPlainWire(curves,
-                (wire.name + " (" + stateName + ")").c_str())
-                 .IsNil()) {
-            ++wires;
-        }
-    }
-    }
+    if(selected.empty())for(const auto& wire:V2FixedConnectionCurves(definition,evaluated,ConnectionScopeCurves(definition),stateName)){
+        if(!AddPlainWire(wire.second,wire.first.c_str()).IsNil())++wires;
     }
     AdoptCurrentDocument();
     return transaction.Commit();

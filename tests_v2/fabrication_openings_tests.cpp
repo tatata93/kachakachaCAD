@@ -253,4 +253,81 @@ KACHA_V2_TEST(material_region, reject_crossed_contours_and_holes_instead_of_sile
     check({{{0,0},{1,0},{1,1},{0,1}},{{.8,.2},{1.2,.2},{1.2,.4},{.8,.4}}});
     check({{{0,0},{1,0},{1,1},{0,1}},{{.2,.2},{.6,.2},{.6,.6},{.2,.6}},{{.4,.4},{.8,.4},{.8,.8},{.4,.8}}});
 }
+
+KACHA_V2_TEST(material_evaluation, one_curved_sheet_retains_six_holes_and_honest_deviation)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;
+    app::FabricationSource source;source.name="cylinder with six windows";source.samples=Samples();source.evaluate=Cylinder;
+    fabrication::BandMaterialRegion region;region.loops={{{0,0},{1,0},{1,1},{0,1}}};
+    for(int i=0;i<6;++i){double u=.1+(i%3)*.27,v=.1+(i/3)*.48;region.loops.push_back({{u,v},{u+.15,v},{u+.15,v+.25},{u,v+.25}});}
+    source.materialRegionsUv={region};source.boundarySamplingDeviationMm=.0005;
+    domain::CreateFabricationModelDefinition def;def.method=1;def.equalPartCount=def.maximumPartCount=1;
+    def.splitAxis=2;def.splitAtCorners=false;def.targetMaxDeviation.value=.01;
+    const auto result=app::EvaluateFabrication(def,{source},{},.001);
+    Require(result.HasValue(),result.FirstMessageJa());const auto& made=result.Value();
+    Require(made.panels.size()==1&&made.panels[0].openings.size()==6,"one physical sheet has all six holes");
+    Require(made.materialBands==std::vector<bool>{true}&&made.bandPanels==std::vector<std::vector<std::size_t>>{{0}}&&made.bandPanelCount==1,"one material band maps to one actual panel");
+    Require(made.reachedTolerance&&made.maximumDeviationMm>=.0005,"boundary sampling error is included");
+    const auto& rail=made.bandMesh->developedBands[0][0];double length=0;
+    for(std::size_t i=1;i<rail.size();++i)length+=std::hypot(rail[i].u-rail[i-1].u,rail[i].v-rail[i-1].v);
+    test::RequireNear(length,50*kPi/2,.003,"unfolded cylinder uses arc length");
+    def.method=0;const auto classified=app::EvaluateFabrication(def,{source},{},.001);
+    Require(classified.HasValue()&&classified.Value().panels.size()==1&&classified.Value().panels[0].openings.size()==6,"classification also preserves native holes");
+}
+KACHA_V2_TEST(material_evaluation, split_material_empty_bands_and_following_planar_panel_have_distinct_indices)
+{
+    using namespace kachakacha::v2;
+    app::FabricationSource source;source.name="C region";source.samples=Samples();source.evaluate=Cylinder;
+    source.materialRegionsUv={{{{{0,0},{1,0},{1,1},{0,1},{0,.8},{.7,.8},{.7,.2},{0,.2}}}}};
+    domain::CreateFabricationModelDefinition def;def.method=1;def.equalPartCount=def.maximumPartCount=2;
+    def.splitAxis=0;def.splitAtCorners=false;def.targetMaxDeviation.value=.1;
+    auto result=app::EvaluateFabrication(def,{source},{},.001);Require(result.HasValue(),result.FirstMessageJa());
+    Require(result.Value().bandPanels.size()==2&&result.Value().bandPanels[0]==std::vector<std::size_t>({0,1})&&result.Value().bandPanels[1]==std::vector<std::size_t>({2}),"first support band makes two independent pieces");
+    Require(result.Value().bandPanelCount==3,"three actual band panels, not two support bands");
+    source.materialRegionsUv={{{{{.6,0},{1,0},{1,1},{.6,1}}}}};
+    app::FabricationSource flat;flat.name="flat after empty bands";
+    flat.flatBoundary=std::vector<CurveSegment>{CurveSegment::MakeLine({0,0,0},{5,0,0}).Value(),CurveSegment::MakeLine({5,0,0},{5,5,0}).Value(),CurveSegment::MakeLine({5,5,0},{0,5,0}).Value(),CurveSegment::MakeLine({0,5,0},{0,0,0}).Value()};
+    def.equalPartCount=def.maximumPartCount=4;
+    result=app::EvaluateFabrication(def,{source,flat},{},.001);Require(result.HasValue(),result.FirstMessageJa());
+    const auto& made=result.Value();
+    Require(made.materialBands==std::vector<bool>({true,true,true,true}),"empty trimmed bands remain identified");
+    Require(made.bandPanels[0].empty()&&made.bandPanels[1].empty()&&made.bandPanelCount==2&&made.panels.size()==3,"planar panel starts after actual pieces, never after empty support bands");
+    def.bandProgress={0,0,.5,1};const auto posed=app::FoldedRailsOf(def,made,0);
+    Require(posed.size()==8,"all support rails retained for stable mapping");
+}
+
+KACHA_V2_TEST(material_evaluation, nonuniform_surface_uv_does_not_move_a_window)
+{
+    using namespace kachakacha::v2;
+    app::FabricationSource source;source.name="nonuniform UV";fabrication::SurfacePatchSamples samples;samples.rowCount=samples.columnCount=3;
+    source.evaluate=[](double u,double v){return Vector3{(u+u*u)*.5,v,0};};
+    for(int r=0;r<3;++r)for(int c=0;c<3;++c)samples.points.push_back(source.evaluate(c*.5,r*.5));source.samples=samples;
+    source.materialRegionsUv={{{{{0,0},{1,0},{1,1},{0,1}},{{.1,.2},{.3,.2},{.3,.4},{.1,.4}}}}};
+    domain::CreateFabricationModelDefinition def;def.method=1;def.equalPartCount=def.maximumPartCount=1;def.splitAxis=0;def.splitAtCorners=false;def.targetMaxDeviation.value=.01;
+    const auto result=app::EvaluateFabrication(def,{source},{},1e-6);Require(result.HasValue(),result.FirstMessageJa());
+    const auto& uv=result.Value().materialPanels.front().loopsUv[1];double low=1,high=0;
+    for(auto p:uv){low=std::min(low,p.u);high=std::max(high,p.u);}
+    test::RequireNear(low,.055,1e-9,"hole starts at its original 3D position");test::RequireNear(high,.195,1e-9,"hole ends at its original 3D position");
+}
+KACHA_V2_TEST(material_evaluation, nearly_extruded_sheet_uses_parallel_generators_with_measured_error)
+{
+    using namespace kachakacha::v2;
+    app::FabricationSource source;source.name="nearly extruded window sheet";
+    source.evaluate=[](double u,double v){const double t=v*kPi/2;return Vector3{30*std::cos(t)+(u-.5)*.004*std::sin(t),30*std::sin(t)+(u-.5)*.004*std::cos(t),u*10};};
+    fabrication::SurfacePatchSamples samples;samples.rowCount=samples.columnCount=17;
+    for(int r=0;r<17;++r)for(int c=0;c<17;++c)samples.points.push_back(source.evaluate(c/16.,r/16.));source.samples=samples;
+    fabrication::BandMaterialRegion region;region.loops={{{0,0},{1,0},{1,1},{0,1}},{{.3,.3},{.7,.3},{.7,.6},{.3,.6}}};source.materialRegionsUv={region};
+    domain::CreateFabricationModelDefinition def;def.method=1;def.equalPartCount=def.maximumPartCount=1;def.splitAxis=0;def.splitAtCorners=false;def.targetMaxDeviation.value=.05;
+    const auto result=app::EvaluateFabrication(def,{source},{},.001);Require(result.HasValue(),result.FirstMessageJa());const auto& made=result.Value();
+    Require(made.reachedTolerance&&made.maximumDeviationMm>.0001&&made.maximumDeviationMm<.05,"nonzero adjustment is measured inside the unchanged target");
+    Require(made.panels.size()==1&&made.panels[0].openings.size()==1,"one sheet keeps its hole");
+    const auto& rails=made.bandMesh->world;const auto direction=geometry::Normalized(rails[1][0]-rails[0][0]);
+    for(std::size_t i=0;i<rails[0].size();++i)test::RequireNear(geometry::Cross(direction,rails[1][i]-rails[0][i]).Length(),0,1e-10,"every quad has parallel width generators");
+    // A bilinear counterexample isolates the adjustment budget from curved-rail sampling limits.
+    source.evaluate=[](double u,double v){return Vector3{v*30,(u-.5)*.004*v,u*10};};
+    samples.points.clear();for(int r=0;r<17;++r)for(int c=0;c<17;++c)samples.points.push_back(source.evaluate(c/16.,r/16.));source.samples=samples;
+    def.targetMaxDeviation.value=1e-5;const auto exact=app::EvaluateFabrication(def,{source},{},.001);Require(exact.HasValue(),exact.FirstMessageJa());
+    const auto& original=exact.Value().bandMesh->world;
+    for(std::size_t i=0;i<original[0].size();++i)test::RequireNear(geometry::Distance(original[0][i],source.evaluate(0,exact.Value().bandMesh->longitudinalParameters[i])),0,1e-10,"insufficient adjustment budget retains the original rail geometry");
+}
 KACHA_V2_TEST_MAIN("fabrication_openings")

@@ -274,7 +274,7 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
     return Guarded([&]() -> Result<SolidExportCheck> {
         // Byte equality includes geometry, topology, orientation and location;
         // a reused handle or changed tolerance can never reuse a different check.
-        std::ostringstream encoded; BRepTools::Write(shape, encoded);
+        std::ostringstream encoded; BRepTools::Write(shape, encoded, false, false, TopTools_FormatVersion_CURRENT);
         const std::string bytes = encoded.str();
         if (const auto cached = CachedCheck(bytes, toleranceMm))
             return Result<SolidExportCheck>::Success(*cached);

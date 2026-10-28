@@ -3,6 +3,9 @@
 #include "V2Viewport.h"
 #include "V2ProjectionTool.h"
 #include "V2FabricationDock.h"
+#include "V2FabricationMaterial.h"
+#include "V2ParameterDock.h"
+#include "V2Ribbon.h"
 #include "V2PlanarCurves.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "V2ThickenDock.h"
@@ -48,6 +51,9 @@ using namespace kachakacha::v2;
 class V2WindowHoleExercise {
 public:
     static bool Run(V2MainWindow& w,bool curved);
+    static bool ApproximateRegion(V2MainWindow& w,base::EntityId source,const QString& output);
+    static bool ReopenMaterial(V2MainWindow& w,const QString& saved,base::EntityId model,base::EntityId part,std::size_t holeCount);
+    static bool RegionFixture(V2MainWindow& w,bool notch);
     static bool PlanarGeneration(V2MainWindow& w);
     static bool Panorama(V2MainWindow& w);
     static bool PreparePanorama(V2MainWindow& w,std::vector<base::EntityId>& input,base::EntityId& perimeter,std::vector<geometry::CurveSegment>& outer,bool left=false,bool makeSources=true);
@@ -121,6 +127,13 @@ bool V2WindowHoleExercise::RawSelection(V2MainWindow& w,bool extra) {
         if(found==now.end()||found->segment.Kind()!=original.segment.Kind()){std::cout<<"original missing "<<original.entityId.ToString()<<std::endl;return false;}
         for(const double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),original.segment.Evaluate(t))>1e-12){std::cout<<"source changed "<<original.entityId.ToString()<<std::endl;return false;}
     }
+    if(qEnvironmentVariableIsSet("KACHACAD_WINDOW_OWNER_APPROX")){
+        if(!ApproximateRegion(w,made,output+"/approximation"))return false;
+        const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
+        return selftest::Explain("saved owner solid keeps the panoramic notch and side window empty with surrounding body material",
+            !material(part,{10,0,21.5})&&material(part,{10,0,16})
+            &&(!extra||(!material(part,{30,-17,21.5},{-1,0,0})&&material(part,{30,-17,16},{-1,0,0}))));
+    }
     w.RunCommand("part.thicken");auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
     if(!w.ThickenDock().ClickConfirm()){std::cout<<"raw thicken failed: "<<w.StatusText().toStdString()<<std::endl;return false;}
     const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
@@ -140,6 +153,148 @@ bool V2WindowHoleExercise::RawSelection(V2MainWindow& w,bool extra) {
         &&!material(part,{10,0,21.5})&&material(part,{10,0,16}));
 }
 
+
+bool V2WindowHoleExercise::ApproximateRegion(V2MainWindow& w,base::EntityId source,const QString& output) {
+    QDir().mkpath(output);
+    const auto capture=[&](const char* name){QApplication::processEvents();return w.grab().save(output+"/"+name);};
+    w.RunCommand("selection.activate");w.Viewport().ClearIsolation();w.Viewport().SetSelection({});
+    if(!ShowOnly(w,source))return false;
+    auto* automatic=w.findChild<QComboBox*>("fabricationAutomaticGeneration");if(!automatic)return false;automatic->setCurrentIndex(0);
+    auto& dock=w.FabricationDock();dock.SetGenerationDestination(0);
+    auto choice=dock.Choice();choice.equalPartCount=choice.maximumPartCount=1;choice.splitAxis=2;
+    choice.splitAtCorners=false;choice.adaptiveSpacing=false;choice.rangeUMin=choice.rangeVMin=0;choice.rangeUMax=choice.rangeVMax=1;dock.SetChoice(choice);
+    if(!w.ParameterDock().Apply(app::ParameterId::MaxDeviationMm,QStringLiteral("0.1"))
+        ||!w.ParameterDock().Apply(app::ParameterId::ExtrudeDistance,QStringLiteral("0.5")))return false;
+    w.SetMode(app::UiMode::Fabrication);
+    if(!w.Ribbon().ClickCategory(QStringLiteral("近似"))||!w.Ribbon().ClickTool(QStringLiteral("近似")))return false;
+    auto* one=w.findChild<QPushButton*>("fabricationOnePiece");if(!one||!one->isVisible()||!one->isEnabled())return false;one->click();
+    app::SelectionSet selected;selected.entityIds={source};w.Viewport().SetSelection(selected);
+    if(!dock.ClickCandidate(1))return false;
+    for(int i=0;i<3;++i)std::cout<<"material candidate "<<i<<": "<<dock.CandidateTextJa(i).toStdString()<<std::endl;
+    if(!selftest::Explain("curved source holes are accepted through ribbon and visible one-sheet button",w.ApproxEvaluations().size()>1
+        &&w.ApproxEvaluations()[1]&&w.ApproxEvaluations()[1]->panels.size()==1&&w.Viewport().ToolPreviewFaceCount()>0))return false;
+    const auto before=w.Session().GetDocument().Revision();
+    (void)w.HandleToolKey(Qt::Key_Escape,nullptr);
+    if(w.Session().GetDocument().Revision()!=before)return false;
+    w.Viewport().SetSelection({});w.Viewport().SetSelection(selected);if(!dock.ClickCandidate(1))return false;
+    const auto initial=*w.ApproxEvaluations()[1];
+    if(initial.materialPanels.empty()||initial.panels[0].openings.empty())return false;
+    const auto holeCount=initial.panels[0].openings.size();
+    std::cout<<"material maxDeviation="<<initial.maximumDeviationMm<<" rms="<<initial.rmsDeviationMm
+        <<" panels="<<initial.panels.size()<<" openings="<<holeCount<<std::endl;
+    if(!capture("01-one-sheet-preview.png")||!w.HandleToolKey(Qt::Key_Return,nullptr)||w.FabricationModelCount()!=1)return false;
+    const auto model=w.CurrentFabricationModelId();
+    w.RunCommand("edit.undo");if(w.FabricationModelCount()!=0)return false;
+    w.RunCommand("edit.redo");if(w.FabricationModelCount()!=1)return false;
+    if(!ShowOnly(w,model))return false;
+    selected.entityIds={model};w.Viewport().SetSelection(selected);w.RunCommand("fabrication.set_assembly");
+    const auto evaluated=w.fabricationModels_.at(model.ToString());
+    std::vector<double> lengths;
+    for(int percent:{0,35,100}){
+        dock.SetPartNumbersText(QStringLiteral("すべて"));dock.TypeAssemblyPercent(percent);dock.PressApplyAssembly();
+        const auto* definition=w.CurrentFabricationDefinition();if(!definition)return false;
+        if(!selftest::Explain("visible assembly control changes the saved model percent",std::abs(definition->masterPercent-percent)<1e-9))return false;
+        const auto rails=app::FoldedRailsOf(*definition,evaluated,0);
+        const auto loops=V2MaterialLoops(evaluated.materialPanels.front(),rails);
+        double length=0;for(const auto& loop:loops)for(std::size_t i=0;i<loop.size();++i)length+=geometry::Distance(loop[i],loop[(i+1)%loop.size()]);
+        lengths.push_back(length);
+        if(percent==100){
+            QFile data(output+"/mapped-loops.csv");if(data.open(QIODevice::WriteOnly)){
+                for(std::size_t l=0;l<loops.size();++l)for(auto p:loops[l])data.write((std::to_string(l)+","+std::to_string(p.x)+","+std::to_string(p.y)+","+std::to_string(p.z)+"\n").c_str());
+            }
+            for(const auto& loop:loops){base::DeterministicIdGenerator ids;std::vector<geometry::ChainInput> inputs;
+                for(const auto& c:V2MaterialCurves(loop,true))inputs.push_back({{},ids.NextTyped<base::IdKind::Segment>(),c});
+                auto exact=w.Session().GetDocument().Snapshot().settings.tolerance;exact.interactiveJoinMm=exact.modelLinearMm;
+                const auto chain=geometry::AnalyzeChain(inputs,exact);
+                std::cout<<"boundary chain "<<loop.size()<<" vertices / "<<inputs.size()<<" curves: "<<(chain.HasValue()?"passed":chain.FirstMessageJa())<<std::endl;
+            }
+        }
+        w.Viewport().FitToDocument();
+        const auto visibleRails=app::FoldedRailsOf(*definition,evaluated,8.0);
+        for(const auto& rail:visibleRails)for(const auto& p:rail){const auto screen=w.Viewport().Mapping().Project(p);
+            if(!selftest::Explain("fit includes the complete current manufacturing pose",screen&&screen->x>=0&&screen->y>=0&&screen->x<=w.Viewport().width()&&screen->y<=w.Viewport().height()))return false;}
+        if(!capture(("02-bend-"+std::to_string(percent)+".png").c_str()))return false;
+        if(percent==0){
+            std::vector<geometry::Vector3> flat;for(const auto& rail:rails)flat.insert(flat.end(),rail.begin(),rail.end());
+            const auto plane=geometry::FitPlane(flat);
+            if(!selftest::Explain("zero percent is an actually flat sheet",plane.valid&&plane.maximumDeviationMm<1e-6))return false;
+            w.RunCommand("fabrication.create_pattern");
+            if(!selftest::Explain("one pattern sheet retains every source hole",w.patternPages_.size()>0&&w.fabricationPanels_.size()==1
+                &&w.fabricationPanels_[0].openings.size()==holeCount))return false;
+        }
+    }
+    for(double length:lengths)if(!selftest::Explain("cut path length is preserved at 0,35,100 percent",std::abs(length-lengths.front())<1e-6*std::max(1.,length)))return false;
+    auto* outputType=w.findChild<QComboBox*>("fabricationGenerationOutput");if(!outputType)return false;
+    const auto generate=[&](int kind){
+        outputType->setCurrentIndex(kind);w.ActivateCommand("fabrication.freeze_state");
+        const bool clicked=w.FabricationDock().ClickGenerateConfirm();
+        std::cout<<"material generation: "<<w.StatusText().toStdString()<<std::endl;
+        return clicked;
+    };
+    // The ordinary tool opens first; its visible confirmation performs the generation.
+    const int guides=selftest::CountOfKind(w,domain::EntityKind::GuideSurface);
+    if(!generate(3)||selftest::CountOfKind(w,domain::EntityKind::GuideSurface)!=guides+1)return false;
+    if(!capture("03-generated-hole-surface.png"))return false;
+    w.RunCommand("edit.undo");if(selftest::CountOfKind(w,domain::EntityKind::GuideSurface)!=guides)return false;
+    w.RunCommand("edit.redo");if(selftest::CountOfKind(w,domain::EntityKind::GuideSurface)!=guides+1)return false;
+    const auto surfaceCopy=output+"/generated-surface.kcd2";
+    w.SetPathChooser([&](bool){return surfaceCopy;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    const int parts=selftest::CountOfKind(w,domain::EntityKind::Part);
+    if(!generate(2)||selftest::CountOfKind(w,domain::EntityKind::Part)!=parts+1)return false;
+    const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto native=w.partShapes_.find(part.ToString());if(native==w.partShapes_.end())return false;
+    const auto check=kernel::CheckSolidForExport(native->second,.001);
+    if(!selftest::Explain("generated perforated sheet thickens to a valid positive-volume solid",check.HasValue()&&check.Value().Ok()&&check.Value().volumeMm3>0))return false;
+    selected.entityIds={part};w.Viewport().SetSelection(selected);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");w.Viewport().SetSelection({});
+    if(!capture("04-generated-hole-solid.png"))return false;
+    const auto saved=output+"/one-sheet-windows.kcd2";w.SetPathChooser([&](bool){return saved;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    return ReopenMaterial(w,saved,model,part,holeCount);
+}
+bool V2WindowHoleExercise::ReopenMaterial(V2MainWindow& w,const QString& saved,base::EntityId model,base::EntityId part,std::size_t holeCount) {
+    if(!w.OpenDocumentFile(saved)||!w.RebuildProblems().isEmpty())return false;
+    const auto after=w.partShapes_.find(part.ToString());if(after==w.partShapes_.end())return false;
+    const auto restored=kernel::CheckSolidForExport(after->second,.001);
+    return selftest::Explain("saved one-sheet approximation and solid rebuild without losing holes",restored.HasValue()&&restored.Value().Ok()
+        &&w.fabricationModels_.at(model.ToString()).panels.size()==1
+        &&w.fabricationModels_.at(model.ToString()).panels[0].openings.size()==holeCount);
+}
+bool V2WindowHoleExercise::RegionFixture(V2MainWindow& w,bool notch) {
+    w.RunCommand("selection.activate");w.RunCommand("file.new");
+    using geometry::CurveSegment;using geometry::Vector3;using P=geometry::Point2;
+    constexpr double pi=3.14159265358979323846;
+    const auto point=[&](P p){return Vector3{p.u*20,30*std::cos(p.v*pi/2),30*std::sin(p.v*pi/2)};};
+    const auto edge=[&](P a,P b){return std::abs(a.u-b.u)<1e-12
+        ?CurveSegment::MakeCircularArc({a.u*20,0,0},{1,0,0},{0,1,0},30,a.v*pi/2,(b.v-a.v)*pi/2).Value()
+        :CurveSegment::MakeLine(point(a),point(b)).Value();};
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;request.keepSectionOrder=true;
+    for(int row=0;row<2;++row){modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=row+1;
+        chain.segments={edge({double(row),0},{double(row),1})};request.chains.push_back(chain);}
+    const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);if(!analysis.HasValue())return false;
+    const auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);if(!support.HasValue())return false;
+    std::vector<std::vector<P>> uv;
+    if(notch)uv={{{0,0},{1,0},{1,1},{0,1},{0,.8},{.65,.8},{.65,.2},{0,.2}},
+        {{.76,.28},{.94,.28},{.94,.44},{.76,.44}},{{.76,.55},{.94,.55},{.94,.72},{.76,.72}}};
+    else {uv={{{0,0},{1,0},{1,1},{0,1}}};for(int i=0;i<6;++i){double u=.1+(i%3)*.27,v=.1+(i/3)*.48;uv.push_back({{u,v},{u+.15,v},{u+.15,v+.25},{u,v+.25}});}}
+    std::vector<std::vector<CurveSegment>> loops;
+    for(const auto& path:uv){std::vector<CurveSegment> curves;for(std::size_t i=0;i<path.size();++i)curves.push_back(edge(path[i],path[(i+1)%path.size()]));loops.push_back(curves);}
+    const auto trimmed=kernel::TrimSurfaceRegion({support.Value().handle},loops,tolerance,.001);kernel::ReleaseShape(support.Value().handle);
+    if(!trimmed.HasValue())return selftest::Explain(trimmed.FirstMessageJa().c_str(),false);
+    const auto bytes=kernel::CaptureOutputShape(trimmed.Value());kernel::ReleaseShape(trimmed.Value());if(!bytes.HasValue())return false;
+    domain::FreezeDerivedDefinition def;def.frozenBrep=bytes.Value();domain::Feature feature;
+    feature.id=w.ids_->NextTyped<base::IdKind::Feature>();feature.type=domain::FeatureType::FreezeDerived;feature.definition=def;
+    domain::Entity entity;entity.id=w.ids_->NextTyped<base::IdKind::Entity>();entity.createdBy=feature.id;entity.kind=domain::EntityKind::GuideSurface;
+    entity.displayName=notch?"切り欠きと2窓の曲面":"6窓の曲面";feature.displayName=entity.displayName;feature.outputs.push_back({"source",entity.id,entity.kind});
+    if(!w.Session().GetDocument().Run(document::AddFeatureCommand(feature,{entity},"穴付き曲面の回帰入力")).committed)return false;
+    w.AdoptCurrentDocument();w.RebuildKernelShapes();w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
+    auto output=qEnvironmentVariable("KACHACAD_MATERIAL_UI_OUTPUT");if(output.isEmpty())output=QDir::currentPath()+"/material-region-fixture";
+    if(!ApproximateRegion(w,entity.id,output+(notch?"/notch":"/six-holes")))return false;
+    const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto hit=[&](P at){const auto on=point(at);for(const auto& view:w.Viewport().ShapeViews())if(view.entityId==part)for(const auto& tri:view.mesh.triangles)
+        if(modeling::RayHitsTriangle({on.x,100,on.z},{0,-1,0},tri))return true;return false;};
+    return selftest::Explain("native generated solid has empty window rays and surrounding material",!hit(notch?P{.85,.36}:P{.175,.225})
+        &&hit(notch?P{.85,.85}:P{.05,.5})&&(!notch||!hit({.3,.5})));
+}
 bool V2WindowHoleExercise::MultipleHoles(V2MainWindow& w,bool notch,bool island){
     w.RunCommand("selection.activate");w.RunCommand("file.new");
     using geometry::CurveSegment;using geometry::Vector3;
@@ -573,7 +728,9 @@ bool V2WindowHoleExercise::PreviewMeshReuse(V2MainWindow& w){
 }
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> WindowHoleOwnerCases(){
-    std::vector<SelfTestCase> cases={{"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration},
+    std::vector<SelfTestCase> cases={{"HP-FAB-REGION six curved windows one pattern and thick solid",[](auto& w){return V2WindowHoleExercise::RegionFixture(w,false);}},
+        {"HP-FAB-REGION C notch two windows one pattern and thick solid",[](auto& w){return V2WindowHoleExercise::RegionFixture(w,true);}},
+        {"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration},
         {"HP-TH-MESH worker preview mesh moves to confirmed part",V2WindowHoleExercise::PreviewMeshReuse},
         {"HP-LF-HOLES six holes from original wires face and solid",[](auto& w){return V2WindowHoleExercise::MultipleHoles(w,false);}},
         {"HP-LF-HOLES semicircular notch and two holes face and solid",[](auto& w){return V2WindowHoleExercise::MultipleHoles(w,true);}},

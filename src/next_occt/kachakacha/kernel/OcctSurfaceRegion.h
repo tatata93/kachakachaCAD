@@ -9,6 +9,12 @@ namespace kachakacha::v2::kernel {
     const std::vector<std::vector<geometry::CurveSegment>>& loops,
     const geometry::GeometryTolerance& tolerance, double boundaryApproximationMm = 0,
     double* maximumDeviationMm = nullptr, double* rmsDeviationMm = nullptr);
+//! Generated fabrication boundaries already lie on one supporting face. Build
+//! its outer/hole wires directly, preserving the exact 3D curve definitions.
+[[nodiscard]] base::Result<modeling::KernelShapeHandle> TrimFabricationFace(
+    modeling::KernelShapeHandle support,
+    const std::vector<std::vector<geometry::CurveSegment>>& loops,
+    const geometry::GeometryTolerance& tolerance);
 [[nodiscard]] base::Result<modeling::GuideSurfaceResult> BuildSurfaceWithHoles(
     const modeling::GuideSurfaceRequest& request,const geometry::GeometryTolerance& tolerance);
 }

@@ -135,6 +135,8 @@ using fabrication::PatternPanel;
     return built;
 }
 
+Result<FabricationEvaluation> EvaluateByBands(const domain::CreateFabricationModelDefinition&,
+    const std::vector<FabricationSource>&,const FabricationMarkings&,double);
 //! V2 方式: 面ごとに「伸ばさずに平らにできるか」を検査して展開する。
 [[nodiscard]] Result<FabricationEvaluation> EvaluateByClassification(
     const domain::CreateFabricationModelDefinition& definition,
@@ -142,6 +144,17 @@ using fabrication::PatternPanel;
     double toleranceMm)
 {
     using Out = Result<FabricationEvaluation>;
+    if(std::any_of(sources.begin(),sources.end(),[](const auto& source){return !source.materialRegionsUv.empty();})){
+        for(const auto& source:sources)if(source.samples){
+            const auto checked=fabrication::BuildCurvedPanel(source.name,*source.samples,definition.targetMaxDeviation.value);
+            if(!checked.HasValue())return Out::Failure(checked.Diagnostics());
+        }
+        auto one=definition;one.method=1;one.equalPartCount=one.maximumPartCount=1;one.splitAtCorners=false;
+        one.splitAxis=2;one.adaptiveSpacing=false;one.automaticBoundaries=true;one.manualBoundaries.clear();
+        auto result=EvaluateByBands(one,sources,markings,toleranceMm);
+        if(result.HasValue()){auto made=result.Value();made.summaryJa="展開可能な曲面の外周と穴を保持。"+made.summaryJa;return Out::Success(std::move(made),result.Diagnostics());}
+        return result;
+    }
     FabricationEvaluation made;
     made.method = FabricationMethod::ClassifyFaces;
     std::vector<fabrication::PlanarPanelRequest> planar;
@@ -196,6 +209,9 @@ struct BandedSource {
     fabrication::BandApproximationResult bands;
     fabrication::BandMesh mesh;
     std::size_t firstPanelIndex = 0;
+    std::vector<FabricationEvaluation::MaterialPanel> materials;
+    std::vector<std::vector<std::size_t>> bandPanels;
+    double boundarySquared=0;std::size_t boundarySamples=0;
 };
 
 //! 面1つを帯へ近似し、型紙の部材にする。
@@ -208,12 +224,16 @@ struct BandedSource {
     fabrication::BandApproximationOptions options = BandOptionsOf(definition);
     // 自動 / 縦 / 横 は面ごとに実際の軸へ決める(縦横は世界の上下、自動は曲がりで)。
     options.splitAxis = fabrication::ResolveSplitAxis(surface, SplitDirectionOf(definition));
+    if(options.equalPartCount==1&&!options.splitAtCorners&&SplitDirectionOf(definition)==fabrication::BandSplitDirection::Auto)
+        options.splitAxis=fabrication::MeasureAxisDeviation(surface,fabrication::BandSplitAxis::U)
+            <fabrication::MeasureAxisDeviation(surface,fabrication::BandSplitAxis::V)
+            ?fabrication::BandSplitAxis::U:fabrication::BandSplitAxis::V;
     auto bands = fabrication::ApproximateBands(surface, options);
     if (!bands.HasValue()) {
         return Out::Failure(bands.Diagnostics());
     }
     const auto parameters=fabrication::AdaptiveRailParameters(surface,options.splitAxis,
-        bands.Value().railParameters,definition.targetMaxDeviation.value*.01);
+        bands.Value().railParameters,definition.targetMaxDeviation.value*(source.materialRegionsUv.empty()?.01:.1));
     if(!parameters.HasValue())return Out::Failure(parameters.Diagnostics());
     const auto mesh = fabrication::DevelopBandMesh(surface, options.splitAxis,
         bands.Value().railParameters,96,parameters.Value());
@@ -226,10 +246,79 @@ struct BandedSource {
         made.bands.railParameters,parameters.Value());
     made.bands.reachedRequestedTolerance=made.bands.maximumDeviationMm<=options.maximumDeviationMm+1e-9;
     made.mesh = mesh.Value();
+    if(!source.materialRegionsUv.empty()&&made.mesh.BandCount()==1){
+        // A one-axis sheet may follow parallel generators within the requested
+        // approximation budget. Avoid microscopic twisted facets in a nearly
+        // extruded source; measure and report the adjustment, never relax tolerance.
+        geometry::Vector3 direction{};
+        for(std::size_t i=0;i<made.mesh.world[0].size();++i)direction=direction+made.mesh.world[1][i]-made.mesh.world[0][i];
+        if(direction.LengthSquared()>1e-18){
+            direction=geometry::Normalized(direction);const auto axis=options.splitAxis;
+            const auto aligned=[&](double u,double v){
+                const double along=axis==fabrication::BandSplitAxis::U?v:u,across=axis==fabrication::BandSplitAxis::U?u:v;
+                const auto a=surface.EvaluateSplit(axis,0,along),b=surface.EvaluateSplit(axis,1,along);
+                return (a+b)*.5+direction*((across-.5)*geometry::Dot(b-a,direction));
+            };
+            double adjustment=0;
+            for(std::size_t i=1;i<parameters.Value().size();++i)for(int k=0;k<=4;++k){
+                const double t=parameters.Value()[i-1]+(parameters.Value()[i]-parameters.Value()[i-1])*k/4.;
+                for(double across:{0.,1.}){const double u=axis==fabrication::BandSplitAxis::U?across:t,v=axis==fabrication::BandSplitAxis::U?t:across;
+                    adjustment=std::max(adjustment,geometry::Distance(surface.Evaluate(u,v),aligned(u,v)));}
+            }
+            if(adjustment>1e-12&&made.bands.maximumDeviationMm+adjustment+source.boundarySamplingDeviationMm<=options.maximumDeviationMm){
+                const fabrication::SampledSurface adjusted(*source.samples,aligned);
+                const auto developed=fabrication::DevelopBandMesh(adjusted,axis,made.bands.railParameters,96,parameters.Value());
+                if(!developed.HasValue())return Out::Failure(developed.Diagnostics());
+                made.mesh=developed.Value();made.bands.maximumDeviationMm+=adjustment;
+            }
+        }
+    }
     made.firstPanelIndex = panels.size();
+    made.bandPanels.resize(made.mesh.BandCount());
     const auto angles = fabrication::MeasureCreaseAngles(made.mesh);
-    for (auto& panel : PanelsFromBandMesh(source.name, made.mesh, angles)) {
-        panels.push_back(std::move(panel));
+    if(source.materialRegionsUv.empty()) {
+        for (auto& panel : PanelsFromBandMesh(source.name, made.mesh, angles)) {
+            made.bandPanels[panels.size()-made.firstPanelIndex].push_back(panels.size());
+            panels.push_back(std::move(panel));
+        }
+    } else {
+        made.bands.maximumDeviationMm+=source.boundarySamplingDeviationMm;
+        made.bands.reachedRequestedTolerance=made.bands.maximumDeviationMm<=options.maximumDeviationMm+1e-9;
+        for(int band=0;band<made.mesh.BandCount();++band)for(const auto& material:source.materialRegionsUv){
+            const double low=made.bands.railParameters[band],high=made.bands.railParameters[band+1];
+            const auto clipped=fabrication::ClipBandMaterial(material.loops,options.splitAxis,low,high);
+            if(!clipped.HasValue())return Out::Failure(clipped.Diagnostics());
+            std::vector<std::vector<geometry::Vector3>> flat(2);
+            for(int row=0;row<2;++row)for(auto point:made.mesh.developedBands[band][row])flat[row].push_back({point.u,point.v,0});
+            for(auto piece:clipped.Value()){
+                fabrication::BandMesh localMesh;localMesh.rows=2;localMesh.columns=made.mesh.columns;localMesh.world={made.mesh.world[band],made.mesh.world[band+1]};
+                std::vector<std::vector<geometry::Vector3>> uvRails(2);
+                for(int row=0;row<2;++row)for(double s:made.mesh.longitudinalParameters)
+                    uvRails[row].push_back(options.splitAxis==fabrication::BandSplitAxis::U
+                        ?geometry::Vector3{row?high:low,s,0}:geometry::Vector3{s,row?high:low,0});
+                for(auto& loop:piece.loops)for(auto& uv:loop){
+                    const auto mapped=fabrication::MapPointToBandState(localMesh,uvRails,surface.Evaluate(uv.u,uv.v));
+                    if(!mapped.HasValue())return Out::Failure(mapped.Diagnostics());
+                    made.bands.maximumDeviationMm=std::max(made.bands.maximumDeviationMm,
+                        mapped.Value().distanceMm+source.boundarySamplingDeviationMm);
+                    made.boundarySquared+=mapped.Value().distanceMm*mapped.Value().distanceMm;++made.boundarySamples;
+                    uv={mapped.Value().point.x,mapped.Value().point.y};
+                }
+                for(auto& loop:piece.loops)fabrication::CompactMaterialLoop(loop);
+                PatternPanel panel;panel.panelId=source.name+" 部材"+std::to_string(panels.size()-made.firstPanelIndex+1);
+                for(std::size_t i=0;i<piece.loops.size();++i){
+                    const auto path=fabrication::MapBandMaterialLoop(piece.loops[i],options.splitAxis,low,high,made.mesh.longitudinalParameters,flat);
+                    if(path.size()<3)return Out::Failure(MakeError("FAB-O001","材料境界の展開に失敗しました。",{}));
+                    std::vector<geometry::Point2> loop;for(auto p:path)loop.push_back({p.x,p.y});
+                    if(i==0)panel.outline=std::move(loop);else panel.openings.push_back(std::move(loop));
+                }
+                made.materials.push_back({panels.size(),static_cast<std::size_t>(band),options.splitAxis,low,high,made.mesh.longitudinalParameters,piece.loops});
+                made.bandPanels[band].push_back(panels.size());
+                panels.push_back(std::move(panel));
+            }
+        }
+        made.bands.reachedRequestedTolerance=made.bands.maximumDeviationMm<=options.maximumDeviationMm+1e-9;
+        if(panels.size()==made.firstPanelIndex)return Out::Failure(MakeError("FAB-O001","選んだ範囲に材料がありません。",{}));
     }
     return Out::Success(std::move(made));
 }
@@ -282,12 +371,16 @@ struct BandedSource {
     using Out = Result<FabricationEvaluation>;
     FabricationEvaluation made;
     made.method = FabricationMethod::BandApproximation;
+    if(!markings.openings.empty()&&std::any_of(sources.begin(),sources.end(),[](const auto& source){return !source.materialRegionsUv.empty();}))
+        return Out::Failure(MakeError("FAB-O001","穴付き曲面へ追加する窓は、元の面へ先に反映してください。",
+            "面にする、またはトリムで外周と全ての窓を含む面を作ってから近似します。開口を無視して生成しません。"));
     std::vector<fabrication::PlanarPanelRequest> planar;
     std::vector<PanelOrigin> planarOrigins;
     std::vector<BandedSource> banded;
     for (const FabricationSource& source : sources) {
         if (source.samples.has_value()) {
             const std::size_t before = made.panels.size();
+            std::size_t bandOffset=0;for(const auto& face:made.bandFaces)bandOffset+=face.mesh.BandCount();
             auto approximated = ApproximateSource(definition, source, made.panels);
             if (!approximated.HasValue()) {
                 return Out::Failure(approximated.Diagnostics());
@@ -302,8 +395,15 @@ struct BandedSource {
                 approximated.Value().bands.maximumDeviationMm);
             made.reachedTolerance = made.reachedTolerance
                 && approximated.Value().bands.reachedRequestedTolerance;
+            if(approximated.Value().boundarySamples)made.rmsDeviationMm=std::max(made.rmsDeviationMm,
+                std::sqrt(approximated.Value().boundarySquared/approximated.Value().boundarySamples));
             made.bandFaces.push_back(FabricationEvaluation::BandedFace{source.entityId,
                 source.faceIndex, approximated.Value().bands, approximated.Value().mesh});
+            for(auto material:approximated.Value().materials){material.bandIndex+=bandOffset;made.materialPanels.push_back(std::move(material));}
+            for(const auto& indices:approximated.Value().bandPanels){
+                made.bandPanels.push_back(indices);
+                made.materialBands.push_back(!source.materialRegionsUv.empty());
+            }
             banded.push_back(std::move(approximated.Value()));
             continue;
         }
@@ -316,6 +416,7 @@ struct BandedSource {
             planarOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
         }
     }
+    made.bandPanelCount=made.panels.size();
     // 開口は、帯の型紙へ切り出す(またぐ窓は、またぐ全ての帯へ)。平らな部材の分は残す。
     const auto remaining = AssignOpeningsToBands(markings, banded, planar, toleranceMm,
         made.panels);
@@ -478,6 +579,19 @@ Result<FabricationEvaluation> EvaluateFabrication(
                 return evaluate(u0+du*u,v0+dv*v);
             };
         }
+        if(!source.materialRegionsUv.empty()) {
+            std::vector<fabrication::BandMaterialRegion> regions;
+            for(auto region:source.materialRegionsUv){
+                for(auto& loop:region.loops)for(auto& p:loop){p.u=(p.u-definition.rangeUMin)/(definition.rangeUMax-definition.rangeUMin);p.v=(p.v-definition.rangeVMin)/(definition.rangeVMax-definition.rangeVMin);}
+                const auto u=fabrication::ClipBandMaterial(region.loops,fabrication::BandSplitAxis::U,0,1);if(!u.HasValue())return Out::Failure(u.Diagnostics());
+                for(const auto& regionU:u.Value()){
+                    const auto v=fabrication::ClipBandMaterial(regionU.loops,fabrication::BandSplitAxis::V,0,1);if(!v.HasValue())return Out::Failure(v.Diagnostics());
+                    regions.insert(regions.end(),v.Value().begin(),v.Value().end());
+                }
+            }
+            if(regions.empty())return Out::Failure(MakeError("FAB-O001","選んだ範囲に材料がありません。",{}));
+            source.materialRegionsUv=std::move(regions);
+        }
     }
     return FabricationMethodOf(definition) == FabricationMethod::BandApproximation
         ? EvaluateByBands(definition, cropped, markings, toleranceMm)
@@ -575,7 +689,12 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     if (!evaluation.bandMesh.has_value()) {
         return {};
     }
-    const ResolvedFoldState state = ResolveFoldState(definition, *evaluation.bandMesh);
+    auto firstDefinition=definition;
+    const std::size_t totalBands=evaluation.bandPanels.size();
+    const bool globalProgress=totalBands>0&&definition.bandProgress.size()==totalBands;
+    if(globalProgress)firstDefinition.bandProgress.assign(definition.bandProgress.begin(),
+        definition.bandProgress.begin()+evaluation.bandMesh->BandCount());
+    const ResolvedFoldState state = ResolveFoldState(firstDefinition, *evaluation.bandMesh);
     // 折り線の個別値は master との比で持ち、帯の進行度でさらに補間される。
     // V1 と同じ扱い: creaseProgress は「1 = 完成形の折り角」で、帯の t が掛かる。
     std::vector<double> creaseRelative(state.creaseProgress.size(), 1.0);
@@ -595,11 +714,13 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     std::vector<std::vector<geometry::Vector3>> lines =
         rails.HasValue() ? rails.Value() : std::vector<std::vector<geometry::Vector3>>{};
     // 2 枚目以降の面: 折りの個別値は持たないので、全体の曲げ具合だけで出す。
+    std::size_t bandOffset=evaluation.bandMesh->BandCount();
     for (std::size_t face = 1; face < evaluation.bandFaces.size(); ++face) {
         const auto& mesh = evaluation.bandFaces[face].mesh;
         const std::vector<double> relative(static_cast<std::size_t>(mesh.CreaseCount()), 1.0);
-        const std::vector<double> progress(static_cast<std::size_t>(mesh.BandCount()),
-            state.masterProgress);
+        std::vector<double> progress(static_cast<std::size_t>(mesh.BandCount()),state.masterProgress);
+        if(globalProgress)std::copy_n(definition.bandProgress.begin()+bandOffset,progress.size(),progress.begin());
+        bandOffset+=progress.size();
         const auto more = fabrication::BuildBandFoldRails(mesh, relative, progress, liftMm);
         if (more.HasValue()) {
             lines.insert(lines.end(), more.Value().begin(), more.Value().end());

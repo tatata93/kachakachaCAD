@@ -4,6 +4,8 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/kernel/OcctFabricationRegion.h"
+#include "kachakacha/kernel/OcctSurfaceRegion.h"
+#include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <NCollection_Array2.hxx>
@@ -22,6 +24,8 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepLib.hxx>
 #include <Geom2d_BezierCurve.hxx>
 #include <TColgp_Array1OfPnt2d.hxx>
@@ -440,6 +444,82 @@ KACHA_V2_TEST(fabrication_surface, curved_material_chart_retains_concave_outline
         const auto expected=surface->Value(v,u);const auto actual=region.Value().evaluate(u,v);
         RequireNear(geometry::Distance(actual,{expected.X(),expected.Y(),expected.Z()}),0,1e-9,"evaluator survives release and retains normalized UV");
     }
+}
+
+KACHA_V2_TEST(fabrication_surface, direct_material_face_keeps_holes_and_rejects_invalid_regions)
+{
+    using C=geometry::CurveSegment;using V=geometry::Vector3;
+    const auto rectangle=[](double x,double y,double w,double h){return std::vector<C>{
+        C::MakeLine({x,y,0},{x+w,y,0}).Value(),C::MakeLine({x+w,y,0},{x+w,y+h,0}).Value(),
+        C::MakeLine({x+w,y+h,0},{x,y+h,0}).Value(),C::MakeLine({x,y+h,0},{x,y,0}).Value()};};
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;
+    modeling::GuideChain chain;chain.role=modeling::ChainRole::OuterBoundary;chain.closed=true;chain.index=1;chain.segments=rectangle(0,0,20,20);request.chains.push_back(chain);
+    const geometry::GeometryTolerance tolerance;const auto support=Build(request);Require(support.HasValue(),support.FirstMessageJa());
+    std::vector<std::vector<C>> loops{chain.segments,{C::MakeCircle({5,5,0},{0,0,-1},{1,0,0},2).Value()},rectangle(12,12,3,4)};
+    const auto made=kernel::TrimFabricationFace(support.Value().handle,loops,tolerance);Require(made.HasValue(),made.FirstMessageJa());
+    const auto boundary=kernel::FaceBoundaryOf(made.Value(),0,tolerance);Require(boundary.HasValue()&&boundary.Value().holeLoops.size()==2,"opposite circle orientation and rectangle are both holes");
+    kernel::ReleaseShape(made.Value());loops.back()=rectangle(19,12,3,4);
+    Require(!kernel::TrimFabricationFace(support.Value().handle,loops,tolerance).HasValue(),"outside hole is not a successful face");
+    loops={chain.segments,rectangle(2,2,5,5),rectangle(4,4,5,5)};
+    Require(!kernel::TrimFabricationFace(support.Value().handle,loops,tolerance).HasValue(),"overlapping holes are refused");
+    kernel::ReleaseShape(support.Value().handle);
+}
+
+KACHA_V2_TEST(fabrication_surface, a_notch_without_enclosed_holes_is_not_filled_by_thickening)
+{
+    using C=geometry::CurveSegment;using V=geometry::Vector3;
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;request.keepSectionOrder=true;
+    for(int r=0;r<2;++r){modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=r+1;
+        chain.segments={C::MakeLine({0,20.*r,0},{20,20.*r,0}).Value()};request.chains.push_back(chain);}
+    geometry::GeometryTolerance tolerance;const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);Require(analysis.HasValue(),analysis.FirstMessageJa());
+    const auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);Require(support.HasValue(),support.FirstMessageJa());
+    const std::vector<V> points{{0,0,0},{20,0,0},{20,20,0},{0,20,0},{0,16,0},{14,16,0},{14,4,0},{0,4,0}};
+    std::vector<C> boundary;for(std::size_t i=0;i<points.size();++i)boundary.push_back(C::MakeLine(points[i],points[(i+1)%points.size()]).Value());
+    const auto trimmed=kernel::TrimFabricationFace(support.Value().handle,{boundary},tolerance);kernel::ReleaseShape(support.Value().handle);Require(trimmed.HasValue(),trimmed.FirstMessageJa());
+    const auto solid=kernel::ThickenSurface(trimmed.Value(),.5,fabrication::ThicknessPlacement::Centered,tolerance);kernel::ReleaseShape(trimmed.Value());
+    Require(solid.HasValue(),solid.FirstMessageJa());RequireNear(solid.Value().volumeMm3,116,1e-7,"C-shaped material volume excludes the edge notch");kernel::ReleaseShape(solid.Value().handle);
+}
+
+KACHA_V2_TEST(fabrication_surface, returning_bend_hole_keeps_consistent_side_wall_orientation)
+{
+    using C=geometry::CurveSegment;using V=geometry::Vector3;
+    const std::vector<V> a{{0,0,0},{200,0,0},{199.5,.8660254037844386,0},{99.5,.8660254037844386,0}};
+    std::vector<V> b;for(auto p:a)b.push_back(p+V{0,0,10});
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;request.keepSectionOrder=true;
+    for(int r=0;r<2;++r){modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=r+1;const auto& points=r?b:a;
+        for(std::size_t i=1;i<points.size();++i)chain.segments.push_back(C::MakeLine(points[i-1],points[i]).Value());request.chains.push_back(chain);}
+    geometry::GeometryTolerance tolerance;const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);Require(analysis.HasValue(),analysis.FirstMessageJa());
+    const auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);Require(support.HasValue(),support.FirstMessageJa());
+    std::vector<V> outer=a;for(auto i=b.rbegin();i!=b.rend();++i)outer.push_back(*i);
+    const std::vector<V> hole{{10,0,3},{20,0,3},{20,0,7},{10,0,7}};
+    std::vector<std::vector<C>> loops;for(const auto& points:{outer,hole}){std::vector<C> curves;
+        for(std::size_t i=0;i<points.size();++i)curves.push_back(C::MakeLine(points[i],points[(i+1)%points.size()]).Value());loops.push_back(curves);}
+    const auto face=kernel::TrimFabricationFace(support.Value().handle,loops,tolerance);kernel::ReleaseShape(support.Value().handle);Require(face.HasValue(),face.FirstMessageJa());
+    const auto solid=kernel::ThickenSurface(face.Value(),.01,fabrication::ThicknessPlacement::Centered,tolerance);kernel::ReleaseShape(face.Value());
+    Require(solid.HasValue(),solid.FirstMessageJa());RequireNear(solid.Value().volumeMm3,29.7,1e-6,"returning bend volume retains its opening");kernel::ReleaseShape(solid.Value().handle);
+}
+KACHA_V2_TEST(fabrication_surface, warped_faceted_sheet_retains_hole_and_normal_thickness)
+{
+    using C=geometry::CurveSegment;using V=geometry::Vector3;
+    const std::vector<V> a{{0,0,0},{10,0,0},{15,5,0}},b{{0,0,8},{10,0,8},{15,5.5,9}};
+    BRepBuilderAPI_Sewing sewing(1e-6);
+    for(int i=0;i<2;++i)for(const auto& points:std::vector<std::vector<V>>{{a[i],a[i+1],b[i]},{b[i],a[i+1],b[i+1]}}){
+        BRepBuilderAPI_MakePolygon polygon;for(auto p:points)polygon.Add(gp_Pnt(p.x,p.y,p.z));polygon.Close();
+        BRepBuilderAPI_MakeFace face(polygon.Wire(),true);Require(face.IsDone(),"facet fixture");sewing.Add(face.Face());
+    }
+    sewing.Perform();const auto source=kernel::StoreShape(sewing.SewedShape());
+    std::vector<V> outer=a;for(auto i=b.rbegin();i!=b.rend();++i)outer.push_back(*i);
+    const std::vector<V> hole{{2,0,1},{4,0,1},{4,0,3},{2,0,3}};
+    std::vector<std::vector<C>> loops;for(const auto& points:{outer,hole}){std::vector<C> curves;
+        for(std::size_t i=0;i<points.size();++i)curves.push_back(C::MakeLine(points[i],points[(i+1)%points.size()]).Value());loops.push_back(curves);}
+    geometry::GeometryTolerance tolerance;const auto cut=kernel::TrimSurfaceRegion({source},loops,tolerance,1e-6);Require(cut.HasValue(),cut.FirstMessageJa());
+    for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Centered,fabrication::ThicknessPlacement::Inside}){
+        const auto full=kernel::ThickenSurface(source,.2,placement,tolerance);Require(full.HasValue(),full.FirstMessageJa());
+        const auto perforated=kernel::ThickenSurface(cut.Value(),.2,placement,tolerance);Require(perforated.HasValue(),perforated.FirstMessageJa());
+        RequireNear(full.Value().volumeMm3-perforated.Value().volumeMm3,.8,1e-6,"4 square mm hole removes exactly normal thickness times area");
+        kernel::ReleaseShape(full.Value().handle);kernel::ReleaseShape(perforated.Value().handle);
+    }
+    kernel::ReleaseShape(cut.Value());kernel::ReleaseShape(source);
 }
 #endif
 KACHA_V2_TEST_MAIN("kernel_dome_tests")

@@ -6,12 +6,13 @@
 //! だから型紙にする前に「平らかどうか」を必ず調べる。
 //! 調べずに近似すると、切ってから合わないことに気づくことになる。
 //!
-//! いま扱えるのは平らな部材だけである。曲がった面は断る。
-//! 扱えるふりをしない。
+//! 曲面は帯として展開し、外周・穴・切り欠きも同じ材料写像で運ぶ。
+//! 近似の許容差と生成形状の安全検査を満たさない結果は確定しない。
 
 #include "V2MainWindow.h"
 #include "V2PlanarCurves.h"
 #include "V2FabricationSources.h"
+#include "V2FabricationMaterial.h"
 #include "V2GptFabricationTool.h"
 
 #include "kachakacha/app/FabricationOptions.h"
@@ -307,8 +308,12 @@ std::vector<int> V2MainWindow::FoldEmphasisFor(const std::vector<FoldGroup>& gro
     for (const auto& group : groups) {
         const bool mine = group.bands && group.model == current;
         for (std::size_t band = 0; band < group.pairs; ++band) {
-            const bool target = mine
-                && std::find(targets.begin(), targets.end(), band) != targets.end();
+            bool target=mine&&std::find(targets.begin(),targets.end(),band)!=targets.end();
+            if(mine)if(const auto found=fabricationModels_.find(group.model.ToString());
+                found!=fabricationModels_.end()&&band<found->second.bandPanels.size()){
+                target=std::any_of(found->second.bandPanels[band].begin(),found->second.bandPanels[band].end(),
+                    [&](auto panel){return std::find(targets.begin(),targets.end(),panel)!=targets.end();});
+            }
             emphasis.push_back(target ? 2 : mine ? 1 : 0);
         }
     }
@@ -320,6 +325,7 @@ void V2MainWindow::RefreshFabricationView()
     // 全近似モデルの部材を並べ直す。型紙はこの並びから作る。
     fabricationPanels_.clear();
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails;
+    std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops;
     std::vector<FoldGroup> groups;
     for (const auto& entity : session_->GetDocument().Snapshot().entities) {
         if (entity.kind != kachakacha::v2::domain::EntityKind::FabricationModel) {
@@ -342,8 +348,15 @@ void V2MainWindow::RefreshFabricationView()
             // いまの曲げ状態での姿勢。画面のプレビューと固定・出力を同じ道にする。
             // V1 で、プレビューと出力を別の作り方にして食い違った教訓である。
             const std::size_t before = rails.size();
-            for (auto& rail : kachakacha::v2::app::FoldedRailsOf(*definition,
-                     found->second, 8.0)) {
+            auto posed=kachakacha::v2::app::FoldedRailsOf(*definition,found->second,8.0);
+            materialLoops.resize((before+posed.size())/2);
+            for(std::size_t band=0;band<found->second.materialBands.size();++band)
+                if(found->second.materialBands[band])materialLoops[before/2+band].emplace();
+            for(const auto& piece:found->second.materialPanels){
+                auto loops=V2MaterialLoops(piece,posed);auto& slot=materialLoops[before/2+piece.bandIndex];
+                if(!slot)slot.emplace();slot->insert(slot->end(),loops.begin(),loops.end());
+            }
+            for (auto& rail : posed) {
                 rails.push_back(std::move(rail));
             }
             // GPT 版は輪(外形 + 開口)で、帯の組ではない。強調は帯の近似だけ。
@@ -354,10 +367,11 @@ void V2MainWindow::RefreshFabricationView()
     // 表示で「近似の姿」を消しているなら出さない(F-04。見るだけの切り替え)。
     if (fabricationDock_ != nullptr && !fabricationDock_->ShowApprox()) {
         rails.clear();
+        materialLoops.clear();
         groups.clear();
     }
     foldGroups_ = std::move(groups);
-    viewport_->SetFoldPreview(std::move(rails), FoldEmphasisFor(foldGroups_));
+    viewport_->SetFoldPreview(std::move(rails), FoldEmphasisFor(foldGroups_),std::move(materialLoops));
     RefreshShapeViews();
     processContext_.fabricationBuilt = !fabricationPanels_.empty();
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
@@ -391,11 +405,22 @@ void V2MainWindow::SetAssemblyPercent(double percent, const QString& parts)
         return;
     }
     const auto found = fabricationModels_.find(modelId.ToString());
-    const int bandCount = found != fabricationModels_.end()
-        ? static_cast<int>(found->second.panels.size())
-        : 0;
+    int bandCount=found!=fabricationModels_.end()?static_cast<int>(found->second.panels.size()):0;
+    auto chosenBands=numbers.Value();
+    if(found!=fabricationModels_.end()&&!found->second.materialBands.empty()){
+        const auto& groups=found->second.bandPanels;bandCount=static_cast<int>(groups.size());chosenBands.clear();
+        for(auto panel:numbers.Value()){
+            const auto group=std::find_if(groups.begin(),groups.end(),[&](const auto& indices){return std::find(indices.begin(),indices.end(),panel-1)!=indices.end();});
+            if(group==groups.end()){SetStatus(QStringLiteral("この部材は曲げる帯に対応しません。対象を選び直してください。"));return;}
+            if(std::any_of(group->begin(),group->end(),[&](auto related){return std::find(numbers.Value().begin(),numbers.Value().end(),static_cast<int>(related+1))==numbers.Value().end();})){
+                SetStatus(QStringLiteral("同じ帯から分かれた部材は一緒に曲げます。対象部材に同じ帯の全ての部材番号を指定してください。"));return;
+            }
+            const auto band=static_cast<std::size_t>(group-groups.begin());
+            if(std::find(chosenBands.begin(),chosenBands.end(),static_cast<int>(band+1))==chosenBands.end())chosenBands.push_back(static_cast<int>(band+1));
+        }
+    }
     const auto updated = kachakacha::v2::app::UpdateBandProgress(*current, bandCount,
-        numbers.Value(), percent);
+        chosenBands, percent);
     if (!updated.HasValue()) {
         ReportDiagnostics(updated.Diagnostics());
         return;

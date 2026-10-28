@@ -791,6 +791,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctThickenToFace.cpp
     src/next_occt/kachakacha/kernel/OcctCorrectedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctPlanarSheetThicken.cpp
     src/next_occt/kachakacha/kernel/OcctRevolvedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctMatchedLoft.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
@@ -1177,6 +1178,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2ApproxPreview.cpp
+        src/apps/cad_next/V2FabricationMaterial.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
         src/apps/cad_next/V2SelfTestImage.cpp
         src/apps/cad_next/V2FlowLayout.cpp

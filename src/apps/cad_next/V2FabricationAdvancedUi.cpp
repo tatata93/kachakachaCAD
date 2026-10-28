@@ -30,6 +30,14 @@ QWidget* V2FabricationDock::ArrangeQuickOptions(QWidget* details)
     deviation_->setObjectName(QStringLiteral("fabricationTolerance"));
     splitAxis_->setObjectName(QStringLiteral("fabricationDirection"));
     method_->setObjectName(QStringLiteral("fabricationMethod"));
+    auto* onePiece=new QPushButton(QStringLiteral("各面を分割せず1枚にする"),quick);
+    onePiece->setObjectName(QStringLiteral("fabricationOnePiece"));
+    onePiece->setToolTip(QStringLiteral("窓と切り欠きを残して、選んだ面ごとに1枚へ近似します。複数面は別部材です。曲げ方向を自動比較し、精度超過は数値で表示します。"));
+    form->insertRow(1,onePiece);
+    connect(onePiece,&QPushButton::clicked,this,[this]{
+        loading_=true;equalParts_->setValue(1);maxParts_->setValue(1);splitAtCorners_->setChecked(false);
+        splitAxis_->setCurrentIndex(2);adaptive_->setChecked(false);loading_=false;QuickOptionsChanged();
+    });
     layout->addWidget(quick);
     auto* toggle=new QPushButton(QStringLiteral("▸ 詳細設定"),wrapper);
     toggle->setObjectName(QStringLiteral("fabricationDetailsToggle"));toggle->setCheckable(true);

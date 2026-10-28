@@ -3,6 +3,7 @@
 #include "kachakacha/app/FabricationOpenings.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/fabrication/BandFold.h"
+#include "kachakacha/fabrication/BandMaterialRegion.h"
 
 #include <algorithm>
 #include <cmath>
@@ -197,4 +198,59 @@ KACHA_V2_TEST(fabrication_openings, 載っていない窓は載っていない�
     Require(made.panels[0].openings.empty() && made.panels[1].openings.empty(), "何も開かない");
 }
 
+KACHA_V2_TEST(material_region, holes_crossing_a_seam_become_notches_without_filling_material)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;
+    const std::vector<std::vector<P>> loops{
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{.2,.1},{.4,.1},{.4,.3},{.2,.3}},
+        {{.45,.4},{.55,.4},{.55,.6},{.45,.6}},
+        {{.5,.7},{.8,.7},{.8,.9},{.5,.9}}};
+    const auto clipped=fabrication::ClipBandMaterial(loops,fabrication::BandSplitAxis::U,.3,.6);
+    Require(clipped.HasValue(),clipped.FirstMessageJa());Require(clipped.Value().size()==1,"connected material remains one panel");
+    Require(clipped.Value()[0].loops.size()==2,"two edge notches and one enclosed hole");
+    const auto area=[](const auto& p){double s=0;for(std::size_t i=0;i<p.size();++i){auto a=p[i],b=p[(i+1)%p.size()];s+=a.u*b.v-b.u*a.v;}return std::abs(s)*.5;};
+    test::RequireNear(area(clipped.Value()[0].loops[0])-area(clipped.Value()[0].loops[1]),.24,1e-9,"material area conserves all three removed windows");
+    const auto all=fabrication::ClipBandMaterial(loops,fabrication::BandSplitAxis::U,0,1);
+    Require(all.HasValue()&&all.Value().size()==1&&all.Value()[0].loops.size()==4,"one sheet retains three holes");
+}
+KACHA_V2_TEST(material_region, concave_perimeter_can_produce_two_disconnected_material_parts)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;
+    const std::vector<std::vector<P>> loops{{{0,0},{1,0},{1,1},{0,1},{0,.8},{.7,.8},{.7,.2},{0,.2}}};
+    for(auto axis:{fabrication::BandSplitAxis::U,fabrication::BandSplitAxis::V}){
+        auto input=loops;if(axis==fabrication::BandSplitAxis::V)for(auto& p:input[0])std::swap(p.u,p.v);
+        const auto clipped=fabrication::ClipBandMaterial(input,axis,0,.5);
+        Require(clipped.HasValue()&&clipped.Value().size()==2,"do not bridge disconnected material across a C-shaped opening");
+        const auto whole=fabrication::ClipBandMaterial(input,axis,0,1);
+        Require(whole.HasValue()&&whole.Value().size()==1,"uncut C remains a single sheet");
+    }
+    Require(!fabrication::ClipBandMaterial({},fabrication::BandSplitAxis::U,0,1).HasValue(),"empty input is not success");
+}
+KACHA_V2_TEST(material_region, cylinder_cut_paths_have_equal_lengths_when_developed)
+{
+    using namespace kachakacha::v2;fabrication::SurfacePatchSamples samples; samples.rowCount=samples.columnCount=3;
+    const auto cylinder=[](double u,double v){const double a=v*kPi/2;return Vector3{u*20,30*std::cos(a),30*std::sin(a)};};
+    for(int r=0;r<3;++r)for(int c=0;c<3;++c)samples.points.push_back(cylinder(c/2.,r/2.));
+    const fabrication::SampledSurface surface(samples,cylinder);
+    const auto mesh=fabrication::DevelopBandMesh(surface,fabrication::BandSplitAxis::U,{0,1},256);
+    Require(mesh.HasValue(),mesh.FirstMessageJa());
+    std::vector<std::vector<Vector3>> flat(2);
+    for(int r=0;r<2;++r)for(auto p:mesh.Value().developedBands[0][r])flat[r].push_back({p.u,p.v,0});
+    const std::vector<geometry::Point2> loop{{.1,.15},{.8,.2},{.75,.7},{.45,.85},{.1,.65}};
+    const auto world=fabrication::MapBandMaterialLoop(loop,fabrication::BandSplitAxis::U,0,1,mesh.Value().longitudinalParameters,mesh.Value().world);
+    const auto pattern=fabrication::MapBandMaterialLoop(loop,fabrication::BandSplitAxis::U,0,1,mesh.Value().longitudinalParameters,flat);
+    Require(world.size()==pattern.size()&&world.size()>loop.size(),"paths cross the same strip triangles");
+    for(std::size_t i=0;i<world.size();++i)test::RequireNear(geometry::Distance(world[i],world[(i+1)%world.size()]),geometry::Distance(pattern[i],pattern[(i+1)%pattern.size()]),1e-9,"each developed cut interval is isometric");
+    double length=0;for(std::size_t c=1;c<flat[0].size();++c)length+=geometry::Distance(flat[0][c-1],flat[0][c]);
+    test::RequireNear(length,30*kPi/2,.001,"cylinder pattern uses arc length, not front-view chord");
+}
+KACHA_V2_TEST(material_region, reject_crossed_contours_and_holes_instead_of_silent_success)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;using Loops=std::vector<std::vector<P>>;
+    const auto check=[](const Loops& loops){Require(!fabrication::ClipBandMaterial(loops,fabrication::BandSplitAxis::U,0,1).HasValue(),"invalid cut topology is not success");};
+    check({{{0,0},{1,0},{.2,1},{.8,.8},{0,1},{1,.2}}});
+    check({{{0,0},{1,0},{1,1},{0,1}},{{.8,.2},{1.2,.2},{1.2,.4},{.8,.4}}});
+    check({{{0,0},{1,0},{1,1},{0,1}},{{.2,.2},{.6,.2},{.6,.6},{.2,.6}},{{.4,.4},{.8,.4},{.8,.8},{.4,.8}}});
+}
 KACHA_V2_TEST_MAIN("fabrication_openings")

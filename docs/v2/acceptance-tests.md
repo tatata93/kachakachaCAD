@@ -1,5 +1,16 @@
 # Wire-first V2 受入試験
 
+## ADR0032 曲面材料領域（2026-10-28）
+
+- AT-FAB-R001（WP-09）: 凹外周・複数穴・穴の帯またぎ切り欠き・非連結材料を区別。
+  `fabrication_openings_tests` material_region群で面積、枚数、閉輪と不正交差拒否を検査。
+- AT-FAB-R002（WP-09）: 正規化UVと支持曲面を分離して搬送。ハンドル解放後評価、
+  非線形UVの直線化誤差も境界許容差内。`kernel_dome_tests` fabrication_surface群。
+- AT-FAB-R003（WP-09）: 円筒の弧長、同じ三角区間上の境界の展開前後の辺長が一致。
+  material_region/cylinder_cut_paths_have_equal_lengths_when_developed。
+- AT-FAB-R004（WP-10）: 実モデルのコの字窓と独立窓穴を含む曲面について、1枚指定、
+  下見、0/30/100%の輪郭、型紙、固定面と厚み、保存再読込、Undo/Redo、取消復帰を検査。
+
 ## 1. 完了の原則
 
 - UIが表示されるだけでは未完成。

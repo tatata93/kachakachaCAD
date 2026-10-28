@@ -3,6 +3,7 @@
 #include "kachakacha/kernel/OcctDomePatch.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
+#include "kachakacha/kernel/OcctFabricationRegion.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <NCollection_Array2.hxx>
@@ -21,6 +22,9 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepLib.hxx>
+#include <Geom2d_BezierCurve.hxx>
+#include <TColgp_Array1OfPnt2d.hxx>
 #include <GCE2d_MakeSegment.hxx>
 #include <algorithm>
 #include <cmath>
@@ -387,6 +391,55 @@ KACHA_V2_TEST(dome, 複合8辺の屋根の実位置の勾配にこぶがない)
         Require(slopeX<=1e-7,"中央から裾まで高さが増える局所的なこぶを作らない");++checked;
     }
     Require(checked>1000,"屋根内部を広く検査");kernel::ReleaseShape(built.Value().handle);
+}
+KACHA_V2_TEST(fabrication_surface, trim_sampling_measures_uv_linearization_as_well_as_world_chords)
+{
+    // S(u,v)=(u,v+u*u,0), trim UV=(t,-t*t). The real edge is straight,
+    // but a UV chord is not. Measuring only its 3D chord misses this error.
+    NCollection_Array2<gp_Pnt> poles(1,3,1,2);
+    for(int i=1;i<=3;++i)for(int j=1;j<=2;++j)poles.SetValue(i,j,gp_Pnt((i-1)*.5,(j==1?-1.:1.)+(i==3?1.:0.),0));
+    TColStd_Array1OfReal uk(1,2),vk(1,2);uk(1)=0;uk(2)=1;vk(1)=-1;vk(2)=1;
+    TColStd_Array1OfInteger um(1,2),vm(1,2);um(1)=um(2)=3;vm(1)=vm(2)=2;
+    occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(poles,uk,vk,um,vm,2,1);
+    TColgp_Array1OfPnt2d control(1,3);control(1)=gp_Pnt2d(0,0);control(2)=gp_Pnt2d(.5,0);control(3)=gp_Pnt2d(1,-1);
+    occ::handle<Geom2d_BezierCurve> curved=new Geom2d_BezierCurve(control);
+    BRepBuilderAPI_MakeWire wire;wire.Add(BRepBuilderAPI_MakeEdge(curved,surface).Edge());
+    for(const auto ends:std::vector<std::pair<gp_Pnt2d,gp_Pnt2d>>{{{1,-1},{1,1}},{{1,1},{0,1}},{{0,1},{0,0}}})
+        wire.Add(BRepBuilderAPI_MakeEdge(GCE2d_MakeSegment(ends.first,ends.second).Value(),surface).Edge());
+    auto face=BRepBuilderAPI_MakeFace(surface,wire.Wire(),true).Face();BRepLib::BuildCurves3d(face);
+    const auto handle=kernel::StoreShape(face);const auto region=kernel::FabricationRegionOf(handle,0,.001);
+    Require(region.HasValue(),region.FirstSummaryJa()+" "+region.FirstDiagnostic().detailsJa);
+    int checked=0;const auto& loop=region.Value().loops.front();
+    for(std::size_t i=0;i<loop.size();++i){const auto a=loop[i],b=loop[(i+1)%loop.size()];
+        const auto wa=region.Value().evaluate(a.u,a.v),wb=region.Value().evaluate(b.u,b.v);
+        if(std::abs(wa.y)>1e-9||std::abs(wb.y)>1e-9)continue;
+        const auto midpoint=region.Value().evaluate((a.u+b.u)*.5,(a.v+b.v)*.5);
+        Require(std::abs(midpoint.y)<=.001,"actual UV chord stays within the requested boundary deviation");++checked;
+    }
+    Require(checked>=16,"refine despite a straight 3D source boundary");kernel::ReleaseShape(handle);
+}
+KACHA_V2_TEST(fabrication_surface, curved_material_chart_retains_concave_outline_and_two_holes)
+{
+    const auto surface=Patch();
+    const std::vector<std::vector<gp_Pnt2d>> loops{
+        {{0,0},{1,0},{1,1},{0,1},{0,.8},{.3,.8},{.3,.2},{0,.2}},
+        {{.45,.25},{.45,.4},{.6,.4},{.6,.25}},
+        {{.7,.6},{.7,.8},{.9,.8},{.9,.6}}};
+    BRepBuilderAPI_MakeFace face;
+    for(std::size_t i=0;i<loops.size();++i){BRepBuilderAPI_MakeWire wire;
+        for(std::size_t j=0;j<loops[i].size();++j)wire.Add(BRepBuilderAPI_MakeEdge(GCE2d_MakeSegment(loops[i][j],loops[i][(j+1)%loops[i].size()]).Value(),surface).Edge());
+        if(i==0)face.Init(BRepBuilderAPI_MakeFace(surface,wire.Wire(),true).Face());else face.Add(wire.Wire());
+    }
+    auto native=face.Face();BRepLib::BuildCurves3d(native);
+    const auto handle=kernel::StoreShape(native);
+    const auto region=kernel::FabricationRegionOf(handle,0,.001);
+    Require(region.HasValue(),region.FirstSummaryJa()+" "+region.FirstDiagnostic().detailsJa);Require(region.Value().loops.size()==3,"outer boundary and both holes accompany the support rectangle");
+    Require(region.Value().samples.Valid()&&region.Value().boundarySamplingDeviationMm<=.001,"finite support samples and measured boundary error");
+    kernel::ReleaseShape(handle);
+    for(double u:{0.,.25,.5,1.})for(double v:{0.,.3,.6,1.}){
+        const auto expected=surface->Value(v,u);const auto actual=region.Value().evaluate(u,v);
+        RequireNear(geometry::Distance(actual,{expected.X(),expected.Y(),expected.Z()}),0,1e-9,"evaluator survives release and retains normalized UV");
+    }
 }
 #endif
 KACHA_V2_TEST_MAIN("kernel_dome_tests")

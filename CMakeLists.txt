@@ -703,6 +703,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/SurfacePatchCrop.cpp
     src/next/kachakacha/fabrication/WrapProjection.cpp
     src/next/kachakacha/fabrication/BandDevelop.cpp
+    src/next/kachakacha/fabrication/BandMaterialRegion.cpp
     src/next/kachakacha/fabrication/BandRailSampling.cpp
     src/next/kachakacha/fabrication/BandBendRadius.cpp
     src/next/kachakacha/fabrication/BandPartition.cpp
@@ -779,6 +780,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctFabricationSampling.cpp
+    src/next_occt/kachakacha/kernel/OcctFabricationRegion.cpp
     src/next_occt/kachakacha/kernel/OcctFabricationTrim.cpp
     src/next_occt/kachakacha/kernel/OcctMatchedRuled.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp

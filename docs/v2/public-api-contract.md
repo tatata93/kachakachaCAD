@@ -1,5 +1,17 @@
 # Wire-first V2 公開API契約
 
+## 2026-10-28 製作領域の追加契約（ADR0032、WP-09）
+
+`kernel/OcctFabricationRegion.h` の `FabricationRegionOf(handle,faceIndex,boundaryToleranceMm)` は
+支持曲面の17×17標本、同じ正規化UV（列,row）の評価関数、外周先頭・穴以降のUV閉輪、
+境界標本最大偏差mmを返す。OCCT型を外へ出さず、ハンドル解放後も評価関数は有効。
+矩形評価だけを材料面として使ってはならない。押し出しのFaceBoundaryOf契約は変更しない。
+
+`fabrication/BandMaterialRegion.h` の `ClipBandMaterial` はUV材料と帯の共通領域を返す。
+非連結なら複数領域。穴と切り欠きを区別し、不正な交差や消失を成功にしない。
+`MapBandMaterialLoop` は列・三角境界で経路を区切り、同じ2本のレールの展開・曲げ状態へ等長写像する。
+三角形は内部計算だけで、部材番号や編集単位へ露出しない。
+
 ## 1. 目的
 
 この文書は、WP間で共有するC++ APIの形を固定する。実装ファイル内のprivate classや関数名は変更できるが、

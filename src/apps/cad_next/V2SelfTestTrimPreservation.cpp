@@ -25,15 +25,48 @@ bool Same(const geometry::CurveSegment& a, const geometry::CurveSegment& b) {
         && a.Normal()==b.Normal() && a.ReferenceDirection()==b.ReferenceDirection() && a.Radius()==b.Radius()
         && a.StartAngleRad()==b.StartAngleRad() && a.SweepAngleRad()==b.SweepAngleRad();
 }
-bool OthersIntact(const modeling::SnapScene& before, const modeling::SnapScene& after, base::EntityId edited) {
+double Deviation(const geometry::CurveSegment& a,const geometry::CurveSegment& b) {
+    if(a.Kind()!=b.Kind()||a.ControlPoints().size()!=b.ControlPoints().size())return 1e100;
+    double error=0;for(std::size_t i=0;i<a.ControlPoints().size();++i)error=std::max(error,geometry::Distance(a.ControlPoints()[i],b.ControlPoints()[i]));
+    for(int i=0;i<=32;++i)error=std::max(error,geometry::Distance(a.Evaluate(i/32.),b.Evaluate(i/32.)));return error;
+}
+bool OthersIntact(const modeling::SnapScene& before, const modeling::SnapScene& after, base::EntityId edited, double savedTolerance=0) {
     for(const auto& curve:before.curves) if(curve.entityId!=edited) {
         const auto match=std::find_if(after.curves.begin(),after.curves.end(),[&](const auto& c){
-            return c.entityId==curve.entityId && c.segmentId==curve.segmentId && Same(c.segment,curve.segment);
+            return c.entityId==curve.entityId && c.segmentId==curve.segmentId && (savedTolerance>0 ? Deviation(c.segment,curve.segment)<=savedTolerance : Same(c.segment,curve.segment));
         });
-        if(match==after.curves.end())return false;
+        if(match==after.curves.end()) {
+            const auto sameId=std::find_if(after.curves.begin(),after.curves.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;});
+            Note((std::string("curve mismatch entity=")+curve.entityId.ShortSuffix()+" segment="+curve.segmentId.ShortSuffix()
+                +" savedTolerance="+std::to_string(savedTolerance)+" deviation="+(sameId==after.curves.end()?"missing ID":std::to_string(Deviation(curve.segment,sameId->segment)))).c_str());
+            return false;
+        }
     }
     return true;
 }
+bool ReloadedOthersIntact(const modeling::SnapScene& before, const modeling::SnapScene& after,
+    const document::DocumentSnapshot& snapshot, base::EntityId edited) {
+    // Saved wire segment UUIDs are editing identities. Native part/surface edges are
+    // rebuilt display geometry and receive temporary IDs, so compare their shapes instead.
+    const double tolerance=snapshot.settings.tolerance.modelLinearMm;
+    std::vector<bool> used(after.curves.size(),false);double maximum=0;
+    for(const auto& old:before.curves)if(old.entityId!=edited) {
+        const auto entity=std::find_if(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& e){return e.id==old.entityId;});
+        if(entity==snapshot.entities.end())return false;
+        const bool native=entity->kind==domain::EntityKind::Part||entity->kind==domain::EntityKind::GuideSurface;
+        bool found=false;
+        for(std::size_t i=0;i<after.curves.size();++i) {
+            const auto& now=after.curves[i];if(used[i]||now.entityId!=old.entityId||(!native&&now.segmentId!=old.segmentId))continue;
+            const double error=Deviation(old.segment,now.segment);
+            if(error>tolerance)continue;
+            used[i]=true;maximum=std::max(maximum,error);found=true;break;
+        }
+        if(!found){Note((std::string("reloaded geometry mismatch ")+old.entityId.ShortSuffix()+" / "+old.segmentId.ShortSuffix()).c_str());return false;}
+    }
+    for(std::size_t i=0;i<after.curves.size();++i)if(after.curves[i].entityId!=edited&&!used[i])return false;
+    Note((std::string("maximum saved geometry deviation (nm)=")+std::to_string(maximum*1e6)).c_str());return true;
+}
+
 double Length(const modeling::SnapScene& scene, base::EntityId id) {
     double length=0;for(const auto& c:scene.curves)if(c.entityId==id)length+=c.segment.TotalLength(1e-8);return length;
 }
@@ -178,8 +211,13 @@ bool CaseOwner(V2MainWindow& w) {
     if(!Explain("115投影で全ての他の線・R・窓・面を残し1 mmだけ削除",w.Session().GetDocument().Snapshot().entities.size()==count
         &&OthersIntact(before,w.Session().Scene(),id)&&std::abs(Length(before,id)-Length(w.Session().Scene(),id)-1)<1e-5))return false;
     w.RunCommand("edit.undo");if(std::abs(Length(before,id)-Length(w.Session().Scene(),id))>1e-5)return false;
-    w.RunCommand("edit.redo");return w.SaveAndReopen("115-trim-local-preserved.kcd2")
-        &&OthersIntact(before,w.Session().Scene(),id)&&w.RebuildProblems().isEmpty();
+    w.RunCommand("edit.redo");
+    if(!Explain("115のトリム結果を保存して読み直せる",w.SaveAndReopen("115-trim-local-preserved.kcd2")))return false;
+    Note((std::string("owner reopen problems=")+w.RebuildProblems().toStdString()).c_str());
+    return Explain("保存再読込でも他の線のID・曲線種類・形状を文書の許容差内で維持",
+        w.Session().GetDocument().Snapshot().entities.size()==count
+        &&ReloadedOthersIntact(before,w.Session().Scene(),w.Session().GetDocument().Snapshot(),id)
+        &&std::abs(Length(before,id)-Length(w.Session().Scene(),id)-1)<1e-5&&w.RebuildProblems().isEmpty());
 }
 }
 std::vector<SelfTestCase> TrimPreservationCases() {

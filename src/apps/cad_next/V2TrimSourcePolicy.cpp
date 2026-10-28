@@ -53,7 +53,7 @@ QCheckBox* v2ui::MakeTrimKeepOriginal(QWidget* parent, const char* name)
     auto* check = new QCheckBox(QStringLiteral("元の線を残す"), parent);
     check->setObjectName(QString::fromLatin1(name));
     check->setChecked(false);
-    check->setToolTip(QStringLiteral("オン: 変更前の線を表示したまま残し、結果を別ワイヤーにします。\nオフ: 元の線を削除します。使っている面・寸法なども消える場合は、一覧と3D表示で確認します。"));
+    check->setToolTip(QStringLiteral("オン: 変更前の線を表示したまま残し、結果を別ワイヤーにします。\nオフ: 赤い下見区間だけを削除し、残りの直線やRは保ちます。\n線全体や寸法も削除する場合は、一覧と3D表示で確認します。"));
     return check;
 }
 

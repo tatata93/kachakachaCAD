@@ -13,6 +13,7 @@
 //! 原寸で確かめるのは紙に出してからで、そのための 1:1 PDF が別にある。
 
 #include "kachakacha/exporters/PatternExport.h"
+#include "kachakacha/document/Document.h"
 
 #include <QDockWidget>
 #include <QWidget>
@@ -46,6 +47,10 @@ public:
     //! 出す型紙を入れ替える。ページが無ければ「まだありません」と出す。
     void SetPages(std::vector<kachakacha::v2::exporters::PatternPage> pages);
 
+    void RememberSource(const kachakacha::v2::document::DocumentSnapshot& snapshot,
+        kachakacha::v2::base::EntityId model);
+    [[nodiscard]] bool MatchesSource(const kachakacha::v2::document::DocumentSnapshot& snapshot);
+
     //! 何ページあるか。試験で見る。
     [[nodiscard]] int PageCount() const { return static_cast<int>(pages_.size()); }
     //! いま何ページ目を見ているか(0始まり)。ページが無ければ -1。
@@ -58,6 +63,11 @@ public:
 private:
     void Refresh();
 
+    [[nodiscard]] std::string SourceKey(const kachakacha::v2::document::DocumentSnapshot& snapshot) const;
+    kachakacha::v2::base::EntityId sourceModel_;
+    kachakacha::v2::base::DocumentId sourceDocument_;
+    std::uint64_t checkedRevision_ = 0;
+    std::string sourceKey_;
     std::vector<kachakacha::v2::exporters::PatternPage> pages_;
     int current_ = 0;
     V2PatternView* view_ = nullptr;

@@ -246,7 +246,7 @@ struct BandedSource {
         made.bands.railParameters,parameters.Value());
     made.bands.reachedRequestedTolerance=made.bands.maximumDeviationMm<=options.maximumDeviationMm+1e-9;
     made.mesh = mesh.Value();
-    if(!source.materialRegionsUv.empty()&&made.mesh.BandCount()==1){
+    if(made.mesh.BandCount()==1){
         // A one-axis sheet may follow parallel generators within the requested
         // approximation budget. Avoid microscopic twisted facets in a nearly
         // extruded source; measure and report the adjustment, never relax tolerance.

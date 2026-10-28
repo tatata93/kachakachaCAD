@@ -344,6 +344,7 @@ void V2MainWindow::RunFabricationCreate()
 //! 候補のボタン。選んだ候補だけを下見に出す。
 void V2MainWindow::ChooseApproxCandidate(int candidate)
 {
+    if (!approxShelfShown_) return; // Settings may also be changed before starting or after confirming.
     approxInput_.selectedCandidate = candidate;
     approxInput_.candidateChosenByUser = true;
     ShowApproxPreview();
@@ -397,9 +398,18 @@ void V2MainWindow::EndApprox(bool keepTool)
         viewport_->SetToolPickActive(keepTool);
         viewport_->SetToolPickToggle(keepTool);
     }
+    if (keepTool) {
+        // Keep the targets useful for restarting, and keep them visible as targets.
+        RefreshApproxDock();
+    } else {
+        approxInput_ = kachakacha::v2::app::ApproxInputState{};
+    }
     if (fabricationDock_ != nullptr) {
-        fabricationDock_->ShowApproxInput(QString(), {}, -1, false, false);
-        fabricationDock_->SetMessage(QString());
+        const auto sources = keepTool ? fabricationDock_->SourcesTextJa() : QString();
+        fabricationDock_->ShowApproxInput(sources, {}, -1, false, false);
+        fabricationDock_->SetMessage(keepTool
+            ? QStringLiteral("近似を取り消しました。対象は保持しています。「近似を始める」で再計算できます。対象の面を押すと追加・解除できます。")
+            : QString());
     }
     ShowToolFooter(QString());
 }

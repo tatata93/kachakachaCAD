@@ -1,4 +1,8 @@
 #include "V2PatternDock.h"
+#include "kachakacha/app/SubDocument.h"
+#include "kachakacha/io/DocumentFile.h"
+#include <QCryptographicHash>
+#include <QByteArray>
 
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/view/PatternView.h"
@@ -155,6 +159,7 @@ V2PatternDock::V2PatternDock(QWidget* parent)
 void V2PatternDock::SetPages(std::vector<PatternPage> pages)
 {
     pages_ = std::move(pages);
+    if (pages_.empty()) sourceKey_.clear();
     current_ = 0;
     Refresh();
 }
@@ -194,4 +199,55 @@ void V2PatternDock::Refresh()
             .arg(page.widthMm, 0, 'f', 0)
             .arg(page.heightMm, 0, 'f', 0)
             .arg(static_cast<int>(page.curves.size())));
+}
+
+
+std::string V2PatternDock::SourceKey(const kachakacha::v2::document::DocumentSnapshot& snapshot) const
+{
+    using namespace kachakacha::v2;
+    auto subset = app::ExtractSubDocument(snapshot, {sourceModel_});
+    if (!subset.HasValue()) return {};
+    io::DocumentFile file;
+    file.snapshot = std::move(subset.Value().snapshot);
+    file.snapshot.revision = 0;
+    file.snapshot.groups.clear();
+    file.snapshot.referenceDimensions = snapshot.referenceDimensions;
+    std::erase_if(file.snapshot.referenceDimensions, [](const auto& dimension) { return !dimension.driving; });
+    file.snapshot.settings.activeGroupId.reset();
+    for (auto& entity : file.snapshot.entities) {
+        entity.revision = 0;
+        entity.visibility = domain::Visibility::Visible;
+        entity.groupId.reset();
+        entity.displayName.clear();
+    }
+    for (auto& feature : file.snapshot.features) {
+        feature.revision = 0;
+        feature.displayName.clear();
+        if (auto* fabrication = std::get_if<domain::CreateFabricationModelDefinition>(&feature.definition)) {
+            // Assembly pose changes do not change the flat cutting pattern.
+            fabrication->masterPercent = 100;
+            fabrication->bandProgress.clear();
+            fabrication->creaseProgress.clear();
+        }
+    }
+    const auto bytes = io::WriteDocumentJson(file);
+    return QCryptographicHash::hash(QByteArray::fromStdString(bytes), QCryptographicHash::Sha256).toStdString();
+}
+
+void V2PatternDock::RememberSource(const kachakacha::v2::document::DocumentSnapshot& snapshot,
+    kachakacha::v2::base::EntityId model)
+{
+    sourceModel_ = model;
+    sourceDocument_ = snapshot.id;
+    checkedRevision_ = snapshot.revision;
+    sourceKey_ = SourceKey(snapshot);
+}
+
+bool V2PatternDock::MatchesSource(const kachakacha::v2::document::DocumentSnapshot& snapshot)
+{
+    if (sourceKey_.empty() || snapshot.id != sourceDocument_) return false;
+    if (snapshot.revision == checkedRevision_) return true;
+    if (SourceKey(snapshot) != sourceKey_) return false;
+    checkedRevision_ = snapshot.revision;
+    return true;
 }

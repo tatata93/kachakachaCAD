@@ -89,9 +89,22 @@ void Fields(Archive& a,app::FabricationEvaluation::BandedFace& v){a.Values(v.ent
 void Fields(Archive& a,fabrication::GptApproxPanel& v) {
     a.Values(v.origin,v.u,v.v,v.normal,v.profile,v.lengths,v.pattern,v.maximumMm,v.squaredMm,v.sampleCount);
 }
+void Fields(Archive& a,app::FabricationEvaluation::MaterialPanel& v) {
+    a.Values(v.panelIndex,v.bandIndex,v.axis,v.low,v.high,v.longitudinal,v.loopsUv);
+}
 void Fields(Archive& a,app::FabricationEvaluation& v) {
-    a.Values(v.method,v.panels,v.panelOrigins,v.bands,v.bandMesh,v.bandFaces,v.maximumDeviationMm,
+    std::vector<int> materialFlags;
+    if (!a.read) for (bool flag : v.materialBands) materialFlags.push_back(flag ? 1 : 0);
+    a.Values(v.method,v.panels,v.panelOrigins,v.bands,v.bandMesh,v.bandFaces,v.materialPanels,
+        materialFlags,v.bandPanels,v.bandPanelCount,v.maximumDeviationMm,
         v.reachedTolerance,v.rmsDeviationMm,v.maximumSeamGapMm,v.gptPanels,v.summaryJa);
+    if (a.read) {
+        v.materialBands.clear();
+        for (int flag : materialFlags) {
+            if (flag != 0 && flag != 1) throw std::runtime_error("Invalid material band flag");
+            v.materialBands.push_back(flag != 0);
+        }
+    }
 }
 void Fields(Archive& a,modeling::GuideTableRow& v) {
     a.Values(v.role,v.sourceWireIds,v.sourceLabels,v.segments,v.reversed,v.continuity,v.supportSurfaceId);
@@ -152,7 +165,7 @@ bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
         if(!input.open(QIODevice::ReadOnly)||input.size()>1024LL*1024*1024)return false;
         Archive reader(&input,true,pulse);std::string magic,id;int version=0;
         reader.Values(magic,version,id);
-        if(magic!="kachakacha-prepared-document"||version!=2||id!=sourceToken.toStdString()||input.atEnd())return false;
+        if(magic!="kachakacha-prepared-document"||version!=3||id!=sourceToken.toStdString()||input.atEnd())return false;
         QSaveFile output(destination);if(!output.open(QIODevice::WriteOnly))return false;
         Archive writer(&output,false);id=destinationToken.toStdString();writer.Values(magic,version,id);
         while(!input.atEnd()) {
@@ -167,7 +180,7 @@ bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
 bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDocument& data) {
     try {
         QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
-        Archive stream(&file,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=2;
+        Archive stream(&file,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=3;
         stream.Values(magic,version,id,data);stream.Check();return file.commit();
     }catch(...){return false;}
 }
@@ -177,7 +190,7 @@ kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDo
     try {
         QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>1024LL*1024*1024)throw std::runtime_error("Cannot read calculation result");
         Archive stream(&file,true,pulse);std::string magic,id;int version=0;stream.Values(magic,version,id);
-        if(magic!="kachakacha-prepared-document"||version!=2||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
+        if(magic!="kachakacha-prepared-document"||version!=3||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
         auto data=std::make_unique<V2PreparedDocument>();stream.Values(*data);stream.Check();if(!file.atEnd())throw std::runtime_error("Unexpected result tail");
         return Result::Success(std::move(data));
     }catch(const std::exception& e) {

@@ -52,6 +52,7 @@ class V2WindowHoleExercise {
 public:
     static bool Run(V2MainWindow& w,bool curved);
     static bool ApproximateRegion(V2MainWindow& w,base::EntityId source,const QString& output);
+    static bool ReopenApproximation(V2MainWindow& w,const QString& output,base::EntityId model);
     static bool ReopenMaterial(V2MainWindow& w,const QString& saved,base::EntityId model,base::EntityId part,std::size_t holeCount);
     static bool RegionFixture(V2MainWindow& w,bool notch);
     static bool PlanarGeneration(V2MainWindow& w);
@@ -186,6 +187,7 @@ bool V2WindowHoleExercise::ApproximateRegion(V2MainWindow& w,base::EntityId sour
     const auto model=w.CurrentFabricationModelId();
     w.RunCommand("edit.undo");if(w.FabricationModelCount()!=0)return false;
     w.RunCommand("edit.redo");if(w.FabricationModelCount()!=1)return false;
+    if(!ReopenApproximation(w,output,model))return false;
     if(!ShowOnly(w,model))return false;
     selected.entityIds={model};w.Viewport().SetSelection(selected);w.RunCommand("fabrication.set_assembly");
     const auto evaluated=w.fabricationModels_.at(model.ToString());
@@ -252,6 +254,15 @@ bool V2WindowHoleExercise::ApproximateRegion(V2MainWindow& w,base::EntityId sour
     if(!capture("04-generated-hole-solid.png"))return false;
     const auto saved=output+"/one-sheet-windows.kcd2";w.SetPathChooser([&](bool){return saved;});w.RunCommand("file.save_as");w.SetPathChooser({});
     return ReopenMaterial(w,saved,model,part,holeCount);
+}
+bool V2WindowHoleExercise::ReopenApproximation(V2MainWindow& w,const QString& output,base::EntityId model) {
+    const auto checkpoint=output+"/approximation-before-generation.kcd2";
+    w.SetPathChooser([checkpoint](bool){return checkpoint;});w.RunCommand("file.save_as");w.SetPathChooser({});
+    if(!w.OpenDocumentFile(checkpoint)||!w.RebuildProblems().isEmpty())return false;
+    const auto restored=w.fabricationModels_.find(model.ToString());
+    return selftest::Explain("normal Open transfers trimmed material and band mappings before generation",
+        restored!=w.fabricationModels_.end()&&!restored->second.materialPanels.empty()
+        &&restored->second.bandPanelCount==restored->second.panels.size());
 }
 bool V2WindowHoleExercise::ReopenMaterial(V2MainWindow& w,const QString& saved,base::EntityId model,base::EntityId part,std::size_t holeCount) {
     if(!w.OpenDocumentFile(saved)||!w.RebuildProblems().isEmpty())return false;

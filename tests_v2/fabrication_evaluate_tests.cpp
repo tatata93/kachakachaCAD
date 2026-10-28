@@ -369,3 +369,30 @@ KACHA_V2_TEST(fabrication_evaluate, planar_trim_keeps_native_openings_in_both_me
             "unnecessary splits and filled holes are avoided");
     }
 }
+
+KACHA_V2_TEST(fabrication_evaluate, untrimmed_single_band_parallelization_respects_the_same_error_budget)
+{
+    FabricationSource source;
+    source.name="untrimmed nearly extruded sheet";
+    source.evaluate=[](double u,double v){const double angle=v*kPi*.5;
+        return Vector3{30*std::cos(angle)+(u-.5)*.004*std::sin(angle),
+            30*std::sin(angle)+(u-.5)*.004*std::cos(angle),u*10};};
+    source.samples=Grid(17,17,source.evaluate);
+    auto definition=Definition(1);definition.equalPartCount=definition.maximumPartCount=1;
+    definition.splitAxis=0;definition.splitAtCorners=false;definition.targetMaxDeviation.value=.05;
+    const auto made=EvaluateFabrication(definition,{source},{},.001);
+    Require(made.HasValue(),made.FirstMessageJa());
+    Require(made.Value().panels.size()==1 && made.Value().bandMesh.has_value(),"untrimmed one-piece path");
+    Require(made.Value().reachedTolerance && made.Value().maximumDeviationMm>.0001
+        && made.Value().maximumDeviationMm<.05,"actual generator adjustment is charged to the requested budget");
+    const auto& rails=made.Value().bandMesh->world;
+    const auto direction=kachakacha::v2::geometry::Normalized(rails[1][0]-rails[0][0]);
+    for(std::size_t i=0;i<rails[0].size();++i)
+        kachakacha::v2::test::RequireNear(kachakacha::v2::geometry::Cross(direction,rails[1][i]-rails[0][i]).Length(),0,1e-10,"common generators");
+    source.evaluate=[](double u,double v){return Vector3{v*30,(u-.5)*.004*v,u*10};};
+    source.samples=Grid(17,17,source.evaluate);definition.targetMaxDeviation.value=1e-5;
+    const auto tight=EvaluateFabrication(definition,{source},{},.001);Require(tight.HasValue(),tight.FirstMessageJa());
+    for(std::size_t i=0;i<tight.Value().bandMesh->world[0].size();++i)
+        kachakacha::v2::test::RequireNear(kachakacha::v2::geometry::Distance(tight.Value().bandMesh->world[0][i],
+            source.evaluate(0,tight.Value().bandMesh->longitudinalParameters[i])),0,1e-10,"insufficient budget preserves original geometry");
+}

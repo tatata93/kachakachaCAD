@@ -3,12 +3,17 @@
 //! 近似を押す → 3D で面を押す(もう一度押すと外れる)→ 3つの候補が **実際に作られて**
 //! 部材数とずれが並ぶ → 候補を押すと下見が変わる → Enter で確定、1回の取り消しで消える。
 //!
-//! 選ぶのは実際に拾う道(`SelectAt`)だけ。ID の注入も、見えない widget を叩くこともしない。
+//! 基本HP-APは実際に拾う道(`SelectAt`)を通す。追加の出力行列はAPIで入力面を用意し、
+//! 実Qtの候補・取消・出力を検査する。大きな手作図入力は別途stress経路で保持する。
 
 #include "V2SelfTest.h"
 #include "V2SelfTestDeleteDialog.h"
 
 #include "V2FabricationDock.h"
+#include "V2PatternDock.h"
+#include "V2PreparedDocument.h"
+#include "V2OutputTool.h"
+#include "V2ExportDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -23,6 +28,15 @@
 #include <QPointF>
 #include <QVariant>
 #include <QString>
+#include <QPushButton>
+#include <QDialog>
+#include <QByteArray>
+#include <QDataStream>
+#include <QIODevice>
+#include <QComboBox>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 
 #include <cstddef>
 #include <cmath>
@@ -395,11 +409,331 @@ using kachakacha::v2::domain::EntityKind;
     return WiresBecomeSelectableAfterApproxEnds(window, "作図へ替えた後", false);
 }
 
+
+// These transitions deliberately avoid the old tests' deselect/reselect reset.
+[[nodiscard]] bool CaseQuickSettingsOutsideApprox(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!MakeCurvedGuideSurface(window)) return false;
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    window.RunCommand("fabrication.set_assembly");
+    auto& dock = window.FabricationDock();
+    dock.FocusCommand("fabrication.create");
+    QPushButton* start = nullptr;
+    for (auto* button : window.findChildren<QPushButton*>(QStringLiteral("panelConfirm")))
+        if (button->text().contains(QStringLiteral("始める"))) { start = button; break; }
+    auto* one = window.findChild<QPushButton*>(QStringLiteral("fabricationOnePiece"));
+    if (!Explain("approximation start and one-piece controls exist", start && one)) return false;
+    for (int pass = 0; pass < 2; ++pass) {
+        const auto revision = window.Session().GetDocument().Revision();
+        if (pass == 0) one->click(); else dock.SetEqualPartCount(3);
+        if (!Explain("idle settings retain an enabled start action", start->isEnabled()
+            && start->text().contains(QStringLiteral("始める")) && !window.ApproxShelfShown()
+            && window.Session().GetDocument().Revision() == revision)) return false;
+        start->click();
+        if (!Explain("one click restarts a valid approximation preview", window.ApproxShelfShown()
+            && window.ApproxOutcomes().size() == 3 && !window.Viewport().ToolPreview().empty())) return false;
+        start->click();
+        if (!Explain("preview confirms and releases the tool", !window.ApproxShelfShown()
+            && window.FabricationModelCount() == static_cast<std::size_t>(pass + 1))) return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseCancelledTargetsRemainVisible(V2MainWindow& window)
+{
+    if (!ArmApproxOnFreshSurface(window) || !ClickOnAnyGuideSurface(window)) return false;
+    const auto sources = window.ApproxInput().sources;
+    const auto revision = window.Session().GetDocument().Revision();
+    if (!window.FabricationDock().ClickCancelApprox()) return false;
+    if (!Explain("cancelled retained targets are still named and labelled", window.ApproxShelfShown()
+        && window.ApproxInput().sources == sources && !window.FabricationDock().SourcesTextJa().isEmpty()
+        && window.Viewport().ToolRoleLabels().size() == sources.size()
+        && window.Viewport().ToolPreview().empty()
+        && window.Session().GetDocument().Revision() == revision)) return false;
+    // A single subsequent click removes this visible target; no hidden target survives.
+    if (!PressAnyGuideSurface(window)) return false;
+    if (!Explain("one click after cancel toggles exactly the visible target",
+        window.ApproxInput().sources.empty() && window.FabricationDock().SourcesTextJa().isEmpty())) return false;
+    if (!PressAnyGuideSurface(window)) return false;
+    return Explain("next click restores a usable preview", window.ApproxInput().sources == sources
+        && !window.Viewport().ToolPreview().empty());
+}
+
+[[nodiscard]] bool CasePatternInvalidatesAfterEdit(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!MakeCurvedGuideSurface(window)) return false;
+    auto& dock = window.FabricationDock();
+    dock.SetEqualPartCount(3);
+    window.RunCommand("fabrication.create"); window.RunCommand("fabrication.create");
+    if (window.FabricationModelCount() != 1) return false;
+    const auto modelSelection = window.Viewport().Selection();
+    QTemporaryDir folder;
+    if (!folder.isValid()) return false;
+    for (int pass = 0; pass < 3; ++pass) {
+        window.Viewport().SetSelection(modelSelection);
+        window.RunCommand("fabrication.create_pattern");
+        if (!Explain("fresh pattern exists before editing", window.PatternDock().PageCount() > 0)) return false;
+        if (pass == 0) {
+            dock.SetPartNumbersText(QStringLiteral("1")); dock.SetSplitPieces(2);
+            window.RunCommand("fabrication.split_part"); dock.HandleKey(Qt::Key_Return);
+            if (!Explain("split was committed", window.FabricationPanelCount() == 4)) return false;
+        } else if (pass == 1) window.RunCommand("edit.undo");
+        else window.RunCommand("file.new");
+        if (!Explain("changed document clears both pattern preview and export counts",
+            window.PatternDock().PageCount() == 0 && window.PatternDock().CurrentPage() == -1)) return false;
+        auto& output = window.ExportDock();
+        output.ChooseFormat(kachakacha::v2::app::ExportFormat::Svg);
+        const bool chosePattern = output.ChooseTarget(kachakacha::v2::app::ExportTarget::CurrentPattern);
+        const auto path = folder.filePath(QStringLiteral("stale-%1.svg").arg(pass));
+        output.ChoosePath(path); output.SetOverwrite(true);
+        if (!Explain("stale pattern cannot be exported", (!chosePattern || !output.RunNow()) && output.Counts().patternPages == 0 && !QFile::exists(path))) return false;
+    }
+    return true;
+}
+
+
+[[nodiscard]] bool PreparePatternAudit(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!MakeCurvedGuideSurface(window)) return false;
+    window.FabricationDock().SetEqualPartCount(3);
+    window.RunCommand("fabrication.create"); window.RunCommand("fabrication.create");
+    if (window.FabricationModelCount() != 1) return false;
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));
+    window.RunCommand("fabrication.create_pattern");
+    return window.PatternDock().PageCount() > 0;
+}
+
+[[nodiscard]] bool CaseCancelEnterRestarts(V2MainWindow& window)
+{
+    if (!ArmApproxOnFreshSurface(window) || !ClickOnAnyGuideSurface(window)) return false;
+    if (!window.HandleToolKey(Qt::Key_Escape, nullptr)
+        || !window.HandleToolKey(Qt::Key_Return, nullptr)) return false;
+    if (!Explain("Enter after cancel recomputes without committing", window.FabricationModelCount() == 0
+        && !window.Viewport().ToolPreview().empty() && window.ApproxOutcomes().size() == 3)) return false;
+    if (!window.HandleToolKey(Qt::Key_Return, nullptr)) return false;
+    return Explain("second Enter confirms a previewed approximation", window.FabricationModelCount() == 1);
+}
+
+[[nodiscard]] bool CasePatternOpenLifecycle(V2MainWindow& window)
+{
+    if (!PreparePatternAudit(window)) return false;
+    QTemporaryDir folder;
+    if (!folder.isValid()) return false;
+    const auto saved = folder.filePath(QStringLiteral("same-document.kcd2"));
+    window.SetPathChooser([saved](bool) { return saved; });
+    window.RunCommand("file.save_as");
+    if (!QFile::exists(saved)) return false;
+    const int pages = window.PatternDock().PageCount();
+    window.SetPathChooser([](bool) { return QString(); }); window.RunCommand("file.open");
+    if (!Explain("cancelled Open preserves the current pattern", window.PatternDock().PageCount() == pages)) return false;
+    if (!Explain("failed Open preserves the current pattern", !window.OpenDocumentFile(folder.filePath("missing.kcd2"))
+        && window.PatternDock().PageCount() == pages)) return false;
+    if (!window.OpenDocumentFile(saved)) return false;
+    return Explain("successful Open clears old pages even for the same saved document",
+        window.PatternDock().PageCount() == 0 && window.ExportDock().Counts().patternPages == 0);
+}
+
+[[nodiscard]] bool CasePatternSurvivesOutputCancel(V2MainWindow& window)
+{
+    if (!PreparePatternAudit(window)) return false;
+    const int pages = window.PatternDock().PageCount();
+    auto& dock = window.FabricationDock();
+    dock.SetPartNumbersText(QStringLiteral("すべて"));
+    dock.TypeAssemblyPercent(37); dock.PressApplyAssembly();
+    if (!Explain("assembly pose leaves the cutting pattern valid", window.PatternDock().PageCount() == pages)) return false;
+    dock.SetShowSource(false); dock.SetShowSource(true);
+    window.RunCommand("view.hide_selected"); window.RunCommand("view.show_all");
+    if (!Explain("entity visibility changes keep the pattern valid", window.PatternDock().PageCount() == pages)) return false;
+    const auto revision = window.Session().GetDocument().Revision();
+    auto* output = V2OutputTool::Open(window, 2);
+    if (!Explain("model output captures current geometry", output && output->AssetCount() > 0)) return false;
+    output->close();
+    V2OutputTool::Generate(window, "fabrication.freeze_state");
+    bool captured = false;
+    for (auto* dialog : window.findChildren<QDialog*>()) {
+        if (dialog->isVisible() && dialog->objectName() == "selectionOutput") {
+            auto* generated = dynamic_cast<V2OutputTool*>(dialog);
+            captured = generated && generated->AssetCount() > 0;
+            dialog->close();
+        }
+    }
+    if (!Explain("generation cancellation preserves geometry and the old valid pattern", captured
+        && window.Session().GetDocument().Revision() == revision
+        && window.PatternDock().PageCount() == pages)) return false;
+    QTemporaryDir folder;
+    if (!folder.isValid()) return false;
+    auto& exportDock = window.ExportDock();
+    if (!exportDock.ChooseTarget(kachakacha::v2::app::ExportTarget::CurrentPattern)) return false;
+    for (const auto format : {kachakacha::v2::app::ExportFormat::Svg,
+        kachakacha::v2::app::ExportFormat::Dxf, kachakacha::v2::app::ExportFormat::Pdf}) {
+        if (!exportDock.ChooseFormat(format)) return false;
+        const auto path = folder.filePath(QStringLiteral("pattern%1").arg(static_cast<int>(format))
+            + QString::fromUtf8(kachakacha::v2::app::ExportFormatExtension(format).data()));
+        exportDock.ChoosePath(path); exportDock.SetOverwrite(true);
+        if (!Explain("unchanged pattern still exports every 2D format", exportDock.RunNow() && QFile(path).size() > 100)) return false;
+    }
+    return true;
+}
+
+
+[[nodiscard]] bool MakeLegacyOutputFixture(V2MainWindow& window)
+{
+    if (qEnvironmentVariableIsSet("KACHACAD_APPROX_UI_AUDIT_STRESS")) return MakeCurvedGuideSurface(window);
+    // A compact native curved sheet keeps the format matrix inexpensive. The
+    // separate stress route retains the large UI-drawn 270-degree source.
+    kachakacha::v2::app::SelectionSet selected;
+    for (int row = 0; row < 2; ++row) {
+        const auto arc = kachakacha::v2::geometry::CurveSegment::MakeCircularArc(
+            {0,0,row*10.0}, {0,0,1}, {1,0,0}, 10.0+row*.01, 0, 1.5707963267948966);
+        if (!arc.HasValue()) return false;
+        const auto wire = window.Session().AddWire({arc.Value()}, false, "legacy native output source");
+        if (!wire.committed || wire.createdEntityIds.size() != 1) return false;
+        selected.entityIds.push_back(wire.createdEntityIds.front());
+    }
+    window.Viewport().SetSelection(selected);
+    window.CreateGuideSurfaceFromSelection();
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    return CountOfKind(window, EntityKind::GuideSurface) == 1;
+}
+
+[[nodiscard]] bool CaseLegacyOnePieceAllOutputs(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!MakeLegacyOutputFixture(window)) return false;
+    auto& dock = window.FabricationDock();
+    dock.SetEqualPartCount(1); dock.SetSplitAxisIndex(2); dock.SetSplitAtCorners(false);
+    window.RunCommand("fabrication.create");
+    if (!dock.ClickCandidate(2)) return false;
+    window.RunCommand("fabrication.create");
+    if (!Explain("legacy untrimmed auto one-piece remains available", window.FabricationModelCount() == 1
+        && window.FabricationPanelCount() == 1)) return false;
+    const auto models = kachakacha::v2::app::SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel);
+    QTemporaryDir temporary;
+    if (!temporary.isValid()) return false;
+    QString directory = temporary.path();
+    const auto evidence = qEnvironmentVariable("KACHACAD_APPROX_UI_AUDIT_DIR");
+    if (!evidence.isEmpty()) { QDir().mkpath(evidence); directory = evidence; }
+    const auto input = directory + QStringLiteral("/legacy-auto-one-piece.kcd2");
+    window.SetPathChooser([input](bool) { return input; }); window.RunCommand("file.save_as");
+    if (!window.OpenDocumentFile(input) || !window.RebuildProblems().isEmpty()) return false;
+    auto* kind = window.findChild<QComboBox*>(QStringLiteral("fabricationGenerationOutput"));
+    if (!kind) return false;
+    for (int percent : {0, 37, 100}) {
+        window.Viewport().SetSelection(models);
+        dock.SetPartNumbersText(QStringLiteral("1")); dock.TypeAssemblyPercent(percent); dock.PressApplyAssembly();
+        for (int format : {0, 3, 1, 2}) {
+            window.Viewport().SetSelection(models); kind->setCurrentIndex(format);
+            const auto before = window.Session().GetDocument().Snapshot();
+            const int wires = CountOfKind(window, EntityKind::Wire), parts = CountOfKind(window, EntityKind::Part);
+            const int guides = CountOfKind(window, EntityKind::GuideSurface);
+            window.RunCommand("fabrication.freeze_state");
+            Note(QStringLiteral("legacy percent=%1 output=%2: %3").arg(percent).arg(format).arg(window.StatusText()).toUtf8().constData());
+            const bool hasWires = format != 1, hasPart = format == 1 || format == 2;
+            if (!Explain("all legacy wire face and part outputs generate", CountOfKind(window, EntityKind::Wire) > wires || !hasWires)) return false;
+            if (!Explain("legacy output creates its requested native shape", CountOfKind(window, EntityKind::Part) == parts + (hasPart ? 1 : 0)
+                && CountOfKind(window, EntityKind::GuideSurface) == guides + (format == 0 ? 0 : 1))) return false;
+            if (format != 0) {
+                kachakacha::v2::app::SelectionSet generated;
+                for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+                    if (entity.kind != (hasPart ? EntityKind::Part : EntityKind::GuideSurface)) continue;
+                    if (std::none_of(before.entities.begin(), before.entities.end(), [&](const auto& old) { return old.id == entity.id; }))
+                        generated.entityIds.push_back(entity.id);
+                }
+                window.Viewport().SetSelection(generated);
+                auto* output = V2OutputTool::Open(window, 1);
+                if (!output || output->AssetCount() != 1) return false;
+                for (int exportFormat : {1, 0, 2}) {
+                    output->ChooseFormat(exportFormat);
+                    const auto path = directory + QStringLiteral("/legacy-%1-%2-%3").arg(percent).arg(format).arg(exportFormat)
+                        + (exportFormat == 1 ? QStringLiteral(".step") : exportFormat == 0 ? QStringLiteral(".stl") : QStringLiteral(".kcd2"));
+                    if (!Explain("legacy native output exports STEP STL and independent KCD2", output->SaveTo(path) && QFile(path).size() > 100)) return false;
+                }
+                output->close();
+            }
+            window.RunCommand("edit.undo");
+            if (!Explain("one undo removes only that generated output", CountOfKind(window, EntityKind::Wire) == wires
+                && CountOfKind(window, EntityKind::Part) == parts && CountOfKind(window, EntityKind::GuideSurface) == guides)) return false;
+        }
+    }
+    return true;
+}
+
+
+[[nodiscard]] bool CasePreparedMaterialRoundTrip(V2MainWindow&)
+{
+    QTemporaryDir folder;
+    if (!folder.isValid()) return false;
+    V2PreparedDocument payload;
+    auto& expected = payload.fabrication["material"];
+    kachakacha::v2::app::FabricationEvaluation::MaterialPanel material;
+    material.panelIndex = 4; material.bandIndex = 7;
+    material.axis = kachakacha::v2::fabrication::BandSplitAxis::V;
+    material.low = .2; material.high = .8; material.longitudinal = {0, .3, 1};
+    material.loopsUv = {{{0,0},{1,0},{1,1},{0,1}},{{.2,.2},{.2,.4},{.4,.4},{.4,.2}}};
+    expected.materialPanels = {material}; expected.materialBands = {false,true,false};
+    expected.bandPanels = {{0},{1,2},{}}; expected.bandPanelCount = 3;
+    const auto path = folder.filePath("prepared.bin");
+    if (!WritePreparedDocument(path, "round-trip", payload)) return false;
+    const auto read = ReadPreparedDocument(path, "round-trip", [] { return true; });
+    if (!read.HasValue() || !read.Value()->fabrication.contains("material")) return false;
+    const auto& actual = read.Value()->fabrication.at("material");
+    if (!Explain("worker transfer retains material flags panel grouping and count", actual.materialBands == expected.materialBands
+        && actual.bandPanels == expected.bandPanels && actual.bandPanelCount == expected.bandPanelCount
+        && actual.materialPanels.size() == 1)) return false;
+    const auto& restored = actual.materialPanels.front();
+    bool sameLoops = restored.loopsUv.size() == material.loopsUv.size();
+    for (std::size_t loop = 0; sameLoops && loop < material.loopsUv.size(); ++loop) {
+        sameLoops = restored.loopsUv[loop].size() == material.loopsUv[loop].size();
+        for (std::size_t point = 0; sameLoops && point < material.loopsUv[loop].size(); ++point)
+            sameLoops = restored.loopsUv[loop][point].u == material.loopsUv[loop][point].u
+                && restored.loopsUv[loop][point].v == material.loopsUv[loop][point].v;
+    }
+    if (!Explain("worker transfer retains exact holes UV axis and interval mapping", restored.panelIndex == material.panelIndex
+        && restored.bandIndex == material.bandIndex && restored.axis == material.axis && restored.low == material.low
+        && restored.high == material.high && restored.longitudinal == material.longitudinal && sameLoops)) return false;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto original = file.readAll(); file.close();
+    auto oldSchema = original;
+    QDataStream oldStream(&oldSchema, QIODevice::ReadWrite);
+    oldStream.skipRawData(8 + static_cast<int>(std::string("kachakacha-prepared-document").size()));
+    oldStream << qint64(2);
+    if (!file.open(QIODevice::WriteOnly) || file.write(oldSchema) != oldSchema.size()) return false;
+    file.close();
+    if (!Explain("old transfer schemas are rejected instead of zero-filling new fields",
+        !ReadPreparedDocument(path, "round-trip", [] { return true; }).HasValue()
+        && !CopyPreparedDocument(path, "round-trip", folder.filePath("old-copy.bin"), "copy"))) return false;
+    QByteArray marker;
+    QDataStream markerStream(&marker, QIODevice::WriteOnly);
+    markerStream << quint64(3) << qint64(0) << qint64(1) << qint64(0);
+    auto badFlags = original;
+    const auto at = badFlags.indexOf(marker);
+    if (at < 0 || badFlags.indexOf(marker, at + 1) >= 0) return false;
+    QDataStream flagStream(&badFlags, QIODevice::ReadWrite);
+    flagStream.skipRawData(at + 8); flagStream << qint64(2);
+    if (!file.open(QIODevice::WriteOnly) || file.write(badFlags) != badFlags.size()) return false;
+    file.close();
+    return Explain("invalid material flag is rejected without adopting a partial result",
+        !ReadPreparedDocument(path, "round-trip", [] { return true; }).HasValue());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathApproxCases()
 {
     return {
+        {"HP-AP-AUDIT worker round trip retains all material fields", CasePreparedMaterialRoundTrip},
+        {"HP-AP-AUDIT legacy auto one-piece all poses and output formats", CaseLegacyOnePieceAllOutputs},
+        {"HP-AP-AUDIT Escape Enter restarts preview before confirming", CaseCancelEnterRestarts},
+        {"HP-AP-AUDIT Open success failure and cancellation preserve pattern ownership", CasePatternOpenLifecycle},
+        {"HP-AP-AUDIT generation cancellation preserves pattern and all 2D exports", CasePatternSurvivesOutputCancel},
+        {"HP-AP-AUDIT idle and post-confirm settings keep start usable", CaseQuickSettingsOutsideApprox},
+        {"HP-AP-AUDIT cancelled targets stay visible and toggle once", CaseCancelledTargetsRemainVisible},
+        {"HP-AP-AUDIT partition undo and new document reject stale patterns", CasePatternInvalidatesAfterEdit},
         {"HP-AP-01 近似は 3D で押した対象が候補になり、押し直すと外れる",
             CaseHumanPathApproxSourcesFollowClicks},
         {"HP-AP-02 候補を押すと下見が変わり、Enter で同じ作り方が文書へ入る",

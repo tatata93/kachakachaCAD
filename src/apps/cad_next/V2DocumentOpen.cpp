@@ -3,6 +3,7 @@
 #include "V2DocumentTiming.h"
 #include "V2GeometryJob.h"
 #include "V2MainWindow.h"
+#include "V2PatternDock.h"
 #include "kachakacha/app/GeometryJobDiagnostic.h"
 #include "kachakacha/app/DocumentIds.h"
 #include "kachakacha/app/OriginPlanes.h"
@@ -62,6 +63,9 @@ bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSna
     if(std::any_of(problems.begin(),problems.end(),[](const auto& d){return d.IsError();})) {
         w.ReportDiagnostics(problems);w.SetStatus(QStringLiteral("開けませんでした。元の文書は保持しています。"));return false;
     }
+    w.patternPages_.clear();
+    if (w.patternDock_) w.patternDock_->SetPages({});
+    w.processContext_.patternBuilt = false;
     app::AdvanceIdsPastDocument(*w.ids_,w.session_->GetDocument().Snapshot());
     timing.Mark("reset-and-advance-ids");
     app::EnsureOriginPlanes(w.session_->GetDocument(),*w.ids_);w.session_->GetDocument().MarkHistoryBoundary();

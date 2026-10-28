@@ -118,6 +118,7 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
     using kachakacha::v2::app::ExportFormat;
     using kachakacha::v2::app::ExportTarget;
     using Out = kachakacha::v2::base::Result<std::string>;
+    RefreshExportCounts();
     const auto& snapshot = session_->GetDocument().Snapshot();
     const auto patternContent = [this, &request](const std::string& title) {
         return MakePatternContent(patternPages_,
@@ -267,6 +268,11 @@ void V2MainWindow::RefreshExportCounts()
         return;
     }
     const auto& snapshot = session_->GetDocument().Snapshot();
+    if (patternDock_ && !patternPages_.empty() && !patternDock_->MatchesSource(snapshot)) {
+        patternPages_.clear();
+        patternDock_->SetPages({});
+    }
+    processContext_.patternBuilt = !patternPages_.empty();
     int visibleParts = 0;
     for (const auto& entity : snapshot.entities) {
         if (entity.kind == kachakacha::v2::domain::EntityKind::Part

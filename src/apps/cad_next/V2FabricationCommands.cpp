@@ -465,6 +465,11 @@ void V2MainWindow::RunCreatePattern()
     using kachakacha::v2::fabrication::PaperSize;
     using kachakacha::v2::fabrication::PlacePanelCurves;
 
+    // Do not leave an older or partially generated sheet usable after a failed request.
+    patternPages_.clear();
+    if (patternDock_) patternDock_->SetPages({});
+    processContext_.patternBuilt = false;
+    RefreshExportCounts();
     const auto model=fabricationModels_.find(CurrentFabricationModelId().ToString());
     if (model==fabricationModels_.end() || model->second.panels.empty()) {
         SetStatus(QStringLiteral(
@@ -479,9 +484,9 @@ void V2MainWindow::RunCreatePattern()
         return;
     }
     // 置いた部材を、原寸のまま紙の上の曲線へ戻す。書き出しはこれを使う。
-    patternPages_.clear();
-    patternPages_.resize(static_cast<std::size_t>(std::max(1, layout.Value().pageCount)));
-    for (auto& page : patternPages_) {
+    std::vector<kachakacha::v2::exporters::PatternPage> pages(
+        static_cast<std::size_t>(std::max(1, layout.Value().pageCount)));
+    for (auto& page : pages) {
         page.widthMm = paper.widthMm;
         page.heightMm = paper.heightMm;
     }
@@ -508,13 +513,18 @@ void V2MainWindow::RunCreatePattern()
             if (!curves.HasValue()) {ReportDiagnostics(curves.Diagnostics());return;}
             const std::size_t page = static_cast<std::size_t>(
                 std::max(0, placement.pageIndex));
-            if (page >= patternPages_.size()) {
+            if (page >= pages.size()) {
                 continue;
             }
             for (const auto& curve : curves.Value()) {
-                patternPages_[page].curves.push_back(curve);
+                pages[page].curves.push_back(curve);
             }
         }
+    }
+    patternPages_ = std::move(pages);
+    if (patternDock_) {
+        patternDock_->SetPages(patternPages_);
+        patternDock_->RememberSource(session_->GetDocument().Snapshot(), CurrentFabricationModelId());
     }
     processContext_.patternBuilt = true;
     SetProcessContext(processContext_);
@@ -522,7 +532,6 @@ void V2MainWindow::RunCreatePattern()
     // 出来た型紙を下見の棚へ渡し、前に出す。
     // 見ないまま出すと、紙に収まっていないことに印刷してから気づく。
     if (patternDock_ != nullptr) {
-        patternDock_->SetPages(patternPages_);
         ShowShelf(kachakacha::v2::app::Shelf::Pattern);
     }
     SetStatus(QStringLiteral("型紙を作る: A4 %1ページに %2枚を並べました(原寸)。")
@@ -686,6 +695,8 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
     }
     fabricationModels_[modelId.ToString()] = evaluated.Value();
     patternPages_.clear();
+    if (patternDock_) patternDock_->SetPages({});
+    RefreshExportCounts();
     RefreshFabricationView();
     // 一覧の近似モデルの下(開口・折り線・切れ目の線、F-15)を今の作り方で作り直す。
     // 作り直さないと、入れた役割が一覧に出るのが次の操作のあとになる(自己試験で見つけた)。

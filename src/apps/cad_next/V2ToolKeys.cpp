@@ -176,7 +176,7 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            ConfirmApprox();
+            RunFabricationCreate();
             return true;
         }
     }

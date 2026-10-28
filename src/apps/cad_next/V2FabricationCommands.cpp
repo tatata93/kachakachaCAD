@@ -408,6 +408,8 @@ void V2MainWindow::SetAssemblyPercent(double percent, const QString& parts)
     int bandCount=found!=fabricationModels_.end()?static_cast<int>(found->second.panels.size()):0;
     auto chosenBands=numbers.Value();
     if(found!=fabricationModels_.end()&&!found->second.materialBands.empty()){
+        const auto valid=kachakacha::v2::app::UpdateBandProgress(*current,static_cast<int>(found->second.panels.size()),numbers.Value(),percent);
+        if(!valid.HasValue()){ReportDiagnostics(valid.Diagnostics());return;}
         const auto& groups=found->second.bandPanels;bandCount=static_cast<int>(groups.size());chosenBands.clear();
         for(auto panel:numbers.Value()){
             const auto group=std::find_if(groups.begin(),groups.end(),[&](const auto& indices){return std::find(indices.begin(),indices.end(),panel-1)!=indices.end();});

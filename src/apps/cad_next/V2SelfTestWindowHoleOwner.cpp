@@ -224,6 +224,9 @@ bool V2WindowHoleExercise::ApproximateRegion(V2MainWindow& w,base::EntityId sour
         }
     }
     for(double length:lengths)if(!selftest::Explain("cut path length is preserved at 0,35,100 percent",std::abs(length-lengths.front())<1e-6*std::max(1.,length)))return false;
+    const auto unchanged=w.Session().GetDocument().Revision();dock.SetPartNumbersText(QStringLiteral("999"));dock.PressApplyAssembly();
+    if(!selftest::Explain("invalid material number keeps the standard diagnostic and document unchanged",w.Session().GetDocument().Revision()==unchanged&&w.StatusText().contains(QStringLiteral("UI-F006"))))return false;
+    dock.SetPartNumbersText(QStringLiteral("すべて"));
     auto* outputType=w.findChild<QComboBox*>("fabricationGenerationOutput");if(!outputType)return false;
     const auto generate=[&](int kind){
         outputType->setCurrentIndex(kind);w.ActivateCommand("fabrication.freeze_state");

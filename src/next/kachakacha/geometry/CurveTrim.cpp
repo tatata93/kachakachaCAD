@@ -24,6 +24,15 @@ constexpr double kSameParameter = 1.0e-9;
     return curve.Kind() == CurveKind::Circle;
 }
 
+bool CollinearLines(const CurveSegment& a, const CurveSegment& b, const GeometryTolerance& tolerance)
+{
+    if (a.Kind() != CurveKind::Line || b.Kind() != CurveKind::Line) return false;
+    const auto u = a.EndPoint()-a.StartPoint(), v = b.EndPoint()-b.StartPoint();
+    const double lu = u.Length(), lv = v.Length();
+    return Cross(u,v).Length() <= tolerance.modelAngularRad*lu*lv
+        && Cross(b.StartPoint()-a.StartPoint(),u).Length() <= tolerance.modelLinearMm*lu;
+}
+
 //! 円の t を 0〜1 に畳む。
 [[nodiscard]] double Wrap01(double t)
 {
@@ -55,7 +64,28 @@ std::vector<CutPoint> CutPointsOn(const CurveSegment& target,
 {
     std::vector<CutPoint> cuts;
     const bool closed = IsCircle(target);
+    const auto bounds = target.Bounds(tolerance.modelLinearMm);
+    const auto onBounds = [&](Vector3 point) {
+        const double e = tolerance.modelLinearMm;
+        return point.x >= bounds.minimum.x-e && point.x <= bounds.maximum.x+e
+            && point.y >= bounds.minimum.y-e && point.y <= bounds.maximum.y+e
+            && point.z >= bounds.minimum.z-e && point.z <= bounds.maximum.z+e;
+    };
     for (std::size_t index = 0; index < boundaries.size(); ++index) {
+        // Open boundary endpoints are real trim boundaries, including tangential
+        // joins and both ends of an overlap. A closed curve's arbitrary seam is not.
+        if (!boundaries[index].IsClosed(tolerance.modelLinearMm))
+            for (const auto point : {boundaries[index].StartPoint(), boundaries[index].EndPoint()}) {
+                if (!onBounds(point)) continue;
+                const auto hit = target.ClosestPoint(point);
+                if (hit.distance > tolerance.modelLinearMm) continue;
+                const double t = closed ? Wrap01(hit.parameter) : hit.parameter;
+                if (!closed && (t <= kSameParameter || t >= 1.0-kSameParameter)) continue;
+                cuts.push_back(CutPoint{t, index, target.Evaluate(std::clamp(t, 0.0, 1.0))});
+            }
+        // A collinear overlap has no single crossing. Its actual endpoints above
+        // bound the interval; a closest-pair representative must not become a cut.
+        if (CollinearLines(target, boundaries[index], tolerance)) continue;
         for (const CurveIntersection& hit : IntersectCurves(target, boundaries[index], tolerance)) {
             double t = hit.firstParameter;
             if (closed) {

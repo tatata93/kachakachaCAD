@@ -274,4 +274,34 @@ KACHA_V2_TEST(curve_trim, Bスプラインを横切る線があってもトリ�
     RequireEqual(removed.FirstCode(), std::string("GEO-C014"), "GEO-C014で断る");
 }
 
+KACHA_V2_TEST(curve_trim, overlap_endpoints_bound_only_the_one_millimeter_tail)
+{
+    const auto target=Line({6,0,26.5},{6,0,1.5});
+    for(const auto boundary : {Line({6,0,24.5},{6,0,2.5}),Line({6,0,2.5},{6,0,24.5})}) {
+        const auto cuts=CutPointsOn(target,{boundary},Tolerance());
+        Require(cuts.size()==2,"both overlap endpoints are cuts");
+        const auto span=TrimSpanAround(target,cuts,.98,Tolerance());Require(span.HasValue(),"tail bounded");
+        RequireNear(SpanLengthMm(target,span.Value(),Tolerance()),1,1e-8,"only 1 mm removed");
+    }
+}
+KACHA_V2_TEST(curve_trim, tangent_arc_endpoint_is_a_real_three_dimensional_boundary)
+{
+    const auto target=Line({6,0,26.5},{6,0,1.5});
+    const auto arc=CurveSegment::MakeCircularArc({5,0,2.5},{0,-1,0},{1,0,0},1,0,-1.5707963267948966).Value();
+    const auto cuts=CutPointsOn(target,{arc},Tolerance());Require(cuts.size()==1,"tangent endpoint cut");
+    const auto span=TrimSpanAround(target,cuts,.98,Tolerance());Require(span.HasValue(),"bounded tail");
+    RequireNear(SpanLengthMm(target,span.Value(),Tolerance()),1,1e-8,"R tangent leaves rest intact");
+}
+KACHA_V2_TEST(curve_trim, nearby_endpoint_in_another_plane_is_not_a_trim_boundary)
+{
+    const auto target=Line({6,0,26.5},{6,0,1.5});
+    const auto boundary=Line({6,.002,24.5},{6,.002,2.5});
+    Require(CutPointsOn(target,{boundary},Tolerance()).empty(),"screen overlap is not a real 3D contact");
+}
+KACHA_V2_TEST(curve_trim, endpoint_at_target_end_does_not_create_a_zero_length_fragment)
+{
+    const auto target=Line({0,0,0},{10,0,0});
+    Require(CutPointsOn(target,{Line({10,0,0},{10,5,0})},Tolerance()).empty(),"target end stays a join, not a cut");
+}
+
 KACHA_V2_TEST_MAIN("curve_trim_tests")

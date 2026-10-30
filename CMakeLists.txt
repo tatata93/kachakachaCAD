@@ -1127,6 +1127,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestHoverEdit.cpp
         src/apps/cad_next/V2SelfTestTrimPreservation.cpp
         src/apps/cad_next/V2SelfTestLoopFaces.cpp
+        src/apps/cad_next/V2SelfTestPanelSupport.cpp
         src/apps/cad_next/V2SelfTestApproxOutline.cpp
         src/apps/cad_next/V2SelfTestPractical.cpp
         src/apps/cad_next/V2SelfTestPracticalFreeze.cpp
@@ -1297,6 +1298,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GptSurfaceAssist.cpp
         src/apps/cad_next/V2LoopFacesTool.cpp
         src/apps/cad_next/V2LoopFacesNetwork.cpp
+        src/apps/cad_next/V2LoopFacesSupport.cpp
         src/apps/cad_next/V2LoopFacesPreview.cpp
         src/apps/cad_next/V2UiShotStatesTools.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp

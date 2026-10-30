@@ -35,6 +35,7 @@ std::vector<SelfTestCase> FaceExtrudeCases();
 std::vector<SelfTestCase> ProjectionCases();
 std::vector<SelfTestCase> NavigationCases();
 std::vector<SelfTestCase> TrimPreservationCases();
+std::vector<SelfTestCase> PanelSupportCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -187,6 +188,7 @@ namespace {
     cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
     const std::vector<SelfTestCase> loopFaces = WithSuite(LoopFacesCases(), "LoopFaces");
     cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
+    const auto skins=WithSuite(PanelSupportCases(), "PanelSupport");cases.insert(cases.end(),skins.begin(),skins.end());
     const auto outlines=WithSuite(ApproxOutlineCases(), "ApproxOutline");cases.insert(cases.end(),outlines.begin(),outlines.end());
     const auto practical=WithSuite(PracticalCases(), "Practical");cases.insert(cases.end(),practical.begin(),practical.end());
     const auto gptFabrication = WithSuite(GptFabricationCases(), "GptFabrication");

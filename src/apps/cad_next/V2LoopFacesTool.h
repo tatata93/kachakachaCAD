@@ -68,7 +68,8 @@ private:
     void ApplyStyle(int face,int style,bool all);
     [[nodiscard]] bool Replan();
     [[nodiscard]] bool TryNetworkPlan();
-    void AttachHoleSupports(kachakacha::v2::modeling::GuideTable& table);
+    void AttachSourceSupports(kachakacha::v2::modeling::GuideTable& table,bool opening);
+    [[nodiscard]] bool PreservesSource(std::size_t face) const;
     void ShowPreview();
     void ScheduleSurfacePreview();
     void BuildSurfacePreview();

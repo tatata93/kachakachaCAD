@@ -118,7 +118,7 @@ void V2LoopFacesTool::BuildSurfacePreview()
                         error=mesh.FirstSummaryJa();
                         if (mesh.HasValue()) {
                             combined.triangles.insert(combined.triangles.end(),mesh.Value().triangles.begin(),mesh.Value().triangles.end());
-                            previewFaceStatus_[at]=QStringLiteral("下見OK / 最大ずれ %1 mm").arg(built.Value().maximumDeviationMm,0,'g',3);
+                            previewFaceStatus_[at]=QStringLiteral("下見OK / 境界の最大ずれ %1 mm").arg(built.Value().maximumDeviationMm,0,'g',3);
                             continue;
                         }
                     }

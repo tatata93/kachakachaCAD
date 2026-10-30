@@ -74,6 +74,7 @@ void V2LoopFacesTool::ApplyStyle(int face,int style,bool all)
     if(face<0 || static_cast<std::size_t>(face)>=styles_.size() || style<0 || style>3)return;
     for(std::size_t i=0;i<styles_.size();++i) {
         const auto method=MethodOf(i);
+        if(PreservesSource(i))continue;
         if((!all && i==static_cast<std::size_t>(face)) || (all && make_[i]
             && (method==LoopFaceMethod::FourEdge || method==LoopFaceMethod::BoundaryFill)))
             styles_[i]=static_cast<kachakacha::v2::modeling::FourEdgeStyle>(style);
@@ -521,11 +522,11 @@ void V2LoopFacesTool::ShowDock()
             : QStringLiteral("平面から %1 mm").arg(face.planeDeviationMm, 0, 'f', 3);
         if (at < previewFaceStatus_.size()) row.statusJa = previewFaceStatus_[at];
         else row.statusJa = QStringLiteral("輪郭検出（面未計算）");
-        if (current==LoopFaceMethod::FourEdge||(current==LoopFaceMethod::BoundaryFill
-            &&(face.selections.size()>=4||(!networkTables_.empty()&&networkTables_[at].rows.size()>=4))))
+        if (!PreservesSource(at)&&(current==LoopFaceMethod::FourEdge||(current==LoopFaceMethod::BoundaryFill
+            &&(face.selections.size()>=4||(!networkTables_.empty()&&networkTables_[at].rows.size()>=4)))))
             row.styleIndex=static_cast<int>(styles_[at]);
         row.make = make_[at];
-        const bool allowed = current == LoopFaceMethod::FourEdge || current == LoopFaceMethod::BoundaryFill;
+        const bool allowed = !PreservesSource(at)&&(current == LoopFaceMethod::FourEdge || current == LoopFaceMethod::BoundaryFill);
         for (std::size_t e = 0; e < face.edges.size(); ++e) {
             const auto& edge = face.edges[e];
             if (!edge.neighborSurface.has_value() && !edge.neighborFace.has_value()) {

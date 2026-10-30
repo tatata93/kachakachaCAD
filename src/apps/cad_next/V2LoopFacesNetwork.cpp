@@ -1,7 +1,5 @@
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
-#include "kachakacha/kernel/OcctSurfaceRegion.h"
-#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/app/LoopGraph.h"
 #include "kachakacha/app/ProfileNetwork.h"
@@ -448,8 +446,10 @@ bool V2LoopFacesTool::TryNetworkPlan()
     networkTables_ = std::move(network.tables);
     if(omitted&&!closed.empty())networkUnusedJa_=QStringLiteral("重複の余り %1区間（許容 %2 mm以内。元の線と曲線形式は保持）")
         .arg(static_cast<int>(omitted)).arg(tolerance.interactiveJoinMm,0,'f',3);
-    for(auto& table:networkTables_)if(notch||std::any_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::HoleBoundary;}))
-        AttachHoleSupports(table);
+    for(auto& table:networkTables_) {
+        const bool opening=notch||std::any_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::HoleBoundary;});
+        AttachSourceSupports(table,opening);
+    }
     for (const auto& selection : selections_) {
         const auto count = std::count_if(network.unusedSegments.begin(), network.unusedSegments.end(),
             [&](const auto& part) { return part.sourceWireId == selection.sourceWireId; });
@@ -471,6 +471,9 @@ bool V2LoopFacesTool::TryNetworkPlan()
     plan.summaryJa = "接続区画 " + std::to_string(plan.faces.size()) + "（曲面は近似）。元の線の区間を使い、線を変更しません";
     std::size_t holeCount=0;for(const auto& table:networkTables_)for(const auto& row:table.rows)holeCount+=row.role==modeling::ChainRole::HoleBoundary;
     if(holeCount)plan.summaryJa+="。穴 "+std::to_string(holeCount)+"個";
+    for(const auto& table:networkTables_)for(const auto& row:table.rows)
+        if(row.role==modeling::ChainRole::SourceSurface&&!row.sourceLabels.empty())
+            plan.summaryJa+="。元の面「"+row.sourceLabels.front()+"」の形を保持";
     if(notch)plan.summaryJa+="。外周に接する開口を切り欠きとして保持";
     const auto unused=network.unusedSegments.size()+(closed.empty()?0:omitted);
     if (unused)
@@ -482,69 +485,4 @@ bool V2LoopFacesTool::TryNetworkPlan()
     continuity_.assign(plan_->faces.size(), {});
     leaveGap_.clear();
     return true;
-}
-
-void V2LoopFacesTool::AttachHoleSupports(kachakacha::v2::modeling::GuideTable& table)
-{
-    using namespace kachakacha::v2;
-    const auto tolerance=ToleranceNow();
-        if(table.method!=modeling::GuideSurfaceMethod::BoundaryFill)return;
-        std::vector<std::vector<geometry::CurveSegment>> loops(1);
-        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::BoundarySide)
-            loops.front().insert(loops.front().end(),row.segments.begin(),row.segments.end());
-        for(const auto& row:table.rows)if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
-        const auto& snapshot=window_.session_->GetDocument().Snapshot();
-        bool found=false;
-        // Prefer visible supports, but hiding a source must not turn a curved
-        // projected window into an unrelated refilled surface.
-        for(const bool visible:{true,false}) {
-        for(const auto* shapes:{&window_.guideShapes_,&window_.partShapes_}) {
-            for(const auto& [key,handle]:*shapes) {
-                const auto id=base::EntityId::Parse(key);if(!id)continue;
-                const auto* entity=window_.session_->GetDocument().FindEntity(*id);
-                if(!entity||(entity->kind!=domain::EntityKind::Part&&entity->kind!=domain::EntityKind::GuideSurface)
-                    ||app::EntityEffectivelyVisible(snapshot,*entity)!=visible)continue;
-                const auto cut=kernel::TrimSurfaceRegion({handle},loops,tolerance,tolerance.interactiveJoinMm);
-                if(!cut.HasValue())continue;
-                kernel::ReleaseShape(cut.Value());
-                modeling::GuideTableRow source;source.role=modeling::ChainRole::SourceSurface;
-                source.sourceWireIds={*id};source.sourceLabels={entity->displayName};table.rows.push_back(source);found=true;break;
-            }
-            if(found)break;
-        }
-        if(found)break;
-        }
-        if(!found) {
-            // A spatial hole can cross several adjacent support faces. Do not
-            // refill its outer wire as an unrelated surface when no single
-            // entity contains the complete boundary.
-            for(const bool visible:{true,false}) {
-                std::vector<modeling::KernelShapeHandle> handles;
-                std::vector<base::EntityId> ids;
-                for(const auto* shapes:{&window_.guideShapes_,&window_.partShapes_})for(const auto& [key,handle]:*shapes) {
-                    const auto id=base::EntityId::Parse(key);if(!id)continue;
-                    const auto* entity=window_.session_->GetDocument().FindEntity(*id);
-                    if(!entity||(visible&&!app::EntityEffectivelyVisible(snapshot,*entity)))continue;
-                    handles.push_back(handle);ids.push_back(*id);
-                }
-                if(handles.size()<2)continue;
-                const auto cut=kernel::TrimSurfaceRegion(handles,loops,tolerance,tolerance.interactiveJoinMm);
-                if(!cut.HasValue())continue;
-                kernel::ReleaseShape(cut.Value());
-                // Record only supports that are actually necessary. Otherwise
-                // unrelated visible parts become dependencies of this window.
-                for(std::size_t at=0;at<handles.size()&&handles.size()>1;) {
-                    auto trial=handles;trial.erase(trial.begin()+at);
-                    const auto reduced=kernel::TrimSurfaceRegion(trial,loops,tolerance,tolerance.interactiveJoinMm);
-                    if(reduced.HasValue()) {kernel::ReleaseShape(reduced.Value());handles=std::move(trial);ids.erase(ids.begin()+at);}
-                    else ++at;
-                }
-                for(const auto& id:ids) {
-                    modeling::GuideTableRow source;source.role=modeling::ChainRole::SourceSurface;
-                    source.sourceWireIds={id};source.sourceLabels={window_.session_->GetDocument().FindEntity(id)->displayName};
-                    table.rows.push_back(source);
-                }
-                found=true;break;
-            }
-        }
 }

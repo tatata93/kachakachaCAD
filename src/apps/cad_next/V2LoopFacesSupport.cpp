@@ -29,6 +29,7 @@ void V2LoopFacesTool::AttachSourceSupports(modeling::GuideTable& table,bool open
     }
     for(const auto& row:table.rows)if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
     const auto& document=window_.session_->GetDocument();
+    const auto snapshot=document.Snapshot();
     struct Candidate {base::EntityId id;modeling::KernelShapeHandle handle;bool visible;std::size_t shared;};
     std::vector<Candidate> candidates;
     for(const auto* shapes:{&window_.guideShapes_,&window_.partShapes_})for(const auto& [key,handle]:*shapes) {
@@ -39,7 +40,7 @@ void V2LoopFacesTool::AttachSourceSupports(modeling::GuideTable& table,bool open
         std::size_t shared=0;
         if(feature)for(const auto wire:boundaryIds)
             shared+=std::find(feature->inputEntityIds.begin(),feature->inputEntityIds.end(),wire)!=feature->inputEntityIds.end();
-        candidates.push_back({*id,handle,app::EntityEffectivelyVisible(document.Snapshot(),*entity),shared});
+        candidates.push_back({*id,handle,app::EntityEffectivelyVisible(snapshot,*entity),shared});
     }
     std::stable_sort(candidates.begin(),candidates.end(),[opening](const auto& a,const auto& b){
         // For a plain perimeter, prefer its own original skin to unrelated

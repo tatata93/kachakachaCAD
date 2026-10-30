@@ -508,7 +508,8 @@ void V2LoopFacesTool::ShowDock()
         const auto choices = MethodChoices(at);
         const LoopFaceMethod current = MethodOf(at);
         for (std::size_t index = 0; index < choices.size(); ++index) {
-            row.methodChoicesJa.push_back(Text(kachakacha::v2::app::LoopFaceMethodLabelJa(choices[index])));
+            row.methodChoicesJa.push_back(PreservesSource(at)?QStringLiteral("元の面から切り出す")
+                :Text(kachakacha::v2::app::LoopFaceMethodLabelJa(choices[index])));
             if (choices[index] == current) {
                 row.methodIndex = static_cast<int>(index);
             }

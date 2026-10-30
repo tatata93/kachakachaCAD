@@ -58,7 +58,7 @@ bool V2OutputTool::SaveTo(const QString& path) {
         const auto content=format_->currentIndex()==0?V2Calculation::Call(nullptr, "STLを生成して検査しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::OutputStl(values...); }, shapes,0.01):V2Calculation::Call(nullptr,"STEPを生成して検査しています…",
         [](const auto& values){return kachakacha::v2::kernel::OutputStep(values);},shapes);
-        if(!content.HasValue()){SetProblem(QString::fromStdString(content.FirstSummaryJa()));return false;}bytes=content.Value();}
+        if(!content.HasValue()){SetProblem(QString::fromStdString(content.FirstSummaryJa()+"\n"+content.FirstDetailsJa()));return false;}bytes=content.Value();}
     const auto written=io::WriteFileAtomically(path.toStdString(),bytes);if(!written.HasValue()){SetProblem(QString::fromStdString(written.FirstMessageJa()));return false;}
     window_.SetStatus(QStringLiteral("プレビューした%1個の形状を%2へ出力しました。").arg(prepared_.size()).arg(path));return true;
 }

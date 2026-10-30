@@ -9,6 +9,7 @@
 #include "V2ThickenDock.h"
 #include "V2FabricationDock.h"
 #include "V2ParameterDock.h"
+#include "V2OutputTool.h"
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/document/Commands.h"
@@ -19,6 +20,7 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QComboBox>
+#include <QLabel>
 #include <QDir>
 #include <QPixmap>
 #include <algorithm>
@@ -191,6 +193,15 @@ bool Owner(V2MainWindow& w)
     face.entityIds={part};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");
     QApplication::processEvents();w.grab().save(output+"/02-body-solid.png");
     w.SetPathChooser([output](bool){return output+"/body-solid.kcd2";});w.RunCommand("file.save_as");w.SetPathChooser({});
+    if(!w.OpenDocumentFile(output+"/body-solid.kcd2")||!w.RebuildProblems().isEmpty())return false;
+    face.entityIds={part};w.Viewport().SetSelection(face);
+    auto* exporter=V2OutputTool::Open(w,0);
+    bool exported=exporter->SaveTo(output+"/body-solid.stl");exporter->ChooseFormat(1);
+    exported=exporter->SaveTo(output+"/body-solid.step")&&exported;
+    if(!exported)for(const auto* label:exporter->findChildren<QLabel*>())Note(label->text().toUtf8().constData());
+    exporter->ChooseFormat(2);exported=exporter->SaveTo(output+"/body-solid-independent.kcd2")&&exported;
+    exporter->close();
+    if(!Explain("reopened body solid exports native STEP and printable STL",exported))return false;
     if(!w.OpenDocumentFile(output+"/body-with-door-notch.kcd2"))return false;
     w.Viewport().ClearIsolation();face.entityIds={made};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();
     auto* automatic=w.findChild<QComboBox*>("fabricationAutomaticGeneration");if(!automatic)return false;automatic->setCurrentIndex(0);

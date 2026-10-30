@@ -468,7 +468,12 @@ bool V2LoopFacesTool::TryNetworkPlan()
             face.previewLines.push_back(geometry::SampleChain(row.segments, tolerance.interactiveJoinMm*0.5));
         plan.faces.push_back(std::move(face));
     }
-    plan.summaryJa = "接続区画 " + std::to_string(plan.faces.size()) + "（曲面は近似）。元の線の区間を使い、線を変更しません";
+    plan.summaryJa = "接続区画 " + std::to_string(plan.faces.size()) + "。元の線の区間を使い、線を変更しません";
+    const bool refilled=std::any_of(networkTables_.begin(),networkTables_.end(),[](const auto& table){
+        return table.method!=modeling::GuideSurfaceMethod::PlanarBoundary
+            &&std::none_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::SourceSurface;});
+    });
+    if(refilled)plan.summaryJa+="。新しく張る曲面は近似";
     std::size_t holeCount=0;for(const auto& table:networkTables_)for(const auto& row:table.rows)holeCount+=row.role==modeling::ChainRole::HoleBoundary;
     if(holeCount)plan.summaryJa+="。穴 "+std::to_string(holeCount)+"個";
     for(const auto& table:networkTables_)for(const auto& row:table.rows)

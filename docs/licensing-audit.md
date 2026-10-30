@@ -140,3 +140,7 @@ OpenGLを利用できない構成では従来のCPU描画へ戻る。追加の�
 
 2026-10-22: Windowsの画面描画に同じQtのOpenGLWidgetsを動的リンクする。
 Qt6OpenGLWidgets.dllも配布に同梱し、同じLGPL-3.0の条件を適用する。
+
+2026-10-31: 前配布で照合済みのQt SVG/ImageFormatsのライセンス・同梱コード表示をlegalへ保存し、
+再パッケージでも落とさない。MSVC CRTはInstallRequiredSystemLibrariesで構成時に検出した
+Visual Studioの未改変の再配布DLLだけを同梱する。新しいライブラリ依存・静的リンクは追加しない。

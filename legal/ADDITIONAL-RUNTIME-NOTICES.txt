@@ -1,0 +1,14 @@
+Additional runtime components / 2026-10-30
+
+Qt SVG and Qt ImageFormats 6.9.2
+Copyright (C) The Qt Company Ltd. and contributors.
+These replaceable Qt DLLs and plugins are dynamically linked under LGPL-3.0.
+Module license files and bundled-code attribution notices are under
+legal/qt-additional-notices. The complete corresponding module archives are
+included in kachakachaCAD-third-party-source.zip on the same GitHub Release.
+
+Microsoft Visual C++ runtime 14.44.35112 (x64 Microsoft.VC143.CRT)
+Copyright (C) Microsoft Corporation. All rights reserved.
+Unmodified redistributable DLLs from Visual Studio Build Tools are included
+under the Microsoft Visual Studio software license and REDIST list.
+https://learn.microsoft.com/visualstudio/releases/2022/redistribution

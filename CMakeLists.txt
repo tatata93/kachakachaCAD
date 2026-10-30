@@ -17,6 +17,8 @@ project(kachakachaCAD
     LANGUAGES CXX
 )
 
+include(KachakachaCompilerRuntime)
+
 option(KACHACAD_BUILD_TESTS "Build kachakachaCAD tests" ON)
 option(KACHACAD_BUILD_QT_APP "Build the Qt desktop application when Qt 6 is available" ON)
 option(KACHACAD_ENABLE_OCCT "Enable Open CASCADE B-Rep and 3D export support" ON)

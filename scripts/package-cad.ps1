@@ -55,6 +55,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "windeployqt failed with exit code $LASTEXITCODE"
 }
 
+if ($Config -eq 'Release') {
+    & (Join-Path $PSScriptRoot 'copy-compiler-runtime.ps1') -BuildDir (Join-Path $RepoRoot $BuildDir) -OutputDir $ResolvedOutput
+}
+
 $PlatformOutput = Join-Path $ResolvedOutput "platforms"
 if (-not (Test-Path $PlatformOutput)) {
     New-Item -ItemType Directory -Path $PlatformOutput | Out-Null

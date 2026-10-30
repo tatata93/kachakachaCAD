@@ -1,0 +1,17 @@
+# Detect redistributable compiler DLLs using CMake's toolchain-aware locator.
+# The generated manifest is local build metadata, never a machine path in Git.
+set(kachacad_compiler_runtime "")
+if(MSVC)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    include(InstallRequiredSystemLibraries)
+    if(IS_DIRECTORY "${MSVC_CRT_DIR}")
+        file(GLOB kachacad_compiler_runtime LIST_DIRECTORIES FALSE "${MSVC_CRT_DIR}/*.dll")
+    endif()
+    if(NOT kachacad_compiler_runtime)
+        message(WARNING "MSVC redistributable DLLs not found; Windows packaging will fail")
+    endif()
+endif()
+list(JOIN kachacad_compiler_runtime "\n" kachacad_compiler_runtime_text)
+file(WRITE "${CMAKE_BINARY_DIR}/compiler-runtime-release.txt" "${kachacad_compiler_runtime_text}\n")
+unset(kachacad_compiler_runtime)
+unset(kachacad_compiler_runtime_text)

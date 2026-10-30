@@ -66,6 +66,10 @@ $deployConfiguration = if ($Config -eq 'Debug') { '--debug' } else { '--release'
     --no-system-d3d-compiler --no-system-dxc-compiler `
     --dir $Output $Deployed
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+if ($Config -eq 'Release') {
+    & (Join-Path $PSScriptRoot 'copy-compiler-runtime.ps1') -BuildDir $BuildRoot -OutputDir $Output
+}
+
 
 $offscreenName = if ($Config -eq 'Debug') { 'qoffscreend.dll' } else { 'qoffscreen.dll' }
 $Offscreen = Join-Path $QtPrefix "plugins\platforms\$offscreenName"

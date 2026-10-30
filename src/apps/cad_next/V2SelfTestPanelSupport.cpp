@@ -22,6 +22,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QDir>
+#include <QFileInfo>
 #include <QPixmap>
 #include <algorithm>
 #include <iostream>
@@ -196,12 +197,19 @@ bool Owner(V2MainWindow& w)
     if(!w.OpenDocumentFile(output+"/body-solid.kcd2")||!w.RebuildProblems().isEmpty())return false;
     face.entityIds={part};w.Viewport().SetSelection(face);
     auto* exporter=V2OutputTool::Open(w,0);
-    bool exported=exporter->SaveTo(output+"/body-solid.stl");exporter->ChooseFormat(1);
-    exported=exporter->SaveTo(output+"/body-solid.step")&&exported;
-    if(!exported)for(const auto* label:exporter->findChildren<QLabel*>())Note(label->text().toUtf8().constData());
-    exporter->ChooseFormat(2);exported=exporter->SaveTo(output+"/body-solid-independent.kcd2")&&exported;
+    const bool stl=exporter->SaveTo(output+"/body-solid.stl");exporter->ChooseFormat(1);
+    const auto stepPath=output+"/body-solid.step";
+    // This legacy C0 carrier is known to change in OCCT STEP round-trip.
+    // Assert the explicit refusal and absence of a corrupt output, not success.
+    const bool step=exporter->SaveTo(stepPath);QString problem;
+    for(const auto* label:exporter->findChildren<QLabel*>())problem+=label->text()+"\n";
+    const bool rejected=!step&&!QFileInfo::exists(stepPath)
+        &&problem.contains(QStringLiteral("STEPを再読込すると立体の形または閉鎖性が変わります"))
+        &&problem.contains(QStringLiteral("このSTEPは保存しません"))&&problem.contains("volume=");
+    if(!step)Note(problem.toUtf8().constData());
+    exporter->ChooseFormat(2);const bool native=exporter->SaveTo(output+"/body-solid-independent.kcd2");
     exporter->close();
-    if(!Explain("reopened body solid exports native STEP and printable STL",exported))return false;
+    if(!Explain("reopened body solid exports STL and native KCD; changed STEP is explicitly rejected",stl&&native&&rejected))return false;
     if(!w.OpenDocumentFile(output+"/body-with-door-notch.kcd2"))return false;
     w.Viewport().ClearIsolation();face.entityIds={made};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();
     auto* automatic=w.findChild<QComboBox*>("fabricationAutomaticGeneration");if(!automatic)return false;automatic->setCurrentIndex(0);

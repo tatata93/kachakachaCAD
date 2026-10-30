@@ -40,6 +40,12 @@
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepLib.hxx>
 #include <GProp_GProps.hxx>
+#include <Geom2d_Line.hxx>
+#include <gp_Dir2d.hxx>
+#include <gp_Pnt2d.hxx>
+#include <Geom_BezierSurface.hxx>
+#include <NCollection_Array2.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
 #endif
 using namespace kachakacha::v2;
 using test::Require;
@@ -446,6 +452,118 @@ KACHA_V2_TEST(thicken_quality, bounded_boundary_handles_high_degree_nonuniform_r
         kernel::ReleaseShape(handle);
     }
 }
+
+namespace {
+struct CylinderTrim {
+    occ::handle<Geom_Surface> surface;
+    TopoDS_Face face;
+};
+TopoDS_Face PerforatedFace(const occ::handle<Geom_Surface>& surface,double angle,double height,bool diagonal) {
+    const auto wire=[&](std::vector<gp_Pnt2d> points,bool reverse=false) {
+        if(reverse)std::reverse(points.begin(),points.end());BRepBuilderAPI_MakeWire made;
+        for(std::size_t i=0;i<points.size();++i) {
+            const auto a=points[i],b=points[(i+1)%points.size()];gp_Vec2d d(a,b);
+            const occ::handle<Geom2d_Curve> line=new Geom2d_Line(a,gp_Dir2d(d));
+            BRepBuilderAPI_MakeEdge edge(line,surface,0,d.Magnitude());Require(edge.IsDone(),"native trim edge");made.Add(edge.Edge());
+        }
+        Require(made.IsDone(),"native oriented trim wire");return made.Wire();
+    };
+    BRepBuilderAPI_MakeFace face(surface,wire({{0,0},{angle,0},{angle,height},{angle*.8,height},
+        {angle*.8,height*.7},{angle*.6,height*.7},{angle*.6,height},{0,height}}),true);
+    face.Add(wire({{angle*.1,height/6},{angle*.25,height/6},{angle*.25,height*.4},{angle*.1,height*.4}},true));
+    if(diagonal)face.Add(wire({{angle*.35,height*.1},{angle*.55,height*.1},{angle*.55,height*.5}},true));
+    else face.Add(wire({{angle*.35,height*.1},{angle*.55,height*.1},{angle*.55,height*.5},{angle*.35,height*.5}},true));
+    Require(face.IsDone(),"notched face with two holes");const auto result=face.Face();
+    Require(BRepLib::BuildCurves3d(result),"native UV edges have exact spatial curves");
+    Require(BRepCheck_Analyzer(result).IsValid(),"valid perforated native face");return result;
+}
+CylinderTrim PerforatedCylinder(bool diagonal) {
+    const double angle=std::acos(-1.)*.5;
+    const occ::handle<Geom_Surface> surface=new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0,0,0),gp_Dir(0,0,1)),12);
+    return {surface,PerforatedFace(surface,angle,30,diagonal)};
+}
+}
+KACHA_V2_TEST(thicken_quality, notched_offset_with_multiple_holes_preserves_analytic_signed_volume_and_centroid)
+{
+    const auto fixture=PerforatedCylinder(false);const double angle=std::acos(-1.)*.5;
+    const auto theta=[&](double u){const auto p=fixture.surface->Value(u,0);return std::atan2(p.Y(),p.X());};
+    const double r=12,R=12.5;
+    double volume=0,mx=0,my=0,mz=0;
+    const auto region=[&](double u0,double u1,double z0,double z1,int sign) {
+        const auto a=theta(u0),b=theta(u1);const double area=(R*R-r*r)*.5,radial=(R*R*R-r*r*r)/3;
+        volume+=sign*area*(b-a)*(z1-z0);
+        mx+=sign*radial*(std::sin(b)-std::sin(a))*(z1-z0);
+        my+=sign*radial*(std::cos(a)-std::cos(b))*(z1-z0);
+        mz+=sign*area*(b-a)*(z1*z1-z0*z0)*.5;
+    };
+    region(0,angle,0,30,1);region(angle*.6,angle*.8,21,30,-1);
+    region(angle*.1,angle*.25,5,12,-1);region(angle*.35,angle*.55,3,15,-1);
+    BRepOffsetAPI_MakeThickSolid made;made.MakeThickSolidBySimple(fixture.face,.5);Require(made.IsDone(),"perforated offset wall built");
+    auto solid=TopoDS::Solid(made.Shape());Require(BRepLib::OrientClosedSolid(solid),"perforated wall oriented");
+    gp_Trsf transform;transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(0,1,0)),.7);transform.SetTranslationPart(gp_Vec(1000,-2000,3000));
+    auto placed=BRepBuilderAPI_Transform(solid,transform,false).Shape();
+    gp_Pnt expected(mx/volume,my/volume,mz/volume);expected.Transform(transform);
+    for(bool reverse:{false,true}) {
+        GProp_GProps result;kernel::detail::VolumeProperties(placed,result,true);
+        test::RequireNear(result.Mass(),reverse?-volume:volume,volume*1e-8,"holes and notch keep analytic signed volume");
+        test::RequireNear(result.CentreOfMass().Distance(expected),0,1e-7,"transformed perforated wall analytic centroid");placed.Reverse();
+    }
+}
+KACHA_V2_TEST(thicken_quality, diagonal_hole_is_integrated_as_native_trim_not_uv_rectangle)
+{
+    const auto fixture=PerforatedCylinder(true);const double angle=std::acos(-1.)*.5;
+    const auto theta=[&](double u){const auto p=fixture.surface->Value(u,0);return std::atan2(p.Y(),p.X());};
+    // Independent 1D integration by parts of the analytic cylinder sector.
+    // No surface normals or flux quadrature from VolumeProperties are reused.
+    const auto triangle=[&](int n) {
+        const double a=angle*.35,b=angle*.55;double sum=theta(a)+theta(b);
+        for(int i=1;i<n;++i)sum+=(i%2?4:2)*theta(a+(b-a)*i/n);
+        return 12*(theta(b)-sum/(3*n));
+    };
+    const double triangleArea=triangle(10000);
+    test::RequireNear(triangleArea,triangle(20000),1e-11,"independent triangle reference converges");
+    const double area=angle*30-(theta(angle*.8)-theta(angle*.6))*9
+        -(theta(angle*.25)-theta(angle*.1))*7-triangleArea;
+    const double expected=area*(12.5*12.5-12*12)*.5;
+    BRepOffsetAPI_MakeThickSolid made;made.MakeThickSolidBySimple(fixture.face,.5);Require(made.IsDone(),"diagonal hole offset built");
+    auto solid=TopoDS::Solid(made.Shape());Require(BRepLib::OrientClosedSolid(solid),"diagonal hole wall oriented");
+    const auto handle=kernel::StoreShape(solid);const auto before=kernel::CaptureOutputShape(handle);Require(before.HasValue(),"capture before mass query");
+    GProp_GProps result;kernel::detail::VolumeProperties(solid,result);
+    test::RequireNear(result.Mass(),expected,expected*1e-8,"diagonal boundary material is subtracted exactly");
+    Require(before.Value()==kernel::CaptureOutputShape(handle).Value(),"mass query never alters stored skin or trim wires");
+    kernel::ReleaseShape(handle);
+}
+
+
+KACHA_V2_TEST(thicken_quality, open_spline_panel_with_notch_and_diagonal_hole_has_analytic_prism_mass)
+{
+    NCollection_Array2<gp_Pnt> poles(1,3,1,3);
+    for(int u=1;u<=3;++u)for(int v=1;v<=3;++v)poles.SetValue(u,v,gp_Pnt((u-1)*5.,(v-1)*10.,(u==3?.3:0)+(v==3?.6:0)));
+    const occ::handle<Geom_Surface> bezier=new Geom_BezierSurface(poles);
+    auto surface=GeomConvert::SurfaceToBSplineSurface(bezier);
+    for(int i=1;i<9;++i){surface->InsertUKnot(i/9.,1,1e-12,false);surface->InsertVKnot(i/9.,1,1e-12,false);}
+    const auto face=PerforatedFace(surface,1,1,true);
+    BRepPrimAPI_MakePrism prism(face,gp_Vec(0,0,.5));Require(prism.IsDone(),"exact graph face extruded vertically");
+    auto solid=TopoDS::Solid(prism.Shape());Require(BRepLib::OrientClosedSolid(solid),"graph wall oriented");
+    Require(BRepCheck_Analyzer(solid).IsValid(),"closed native graph prism with two holes and notch");
+    double a=0,u=0,v=0,uu=0,vv=0;
+    const auto rectangle=[&](double x0,double x1,double y0,double y1,int sign) {
+        a+=sign*(x1-x0)*(y1-y0);u+=sign*(x1*x1-x0*x0)*.5*(y1-y0);v+=sign*(y1*y1-y0*y0)*.5*(x1-x0);
+        uu+=sign*(x1*x1*x1-x0*x0*x0)/3*(y1-y0);vv+=sign*(y1*y1*y1-y0*y0*y0)/3*(x1-x0);
+    };
+    rectangle(0,1,0,1,1);rectangle(.6,.8,.7,1,-1);rectangle(.1,.25,1./6,.4,-1);
+    const double triangle=(.55-.35)*(.5-.1)*.5;
+    a-=triangle;u-=triangle*(.35+.55+.55)/3;v-=triangle*(.1+.1+.5)/3;
+    uu-=triangle*(.35*.35+.55*.55+.55*.55+.35*.55+.35*.55+.55*.55)/6;
+    vv-=triangle*(.1*.1+.1*.1+.5*.5+.1*.1+.1*.5+.1*.5)/6;
+    const double expected=200*a*.5;const gp_Pnt center(10*u/a,20*v/a,(.3*uu+.6*vv)/a+.25);
+    for(bool reverse:{false,true}) {
+        GProp_GProps result;kernel::detail::VolumeProperties(solid,result,true);
+        test::RequireNear(result.Mass(),reverse?-expected:expected,expected*1e-8,"native trimmed spline analytic prism volume");
+        test::RequireNear(result.CentreOfMass().Distance(center),0,1e-8,"native trimmed spline polynomial analytic centroid");solid.Reverse();
+    }
+}
+
 #else
 KACHA_V2_TEST(thicken_quality, missing_kernel_is_reported)
 {

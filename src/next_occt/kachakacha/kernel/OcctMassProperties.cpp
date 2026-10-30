@@ -17,12 +17,16 @@
 #include <BRepAdaptor_Curve2d.hxx>
 #include <Geom2d_BSplineCurve.hxx>
 #include <Geom2d_BezierCurve.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom2dAPI_InterCurveCurve.hxx>
 #include <gp_Pnt2d.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Edge.hxx>
 #include <gp_Vec.hxx>
+#include <gp_Vec2d.hxx>
 #include <NCollection_Array1.hxx>
 #include <array>
 #include <vector>
@@ -58,14 +62,18 @@ struct Quadrature {
     }
 };
 using Integral=std::array<double,4>;
+Integral PointFlux(BRepAdaptor_Surface& surface,const gp_Pnt& origin,double u,double v,bool centroid) {
+    gp_Pnt p;gp_Vec du,dv;surface.D1(u,v,p,du,dv);
+    const gp_Vec r(origin,p);const double flux=r.Dot(du.Crossed(dv));
+    return {flux/3,centroid?r.X()*flux/4:0,centroid?r.Y()*flux/4:0,centroid?r.Z()*flux/4:0};
+}
 Integral Flux(BRepAdaptor_Surface& surface,const gp_Pnt& origin,double u0,double u1,
     double v0,double v1,const Quadrature& rule,bool centroid) {
     Integral sum{};const double hu=(u1-u0)*.5,hv=(v1-v0)*.5;
     for(std::size_t i=0;i<rule.nodes.size();++i)for(std::size_t j=0;j<rule.nodes.size();++j) {
-        gp_Pnt p;gp_Vec du,dv;surface.D1((u0+u1)*.5+hu*rule.nodes[i],(v0+v1)*.5+hv*rule.nodes[j],p,du,dv);
-        const gp_Vec r(origin,p);const double weighted=r.Dot(du.Crossed(dv))*hu*hv*rule.weights[i]*rule.weights[j];
-        sum[0]+=weighted/3;
-        if(centroid){sum[1]+=r.X()*weighted/4;sum[2]+=r.Y()*weighted/4;sum[3]+=r.Z()*weighted/4;}
+        const auto value=PointFlux(surface,origin,(u0+u1)*.5+hu*rule.nodes[i],(v0+v1)*.5+hv*rule.nodes[j],centroid);
+        const double weight=hu*hv*rule.weights[i]*rule.weights[j];
+        for(int k=0;k<(centroid?4:1);++k)sum[k]+=value[k]*weight;
     }
     return sum;
 }
@@ -124,6 +132,101 @@ bool Rectangle(const TopoDS_Face& face,double u0,double u1,double v0,double v1) 
     }
     return true;
 }
+struct Estimate {Integral value{},error{};};
+template<class Function>
+Estimate LineRule(const Function& function,double first,double last,const Quadrature& rule,bool centroid) {
+    Estimate result;const double half=(last-first)*.5;
+    for(std::size_t i=0;i<rule.nodes.size();++i) {
+        const auto sample=function((first+last)*.5+half*rule.nodes[i]);
+        const double weight=half*rule.weights[i];
+        for(int k=0;k<(centroid?4:1);++k) {
+            result.value[k]+=sample.value[k]*weight;
+            result.error[k]+=sample.error[k]*std::abs(weight);
+        }
+    }
+    return result;
+}
+template<class Function>
+Estimate LineIntegral(const Function& function,double first,double last,bool centroid,int depth=0) {
+    static const Quadrature coarse(8),fine(12);
+    const auto a=LineRule(function,first,last,coarse,centroid);
+    auto b=LineRule(function,first,last,fine,centroid);double difference=0;
+    for(int k=0;k<(centroid?4:1);++k)
+        difference=std::max(difference,std::abs(a.value[k]-b.value[k])/std::max(1.,std::abs(b.value[k])));
+    if(difference<1e-10||depth==8) {
+        for(int k=0;k<(centroid?4:1);++k)b.error[k]+=std::abs(a.value[k]-b.value[k]);
+        return b;
+    }
+    const double mid=(first+last)*.5;
+    auto left=LineIntegral(function,first,mid,centroid,depth+1);
+    const auto right=LineIntegral(function,mid,last,centroid,depth+1);
+    for(int k=0;k<4;++k){left.value[k]+=right.value[k];left.error[k]+=right.error[k];}
+    return left;
+}
+// Green's theorem integrates the actual UV wires (including concave outlines
+// and clockwise holes), not their bounding rectangle. The primitive is split
+// at native U spans; nested quadrature errors are propagated to the final gate.
+Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt& origin,bool centroid) {
+    face.Orientation(TopAbs_FORWARD);
+    double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
+    const int count=surface.NbUIntervals(GeomAbs_CN),vCount=surface.NbVIntervals(GeomAbs_CN);
+    if(count<=0||vCount<=0||count>50000/vCount)throw Standard_Failure("Too many trim integration intervals");
+    NCollection_Array1<double> us(1,count+1),vs(1,vCount+1);
+    surface.UIntervals(us,GeomAbs_CN);surface.VIntervals(vs,GeomAbs_CN);
+    const auto primitive=[&](double u,double v) {
+        Estimate result;const double first=std::min(u0,u),last=std::max(u0,u);
+        std::vector<double> cuts{first};
+        for(int i=1;i<=count+1;++i)if(us(i)>first&&us(i)<last)cuts.push_back(us(i));
+        cuts.push_back(last);
+        for(std::size_t i=1;i<cuts.size();++i) {
+            const auto part=LineIntegral([&](double x){return Estimate{PointFlux(surface,origin,x,v,centroid),{}};},cuts[i-1],cuts[i],centroid);
+            for(int k=0;k<(centroid?4:1);++k){result.value[k]+=(u<u0?-1:1)*part.value[k];result.error[k]+=part.error[k];}
+        }
+        return result;
+    };
+    Estimate result;
+    for(TopExp_Explorer e(face,TopAbs_EDGE);e.More();e.Next()) {
+        const auto edge=TopoDS::Edge(e.Current());
+        if(edge.Orientation()==TopAbs_INTERNAL||edge.Orientation()==TopAbs_EXTERNAL)continue;
+        BRepAdaptor_Curve2d curve(edge,face);
+        const int intervals=curve.NbIntervals(GeomAbs_CN);
+        if(intervals<=0||intervals>50000)throw Standard_Failure("Too many trim boundary intervals");
+        NCollection_Array1<double> ts(1,intervals+1);curve.Intervals(ts,GeomAbs_CN);
+        std::vector<double> cuts;
+        for(int i=1;i<=intervals+1;++i)cuts.push_back(ts(i));
+        const occ::handle<Geom2d_Curve> bounded=new Geom2d_TrimmedCurve(curve.Curve(),ts(1),ts(intervals+1));
+        const auto cross=[&](const NCollection_Array1<double>& knots,bool vertical) {
+            for(int i=2;i<knots.Length();++i) {
+                const occ::handle<Geom2d_Curve> line=new Geom2d_Line(
+                    vertical?gp_Pnt2d(knots(i),0):gp_Pnt2d(0,knots(i)),vertical?gp_Dir2d(0,1):gp_Dir2d(1,0));
+                Geom2dAPI_InterCurveCurve hit(bounded,line,1e-12);
+                if(!hit.Intersector().IsDone())throw Standard_Failure("Trim integration span intersection failed");
+                for(int j=1;j<=hit.NbPoints();++j) {
+                    const double t=hit.Intersector().Point(j).ParamOnFirst();
+                    if(t>ts(1)&&t<ts(intervals+1))cuts.push_back(t);
+                }
+            }
+        };
+        // A small feature between quadrature nodes must not disappear simply
+        // because both rules miss the same narrow surface knot interval.
+        cross(us,true);cross(vs,false);
+        std::sort(cuts.begin(),cuts.end());cuts.erase(std::unique(cuts.begin(),cuts.end()),cuts.end());
+        if(cuts.size()>50000)throw Standard_Failure("Too many trim integration crossings");
+        for(std::size_t i=1;i<cuts.size();++i) {
+            const auto part=LineIntegral([&](double t){
+                gp_Pnt2d p;gp_Vec2d derivative;curve.D1(t,p,derivative);
+                auto value=primitive(p.X(),p.Y());
+                for(int k=0;k<(centroid?4:1);++k){value.value[k]*=derivative.Y();value.error[k]*=std::abs(derivative.Y());}
+                return value;
+            },cuts[i-1],cuts[i],centroid);
+            for(int k=0;k<(centroid?4:1);++k) {
+                result.value[k]+=(edge.Orientation()==TopAbs_REVERSED?-1:1)*part.value[k];
+                result.error[k]+=part.error[k];
+            }
+        }
+    }
+    return result;
+}
 class IntegratedProperties final:public GProp_GProps {
 public:
     IntegratedProperties(const Integral& value,const gp_Pnt& origin,bool centroid) {
@@ -135,7 +238,7 @@ public:
 // Offset surfaces hide the spline spans from OCCT's GK integration. Integrate
 // the exact native surface per continuity interval, without replacing geometry
 // by a mesh or an approximated surface. Planar trims retain their exact area
-// and centroid; other nonrectangular trims use the existing OCCT path.
+// and centroid; other trims integrate their native oriented UV wires.
 std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid) {
     bool offset=false;
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
@@ -145,12 +248,15 @@ std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid
     if(!offset)return std::nullopt;
     gp_Pnt origin;
     for(TopExp_Explorer e(shape,TopAbs_VERTEX);e.More();e.Next()) {origin=BRep_Tool::Pnt(TopoDS::Vertex(e.Current()));break;}
-    // Validate every domain before accumulating anything. Holes and non-iso
-    // trims must never be silently integrated as the complete UV rectangle.
+    // Validate every domain before accumulating anything.
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
-        double u0,u1,v0,v1;BRepTools::UVBounds(TopoDS::Face(e.Current()),u0,u1,v0,v1);
+        const auto face=TopoDS::Face(e.Current());
+        double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
         if(!std::isfinite(u0+u1+v0+v1))return std::nullopt;
-        if(!Rectangle(TopoDS::Face(e.Current()),u0,u1,v0,v1)&&BRepAdaptor_Surface(TopoDS::Face(e.Current())).GetType()!=GeomAbs_Plane)return std::nullopt;
+        const BRepAdaptor_Surface surface(face,true);
+        // Keep the established periodic-solid integration route. A seam can
+        // have two pcurves on one edge; this new path handles open panel domains.
+        if(!Rectangle(face,u0,u1,v0,v1)&&(surface.IsUClosed()||surface.IsVClosed()))return std::nullopt;
     }
     Integral sum{},error{};
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
@@ -166,6 +272,12 @@ std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid
             if(centroid){sum[1]+=r.X()*flux/4;sum[2]+=r.Y()*flux/4;sum[3]+=r.Z()*flux/4;}
             error[0]+=std::abs(flux/3)*relative;
             if(centroid){error[1]+=std::abs(r.X()*flux/4)*relative;error[2]+=std::abs(r.Y()*flux/4)*relative;error[3]+=std::abs(r.Z()*flux/4)*relative;}
+            continue;
+        }
+        double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
+        if(!Rectangle(face,u0,u1,v0,v1)) {
+            const auto trimmed=TrimmedFlux(face,s,origin,centroid);
+            for(int k=0;k<(centroid?4:1);++k){sum[k]+=sign*trimmed.value[k];error[k]+=trimmed.error[k];}
             continue;
         }
         const int nu=s.NbUIntervals(GeomAbs_CN),nv=s.NbVIntervals(GeomAbs_CN);

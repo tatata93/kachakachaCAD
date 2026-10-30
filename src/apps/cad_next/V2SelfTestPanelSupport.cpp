@@ -18,6 +18,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QApplication>
+#include <QString>
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QLabel>

@@ -1,0 +1,36 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>他PC向けWindows最新版のGitHub公開 — 2026-10-30</title>
+<style>body{font:16px/1.8 system-ui,sans-serif;max-width:1000px;margin:32px auto;padding:0 20px;color:#222}h1{font-size:28px}h2{font-size:21px;margin-top:32px}code{background:#eee;padding:2px 5px;overflow-wrap:anywhere}a{color:#1755a6}td,th{border:1px solid #ccc;padding:10px;text-align:left}table{border-collapse:collapse;width:100%}</style>
+<h1>他のPCから最新版をダウンロードして使う</h1>
+<p>2026-10-30。検証済みトリム修正版をGitHub Release <code>v0.1.0-20261030</code> として公開し、Latestに設定した。</p>
+<p><a href="https://github.com/tatata93/kachakachaCAD/releases/latest/download/kachakachaCAD-windows-x64.zip">最新版Windows ZIPをダウンロード</a> ／
+<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261030">この版の公開ページ</a></p>
+<ol><li><code>kachakachaCAD-windows-x64.zip</code> をダウンロードする。</li>
+<li>ZIPを右クリックし「すべて展開」する。</li>
+<li>展開したフォルダの <code>kachakacha_cad_next.exe</code> をダブルクリックする。</li>
+<li>説明書は <code>OPEN_MANUAL.cmd</code> または <code>manual.html</code> から開く。</li></ol>
+<p>Windows x64向け。Qt・Open CASCADE・Visual C++ランタイムを同梱し、開発ツールの導入を不要にした。
+EXEだけを取り出さず、DLLやplatforms等も同じフォルダに残す。</p>
+<h2>配布内容と検証</h2>
+<table><tr><th>項目</th><th>結果</th></tr>
+<tr><td>アプリ本体</td><td>前回の検証済みトリム修正版とバイト列が同一。既存配布の986ファイルを変更せず保持。</td></tr>
+<tr><td>基準版の全体検証</td><td>Windows全195 CTest（skip 0）、開発版・配布版UI各647件、旧CAD自己試験、添付モデルを含む重点42件が成功。</td></tr>
+<tr><td>別PC向けの追加</td><td>既存ZIPに不足したMicrosoft.VC143.CRTの再配布可能DLL 10ファイルを追加。Qt SVG・画像プラグインの対応ソースと通知も補完。</td></tr>
+<tr><td>追加後の配布試験</td><td>開発環境のPATHを外し、全UI647件が成功。主要CRT 3モジュールが同梱フォルダから読み込まれることを確認。通常Windows起動2条件も成功。</td></tr>
+<tr><td>公開後の確認</td><td>匿名でLatestのURLから75,392,301バイトを取得。公開したZIPのSHA256と一致し、CRC・展開・EXEを照合。日本語名の展開先から通常Windows起動2条件が成功。</td></tr>
+<tr><td>確認の境界</td><td>別の物理PCでの試験ではなく、同じWindows実機で依存ライブラリの参照先とPATHを隔離した検証。</td></tr></table>
+<p>標準のpackage-v2.ps1による前回ZIPにはCRTが含まれていなかったため、このGitHub配布には検証済みの本体へCRTを追加している。
+基準のZIP・証拠を上書きせず、別フォルダで全UI試験と起動を確認した。アプリのコード変更・再ビルドは行っていない。
+標準の配布スクリプトだけで将来もCRTが必ず揃うようになった、という変更ではない。</p>
+<h2>ソースと整合性</h2>
+<ul><li>Releaseの対象コミット：<code>ba72c2974416bbffb4e809c2aa79fdbfab5be8b9</code>。</li>
+<li>検証済みコード：<code>314a13cca2bc2237bfc34724546e618fa0cb88f9</code>。対象コミットとの差は前回の完了記録と実画面のみ。</li>
+<li>EXE SHA256：<code>7209533959bd0e3cea34e3d1e48e387749fbced396c49be6f4a14e5b28fcdb49</code>。</li>
+<li>Windows ZIP SHA256：<code>cedbefdfd58124ad8a36677815afda0e0768d875fbb4d1013424429f2f66029c</code>。</li>
+<li>実行用ZIP、Qt/OCCT等の対応ソースZIP、<code>SHA256SUMS.txt</code>、<code>release-verification.json</code> の4点を公開。GitHubにアップロードした各資産のdigestも照合した。</li>
+<li>原本、編集中模型、旧配布版、他のworktreeは保全。個人の編集中モデルや認証情報は添付しない。mainとci-latestは変更していない。</li></ul>
+<p>詳細ログ：<code>out/github-release-20261030/</code>。
+<a href="../../out/github-release-20261030/release-verification.json">検証要約</a> ／
+<a href="../../out/github-release-20261030/download-verified.json">匿名ダウンロード照合</a> ／
+<a href="trim-preview-preservation-20261029.html">トリム修正と実画面</a></p>
+</html>

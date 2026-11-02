@@ -285,7 +285,11 @@ int Worker(const QString& directory) {
     }catch(const std::exception& e){response=Diagnostic(Failed(QString::fromUtf8(e.what())));}
     catch(...){response=Diagnostic(Failed(QStringLiteral("幾何計算で例外が発生しました。")));}
     response["version"]=1;response["token"]=request.value("token");
-    return WriteJson(dir.filePath("response.json"),response)?0:3;
+    const bool wrote=WriteJson(dir.filePath("response.json"),response);
+    // Destroy native shapes while the worker runtime is still alive rather
+    // than leaving them in the static cache until process shutdown.
+    kernel::ClearShapeCache();
+    return wrote?0:3;
 }
 
 base::Result<kernel::ThickenedSolid> Thicken(QWidget* parent,modeling::KernelShapeHandle source,

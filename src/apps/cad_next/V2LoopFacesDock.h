@@ -115,6 +115,7 @@ public:
     //! T 字の一文(複数なら改行でつなぐ)。無ければ空。
     [[nodiscard]] QString SplitTextJa() const;
     [[nodiscard]] bool ConfirmEnabled() const;
+    [[nodiscard]] double JoinToleranceValue() const;
 
 private:
     //! 輪 1 行分の持ち物(2. 節)。

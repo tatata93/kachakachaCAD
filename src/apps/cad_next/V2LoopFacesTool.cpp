@@ -491,6 +491,10 @@ void V2LoopFacesTool::ShowPreview()
                                          "Enter で寄せてから作ります。寄せたくなければ[そのまま]を押してください。Esc でやめます。"));
         return;
     }
+    if (plan_->faces.empty()) {
+        window_.SetStatus(Text(plan_->summaryJa));
+        return;
+    }
     window_.SetStatus(QStringLiteral("面にする: %1 の輪が見つかりました(%2)。"
                                      "Enter で作ります(元の線は残ります)。Esc でやめます。")
             .arg(static_cast<int>(plan_->faces.size()))
@@ -607,6 +611,10 @@ bool V2LoopFacesTool::Confirm()
 {
     if (!plan_.has_value()) {
         return false;
+    }
+    if (plan_->faces.empty() && plan_->gaps.empty()) {
+        window_.SetStatus(Text(plan_->summaryJa));
+        return true;
     }
     if (previewPending_) BuildSurfacePreview();
     if (!plan_->faces.empty() && !previewReady_) {

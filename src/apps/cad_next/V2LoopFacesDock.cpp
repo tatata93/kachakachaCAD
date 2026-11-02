@@ -586,6 +586,11 @@ bool V2LoopFacesDock::ConfirmEnabled() const
     return confirm_ != nullptr && confirm_->isEnabled();
 }
 
+double V2LoopFacesDock::JoinToleranceValue() const
+{
+    return tolerance_ != nullptr ? tolerance_->value() : 0.0;
+}
+
 void V2LoopFacesDock::SetProgressText(const QString& text)
 {
     summary_->setText(text);

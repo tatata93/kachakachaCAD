@@ -18,8 +18,10 @@ bool WithinSamplingBudget(const geometry::CurveSegment& curve)
 {
     return curve.Kind()!=geometry::CurveKind::CubicBSpline||curve.ControlPoints().size()<=4098;
 }
-// Only equal parameterisations qualify as complete duplicates. Seed every
-// spline span: five global samples can miss an intervening bend.
+// Seed every spline span: five global samples can miss an intervening bend.
+// Two spline projections may have one shared endpoint and a slightly different
+// terminal parameter. The whole span must remain inside the document join
+// tolerance; nearby straight branches are never merged by this allowance.
 bool SameInterval(const geometry::CurveSegment& a,const geometry::CurveSegment& b,double epsilon,double joinTolerance)
 {
     const auto& ac=a.ControlPoints();const auto& bc=b.ControlPoints();
@@ -31,8 +33,14 @@ bool SameInterval(const geometry::CurveSegment& a,const geometry::CurveSegment& 
         }
         if(same||reverse)return true; // Convex hull property, with the same basis.
     }
-    bool forward=geometry::Distance(a.StartPoint(),b.StartPoint())<=epsilon&&geometry::Distance(a.EndPoint(),b.EndPoint())<=epsilon;
-    bool backward=geometry::Distance(a.StartPoint(),b.EndPoint())<=epsilon&&geometry::Distance(a.EndPoint(),b.StartPoint())<=epsilon;
+    const auto endpoints=[&](geometry::Vector3 p,geometry::Vector3 q,geometry::Vector3 r,geometry::Vector3 s){
+        const auto first=geometry::Distance(p,q),last=geometry::Distance(r,s);
+        const bool spline=a.Kind()==geometry::CurveKind::CubicBSpline&&b.Kind()==geometry::CurveKind::CubicBSpline;
+        return first<=epsilon&&last<=epsilon
+            ||(spline&&std::min(first,last)<=epsilon&&std::max(first,last)<=joinTolerance);
+    };
+    bool forward=endpoints(a.StartPoint(),b.StartPoint(),a.EndPoint(),b.EndPoint());
+    bool backward=endpoints(a.StartPoint(),b.EndPoint(),a.EndPoint(),b.StartPoint());
     const auto check=[&](double t){
         forward=forward&&geometry::Distance(a.Evaluate(t),b.Evaluate(t))<=joinTolerance;
         backward=backward&&geometry::Distance(a.Evaluate(t),b.Evaluate(1-t))<=joinTolerance;
@@ -87,6 +95,103 @@ bool CoveredChord(const geometry::CurveSegment& curve,double first,double last,
         &&CoveredChord(curve,middle,last,retained,tolerance,depth+1);
 }
 
+// A discarded input may overlap a boundary or lie wholly outside it. An open
+// inner window must not disappear merely because another closed loop exists.
+bool OmittedInputsAllowed(const std::vector<geometry::CurveSegment>& kept,
+    const std::vector<geometry::CurveSegment>& omitted,const geometry::GeometryTolerance& tolerance,
+    const std::vector<std::vector<geometry::CurveSegment>>& loops={},
+    const std::vector<base::EntityId>& sourceIds={})
+{
+    if(omitted.empty())return true;
+    const double epsilon=tolerance.modelLinearMm,joinTolerance=tolerance.interactiveJoinMm;
+    std::vector<std::vector<geometry::CurvePoint>> retained;
+    modeling::SnapScene closedScene;base::DeterministicIdGenerator ids{81291};
+    for(std::size_t i=0;i<kept.size();++i){
+        const auto& curve=kept[i];
+        if(!WithinSamplingBudget(curve))return false;
+        auto points=geometry::SampleCurve(curve,joinTolerance*.125,16384);
+        if(points.size()>=16384)return false;
+        retained.push_back(std::move(points));
+        const auto owner=i<sourceIds.size()?sourceIds[i]:ids.NextTyped<base::IdKind::Entity>();
+        closedScene.curves.push_back({owner,ids.NextTyped<base::IdKind::Segment>(),curve});
+    }
+    if(retained.empty())return false;
+    std::vector<std::vector<geometry::Vector3>> boundaries;
+    if(loops.empty()){
+        for(const auto& boundary:app::DetectSpatialBoundaries(closedScene,tolerance))boundaries.push_back(boundary.sampled);
+    }else{
+        // Keep each candidate's closed outline. Flattening adjacent faces into
+        // one graph creates degree-three vertices and loses their loops.
+        for(const auto& loop:loops)if(geometry::SegmentsFormClosedLoop(loop,tolerance))
+            boundaries.push_back(geometry::SampleChain(loop,joinTolerance*.125));
+    }
+    struct Outline {geometry::PlanarFrame frame;std::vector<geometry::Point2> polygon;};
+    std::vector<Outline> outlines;
+    for(auto boundary:boundaries){
+        geometry::RemoveClosingDuplicate(boundary,epsilon);
+        auto fit=geometry::FitPlane(boundary);if(!fit.valid)continue;
+        geometry::Vector3 area{};for(std::size_t i=0;i<boundary.size();++i)
+            area=area+geometry::Cross(boundary[i]-fit.origin,boundary[(i+1)%boundary.size()]-fit.origin);
+        if(area.LengthSquared()<1e-20)continue;
+        fit.normal=geometry::Normalized(area);const auto frame=geometry::MakeFrame(fit);
+        auto polygon=geometry::ProjectToFrame(boundary,frame);
+        if(geometry::HasSelfIntersection(polygon,epsilon))continue;
+        outlines.push_back({frame,std::move(polygon)});
+    }
+    const auto exterior=[&](const auto& points){
+        if(outlines.empty())return false;
+        const auto allowed=[&](geometry::Vector3 point){
+            bool covered=false;
+            for(const auto& line:retained)for(std::size_t j=1;j<line.size();++j)
+                covered=covered||ChordDistance(point,line[j-1].position,line[j].position)<=joinTolerance*.75;
+            if(covered)return true;
+            for(const auto& outline:outlines)
+                if(geometry::ContainsPoint(outline.polygon,geometry::ProjectToFrame({point},outline.frame).front()))return false;
+            return true;
+        };
+        for(const auto& point:points)if(!allowed(point.position))return false;
+        // Partition EVERY sampled chord at polygon contacts. Endpoint or
+        // quarter-point tests alone miss a long divider crossing a narrow
+        // outline between samples. Collinear overlaps add both endpoints.
+        for(std::size_t j=1;j<points.size();++j){
+            const auto a=points[j-1].position,b=points[j].position;
+            std::vector<double> cuts{0,1};
+            for(const auto& outline:outlines){
+                const auto flat=geometry::ProjectToFrame({a,b},outline.frame);
+                const double dx=flat[1].u-flat[0].u,dy=flat[1].v-flat[0].v,d2=dx*dx+dy*dy;
+                if(d2<=epsilon*epsilon)continue;
+                for(std::size_t k=0;k<outline.polygon.size();++k){
+                    const auto p=outline.polygon[k],q=outline.polygon[(k+1)%outline.polygon.size()];
+                    const double ex=q.u-p.u,ey=q.v-p.v,px=p.u-flat[0].u,py=p.v-flat[0].v;
+                    const double den=dx*ey-dy*ex;
+                    if(std::abs(den)>std::numeric_limits<double>::epsilon()*std::sqrt(d2*(ex*ex+ey*ey))*16){
+                        const double t=(px*ey-py*ex)/den,s=(px*dy-py*dx)/den;
+                        if(t>=0&&t<=1&&s>=0&&s<=1)cuts.push_back(t);
+                    }else if(std::abs(px*dy-py*dx)<=epsilon*std::sqrt(d2)){
+                        cuts.push_back(std::clamp((px*dx+py*dy)/d2,0.,1.));
+                        cuts.push_back(std::clamp(((q.u-flat[0].u)*dx+(q.v-flat[0].v)*dy)/d2,0.,1.));
+                    }
+                }
+            }
+            std::sort(cuts.begin(),cuts.end());
+            for(std::size_t k=1;k<cuts.size();++k)
+                if(!allowed(a+(b-a)*((cuts[k-1]+cuts[k])*.5)))return false;
+        }
+        return true;
+    };
+    for(const auto& curve:omitted){
+        if(!WithinSamplingBudget(curve))return false;
+        const auto points=geometry::SampleCurve(curve,joinTolerance*.125,16384);
+        if(points.size()>=16384)return false;
+        bool covered=true;for(std::size_t j=1;j<points.size();++j)
+            covered=covered&&CoveredChord(curve,points[j-1].parameter,points[j].parameter,retained,joinTolerance);
+        if(!covered&&!exterior(points)){
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<geometry::CurveSegment> JoinedStraightIntervals(std::vector<geometry::CurveSegment> curves,double epsilon)
 {
     bool changed=true;
@@ -106,9 +211,10 @@ std::vector<geometry::CurveSegment> JoinedStraightIntervals(std::vector<geometry
 // must not turn an otherwise closed window into a branched chain. This does not
 // join near endpoints, refit splines, edit source wires, or raise the cycle limit.
 std::vector<kachakacha::v2::app::RoleWire> ClosedBoundaryInputs(
-    const std::vector<kachakacha::v2::app::RoleWire>& source,double epsilon,double joinTolerance,std::size_t& omitted)
+    const std::vector<kachakacha::v2::app::RoleWire>& source,const geometry::GeometryTolerance& tolerance,std::size_t& omitted)
 {
     using namespace kachakacha::v2;
+    const double epsilon=tolerance.modelLinearMm,joinTolerance=tolerance.interactiveJoinMm;
     struct Input {base::EntityId id;geometry::CurveSegment curve;};
     std::vector<Input> unique;
     for(const auto& wire:source)for(const auto& curve:wire.segments){
@@ -125,21 +231,13 @@ std::vector<kachakacha::v2::app::RoleWire> ClosedBoundaryInputs(
     app::PruneDeadEnds(edges,graph.NodeCount());
     const bool branches=std::any_of(edges.begin(),edges.end(),[](const auto& edge){return !edge.alive;});
     if(branches){
-        std::vector<std::vector<geometry::CurvePoint>> retained;
-        for(std::size_t i=0;i<unique.size();++i)if(edges[i].alive){
-            if(!WithinSamplingBudget(unique[i].curve))return {};
-            auto points=geometry::SampleCurve(unique[i].curve,joinTolerance*.125,16384);
-            if(points.size()>=16384)return {};
-            retained.push_back(std::move(points));
+        std::vector<geometry::CurveSegment> kept,discarded;
+        std::vector<base::EntityId> owners;
+        for(std::size_t i=0;i<unique.size();++i){
+            (edges[i].alive?kept:discarded).push_back(unique[i].curve);
+            if(edges[i].alive)owners.push_back(unique[i].id);
         }
-        if(retained.empty())return {};
-        for(std::size_t i=0;i<unique.size();++i)if(!edges[i].alive){
-            if(!WithinSamplingBudget(unique[i].curve))return {};
-            const auto points=geometry::SampleCurve(unique[i].curve,joinTolerance*.125,16384);
-            if(points.size()>=16384)return {};
-            for(std::size_t j=1;j<points.size();++j)
-                if(!CoveredChord(unique[i].curve,points[j-1].parameter,points[j].parameter,retained,joinTolerance))return {};
-        }
+        if(!OmittedInputsAllowed(kept,discarded,tolerance,{},owners))return {};
     }
     std::vector<app::RoleWire> result;
     for(const auto& wire:source){
@@ -398,6 +496,99 @@ app::SurfaceNetworkPlan IndependentPlanarHoles(const std::vector<app::RoleWire>&
     }
     return result;
 }
+
+// Resolve each disconnected outline before classifying nesting. The bounded
+// cycle search counts junctions; an outer and an inner projected outline must
+// not exhaust its budget merely because both contain independent spline spans.
+app::SurfaceNetworkPlan IndependentSpatialLoops(const std::vector<app::RoleWire>& wires,
+    const geometry::GeometryTolerance& tolerance)
+{
+    struct Input {base::EntityId id;geometry::CurveSegment curve;};
+    std::vector<Input> inputs;for(const auto& wire:wires)for(const auto& curve:wire.segments){
+        if(!WithinSamplingBudget(curve))return {};inputs.push_back({wire.id,curve});
+    }
+    const auto count=inputs.size();
+    if(count>128)return {};
+    std::vector<std::size_t> component(count);
+    for(std::size_t i=0;i<count;++i)component[i]=i;
+    const auto root=[&](std::size_t i){while(component[i]!=i)i=component[i];return i;};
+    const double join=tolerance.interactiveJoinMm;
+    for(std::size_t a=0;a<count;++a)for(std::size_t b=a+1;b<count;++b){
+        bool touches=false;
+        const auto& first=inputs[a].curve;const auto& second=inputs[b].curve;
+        for(const auto p:{first.StartPoint(),first.EndPoint()})
+            touches=touches||second.ClosestPoint(p).distance<=join;
+        for(const auto p:{second.StartPoint(),second.EndPoint()})
+            touches=touches||first.ClosestPoint(p).distance<=join;
+        if(!touches)touches=!geometry::IntersectCurves(first,second,tolerance).empty();
+        if(touches)component[root(b)]=root(a);
+    }
+    std::vector<std::vector<app::RoleWire>> groups;
+    std::vector<std::size_t> roots;
+    for(std::size_t i=0;i<count;++i){
+        const auto key=root(i);auto found=std::find(roots.begin(),roots.end(),key);
+        if(found==roots.end()){roots.push_back(key);groups.push_back({});found=roots.end()-1;}
+        auto& group=groups[std::distance(roots.begin(),found)];
+        auto wire=std::find_if(group.begin(),group.end(),[&](const auto& item){return item.id==inputs[i].id;});
+        if(wire==group.end()){group.push_back({inputs[i].id,{}});wire=group.end()-1;}
+        wire->segments.push_back(inputs[i].curve);
+    }
+    if(groups.size()<2)return {};
+    base::DeterministicIdGenerator ids{81289};
+    std::vector<app::RoleWire> cycles;
+    std::vector<std::pair<base::EntityId,std::vector<base::EntityId>>> sources;
+    std::vector<modeling::GuideTableSelection> unused;
+    for(const auto& group:groups){
+        auto normalized=group;
+        std::stable_sort(normalized.begin(),normalized.end(),[](const auto& a,const auto& b){return a.id.ToString()<b.id.ToString();});
+        std::vector<geometry::CurveSegment> unique;
+        for(auto& wire:normalized){
+            std::vector<geometry::CurveSegment> kept;
+            for(const auto& curve:wire.segments){
+                if(std::any_of(unique.begin(),unique.end(),[&](const auto& prior){
+                    return SameInterval(curve,prior,tolerance.modelLinearMm,join);})){
+                    unused.push_back({wire.id,"重複する投影区間",{curve}});continue;
+                }
+                unique.push_back(curve);kept.push_back(curve);
+            }
+            wire.segments=std::move(kept);
+        }
+        std::size_t omitted=0;
+        const auto closed=ClosedBoundaryInputs(normalized,tolerance,omitted);
+        if(closed.empty())return {};
+        for(const auto& wire:normalized)for(const auto& curve:wire.segments){
+            const bool kept=std::any_of(closed.begin(),closed.end(),[&](const auto& keptWire){
+                return keptWire.id==wire.id&&std::any_of(keptWire.segments.begin(),keptWire.segments.end(),[&](const auto& prior){
+                    return SameInterval(curve,prior,tolerance.modelLinearMm,tolerance.modelLinearMm);});});
+            if(!kept)unused.push_back({wire.id,"輪の外に延びた区間",{curve}});
+        }
+        auto planned=app::PlanSurfaceNetwork(closed,tolerance);
+        if(planned.tables.empty()||!planned.unusedSegments.empty())return {}; // Never fill over a still-open inner outline.
+        for(const auto& table:planned.tables){
+            app::RoleWire cycle;cycle.id=ids.NextTyped<base::IdKind::Entity>();
+            std::vector<base::EntityId> input;
+            for(const auto& row:table.rows){
+                if(row.role==modeling::ChainRole::HoleBoundary)return {};
+                cycle.segments.insert(cycle.segments.end(),row.segments.begin(),row.segments.end());
+                for(const auto id:row.sourceWireIds)
+                    if(std::find(input.begin(),input.end(),id)==input.end())input.push_back(id);
+            }
+            if(!geometry::SegmentsFormClosedLoop(cycle.segments,tolerance))return {};
+            sources.push_back({cycle.id,std::move(input)});cycles.push_back(std::move(cycle));
+        }
+    }
+    auto nested=app::PlanSurfaceNetwork(cycles,tolerance);
+    if(nested.tables.empty()||!nested.unusedSegments.empty())return {};
+    for(auto& table:nested.tables)for(auto& row:table.rows){
+        std::vector<base::EntityId> original;
+        for(const auto key:row.sourceWireIds)for(const auto& entry:sources)if(entry.first==key)
+            for(const auto id:entry.second)if(std::find(original.begin(),original.end(),id)==original.end())original.push_back(id);
+        if(original.empty())return {};
+        row.sourceWireIds=std::move(original);row.sourceLabels.assign(row.sourceWireIds.size(),"選択境界");
+    }
+    nested.unusedSegments=std::move(unused);
+    return nested;
+}
 }
 
 bool V2LoopFacesTool::TryNetworkPlan()
@@ -411,27 +602,22 @@ bool V2LoopFacesTool::TryNetworkPlan()
         compound = compound || selection.segments.size() > 1;
     }
     std::size_t omitted=0;
-    const auto closed=ClosedBoundaryInputs(wires,tolerance.modelLinearMm,tolerance.interactiveJoinMm,omitted);
+    const auto closed=ClosedBoundaryInputs(wires,tolerance,omitted);
     // Keep the intersection solver for networks whose only loops require an
     // internal crossing. Normalise complete cycles first when available.
     if(!closed.empty())wires=closed;
-    // Network welding is useful for exact intersections, but a merely near
-    // endpoint needs the ordinary gap UI and its explicit correction first.
-    std::vector<geometry::Vector3> ends;
-    for(const auto& wire:wires)for(const auto& curve:wire.segments){ends.push_back(curve.StartPoint());ends.push_back(curve.EndPoint());}
-    bool nearGap=false;
-    for(std::size_t i=0;i<ends.size();++i) {
-        bool exact=false,near=false;
-        for(std::size_t j=0;j<ends.size();++j)if(i!=j) {
-            const auto d=geometry::Distance(ends[i],ends[j]);
-            exact=exact||d<=tolerance.modelLinearMm;near=near||d<=tolerance.interactiveJoinMm;
-        }
-        nearGap=nearGap||(near&&!exact);
-    }
     auto network = IndependentPlanarHoles(wires,tolerance);
+    bool independent=false;
+    if(network.tables.empty()){
+        network=IndependentSpatialLoops(wires,tolerance);
+        independent=!network.tables.empty();
+    }
     bool notch=false;
     if(network.tables.empty()){network=SelectedNotches(wires,tolerance);notch=!network.tables.empty();}
-    if(network.tables.empty()&&!nearGap)network=app::PlanSurfaceNetwork(wires, tolerance);
+    // A visible near gap is not itself a reason to suppress a candidate. The
+    // selected-wire tolerance already bounds which endpoints may connect, and
+    // PlanSurfaceNetwork validates the resulting regions before preview.
+    if(network.tables.empty())network=app::PlanSurfaceNetwork(wires, tolerance);
     if(network.tables.empty()&&!closed.empty()){
         std::vector<app::RoleWire> selected;
         for(const auto& s:selections_)selected.push_back({s.sourceWireId,s.segments});
@@ -443,6 +629,31 @@ bool V2LoopFacesTool::TryNetworkPlan()
         return std::any_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::HoleBoundary;});
     });
     if (!compound&&!holes&&!notch) return false;
+    std::vector<geometry::CurveSegment> kept,discarded;
+    std::vector<std::vector<geometry::CurveSegment>> loops;
+    for(const auto& table:network.tables){
+        std::vector<geometry::CurveSegment> outer;
+        for(const auto& row:table.rows)if(row.role!=modeling::ChainRole::SourceSurface){
+            kept.insert(kept.end(),row.segments.begin(),row.segments.end());
+            if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
+            else outer.insert(outer.end(),row.segments.begin(),row.segments.end());
+        }
+        if(!outer.empty())loops.push_back(std::move(outer));
+    }
+    for(const auto& selection:network.unusedSegments)
+        discarded.insert(discarded.end(),selection.segments.begin(),selection.segments.end());
+    // Independent groups have already checked their own tails and duplicates,
+    // and reject every unexplained planner remainder. A tail outside an inner
+    // loop must not be reclassified against the containing outer loop.
+    if(!independent&&!OmittedInputsAllowed(kept,discarded,tolerance,loops)){
+        // This is a handled refusal. Returning false would let PlanLoopFaces
+        // accept the same outer loop again and silently fill the open window.
+        app::LoopFacePlan blocked;
+        blocked.summaryJa="外周の内側に、輪に使えない選択線があります。穴を埋めないため面を作りません。内側の輪を閉じるか、不要な線の選択を解除してください";
+        plan_=std::move(blocked);
+        styles_.clear();methodOverride_.clear();make_.clear();continuity_.clear();leaveGap_.clear();
+        return true;
+    }
     networkTables_ = std::move(network.tables);
     if(omitted&&!closed.empty())networkUnusedJa_=QStringLiteral("重複の余り %1区間（許容 %2 mm以内。元の線と曲線形式は保持）")
         .arg(static_cast<int>(omitted)).arg(tolerance.interactiveJoinMm,0,'f',3);

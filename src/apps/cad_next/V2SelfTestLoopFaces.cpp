@@ -53,6 +53,7 @@
 #include <vector>
 
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> LoopFacesHrubberCases();
 namespace {
 
 using kachakacha::v2::app::LoopFace;
@@ -1307,6 +1308,22 @@ bool CaseLoopFacesOwner115(V2MainWindow& window)
     return true;
 }
 
+bool CaseLoopFacesExteriorDivider(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto input=window.Session().AddWire({line({0,0,0},{10,0,0}),line({10,0,0},{10,10,0}),
+        line({10,10,0},{0,10,0}),line({0,10,0},{0,0,0}),line({-100,5,0},{100,5,0})},false,"外部から横断する分割線");
+    if(!input.committed||!window.SaveAndReopen("exterior-divider.kcd2"))return false;
+    app::SelectionSet selected;selected.entityIds={input.createdEntityIds.front()};
+    window.Viewport().SetSelection(selected);window.RunCommand("surface.from_lines");
+    const auto& plan=window.LoopFacesTool().Plan();
+    if(!Explain("端点と四分点が外部でも、輪を横断する選択線を捨てず2区画にする",plan&&plan->faces.size()==2))return false;
+    if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    return Explain("分割線と元の複合ワイヤを保持して面2枚を確定する",CountOfKind(window,EntityKind::GuideSurface)==2
+        &&CountOfKind(window,EntityKind::Wire)==1);
+}
+
 bool CaseLoopFacesOwnerRegion(V2MainWindow& window, const QString& name,
     const std::vector<std::string>& suffixes, int unusedCount, int expected=1)
 {
@@ -1395,6 +1412,7 @@ std::vector<SelfTestCase> LoopFacesCases()
             CaseApproxKeepsOtherFaceVisible},
         {"HP-AP-09 役割表の行の色分け(境界辺)は役割表の棚を見ている間だけ 3D に出る",
             CaseGuideRowsOnlyWithShelf},
+        {"HP-LF-EXTERIOR 横断する選択線を外部の余りとして捨てない",CaseLoopFacesExteriorDivider},
     };
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE")) {
         cases.push_back({"HP-LF-115-DOME 右だけの滑らかなドームを下見確定し再生成",CaseOwnerDome});
@@ -1409,6 +1427,8 @@ std::vector<SelfTestCase> LoopFacesCases()
             return CaseLoopFacesOwnerRegion(w,"window",{"0db"},0);}});
         cases.push_back({"HP-LF-115 添付モデルの上部ワイヤーから面を作る",CaseLoopFacesOwner115});
     }
+    const auto bandCases=LoopFacesHrubberCases();
+    cases.insert(cases.end(),bandCases.begin(),bandCases.end());
     return cases;
 }
 

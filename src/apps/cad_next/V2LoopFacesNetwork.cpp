@@ -192,6 +192,24 @@ bool OmittedInputsAllowed(const std::vector<geometry::CurveSegment>& kept,
     return true;
 }
 
+bool NetworkOmissionsAllowed(const app::SurfaceNetworkPlan& network,const geometry::GeometryTolerance& tolerance)
+{
+    std::vector<geometry::CurveSegment> kept,discarded;
+    std::vector<std::vector<geometry::CurveSegment>> loops;
+    for(const auto& table:network.tables){
+        std::vector<geometry::CurveSegment> outer;
+        for(const auto& row:table.rows)if(row.role!=modeling::ChainRole::SourceSurface){
+            kept.insert(kept.end(),row.segments.begin(),row.segments.end());
+            if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
+            else outer.insert(outer.end(),row.segments.begin(),row.segments.end());
+        }
+        if(!outer.empty())loops.push_back(std::move(outer));
+    }
+    for(const auto& selection:network.unusedSegments)
+        discarded.insert(discarded.end(),selection.segments.begin(),selection.segments.end());
+    return OmittedInputsAllowed(kept,discarded,tolerance,loops);
+}
+
 std::vector<geometry::CurveSegment> JoinedStraightIntervals(std::vector<geometry::CurveSegment> curves,double epsilon)
 {
     bool changed=true;
@@ -629,23 +647,10 @@ bool V2LoopFacesTool::TryNetworkPlan()
         return std::any_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::HoleBoundary;});
     });
     if (!compound&&!holes&&!notch) return false;
-    std::vector<geometry::CurveSegment> kept,discarded;
-    std::vector<std::vector<geometry::CurveSegment>> loops;
-    for(const auto& table:network.tables){
-        std::vector<geometry::CurveSegment> outer;
-        for(const auto& row:table.rows)if(row.role!=modeling::ChainRole::SourceSurface){
-            kept.insert(kept.end(),row.segments.begin(),row.segments.end());
-            if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
-            else outer.insert(outer.end(),row.segments.begin(),row.segments.end());
-        }
-        if(!outer.empty())loops.push_back(std::move(outer));
-    }
-    for(const auto& selection:network.unusedSegments)
-        discarded.insert(discarded.end(),selection.segments.begin(),selection.segments.end());
     // Independent groups have already checked their own tails and duplicates,
     // and reject every unexplained planner remainder. A tail outside an inner
     // loop must not be reclassified against the containing outer loop.
-    if(!independent&&!OmittedInputsAllowed(kept,discarded,tolerance,loops)){
+    if(!independent&&!NetworkOmissionsAllowed(network,tolerance)){
         // This is a handled refusal. Returning false would let PlanLoopFaces
         // accept the same outer loop again and silently fill the open window.
         app::LoopFacePlan blocked;

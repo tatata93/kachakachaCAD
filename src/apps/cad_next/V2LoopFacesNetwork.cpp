@@ -192,22 +192,68 @@ bool OmittedInputsAllowed(const std::vector<geometry::CurveSegment>& kept,
     return true;
 }
 
-bool NetworkOmissionsAllowed(const app::SurfaceNetworkPlan& network,const geometry::GeometryTolerance& tolerance)
+std::vector<std::vector<geometry::CurveSegment>> NetworkBoundaryLoops(const app::SurfaceNetworkPlan& network)
 {
-    std::vector<geometry::CurveSegment> kept,discarded;
     std::vector<std::vector<geometry::CurveSegment>> loops;
     for(const auto& table:network.tables){
         std::vector<geometry::CurveSegment> outer;
-        for(const auto& row:table.rows)if(row.role!=modeling::ChainRole::SourceSurface){
-            kept.insert(kept.end(),row.segments.begin(),row.segments.end());
+        for(const auto& row:table.rows){
             if(row.role==modeling::ChainRole::HoleBoundary)loops.push_back(row.segments);
-            else outer.insert(outer.end(),row.segments.begin(),row.segments.end());
+            else if(row.role==modeling::ChainRole::OuterBoundary||row.role==modeling::ChainRole::BoundarySide)
+                outer.insert(outer.end(),row.segments.begin(),row.segments.end());
         }
         if(!outer.empty())loops.push_back(std::move(outer));
     }
+    return loops;
+}
+
+bool NetworkBoundaryHasGap(const app::SurfaceNetworkPlan& network,double epsilon)
+{
+    for(const auto& loop:NetworkBoundaryLoops(network))
+        for(std::size_t i=0;i<loop.size();++i)
+            if(geometry::Distance(loop[i].EndPoint(),loop[(i+1)%loop.size()].StartPoint())>epsilon)return true;
+    return false;
+}
+
+bool NetworkOmissionsAllowed(const app::SurfaceNetworkPlan& network,const geometry::GeometryTolerance& tolerance)
+{
+    const auto loops=NetworkBoundaryLoops(network);
+    std::vector<geometry::CurveSegment> kept,discarded;
+    for(const auto& loop:loops)kept.insert(kept.end(),loop.begin(),loop.end());
     for(const auto& selection:network.unusedSegments)
         discarded.insert(discarded.end(),selection.segments.begin(),selection.segments.end());
     return OmittedInputsAllowed(kept,discarded,tolerance,loops);
+}
+
+app::LoopFacePlan NetworkDisplayPlan(const std::vector<modeling::GuideTable>& tables,
+    const geometry::GeometryTolerance& tolerance,bool notch,std::size_t unused)
+{
+    app::LoopFacePlan plan;
+    for (const auto& table : tables) {
+        app::LoopFace face;
+        face.method = table.method == modeling::GuideSurfaceMethod::PlanarBoundary ? app::LoopFaceMethod::Planar
+            : table.method == modeling::GuideSurfaceMethod::FourEdgePatch ? app::LoopFaceMethod::FourEdge
+            : app::LoopFaceMethod::BoundaryFill;
+        face.sideCount = std::count_if(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role!=modeling::ChainRole::SourceSurface;});
+        for (const auto& row : table.rows)
+            face.previewLines.push_back(geometry::SampleChain(row.segments, tolerance.interactiveJoinMm*0.5));
+        plan.faces.push_back(std::move(face));
+    }
+    plan.summaryJa = "接続区画 " + std::to_string(plan.faces.size()) + "。元の線の区間を使い、線を変更しません";
+    const bool refilled=std::any_of(tables.begin(),tables.end(),[](const auto& table){
+        return table.method!=modeling::GuideSurfaceMethod::PlanarBoundary
+            &&std::none_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::SourceSurface;});
+    });
+    if(refilled)plan.summaryJa+="。新しく張る曲面は近似";
+    std::size_t holeCount=0;for(const auto& table:tables)for(const auto& row:table.rows)holeCount+=row.role==modeling::ChainRole::HoleBoundary;
+    if(holeCount)plan.summaryJa+="。穴 "+std::to_string(holeCount)+"個";
+    for(const auto& table:tables)for(const auto& row:table.rows)
+        if(row.role==modeling::ChainRole::SourceSurface&&!row.sourceLabels.empty())
+            plan.summaryJa+="。元の面「"+row.sourceLabels.front()+"」の形を保持";
+    if(notch)plan.summaryJa+="。外周に接する開口を切り欠きとして保持";
+    if (unused)
+        plan.summaryJa += "。輪に使わない区間 " + std::to_string(unused) + "（元の線は保持）";
+    return plan;
 }
 
 std::vector<geometry::CurveSegment> JoinedStraightIntervals(std::vector<geometry::CurveSegment> curves,double epsilon)
@@ -643,6 +689,10 @@ bool V2LoopFacesTool::TryNetworkPlan()
         notch=!network.tables.empty();
     }
     if (network.tables.empty()) return false;
+    // A bounded join can detect a possible loop, but must not silently close
+    // an actual gap. Examine only the adopted outlines, excluding overlap
+    // tails, then retain the existing explicit gap-repair UI when needed.
+    if(NetworkBoundaryHasGap(network,tolerance.modelLinearMm))return false;
     const bool holes=std::any_of(network.tables.begin(),network.tables.end(),[](const auto& table){
         return std::any_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::HoleBoundary;});
     });
@@ -673,33 +723,8 @@ bool V2LoopFacesTool::TryNetworkPlan()
         if (!networkUnusedJa_.isEmpty()) networkUnusedJa_ += QStringLiteral("、");
         networkUnusedJa_ += QString::fromStdString(selection.label) + QStringLiteral("（%1区間）").arg(static_cast<int>(count));
     }
-    app::LoopFacePlan plan;
-    for (const auto& table : networkTables_) {
-        app::LoopFace face;
-        face.method = table.method == modeling::GuideSurfaceMethod::PlanarBoundary ? app::LoopFaceMethod::Planar
-            : table.method == modeling::GuideSurfaceMethod::FourEdgePatch ? app::LoopFaceMethod::FourEdge
-            : app::LoopFaceMethod::BoundaryFill;
-        face.sideCount = std::count_if(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role!=modeling::ChainRole::SourceSurface;});
-        for (const auto& row : table.rows)
-            face.previewLines.push_back(geometry::SampleChain(row.segments, tolerance.interactiveJoinMm*0.5));
-        plan.faces.push_back(std::move(face));
-    }
-    plan.summaryJa = "接続区画 " + std::to_string(plan.faces.size()) + "。元の線の区間を使い、線を変更しません";
-    const bool refilled=std::any_of(networkTables_.begin(),networkTables_.end(),[](const auto& table){
-        return table.method!=modeling::GuideSurfaceMethod::PlanarBoundary
-            &&std::none_of(table.rows.begin(),table.rows.end(),[](const auto& row){return row.role==modeling::ChainRole::SourceSurface;});
-    });
-    if(refilled)plan.summaryJa+="。新しく張る曲面は近似";
-    std::size_t holeCount=0;for(const auto& table:networkTables_)for(const auto& row:table.rows)holeCount+=row.role==modeling::ChainRole::HoleBoundary;
-    if(holeCount)plan.summaryJa+="。穴 "+std::to_string(holeCount)+"個";
-    for(const auto& table:networkTables_)for(const auto& row:table.rows)
-        if(row.role==modeling::ChainRole::SourceSurface&&!row.sourceLabels.empty())
-            plan.summaryJa+="。元の面「"+row.sourceLabels.front()+"」の形を保持";
-    if(notch)plan.summaryJa+="。外周に接する開口を切り欠きとして保持";
-    const auto unused=network.unusedSegments.size()+(closed.empty()?0:omitted);
-    if (unused)
-        plan.summaryJa += "。輪に使わない区間 " + std::to_string(unused) + "（元の線は保持）";
-    plan_ = std::move(plan);
+    plan_=NetworkDisplayPlan(networkTables_,tolerance,notch,
+        network.unusedSegments.size()+(closed.empty()?0:omitted));
     styles_.assign(plan_->faces.size(),modeling::FourEdgeStyle::Coons);
     methodOverride_.assign(plan_->faces.size(), std::nullopt);
     make_.assign(plan_->faces.size(), true);

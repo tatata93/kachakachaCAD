@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GitHub側のCAD成果物整理・2026-11-03</title>
+<style>body{max-width:1080px;margin:32px auto;padding:0 24px;font:17px/1.8 "Yu Gothic UI",sans-serif;color:#22303d}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9bac7;padding:8px;text-align:left}.result{padding:14px;background:#edf3f7}code{overflow-wrap:anywhere}</style></head><body>
+<h1>GitHub側のCAD成果物整理</h1>
+<p>2026年11月3日。オーナーの追加指示に基づき、<a href="https://github.com/tatata93/kachakachaCAD">tatata93/kachakachaCAD</a> だけを対象に、不要な成果物を整理しました。他のリポジトリは変更していません。</p>
+<p class="result">削除した配布資産・Actions成果物のAPI上の合計サイズは <strong>7,406,669,255 bytes（約7.41 GB）</strong>。GitHubの利用量表示・課金への反映量や時刻を計測した値ではありません。</p>
+<table><thead><tr><th>削除対象</th><th>件数</th><th>資産サイズ</th></tr></thead><tbody><tr><td>過去のWindowsビルド成果物</td><td>205</td><td>6.968 GB</td></tr><tr><td>未公開の古いリリース下書き</td><td>3</td><td>0.273 GB</td></tr><tr><td>旧版のWindows実行ファイル</td><td>3</td><td>0.166 GB</td></tr><tr><td>統合済みで未使用のブランチ</td><td>3</td><td>0.000 GB</td></tr></tbody></table>
+<h2>残したもの</h2>
+<ul><li>最新版 <a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261102.2">v0.1.0-20261102.2</a> と直前の動作版 <a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261102">v0.1.0-20261102</a> の配布資産をそのまま保持。</li>
+<li>従来版の配布経路 <code>ci-latest</code>、第三者ライブラリの対応ソースZIP 2件、公開版の説明・検証JSON・チェックサム。</li>
+<li>現在の開発ブランチ、main、未統合変更を持つブランチ、作業フォルダで使用中のブランチ、WIPバックアップ。</li>
+<li>Gitのコミット履歴と全タグ。履歴の書換えやforce pushは行っていません。</li>
+<li>各ブランチの直近3成果物、直近48時間の成果物、保持した公開版のソースコミットに対応する成果物、実行中のCIに関係する成果物。整理後の取得時点で9件を保持しています。</li>
+<li>Actionsの実行記録・ログ。ビルドに使われ、直近にも参照されていたOCCTキャッシュ1件（約27.6 MB）。</li>
+<li>ソースコード、モデル、資料などのリポジトリ内ファイル。今回の整理では削除していません。</li></ul>
+<h2>旧版とブランチの扱い</h2>
+<p>未公開だったalpha.3・alpha.4・alpha.5の下書きを削除しました。公開済みのalpha.1と2026-10-30版はWindows実行ファイルだけを取り下げ、対応ソースと記録を保持し、最新版への案内を追記しました。</p>
+<ul><li><code>codex/unified-sheet-parts</code> → <a href="https://github.com/tatata93/kachakachaCAD/commit/404305c3551f73558e79c7a9540f91554799402d">404305c355</a>。mainと現在の開発ブランチの両方に統合済み。</li><li><code>codex/v2-ui-ux-overhaul</code> → <a href="https://github.com/tatata93/kachakachaCAD/commit/ac379260a4fbba68bb62bc2e3e2742c4dc3cef88">ac379260a4</a>。mainと現在の開発ブランチの両方に統合済み。</li><li><code>codex/wire-first-v2-spec</code> → <a href="https://github.com/tatata93/kachakachaCAD/commit/8c7e706f0864b269bb6b3fb5f821ac2748895bc7">8c7e706f08</a>。mainと現在の開発ブランチの両方に統合済み。</li></ul>
+<h2>確認方法</h2>
+<p>削除前に全件を列挙して明示一覧を保存し、各ID・名前・サイズを削除直前にも照合しました。ブランチはmainへの包含、現在のSHA、作業フォルダ・未処理PR・実行中CIの有無を確認してから削除しました。新しく生成された別IDの成果物をまとめて削除する操作はしていません。</p>
+<p>削除後に再取得し、予定した削除が完了したこと、保持した配布資産のID・名前・サイズ・digest、第三者ソース、最新リリースの参照先、その他のブランチと全タグが削除前と一致することを照合しました。現在のコードを変更したり、今回アプリ全体試験を再実行したりした記録ではありません。</p>
+<p>認証情報を表示・保存せず、同じCADリポジトリに限定したAPIを使用しています。操作一覧・前後のメタデータ・照合結果は <code>out/maintenance/github-cleanup-20261103/</code> に保存しました。</p>
+<p><a href="../../out/maintenance/github-cleanup-20261103/result.json">このPCの照合結果</a> ／ <a href="storage-cleanup-20261103.html">PC内の容量整理記録</a> ／ <a href="https://github.com/tatata93/kachakachaCAD/releases/latest">最新版のダウンロード</a></p>
+<p><a href="../../out/releases/support-compact-retry1-1102/package/kachakacha_cad_next.exe">このPCのCAD起動パス</a></p>
+</body></html>

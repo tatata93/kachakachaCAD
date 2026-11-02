@@ -14,7 +14,11 @@
 namespace kachakacha::v2::selftest {
 bool CheckPracticalFreezeSweep(V2MainWindow& w,const QString& input,const QString& directory)
 {
+    const auto only=qEnvironmentVariable("KACHACAD_PRACTICAL_FREEZE_PERCENT");
+    bool valid=false;const int requested=only.toInt(&valid);
+    if(!only.isEmpty()&&(!valid||(requested!=0&&requested!=30&&requested!=50&&requested!=100)))return false;
     for(const int percent:{0,30,50,100})for(const int format:{1,2}) {
+        if(!only.isEmpty()&&percent!=requested)continue;
         const auto stem=directory+QString("/freeze-%1-%2").arg(percent).arg(format==1?"parts":"both");
         std::cout<<"PRACTICAL FREEZE "<<percent<<" output="<<format<<std::endl;
         if(!w.OpenDocumentFile(input)||!w.RebuildProblems().isEmpty())return false;

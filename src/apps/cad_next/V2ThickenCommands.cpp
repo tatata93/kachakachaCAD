@@ -104,8 +104,6 @@ void V2MainWindow::RunThickenTool(bool toPlane)
     MirrorThickenToSelection();
     BindThickenInputs();
     RefreshThickenAll();
-    SetStatus(QStringLiteral("厚み: 3D で形状ガイドの面を押してください(何枚でも。押し直すと外れます)。"
-                             "作り方を選んで、Enter で確定、Esc でやめます。"));
 }
 
 //! 3D の選択の印を、面の欄に合わせる。欄が正本。
@@ -288,6 +286,12 @@ void V2MainWindow::RefreshThickenDock()
         lines.push_back(QString::fromStdString(line));
     }
     if(calculating)lines.front()=QStringLiteral("計算中です。3D表示と設定は操作できます。設定を変えると計算し直します。");
+    else if(!thicken_->input.surfaces.empty()&&!kachakacha::v2::app::ThickenReadyToBuild(thicken_->input))
+        lines.front()=thicken_->input.toPlane?QStringLiteral("相手の作業平面を選んでください。")
+            :QStringLiteral("厚みを0より大きくしてください。");
+    else if(thicken_->outcome.evaluated&&!thicken_->outcome.available&&!thicken_->input.surfaces.empty())
+        lines.front()=QString::fromStdString(thicken_->outcome.refusalJa.empty()
+            ?"この条件では作れません。厚みや方向を変更してください。":thicken_->outcome.refusalJa);
     const bool needsWires=kachakacha::v2::app::IncludesWires(thickenDock_->OutputMode());
     const bool boundariesReady=!needsWires || (!thicken_->builtEdges.empty()&&std::all_of(thicken_->builtEdges.begin(),thicken_->builtEdges.end(),
         [](const auto& curves){return !curves.empty();}));
@@ -308,6 +312,7 @@ void V2MainWindow::RefreshThickenDock()
     thickenDock_->ShowInput(thicken_->input, QString::fromStdString(names), lines,
         thicken_->outcome.available&&boundariesReady&&!thicken_->refreshPending&&!V2GeometryJob::Active()
             &&!thicken_->built.empty()&&thicken_->built.size()==thicken_->input.surfaces.size());
+    if(thicken_->shelfShown&&!lines.empty())SetStatus(QStringLiteral("厚み: ")+lines.front());
     ShowToolFooter(thicken_->shelfShown
             ? QString::fromStdString(kachakacha::v2::app::ThickenFooterLine(thicken_->input,
                   names, nameOf(thicken_->input.targetPlane), thicken_->outcome, previewShown))

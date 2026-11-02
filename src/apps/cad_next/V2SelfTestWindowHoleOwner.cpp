@@ -136,7 +136,12 @@ bool V2WindowHoleExercise::RawSelection(V2MainWindow& w,bool extra) {
             &&(!extra||(!material(part,{30,-17,21.5},{-1,0,0})&&material(part,{30,-17,16},{-1,0,0}))));
     }
     w.RunCommand("part.thicken");auto* amount=w.findChild<QDoubleSpinBox*>("thickenAmount");if(!amount)return false;amount->setValue(.5);
-    if(!w.ThickenDock().ClickConfirm()){std::cout<<"raw thicken failed: "<<w.StatusText().toStdString()<<std::endl;return false;}
+    if(!w.ThickenDock().ClickConfirm()){
+        std::cout<<"raw thicken failed: "<<w.StatusText().toStdString()
+            <<"\nsurfaces="<<w.ThickenInput().surfaces.size()<<" placement="<<int(w.ThickenInput().placement)
+            <<"\n"<<w.ThickenDock().SurfaceTextJa().toStdString()<<"\n"<<w.ThickenDock().StatusTextJa().toStdString()<<std::endl;
+        w.grab().save(output+"/raw-thicken-failed.png");return false;
+    }
     const auto part=w.Session().GetDocument().Snapshot().entities.back().id;
     const auto check=kernel::CheckSolidForExport(w.partShapes_.at(part.ToString()),.001);
     if(!selftest::Explain("raw notch makes a closed positive-volume solid without filling the window",check.HasValue()&&check.Value().Ok()

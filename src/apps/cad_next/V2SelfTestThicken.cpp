@@ -675,6 +675,26 @@ bool CaseOwnerWireOutput(V2MainWindow& window)
     return Explain("wire-only roof also leaves original KCD bytes unchanged",file.readAll()==original);
 }
 
+bool CaseThickenGuidanceMatchesInputs(V2MainWindow& w)
+{
+    if(!MakeFreshGuideSurface(w))return false;
+    const auto guides=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),EntityKind::GuideSurface);
+    w.SetMode(UiMode::Part);w.Viewport().SetSelection(guides);
+    const auto before=w.Session().GetDocument().Revision();
+    w.RunCommand("part.thicken_to_plane");
+    if(!Explain("preselected thickness asks for its missing plane, not another surface",
+        !w.ThickenInput().surfaces.empty()&&w.StatusText().contains(QStringLiteral("相手の作業平面"))
+        &&w.ThickenDock().StatusTextJa().startsWith(QStringLiteral("相手の作業平面"))
+        &&w.Session().GetDocument().Revision()==before))return false;
+    w.RunCommand("selection.activate");w.Viewport().SetSelection(guides);w.RunCommand("part.thicken");
+    if(!Explain("ready thickness reports confirmation with the selected surface retained",
+        !w.ThickenInput().surfaces.empty()&&w.StatusText().contains(QStringLiteral("Enter"))
+        &&w.ThickenDock().ClickConfirm()&&CountOfKind(w,EntityKind::Part)==1))return false;
+    w.RunCommand("edit.undo");
+    return Explain("guidance changes do not add a document operation",CountOfKind(w,EntityKind::Part)==0
+        &&CountOfKind(w,EntityKind::GuideSurface)==1);
+}
+
 bool CaseIndependentThicken(V2MainWindow& w) {
     using namespace kachakacha::v2;
     for(const int mode:{0,2}){
@@ -710,6 +730,7 @@ bool CaseIndependentThicken(V2MainWindow& w) {
 std::vector<SelfTestCase> ThickenCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-TH-GUIDANCE selected surface and missing target have accurate instructions",CaseThickenGuidanceMatchesInputs},
         {"HP-TH-INDEPENDENT frozen solid and boundary survive source deletion and save",CaseIndependentThicken},
         {"HP-TH-JIG-OUTPUT all jig outputs themes undo and saved results",CaseJigOutputMatrix},
         {"HP-TH-OUTPUT all outputs placements to-plane themes and atomic saved results",CaseThickenOutputMatrix},

@@ -6,8 +6,52 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <algorithm>
+#include <cmath>
 
 using namespace kachakacha::v2;
+namespace {
+// Remove only redundant, planar runs in a newly generated support. Keep the
+// two rails paired; the material loops have already been mapped on the original
+// rails and must not be remapped with a different longitudinal parameterization.
+auto CompactSupportRails(const std::vector<std::vector<geometry::Vector3>>& rails,
+    const geometry::GeometryTolerance& tolerance)
+{
+    if(rails.size()!=2||rails[0].size()!=rails[1].size()||rails[0].size()<3)return rails;
+    const double epsilon=tolerance.modelLinearMm*.001;
+    const auto straight=[&](std::size_t first,std::size_t last){
+        for(const auto& rail:rails){
+            const auto delta=rail[last]-rail[first];const double squared=delta.LengthSquared();
+            if(squared<=epsilon*epsilon)return false;
+            double previous=0;
+            for(auto i=first+1;i<last;++i){
+                const double t=geometry::Dot(rail[i]-rail[first],delta)/squared;
+                if(t<previous||t>1||geometry::Distance(rail[i],rail[first]+delta*t)>epsilon)return false;
+                previous=t;
+            }
+        }
+        const auto normal=geometry::Cross(rails[1][first]-rails[0][first],rails[0][last]-rails[0][first]);
+        if(normal.LengthSquared()<=tolerance.numericEpsilon*tolerance.numericEpsilon
+            ||std::abs(geometry::Dot(rails[1][last]-rails[0][first],normal))>epsilon*normal.Length())return false;
+        const auto direction=geometry::Normalized(normal);
+        for(auto i=first;i<last;++i){
+            const auto a=rails[0][i],b=rails[1][i],c=rails[0][i+1],d=rails[1][i+1];
+            for(const auto cellNormal:{geometry::Cross(b-a,c-a),geometry::Cross(d-b,c-b)}){
+                if(cellNormal.LengthSquared()<=tolerance.numericEpsilon*tolerance.numericEpsilon)return false;
+                const auto cell=geometry::Normalized(cellNormal);
+                if(geometry::Dot(direction,cell)<=0||geometry::Cross(direction,cell).Length()
+                    >std::sin(tolerance.modelAngularRad))return false;
+            }
+        }
+        return true;
+    };
+    std::vector<std::size_t> indices{0};
+    for(std::size_t i=1;i+1<rails[0].size();++i)if(!straight(indices.back(),i+1))indices.push_back(i);
+    indices.push_back(rails[0].size()-1);
+    std::vector<std::vector<geometry::Vector3>> result(2);
+    for(int row=0;row<2;++row)for(const auto index:indices)result[row].push_back(rails[row][index]);
+    return result;
+}
+}
 std::vector<std::vector<geometry::Vector3>> V2MaterialLoops(
     const app::FabricationEvaluation::MaterialPanel& panel,const std::vector<std::vector<geometry::Vector3>>& rails)
 {
@@ -29,12 +73,19 @@ std::vector<geometry::CurveSegment> V2MaterialCurves(std::vector<geometry::Vecto
     return V2CompactGeneratedCurves(curves);
 }
 base::Result<modeling::GuideSurfaceResult> V2BuildMaterialSurface(
-    const std::vector<std::vector<geometry::Vector3>>& rails,
+    const std::vector<std::vector<geometry::Vector3>>& originalRails,
     const std::vector<std::vector<geometry::Vector3>>& loops,
     const geometry::GeometryTolerance& tolerance,double boundaryTolerance,geometry::Vector3 expectedNormal)
 {
     using Out=base::Result<modeling::GuideSurfaceResult>;
-    if(rails.size()!=2||loops.empty())return Out::Failure(base::MakeError("FAB-O001","近似の材料境界がありません。",{}));
+    if(originalRails.size()!=2||originalRails[0].size()<2||originalRails[0].size()!=originalRails[1].size()
+        ||loops.empty())return Out::Failure(base::MakeError("FAB-O001","近似の材料境界がありません。",{}));
+    const auto referenceCell=(originalRails[0].size()-1)/2;
+    const auto referencePoint=(originalRails[0][referenceCell]+originalRails[1][referenceCell]
+        +originalRails[0][referenceCell+1])*(1./3);
+    const auto referenceNormal=geometry::Cross(originalRails[1][referenceCell]-originalRails[0][referenceCell],
+        originalRails[0][referenceCell+1]-originalRails[0][referenceCell]);
+    const auto rails=CompactSupportRails(originalRails,tolerance);
     modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;request.keepSectionOrder=true;
     for(int row=0;row<2;++row){modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=row+1;
         // Keep both section parameterizations identical. Independent curve fitting
@@ -44,7 +95,7 @@ base::Result<modeling::GuideSurfaceResult> V2BuildMaterialSurface(
     const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);if(!analysis.HasValue())return Out::Failure(analysis.Diagnostics());
     auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);if(!support.HasValue())return support;
     if(expectedNormal.LengthSquared()>1e-18){
-        const auto frame=kernel::OutputSurfaceFrame(support.Value().handle,rails[0][rails[0].size()/2]);
+        const auto frame=kernel::OutputSurfaceFrame(support.Value().handle,referencePoint);
         if(!frame.HasValue()){kernel::ReleaseShape(support.Value().handle);return Out::Failure(frame.Diagnostics());}
         if(geometry::Dot(frame.Value().normal,expectedNormal)<0){
             kernel::ReleaseShape(support.Value().handle);
@@ -66,9 +117,7 @@ base::Result<modeling::GuideSurfaceResult> V2BuildMaterialSurface(
         // Keep exact planar B-Rep patches for those cells, rather than moving
         // the cut path to a different supporting surface.
         kernel::ReleaseShape(support.Value().handle);
-        const auto middle=(rails[0].size()-1)/2;
-        const bool reverse=expectedNormal.LengthSquared()>1e-18&&geometry::Dot(expectedNormal,
-            geometry::Cross(rails[1][middle]-rails[0][middle],rails[0][middle+1]-rails[0][middle]))<0;
+        const bool reverse=expectedNormal.LengthSquared()>1e-18&&geometry::Dot(expectedNormal,referenceNormal)<0;
         for(std::size_t i=1;i<rails[0].size();++i)for(int side:{0,1}){
             std::vector<geometry::Vector3> triangle=side?std::vector{rails[1][i-1],rails[1][i],rails[0][i]}:std::vector{rails[0][i-1],rails[1][i-1],rails[0][i]};
             if(reverse)std::reverse(triangle.begin(),triangle.end());

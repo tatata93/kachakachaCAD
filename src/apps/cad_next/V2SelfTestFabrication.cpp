@@ -7,6 +7,7 @@
 #include "V2SelfTest.h"
 
 #include "V2FabricationDock.h"
+#include "V2FabricationMaterial.h"
 #include "V2MainWindow.h"
 #include "V2ParameterDock.h"
 #include "V2ProjectionTool.h"
@@ -15,6 +16,11 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/io/AtomicFile.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/modeling/MeshPick.h"
 
 #include <filesystem>
 #include <system_error>
@@ -23,6 +29,7 @@
 #include <QString>
 #include <QLabel>
 #include <QWidget>
+#include <QScopeGuard>
 
 #include <algorithm>
 #include <cmath>
@@ -571,9 +578,124 @@ namespace kachakacha::v2::selftest {
         window.Session().GetDocument().Revision() != revision);
 }
 
+bool CaseMaterialSupportStraightRuns(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    for(const bool bent:{false,true}){
+        const auto point=[&](double x,double y){return Vector3{x,y,bent?std::max(0.,x-5)*.2:0};};
+        std::vector<std::vector<Vector3>> rails(2),loops(1);
+        for(int i=0;i<=100;++i)for(int row=0;row<2;++row)rails[row].push_back(point(i*.1,row*10));
+        loops[0]=rails[0];loops[0].insert(loops[0].end(),rails[1].rbegin(),rails[1].rend());
+        loops.push_back({point(2,2),point(3,2),point(3,4),point(2,4)});
+        loops.push_back({point(6,6),point(8,6),point(8,8),point(6,8)});
+        const auto originalRails=rails,originalLoops=loops;
+        const auto made=V2BuildMaterialSurface(rails,loops,tolerance,.001,{0,0,1});
+        if(!Explain("dense flat runs with two holes make a material surface",made.HasValue()))return false;
+        std::vector<modeling::KernelShapeHandle> owned{made.Value().handle};
+        const auto release=qScopeGuard([&]{for(const auto h:owned)kernel::ReleaseShape(h);});
+        const auto mesh=kernel::BuildShapeMesh(made.Value().handle);
+        if(!mesh.HasValue())return false;
+        const auto hit=[&](const modeling::ShapeMesh& shape,double x,double y){
+            for(const auto& triangle:shape.triangles)if(modeling::RayHitsTriangle({x,y,10},{0,0,-1},triangle))return true;
+            return false;
+        };
+        if(!Explain("compaction preserves both holes and the material between them",!hit(mesh.Value(),2.5,3)
+            &&!hit(mesh.Value(),7,7)&&hit(mesh.Value(),4,5)&&hit(mesh.Value(),9,5)
+            &&rails==originalRails&&loops==originalLoops))return false;
+        const auto frame=kernel::OutputSurfaceFrame(made.Value().handle,point(9,5));
+        const auto expected=geometry::Normalized(Vector3{bent?-.2:0,0,1});
+        if(!Explain("the real bend retains its surface normal",frame.HasValue()
+            &&geometry::Dot(frame.Value().normal,expected)>1-1e-10))return false;
+        const auto solid=kernel::ThickenSurface(made.Value().handle,.5,fabrication::ThicknessPlacement::Inside,tolerance);
+        if(!Explain("compacted material supports still thicken",solid.HasValue()))return false;
+        owned.push_back(solid.Value().handle);
+        const auto checked=kernel::CheckSolidForExport(solid.Value().handle,tolerance.modelLinearMm);
+        const auto shown=kernel::BuildShapeMesh(solid.Value().handle);
+        Note(QStringLiteral("material support bent=%1 valid=%2 volume=%3 faces=%4 hole1=%5 hole2=%6 body=%7")
+            .arg(bent).arg(checked.HasValue()&&checked.Value().Ok()).arg(checked.HasValue()?checked.Value().volumeMm3:0)
+            .arg(shown.HasValue()?shown.Value().faceCount:0).arg(shown.HasValue()&&hit(shown.Value(),2.5,3))
+            .arg(shown.HasValue()&&hit(shown.Value(),7,7)).arg(shown.HasValue()&&hit(shown.Value(),4,5)).toUtf8().constData());
+        if(!Explain("solid remains closed with positive volume and no dense straight-run face splitting",checked.HasValue()
+            &&checked.Value().Ok()&&checked.Value().volumeMm3>0&&shown.HasValue()
+            &&shown.Value().faceCount<40&&!hit(shown.Value(),2.5,3)&&!hit(shown.Value(),7,7)
+            &&hit(shown.Value(),4,5)))return false;
+        if(!bent&&!Explain("two cutouts and 0.5 mm thickness give the analytic volume 47 mm3",
+            std::abs(checked.Value().volumeMm3-47)<1e-8))return false;
+        const auto bytes=kernel::CaptureOutputShape(solid.Value().handle);
+        if(!bytes.HasValue())return false;
+        const auto restored=kernel::RestoreOutputShape(bytes.Value());
+        if(!restored.HasValue())return false;owned.push_back(restored.Value());
+        const auto again=kernel::CheckSolidForExport(restored.Value(),tolerance.modelLinearMm);
+        if(!Explain("native round trip preserves compacted solid volume",again.HasValue()&&again.Value().Ok()
+            &&std::abs(again.Value().volumeMm3-checked.Value().volumeMm3)<1e-8))return false;
+    }
+    return true;
+}
+
+bool CaseMaterialSupportOrientationRetained(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+    std::vector<std::vector<Vector3>> rails(2);
+    for(int i=0;i<=100;++i)for(int row=0;row<2;++row)rails[row].push_back({i*.05,row*10.,0});
+    for(const auto end:{Vector3{6,0,1},Vector3{3,0,2},Vector3{2,0,3}})
+        for(int row=0;row<2;++row)rails[row].push_back(end+Vector3{0,row*10.,0});
+    auto outer=rails[0];outer.insert(outer.end(),rails[1].rbegin(),rails[1].rend());
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    const auto made=V2BuildMaterialSurface(rails,{outer},tolerance,.001,{0,0,-1});
+    if(!Explain("nonuniform rails spanning more than 90 degrees build",made.HasValue()))return false;
+    const auto release=qScopeGuard([&]{kernel::ReleaseShape(made.Value().handle);});
+    const auto frame=kernel::OutputSurfaceFrame(made.Value().handle,{2,5,0});
+    return Explain("reducing knot density keeps the original cell used for inside and outside",frame.HasValue()
+        &&geometry::Dot(frame.Value().normal,{0,0,-1})>1-1e-10);
+}
+
+bool CaseMaterialSupportWarpRetained(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    // Both rails are straight, but merging their twisted cells would move the
+    // diagonal of the core's planar triangle patches and change the surface.
+    const std::vector<std::vector<Vector3>> rails{{{0,0,0},{1,0,0},{2,0,0}},{{0,2,0},{1,2,1},{2,2,2}}};
+    const std::vector<std::vector<Vector3>> loops{{{0,0,0},{2,0,0},{2,2,2},{0,2,0}}};
+    const auto made=V2BuildMaterialSurface(rails,loops,tolerance,.001);
+    if(!Explain("twisted cells still make their original material patches",made.HasValue()))return false;
+    const auto release=qScopeGuard([&]{kernel::ReleaseShape(made.Value().handle);});
+    for(const auto expected:{Vector3{.25,.5,0},Vector3{.75,1.5,.5},Vector3{1.25,.5,.25},Vector3{1.75,1.5,1.25}}){
+        const auto frame=kernel::OutputSurfaceFrame(made.Value().handle,expected);
+        if(!Explain("support compaction does not replace twisted triangles with a different surface",frame.HasValue()
+            &&geometry::Distance(frame.Value().origin,expected)<tolerance.modelLinearMm))return false;
+    }
+    return true;
+}
+
+bool CaseMaterialSupportShortFoldRetained(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    const std::vector<std::vector<Vector3>> rails{{{0,0,0},{.001,0,1e-10},{.002,0,0}},
+        {{0,10,0},{.001,10,1e-10},{.002,10,0}}};
+    auto outer=rails[0];outer.insert(outer.end(),rails[1].rbegin(),rails[1].rend());
+    const auto made=V2BuildMaterialSurface(rails,{outer},tolerance,.001,{0,0,1});
+    if(!Explain("a short shallow fold builds",made.HasValue()))return false;
+    const auto release=qScopeGuard([&]{kernel::ReleaseShape(made.Value().handle);});
+    const auto frame=kernel::OutputSurfaceFrame(made.Value().handle,{.0005,5,5e-11});
+    const auto normal=geometry::Normalized(Vector3{-1e-7,0,1});
+    return Explain("a sub-position-tolerance fold still retains its normal for later offsets",frame.HasValue()
+        &&geometry::Cross(frame.Value().normal,normal).Length()<tolerance.modelAngularRad);
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"HP-FAB-COMPACT straight support runs preserve bends and multiple holes",CaseMaterialSupportStraightRuns},
+        {"HP-FAB-COMPACT twisted cells retain their triangle geometry",CaseMaterialSupportWarpRetained},
+        {"HP-FAB-COMPACT nonuniform knot density retains surface orientation",CaseMaterialSupportOrientationRetained},
+        {"HP-FAB-COMPACT shallow short folds retain their normals",CaseMaterialSupportShortFoldRetained},
         {"PROJ 回り込み投影は1面から開始できる", &CaseWrapProjectionStartsWithOneSurface},
         {"製作の棚の範囲と材料・積層が効く", &CaseFabricationDockRangeAndMaterial},
         {"HP-FAB-SHELF 製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},

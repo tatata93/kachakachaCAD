@@ -35,6 +35,8 @@
 #include <GeomAbs_Shape.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <BRepOffsetAPI_MakeFilling.hxx>
+#include <BRepOffset_MakeSimpleOffset.hxx>
+#include <BRepCheck_Analyzer.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -589,18 +591,19 @@ constexpr int kNetworkPointsPerChain = 9;
             if (!surface.HasValue()) {
                 return Out::Failure(surface.Diagnostics());
             }
-            double u0 = 0.0;
-            double u1 = 0.0;
-            double v0 = 0.0;
-            double v1 = 0.0;
-            BRepTools::UVBounds(face, u0, u1, v0, v1);
-            BRepBuilderAPI_MakeFace maker(surface.Value(), u0, u1, v0, v1,
-                std::max(tolerance.modelLinearMm, Precision::Confusion()));
-            if (!maker.IsDone()) {
+            // Offset the complete trimmed face. Rebuilding its UV rectangle
+            // silently filled holes and concave notches in the source.
+            BRepOffset_MakeSimpleOffset maker(face,request.offsetDistanceMm);
+            maker.SetTolerance(tolerance.modelLinearMm);
+            maker.Perform();
+            if (!maker.IsDone() || maker.GetResultShape().IsNull()
+                || !BRepCheck_Analyzer(maker.GetResultShape()).IsValid()) {
                 return Out::Failure(MakeError(kSurfaceOffsetImpossible,
-                    "ずらした面を作れませんでした。", {}));
+                    "輪郭と穴を保ったまま面を離せませんでした。",
+                    "距離を小さくするか、元の面の曲がりと輪郭を確認してください。"));
             }
-            made.push_back(maker.Face());
+            for(TopExp_Explorer e(maker.GetResultShape(),TopAbs_FACE);e.More();e.Next())
+                made.push_back(TopoDS::Face(e.Current()));
         }
         if (made.size() == 1) {
             return Out::Success(TopoDS_Shape(made.front()));

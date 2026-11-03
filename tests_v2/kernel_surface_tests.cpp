@@ -12,6 +12,22 @@
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#include <TopExp_Explorer.hxx>
+#include <gp_Trsf.hxx>
+#include <gp_Ax1.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepLib.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom_SphericalSurface.hxx>
+#include <Geom2d_Circle.hxx>
+#include <gp_Ax2d.hxx>
+#include <ShapeFix_Face.hxx>
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/Units.h"
 
@@ -718,6 +734,68 @@ KACHA_V2_TEST(kernel_offset, 平面をずらすと平面のまま同じ面積に
             == kachakacha::v2::fabrication::AnalyticSurfaceKind::Plane,
         "平面のまま");
     RequireNear(built.Value().areaMm2, 40.0 * 25.0, 1.0e-4, "面積は変わらない");
+}
+
+KACHA_V2_TEST(kernel_offset, perforated_concave_armour_keeps_all_trims_and_source)
+{
+    using namespace kachakacha::v2;
+    GuideSurfaceRequest request;request.method=GuideSurfaceMethod::PlanarBoundary;
+    GuideChain outer;outer.role=ChainRole::OuterBoundary;outer.closed=true;
+    const std::vector<Vector3> p{{0,0,0},{20,0,0},{20,6,0},{10,6,0},
+        {10,14,0},{20,14,0},{20,20,0},{0,20,0}};
+    for(std::size_t i=0;i<p.size();++i)outer.segments.push_back(Line(p[i],p[(i+1)%p.size()]));
+    request.chains={outer,Circle(ChainRole::HoleBoundary,1,{3,3,0},1),Circle(ChainRole::HoleBoundary,2,{3,12,0},1)};
+    const auto source=Build(request);Require(source.HasValue(),source.FirstSummaryJa());
+    for(const bool reversed:{false,true})for(const double distance:{-.5,.5}) {
+        TopoDS_Shape shape;Require(kernel::LookupShape(source.Value().handle,shape),"source face exists");
+        gp_Trsf transform;transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.7);
+        transform.SetTranslationPart(gp_Vec(100,-200,300));
+        shape=BRepBuilderAPI_Transform(shape,transform,true).Shape();if(reversed)shape.Reverse();
+        const auto input=kernel::StoreShape(shape);const auto before=kernel::CaptureOutputShape(input);
+        const auto moved=Build(OffsetRequest(distance),input);Require(moved.HasValue(),moved.FirstSummaryJa());
+        RequireNear(moved.Value().areaMm2,320-2*kPi,1e-5,"concavity and both circular holes survive offset");
+        TopoDS_Shape native;Require(kernel::LookupShape(moved.Value().handle,native),"offset native face exists");
+        std::size_t wires=0;for(TopExp_Explorer e(native,TopAbs_WIRE);e.More();e.Next())++wires;
+        Require(wires==3&&BRepCheck_Analyzer(native).IsValid(),"one outer and two holes, valid native topology");
+        const auto solid=kernel::ThickenSurface(moved.Value().handle,.2,fabrication::ThicknessPlacement::Outside,{});
+        Require(solid.HasValue(),solid.FirstSummaryJa());
+        RequireNear(solid.Value().volumeMm3,(320-2*kPi)*.2,1e-5,"thickening retains true material volume");
+        Require(kernel::OutputStep({solid.Value().handle}).HasValue(),"offset perforated solid STEP roundtrip");
+        const auto after=kernel::CaptureOutputShape(input);
+        Require(before.HasValue()&&after.HasValue()&&before.Value()==after.Value(),"original face untouched");
+        kernel::ReleaseShape(input);kernel::ReleaseShape(moved.Value().handle);kernel::ReleaseShape(solid.Value().handle);
+    }
+    kernel::ReleaseShape(source.Value().handle);
+}
+
+KACHA_V2_TEST(kernel_offset, rounded_shells_and_periodic_joint_keep_their_holes)
+{
+    using namespace kachakacha::v2;
+    for(const bool spherical:{false,true}) {
+        const occ::handle<Geom_Surface> surface=spherical
+            ?occ::handle<Geom_Surface>(new Geom_SphericalSurface(gp_Ax3(),10))
+            :occ::handle<Geom_Surface>(new Geom_CylindricalSurface(gp_Ax3(),10));
+        // The joint spans the cylinder's periodic seam. The rounded shell is a head/armour patch.
+        const double u=spherical?0:2*kPi,v=spherical?0:10;
+        BRepBuilderAPI_MakeFace face(surface,u-.5,u+.5,v-.4,v+.4,1e-7);
+        const occ::handle<Geom2d_Curve> curve=new Geom2d_Circle(gp_Ax2d(gp_Pnt2d(u,v),gp_Dir2d(1,0)),.1);
+        BRepBuilderAPI_MakeWire hole(BRepBuilderAPI_MakeEdge(curve,surface).Edge());
+        auto wire=hole.Wire();wire.Reverse();face.Add(wire);auto native=face.Face();
+        BRepLib::BuildCurves3d(native,1e-8);BRepLib::SameParameter(native,1e-7,true);
+        ShapeFix_Face canonical(native);canonical.Perform();native=canonical.Face();
+        Require(BRepCheck_Analyzer(native).IsValid(),"native perforated curved fixture valid");
+        const auto input=kernel::StoreShape(native);const auto before=kernel::CaptureOutputShape(input);
+        const auto moved=Build(OffsetRequest(.25),input);Require(moved.HasValue(),moved.FirstSummaryJa());
+        TopoDS_Shape result;Require(kernel::LookupShape(moved.Value().handle,result),"curved offset exists");
+        std::size_t wires=0;for(TopExp_Explorer e(result,TopAbs_WIRE);e.More();e.Next())++wires;
+        Require(wires==2&&BRepCheck_Analyzer(result).IsValid(),"periodic/organic trim and hole retained");
+        const auto thick=kernel::ThickenSurface(moved.Value().handle,.1,fabrication::ThicknessPlacement::Outside,{});
+        Require(thick.HasValue(),thick.FirstSummaryJa());
+        Require(kernel::OutputStep({thick.Value().handle}).HasValue(),"rounded holed shell STEP roundtrip");
+        const auto after=kernel::CaptureOutputShape(input);
+        Require(before.HasValue()&&after.HasValue()&&before.Value()==after.Value(),"native original preserved");
+        kernel::ReleaseShape(input);kernel::ReleaseShape(moved.Value().handle);kernel::ReleaseShape(thick.Value().handle);
+    }
 }
 
 KACHA_V2_TEST(kernel_offset, 平面をずらすと法線方向へ動く)

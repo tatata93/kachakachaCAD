@@ -1,10 +1,12 @@
 #include "kachakacha/geometry/WireChain.h"
 
 #include "kachakacha/geometry/CurveIntersection.h"
+#include "kachakacha/geometry/CurveFit.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <map>
+#include <cmath>
 
 namespace kachakacha::v2::geometry {
 
@@ -43,6 +45,88 @@ struct Endpoint {
         return inputs[l].segmentId < inputs[r].segmentId;
     });
     return order;
+}
+
+//! 隙間候補は別の連結成分の未接続端に限る。短辺や細い輪郭の頂点間距離ではない。
+[[nodiscard]] std::vector<Vector3> EndpointGaps(const std::vector<int>& nodeOf,
+    const std::vector<Vector3>& positions,
+    const std::vector<std::vector<std::size_t>>& members,
+    const GeometryTolerance& tolerance)
+{
+    std::vector<std::size_t> component(positions.size());
+    for (std::size_t i=0;i<component.size();++i) component[i]=i;
+    const auto root=[&](std::size_t node) {
+        while(component[node]!=node) node=component[node];
+        return node;
+    };
+    for(std::size_t i=0;i<nodeOf.size();i+=2) {
+        const auto a=root(static_cast<std::size_t>(nodeOf[i]));
+        const auto b=root(static_cast<std::size_t>(nodeOf[i+1]));
+        component[std::max(a,b)]=std::min(a,b);
+    }
+    std::vector<Vector3> gaps;
+    for(std::size_t a=0;a<positions.size();++a) {
+        if(members[a].size()!=1) continue;
+        for(std::size_t b=a+1;b<positions.size();++b) {
+            if(members[b].size()!=1 || root(a)==root(b)) continue;
+            const double distance=Distance(positions[a],positions[b]);
+            if(distance>tolerance.modelLinearMm && distance<=tolerance.interactiveJoinMm)
+                gaps.push_back(positions[a]);
+        }
+    }
+    return gaps;
+}
+
+//! P(s)=P(t), s!=t: a*((s+t)^2-st)+b*(s+t)+c=0 for a cubic.
+[[nodiscard]] std::optional<Vector3> CubicCrossing(const CurveSegment& curve,
+    const GeometryTolerance& tolerance)
+{
+    const auto& p=curve.ControlPoints();
+    const double scale=std::max({Distance(p[0],p[1]),Distance(p[0],p[2]),Distance(p[0],p[3])});
+    if(scale<=tolerance.modelLinearMm)return {};
+    const auto q1=(p[1]-p[0])*(1/scale),q2=(p[2]-p[0])*(1/scale),q3=(p[3]-p[0])*(1/scale);
+    const auto a=q1*3-q2*3+q3,b=q2*3-q1*6,c=q1*3;
+    const auto ab=Cross(a,b),ac=Cross(a,c);
+    const double determinant=ab.LengthSquared();
+    if(determinant<=tolerance.numericEpsilon*tolerance.numericEpsilon)return {};
+    const double sum=-Dot(ab,ac)/determinant;
+    const double product=sum*sum+Dot(a,b*sum+c)/a.LengthSquared();
+    const double discriminant=sum*sum-4*product;
+    if(discriminant<=0)return {};
+    const double delta=std::sqrt(discriminant),s=(sum-delta)*.5,t=(sum+delta)*.5;
+    if(s<0||t>1||s>=t)return {};
+    if(s<=tolerance.numericEpsilon&&t>=1-tolerance.numericEpsilon)return {};
+    if(Distance(curve.Evaluate(s),curve.Evaluate(t))>tolerance.modelLinearMm)return {};
+    return curve.Evaluate(s);
+}
+
+[[nodiscard]] std::optional<Vector3> InternalCrossing(const CurveSegment& curve,
+    const GeometryTolerance& tolerance)
+{
+    if(curve.Kind()==CurveKind::CubicBezier)return CubicCrossing(curve,tolerance);
+    if(curve.Kind()!=CurveKind::CubicBSpline)return {};
+    std::vector<CurveSegment> spans;
+    std::vector<Bounds3> bounds;
+    for(const auto& poles:UniformBSplineBezierSpans(curve.ControlPoints())) {
+        const auto span=CurveSegment::MakeCubicBezier({poles.begin(),poles.end()});
+        if(!span.HasValue())continue;
+        if(const auto crossing=CubicCrossing(span.Value(),tolerance))return crossing;
+        spans.push_back(span.Value());
+        Bounds3 bound;for(const auto& pole:poles)bound.Add(pole);bounds.push_back(bound);
+    }
+    for(std::size_t a=0;a<spans.size();++a)for(std::size_t b=a+1;b<spans.size();++b) {
+        const auto& x=bounds[a];const auto& y=bounds[b];const double eps=tolerance.modelLinearMm;
+        if(x.maximum.x+eps<y.minimum.x||y.maximum.x+eps<x.minimum.x
+            ||x.maximum.y+eps<y.minimum.y||y.maximum.y+eps<x.minimum.y
+            ||x.maximum.z+eps<y.minimum.z||y.maximum.z+eps<x.minimum.z)continue;
+        for(const auto& crossing:IntersectCurves(spans[a],spans[b],tolerance)) {
+            const bool adjacent=b==a+1&&Distance(crossing.position,spans[a].EndPoint())<=tolerance.modelLinearMm;
+            const bool closed=a==0&&b+1==spans.size()&&curve.IsClosed(tolerance.modelLinearMm)
+                &&Distance(crossing.position,curve.StartPoint())<=tolerance.modelLinearMm;
+            if(!adjacent&&!closed)return crossing.position;
+        }
+    }
+    return {};
 }
 
 } // namespace
@@ -160,15 +244,7 @@ Result<ChainAnalysis> AnalyzeChain(std::vector<ChainInput> inputs,
 
     // interactiveJoinMm 内だが modelLinearMm 外の端点は「ほぼ接続」として知らせる。
     // 勝手に動かさない。形状生成もしない(GEO-W003)。
-    std::vector<Vector3> nearMiss;
-    for (std::size_t left = 0; left < nodePositions.size(); ++left) {
-        for (std::size_t right = left + 1; right < nodePositions.size(); ++right) {
-            const double gap = Distance(nodePositions[left], nodePositions[right]);
-            if (gap > tolerance.modelLinearMm && gap <= tolerance.interactiveJoinMm) {
-                nearMiss.push_back(nodePositions[left]);
-            }
-        }
-    }
+    const auto nearMiss=EndpointGaps(nodeOf,nodePositions,nodeEndpoints,tolerance);
     if (!nearMiss.empty()) {
         ChainAnalysis analysis;
         analysis.nearMissPoints = nearMiss;
@@ -291,6 +367,8 @@ base::Result<std::vector<SelfIntersection>> FindSelfIntersections(
     std::vector<SelfIntersection> found;
     const std::size_t count = segments.size();
     for (std::size_t first = 0; first < count; ++first) {
+        if(const auto crossing=InternalCrossing(segments[first],tolerance))
+            found.push_back(SelfIntersection{first,first,*crossing});
         for (std::size_t second = first + 1; second < count; ++second) {
             // 隣どうしは端点で触れる。それは交差ではない。
             const bool adjacent = second == first + 1;
@@ -307,7 +385,7 @@ base::Result<std::vector<SelfIntersection>> FindSelfIntersections(
                         (crossing.position - segments[first].StartPoint()).Length();
                     const double toWrapEnd =
                         (crossing.position - segments[second].EndPoint()).Length();
-                    const double join = tolerance.interactiveJoinMm;
+                    const double join = tolerance.modelLinearMm;
                     if ((adjacent && toEnd <= join && toStart <= join)
                         || (wrapsAround && toWrapStart <= join && toWrapEnd <= join)) {
                         continue;

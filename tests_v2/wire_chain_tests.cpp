@@ -3,6 +3,8 @@
 #include "kachakacha/geometry/WireChain.h"
 
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 using kachakacha::v2::base::DeterministicIdGenerator;
 using kachakacha::v2::base::EntityId;
@@ -221,6 +223,52 @@ KACHA_V2_TEST(chain, a_near_miss_is_reported_and_nothing_is_moved)
         "the message says the points are not moved on their own");
 }
 
+KACHA_V2_TEST(chain, connected_fine_detail_is_not_an_endpoint_gap)
+{
+    for (const double scale : {0.001, 0.005, 1.0, 100.0}) {
+        for (const bool tilted : {false, true}) {
+            Fixture fixture;
+            const auto place = [=](Vector3 p) {
+                p = p * scale;
+                if (!tilted) return p;
+                return Vector3{100 + .6 * p.x - .8 * p.y,
+                    -200 + .64 * p.x + .48 * p.y - .6 * p.z,
+                    300 + .48 * p.x + .36 * p.y + .8 * p.z};
+            };
+            // A narrow lip, concave notch, and an open curved-detail-sized path.
+            for (const std::vector<Vector3>& points : {
+                     std::vector<Vector3>{{0,0,0},{1,0,0},{1,5,0},{0,5,0},{0,0,0}},
+                     std::vector<Vector3>{{0,0,0},{5,0,0},{5,5,0},{3,5,0},
+                         {3,1,0},{2,1,0},{2,5,0},{0,5,0},{0,0,0}},
+                     std::vector<Vector3>{{0,0,0},{1,0,0},{1,1,1}}}) {
+                std::vector<ChainInput> inputs;
+                for (std::size_t i=1;i<points.size();++i)
+                    inputs.push_back(fixture.Line(place(points[i-1]),place(points[i])));
+                const auto result = AnalyzeChain(inputs, fixture.tolerance);
+                Require(result.HasValue(), "connected fine geometry resolves without changing join tolerance");
+                Require(result.Value().order.segments.size()==inputs.size(), "every original segment is retained");
+                Require(result.Value().order.closed==(points.front()==points.back()), "open/closed topology retained");
+                std::reverse(inputs.begin(),inputs.end());
+                const auto reversed = AnalyzeChain(inputs,fixture.tolerance);
+                Require(reversed.HasValue(), "input order does not change fine connectivity");
+            }
+            const auto single=AnalyzeChain({fixture.Line(place({0,0,0}),place({1,0,0}))},fixture.tolerance);
+            Require(single.HasValue()&&!single.Value().order.closed,"a short single line remains open");
+        }
+    }
+}
+
+KACHA_V2_TEST(chain, nearby_open_ends_do_not_change_an_exactly_connected_path)
+{
+    Fixture fixture;
+    const std::vector<ChainInput> inputs{
+        fixture.Line({0,0,0},{10,0,0}),fixture.Line({10,0,0},{10,10,0}),
+        fixture.Line({10,10,0},{0,10,0}),fixture.Line({0,10,0},{0,.005,0})};
+    const auto result=AnalyzeChain(inputs,fixture.tolerance);
+    Require(result.HasValue()&&!result.Value().order.closed,"an intentional slit stays open and is never snapped closed");
+    Require(result.Value().order.segments.size()==4,"all slit boundary segments retained");
+}
+
 KACHA_V2_TEST(chain, a_duplicate_segment_is_refused)
 {
     Fixture fixture;
@@ -230,6 +278,22 @@ KACHA_V2_TEST(chain, a_duplicate_segment_is_refused)
     Require(!result.HasValue(), "the same segment twice is refused");
     RequireEqual(result.Diagnostics().front().code, "GEO-W006",
         "the refusal is DuplicateSegment");
+}
+
+KACHA_V2_TEST(chain, a_crossing_within_one_cubic_is_rejected)
+{
+    // x(t)=9t-24t²+16t³, y(t)=9t(1-t): t=(1±sqrt(.75))/2 crosses at (.5,.5625).
+    const std::vector<Vector3> bezier{{0,0,0},{3,3,0},{-2,3,0},{1,0,0}};
+    const auto b1=bezier[1]*2-bezier[2],b2=bezier[2]*2-bezier[1];
+    const std::vector<Vector3> spline{bezier[0]*6-b1*4-b2,b1,b2,bezier[3]*6-b1-b2*4};
+    for(const auto& curve:{CurveSegment::MakeCubicBezier(bezier).Value(),
+             CurveSegment::MakeCubicBSpline(spline).Value()}) {
+        const auto result=kachakacha::v2::geometry::FindSelfIntersections({curve},false,{});
+        Require(!result.HasValue(),"a single cubic loop must not become a self-intersecting face");
+        RequireEqual(result.Diagnostics().front().code,"GEO-W004","explain the self-intersection");
+    }
+    const auto safe=CurveSegment::MakeCubicBezier({{0,0,0},{0,2,0},{2,2,0},{2,0,0}}).Value();
+    Require(kachakacha::v2::geometry::FindSelfIntersections({safe},false,{}).HasValue(),"a rounded non-crossing curve stays valid");
 }
 
 KACHA_V2_TEST(chain, an_empty_selection_is_refused)

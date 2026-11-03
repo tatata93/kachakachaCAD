@@ -146,6 +146,7 @@ private:
     };
 
     void RebuildFaceRows(const std::vector<V2LoopFaceRow>& faces);
+    void EnsureSelectionControls();
     void RebuildGapSection(const V2LoopFacesView& view);
     [[nodiscard]] FaceRowWidgets MakeFaceRow(const V2LoopFaceRow& face);
     void AddEdgeLine(FaceRowWidgets& widgets, int faceIndex, const V2LoopFaceRow& face);
@@ -155,6 +156,7 @@ private:
     QLabel* recent_ = nullptr;
     QPushButton* reopen_ = nullptr;
     QWidget* planBody_ = nullptr;   //!< 計画の段(1.〜4. と確定)。直前の操作だけのときは隠す
+    QVBoxLayout* planLayout_ = nullptr;
     QVBoxLayout* facesLayout_ = nullptr;
     QVBoxLayout* gapsLayout_ = nullptr;
     QDoubleSpinBox* tolerance_ = nullptr;

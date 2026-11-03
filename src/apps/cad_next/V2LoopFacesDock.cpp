@@ -116,18 +116,12 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     planBody_ = new QWidget(body);
     outer->addWidget(planBody_);
     auto* layout = new QVBoxLayout(planBody_);
+    planLayout_=layout;
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
     auto* help=new QLabel(QStringLiteral("外周と窓の輪郭を選んでください。閉じた内周は穴、外周に接する窓は切り欠きとして残します。"),body);
     help->setWordWrap(true);layout->addWidget(help);
-    selection_=new QLabel(body);selection_->setObjectName("loopFacesSelection");
-    selection_->setWordWrap(true);layout->addWidget(selection_);
-    wholeWires_=new QPushButton(QStringLiteral("選んだワイヤー全体を使う"),body);
-    wholeWires_->setObjectName("loopFacesWholeWires");
-    wholeWires_->setToolTip(QStringLiteral("3Dで選んだ線が属するワイヤーの全区間を面作成に使います。元の線の形は変更しません。"));
-    layout->addWidget(wholeWires_);wholeWires_->hide();
-    QObject::connect(wholeWires_,&QPushButton::clicked,this,[this]{if(wholeWiresHandler_)wholeWiresHandler_();});
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作る面")));
     auto* facesContainer = new QWidget(body);
     facesLayout_ = new QVBoxLayout(facesContainer);
@@ -379,8 +373,22 @@ void V2LoopFacesDock::RebuildGapSection(const V2LoopFacesView& view)
     }
 }
 
+void V2LoopFacesDock::EnsureSelectionControls()
+{
+    if(selection_)return;
+    auto* body=widget();
+    selection_=new QLabel(body);selection_->setObjectName("loopFacesSelection");
+    selection_->setWordWrap(true);planLayout_->insertWidget(1,selection_);
+    wholeWires_=new QPushButton(QStringLiteral("選んだワイヤー全体を使う"),body);
+    wholeWires_->setObjectName("loopFacesWholeWires");
+    wholeWires_->setToolTip(QStringLiteral("3Dで選んだ線が属するワイヤーの全区間を面作成に使います。元の線の形は変更しません。"));
+    planLayout_->insertWidget(2,wholeWires_);wholeWires_->hide();
+    QObject::connect(wholeWires_,&QPushButton::clicked,this,[this]{if(wholeWiresHandler_)wholeWiresHandler_();});
+}
+
 void V2LoopFacesDock::ShowView(const V2LoopFacesView& view)
 {
+    EnsureSelectionControls();
     loading_ = true;
     recentRow_->hide();
     planBody_->show();
@@ -440,7 +448,7 @@ bool V2LoopFacesDock::ClickWholeWires()
 
 QString V2LoopFacesDock::SelectionTextJa() const
 {
-    return selection_->text();
+    return selection_?selection_->text():QString();
 }
 
 bool V2LoopFacesDock::ClickConfirm()

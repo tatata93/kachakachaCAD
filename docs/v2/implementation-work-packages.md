@@ -10,10 +10,10 @@
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 完了(`codex/v2-wp01-build-scaffold`、v2_foundation_tests 22件) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 完了(`codex/v2-wp01-build-scaffold`、v2_document_tests 21件) | WP-02 | Document、Feature DAG、Command、Undo |
-| WP-04 | 進行中(Codex、2026-11-04。段階1追加レビューの同一直線上の折返しとB-spline内部閉輪の診断に限定) | WP-02 | Curve/Wire/Chain、編集、数式 |
+| WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(Codex、2026-11-04。実境界付き面のオフセットを修正、kernel_surface 63例成功。全体・UI経路は後段で実施) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
-| WP-07 | 完了(v2_extrude / v2_kernel_extrude / v2_wire_cage / v2_kernel_wire_cage。意味的Subshapeキー) | WP-06 | Part作成、押し出し、Boolean、Subshape |
+| WP-07 | 進行中(Codex、2026-11-04。汎用形状監査の段階3: 多穴押し出しの面由来とBooleanの連結・複数相手の整合に限定) | WP-06 | Part作成、押し出し、Boolean、Subshape |
 | WP-08 | 完了（Codex、2026-10-24。平面ワイヤ表示中の作図更新、候補fb143d73c。全体195件・UI各582件・通常起動成功。配布plane-wire-drawing-release-20261024） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |

@@ -17,8 +17,10 @@
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPointF>
+#include <QPushButton>
 #include <QString>
 #include <QTreeWidgetItem>
+#include <QWidget>
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -30,7 +32,15 @@ using base::EntityId;
 using domain::EntityKind;
 using geometry::CurveSegment;
 using geometry::Vector3;
-bool CaseLoopFacesPanoramaHrubber(V2MainWindow& window,bool compound=false)
+void MouseClick(QWidget& target,const QPointF& p,Qt::KeyboardModifiers modifiers)
+{
+    for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+        QMouseEvent event(type,p,QPointF(target.mapToGlobal(p.toPoint())),Qt::LeftButton,
+            type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,modifiers);
+        QApplication::sendEvent(&target,&event);
+    }
+}
+bool CaseLoopFacesPanoramaHrubber(V2MainWindow& window,bool compound=false,bool viewportPick=false)
 {
     const QString path=qEnvironmentVariable("KACHACAD_SURFACE_TEST_FILE");
     if(path.isEmpty()||!window.OpenDocumentFile(path))return false;
@@ -63,21 +73,58 @@ bool CaseLoopFacesPanoramaHrubber(V2MainWindow& window,bool compound=false)
         return io::WriteDocumentJson(current)==originalJson;
     };
     window.Viewport().SetSelection({});QApplication::processEvents();
-    auto* tree=window.EntityTree();if(!tree)return false;
-    for(std::size_t i=0;i<selection.entityIds.size();++i){
-        auto* item=tree->FindKey("entity:"+QString::fromStdString(selection.entityIds[i].ToString()));
-        if(!item)return false;
-        for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
-        tree->scrollToItem(item);QApplication::processEvents();
-        const QPointF p=tree->visualItemRect(item).center();
-        const auto modifiers=i?Qt::ControlModifier:Qt::NoModifier;
-        for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
-            QMouseEvent event(type,p,QPointF(tree->viewport()->mapToGlobal(p.toPoint())),Qt::LeftButton,
-                type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,modifiers);
-            QApplication::sendEvent(tree->viewport(),&event);
+    if(viewportPick){
+        auto& view=window.Viewport();
+        window.resize(1600,1000);view.SetViewDirection(ViewDirection::Isometric);view.FitToDocument();
+        QApplication::processEvents();
+        for(const auto id:selection.entityIds){
+            bool pressed=false;
+            for(const auto& curve:window.Session().Scene().curves){
+                if(curve.entityId!=id||curve.segment.Kind()==geometry::CurveKind::Line)continue;
+                const auto pixel=view.Mapping().Project(curve.segment.Evaluate(.43));if(!pixel)continue;
+                const QPointF p(pixel->x,pixel->y);view.HoverAt(p);
+                for(std::size_t i=0,n=view.CandidateCount();i<n;++i){
+                    const auto candidate=view.CurrentCandidate();
+                    if(candidate&&candidate->entityId==id&&candidate->segmentId==curve.segmentId){
+                        MouseClick(view,p,Qt::ControlModifier);
+                        pressed=true;break;
+                    }
+                    view.CycleCandidate(false);
+                }
+                if(pressed)break;
+            }
+            if(!Explain("3Dビューの曲線をCtrlクリックで選び足せる",pressed))return false;
         }
+        if(!Explain("3Dの4回のクリックは4ワイヤーの部分区間を選ぶ",view.Selection().entityIds==selection.entityIds
+            &&view.Selection().ordered.size()==4&&std::all_of(view.Selection().ordered.begin(),view.Selection().ordered.end(),
+                [](const auto& ref){return ref.segmentId.has_value();})))return false;
+        QApplication::processEvents();
+        const auto& partialPlan=window.LoopFacesTool().Plan();
+        if(partialPlan)Note(partialPlan->summaryJa.c_str());
+        if(!Explain("4部分区間を選んだだけでは窓枠の帯にならず、原本を変えない",partialPlan
+            &&partialPlan->summaryJa.find("穴 1個")==std::string::npos&&originalsPreserved()))return false;
+        auto* whole=window.findChild<QPushButton*>("loopFacesWholeWires");
+        if(!Explain("選択した区間数とワイヤー全体を使うボタンが右棚に見える",whole&&whole->isVisible()
+            &&whole->isEnabled()&&window.LoopFacesTool().Dock()->SelectionTextJa().contains(QStringLiteral("4区間"))))return false;
+        const auto output=qEnvironmentVariable("KACHACAD_SURFACE_TEST_OUTPUT");
+        if(!output.isEmpty())window.grab().save(output+"-partial-selection.png");
+        MouseClick(*whole,whole->rect().center(),Qt::NoModifier);
+        QApplication::processEvents();
+        if(!Explain("1回のボタン操作で指定4本の全32区間を使い原本は不変",view.Selection().entityIds==selection.entityIds
+            &&app::SelectedCurves(view.Selection(),window.Session().Scene()).size()==32&&originalsPreserved()
+            &&!whole->isVisible()))return false;
+        if(!output.isEmpty())window.grab().save(output+"-whole-selection.png");
+    }else{
+        auto* tree=window.EntityTree();if(!tree)return false;
+        for(std::size_t i=0;i<selection.entityIds.size();++i){
+            auto* item=tree->FindKey("entity:"+QString::fromStdString(selection.entityIds[i].ToString()));
+            if(!item)return false;
+            for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
+            tree->scrollToItem(item);QApplication::processEvents();
+            MouseClick(*tree->viewport(),tree->visualItemRect(item).center(),i?Qt::ControlModifier:Qt::NoModifier);
+        }
+        if(!Explain("左ペインのCtrlクリックから指定した入力だけを選べる",window.Viewport().Selection().entityIds==selection.entityIds))return false;
     }
-    if(!Explain("左ペインのCtrlクリックから指定した入力だけを選べる",window.Viewport().Selection().entityIds==selection.entityIds))return false;
     QApplication::processEvents(); // Let the queued preview run after the final mouse release.
     const auto& plan=window.LoopFacesTool().Plan();
     if(plan)Note(plan->summaryJa.c_str());
@@ -215,13 +262,56 @@ bool CaseLoopFacesOpenInner(V2MainWindow& window)
     return Explain("修復後は元の3ワイヤを残して穴付き面を確定する",CountOfKind(window,EntityKind::GuideSurface)==1
         &&CountOfKind(window,EntityKind::Wire)==3);
 }
+
+bool CaseLoopFacesWholeWires(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    std::vector<EntityId> wires;
+    for(double x:{0.,3.,30.}){
+        const double size=x==3?4:10;
+        const double y=x==3?3:0;
+        const auto wire=w.Session().AddWire({line({x,y,0},{x+size,y,0}),line({x+size,y,0},{x+size,y+size,0}),
+            line({x+size,y+size,0},{x,y+size,0}),line({x,y+size,0},{x,y,0})},true,"選択範囲の試験");
+        if(!wire.committed)return false;wires.push_back(wire.createdEntityIds.front());
+    }
+    if(!w.SaveAndReopen("whole-wire-selection.kcd2"))return false;
+    app::SelectionSet selected;selected.entityIds={wires[0],wires[1]};
+    for(auto id:selected.entityIds)for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==id){
+        app::SelectionRef ref;ref.entityId=id;ref.kind=app::SelectionElementKind::Edge;ref.segmentId=curve.segmentId;
+        selected.ordered.push_back(ref);break;
+    }
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");QApplication::processEvents();
+    auto* dock=w.LoopFacesTool().Dock();const auto revision=w.Session().GetDocument().Revision();
+    const double tolerance=dock->JoinToleranceValue();
+    if(!Explain("部分区間の入力を黙って全体にしない",app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==2
+        &&dock->SelectionTextJa().contains(QStringLiteral("2区間"))))return false;
+    if(!Explain("棚から選んだ2本だけを全体へ広げる",dock->ClickWholeWires()
+        &&w.Viewport().Selection().entityIds==selected.entityIds
+        &&app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==8
+        &&!app::IsSelected(w.Viewport().Selection(),wires[2])&&w.Session().GetDocument().Revision()==revision
+        &&dock->JoinToleranceValue()==tolerance&&!dock->ClickWholeWires()))return false;
+    QApplication::processEvents();
+    if(!Explain("全体へ切り替えると1つの穴を持つ1枚の面を下見する",w.LoopFacesTool().Plan()
+        &&w.LoopFacesTool().Plan()->faces.size()==1&&w.Viewport().ToolPreviewFaceCount()>0
+        &&dock->SummaryTextJa().contains(QStringLiteral("穴 1個"))))return false;
+    w.HandleToolKey(Qt::Key_Escape,nullptr);w.RunCommand("draw.line");w.RunCommand("surface.from_lines");
+    w.Viewport().SetSelection(selected);QApplication::processEvents();
+    if(!Explain("取消して他の道具を経由しても部分選択と全体ボタンへ戻れる",app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==2
+        &&dock->ClickWholeWires()))return false;
+    w.HandleToolKey(Qt::Key_Escape,nullptr);
+    return Explain("選択範囲の変更と取消で形状や履歴を変えない",w.Session().GetDocument().Revision()==revision
+        &&CountOfKind(w,EntityKind::GuideSurface)==0);
+}
 } // namespace
 std::vector<SelfTestCase> LoopFacesHrubberCases()
 {
     std::vector<SelfTestCase> cases{{"HP-LF-OPEN-INNER 閉じていない窓を別の閉輪で埋めない",CaseLoopFacesOpenInner}};
+    cases.push_back({"HP-LF-WHOLE-WIRES 部分区間から明示的に選択ワイヤー全体へ切り替える",CaseLoopFacesWholeWires});
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE")){
         cases.push_back({"HP-LF-115-HRUBBER パノラマ窓の投影継ぎ目を補正して面にする",[](V2MainWindow& w){return CaseLoopFacesPanoramaHrubber(w);}});
         cases.push_back({"HP-LF-115-HRUBBER-COMPOUND 同じ内外周を1ワイヤで選び穴付きの帯と立体にする",[](V2MainWindow& w){return CaseLoopFacesPanoramaHrubber(w,true);}});
+        cases.push_back({"HP-LF-115-HRUBBER-VIEW 3DのCtrlクリックから穴付きの帯と立体にする",[](V2MainWindow& w){return CaseLoopFacesPanoramaHrubber(w,false,true);}});
     }
     return cases;
 }

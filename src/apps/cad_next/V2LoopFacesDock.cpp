@@ -121,6 +121,13 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
 
     auto* help=new QLabel(QStringLiteral("外周と窓の輪郭を選んでください。閉じた内周は穴、外周に接する窓は切り欠きとして残します。"),body);
     help->setWordWrap(true);layout->addWidget(help);
+    selection_=new QLabel(body);selection_->setObjectName("loopFacesSelection");
+    selection_->setWordWrap(true);layout->addWidget(selection_);
+    wholeWires_=new QPushButton(QStringLiteral("選んだワイヤー全体を使う"),body);
+    wholeWires_->setObjectName("loopFacesWholeWires");
+    wholeWires_->setToolTip(QStringLiteral("3Dで選んだ線が属するワイヤーの全区間を面作成に使います。元の線の形は変更しません。"));
+    layout->addWidget(wholeWires_);wholeWires_->hide();
+    QObject::connect(wholeWires_,&QPushButton::clicked,this,[this]{if(wholeWiresHandler_)wholeWiresHandler_();});
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作る面")));
     auto* facesContainer = new QWidget(body);
     facesLayout_ = new QVBoxLayout(facesContainer);
@@ -381,6 +388,10 @@ void V2LoopFacesDock::ShowView(const V2LoopFacesView& view)
     RebuildFaceRows(view.faces);
     RebuildGapSection(view);
     summary_->setText(view.summaryJa);
+    selection_->setText(view.selectionJa);
+    selection_->setVisible(!view.selectionJa.isEmpty());
+    wholeWires_->setVisible(view.canUseWholeWires);
+    wholeWires_->setEnabled(view.canUseWholeWires);
     int first=-1;bool different=false;
     for(const auto& face:view.faces)if(face.make && face.styleIndex>=0) {
         if(first<0)first=face.styleIndex;else different=different || first!=face.styleIndex;
@@ -415,6 +426,21 @@ void V2LoopFacesDock::SetActionHandlers(std::function<void()> confirm, std::func
 {
     confirmHandler_ = std::move(confirm);
     cancelHandler_ = std::move(cancel);
+}
+
+void V2LoopFacesDock::SetWholeWiresHandler(std::function<void()> handler)
+{
+    wholeWiresHandler_=std::move(handler);
+}
+
+bool V2LoopFacesDock::ClickWholeWires()
+{
+    return ClickIfUsable(wholeWires_);
+}
+
+QString V2LoopFacesDock::SelectionTextJa() const
+{
+    return selection_->text();
 }
 
 bool V2LoopFacesDock::ClickConfirm()

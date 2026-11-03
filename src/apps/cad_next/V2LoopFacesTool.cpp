@@ -126,6 +126,7 @@ V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
         }
     });
     dock_->SetReopenHandler([this] { (void)ReopenRecent(); });
+    dock_->SetWholeWiresHandler([this]{UseWholeWires();});
     dock_->SetActionHandlers([this] { (void)Confirm(); },
         [this] {
             Clear(true);
@@ -202,6 +203,19 @@ void V2LoopFacesTool::HandleSelectionChanged()
     }
     ShowPreview();
     window_.RefreshRightShelves();
+}
+
+void V2LoopFacesTool::UseWholeWires()
+{
+    if(!Active()||updating_)return;
+    auto selected=inputSelection_;
+    // Explicit action only: partial edges must never silently widen on replan.
+    for(const auto& wire:selections_){
+        std::erase_if(selected.ordered,[&](const auto& ref){return ref.entityId==wire.sourceWireId;});
+        kachakacha::v2::app::SelectionRef whole;whole.entityId=wire.sourceWireId;
+        selected.ordered.push_back(whole);
+    }
+    window_.viewport_->SetSelection(std::move(selected));
 }
 
 kachakacha::v2::geometry::GeometryTolerance V2LoopFacesTool::ToleranceNow() const
@@ -505,6 +519,19 @@ void V2LoopFacesTool::ShowPreview()
 void V2LoopFacesTool::ShowDock()
 {
     V2LoopFacesView view;
+    int partialWires=0,segments=0;
+    for(const auto& wire:selections_){
+        segments+=static_cast<int>(wire.segments.size());
+        const bool partial=std::any_of(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),[&](const auto& ref){
+            return ref.entityId==wire.sourceWireId&&ref.segmentId.has_value();});
+        const bool whole=std::any_of(inputSelection_.ordered.begin(),inputSelection_.ordered.end(),[&](const auto& ref){
+            return ref.entityId==wire.sourceWireId&&ref.kind==kachakacha::v2::app::SelectionElementKind::Object;});
+        if(partial&&!whole)++partialWires;
+    }
+    view.canUseWholeWires=partialWires>0;
+    view.selectionJa=QStringLiteral("入力: ワイヤー%1本・%2区間").arg(selections_.size()).arg(segments);
+    if(partialWires) view.selectionJa+=QStringLiteral("\n%1本は区間を指定して使用中です。選んでいない区間は含みません。輪郭全体が必要なら下のボタンを押してください。").arg(partialWires);
+    else view.selectionJa+=QStringLiteral("（全体を使用）");
     for (std::size_t at = 0; at < plan_->faces.size(); ++at) {
         const LoopFace& face = plan_->faces[at];
         V2LoopFaceRow row;

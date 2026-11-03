@@ -912,3 +912,16 @@ WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入�
 `material-six-flat`: ![6窓を保つ近似と生成の実Qt操作画面](images/v2-material-six-flat.png)
 
 `material-six-solid`: ![6窓を保つ近似と生成の実Qt操作画面](images/v2-material-six-solid.png)
+
+## 2026-11-03 3Dで選んだ窓枠を全体の輪郭として使う
+
+3DビューのCtrl＋クリックは直線・曲線の区間を選びます。複合ワイヤー全体が必要な場合は、
+「面にする」の右側に表示する入力区間数を確認し「選んだワイヤー全体を使う」を押します。
+部分区間だけで作る場合は押さずに選び足します。別ワイヤー・元形状・許容差は変更しません。
+[手順と注意点](panorama-window-holes.html)。以下は添付115投影のコピーを使ったQtマウス入力試験の画面です。
+
+`115-hrubber-partial-1103`: ![4回のCtrlクリックは4区間の選択](images/v2-115-hrubber-partial-1103.png)
+
+`115-hrubber-whole-1103`: ![ボタンで同じ4本の32区間を使用](images/v2-115-hrubber-whole-1103.png)
+
+`115-hrubber-solid-1103`: ![窓を空けた0.1mm厚のHゴム部品](images/v2-115-hrubber-solid-1103.png)

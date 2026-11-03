@@ -65,6 +65,7 @@ public:
     [[nodiscard]] bool CycleContinuity(std::size_t face, std::size_t edge);
 
 private:
+    void UseWholeWires();
     void ApplyStyle(int face,int style,bool all);
     [[nodiscard]] bool Replan();
     [[nodiscard]] bool TryNetworkPlan();

@@ -56,6 +56,8 @@ struct V2LoopGapRow {
 };
 
 struct V2LoopFacesView {
+    QString selectionJa;
+    bool canUseWholeWires = false;
     std::vector<V2LoopFaceRow> faces;
     std::vector<V2LoopGapRow> gaps;
     std::vector<QString> splitsJa;   //!< T 字の一文(1 行ずつ)
@@ -92,10 +94,13 @@ public:
     //! 辺の連続の欄を押した(G0 → G1 → G2 → G0 と回す)。
     void SetContinuityHandler(std::function<void(int face, int edge)> handler);
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel);
+    void SetWholeWiresHandler(std::function<void()> handler);
 
     //! 見えていて押せるものを実際に押す(自己試験用)。
     [[nodiscard]] bool ClickConfirm();
     [[nodiscard]] bool ClickCancel();
+    [[nodiscard]] bool ClickWholeWires();
+    [[nodiscard]] QString SelectionTextJa() const;
     [[nodiscard]] bool ClickCloseGap(int gap);
     [[nodiscard]] bool ClickLeaveGap(int gap);
     [[nodiscard]] bool ChooseMethod(int face, int methodIndex);
@@ -154,6 +159,8 @@ private:
     QVBoxLayout* gapsLayout_ = nullptr;
     QDoubleSpinBox* tolerance_ = nullptr;
     QLabel* summary_ = nullptr;
+    QLabel* selection_ = nullptr;
+    QPushButton* wholeWires_ = nullptr;
     QPushButton* cancel_ = nullptr;
     QPushButton* confirm_ = nullptr;
     bool loading_ = false;
@@ -175,4 +182,5 @@ private:
     std::function<void(double)> toleranceHandler_;
     std::function<void()> confirmHandler_;
     std::function<void()> cancelHandler_;
+    std::function<void()> wholeWiresHandler_;
 };

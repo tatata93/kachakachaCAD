@@ -303,8 +303,17 @@ void CollectFaceKeys(BRepPrimAPI_MakePrism& prism, const TopoDS_Shape& profileFa
     }
 
     // 側面。輪郭の線1本につき1枚。
-    const auto addSides = [&](std::size_t profileIndex) {
+    // ProfileFace inserts the outer wire first, followed by its hole wires.
+    // Preserve that construction provenance across the common translation.
+    std::vector<base::SegmentId> sourceIds;
+    const auto appendIds = [&](std::size_t profileIndex) {
         const modeling::ExtrudeProfile& profile = request.profiles[profileIndex];
+        for(std::size_t i=0;i<profile.segments.size();++i)
+            sourceIds.push_back(i<profile.segmentIds.size()?profile.segmentIds[i]:base::SegmentId{});
+    };
+    appendIds(loop.profileIndex);
+    for(const auto hole:loop.holes)appendIds(hole);
+    const auto addSides = [&]() {
         std::size_t segmentIndex = 0;
         for (TopExp_Explorer explorer(profileFace, TopAbs_EDGE); explorer.More();
             explorer.Next()) {
@@ -320,15 +329,15 @@ void CollectFaceKeys(BRepPrimAPI_MakePrism& prism, const TopoDS_Shape& profileFa
                 continue;
             }
             base::SegmentId id;
-            if (segmentIndex < profile.segmentIds.size()) {
-                id = profile.segmentIds[segmentIndex];
+            if (segmentIndex < sourceIds.size()) {
+                id = sourceIds[segmentIndex];
             }
             out.faces.push_back(generated);
             out.keys.push_back(modeling::MakeExtrudeSide(id).ToString());
             ++segmentIndex;
         }
     };
-    addSides(loop.profileIndex);
+    addSides();
 }
 
 } // namespace
@@ -565,18 +574,15 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
             for (const TopoDS_Face& face : profileFaces) {
                 const TopoDS_Shape moved =
                     MovedAlong(face, analysis.direction, analysis.endOffsetMm);
-                const TopoDS_Wire outer = BRepTools::OuterWire(TopoDS::Face(moved));
-                if (outer.IsNull()) {
-                    continue;
+                for(TopExp_Explorer wire(moved,TopAbs_WIRE);wire.More();wire.Next()) {
+                    auto segments = FromWire(TopoDS::Wire(wire.Current()), tolerance.modelLinearMm);
+                    if (!segments.HasValue()) {
+                        warnings.push_back(MakeWarning("KER-E100",
+                            "押し出し先の輪郭を、曲線の種類を保ったまま取り出せませんでした。", {}));
+                        continue;
+                    }
+                    built.endProfileWires.push_back(segments.Value());
                 }
-                auto segments = FromWire(outer, tolerance.modelLinearMm);
-                if (!segments.HasValue()) {
-                    warnings.push_back(MakeWarning("KER-E100",
-                        "押し出し先の輪郭を、曲線の種類を保ったまま取り出せませんでした。",
-                        {}));
-                    continue;
-                }
-                built.endProfileWires.push_back(segments.Value());
             }
         }
         if (request.outputs.sideBoundaryWires) {

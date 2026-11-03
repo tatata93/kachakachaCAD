@@ -55,4 +55,9 @@ struct BooleanBuildResult {
     modeling::KernelShapeHandle first, const std::vector<modeling::KernelShapeHandle>& tools,
     double toleranceMm);
 
+//! Individual connected solids ordered by geometric bounds. Caller owns all
+//! returned handles; the checked Boolean result is left unchanged.
+[[nodiscard]] base::Result<std::vector<modeling::KernelShapeHandle>> BooleanSolidComponents(
+    modeling::KernelShapeHandle result);
+
 } // namespace kachakacha::v2::kernel

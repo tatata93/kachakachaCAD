@@ -96,6 +96,50 @@ KACHA_V2_TEST(kernel_boolean_absent, カーネルが無い版は足し引きせ�
 
 #else
 
+KACHA_V2_TEST(kernel_boolean, disconnected_addition_is_refused_without_leaking_or_touching_inputs)
+{
+    using namespace kachakacha::v2;
+    const auto a=Box(0,0,10,10,0,10),apart=Box(20,0,30,10,0,10),overlap=Box(5,0,15,10,0,10);
+    const auto before=kernel::CachedShapeCount();
+    const auto separated=BuildBoolean(BooleanOperation::Union,a,apart,1e-6);
+    Require(!separated.HasValue(),"one part cannot contain two disconnected solids");
+    const auto batch=kernel::BuildBooleans(BooleanOperation::Union,a,{overlap,apart},1e-6);
+    Require(!batch.HasValue(),"batch addition also requires one connected solid");
+    Require(kernel::CachedShapeCount()==before,"refused previews release intermediate shapes");
+    const auto retry=BuildBoolean(BooleanOperation::Union,a,overlap,1e-6);
+    Require(retry.HasValue(),retry.FirstSummaryJa());
+    kernel::ReleaseShape(retry.Value().handle);kernel::ReleaseShape(a);kernel::ReleaseShape(apart);kernel::ReleaseShape(overlap);
+}
+
+KACHA_V2_TEST(kernel_boolean, redundant_cut_and_common_tools_do_not_cancel_a_useful_batch)
+{
+    using namespace kachakacha::v2;
+    const auto a=Box(0,0,10,10,0,10),apart=Box(20,0,30,10,0,10),cut=Box(5,-1,11,11,-1,12),around=Box(-1,-1,11,11,-1,12);
+    for(const bool reverse:{false,true}) {
+        const auto difference=kernel::BuildBooleans(BooleanOperation::Difference,a,reverse?std::vector{cut,apart}:std::vector{apart,cut},1e-6);
+        Require(difference.HasValue(),difference.FirstSummaryJa());RequireNear(difference.Value().volumeMm3,500,1e-6,"one useful cutter removes half");
+        const auto common=kernel::BuildBooleans(BooleanOperation::Intersection,a,reverse?std::vector{cut,around}:std::vector{around,cut},1e-6);
+        Require(common.HasValue(),common.FirstSummaryJa());RequireNear(common.Value().volumeMm3,500,1e-6,"one enclosing tool does not cancel useful common");
+        kernel::ReleaseShape(difference.Value().handle);kernel::ReleaseShape(common.Value().handle);
+    }
+    const auto unchanged=kernel::BuildBooleans(BooleanOperation::Difference,a,{apart,apart},1e-6);
+    Require(!unchanged.HasValue()&&FirstCode(unchanged.Diagnostics())=="KER-B003","whole no-change still explained");
+    kernel::ReleaseShape(a);kernel::ReleaseShape(apart);kernel::ReleaseShape(cut);kernel::ReleaseShape(around);
+}
+
+KACHA_V2_TEST(kernel_boolean, separating_cut_produces_stable_individual_solids)
+{
+    using namespace kachakacha::v2;
+    const auto a=Box(0,0,10,10,0,10),tool=Box(4,-1,6,11,-1,12);
+    const auto cut=BuildBoolean(BooleanOperation::Difference,a,tool,1e-6);Require(cut.HasValue(),cut.FirstSummaryJa());
+    const auto parts=kernel::BooleanSolidComponents(cut.Value().handle);Require(parts.HasValue()&&parts.Value().size()==2,"two separate part results");
+    for(const auto part:parts.Value()) {
+        const auto volume=kernel::ShapeVolume(part);Require(volume.HasValue(),"each solid can be measured");
+        RequireNear(volume.Value(),400,1e-6,"each remaining half is four hundred");kernel::ReleaseShape(part);
+    }
+    kernel::ReleaseShape(cut.Value().handle);kernel::ReleaseShape(a);kernel::ReleaseShape(tool);
+}
+
 KACHA_V2_TEST(kernel_boolean, batch_union_matches_ordered_union_and_preserves_inputs)
 {
     using kachakacha::v2::kernel::BuildBooleans;

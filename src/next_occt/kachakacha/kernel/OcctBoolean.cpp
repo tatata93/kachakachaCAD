@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <string>
+#include <array>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
@@ -19,6 +20,9 @@
 #include <Standard_Failure.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
+#include <TopExp_Explorer.hxx>
 
 #endif
 
@@ -90,7 +94,43 @@ TopoDS_Shape NonDestructiveOperation(const TopoDS_Shape& base,const TopoDS_Shape
         "土台からはみ出る部分がある相手を選んでください。");
 }
 
+[[nodiscard]] bool ConnectedUnion(const TopoDS_Shape& shape)
+{
+    std::size_t count=0;for(TopExp_Explorer e(shape,TopAbs_SOLID);e.More();e.Next())++count;
+    return count==1;
+}
+
+[[nodiscard]] base::Diagnostic DisconnectedAddition()
+{
+    return MakeError(kBooleanFailed,"足した結果が一つにつながらないため、変更しませんでした。",
+        "接合する面どうしを重ねるか接する位置へ移してください。別部品として残す場合は足す操作は不要です。");
+}
+
 } // namespace
+
+Result<std::vector<KernelShapeHandle>> BooleanSolidComponents(KernelShapeHandle result)
+{
+    using Out=Result<std::vector<KernelShapeHandle>>;
+    TopoDS_Shape source;
+    if(!LookupShape(result,source))return Out::Failure(MakeError(kBooleanTargetMissing,"結果の立体がありません。",{}));
+    try {
+        std::vector<std::pair<std::array<double,6>,TopoDS_Shape>> solids;
+        for(TopExp_Explorer e(source,TopAbs_SOLID);e.More();e.Next()) {
+            Bnd_Box box;BRepBndLib::AddOptimal(e.Current(),box,false,false);
+            std::array<double,6> bounds{};box.Get(bounds[0],bounds[1],bounds[2],bounds[3],bounds[4],bounds[5]);
+            solids.emplace_back(bounds,e.Current());
+        }
+        if(solids.empty())return Out::Failure(MakeError(kBooleanFailed,"結果に閉じた立体がありません。",{}));
+        std::stable_sort(solids.begin(),solids.end(),[](const auto& a,const auto& b){return a.first<b.first;});
+        std::vector<KernelShapeHandle> handles;handles.reserve(solids.size());
+        for(const auto& solid:solids)handles.push_back(StoreShape(solid.second));
+        return Out::Success(std::move(handles));
+    } catch(const Standard_Failure& error) {
+        return Out::Failure(MakeError(kBooleanFailed,"結果の立体を分けられませんでした。",error.what()));
+    } catch(const std::exception& error) {
+        return Out::Failure(MakeError(kBooleanFailed,"結果の立体を分けられませんでした。",error.what()));
+    }
+}
 
 Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     KernelShapeHandle first, KernelShapeHandle second, double toleranceMm)
@@ -138,6 +178,8 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
             // 引き切った・重ならないものを交差させた。消えた部品を持ち続けない。
             return Out::Failure(NothingLeft(operation));
         }
+        if(operation==BooleanOperation::Union&&!ConnectedUnion(made))
+            return Out::Failure(DisconnectedAddition());
         const double scale = before > 0.0 ? before : 1.0;
         if (std::abs(after - before) / scale <= 1.0e-9) {
             // 何も変わらないのに「足しました」と言うのが V1 の悪癖だった。
@@ -180,12 +222,17 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         BooleanBuildResult result;
         for (const auto tool : tools) {
             const auto next = BuildBoolean(operation, current, tool, toleranceMm);
+            if (!next.HasValue()) {
+                if(next.Diagnostics().size()==1&&next.Diagnostics().front().code==kBooleanNoChange)continue;
+                if(current.value!=first.value)ReleaseShape(current);
+                return next;
+            }
             if (current.value != first.value) ReleaseShape(current);
-            if (!next.HasValue()) return next;
             result = next.Value();
             if (before < 0) before = result.previousVolumeMm3;
             current = result.handle;
         }
+        if(before<0)return Out::Failure(NoChange(operation));
         result.previousVolumeMm3 = before;
         return Out::Success(result);
     }
@@ -213,6 +260,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         fuse.Build();
         if (!fuse.IsDone()) return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", {}));
         fuse.SimplifyResult(true, true);
+        if(!ConnectedUnion(fuse.Shape()))return Out::Failure(DisconnectedAddition());
         const double after = VolumeOf(fuse.Shape());
         const double epsilon = std::max(std::pow(std::max(toleranceMm, 1e-6), 3.0), largest * 1e-7);
         if (!std::isfinite(after) || after < largest - epsilon || after > sum + epsilon)
@@ -235,6 +283,12 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
 }
 
 #else
+
+Result<std::vector<KernelShapeHandle>> BooleanSolidComponents(KernelShapeHandle)
+{
+    return Result<std::vector<KernelShapeHandle>>::Failure(MakeError(kBooleanUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。",{}));
+}
 
 Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
     KernelShapeHandle first, KernelShapeHandle second, double toleranceMm)

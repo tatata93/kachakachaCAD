@@ -6,6 +6,15 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/kernel/OcctExtrude.h"
+#include "kachakacha/modeling/SubshapeKey.h"
+#include "kachakacha/base/Ids.h"
+#include <set>
+#include <map>
+#include "kachakacha/geometry/WireEdit.h"
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include <TopExp_Explorer.hxx>
+#endif
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
@@ -239,6 +248,46 @@ KACHA_V2_TEST(kernel_extrude, 貫通穴の分だけ体積が減る)
     RequireNear(built.Value().totalVolumeMm3, (800.0 - kPi * 25.0) * 30.0, 1.0e-6,
         "体積");
     RequireEqual(std::to_string(built.Value().totalFaceCount), "7", "面の数");
+}
+
+KACHA_V2_TEST(kernel_extrude, multiple_joint_holes_keep_unique_side_origins_and_end_wires)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids(1104);
+    for(const bool reversed:{false,true})for(const auto extent:{ExtrudeExtentMode::Distance,ExtrudeExtentMode::SymmetricDistance,ExtrudeExtentMode::TwoDistances}) {
+        auto request=BasicRequest();request.extent=extent;request.secondDistanceMm=5;
+        request.outputs.endProfileWire=true;
+        request.profiles={Rectangle(0,0,40,20),Circle({10,10,0},2),Circle({30,10,0},3)};
+        std::set<std::string> wanted;
+        std::map<std::string,Vector3> probes;
+        if(reversed)for(auto& profile:request.profiles) {
+            std::reverse(profile.segments.begin(),profile.segments.end());
+            for(auto& segment:profile.segments)segment=geometry::ReverseCurve(segment).Value();
+        }
+        for(auto& profile:request.profiles)for(std::size_t i=0;i<profile.segments.size();++i) {
+            const auto id=ids.NextTyped<base::IdKind::Segment>();profile.segmentIds.push_back(id);
+            wanted.insert(modeling::MakeExtrudeSide(id).ToString());
+            probes.emplace(modeling::MakeExtrudeSide(id).ToString(),profile.segments[i].Evaluate(.5)+Vector3{0,0,1});
+        }
+        const auto built=Build(request);Require(built.HasValue(),built.FirstSummaryJa());
+        const auto& keys=built.Value().parts.front().faceKeys;std::set<std::string> seen;
+        for(const auto& key:keys)if(key.starts_with("extrude/side/")) {
+            Require(wanted.contains(key),"every hole/outer wall refers to its actual nonnil source segment");
+            Require(seen.insert(key).second,"distinct source walls have distinct keys");
+        }
+        Require(seen==wanted,"all six source edge keys survive extrusion");
+        TopoDS_Shape native;Require(kernel::LookupShape(built.Value().parts.front().handle,native),"native walls available");
+        std::size_t faceIndex=0;
+        for(TopExp_Explorer e(native,TopAbs_FACE);e.More();e.Next(),++faceIndex) {
+            const auto probe=probes.find(keys[faceIndex]);if(probe==probes.end())continue;
+            const auto face=kernel::StoreShape(e.Current());const auto gap=kernel::DistanceToShapeSurface(face,probe->second);
+            Require(gap.HasValue()&&gap.Value()<1e-6,"the side key identifies the actual wall of that source edge");kernel::ReleaseShape(face);
+        }
+        Require(built.Value().endProfileWires.size()==3,"end wires include the outer boundary and both holes");
+        const auto again=Build(request);Require(again.HasValue(),again.FirstSummaryJa());
+        Require(again.Value().parts.front().faceKeys==keys,"rebuild keeps exact semantic keys");
+        kernel::ReleaseShape(built.Value().parts.front().handle);kernel::ReleaseShape(again.Value().parts.front().handle);
+    }
 }
 
 KACHA_V2_TEST(kernel_extrude, 角丸の断面でも体積が合う)

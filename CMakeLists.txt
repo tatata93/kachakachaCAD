@@ -1475,7 +1475,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         add_test(
             NAME v2_cad_next_smoke
             COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
-                --name v2_cad_next_smoke -- $<TARGET_FILE:kachakacha_cad_next> --self-test --self-test-all
+                --name v2_cad_next_smoke --ui-suite direct -- $<TARGET_FILE:kachakacha_cad_next> --self-test --self-test-all
         )
         if(WIN32)
             add_test(NAME v2_desktop_startup
@@ -1485,13 +1485,12 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             set_tests_properties(v2_desktop_startup PROPERTIES
                 RESOURCE_LOCK cad_gui_package TIMEOUT 90)
         endif()
-        # 自己試験は増える一方である(2026-09-14 で 225 件、PC で約 200 秒)。
-        # 120 秒のままだと、落ちてもいないのに時間切れで赤くなる。
-        # 増えるたびに直すのではなく、余裕を持たせておく。
+        # 全件は同じ1プロセス・同じ順序。各ケースの進捗停止はwrapperが180秒で失敗にする。
+        # 657件で900秒を超えるため、全件の総上限と個々の停止判定を分ける。
         set_tests_properties(v2_cad_next_smoke PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
             RESOURCE_LOCK cad_gui_package
-            TIMEOUT 900
+            TIMEOUT 1800
         )
 
         # 配る形そのものを試す(WP-12)。
@@ -1503,7 +1502,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             add_test(
                 NAME v2_package_zip
                 COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/verification/isolated_test.py"
-                    --name v2_package_zip -- powershell -NoProfile -ExecutionPolicy Bypass
+                    --name v2_package_zip --ui-suite package -- powershell -NoProfile -ExecutionPolicy Bypass
                     -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package-v2.ps1"
                     -BuildDir "$<SHELL_PATH:${CMAKE_BINARY_DIR}>"
                     -Config "$<CONFIG>"
@@ -1514,7 +1513,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
                 SKIP_RETURN_CODE 77
                 RESOURCE_LOCK cad_gui_package
                 RUN_SERIAL TRUE
-                TIMEOUT 900
+                TIMEOUT 1800
             )
         endif()
     endif()

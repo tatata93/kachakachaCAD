@@ -10,7 +10,7 @@
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 完了(`codex/v2-wp01-build-scaffold`、v2_foundation_tests 22件) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 完了(`codex/v2-wp01-build-scaffold`、v2_document_tests 21件) | WP-02 | Document、Feature DAG、Command、Undo |
-| WP-04 | 完了(曲線・数式・鎖・編集・交差・標本化。v2_curve/expression/wire_chain/wire_edit/curve_join/curve_sampling 各試験) | WP-02 | Curve/Wire/Chain、編集、数式 |
+| WP-04 | 進行中(Codex、2026-11-04。汎用形状監査の段階1: 厳密接続した短辺の隙間誤認と回帰試験に限定) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(v2_guide_surface / v2_kernel_surface。7つの作り方、偏差を測って断る) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 完了(v2_extrude / v2_kernel_extrude / v2_wire_cage / v2_kernel_wire_cage。意味的Subshapeキー) | WP-06 | Part作成、押し出し、Boolean、Subshape |

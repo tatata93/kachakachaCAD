@@ -1,0 +1,19 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>面作成の案内と線の見やすさの改善</title><style>body{max-width:1100px;margin:32px auto;padding:0 24px;font:17px/1.8 "Yu Gothic UI",sans-serif;color:#22303d}img{width:100%;border:1px solid #a9bac7}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #a9bac7;text-align:left}code{overflow-wrap:anywhere}.note{padding:14px;background:#edf3f7}figcaption{color:#536475}</style></head><body>
+<h1>面作成の案内と線の見やすさの改善</h1><p>2026-11-04。固定の操作案内を一般的な輪郭の説明へ変更し、カーソル下の候補と選択済みの線を区別しやすくしました。</p>
+<p class="note"><a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261104">Windows配布版</a> ／ <a href="../../out/releases/hover-guidance-release-20261104/package/kachakacha_cad_next.exe">このPCの検証済みCAD</a>。製品ソース2fe8e3b8e。全体195試験、開発版・配布版のUI各658試験に成功し、配布版でも実Windowsの表示と添付モデルを確認しました。</p>
+<h2>面作成の固定案内</h2><p>「窓」など特定の作例に依存する表現をなくし、案内を次に変更しました。</p><blockquote>面を作る輪郭の線を選んでください。内側の輪郭は穴、面の境界に接する輪郭は切り欠きとして扱います。</blockquote>
+<p>関連する状態表示も同じ輪郭の説明へ揃えました。選択区間を勝手に全体へ広げる変更はしていません。「選んだワイヤー全体を使う」は、必要なときに押す明示操作のままです。</p>
+<figure><img src="hover-guidance-20261104/guidance.png" alt="添付モデルの線をCtrlクリックし全体切替した実CADの面作成画面"><figcaption>添付モデルで一般化した案内を表示。4本・32区間から、内側を空けた帯を下見しています。</figcaption></figure>
+<h2>候補と選択の表示</h2><table><tr><th>状態</th><th>表示</th></tr><tr><td>カーソル下の未選択線</td><td>青。通常の線より太く、白と濃色で縁取りします。</td></tr><tr><td>選択済みの線</td><td>オレンジ。候補より太く、同じ縁取りで背景から分けます。カーソルを重ねても選択色を保ちます。</td></tr><tr><td>役割を指定した入力線</td><td>中心の役割色を保ち、周囲の青・オレンジで候補と選択を示します。</td></tr></table>
+<p>旧表示は候補色が作業面の水色に近く、後で描く交差線に隠れる経路と、薄い表示が候補にも残る経路がありました。通常線、選択線、候補線の順に描き、候補を薄くする対象から除きました。非表示や選択範囲の判定は保持し、元の線・UUID・参照・保存処理・幾何計算は変更していません。</p>
+<figure><img src="hover-guidance-20261104/hover.png" alt="白背景で青い候補線が交差線より手前に明瞭に表示される実CAD画面"><figcaption>Windows 95テーマ。描画検査用の線を文書APIで準備した実CAD画面です。カーソルを重ねても選択は増えません。隣の区間は通常表示を保ちます。</figcaption></figure>
+<figure><img src="hover-guidance-20261104/hover-dark.png" alt="暗い背景でも青い候補線を縁取りして区別した実CAD画面"><figcaption>標準テーマでも同じ意味の色と縁取りを使います。明暗のある画像の上での画素検査も成功しています。</figcaption></figure>
+<h2>確認した操作</h2><table><tr><th>検査</th><th>結果</th></tr><tr><td>事前整合検査・全体</td><td>事前9件、CTest195件、skip 0。旧CAD自己試験と通常起動も成功。</td></tr><tr><td>開発版・配布ZIP内</td><td>それぞれ658件すべて成功。部分選択、削除、役割色、取消・道具切替などの既存検査を維持。</td></tr><tr><td>実Windowsの配布版</td><td>重点6件と、100・125・150・200%表示の候補線検査が成功。両テーマ、明暗の画像、交差線、役割色、選択済みの区間を確認。</td></tr><tr><td>添付115投影のコピー</td><td>3DビューのCtrlクリック→明示的な全体切替→1穴の面→0.1 mm厚み→Undo/Redo→保存再読込が成功。上下と側面に帯を残し、内側に材料がないことを検査。</td></tr></table>
+<figure><img src="hover-guidance-20261104/solid.png" alt="配布版で添付モデルから生成した0.1mm厚の穴付き帯"><figcaption>同じ配布版で作った0.1 mm厚の帯。原本を上書きせずコピーで試験しました。</figcaption></figure>
+<p>入力コピーは1,035,067 bytes、SHA256は<code>f472858638de8413d47da0395e41b7655ca08c55bf3cfc2f256acf86946b1dca</code>。全体証拠は<a href="../../out/verification/hover-guidance-release-20261104/result.json">result.json</a>、配布版のモデル操作は<a href="../../out/hover-guidance-20261104/packaged-final.json">packaged-final.json</a>です。公開ZIPのSHA256は<code>7142a6970a4921dd5dc4ef83adc76e8b2b99e3629dda1eb60e12fb096625d516</code>。GitHub側のタグとZIPのdigestも照合しました。</p>
+<h2>途中で検出した照合の誤検知</h2><p>独立した読み込みキャッシュで添付モデルを確認すると、保存後の原本比較だけが失敗しました。再読込・再計算・帯の形状は成功しており、差は既存曲線の方向ベクトル3数値、最大2.22×10⁻¹⁶でした。旧公開版でも同じ条件で失敗したため、今回の描画変更とは切り分けました。</p>
+<p>保存前の原本比較は完全一致を維持します。再読込後だけ、数値に4倍の機械イプシロン×max(1,絶対値)以内の丸めを許します。文字列・UUID・参照の一致、項目の有無、配列の順序と個数は厳密に照合し、実際の数値変更、UUID変更、配列の順序や個数の変更を拒否する負例も追加しました。製品の保存・読込・幾何コードは変えていません。失敗時の元/再読込JSONと旧公開版の失敗記録はout/hover-guidance-20261104に保持しています。</p>
+<p>最初の事前検査は検査開始後の点描画分離で入力が変わったため無効となり、次の全体入口では試験コードの明示ヘッダー不足を検出しました。いずれも成功扱いせず、修正を固定して全体を新規実行しました。試験の除外、時限や幾何許容差の拡大はしていません。</p>
+<p>担当は主担当1名。根拠は実CAD内のQtウィジェット・マウスイベント、画素検査、保存再読込です。更新した<a href="../manual/explorer-selection.html">選択操作の説明</a>と<a href="../manual/panorama-window-holes.html">輪郭から面と部品を作る手順</a>も参照できます。</p>
+</body></html>

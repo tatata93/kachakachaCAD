@@ -77,7 +77,7 @@ ViewportPalette ViewportPalette::Dark()
 ViewportPalette ViewportPalette::Win95()
 {
     // Windows 95 のアプリケーション作業領域は白。線は黒。
-    // 意味状態は16色から **色相の違う** ものを割り当てる。濃紺と青(旧 selected と
+    // 意味状態には色相の違う色を割り当てる。濃紺と青(旧 selected と
     // preview)のような明るさ違いは、白地では同じ色にしか見えなかった。
     ViewportPalette palette;
     palette.background = QColor(0xFF, 0xFF, 0xFF);
@@ -89,7 +89,7 @@ ViewportPalette ViewportPalette::Win95()
     palette.wire = QColor(0x00, 0x00, 0x00);
     palette.construction = QColor(0x80, 0x80, 0x80);
     palette.selected = QColor(0xFF, 0x78, 0x00);
-    palette.hover = QColor(0x00, 0x80, 0x80);
+    palette.hover = QColor(0x00, 0x5B, 0xD9);
     palette.preview = QColor(0x80, 0x00, 0x80);
     palette.point = QColor(0x00, 0x00, 0x00);
     palette.snap = QColor(0xC0, 0x00, 0x00);

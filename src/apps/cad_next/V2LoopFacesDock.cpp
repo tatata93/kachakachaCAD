@@ -120,7 +120,8 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    auto* help=new QLabel(QStringLiteral("外周と窓の輪郭を選んでください。閉じた内周は穴、外周に接する窓は切り欠きとして残します。"),body);
+    auto* help=new QLabel(QStringLiteral("面を作る輪郭の線を選んでください。内側の輪郭は穴、面の境界に接する輪郭は切り欠きとして扱います。"),body);
+    help->setObjectName("loopFacesHelp");
     help->setWordWrap(true);layout->addWidget(help);
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("作る面")));
     auto* facesContainer = new QWidget(body);

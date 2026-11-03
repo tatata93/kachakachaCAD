@@ -328,13 +328,16 @@ QPen SelectionStroke(const QColor& color,double width,double sourceWidth,Qt::Pen
     }
     return pen;
 }
-void DrawSelectionOutline(QPainter& painter,const QPainterPath& path,double width,
-    bool hasRole,const QColor& selected,Qt::PenStyle style)
+void DrawHighlightOutline(QPainter& painter,const QPainterPath& path,double width,
+    bool hasRole,const QColor& accent,Qt::PenStyle style)
 {
+    // White and dark rims separate the ink from light planes, dark faces and images.
+    painter.setPen(SelectionStroke(Qt::white,width+(hasRole?8.:4.),width,style));
+    painter.drawPath(path);
     painter.setPen(SelectionStroke(QColor(24,24,24),width+(hasRole?6.:2.),width,style));
     painter.drawPath(path);
     if(hasRole) {
-        painter.setPen(SelectionStroke(selected,width+4.,width,style));
+        painter.setPen(SelectionStroke(accent,width+4.,width,style));
         painter.drawPath(path);
     }
 }
@@ -378,10 +381,10 @@ double V2Viewport::SemanticWidthPx(kachakacha::v2::app::SemanticState state) con
         // 色だけでなく太さも変える。色が読めない画面でも、当たっている線が分かる。
         // ただし選択より必ず細くする。Hover は選択と違う軽い強調である(§3 規則1)。
         // 線の太さの設定がいくつでも、通常 < Hover < 選択 の順を崩さない。
-        return display_.wireWidthPx + 0.6;
+        return std::max(2.8, display_.wireWidthPx + 1.0);
     case SemanticState::Selected:
         // 細い線の設定でも選択は必ず太くする。太さが同じだと色だけが頼りになる。
-        return std::max(3.2, display_.wireWidthPx + 1.2);
+        return std::max(3.6, display_.wireWidthPx + 1.6);
     case SemanticState::Snap:
         return 1.8;
     case SemanticState::Preview:
@@ -411,6 +414,24 @@ kachakacha::v2::app::SemanticState V2Viewport::CurveStateOf(
         &&(hoveredSegmentId_.IsNil()||hoveredSegmentId_==segmentId)?SemanticState::Hover:SemanticState::Default;
 }
 
+void V2Viewport::DrawPoints(QPainter& painter) const
+{
+    for (const auto& point : session_->Scene().points) {
+        const auto screen = ToScreen(point.position);
+        if (!screen.has_value()) continue;
+        const SemanticState state = V2RenderSelectionOf(*this).Entity(point.entityId)?SemanticState::Selected
+            :(!hoveredEntityId_.IsNil()&&point.entityId==hoveredEntityId_?SemanticState::Hover:SemanticState::Default);
+        if (!EntityShown(point.entityId)) continue;
+        const bool plain = state == SemanticState::Default;
+        const QColor ink = plain ? palette_.point : SemanticColor(state);
+        const double half = plain ? 2.0 : 3.5;
+        painter.setPen(QPen(ink, 1.0));
+        painter.setBrush(ink);
+        painter.drawRect(QRectF(screen->x() - half, screen->y() - half, half * 2.0,
+            half * 2.0));
+    }
+}
+
 void V2Viewport::DrawDocument(QPainter& painter) const
 {
     const auto& scene = session_->Scene();
@@ -420,6 +441,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     std::unordered_set<kachakacha::v2::base::EntityId> meshed;
     if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);
     std::vector<const kachakacha::v2::modeling::SnapCurve*> selectedCurves;
+    std::vector<const kachakacha::v2::modeling::SnapCurve*> hoveredCurves;
     const auto drawCurve=[&](const auto& curve,SemanticState state) {
         if(sectionView_){const auto* e=session_->GetDocument().FindEntity(curve.entityId);
             if(e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface))return;}
@@ -443,7 +465,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
                                                    : SemanticColor(state);
         // 薄くするかどうかの判断は core にある(app/PlaneFocus)。
         // 掴めるかどうかと同じところから出さないと、薄いのに掴める、が起きる。
-        if (dimming && !entitySelected
+        if (plain && dimming && !entitySelected
             && !kachakacha::v2::app::CurveLiesOnPlane(curve.segment, workPlane_)) {
             color.setAlphaF(color.alphaF() * 0.24);
         }
@@ -462,8 +484,9 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             ? Qt::DashDotLine
             : PenStyleOf(curve.construction ? display_.constructionStyle : display_.wireStyle);
         painter.setBrush(Qt::NoBrush);
-        if(state==SemanticState::Selected&&!DeletionPreviewContains(curve.entityId))
-            DrawSelectionOutline(painter,path,width,role.has_value(),SemanticColor(state),style);
+        if((state==SemanticState::Selected||state==SemanticState::Hover)
+            &&!DeletionPreviewContains(curve.entityId))
+            DrawHighlightOutline(painter,path,width,role.has_value(),SemanticColor(state),style);
         painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.drawPath(path);
         if (entitySelected && bodyDrag_.active && bodyDrag_.gesture.IsDrag()) {
@@ -483,28 +506,12 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     for(const auto& curve:scene.curves) {
         const auto state=CurveStateOf(curve.entityId,curve.segmentId);
         if(state==SemanticState::Selected)selectedCurves.push_back(&curve);
+        else if(state==SemanticState::Hover)hoveredCurves.push_back(&curve);
         else drawCurve(curve,state);
     }
     for(const auto* curve:selectedCurves)drawCurve(*curve,SemanticState::Selected);
-    for (const auto& point : scene.points) {
-        const auto screen = ToScreen(point.position);
-        if (!screen.has_value()) continue;
-        const SemanticState state = V2RenderSelectionOf(*this).Entity(point.entityId)?SemanticState::Selected
-            :(!hoveredEntityId_.IsNil()&&point.entityId==hoveredEntityId_?SemanticState::Hover:SemanticState::Default);
-        if (!EntityShown(point.entityId)) {
-            continue;
-        }
-        // 点も状態で描き分ける。選んでも見た目が変わらないと、
-        // 押して選べたのかどうかが画面から読めない。
-        const bool plain = state == SemanticState::Default;
-        const QColor ink = plain ? palette_.point : SemanticColor(state);
-        // 大きさは画面上の px で決める(§3 規則6)。寄っても引いても見失わない。
-        const double half = plain ? 2.0 : 3.5;
-        painter.setPen(QPen(ink, 1.0));
-        painter.setBrush(ink);
-        painter.drawRect(QRectF(screen->x() - half, screen->y() - half, half * 2.0,
-            half * 2.0));
-    }
+    for(const auto* curve:hoveredCurves)drawCurve(*curve,SemanticState::Hover);
+    DrawPoints(painter);
     DrawControlPoints(painter);
     DrawFoldPreview(painter);
     DrawKeptDimensions(painter);

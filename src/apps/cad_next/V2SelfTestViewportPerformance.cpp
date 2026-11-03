@@ -258,6 +258,53 @@ bool SelectedWireContrast(V2MainWindow& window) {
     }
     return true;
 }
+bool HoverWireContrast(V2MainWindow& window) {
+    window.resize(1400,900);window.RunCommand("file.new");QApplication::processEvents();
+    auto& view=window.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetVisibleWidthMm(200);
+    const auto line=[](geometry::Vector3 a,geometry::Vector3 b){return geometry::CurveSegment::MakeLine(a,b).Value();};
+    if(!window.Session().AddWire({line({-40,0,0},{40,0,0}),line({40,0,0},{40,20,0})},false,"部分強調の対象").committed
+        ||!window.Session().AddWire({line({0,-25,0},{0,25,0})},false,"後から描く交差線").committed)return false;
+    window.SelectTool(modeling::DrawingTool::Select);
+    const auto curve=window.Session().Scene().curves.front();
+    auto display=view.DisplaySettingsNow();display.gridVisible=false;display.workPlaneVisible=false;
+    for(int i=0;i<3;++i)view.SetAxisVisible(i,false);
+    const auto revision=window.Session().GetDocument().Revision();
+    const auto hit=view.Mapping().Project({-20,0,0}),cross=view.Mapping().Project({0,0,0});if(!hit||!cross)return false;
+    const QPointF center(cross->x,cross->y);
+    base::DeterministicIdGenerator ids(981400);V2ImageView image;image.entityId=ids.NextTyped<base::IdKind::Entity>();
+    modeling::ImageTriangle triangle;triangle.mesh.points={geometry::Vector3{-80,-60,-1},{80,-60,-1},{0,80,-1}};
+    triangle.mesh.normal={0,0,1};image.triangles={triangle};
+    for(const auto theme:{UiTheme::Windows95,UiTheme::Normal}) {
+        window.ApplyTheme(theme);const auto hover=view.SemanticColor(app::SemanticState::Hover);
+        for(const unsigned background:{0xffffffffu,0xffdceeeeu,0xff20242cu}) {
+            image.image={1,1,{background},1};view.SetImageViews({image});
+            for(const double width:{2.,6.}) {
+                display.wireWidthPx=width;view.SetDisplaySettings(display);view.SetSelection({});
+                view.HoverAt({hit->x,hit->y});
+                if(!Explain("hover changes only the hit interval, without selecting it",
+                    view.CurveStateOf(curve.entityId,curve.segmentId)==app::SemanticState::Hover
+                    &&view.Selection().entityIds.empty()))return false;
+                if(!Explain("hover ink stays above a later crossing on light and dark image backgrounds",
+                    Near(Frame(view),center,hover,1)))return false;
+                const QColor role(120,0,190);view.SetSegmentRoleColors({{curve.entityId,curve.segmentId,role}});
+                const auto frame=Frame(view);
+                if(!Explain("input color keeps a distinct blue hover rim",Near(frame,center,role,1)&&Near(frame,center,hover,7)))return false;
+                view.SetSegmentRoleColors({});
+            }
+        }
+        view.SetImageViews({});display.wireWidthPx=2.;view.SetDisplaySettings(display);
+        Shot(window,theme==UiTheme::Windows95?"hover-wire-win95":"hover-wire-dark");
+        app::SelectionSet selection;selection.entityIds={curve.entityId};app::SelectionRef ref;
+        ref.entityId=curve.entityId;ref.segmentId=curve.segmentId;ref.kind=app::SelectionElementKind::Edge;
+        selection.ordered={ref};view.SetSelection(selection);view.HoverAt({hit->x,hit->y});
+        if(!Explain("hovering a selected interval preserves selection orange and the untouched interval",
+            view.CurveStateOf(curve.entityId,curve.segmentId)==app::SemanticState::Selected
+            &&view.CurveStateOf(curve.entityId,window.Session().Scene().curves[1].segmentId)==app::SemanticState::Default
+            &&Near(Frame(view),center,view.SemanticColor(app::SemanticState::Selected),1)))return false;
+    }
+    view.SetSelection({});view.SetImageViews({});
+    return Explain("hover and highlighting do not edit geometry or history",window.Session().GetDocument().Revision()==revision);
+}
 bool HiddenOverlayRendering(V2MainWindow& window) {
     auto& view=window.Viewport();base::DeterministicIdGenerator ids(981000);
     const auto shapeId=ids.NextTyped<base::IdKind::Entity>(),imageId=ids.NextTyped<base::IdKind::Entity>();

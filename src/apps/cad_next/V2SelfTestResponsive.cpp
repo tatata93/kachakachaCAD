@@ -20,6 +20,7 @@ bool ViewportFrameBenchmark(V2MainWindow&);
 bool PresentationUpdates(V2MainWindow&);
 bool GridVisibilityInteraction(V2MainWindow&);
 bool SelectedWireContrast(V2MainWindow&);
+bool HoverWireContrast(V2MainWindow&);
 bool HiddenOverlayRendering(V2MainWindow&);
 bool PersistentGridControls(V2MainWindow&);
 bool GridProjectionReuse(V2MainWindow&);
@@ -86,6 +87,7 @@ std::vector<SelfTestCase> ResponsiveCases()
         {"HP-GRID-01 display toggle preserves snapping and pending input",GridVisibilityInteraction},
         {"HP-PERF-03 presentation camera capture resize and idle",PresentationUpdates},
         {"HP-GRID-02 selected wire contrast and overlapping roles",SelectedWireContrast},
+        {"HP-HOVER-01 hover contrast across crossings images themes and partial selection",HoverWireContrast},
         {"HP-GRID-03 hidden overlays keep GPU shading",HiddenOverlayRendering},
         {"HP-GRID-04 optional settings preserve tools and numeric input",PersistentGridControls},
         {"HP-GRID-05 projected grid reuse and invalidation",GridProjectionReuse},

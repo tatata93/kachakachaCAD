@@ -80,7 +80,7 @@ struct ViewportPalette {
     QColor selected{0xFF, 0xC0, 0x40};
     //! カーソルの下の候補。**選択色の明るさ違いにしない。**
     //! 明るさだけの違いは、線が重なっているところで読めない。
-    QColor hover{0x55, 0xE0, 0x8A};
+    QColor hover{0x40, 0x90, 0xFF};
     QColor preview{0x60, 0xD0, 0xFF};
     QColor point{0xF0, 0xF0, 0xF0};
     //! 吸着の記号。選択色(橙)と近い黄では、線の上で見分けられなかった。
@@ -870,6 +870,7 @@ private:
     void DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, const QColor& edge,
         bool emphasized) const;
     void DrawDocument(QPainter& painter) const;
+    void DrawPoints(QPainter& painter) const;
     //! 閉じた輪郭の内側。線の下へ半透明で敷く。
     void DrawProfileRegions(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;

@@ -250,7 +250,7 @@ app::LoopFacePlan NetworkDisplayPlan(const std::vector<modeling::GuideTable>& ta
     for(const auto& table:tables)for(const auto& row:table.rows)
         if(row.role==modeling::ChainRole::SourceSurface&&!row.sourceLabels.empty())
             plan.summaryJa+="。元の面「"+row.sourceLabels.front()+"」の形を保持";
-    if(notch)plan.summaryJa+="。外周に接する開口を切り欠きとして保持";
+    if(notch)plan.summaryJa+="。面の境界に接する輪郭を切り欠きとして保持";
     if (unused)
         plan.summaryJa += "。輪に使わない区間 " + std::to_string(unused) + "（元の線は保持）";
     return plan;
@@ -704,7 +704,7 @@ bool V2LoopFacesTool::TryNetworkPlan()
         // This is a handled refusal. Returning false would let PlanLoopFaces
         // accept the same outer loop again and silently fill the open window.
         app::LoopFacePlan blocked;
-        blocked.summaryJa="外周の内側に、輪に使えない選択線があります。穴を埋めないため面を作りません。内側の輪を閉じるか、不要な線の選択を解除してください";
+        blocked.summaryJa="閉じた輪郭の内側に、輪に使えない選択線があります。穴を埋めないため面を作りません。内側の輪を閉じるか、不要な線の選択を解除してください";
         plan_=std::move(blocked);
         styles_.clear();methodOverride_.clear();make_.clear();continuity_.clear();leaveGap_.clear();
         return true;

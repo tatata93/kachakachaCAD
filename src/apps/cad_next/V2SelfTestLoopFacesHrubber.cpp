@@ -14,6 +14,12 @@
 #include <QEvent>
 #include <QFile>
 #include <QIODevice>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
+#include <QLabel>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPointF>
@@ -23,6 +29,7 @@
 #include <QWidget>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -32,6 +39,36 @@ using base::EntityId;
 using domain::EntityKind;
 using geometry::CurveSegment;
 using geometry::Vector3;
+// Reload reconstructs unit frames. Permit only machine roundoff in numeric fields;
+// object keys, array order/length, IDs, references and all other values stay exact.
+bool RoundTripValueEqual(const QJsonValue& a,const QJsonValue& b)
+{
+    if(a.type()!=b.type())return false;
+    if(a.isDouble()){
+        const double x=a.toDouble(),y=b.toDouble();
+        return std::isfinite(x)&&std::isfinite(y)&&std::abs(x-y)
+            <=4*std::numeric_limits<double>::epsilon()*std::max({1.,std::abs(x),std::abs(y)});
+    }
+    if(a.isArray()){
+        const auto x=a.toArray(),y=b.toArray();if(x.size()!=y.size())return false;
+        for(qsizetype i=0;i<x.size();++i)if(!RoundTripValueEqual(x[i],y[i]))return false;
+        return true;
+    }
+    if(a.isObject()){
+        const auto x=a.toObject(),y=b.toObject();if(x.keys()!=y.keys())return false;
+        for(auto it=x.begin();it!=x.end();++it)if(!RoundTripValueEqual(it.value(),y.value(it.key())))return false;
+        return true;
+    }
+    return a==b;
+}
+bool RoundTripContentEqual(const std::string& a,const std::string& b)
+{
+    QJsonParseError firstError,secondError;
+    const auto x=QJsonDocument::fromJson(QByteArray::fromStdString(a),&firstError);
+    const auto y=QJsonDocument::fromJson(QByteArray::fromStdString(b),&secondError);
+    return firstError.error==QJsonParseError::NoError&&secondError.error==QJsonParseError::NoError
+        &&x.isObject()&&y.isObject()&&RoundTripValueEqual(x.object(),y.object());
+}
 void MouseClick(QWidget& target,const QPointF& p,Qt::KeyboardModifiers modifiers)
 {
     for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
@@ -65,13 +102,14 @@ bool CaseLoopFacesPanoramaHrubber(V2MainWindow& window,bool compound=false,bool 
     const auto original=window.Session().GetDocument().Snapshot();
     io::DocumentFile originalFile;originalFile.snapshot=original;
     const auto originalJson=io::WriteDocumentJson(originalFile);
-    const auto originalsPreserved=[&]{
+    const auto originalContent=[&]{
         io::DocumentFile current;current.snapshot=window.Session().GetDocument().Snapshot();
         std::erase_if(current.snapshot.entities,[&](const auto& entity){return std::none_of(original.entities.begin(),original.entities.end(),[&](const auto& e){return e.id==entity.id;});});
         std::erase_if(current.snapshot.features,[&](const auto& feature){return std::none_of(original.features.begin(),original.features.end(),[&](const auto& f){return f.id==feature.id;});});
         current.snapshot.revision=original.revision;current.snapshot.evaluationOrder=original.evaluationOrder;
-        return io::WriteDocumentJson(current)==originalJson;
+        return io::WriteDocumentJson(current);
     };
+    const auto originalsPreserved=[&]{return originalContent()==originalJson;};
     window.Viewport().SetSelection({});QApplication::processEvents();
     if(viewportPick){
         auto& view=window.Viewport();
@@ -218,8 +256,16 @@ bool CaseLoopFacesPanoramaHrubber(V2MainWindow& window,bool compound=false,bool 
     window.RunCommand("edit.redo");
     if(!Explain("厚み付けをやり直せる",CountOfKind(window,EntityKind::Part)==1&&hollowBand(madePart)&&originalsPreserved()))return false;
     if(!output.isEmpty()){
-        if(!Explain("穴付き面とHゴム立体を保存して実際に再読込できる",window.SaveAndReopen(output+"-h-rubber-solid.kcd2")
-            &&window.RebuildProblems().isEmpty()&&hollowBand(madeSurface)&&hollowBand(madePart)&&originalsPreserved()))return false;
+        const bool reopened=window.SaveAndReopen(output+"-h-rubber-solid.kcd2");
+        const bool clean=window.RebuildProblems().isEmpty(),face=hollowBand(madeSurface),part=hollowBand(madePart);
+        const bool preserved=RoundTripContentEqual(originalJson,originalContent());
+        Note(QStringLiteral("再読込=%1 再計算=%2 面の帯=%3 部品の帯=%4 原本保全=%5 状態=%6")
+            .arg(reopened).arg(clean).arg(face).arg(part).arg(preserved).arg(window.StatusText()).toUtf8().constData());
+        if(!preserved)for(const auto& item:std::vector<std::pair<QString,std::string>>{
+            {output+"-original.json",originalJson},{output+"-reopened.json",originalContent()}}){
+            QFile file(item.first);if(file.open(QIODevice::WriteOnly))file.write(item.second.data(),static_cast<qint64>(item.second.size()));
+        }
+        if(!Explain("穴付き面とHゴム立体を保存して実際に再読込できる",reopened&&clean&&face&&part&&preserved))return false;
         return true;
     }
     window.RunCommand("edit.undo");window.RunCommand("edit.undo");
@@ -265,6 +311,13 @@ bool CaseLoopFacesOpenInner(V2MainWindow& window)
 
 bool CaseLoopFacesWholeWires(V2MainWindow& w)
 {
+    const std::string original=R"({"curve":[1,2],"uuid":"a"})";
+    if(!Explain("保存照合は末尾の丸めだけ許し、形状・UUID・配列変更を拒否する",
+        RoundTripContentEqual(original,R"({"curve":[1.0000000000000002,2],"uuid":"a"})")
+        &&!RoundTripContentEqual(original,R"({"curve":[1.000001,2],"uuid":"a"})")
+        &&!RoundTripContentEqual(original,R"({"curve":[1,2],"uuid":"b"})")
+        &&!RoundTripContentEqual(original,R"({"curve":[2,1],"uuid":"a"})")
+        &&!RoundTripContentEqual(original,R"({"curve":[1],"uuid":"a"})")))return false;
     w.RunCommand("file.new");
     const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
     std::vector<EntityId> wires;
@@ -285,6 +338,10 @@ bool CaseLoopFacesWholeWires(V2MainWindow& w)
     }
     QApplication::processEvents();
     auto* dock=w.LoopFacesTool().Dock();const auto revision=w.Session().GetDocument().Revision();
+    auto* help=w.findChild<QLabel*>("loopFacesHelp");
+    if(!Explain("面作成は用途固有の語を使わず輪郭と穴を案内する",help&&help->isVisible()
+        &&help->text().contains(QStringLiteral("輪郭"))&&help->text().contains(QStringLiteral("穴"))
+        &&!help->text().contains(QStringLiteral("窓"))&&!help->text().contains(QStringLiteral("外周"))))return false;
     const double tolerance=dock->JoinToleranceValue();
     if(!Explain("矩形の1辺だけを3Dで選び、候補が無くても全体切替を表示する",!w.LoopFacesTool().Plan()
         &&dock->SelectionTextJa().contains(QStringLiteral("1区間"))&&dock->ClickWholeWires()))return false;

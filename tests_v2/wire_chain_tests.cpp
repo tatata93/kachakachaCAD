@@ -296,6 +296,20 @@ KACHA_V2_TEST(chain, a_crossing_within_one_cubic_is_rejected)
     Require(kachakacha::v2::geometry::FindSelfIntersections({safe},false,{}).HasValue(),"a rounded non-crossing curve stays valid");
 }
 
+KACHA_V2_TEST(chain, retraced_cubics_and_internal_spline_loops_are_rejected)
+{
+    using kachakacha::v2::geometry::FindSelfIntersections;
+    for(const auto& curve:{
+        CurveSegment::MakeCubicBezier({{0,0,0},{3,0,0},{-2,0,0},{1,0,0}}).Value(),
+        CurveSegment::MakeCubicBSpline({{-25,0,0},{8,0,0},{-7,0,0},{26,0,0}}).Value(),
+        CurveSegment::MakeCubicBSpline({{0,0,0},{1,0,0},{0,1,0},{3,-3,0},{5,-3,0}}).Value()})
+        Require(!FindSelfIntersections({curve},false,{}).HasValue(),"retracing or an internal closed span is not a simple boundary");
+    const auto monotone=CurveSegment::MakeCubicBezier({{0,0,0},{1,0,0},{2,0,0},{3,0,0}}).Value();
+    const auto closed=CurveSegment::MakeCubicBezier({{0,0,0},{3,0,0},{0,3,0},{0,0,0}}).Value();
+    Require(FindSelfIntersections({monotone},false,{}).HasValue(),"collinear monotone remains valid");
+    Require(FindSelfIntersections({closed},true,{}).HasValue(),"the whole curve may close at its permitted seam");
+}
+
 KACHA_V2_TEST(chain, an_empty_selection_is_refused)
 {
     const auto result = AnalyzeChain({}, GeometryTolerance::Default());

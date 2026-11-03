@@ -77,6 +77,31 @@ struct Endpoint {
     return gaps;
 }
 
+[[nodiscard]] std::optional<Vector3> CollinearRetrace(const CurveSegment& curve,
+    const Vector3& a,const Vector3& b,const Vector3& c,const GeometryTolerance& tolerance)
+{
+    const double eps=tolerance.numericEpsilon;
+    if(Cross(a,c).Length()>eps||Cross(b,c).Length()>eps)return {};
+    const auto axis=Normalized(c.Length()>eps?c:b.Length()>eps?b:a);
+    const double x=Dot(a,axis),y=Dot(b,axis),z=Dot(c,axis);
+    std::vector<double> critical{0,1};
+    const auto add=[&](double t){if(t>0&&t<1)critical.push_back(t);};
+    if(std::abs(x)>eps) {
+        const double discriminant=y*y-3*x*z;
+        if(discriminant>0){add((-y-std::sqrt(discriminant))/(3*x));add((-y+std::sqrt(discriminant))/(3*x));}
+    } else if(std::abs(y)>eps)add(-z/(2*y));
+    std::sort(critical.begin(),critical.end());
+    const auto derivative=[&](double t){return (3*x*t+2*y)*t+z;};
+    for(std::size_t i=1;i+1<critical.size();++i) {
+        const double t=critical[i];
+        if(derivative((t+critical[i-1])*.5)*derivative((t+critical[i+1])*.5)>=0)continue;
+        const auto point=curve.Evaluate(t);
+        if(Distance(point,curve.Evaluate(critical[i-1]))>tolerance.modelLinearMm
+            &&Distance(point,curve.Evaluate(critical[i+1]))>tolerance.modelLinearMm)return point;
+    }
+    return {};
+}
+
 //! P(s)=P(t), s!=t: a*((s+t)^2-st)+b*(s+t)+c=0 for a cubic.
 [[nodiscard]] std::optional<Vector3> CubicCrossing(const CurveSegment& curve,
     const GeometryTolerance& tolerance)
@@ -88,7 +113,8 @@ struct Endpoint {
     const auto a=q1*3-q2*3+q3,b=q2*3-q1*6,c=q1*3;
     const auto ab=Cross(a,b),ac=Cross(a,c);
     const double determinant=ab.LengthSquared();
-    if(determinant<=tolerance.numericEpsilon*tolerance.numericEpsilon)return {};
+    if(determinant<=tolerance.numericEpsilon*tolerance.numericEpsilon)
+        return CollinearRetrace(curve,a,b,c,tolerance);
     const double sum=-Dot(ab,ac)/determinant;
     const double product=sum*sum+Dot(a,b*sum+c)/a.LengthSquared();
     const double discriminant=sum*sum-4*product;
@@ -110,6 +136,8 @@ struct Endpoint {
     for(const auto& poles:UniformBSplineBezierSpans(curve.ControlPoints())) {
         const auto span=CurveSegment::MakeCubicBezier({poles.begin(),poles.end()});
         if(!span.HasValue())continue;
+        if(curve.ControlPoints().size()>4&&span.Value().IsClosed(tolerance.modelLinearMm))
+            return span.Value().StartPoint();
         if(const auto crossing=CubicCrossing(span.Value(),tolerance))return crossing;
         spans.push_back(span.Value());
         Bounds3 bound;for(const auto& pole:poles)bound.Add(pole);bounds.push_back(bound);

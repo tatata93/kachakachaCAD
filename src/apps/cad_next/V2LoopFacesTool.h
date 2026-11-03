@@ -66,6 +66,7 @@ public:
 
 private:
     void UseWholeWires();
+    void DescribeSelection(V2LoopFacesView& view) const;
     void ApplyStyle(int face,int style,bool all);
     [[nodiscard]] bool Replan();
     [[nodiscard]] bool TryNetworkPlan();

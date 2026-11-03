@@ -240,6 +240,7 @@ bool V2LoopFacesTool::Replan()
         window_.viewport_->HideEditPreview();
         window_.viewport_->HideToolRoleLabels();
         V2LoopFacesView view; view.summaryJa = QString::fromStdString(planned.FirstSummaryJa());
+        DescribeSelection(view);
         dock_->ShowView(view);
         window_.ReportDiagnostics(planned.Diagnostics());
         return false;
@@ -516,9 +517,8 @@ void V2LoopFacesTool::ShowPreview()
 }
 
 //! 棚に映す。作り方の選択肢は core が決める(平面 ↔ 境界面など)。
-void V2LoopFacesTool::ShowDock()
+void V2LoopFacesTool::DescribeSelection(V2LoopFacesView& view) const
 {
-    V2LoopFacesView view;
     int partialWires=0,segments=0;
     for(const auto& wire:selections_){
         segments+=static_cast<int>(wire.segments.size());
@@ -532,6 +532,12 @@ void V2LoopFacesTool::ShowDock()
     view.selectionJa=QStringLiteral("入力: ワイヤー%1本・%2区間").arg(selections_.size()).arg(segments);
     if(partialWires) view.selectionJa+=QStringLiteral("\n%1本は区間を指定して使用中です。選んでいない区間は含みません。輪郭全体が必要なら下のボタンを押してください。").arg(partialWires);
     else view.selectionJa+=QStringLiteral("（全体を使用）");
+}
+
+void V2LoopFacesTool::ShowDock()
+{
+    V2LoopFacesView view;
+    DescribeSelection(view);
     for (std::size_t at = 0; at < plan_->faces.size(); ++at) {
         const LoopFace& face = plan_->faces[at];
         V2LoopFaceRow row;

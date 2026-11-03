@@ -276,14 +276,29 @@ bool CaseLoopFacesWholeWires(V2MainWindow& w)
         if(!wire.committed)return false;wires.push_back(wire.createdEntityIds.front());
     }
     if(!w.SaveAndReopen("whole-wire-selection.kcd2"))return false;
+    auto& viewport=w.Viewport();viewport.SetSelection({});w.RunCommand("surface.from_lines");
+    viewport.SetViewDirection(ViewDirection::Top);viewport.SetViewCenter({15,8,0});viewport.SetVisibleWidthMm(50);
+    QApplication::processEvents();
+    for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==wires[0]){
+        const auto pixel=viewport.Mapping().Project(curve.segment.Evaluate(.43));if(!pixel)return false;
+        MouseClick(viewport,{pixel->x,pixel->y},Qt::ControlModifier);break;
+    }
+    QApplication::processEvents();
+    auto* dock=w.LoopFacesTool().Dock();const auto revision=w.Session().GetDocument().Revision();
+    const double tolerance=dock->JoinToleranceValue();
+    if(!Explain("矩形の1辺だけを3Dで選び、候補が無くても全体切替を表示する",!w.LoopFacesTool().Plan()
+        &&dock->SelectionTextJa().contains(QStringLiteral("1区間"))&&dock->ClickWholeWires()))return false;
+    QApplication::processEvents();
+    if(!Explain("1辺から同じワイヤーの4辺へ広げて面を下見できる",viewport.Selection().entityIds==std::vector<EntityId>{wires[0]}
+        &&app::SelectedCurves(viewport.Selection(),w.Session().Scene()).size()==4&&w.LoopFacesTool().Plan()
+        &&w.LoopFacesTool().Plan()->faces.size()==1&&viewport.ToolPreviewFaceCount()>0
+        &&w.Session().GetDocument().Revision()==revision))return false;
     app::SelectionSet selected;selected.entityIds={wires[0],wires[1]};
     for(auto id:selected.entityIds)for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==id){
         app::SelectionRef ref;ref.entityId=id;ref.kind=app::SelectionElementKind::Edge;ref.segmentId=curve.segmentId;
         selected.ordered.push_back(ref);break;
     }
     w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");QApplication::processEvents();
-    auto* dock=w.LoopFacesTool().Dock();const auto revision=w.Session().GetDocument().Revision();
-    const double tolerance=dock->JoinToleranceValue();
     if(!Explain("部分区間の入力を黙って全体にしない",app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene()).size()==2
         &&dock->SelectionTextJa().contains(QStringLiteral("2区間"))))return false;
     if(!Explain("棚から選んだ2本だけを全体へ広げる",dock->ClickWholeWires()

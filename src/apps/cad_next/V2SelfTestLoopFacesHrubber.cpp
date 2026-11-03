@@ -10,6 +10,7 @@
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QApplication>
+#include <QByteArray>
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFile>

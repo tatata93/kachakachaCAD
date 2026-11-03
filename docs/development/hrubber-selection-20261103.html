@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>115投影：3Dビューから選ぶHゴムの面</title>
+<style>body{max-width:1100px;margin:32px auto;padding:0 24px;font:17px/1.8 "Yu Gothic UI",sans-serif;color:#22303d}img{width:100%;border:1px solid #a9bac7}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #a9bac7;text-align:left}code{overflow-wrap:anywhere}.note{padding:14px;background:#edf3f7}figcaption{color:#536475}</style></head><body>
+<h1>115投影：3Dビューから選ぶHゴムの面</h1>
+<p>2026-11-03。利用者が回答した「3Dビューの線をCtrl＋クリック」の経路を、更新された115投影のコピーで調べました。左一覧から4本全体を選ぶ試験と区別し、3Dでの部分区間選択から面と立体を作る操作を修正しました。</p>
+<p class="note">修正版：<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261103">GitHubのWindows配布版</a> ／ <a href="../../out/releases/hrubber-selection6-20261103/package/kachakacha_cad_next.exe">このPCの検証済みCAD</a>。製品ソースは4d831c70d。Windows全体195件、開発版・配布版UI各657件に成功し、配布版で添付モデルの操作も再確認しました。</p>
+<h2>なぜ面にならなかったか</h2>
+<p>3Dビューで線をCtrlクリックすると、クリックした直線・曲線の区間が選ばれます。左一覧ではその区間を含むワイヤーの行が選ばれて見えるため、ワイヤー全体を面へ渡したように見えていました。4本の曲線をクリックする再現では、実際の入力は4本の部分区間だけで、Hゴムの内外周が揃いませんでした。元画像の正確なクリック位置は保存されていないため、画像と完全に同じ区間を再現したとは断定しません。</p>
+<p>右欄に「入力 ワイヤー○本・○区間」と部分選択の状態を表示し、部分選択時は「選んだワイヤー全体を使う」を追加しました。押した場合だけ、その時点で選んだワイヤーを全区間へ切り替えます。未選択の別ワイヤーを加えたり、端を移動したり、許容差を拡大したりはしません。従来の曲線区間だけの選択も保ちます。</p>
+<h2>この窓枠の操作</h2>
+<ol><li>「作図 → 面作成 → 面にする」を開きます。</li><li>窓枠の外周と内周をCtrlクリックで選びます。正面・側面へ別々に投影した輪郭では、その続きも必要です。</li><li>右欄の「選んだワイヤー全体を使う」を押します。このデータでは4本・32区間になります。</li><li>窓の内側が空いた帯を下見し、要約の「穴 1個」を確認してEnterで確定します。</li><li>作った面を選び「部品 → 厚み」を開きます。この検査では0.1 mmの厚みを付け、窓内が空いた立体になりました。</li></ol>
+<p><a href="../manual/panorama-window-holes.html">画像付きの操作手順</a>も更新しています。通知欄には以前の失敗メッセージが履歴として残る場合があります。現在の右欄の入力数・下見・確定状態を確認してください。</p>
+<figure><img src="hrubber-selection-20261103/partial.png" alt="4本のワイヤーの部分区間を3Dビューから選んだ画面"><figcaption>部分区間の選択。右欄に区間数と全体へ切り替えるボタンを表示します。</figcaption></figure>
+<figure><img src="hrubber-selection-20261103/whole.png" alt="全体切替後に窓内を空けたHゴム帯を下見する画面"><figcaption>全体切替後の4本・32区間。穴を1つ持つ帯で、元の「運転席側上」の形を保持します。この例の表示上の最大境界ずれは0.000229 mmです。</figcaption></figure>
+<figure><img src="hrubber-selection-20261103/solid.png" alt="配布版で作成した0.1mm厚のHゴム部品を局所表示"><figcaption>同じ配布版で作ったHゴム部品。厚み0.100 mm、表示体積1.303 mm³。内部は空いたままです。</figcaption></figure>
+<h2>対象と保全</h2>
+<table><tr><th>グループ</th><th>ワイヤー</th><th>全区間数</th></tr><tr><td>見本以外</td><td>曲面へ投影</td><td>7</td></tr><tr><td>見本以外</td><td>曲面へ投影 2</td><td>7</td></tr><tr><td>前面見本</td><td>曲面へ投影 31</td><td>9</td></tr><tr><td>前面見本</td><td>曲面へ投影 32</td><td>9</td></tr></table>
+<p>入力32区間のうち、輪に使わない重複した端の8区間は元の線として残します。「曲面へ投影 31 2」はこの4本とは別の線です。入力コピーは1,035,067 bytes、SHA256は<code>f472858638de8413d47da0395e41b7655ca08c55bf3cfc2f256acf86946b1dca</code>。最終検査後も利用者の原本とコピーのSHA256が一致し、原本を上書きしていません。</p>
+<h2>検証結果</h2>
+<table><tr><th>検査</th><th>結果</th></tr><tr><td>Windows全体検証</td><td>CTest195件成功、skip 0。事前検査9件と旧CAD自己試験も成功。</td></tr><tr><td>開発版UI</td><td>657件すべて成功。ケース実測合計955.26秒。</td></tr><tr><td>配布ZIP内のUI</td><td>同じ657件すべて成功。ケース実測合計983.33秒。通常起動も成功。</td></tr><tr><td>配布版＋添付モデル</td><td>実WindowsのQt画面でCtrlマウスイベント→全体切替ボタン→1穴の面→0.1 mm厚み。76.87秒で成功。</td></tr><tr><td>形状と履歴</td><td>窓内へ材料がないこと、前面の上下と側面に帯があることを検査。元要素の全JSON・UUID・参照を照合し、Undo/Redo・保存再読込後も成功。</td></tr><tr><td>別の操作経路</td><td>矩形の1辺だけで面候補が出ない状態でも全体切替を表示し、4辺の面へ進めることを確認。未選択ワイヤー不変、取消と別道具経由の選び直しも試験。</td></tr></table>
+<p>全体証拠：<a href="../../out/verification/hrubber-selection6-20261103/result.json">result.json</a>。添付モデルの配布版操作：<a href="../../out/hrubber-repro-20261103/packaged-final.json">packaged-final.json</a>。公開ZIPのSHA256は<code>20eaac895b3c61acf2bd2a154395c322a9a4b42639b020387348789f62e2664d</code>です。</p>
+<h2>検査の時間超過と修正</h2>
+<p>全体検査3回目は開発版・配布版とも656件成功時点で累積900秒の制限に達し、失敗として保持しました。追加した選択欄は面作成を開く時だけ生成する構造へ整理しました。同条件の基本20例の単発比較では16.493秒から15.362秒になりましたが、一般的な速度や60fpsを保証する数値ではありません。読み取りレビューで見つかった「矩形1辺だけでは全体切替が隠れる」漏れを直すため4回目を中断し、5回目も624件成功時点で累積制限に達しました。</p>
+<p>機能修正を固定した後、検証管理のWP-12として、ケース完了の進捗停滞180秒と総時間上限1800秒を分けました。全657件を同じ順序・同じ1プロセスで、開発版と配布版それぞれ新規に実行しています。欠落・skip・重複・失敗を拒否する条件は保持し、旧失敗ログを合格へ書き換えていません。親検査の終了時に子のCADが残る経路は、<a href="https://learn.microsoft.com/en-US/windows/win32/procthread/job-objects">Windows Job Object</a>で検査プロセス群の終了を結び付けました。</p>
+<p>検証基盤18試験では進捗あり・停滞・異常終了・無効な設定、Windowsで親を止めた時の子と孫の終了を確認しています。通常CTestで配布先がTEMPになる不整合も修正し、配布検査だけrepo/out内の一意な場所へ分離しました。詳細は<a href="verification-workflow.md">検証手順</a>に記録しています。</p>
+<h2>範囲と担当</h2>
+<p>主担当が実装・Git変更・ビルド・試験・配布を管理し、既存の読み取り専用UI・回帰担当が別経路と検証管理を確認しました。補助担当は編集・ビルド・試験・アプリ操作を行っていません。ここでの画面操作試験は実CAD内のQtマウスイベントを使い、OS全体を外部マウスで操作した試験とは区別します。</p>
+<p>今回の修正は選択範囲の表示と明示的な全体切替です。公開幾何API・保存形式・文書許容差は変更していません。任意の3D輪郭の曲率を常に推測できる保証や、115系車両全体の完成を示すものではありません。理想モデル・近似モデル・プラ板モデルの組合せと組立寸法の確認は<a href="../../docs/refactoring-plan.md">継続作業</a>です。</p>
+</body></html>

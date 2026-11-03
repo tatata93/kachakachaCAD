@@ -13,8 +13,8 @@
 | WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(Codex、2026-11-04。実境界付き面のオフセットを修正、kernel_surface 63例成功。全体・UI経路は後段で実施) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
-| WP-07 | 進行中(Codex、2026-11-04。汎用形状監査の段階3: 多穴押し出しの面由来とBooleanの連結・複数相手の整合に限定) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 完了（Codex、2026-10-24。平面ワイヤ表示中の作図更新、候補fb143d73c。全体195件・UI各582件・通常起動成功。配布plane-wire-drawing-release-20261024） | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-07 | 完了(Codex、c15857283。多穴押し出し48例・Boolean9例成功。分離結果を個別ソリッドとして取得する境界APIを追加、UI接続は段階4) | WP-06 | Part作成、押し出し、Boolean、Subshape |
+| WP-08 | 進行中(Codex、2026-11-04。汎用形状監査の段階4: 複数曲面の穴分類・Boolean分離結果のUI/再生成・通常入力経路の受入に限定) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(Claude, cda2a5b。対象x形式の表・検査・原子的な書き込みに加え、選択と書き出しの棚を画面へ繋いだ。tests_v2/export_panel_tests.cpp 25件、export_content_tests.cpp 15件、selection_tests.cpp 21件、cad_next --self-test 4件) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

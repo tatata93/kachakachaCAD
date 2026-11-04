@@ -8,10 +8,27 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctMeshCache.h"
+#include "kachakacha/kernel/OcctBoundaryDistance.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Builder.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepLib.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_Curve.hxx>
+#include <NCollection_Array1.hxx>
+#include <NCollection_Array2.hxx>
+#include <gp_Pnt2d.hxx>
+#include <gp_Vec2d.hxx>
+#include <gp_Dir2d.hxx>
 #include <TopExp_Explorer.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepTools.hxx>
@@ -553,6 +570,84 @@ KACHA_V2_TEST(kernel_export, rigid_output_copy_preserves_geometry_and_ownership)
     const auto after=kernel::CaptureOutputShape(source);
     Require(after.HasValue()&&before.Value()==after.Value(),"mutating output copy never changes source topology or geometry");
     kernel::ReleaseShape(source);kernel::ReleaseShape(moved.Value());
+}
+
+KACHA_V2_TEST(kernel_export, mesh_reuse_checks_geometry_quality_and_handle_lifetime)
+{
+    using namespace kachakacha::v2;
+    kernel::ClearShapeCache();
+    auto shape=BRepPrimAPI_MakeCylinder(4,9).Shape();
+    const auto source=kernel::StoreShape(shape);
+    const auto original=kernel::CaptureOutputShape(source);
+    const auto first=kernel::BuildShapeMesh(source,.02);
+    Require(first.HasValue(),"native mesh is built");
+    BRepBuilderAPI_Copy copy(shape,true,false);
+    const auto duplicate=kernel::StoreShape(copy.Shape());
+    const auto repeated=kernel::BuildShapeMesh(duplicate,.02);
+    Require(repeated.HasValue()&&kernel::detail::MeshCacheHits()==1,"equivalent private copy reuses exact mesh");
+    Require(first.Value().triangles.size()==repeated.Value().triangles.size(),"same native face indexing and triangles");
+    const auto fine=kernel::BuildShapeMesh(source,.002);
+    Require(fine.HasValue()&&fine.Value().triangles.size()>first.Value().triangles.size(),"finer quality is remeshed");
+    const auto iso=kernel::BuildShapeMesh(source,.02,2);
+    Require(iso.HasValue()&&!iso.Value().isoLines.empty(),"isoparametric lines are a separate quality key");
+    Require(kernel::detail::MeshCacheHits()==1,"quality changes never hit an old mesh");
+    const auto after=kernel::CaptureOutputShape(source);
+    Require(original.HasValue()&&after.HasValue()&&original.Value()==after.Value(),"meshing never mutates native geometry");
+    TopExp_Explorer vertices(shape,TopAbs_VERTEX);Require(vertices.More(),"cylinder has a vertex");
+    BRep_Builder builder;builder.UpdateVertex(TopoDS::Vertex(vertices.Current()),gp_Pnt(100,100,100),1e-6);
+    (void)kernel::BuildShapeMesh(source,.02);
+    Require(kernel::detail::MeshCacheHits()==1,"shared native mutation invalidates content key");
+    kernel::ReleaseShape(duplicate);
+    Require(!kernel::BuildShapeMesh(duplicate,.02).HasValue(),"released handle cannot retrieve a cached mesh");
+    kernel::ClearShapeCache();
+    Require(kernel::detail::MeshCacheHits()==0,"document cache reset also releases meshes");
+}
+
+KACHA_V2_TEST(kernel_export, boundary_coincidence_is_only_a_finite_trim_upper_bound)
+{
+    using namespace kachakacha::v2;
+    const auto cylinder=BRepPrimAPI_MakeCylinder(4,9).Shape();
+    const kernel::detail::NativeBoundaryDistance probe(cylinder);
+    for(double a:{.03,.3,1.4,2.8,4.9,6.2}) {
+        const auto distance=probe.Coincident(gp_Pnt(4*std::cos(a),4*std::sin(a),9),1e-9);
+        Require(distance&&*distance<=1e-9,"curved native trim is located");
+    }
+    Require(probe.Coincident(gp_Pnt(4*std::cos(.3),4*std::sin(.3),4.5),1e-9).has_value(),
+        "coincident point is classified inside the finite face");
+    Require(!probe.Coincident(gp_Pnt(4.01*std::cos(.3),4.01*std::sin(.3),9),1e-9),
+        "displaced boundary cannot pass as coincidence");
+    Require(!probe.Coincident(gp_Pnt(4,0,12),1e-9),"infinite continuation of seam is outside finite trim");
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;
+    modeling::GuideChain outer;outer.role=modeling::ChainRole::OuterBoundary;outer.index=1;outer.closed=true;
+    outer.segments=Rectangle(0,0,10,10).segments;
+    modeling::GuideChain hole;hole.role=modeling::ChainRole::HoleBoundary;hole.index=1;hole.closed=true;
+    hole.segments={CurveSegment::MakeCircle({5,5,0},{0,0,1},{1,0,0},2).Value()};
+    request.chains={outer,hole};
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,Tolerance());Require(analysis.HasValue(),"hole input accepted");
+    const auto made=kernel::BuildGuideSurface(request,analysis.Value(),Tolerance());Require(made.HasValue(),"finite perforated face");
+    TopoDS_Shape face;Require(kernel::LookupShape(made.Value().handle,face),"native trimmed face exists");
+    const kernel::detail::NativeBoundaryDistance trimmed(face);
+    Require(!trimmed.Coincident(gp_Pnt(5,5,0),1e-9),"infinite supporting surface does not fill the hole");
+    Require(!trimmed.Coincident(gp_Pnt(6.9999,5,0),1e-9),"point just inside the hole is not material");
+    Require(trimmed.Coincident(gp_Pnt(7.0001,5,0),1e-9).has_value(),"material just outside the hole is classified");
+    Require(!trimmed.Coincident(gp_Pnt(11,5,0),1e-9),"supporting plane beyond outer trim is excluded");
+    kernel::ReleaseShape(made.Value().handle);
+    NCollection_Array2<gp_Pnt> poles(1,2,1,2);
+    for(int i=1;i<=2;++i)for(int j=1;j<=2;++j)poles(i,j)=gp_Pnt((i-1)*1e6,(j-1)*1e6,0);
+    NCollection_Array1<double> knots(1,2);knots(1)=0;knots(2)=1e-6;
+    NCollection_Array1<int> mults(1,2);mults(1)=mults(2)=2;
+    const occ::handle<Geom_Surface> scaled=new Geom_BSplineSurface(poles,knots,knots,mults,mults,1,1);
+    const std::array<gp_Pnt2d,3> points{{{0,0},{1e-6,0},{0,1e-6}}};BRepBuilderAPI_MakeWire triangle;
+    for(std::size_t i=0;i<3;++i) {
+        const auto a=points[i],b=points[(i+1)%3];const gp_Vec2d d(a,b);
+        const occ::handle<Geom2d_Curve> line=new Geom2d_Line(a,gp_Dir2d(d));
+        triangle.Add(BRepBuilderAPI_MakeEdge(line,scaled,0,d.Magnitude()).Edge());
+    }
+    BRepBuilderAPI_MakeFace scaledFace(scaled,triangle.Wire(),true);
+    Require(scaledFace.IsDone()&&BRepLib::BuildCurves3d(scaledFace.Face()),"tiny UV domain on large physical face");
+    const kernel::detail::NativeBoundaryDistance scaledProbe(scaledFace.Face());
+    Require(!scaledProbe.Coincident(gp_Pnt(5e5,5e5+.0001,0),1e-7),
+        "UV ON tolerance cannot admit an outside point farther than physical precision");
 }
 
 KACHA_V2_TEST(kernel_export, legacy_offset_refusal_preserves_original)

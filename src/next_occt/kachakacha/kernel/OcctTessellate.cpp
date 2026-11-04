@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctMeshPlanarFaces.h"
+#include "kachakacha/kernel/OcctMeshCache.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
@@ -243,6 +245,14 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
     try {
         const double chosen = deflectionMm > 0.0 ? deflectionMm
                                                  : DeflectionForSize(DiagonalOf(shape));
+        // Compare full native bytes, never just a handle: callers can mutate a
+        // native surface and private output copies have different handles.
+        std::ostringstream encoded;
+        BRepTools::Write(shape, encoded, false, false, TopTools_FormatVersion_CURRENT);
+        auto key = encoded.str();
+        key.append(reinterpret_cast<const char*>(&chosen), sizeof(chosen));
+        key.append(reinterpret_cast<const char*>(&isoLinesPerDirection), sizeof(isoLinesPerDirection));
+        if (auto cached = detail::CachedMesh(key)) return Result<ShapeMesh>::Success(std::move(*cached));
         const auto meshingShape=detail::TessellatedCopy(shape,chosen);
         ShapeMesh made;
         made.closed = IsClosedSolid(shape);
@@ -261,6 +271,7 @@ Result<ShapeMesh> BuildShapeMesh(modeling::KernelShapeHandle handle, double defl
         }
         modeling::RefreshNormals(made);
         modeling::RefreshBounds(made);
+        detail::RememberMesh(std::move(key), made);
         return Result<ShapeMesh>::Success(std::move(made));
     } catch (const Standard_Failure& failure) {
         return Result<ShapeMesh>::Failure(MakeError(kTessellateFailed,

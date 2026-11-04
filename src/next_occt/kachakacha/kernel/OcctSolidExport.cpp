@@ -212,7 +212,7 @@ void RememberCheck(std::string bytes, double tolerance, const SolidExportCheck& 
     std::lock_guard<std::mutex> lock(CheckedShapesMutex());
     auto& entries = CheckedShapes(); std::size_t total = bytes.size();
     for (const auto& entry : entries) total += entry.bytes.size();
-    while (!entries.empty() && (entries.size() >= 8 || total > limit)) {
+    while (!entries.empty() && (entries.size() >= 4096 || total > limit)) {
         total -= entries.front().bytes.size(); entries.pop_front();
     }
     entries.push_back({std::move(bytes), tolerance, check});

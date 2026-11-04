@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -20,6 +23,7 @@
 #include "kachakacha/kernel/OcctMatchedRuled.h"
 #include "kachakacha/kernel/OcctMatchedLoft.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctBoundaryDistance.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <TopoDS_Edge.hxx>
@@ -766,6 +770,11 @@ struct Deviation {
     const double samplingTolerance = SamplingToleranceMm(tolerance);
     double sum = 0.0;
     std::size_t count = 0;
+    BRepExtrema_DistShapeShape measure;
+    const double deflection=std::max(tolerance.modelLinearMm * 0.1, 1.0e-9);
+    measure.SetDeflection(deflection);
+    measure.LoadS2(shape);
+    const detail::NativeBoundaryDistance boundary(shape);
     for (std::size_t index = 0; index < request.chains.size(); ++index) {
         const GuideChain& chain = request.chains[index];
         if (chain.segments.empty()) {
@@ -777,12 +786,19 @@ struct Deviation {
         double chainWorst = 0.0;
         for (const Vector3& point : ProbePoints(chain, samplingTolerance)) {
             const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(ToPoint(point));
-            BRepExtrema_DistShapeShape measure(vertex, shape,
-                std::max(tolerance.modelLinearMm * 0.1, 1.0e-9), Extrema_ExtFlag_MIN);
-            if (!measure.IsDone() || measure.NbSolution() < 1) {
-                continue;
+            double distance=-1;
+            if(chain.role==ChainRole::BoundarySide||chain.role==ChainRole::OuterBoundary||chain.role==ChainRole::HoleBoundary) {
+                // Native trim edges and points classified on the finite face give
+                // conservative distance bounds. Accept only numerical coincidence
+                // below the existing solver precision; displaced boundaries and
+                // all interior guides still use full BRep distance.
+                if(const auto exact=boundary.Coincident(ToPoint(point),deflection))distance=*exact;
             }
-            const double distance = measure.Value();
+            if(distance<0) {
+                measure.LoadS1(vertex);measure.Perform();
+                if(!measure.IsDone()||measure.NbSolution()<1)continue;
+                distance=measure.Value();
+            }
             sum += distance * distance;
             ++count;
             chainWorst = std::max(chainWorst, distance);
@@ -831,6 +847,17 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
     KernelShapeHandle sourceShape)
 {
+    const auto started=std::chrono::steady_clock::now();
+    auto checkpoint=started;
+    const auto trace=[&](const char* stage) {
+        const auto now=std::chrono::steady_clock::now();
+        if(const auto* path=std::getenv("KACHACAD_SURFACE_PERF")) {
+            std::ofstream out(path,std::ios::app);
+            out<<static_cast<int>(request.method)<<","<<stage<<","
+                <<std::chrono::duration<double,std::milli>(now-checkpoint).count()<<"\n";
+        }
+        checkpoint=now;
+    };
     if(request.method==GuideSurfaceMethod::BoundaryFill && std::any_of(request.chains.begin(),request.chains.end(),
         [](const auto& c){return c.role==modeling::ChainRole::HoleBoundary||c.role==modeling::ChainRole::SourceSurface;}))
         return BuildSurfaceWithHoles(request,tolerance);
@@ -880,6 +907,7 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     }
 
     const TopoDS_Shape shape = built.Value();
+    trace("build");
     if (FaceCount(shape) == 0) {
         return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceBuildFailed,
             "面が1枚も出来ませんでした。", {}));
@@ -906,7 +934,9 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         }
     }
 
+    trace("deviation");
     auto finished = detail::FinishSurfaceResult(shape, tolerance);
+    trace("finish");
     if (!finished.HasValue()) {
         return finished;
     }

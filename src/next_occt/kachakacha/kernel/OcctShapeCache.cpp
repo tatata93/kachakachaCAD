@@ -1,5 +1,6 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctMeshCache.h"
 
 #include <cstdint>
 #include <map>
@@ -75,6 +76,7 @@ void ClearShapeCache()
 {
     std::lock_guard<std::mutex> lock(CacheMutex());
     CacheTable().clear();
+    detail::ClearMeshCache();
 }
 
 } // namespace kachakacha::v2::kernel

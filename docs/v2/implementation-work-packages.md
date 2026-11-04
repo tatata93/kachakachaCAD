@@ -14,10 +14,10 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(Codex、2026-11-04。実境界付き面のオフセットを修正、kernel_surface 63例成功。全体・UI経路は後段で実施) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 完了(Codex、c15857283。多穴押し出し48例・Boolean9例成功。分離結果を個別ソリッドとして取得する境界APIを追加、UI接続は段階4) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 完了(Codex、2026-11-04の段階4重点。短辺面計画・離れた複数穴付き曲面・距離指定オフセット・分離切断を修正。重点CTest4件、新規実パネル5経路、添付115の3D選択経路が成功。全体と配布版は後段) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中(Codex、段階7。追加3断面のoffscreen画面試験で候補とクリック結果が一致しない経路を調査。実画面の5例成功だけで全体完了としない) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
-| WP-11 | 進行中(Codex、段階6。初回全体で見つかったEXP-P004/P005/P006の診断台帳登録漏れを補正。出力の重点成功を全体成功へ読み替えない) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
+| WP-11 | 完了(Codex、段階6重点。EXP-P004/P005/P006を台帳へ登録しdiagnostic_catalog13例が成功。選択型紙の3形式は重点成功、全体再検証は後段) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
 | WP-12 | 進行中(Claude。ER1/ER2 の受入モデル、図つきマニュアル、見本 .kcd2、文書を開く道、配布 script は完了。実機での配布zip確認と切替が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
 | WP-13 | 保留(オーナー指示待ち。「V2が満足いくものになるまでV1は消すな。満足したら指示する」2026-09-09)。準備だけ進める | WP-12 | 旧実装削除と最終整理 |
 | WP-14 | 進行中(Codex, `codex/v2-ui-ux-overhaul`, 2026-09-12。Phase 1 操作基盤) | WP-08 | 統合UI/UX、選択、カーソル、スナップ、ToolSession、プロパティ、プレビュー、画面復元 |

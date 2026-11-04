@@ -659,6 +659,11 @@ public:
 - Partの正本B-RepはOCCT evaluatorのprivate cacheに置く。
 - export serviceはEntityId+revisionで同じcache shapeを要求する。
 - cache missは同じFeature定義から再評価する。
+- 2026-11-04: OCCT adapterの`CaptureTransferShape(handle)` / `RestoreTransferShape(bytes)`は
+  同一配布版のプロセス間専用とする。戻り値は`Result<string>` / `Result<KernelShapeHandle>`、
+  Qt/OCCT型を外へ出さない。版付きbinary BRepの完全読込と妥当性を検査し、形状の近似・修復はしない。
+  使い捨てキャッシュと転送でのみ使い、永続KCDや独立部品のテキストBRepを置換しない。
+  未知の版・切断・余剰データ・無効形状は拒否し、元文書を保持して定義からの再評価へ戻す。
 
 ## 13. Modeling preview services
 

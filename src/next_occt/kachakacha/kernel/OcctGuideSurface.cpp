@@ -23,7 +23,7 @@
 #include "kachakacha/kernel/OcctMatchedRuled.h"
 #include "kachakacha/kernel/OcctMatchedLoft.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
-#include "kachakacha/kernel/OcctBoundaryDistance.h"
+#include "kachakacha/kernel/OcctFiniteDistance.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <TopoDS_Edge.hxx>
@@ -33,7 +33,6 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
-#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
 #include <Extrema_ExtFlag.hxx>
 #include <GeomAbs_Shape.hxx>
@@ -47,7 +46,6 @@
 #include <gp_Ax1.hxx>
 #include <gp_Dir.hxx>
 #include <BRepTools.hxx>
-#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
@@ -65,7 +63,6 @@
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
-#include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Cone.hxx>
@@ -770,43 +767,25 @@ struct Deviation {
     const double samplingTolerance = SamplingToleranceMm(tolerance);
     double sum = 0.0;
     std::size_t count = 0;
-    BRepExtrema_DistShapeShape measure;
-    const double deflection=std::max(tolerance.modelLinearMm * 0.1, 1.0e-9);
-    measure.SetDeflection(deflection);
-    measure.LoadS2(shape);
-    const detail::NativeBoundaryDistance boundary(shape);
-    for (std::size_t index = 0; index < request.chains.size(); ++index) {
-        const GuideChain& chain = request.chains[index];
-        if (chain.segments.empty()) {
-            continue;
+    std::vector<detail::NativeDistanceProbe> probes;
+    std::vector<std::size_t> chains;
+    for(std::size_t index=0;index<request.chains.size();++index) {
+        const auto& chain=request.chains[index];
+        if(chain.segments.empty()||chain.role==ChainRole::Centerline)continue;
+        const bool boundary=chain.role==ChainRole::BoundarySide||chain.role==ChainRole::OuterBoundary
+            ||chain.role==ChainRole::HoleBoundary;
+        for(const auto& point:ProbePoints(chain,samplingTolerance)) {
+            probes.push_back({ToPoint(point),boundary});chains.push_back(index);
         }
-        if (chain.role == ChainRole::Centerline) {
-            continue;   // 中心線は断面を運ぶ道筋で、面の上には乗らない(乗らなくて正しい)
-        }
-        double chainWorst = 0.0;
-        for (const Vector3& point : ProbePoints(chain, samplingTolerance)) {
-            const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(ToPoint(point));
-            double distance=-1;
-            if(chain.role==ChainRole::BoundarySide||chain.role==ChainRole::OuterBoundary||chain.role==ChainRole::HoleBoundary) {
-                // Native trim edges and points classified on the finite face give
-                // conservative distance bounds. Accept only numerical coincidence
-                // below the existing solver precision; displaced boundaries and
-                // all interior guides still use full BRep distance.
-                if(const auto exact=boundary.Coincident(ToPoint(point),deflection))distance=*exact;
-            }
-            if(distance<0) {
-                measure.LoadS1(vertex);measure.Perform();
-                if(!measure.IsDone()||measure.NbSolution()<1)continue;
-                distance=measure.Value();
-            }
-            sum += distance * distance;
-            ++count;
-            chainWorst = std::max(chainWorst, distance);
-            deviation.measured = true;
-        }
-        if (chainWorst > deviation.maximumMm) {
-            deviation.maximumMm = chainWorst;
-            deviation.worstChainIndex = index;
+    }
+    const auto distances=detail::MeasureFinitePoints(shape,probes,std::max(tolerance.modelLinearMm*.1,1e-9));
+    // Preserve serial summation and first-chain tie-breaking regardless of
+    // worker completion order. Finite trims, holes and solver precision match.
+    for(std::size_t i=0;i<distances.size();++i) {
+        const double distance=distances[i];if(distance<0)continue;
+        sum+=distance*distance;++count;deviation.measured=true;
+        if(distance>deviation.maximumMm) {
+            deviation.maximumMm=distance;deviation.worstChainIndex=chains[i];
         }
     }
     if (count > 0) {

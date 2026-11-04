@@ -15,6 +15,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctFiniteDistance.h"
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <TopExp_Explorer.hxx>
@@ -36,6 +37,8 @@
 #include <Geom_TrimmedCurve.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Hypr.hxx>
+#include <gp_Pln.hxx>
+#include <gp_Circ.hxx>
 #endif
 
 #include <algorithm>
@@ -1204,6 +1207,30 @@ KACHA_V2_TEST(kernel_fill, segmented_roof_stays_inside_its_boundary_envelope)
     Require(m.minimum.y>=-27.1 && m.maximum.y<=0.1, "前後へ折り返さない");
     Require(m.minimum.z>=-0.1 && m.maximum.z<=6.1, "底より下へ垂れたり上へ尖ったりしない");
     ReleaseShape(built.Value().handle);
+}
+
+KACHA_V2_TEST(kernel_surface, private_parallel_deviation_keeps_finite_holes_order_and_source)
+{
+    using namespace kachakacha::v2;
+    BRepBuilderAPI_MakeFace face(gp_Pln(gp_Pnt(0,0,0),gp_Dir(0,0,1)),0,20,0,20);
+    auto hole=BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(10,10,0),gp_Dir(0,0,1)),2)).Edge()).Wire();
+    hole.Reverse();face.Add(hole);const auto source=face.Face();
+    Require(BRepCheck_Analyzer(source).IsValid(),"native finite face with actual hole");
+    const auto handle=kernel::StoreShape(source);const auto before=kernel::CaptureOutputShape(handle);
+    Require(before.HasValue(),"capture unchanged native source before concurrent searches");
+    std::vector<kernel::detail::NativeDistanceProbe> points;
+    const std::vector<gp_Pnt> locations{{5,5,.75},{10,10,0},{22,10,0},{0,10,0},{10,10,1},{8,7,0}};
+    const std::vector<double> expected{.75,2,2,0,std::sqrt(5.),0};
+    for(int i=0;i<24;++i)for(const auto& point:locations)points.push_back({point,i%2==0});
+    const auto serial=kernel::detail::MeasureFinitePoints(source,points,1e-7,0);
+    const auto parallel=kernel::detail::MeasureFinitePoints(source,points,1e-7);
+    Require(serial.size()==points.size()&&parallel.size()==serial.size(),"every original probe is retained");
+    for(std::size_t i=0;i<serial.size();++i) {
+        RequireNear(parallel[i],serial[i],1e-12,"worker completion never changes ordered measurements");
+        RequireNear(parallel[i],expected[i%expected.size()],1e-7,"finite hole and outer continuation distances stay physical");
+    }
+    Require(before.Value()==kernel::CaptureOutputShape(handle).Value(),"parallel searches do not mutate source topology or curves");
+    kernel::ReleaseShape(handle);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

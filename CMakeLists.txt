@@ -789,6 +789,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctMeshCache.cpp
     src/next_occt/kachakacha/kernel/OcctBoundaryDistance.cpp
+    src/next_occt/kachakacha/kernel/OcctFiniteDistance.cpp
     src/next_occt/kachakacha/kernel/OcctMeshPlanarFaces.cpp
     src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp

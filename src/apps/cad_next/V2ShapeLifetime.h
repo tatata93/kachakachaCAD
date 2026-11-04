@@ -6,9 +6,19 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace v2ui {
 using NativeShapes=std::map<std::string,kachakacha::v2::modeling::KernelShapeHandle>;
+
+struct ShapeListOwner {
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> values;
+    explicit ShapeListOwner(const decltype(values)& handles):values(handles){}
+    ShapeListOwner(const ShapeListOwner&)=delete;
+    ShapeListOwner& operator=(const ShapeListOwner&)=delete;
+    ~ShapeListOwner(){for(const auto handle:values)if(handle.Valid())kachakacha::v2::kernel::ReleaseShape(handle);}
+    [[nodiscard]] auto Take(std::size_t index){const auto handle=values[index];values[index]={};return handle;}
+};
 
 // A preview and a committed document may briefly refer to the same native shape.
 // Release only uncommitted handles, once, when replacing or cancelling a preview.

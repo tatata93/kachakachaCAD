@@ -134,6 +134,13 @@ std::vector<ShapeRebuildStep> PlanShapeRebuild(const document::DocumentSnapshot&
             step.outputOrdinal = ExtrudeOrdinal(snapshot, *found);
         }
         steps.push_back(std::move(step));
+        if(*kind==ShapeRebuildKind::Boolean) {
+            for(std::size_t i=1;i<found->outputs.size();++i) {
+                const auto& part=found->outputs[i];
+                if(part.kind!=domain::EntityKind::Part||part.entityId.IsNil())continue;
+                steps.push_back({*kind,found->id,part.entityId,found->displayName,i});
+            }
+        }
     }
     return steps;
 }

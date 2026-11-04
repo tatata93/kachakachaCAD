@@ -88,6 +88,7 @@ struct SurfaceInputState {
     std::vector<base::EntityId> boundaries;
     //! 離した面のもと(OffsetGuide のとき)。
     std::vector<base::EntityId> sourceSurfaces;
+    double offsetDistanceMm = 1.0;
     //! 中心線(ロフトのとき、0〜1 本)。
     std::vector<base::EntityId> centerlines;
     //! 人が「向き反転」を押した線。表へ入れるときに逆向きにする。

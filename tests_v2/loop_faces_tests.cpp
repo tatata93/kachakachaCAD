@@ -930,4 +930,36 @@ KACHA_V2_TEST(loop_faces, the_owners_atama_wires_drawn_backwards_still_make_both
     }
 }
 
+KACHA_V2_TEST(loop_faces, exact_fine_concave_lip_keeps_short_edges_and_no_false_junctions)
+{
+    const std::vector<Vector3> points{{0,0,0},{1,0,0},{1,.005,0},{.006,.005,0},{.006,.009,0},{0,.009,0}};
+    std::vector<GuideTableSelection> selections;
+    for(std::size_t i=0;i<points.size();++i)
+        selections.push_back(Sel(static_cast<std::uint8_t>(i+1),"edge",L(points[i],points[(i+1)%points.size()])));
+    const auto plan=PlanLoopFaces(selections,MakeTolerance());
+    Require(plan.HasValue(),"fine exact boundary can be planned");
+    Require(plan.Value().splits.empty(),"short parallel sides do not create T junctions");
+    Require(plan.Value().gaps.empty(),"an exactly closed outline has no gaps");
+    Require(plan.Value().unused.empty(),"all six sides remain in the outline");
+    Require(plan.Value().faces.size()==1,"one concave face");
+    const auto table=LoopFaceTable(selections,plan.Value().faces.front(),MakeTolerance());
+    Require(table.HasValue(),"the fine outline creates a usable table");
+}
+
+KACHA_V2_TEST(loop_faces, sub_pick_distance_gap_requires_explicit_repair)
+{
+    std::vector<GuideTableSelection> selections{
+        Sel(1,"bottom",L({0,0,0},{10,0,0})),Sel(2,"right",L({10,0,0},{10,10,0})),
+        Sel(3,"top",L({10,10,0},{0,10,0})),Sel(4,"left",L({0,10,0},{0,.005,0}))};
+    const auto plan=PlanLoopFaces(selections,MakeTolerance());
+    Require(plan.HasValue()&&plan.Value().faces.empty(),"a real .005mm gap does not silently close");
+    Require(plan.Value().gaps.size()==1,"the free endpoints are offered for repair");
+    const auto gap=plan.Value().gaps.front();const auto fix=CloseLoopGap(selections,gap);
+    Require(fix.HasValue(),"explicit line endpoint repair is available");
+    if(fix.Value().first)selections[gap.firstSelection].segments={*fix.Value().first};
+    if(fix.Value().second)selections[gap.secondSelection].segments={*fix.Value().second};
+    const auto repaired=PlanLoopFaces(selections,MakeTolerance());
+    Require(repaired.HasValue()&&repaired.Value().faces.size()==1&&repaired.Value().gaps.empty(),"repair creates exactly one closed face");
+}
+
 KACHA_V2_TEST_MAIN("loop_faces_tests")

@@ -6,6 +6,7 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QDockWidget>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -90,6 +91,7 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
     }
     // 主要6方式に入らないものは「その他」へ。**既存機能は消さない。**
     otherMethods_ = new QComboBox(widget());
+    otherMethods_->setObjectName(QStringLiteral("surfaceOtherMethods"));
     otherMethods_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     otherMethods_->addItem(QStringLiteral("その他の作り方..."));
     for (const GuideSurfaceMethod method : kachakacha::v2::app::OtherSurfaceMethods()) {
@@ -106,6 +108,17 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
         }
     });
     layout->addWidget(otherMethods_);
+    auto* offset=new QHBoxLayout();
+    offsetTitle_=new QLabel(QStringLiteral("離す距離"),widget());offset->addWidget(offsetTitle_);
+    offsetDistance_=new QDoubleSpinBox(widget());offsetDistance_->setObjectName(QStringLiteral("surfaceOffsetDistance"));
+    offsetDistance_->setAccessibleName(QStringLiteral("離す距離"));offsetDistance_->setDecimals(6);
+    offsetDistance_->setRange(-1000000,1000000);offsetDistance_->setSingleStep(.1);offsetDistance_->setSuffix(QStringLiteral(" mm"));
+    offsetDistance_->setKeyboardTracking(false);offsetDistance_->setValue(1);
+    offsetDistance_->setToolTip(QStringLiteral("面の向きに沿って離します。負の値は反対側です。元の面は残します。"));
+    QObject::connect(offsetDistance_,&QDoubleSpinBox::valueChanged,this,[this](double value){
+        if(!loading_&&offsetDistanceHandler_)offsetDistanceHandler_(value);
+    });
+    offset->addWidget(offsetDistance_,1);layout->addLayout(offset);
 }
 
 void V2SurfaceDock::BuildSlotRow(QVBoxLayout* layout, int index)
@@ -466,6 +479,11 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     const std::vector<QString>& sectionNamesJa = names.sections;
     loading_ = true;
     shown_ = state;
+    const bool offset=state.method==GuideSurfaceMethod::OffsetGuide;
+    offsetTitle_->setVisible(offset);offsetDistance_->setVisible(offset);offsetDistance_->setValue(state.offsetDistanceMm);
+    int otherIndex=0;const auto& others=kachakacha::v2::app::OtherSurfaceMethods();
+    for(std::size_t i=0;i<others.size();++i)if(others[i]==state.method)otherIndex=static_cast<int>(i+1);
+    otherMethods_->setCurrentIndex(otherIndex);
 
     // 1. 作り方。いま効いているものが押された形で見える。
     const auto& main = kachakacha::v2::app::MainSurfaceMethods();

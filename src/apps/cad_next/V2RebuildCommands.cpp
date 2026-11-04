@@ -251,7 +251,23 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
         ReportDiagnostics(built.Diagnostics());
         return false;
     }
-    partShapes_[output.ToString()] = built.Value().handle;
+    // Earlier files stored disconnected Boolean results in a single output.
+    // Preserve their geometry and references; new features store one output per solid.
+    if(feature.outputs.size()==1&&feature.outputs.front().entityId==output) {
+        partShapes_[output.ToString()]=built.Value().handle;
+        return true;
+    }
+    const auto split=kachakacha::v2::kernel::BooleanSolidComponents(built.Value().handle);
+    kachakacha::v2::kernel::ReleaseShape(built.Value().handle);
+    if(!split.HasValue()){ReportDiagnostics(split.Diagnostics());return false;}
+    v2ui::ShapeListOwner pieces{split.Value()};
+    if(pieces.values.size()!=feature.outputs.size()) {
+        SetStatus(QStringLiteral("足す・引くの再生成: 部品の数が保存時と一致しません。入力と分割結果を確認してください。"));
+        return false;
+    }
+    const auto at=std::find_if(feature.outputs.begin(),feature.outputs.end(),[&](const auto& item){return item.entityId==output;});
+    if(at==feature.outputs.end())return false;
+    partShapes_[output.ToString()] = pieces.Take(static_cast<std::size_t>(at-feature.outputs.begin()));
     return true;
 }
 

@@ -839,6 +839,8 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
 {
     using Out = Result<LoopFacePlan>;
     const double joinMm = std::max(tolerance.interactiveJoinMm, tolerance.modelLinearMm * 100.0);
+    // Picking/repair distance must not collapse distinct vertices or parallel short sides.
+    const double topologyMm = tolerance.modelLinearMm;
     std::size_t given = 0;
     for (const auto& selection : selections) {
         given += selection.segments.empty() ? 0 : 1;
@@ -853,7 +855,7 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
     }
     LoopFacePlan plan;
     // T 字: 端が別の線の途中に乗っていれば、その線を分けた片で輪を探す。
-    const auto splits = CollectSplits(selections, FindTJunctions(selections, joinMm));
+    const auto splits = CollectSplits(selections, FindTJunctions(selections, topologyMm));
     if (!splits.HasValue()) {
         return Out::Failure(splits.Diagnostics());
     }
@@ -863,7 +865,7 @@ Result<LoopFacePlan> PlanLoopFaces(const std::vector<GuideTableSelection>& selec
         return Out::Failure(pieces.Diagnostics());
     }
     plan.pieces = pieces.Value();
-    LoopGraph graph(joinMm);
+    LoopGraph graph(topologyMm);
     std::vector<LoopEdge> edges;
     for (std::size_t index = 0; index < plan.pieces.size(); ++index) {
         const LoopPiece& piece = plan.pieces[index];

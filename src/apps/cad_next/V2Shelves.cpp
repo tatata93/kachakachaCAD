@@ -439,6 +439,9 @@ void V2MainWindow::BuildSurfaceDock()
             RefreshSurfacePreview();
             RefreshSurfaceDock();
         });
+    surfaceDock_->SetOffsetDistanceHandler([this](double distance){
+        surfaceInput_.offsetDistanceMm=distance;RefreshSurfacePreview();RefreshSurfaceDock();
+    });
     surfaceDock_->SetActionHandlers([this] { ConfirmSurface(); },
         [this] {
             EndSurfacePreview(true);

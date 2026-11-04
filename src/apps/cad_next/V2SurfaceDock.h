@@ -26,12 +26,14 @@
 class QLabel;
 class QPushButton;
 class QComboBox;
+class QDoubleSpinBox;
 class QTreeWidget;
 class QVBoxLayout;
 
 class V2SurfaceDock final : public QDockWidget {
 public:
     explicit V2SurfaceDock(QWidget* parent);
+    void SetOffsetDistanceHandler(std::function<void(double)> handler){offsetDistanceHandler_=std::move(handler);}
 
     //! 欄ごとの名前。3D で押した順(断面は生成順)。
     struct SlotNames {
@@ -159,6 +161,9 @@ private:
     QLabel* state_ = nullptr;
     std::vector<QPushButton*> methodCards_;
     QComboBox* otherMethods_ = nullptr;
+    QLabel* offsetTitle_ = nullptr;
+    QDoubleSpinBox* offsetDistance_ = nullptr;
+    std::function<void(double)> offsetDistanceHandler_;
     void RefreshSlotTitles(kachakacha::v2::modeling::GuideSurfaceMethod method);
 
     //! 欄 1 つぶん。欄の並びは SurfaceSlotKey(0..kSurfaceSlotCount-1)と同じ。

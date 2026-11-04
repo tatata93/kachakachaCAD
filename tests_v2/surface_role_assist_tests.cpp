@@ -352,4 +352,22 @@ KACHA_V2_TEST(role_assist,spatial_outer_hole_and_island_keep_even_depth_regions)
     Require(holes==1,"island inside a hole is not subtracted a second time");
 }
 
+KACHA_V2_TEST(role_assist,separate_spatial_armour_regions_keep_each_hole_and_island)
+{
+    for(const bool reverse:{false,true}) {
+        DeterministicIdGenerator ids{921};std::vector<RoleWire> wires;
+        const auto loop=[&](double x,double size) {
+            return Wire(ids,{{x-size,-size,size*.2},{x+size,-size,-size*.2},{x+size,size,size*.2},
+                {x-size,size,-size*.2},{x-size,-size,size*.2}});
+        };
+        wires={loop(0,10),loop(0,6),loop(40,10),loop(40,6),loop(40,2)};
+        if(reverse)std::reverse(wires.begin(),wires.end());
+        const auto plan=kachakacha::v2::app::PlanSurfaceNetwork(wires,Tolerance());
+        Require(plan.tables.size()==3&&plan.unusedSegments.empty(),"two separate perforated surfaces and one island");
+        int holes=0;for(const auto& table:plan.tables)for(const auto& row:table.rows)
+            if(row.role==kachakacha::v2::modeling::ChainRole::HoleBoundary)++holes;
+        Require(holes==2,"both holes stay holes, rather than filled faces");
+    }
+}
+
 KACHA_V2_TEST_MAIN("surface_role_assist_tests")

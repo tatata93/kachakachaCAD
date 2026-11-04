@@ -33,6 +33,7 @@
 #include <algorithm>
 
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> GenericShapesCases();
 namespace {
 
 using kachakacha::v2::app::MirrorPlaneChoice;
@@ -307,7 +308,7 @@ bool SurfaceFolderPreview(V2MainWindow& w){
 
 std::vector<SelfTestCase> SurfaceEditCases()
 {
-    return {
+    std::vector<SelfTestCase> cases{
         {"HP-SE-01 面を2枚作り、向かい合う縁を押して G1 でつなぎ、取り消しで消える",
             CaseSurfaceEditBridge},
         {"HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
@@ -319,6 +320,7 @@ std::vector<SelfTestCase> SurfaceEditCases()
         {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
         {"HP-SE-07 folder metadata preserves preview but geometry invalidates it",SurfaceFolderPreview},
     };
+    const auto general=GenericShapesCases();cases.insert(cases.end(),general.begin(),general.end());return cases;
 }
 
 } // namespace kachakacha::v2::selftest

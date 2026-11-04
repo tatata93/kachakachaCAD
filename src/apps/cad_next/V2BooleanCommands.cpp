@@ -43,6 +43,9 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include "V2CornerDock.h"
+#include "V2ShapeLifetime.h"
+#include "kachakacha/app/ExplorerModel.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 
 #include <QString>
 #include <QVariant>
@@ -399,6 +402,10 @@ void V2MainWindow::RefreshBooleanDock()
              booleanOutcome_, previewShown)) {
         lines.push_back(QString::fromStdString(line));
     }
+    if(booleanBuilt_) {
+        const auto count=kachakacha::v2::kernel::CountSolidComponents({*booleanBuilt_});
+        if(count.HasValue()&&count.Value()>1)lines.push_back(QStringLiteral("確定すると %1 個の部品になります。").arg(count.Value()));
+    }
     // 相手の名前を並べる(何個でも)。
     std::string tools;
     QStringList toolNames;
@@ -519,13 +526,25 @@ void V2MainWindow::ConfirmBoolean()
     used.insert(used.end(), booleanInput_.tools.begin(), booleanInput_.tools.end());
     const auto outcome = booleanOutcome_;
     const auto handle = *booleanBuilt_;
+    const auto split=kachakacha::v2::kernel::BooleanSolidComponents(handle);
+    if(!split.HasValue()){ReportDiagnostics(split.Diagnostics());return;}
+    v2ui::ShapeListOwner pieces{split.Value()};
+    kachakacha::v2::domain::Feature feature;
+    feature.id=ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type=kachakacha::v2::domain::FeatureType::Boolean;feature.definition=definition;
+    feature.displayName=labelText;feature.inputEntityIds=used;
+    std::vector<kachakacha::v2::domain::Entity> outputs;
+    for(std::size_t i=0;i<pieces.values.size();++i) {
+        kachakacha::v2::domain::Entity entity;entity.id=ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind=EntityKind::Part;entity.createdBy=feature.id;
+        const auto name=labelText+(pieces.values.size()>1?" "+std::to_string(i+1):"");
+        entity.displayName=kachakacha::v2::app::UniqueDisplayName(session_->GetDocument().Snapshot(),EntityKind::Part,name);
+        feature.outputs.push_back({"part/"+std::to_string(i+1),entity.id,EntityKind::Part});outputs.push_back(entity);
+    }
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     // 出来た形の辺は、いまは持たない。持てるようになるまで、元の辺を使い回さない。
-    const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::Boolean,
-        std::move(definition), handle, {}, label, used);
-    if (madeId.IsNil()) {
-        return;   // まとまりは戻る(Transaction が捨てる)。
-    }
+    const auto added=session_->GetDocument().Run(kachakacha::v2::document::AddFeatureCommand(feature,outputs,label));
+    if(!added.committed){ReportDiagnostics(added.diagnostics);return;}
     // 使い切った2つは隠す。消すと、作り方をたどれなくなる。
     const auto hidden = session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
         used, kachakacha::v2::domain::Visibility::Hidden));
@@ -536,7 +555,7 @@ void V2MainWindow::ConfirmBoolean()
     if (!transaction.Commit()) {
         return;
     }
-    booleanBuilt_.reset(); // Ownership moved to the committed part.
+    for(std::size_t i=0;i<outputs.size();++i)partShapes_[outputs[i].id.ToString()]=pieces.Take(i);
     EndBoolean();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("%1: 体積が %2 mm3 から %3 mm3 になりました。")

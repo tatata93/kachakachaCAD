@@ -201,4 +201,15 @@ KACHA_V2_TEST(shape_rebuild, different_cells_of_same_wire_are_different_extrusio
         "同じWireの別区画を同じ押し出しの複数出力と誤認しない");
 }
 
+KACHA_V2_TEST(shape_rebuild, every_part_of_a_separating_boolean_is_rebuilt)
+{
+    DocumentSnapshot snapshot;DeterministicIdGenerator ids;
+    Add(snapshot,ids,FeatureType::Boolean,EntityKind::Part,"cut");
+    const auto second=ids.NextTyped<IdKind::Entity>();
+    snapshot.features.front().outputs.push_back({"part/2",second,EntityKind::Part});
+    const auto steps=PlanShapeRebuild(snapshot);
+    Require(steps.size()==2,"both connected results must be regenerated after reopening");
+    Require(steps[0].outputEntityId!=steps[1].outputEntityId&&steps[1].outputEntityId==second,"preserve output IDs");
+}
+
 KACHA_V2_TEST_MAIN("shape_rebuild_tests")

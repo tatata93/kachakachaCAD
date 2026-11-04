@@ -79,6 +79,22 @@ void AddSectionControls(QWidget* body,QVBoxLayout* layout,QFormLayout* form)
     form->addRow(QStringLiteral("断面位置オフセット"),offset);
 }
 
+QComboBox* MakeMethodCombo(QWidget* body)
+{
+    auto* combo=new QComboBox(body);
+    combo->setObjectName(QStringLiteral("workPlaneMethod"));
+    for(const auto method:WorkPlaneMethods()) {
+        combo->addItem(Text(kachakacha::v2::modeling::WorkPlaneMethodNameJa(method)));
+        if(method==WorkPlaneMethod::CylinderAxis||method==WorkPlaneMethod::TangentThroughPoint
+            ||method==WorkPlaneMethod::TangentThroughEdge) {
+            auto* item=static_cast<QStandardItemModel*>(combo->model())->item(combo->count()-1);
+            item->setEnabled(false);
+            item->setToolTip(QStringLiteral("支持面を指定する入力が未対応です。フェイスで作図、または位置と向きの数値指定を使ってください。"));
+        }
+    }
+    return combo;
+}
+
 } // namespace
 
 V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
@@ -98,16 +114,7 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     name_->setPlaceholderText(QStringLiteral("空なら作業面1、作業面2…"));
     form_->addRow(QStringLiteral("名前"), name_);
 
-    method_ = new QComboBox(body_);
-    for (const auto method : WorkPlaneMethods()) {
-        method_->addItem(Text(kachakacha::v2::modeling::WorkPlaneMethodNameJa(method)));
-        if (method == WorkPlaneMethod::CylinderAxis || method == WorkPlaneMethod::TangentThroughPoint
-            || method == WorkPlaneMethod::TangentThroughEdge) {
-            auto* item = static_cast<QStandardItemModel*>(method_->model())->item(method_->count()-1);
-            item->setEnabled(false);
-            item->setToolTip(QStringLiteral("支持面を指定する入力が未対応です。フェイスで作図、または位置と向きの数値指定を使ってください。"));
-        }
-    }
+    method_ = MakeMethodCombo(body_);
     form_->addRow(QStringLiteral("作り方"), method_);
 
     standard_ = new QComboBox(body_);
@@ -128,9 +135,11 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     }
 
     referencePlane_ = AddPlaneRow(QStringLiteral("基準平面"));
+    referencePlane_->setObjectName(QStringLiteral("workPlaneReference"));
     secondPlane_ = AddPlaneRow(QStringLiteral("相手の平面"));
     offset_ = AddNumberRow(QStringLiteral("離す距離"), -100000.0, 100000.0, 0.0,
         QStringLiteral(" mm"));
+    offset_->setObjectName(QStringLiteral("workPlaneDistance"));
     axisPoint_ = AddVectorRow(QStringLiteral("軸の点 mm"), Vector3{0.0, 0.0, 0.0}, 1.0);
     axisDirection_ = AddVectorRow(QStringLiteral("軸の向き"), Vector3{1.0, 0.0, 0.0}, 0.1);
     angle_ = AddNumberRow(QStringLiteral("回す角度"), -360.0, 360.0, 0.0,

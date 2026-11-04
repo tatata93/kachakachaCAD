@@ -534,6 +534,7 @@ V2MainWindow::SurfaceTableFromInput(
     // 手動固定は要求までそのまま渡す。カーネルに並べ替えさせない。
     table.lockSectionOrder = input.ordering == SurfaceOrdering::ManualLock;
     table.fourEdgeStyle = input.fourEdgeStyle;
+    table.offsetDistanceMm = input.offsetDistanceMm;
     if (input.method == GuideSurfaceMethod::PlanarBoundary) {
         auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
             input.boundaries,

@@ -156,6 +156,7 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     coordinateLayout->addLayout(wireForm_);
 
     createWire_ = new QPushButton(QStringLiteral("この座標で線を作る"), coordinatePage);
+    createWire_->setObjectName(QStringLiteral("drawingCreateCoordinates"));
     QObject::connect(createWire_, &QPushButton::clicked, this, [this] { PressCreateWire(); });
     coordinateLayout->addWidget(createWire_);
     message_ = new QLabel(coordinatePage);
@@ -537,6 +538,7 @@ void V2DrawingDock::BuildArcRows(QFormLayout* form)
 void V2DrawingDock::BuildDirectWireRows(QFormLayout* form)
 {
     wireKind_ = new QComboBox(body_);
+    wireKind_->setObjectName(QStringLiteral("drawingCoordinateKind"));
     for (const DirectWireKind kind : DirectWireKinds()) {
         wireKind_->addItem(Text(kachakacha::v2::app::DirectWireKindNameJa(kind)));
     }
@@ -544,8 +546,11 @@ void V2DrawingDock::BuildDirectWireRows(QFormLayout* form)
     for (std::size_t index = 0; index < wirePoints_.size(); ++index) {
         wirePoints_[index] = AddVectorRow(form,
             QStringLiteral("点%1 mm").arg(static_cast<int>(index) + 1));
+        for(std::size_t axis=0;axis<3;++axis)wirePoints_[index][axis]->setObjectName(
+            QStringLiteral("drawingCoordinateP%1_%2").arg(index+1).arg(axis));
     }
     wireRadius_ = new V2NumericSpinBox(body_);
+    wireRadius_->setObjectName(QStringLiteral("drawingCoordinateRadius"));
     // 0 も入れられる。断るのは core(UI-D002)で、欄が黙って 0.001 に寄せない。
     wireRadius_->setRange(0.0, 100000.0);
     wireRadius_->setDecimals(3);
@@ -574,6 +579,7 @@ std::array<QDoubleSpinBox*, 3> V2DrawingDock::AddVectorRow(QFormLayout* form,
         auto* field = new V2NumericSpinBox(row);
         field->setRange(-100000.0, 100000.0);
         field->setDecimals(3);
+        field->setAccessibleName(label+QStringLiteral(" %1").arg(index+1));
         field->setSingleStep(1.0);
         rowLayout->addWidget(field);
         fields[index] = field;

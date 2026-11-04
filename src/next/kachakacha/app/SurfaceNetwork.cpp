@@ -110,7 +110,18 @@ SurfaceNetworkPlan SpatialHoles(const std::vector<modeling::SnapCurve>& curves,
     modeling::SnapScene scene;scene.curves=curves;
     const auto boundaries=DetectSpatialBoundaries(scene,tolerance);
     if(boundaries.size()<2)return {};
-    for(std::size_t outer=0;outer<boundaries.size();++outer) {
+    std::vector<std::size_t> order;
+    for(std::size_t i=0;i<boundaries.size();++i)order.push_back(i);
+    const auto extent=[&](std::size_t i){geometry::Bounds3 bounds;for(const auto& p:boundaries[i].sampled)bounds.Add(p);return bounds.DiagonalLength();};
+    std::stable_sort(order.begin(),order.end(),[&](auto a,auto b){return extent(a)>extent(b);});
+    SurfaceNetworkPlan result;std::vector<bool> assigned(boundaries.size(),false);
+    const auto append=[&](modeling::GuideTable& table,std::size_t i,modeling::ChainRole role) {
+        modeling::GuideTableRow row;row.role=role;row.segments=boundaries[i].segments;
+        row.sourceWireIds=boundaries[i].entityIds;row.sourceLabels.assign(row.sourceWireIds.size(),"境界");
+        table.rows.push_back(std::move(row));
+    };
+    for(const auto outer:order) {
+        if(assigned[outer])continue;
         auto fit=geometry::FitPlane(boundaries[outer].sampled);
         if(!fit.valid || fit.maximumDeviationMm<=tolerance.modelLinearMm)continue;
         geometry::Vector3 area{};const auto& points=boundaries[outer].sampled;
@@ -119,32 +130,38 @@ SurfaceNetworkPlan SpatialHoles(const std::vector<modeling::SnapCurve>& curves,
         fit.normal=geometry::Normalized(area);
         const auto frame=geometry::MakeFrame(fit);
         const auto polygon=geometry::ProjectToFrame(boundaries[outer].sampled,frame);
-        bool contains=true;
+        std::vector<bool> member(boundaries.size(),false);member[outer]=true;
         for(std::size_t hole=0;hole<boundaries.size();++hole)if(hole!=outer)
-            for(const auto& p:geometry::ProjectToFrame(boundaries[hole].sampled,frame))
-                contains=contains&&geometry::ContainsPoint(polygon,p);
-        if(!contains)continue;
+            if(!assigned[hole]) {
+                const auto child=geometry::ProjectToFrame(boundaries[hole].sampled,frame);
+                member[hole]=std::all_of(child.begin(),child.end(),[&](const auto& p){return geometry::ContainsPoint(polygon,p);});
+            }
+        if(std::count(member.begin(),member.end(),true)<2)continue;
         std::vector<std::vector<bool>> inside(boundaries.size(),std::vector<bool>(boundaries.size(),false));
         std::vector<int> depth(boundaries.size(),0);
-        for(std::size_t i=0;i<boundaries.size();++i)for(std::size_t j=0;j<boundaries.size();++j)if(i!=j) {
+        for(std::size_t i=0;i<boundaries.size();++i)for(std::size_t j=0;j<boundaries.size();++j)if(i!=j&&member[i]&&member[j]) {
             const auto parent=geometry::ProjectToFrame(boundaries[j].sampled,frame);
             const auto child=geometry::ProjectToFrame(boundaries[i].sampled,frame);
             inside[i][j]=std::all_of(child.begin(),child.end(),[&](const auto& p){return geometry::ContainsPoint(parent,p);});
             if(inside[i][j])++depth[i];
         }
-        const auto append=[&](modeling::GuideTable& table,std::size_t i,modeling::ChainRole role) {
-            modeling::GuideTableRow row;row.role=role;row.segments=boundaries[i].segments;
-            row.sourceWireIds=boundaries[i].entityIds;row.sourceLabels.assign(row.sourceWireIds.size(),"境界");
-            table.rows.push_back(std::move(row));
-        };
-        SurfaceNetworkPlan result;
-        for(std::size_t island=0;island<boundaries.size();++island)if(depth[island]%2==0) {
+        for(std::size_t island=0;island<boundaries.size();++island)if(member[island]&&depth[island]%2==0) {
             modeling::GuideTable table;table.method=modeling::GuideSurfaceMethod::BoundaryFill;
             append(table,island,modeling::ChainRole::BoundarySide);
             for(std::size_t hole=0;hole<boundaries.size();++hole)
                 if(inside[hole][island]&&depth[hole]==depth[island]+1)append(table,hole,modeling::ChainRole::HoleBoundary);
             result.tables.push_back(std::move(table));
         }
+        for(std::size_t i=0;i<assigned.size();++i)assigned[i]=assigned[i]||member[i];
+    }
+    if(result.tables.empty())return {};
+    for(std::size_t i=0;i<boundaries.size();++i)if(!assigned[i]) {
+        const auto fit=geometry::FitPlane(boundaries[i].sampled);
+        const bool flat=fit.valid&&fit.maximumDeviationMm<=tolerance.modelLinearMm;
+        modeling::GuideTable table;table.method=flat?modeling::GuideSurfaceMethod::PlanarBoundary:modeling::GuideSurfaceMethod::BoundaryFill;
+        append(table,i,flat?modeling::ChainRole::OuterBoundary:modeling::ChainRole::BoundarySide);
+        result.tables.push_back(std::move(table));
+    }
         for(const auto& curve:curves) {
             const bool used=std::any_of(boundaries.begin(),boundaries.end(),[&](const auto& boundary){
                 if(std::find(boundary.entityIds.begin(),boundary.entityIds.end(),curve.entityId)==boundary.entityIds.end())return false;
@@ -155,8 +172,6 @@ SurfaceNetworkPlan SpatialHoles(const std::vector<modeling::SnapCurve>& curves,
             if(!used)result.unusedSegments.push_back({curve.entityId,"境界に使わない線",{curve.segment}});
         }
         return result;
-    }
-    return {};
 }
 
 bool IndependentCycle(std::vector<bool> cycle, std::vector<std::vector<bool>>& basis)

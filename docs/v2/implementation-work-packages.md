@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | WP-00 | 完了(`25d9982`、文書監査、Windows 18試験、self-test) | なし | 規範文書と受入基準の凍結 |
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
-| WP-02 | 完了(`codex/v2-wp01-build-scaffold`、v2_foundation_tests 22件) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
+| WP-02 | 進行中(Codex、2026-11-04段階12。実装済み形状転送診断KER-X001の台帳登録漏れを整合) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 重点検証済み(Codex、2026-11-04段階3。型付きUUIDと依存順序の一度検証。document/構造試験成功、1000線確定42.54→13.27 ms。全体検証は後段) | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |

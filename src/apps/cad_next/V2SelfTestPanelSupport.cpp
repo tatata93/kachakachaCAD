@@ -17,6 +17,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include <QApplication>
 #include <QString>
 #include <QDoubleSpinBox>
@@ -24,6 +25,9 @@
 #include <QLabel>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
+#include <QByteArray>
+#include <QIODevice>
 #include <QPixmap>
 #include <algorithm>
 #include <iostream>
@@ -93,8 +97,15 @@ bool CheckStoredSkin(V2MainWindow& w,EntityId made,EntityId source)
     auto result=w.BuildSurfaceFromTable(a.Value(),false);auto support=w.BuildSurfaceFromTable(b.Value(),false);
     if(!result||!support)return false;
     const bool ok=OnOriginalSkin(result->handle,support->handle);
+    const auto output=qEnvironmentVariable("KACHACAD_PANEL_OWNER_OUTPUT");
+    bool stored=true;
+    if(ok&&!output.isEmpty()) {
+        const auto native=kernel::CaptureOutputShape(result->handle);QFile file(output+"/native-body-source.brep");
+        const auto bytes=native.HasValue()?QByteArray::fromStdString(native.Value()):QByteArray{};
+        stored=native.HasValue()&&file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size();
+    }
     kernel::ReleaseShape(result->handle);kernel::ReleaseShape(support->handle);
-    return Explain("interior geometry stays on original skin including the corner",ok);
+    return Explain("interior geometry stays on original skin including the corner",ok&&stored);
 }
 
 bool Confirm(V2MainWindow& w,const app::SelectionSet& selected,EntityId& made,bool first)
@@ -200,17 +211,15 @@ bool Owner(V2MainWindow& w)
     auto* exporter=V2OutputTool::Open(w,0);
     const bool stl=exporter->SaveTo(output+"/body-solid.stl");exporter->ChooseFormat(1);
     const auto stepPath=output+"/body-solid.step";
-    // This legacy C0 carrier is known to change in OCCT STEP round-trip.
-    // Assert the explicit refusal and absence of a corrupt output, not success.
+    // This carrier has genuine normal creases. The smooth parameter-span
+    // repair must not bridge them or weaken the strict STEP read-back gate.
     const bool step=exporter->SaveTo(stepPath);QString problem;
     for(const auto* label:exporter->findChildren<QLabel*>())problem+=label->text()+"\n";
-    const bool rejected=!step&&!QFileInfo::exists(stepPath)
-        &&problem.contains(QStringLiteral("STEPを再読込すると立体の形または閉鎖性が変わります"))
-        &&problem.contains(QStringLiteral("このSTEPは保存しません"))&&problem.contains("volume=");
+    const bool complete=!step&&!QFileInfo::exists(stepPath)&&problem.contains(QStringLiteral("EXP-P003"));
     if(!step)Note(problem.toUtf8().constData());
     exporter->ChooseFormat(2);const bool native=exporter->SaveTo(output+"/body-solid-independent.kcd2");
     exporter->close();
-    if(!Explain("reopened body solid exports STL and native KCD; changed STEP is explicitly rejected",stl&&native&&rejected))return false;
+    if(!Explain("reopened creased body retains native/STL geometry and refuses a changed STEP",stl&&native&&complete))return false;
     if(!w.OpenDocumentFile(output+"/body-with-door-notch.kcd2"))return false;
     w.Viewport().ClearIsolation();face.entityIds={made};w.Viewport().SetSelection(face);w.Viewport().IsolateSelection();
     auto* automatic=w.findChild<QComboBox*>("fabricationAutomaticGeneration");if(!automatic)return false;automatic->setCurrentIndex(0);

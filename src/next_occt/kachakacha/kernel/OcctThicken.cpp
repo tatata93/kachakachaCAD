@@ -14,6 +14,7 @@
 #include "kachakacha/kernel/OcctFoldedBandThicken.h"
 #include "kachakacha/kernel/OcctPlanarSheetThicken.h"
 #include "kachakacha/kernel/OcctRevolvedThicken.h"
+#include "kachakacha/kernel/OcctSpanThicken.h"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -280,6 +281,8 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         // Retain the general native offset path and its authoritative checks.
     }
     if(!folded)folded=detail::ThickenRevolvedProfile(face,thicknessMm,placement,tolerance);
+    if(!folded)if(const auto spans=detail::ThickenSmoothSpans(face,thicknessMm,placement,tolerance))
+        folded=Result<TopoDS_Shape>::Success(*spans);
     TopoDS_Shape base = face;
     if (!folded && startOffset != 0.0) {
         const auto moved = OffsetSurface(face, startOffset,tolerance);

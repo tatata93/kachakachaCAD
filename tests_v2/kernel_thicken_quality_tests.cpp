@@ -10,17 +10,23 @@
 #include "kachakacha/kernel/OcctImage.h"
 #include "kachakacha/kernel/OcctIntersectionPartition.h"
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
+#include "kachakacha/kernel/OcctSpanThicken.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
+#include <array>
+#include <fstream>
+#include <filesystem>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Tool.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepTools.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <Geom_Surface.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Shape.hxx>
 #include <TopExp_Explorer.hxx>
 #include <gp_Lin.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
@@ -45,6 +51,9 @@
 #include <gp_Pnt2d.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <NCollection_Array2.hxx>
+#include <STEPControl_Reader.hxx>
+#include <IFSelect_ReturnStatus.hxx>
+#include <sstream>
 #include <BRepPrimAPI_MakePrism.hxx>
 #endif
 using namespace kachakacha::v2;
@@ -534,6 +543,90 @@ KACHA_V2_TEST(thicken_quality, diagonal_hole_is_integrated_as_native_trim_not_uv
     kernel::ReleaseShape(handle);
 }
 
+
+KACHA_V2_TEST(thicken_quality, exact_c0_cylinder_spans_preserve_two_holes_thickness_and_step)
+{
+    const double pi=std::acos(-1.),w=std::cos(pi/8),c=12/std::sqrt(2.),t=12*std::tan(pi/8);
+    NCollection_Array2<gp_Pnt> poles(1,5,1,2);NCollection_Array2<double> weights(1,5,1,2);
+    const std::array<gp_Pnt,5> xy{{{12,0,0},{12,t,0},{c,c,0},{t,12,0},{0,12,0}}};
+    const std::array<double,5> ws{1,w,1,w,1};
+    for(int i=1;i<=5;++i)for(int j=1;j<=2;++j){poles(i,j)=gp_Pnt(xy[i-1].X(),xy[i-1].Y(),(j-1)*30);weights(i,j)=ws[i-1];}
+    NCollection_Array1<double> uk(1,3),vk(1,2);uk(1)=0;uk(2)=.4;uk(3)=1;vk(1)=0;vk(2)=30;
+    NCollection_Array1<int> um(1,3),vm(1,2);um(1)=3;um(2)=2;um(3)=3;vm.Init(2);
+    const occ::handle<Geom_Surface> surface=new Geom_BSplineSurface(poles,weights,uk,vk,um,vm,2,1);
+    Require(surface->Continuity()==GeomAbs_C0,"unequal rational parameter spans are globally C0");
+    const auto face=PerforatedFace(surface,1,30,true);
+    Require(kernel::detail::ThickenSmoothSpans(face,.5,fabrication::ThicknessPlacement::Centered,{}).has_value(),"exact span path is used");
+    const auto theta=[&](double u){const auto p=surface->Value(u,0);return std::atan2(p.Y(),p.X());};
+    const auto triangle=[&](int n){double sum=theta(.35)+theta(.55);for(int i=1;i<n;++i)sum+=(i%2?4:2)*theta(.35+.2*i/n);return 12*(theta(.55)-sum/(3*n));};
+    const double triangular=triangle(10000);test::RequireNear(triangular,triangle(20000),1e-10,"independent angular integral converges");
+    const double area=pi*.5*30-(theta(.8)-theta(.6))*9-(theta(.25)-theta(.1))*7-triangular;
+    for(bool individual:{false,true})for(bool reverse:{false,true})for(auto placement:{fabrication::ThicknessPlacement::Centered,
+        fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside}) {
+        TopoDS_Shape oriented=face;if(reverse)oriented.Reverse();
+        const auto source=kernel::StoreShape(oriented);
+        const auto before=kernel::CaptureOutputShape(source);Require(before.HasValue(),"source native trim captured");
+        const auto built=kernel::ThickenSurface(source,.5,placement,{});
+        Require(built.HasValue(),"C0 trimmed source thickens: "+built.FirstSummaryJa());
+        auto made=built.Value();
+        if(individual) {
+            const auto separate=kernel::detail::ThickenSmoothSpans(oriented,.5,placement,{},true);
+            Require(separate.has_value(),"independent exact span walls unite without filling openings");
+            kernel::ReleaseShape(made.handle);made.handle=kernel::StoreShape(*separate);
+            GProp_GProps facts;kernel::detail::VolumeProperties(*separate,facts);made.volumeMm3=facts.Mass();
+        }
+        double r=11.75,R=12.25;
+        if(placement!=fabrication::ThicknessPlacement::Centered) {
+            const bool inward=(placement==fabrication::ThicknessPlacement::Inside)!=reverse;
+            r=inward?11.5:12;R=inward?12:12.5;
+        }
+        const double expected=area*(R*R-r*r)*.5;
+        test::RequireNear(made.volumeMm3,expected,expected*1e-6,"both holes and notch retain analytic material volume");
+        const auto step=kernel::OutputStep({made.handle});
+        Require(step.HasValue(),"exact smooth offset spans survive strict STEP readback: "+step.FirstSummaryJa()+
+            (step.Diagnostics().empty()?std::string():step.Diagnostics().front().detailsJa));
+        STEPControl_Reader reader;std::istringstream input(step.Value());
+        Require(reader.ReadStream("c0-test.step",input)==IFSelect_RetDone&&reader.TransferRoots(),"read real STEP output");
+        TopoDS_Shape native;Require(kernel::LookupShape(made.handle,native),"native result exists");
+        for(const auto& solid:{native,reader.OneShape()}) {
+            IntCurvesFace_ShapeIntersector ray;ray.Load(solid,1e-7);
+            for(double u:{.1,.39,.41,.9}) {
+                const double a=theta(u);ray.Perform(gp_Lin(gp_Pnt(0,0,17),gp_Dir(std::cos(a),std::sin(a),0)),0,20);
+                Require(ray.NbPnt()==2,"two real offset skins on either side of the parameter seam");
+                const double aRadius=std::hypot(ray.Pnt(1).X(),ray.Pnt(1).Y()),bRadius=std::hypot(ray.Pnt(2).X(),ray.Pnt(2).Y());
+                test::RequireNear(std::min(aRadius,bRadius),r,1e-6,"inner skin has requested physical radius");
+                test::RequireNear(std::max(aRadius,bRadius),R,1e-6,"outer skin has requested physical radius");
+            }
+            for(const auto& uz:{std::pair{.15,6.},std::pair{.5,6.},std::pair{.7,25.}}) {
+                const double a=theta(uz.first);ray.Perform(gp_Lin(gp_Pnt(0,0,uz.second),gp_Dir(std::cos(a),std::sin(a),0)),0,20);
+                Require(ray.NbPnt()==0,"neither hole nor outer notch is filled");
+            }
+        }
+        Require(before.Value()==kernel::CaptureOutputShape(source).Value(),"source geometry and hole boundaries never change");
+        kernel::ReleaseShape(made.handle);kernel::ReleaseShape(source);
+    }
+}
+
+KACHA_V2_TEST(thicken_quality, genuinely_creased_carrier_is_not_misclassified_as_smooth_parameter_spans)
+{
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"concave-carrier-c0.brep");
+    Require(input.good(),"actual concave source fixture exists");
+    TopoDS_Shape source;BRep_Builder builder;BRepTools::Read(source,input,builder);
+    Require(!source.IsNull()&&BRepCheck_Analyzer(source).IsValid(),"valid original trimmed source");
+    const auto handle=kernel::StoreShape(source);const auto before=kernel::CaptureOutputShape(handle);
+    Require(before.HasValue(),"source captured before offset");
+    Require(!kernel::detail::ThickenSmoothSpans(source,.5,fabrication::ThicknessPlacement::Centered,{}),
+        "real normal discontinuities are never silently connected by the smooth-span path");
+    const auto made=kernel::ThickenSurface(handle,.5,fabrication::ThicknessPlacement::Centered,{});
+    Require(made.HasValue(),"actual finite carrier thickens: "+made.FirstSummaryJa());
+    const auto step=kernel::OutputStep({made.Value().handle});
+    Require(!step.HasValue()&&step.Diagnostics().front().code=="EXP-P003",
+        "known nonsmooth offset is explicitly refused when STEP changes its native volume");
+    const auto stl=kernel::OutputStl({made.Value().handle},.01);
+    Require(stl.HasValue(),"actual carrier supports closed STL: "+stl.FirstSummaryJa());
+    Require(before.Value()==kernel::CaptureOutputShape(handle).Value(),"all original trim curves and carrier geometry remain unchanged");
+    kernel::ReleaseShape(made.Value().handle);kernel::ReleaseShape(handle);
+}
 
 KACHA_V2_TEST(thicken_quality, open_spline_panel_with_notch_and_diagonal_hole_has_analytic_prism_mass)
 {

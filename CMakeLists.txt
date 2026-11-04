@@ -792,6 +792,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctMeshPlanarFaces.cpp
     src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctSpanThicken.cpp
     src/next_occt/kachakacha/kernel/OcctThickenToFace.cpp
     src/next_occt/kachakacha/kernel/OcctCorrectedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
@@ -1087,6 +1088,8 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_place_tests tests_v2/kernel_place_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_solid_tests tests_v2/kernel_solid_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_thicken_quality_tests tests_v2/kernel_thicken_quality_tests.cpp)
+    target_compile_definitions(kachakacha_v2_kernel_thicken_quality_tests PRIVATE
+        KACHACAD_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests_v2/fixtures")
     kachakacha_add_v2_kernel_test(kernel_warped_thicken_tests tests_v2/kernel_warped_thicken_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_envelope_tests tests_v2/kernel_loft_envelope_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_edge_finish_tests tests_v2/kernel_edge_finish_tests.cpp)

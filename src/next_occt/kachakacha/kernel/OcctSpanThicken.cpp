@@ -47,6 +47,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 #include <Standard_Type.hxx>
 #include <Standard_Failure.hxx>
 
@@ -54,8 +55,9 @@ namespace kachakacha::v2::kernel::detail {
 namespace {
 void Trace(const std::string& why) {
     if(const auto* path=std::getenv("KACHACAD_SPAN_TRACE")) {
-        if(std::string(path)=="1")std::cerr<<"span thickening: "<<why<<std::endl;
-        else {std::ofstream out(path,std::ios::app);out<<why<<"\n";}
+        const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        if(std::string(path)=="1")std::cerr<<"span thickening "<<ms<<": "<<why<<std::endl;
+        else {std::ofstream out(path,std::ios::app);out<<ms<<" "<<why<<"\n";}
     }
 }
 std::optional<TopoDS_Shape> Unavailable(const std::string& why) {
@@ -133,7 +135,7 @@ bool RestoreProvenTolerance(const TopoDS_Shape& shape,double limit) {
 std::optional<TopoDS_Shape> SplitSource(const TopoDS_Shape& source,double tolerance) {
     bool needed=false;int patches=0;
     for(TopExp_Explorer f(source,TopAbs_FACE);f.More();f.Next()) {
-        BRepAdaptor_Surface s(TopoDS::Face(f.Current()));
+        BRepAdaptor_Surface s(TopoDS::Face(f.Current()),false);
         Trace(std::string("source ")+BRep_Tool::Surface(TopoDS::Face(f.Current()))->DynamicType()->Name()+" type="+std::to_string(s.GetType()));
         if(s.GetType()!=GeomAbs_BSplineSurface){++patches;continue;}
         const auto b=s.BSpline();int nu=1,nv=1;
@@ -141,11 +143,15 @@ std::optional<TopoDS_Shape> SplitSource(const TopoDS_Shape& source,double tolera
         for(int i=2;i<b->NbUKnots();++i)if(b->UMultiplicity(i)>=b->UDegree()-1)++nu;
         for(int i=2;i<b->NbVKnots();++i)if(b->VMultiplicity(i)>=b->VDegree()-1)++nv;
         if(nu>256/nv)return std::nullopt;
-        needed=needed||nu*nv>1;patches+=nu*nv;if(patches>256)return std::nullopt;
+        // C1 supports already use the ordinary native offset path. Splitting
+        // them here needlessly repeats expensive trimming and area checks.
+        needed=needed||(nu*nv>1&&b->Continuity()==GeomAbs_C0);
+        patches+=nu*nv;if(patches>256)return std::nullopt;
     }
-    if(!needed)return Unavailable("no nonsmooth spans");
+    if(!needed)return Unavailable("no C0 parameter spans");
     BRepBuilderAPI_Copy copy(source,true,false);if(!copy.IsDone())return std::nullopt;
     const double limit=std::max(tolerance,MaximumTolerance(source));
+    Trace("begin exact span split");
     ShapeUpgrade_ShapeDivide split(copy.Shape());
     const occ::handle<ShapeUpgrade_FaceDivide> divider=new ShapeUpgrade_FaceDivide;
     divider->SetSplitSurfaceTool(new ExactKnotSplit);split.SetSplitFaceTool(divider);
@@ -153,12 +159,16 @@ std::optional<TopoDS_Shape> SplitSource(const TopoDS_Shape& source,double tolera
     split.SetMinTolerance(Precision::Confusion());split.SetMaxTolerance(limit);split.Perform();
     if(split.Status(ShapeExtend_FAIL))return Unavailable("native split reported failure");
     const auto result=split.Result();
+    Trace("end exact span split");
     if(result.IsNull()||!BRepCheck_Analyzer(result).IsValid())return Unavailable("invalid split");
     if(MaximumTolerance(result)>limit+1e-10&&!RestoreProvenTolerance(result,limit))
         return Unavailable("split tolerance "+std::to_string(MaximumTolerance(result))+" / "+std::to_string(limit));
     GProp_GProps before,after;
+    Trace("begin original area check");
     const double aError=BRepGProp::SurfaceProperties(source,before,1e-10,false);
+    Trace("begin split area check");
     const double bError=BRepGProp::SurfaceProperties(result,after,1e-10,false);
+    Trace("end area checks");
     if(!std::isfinite(aError)||!std::isfinite(bError)||aError>1e-8||bError>1e-8
         ||!std::isfinite(before.Mass())||!std::isfinite(after.Mass())||before.Mass()<=0||after.Mass()<=0
         ||std::abs(before.Mass()-after.Mass())>std::max(1e-7,before.Mass()*1e-8))
@@ -189,6 +199,26 @@ std::optional<TopoDS_Shape> CheckedWall(const TopoDS_Shape& shape,double toleran
         return Unavailable("wall export check");
     }
     return *solid;
+}
+std::optional<TopoDS_Shape> VerifiedSimpleWall(const TopoDS_Shape& source,double thickness,
+    fabrication::ThicknessPlacement placement,double tolerance) {
+    try {
+        BRepBuilderAPI_Copy copy(source,true,false);if(!copy.IsDone())return std::nullopt;
+        TopoDS_Shape base=copy.Shape();
+        if(placement==fabrication::ThicknessPlacement::Centered) {
+            BRepOffsetAPI_MakeOffsetShape offset;offset.PerformBySimple(base,-thickness*.5);
+            if(!offset.IsDone())return std::nullopt;base=offset.Shape();
+        }
+        BRepOffsetAPI_MakeThickSolid maker;
+        maker.MakeThickSolidBySimple(base,placement==fabrication::ThicknessPlacement::Inside?-thickness:thickness);
+        if(!maker.IsDone())return std::nullopt;
+        const auto solid=OrientedWall(maker.Shape());if(!solid)return std::nullopt;
+        const auto handle=StoreShape(*solid);
+        struct Guard {modeling::KernelShapeHandle handle;~Guard(){ReleaseShape(handle);}}guard{handle};
+        const auto exported=BuildStepText(handle,tolerance);
+        if(!exported.HasValue())return Unavailable("simple C0 wall failed strict STEP readback");
+        Trace("simple C0 wall passed strict STEP readback");return *solid;
+    }catch(const Standard_Failure& e){Trace(e.what());return std::nullopt;}
 }
 std::optional<TopoDS_Shape> JoinedAtSource(const TopoDS_Shape& source,double thickness,double tolerance) {
     BRepBuilderAPI_Copy copy(source,true,false);if(!copy.IsDone())return std::nullopt;
@@ -268,7 +298,14 @@ std::optional<TopoDS_Shape> ThickenSmoothSpans(const TopoDS_Shape& source,double
         // 0.1 rad; do not let that connect displaced skins across a real fold.
         if(!SmoothConnections(*prepared,sourcePrecision,std::max(1e-9,tolerance.modelAngularRad)))
             return Unavailable("source spans have a geometric crease");
-        if(!individualOnly)if(const auto joined=JoinedWall(*prepared,thickness,placement,sourcePrecision))return joined;
+        if(!individualOnly) {
+            Trace("begin verified simple wall");
+            // Use only the already checked C2 patches. A global-C0 offset can
+            // be healed by the STEP reader without changing aggregate bounds.
+            if(const auto simple=VerifiedSimpleWall(*prepared,thickness,placement,sourcePrecision))return simple;
+        }
+        Trace("begin joined exact span wall");
+        if(!individualOnly)if(const auto joined=JoinedWall(*prepared,thickness,placement,sourcePrecision)){Trace("end joined exact span wall");return joined;}
         Trace("individual exact span walls");const auto walls=IndividualWalls(*prepared,thickness,placement,sourcePrecision);
         if(!walls)return Unavailable("individual wall union");
         const auto checked=CheckedWall(*walls,tolerance.modelLinearMm);

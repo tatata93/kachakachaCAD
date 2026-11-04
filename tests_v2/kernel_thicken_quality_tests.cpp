@@ -544,6 +544,25 @@ KACHA_V2_TEST(thicken_quality, diagonal_hole_is_integrated_as_native_trim_not_uv
 }
 
 
+KACHA_V2_TEST(thicken_quality, c1_support_uses_existing_offset_without_c0_span_preprocessing)
+{
+    NCollection_Array2<gp_Pnt> poles(1,4,1,2);
+    const std::array<double,4> x{0,3,7,10},z{0,1,1,0};
+    for(int i=1;i<=4;++i)for(int j=1;j<=2;++j)poles(i,j)=gp_Pnt(x[i-1],(j-1)*5,z[i-1]);
+    NCollection_Array1<double> uk(1,3),vk(1,2);uk(1)=0;uk(2)=.5;uk(3)=1;vk(1)=0;vk(2)=1;
+    NCollection_Array1<int> um(1,3),vm(1,2);um(1)=3;um(2)=1;um(3)=3;vm.Init(2);
+    const occ::handle<Geom_Surface> surface=new Geom_BSplineSurface(poles,uk,vk,um,vm,2,1);
+    Require(surface->Continuity()==GeomAbs_C1,"fixture has a C1 parameter join");
+    const auto face=BRepBuilderAPI_MakeFace(surface,1e-7).Face();
+    const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+    Require(before.HasValue(),"capture unchanged C1 source");
+    Require(!kernel::detail::ThickenSmoothSpans(face,.2,fabrication::ThicknessPlacement::Outside,{}),
+        "C1 supports bypass C0-specific splitting and quadrature");
+    const auto built=kernel::ThickenSurface(source,.2,fabrication::ThicknessPlacement::Outside,{});
+    Require(built.HasValue(),"C1 support retains the established native thickening path: "+built.FirstSummaryJa());
+    Require(before.Value()==kernel::CaptureOutputShape(source).Value(),"C1 support is never modified by either path");
+    kernel::ReleaseShape(built.Value().handle);kernel::ReleaseShape(source);
+}
 KACHA_V2_TEST(thicken_quality, exact_c0_cylinder_spans_preserve_two_holes_thickness_and_step)
 {
     const double pi=std::acos(-1.),w=std::cos(pi/8),c=12/std::sqrt(2.),t=12*std::tan(pi/8);

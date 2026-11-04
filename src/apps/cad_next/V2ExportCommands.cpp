@@ -266,8 +266,13 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeSolidContent(
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     if (format == kachakacha::v2::app::ExportFormat::Step) {
+        // Pointer joining distance is not the model's geometric accuracy.
+        // Match the stricter STEP round-trip check, so an already validated
+        // solid is not run through native self-intersection checks again.
+        const double solidTolerance=std::min(1e-6,
+            session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
         const auto built = V2Calculation::Call(nullptr, "選択した部品のSTEPを生成しています…",
-        [](const auto&... values) { return kachakacha::v2::kernel::BuildStepForSelection(values...); }, shapes, tolerance);
+        [](const auto&... values) { return kachakacha::v2::kernel::BuildStepForSelection(values...); }, shapes, solidTolerance);
         if (!built.HasValue()) {
             return Out::Failure(built.Diagnostics());
         }

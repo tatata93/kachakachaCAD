@@ -14,10 +14,10 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 重点検証済み(Codex、2026-11-05段階13。offscreen固定180.50秒を再現。native分割/厚み形状の作成は1秒未満、BuildStepTextに集中。構造/台帳成功、出力側へ調査を移す。全体未完了) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 重点検証済み(Codex、2026-11-04段階9。読込9/視点7経路成功。ガイドのみ・部品混在の逐次/有限並列一致と構造検査成功。全体・配布検証の候補) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中(Codex、2026-11-05段階15。視点変更時の未使用style/描かない派生線/格子の空処理を削減。選択・hover・格子・再表示・section・CPU fallbackを保持して画面比較と計時を行う) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
-| WP-11 | 進行中(Codex、2026-11-05段階14。STEP選択出力の精度を文書幾何精度へ整合し重複native検査を除く。元形状・実再読込・全立体数/体積/寸法検査は維持。STL精度を変更しない) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
+| WP-11 | 重点検証済み(Codex、2026-11-05段階14。STEP検査を文書幾何精度へ整合。offscreen固定180.50→92.08秒、出力UI11例成功。小部品の厳密STEP追加。STL精度/実再読込を維持、全体は後段) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
 | WP-12 | 進行中(Claude。ER1/ER2 の受入モデル、図つきマニュアル、見本 .kcd2、文書を開く道、配布 script は完了。実機での配布zip確認と切替が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
 | WP-13 | 保留(オーナー指示待ち。「V2が満足いくものになるまでV1は消すな。満足したら指示する」2026-09-09)。準備だけ進める | WP-12 | 旧実装削除と最終整理 |
 | WP-14 | 重点検証済み(Codex、2026-11-04段階2。選択・候補照合索引、非表示測定遅延。UI13経路成功、ホバー中央値7.07→0.75 ms。全体検証は後段) | WP-08 | 統合UI/UX、選択、カーソル、スナップ、ToolSession、プロパティ、プレビュー、画面復元 |

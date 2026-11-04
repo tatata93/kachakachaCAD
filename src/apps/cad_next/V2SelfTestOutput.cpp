@@ -34,9 +34,9 @@
 #include <iostream>
 namespace kachakacha::v2::selftest {
 namespace {
-bool DrawOutputRectangle(V2MainWindow& window) {
+bool DrawOutputRectangle(V2MainWindow& window,double visibleWidth=200) {
     auto& viewport=window.Viewport();viewport.SetViewDirection(ViewDirection::Top);
-    viewport.SetViewCenter({});viewport.SetVisibleWidthMm(200);
+    viewport.SetViewCenter({});viewport.SetVisibleWidthMm(visibleWidth);
     window.SelectTool(modeling::DrawingTool::Rectangle);viewport.SetSnapSuppressed(true);
     viewport.ClickAt(QPointF(viewport.width()*0.35,viewport.height()*0.35));
     viewport.HoverAt(QPointF(viewport.width()*0.65,viewport.height()*0.65));
@@ -221,6 +221,20 @@ bool SelectedPatternPanels(V2MainWindow& w)
         &&w.Session().GetDocument().Revision()==revision);
 }
 
+bool SmallAccurateStep(V2MainWindow& w) {
+    w.RunCommand("file.new");if(!DrawOutputRectangle(w,.15))return false;
+    w.SetExtrudeChooser([](const app::ExtrudeChoice& initial,const app::ExtrudeFacts&){auto choice=initial;choice.distanceMm=.05;return std::optional<app::ExtrudeChoice>{choice};});
+    w.RunCommand("part.extrude");w.RunCommand("part.extrude");
+    if(!Explain("small profile makes a real closed part",CountOfKind(w,domain::EntityKind::Part)==1&&w.Viewport().ShapeViews().front().mesh.closed))return false;
+    w.Viewport().SetSelection(OutputSelection(w,false));const auto revision=w.Session().GetDocument().Revision();
+    if(!Explain("STEP eligibility uses model accuracy rather than pointer joining distance",w.CanExportSelectedParts()))return false;
+    QTemporaryDir folder;if(!folder.isValid())return false;auto* output=V2OutputTool::Open(w,1);
+    const bool saved=output->SaveTo(folder.filePath("small-accurate.step"));output->close();
+    const auto bytes=io::ReadWholeFile(folder.filePath("small-accurate.step").toStdString());
+    return Explain("small part passes actual STEP roundtrip without changing the document",saved&&bytes.HasValue()
+        &&bytes.Value().find("END-ISO-10303-21;")!=std::string::npos&&w.Session().GetDocument().Revision()==revision
+        &&w.Session().GetDocument().Snapshot().settings.tolerance.interactiveJoinMm==.01);
+}
 bool CaseOutputOwnership(V2MainWindow& w){
     if(!OutputBox(w))return false;
     w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
@@ -234,5 +248,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

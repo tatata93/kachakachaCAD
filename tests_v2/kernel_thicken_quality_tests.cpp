@@ -11,6 +11,8 @@
 #include "kachakacha/kernel/OcctIntersectionPartition.h"
 #include "kachakacha/kernel/OcctBoundaryCurves.h"
 #include "kachakacha/kernel/OcctSpanThicken.h"
+#include "kachakacha/kernel/OcctPlanarSplineThicken.h"
+#include "kachakacha/kernel/OcctBilinearSupport.h"
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -21,6 +23,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Tool.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepTools.hxx>
 #include <IntCurvesFace_ShapeIntersector.hxx>
@@ -544,6 +547,122 @@ KACHA_V2_TEST(thicken_quality, diagonal_hole_is_integrated_as_native_trim_not_uv
 }
 
 
+KACHA_V2_TEST(thicken_quality, planar_multiknot_spline_keeps_native_holes_notch_and_oriented_thickness)
+{
+    NCollection_Array2<gp_Pnt> poles(1,97,1,2);
+    NCollection_Array1<double> uk(1,97),vk(1,2);NCollection_Array1<int> um(1,97),vm(1,2);
+    vk(1)=0;vk(2)=30;vm.Init(2);um.Init(1);um(1)=um(97)=2;
+    for(int i=1;i<=97;++i){uk(i)=double(i-1)/96;for(int j=1;j<=2;++j)poles(i,j)=gp_Pnt(30*uk(i),(j-1)*30,0);}
+    const occ::handle<Geom_BSplineSurface> spline=new Geom_BSplineSurface(poles,uk,vk,um,vm,1,1);
+    const auto face=PerforatedFace(spline,1,30,true);
+    gp_Trsf placed;placed.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(0,1,0)),.7);placed.SetTranslationPart(gp_Vec(1000,-2000,3000));
+    const double area=30*(30-.2*9-.15*7-.2*12*.5),thickness=.4;
+    for(bool reverse:{false,true})for(auto placement:{fabrication::ThicknessPlacement::Centered,
+        fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside}) {
+        auto oriented=BRepBuilderAPI_Transform(face,placed,false).Shape();if(reverse)oriented.Reverse();
+        const auto source=kernel::StoreShape(oriented);const auto before=kernel::CaptureOutputShape(source);
+        Require(before.HasValue(),"capture placed multiknot planar source");
+        const auto prism=kernel::detail::ThickenPlanarSpline(oriented,thickness,placement,{});
+        Require(prism.has_value(),"full control hull proves a planar source without fragmenting it");
+        const auto handle=kernel::StoreShape(*prism);const auto checked=kernel::CheckSolidForExport(handle,1e-6);
+        Require(checked.HasValue()&&checked.Value().Ok(),"closed oriented planar spline wall");
+        test::RequireNear(checked.Value().volumeMm3,area*thickness,1e-6,"independent trimmed planar area times thickness");
+        const auto step=kernel::OutputStep({handle});Require(step.HasValue(),"planar spline wall passes real STEP validation");
+        STEPControl_Reader reader;std::istringstream input(step.Value());
+        Require(reader.ReadStream("planar-spline.step",input)==IFSelect_RetDone&&reader.TransferRoots(),"read independent STEP result");
+        for(const auto& shape:{*prism,reader.OneShape()}) {
+            IntCurvesFace_ShapeIntersector ray;ray.Load(shape,1e-7);
+            for(const auto& xy:{std::pair{4.5,6.},std::pair{15.,6.},std::pair{21.,25.}}) {
+                ray.Perform(gp_Lin(gp_Pnt(xy.first,xy.second,-2).Transformed(placed),gp_Dir(0,0,1).Transformed(placed)),0,5);
+                Require(ray.NbPnt()==0,"both holes and the outer notch stay empty");
+            }
+            ray.Perform(gp_Lin(gp_Pnt(27,17,-2).Transformed(placed),gp_Dir(0,0,1).Transformed(placed)),0,5);
+            Require(ray.NbPnt()==2,"two planar skins remain");
+            const double z0=(reverse?-1.:1.)*(placement==fabrication::ThicknessPlacement::Inside?-thickness:
+                placement==fabrication::ThicknessPlacement::Centered?-thickness*.5:0.);
+            const double z1=z0+(reverse?-thickness:thickness);gp_Trsf undo=placed.Inverted();
+            const double a=ray.Pnt(1).Transformed(undo).Z(),b=ray.Pnt(2).Transformed(undo).Z();
+            test::RequireNear(std::min(a,b),std::min(z0,z1),1e-6,"correct low skin in original frame");
+            test::RequireNear(std::max(a,b),std::max(z0,z1),1e-6,"correct high skin in original frame");
+        }
+        Require(before.Value()==kernel::CaptureOutputShape(source).Value(),"source support and every trim curve remain exact");
+        kernel::ReleaseShape(handle);kernel::ReleaseShape(source);
+    }
+    auto warped=occ::handle<Geom_BSplineSurface>::DownCast(spline->Copy());
+    warped->SetPole(49,2,gp_Pnt(15,30,1e-8));
+    const auto curved=PerforatedFace(warped,1,30,true);
+    Require(!kernel::detail::ThickenPlanarSpline(curved,.4,fabrication::ThicknessPlacement::Outside,{}),
+        "even a small real departure from the plane is never flattened");
+}
+KACHA_V2_TEST(thicken_quality, planar_prism_direction_uses_trimmed_face_not_control_hull_order)
+{
+    for(bool trimmed:{false,true}) {
+        const int count=trimmed?3:2;NCollection_Array2<gp_Pnt> poles(1,count,1,2);
+        NCollection_Array1<double> uk(1,count),vk(1,2);NCollection_Array1<int> um(1,count),vm(1,2);
+        um.Init(1);um(1)=um(count)=2;vm.Init(2);vk(1)=0;vk(2)=1;
+        for(int i=1;i<=count;++i) {
+            uk(i)=double(i-1)/(count-1);
+            const double x=trimmed?(i==1?0:i==2?2:1):(i-1)*10.;
+            poles(i,1)=gp_Pnt(x,0,0);poles(i,2)=gp_Pnt(x,trimmed?1:i==1?1:10,0);
+        }
+        const occ::handle<Geom_BSplineSurface> spline=new Geom_BSplineSurface(poles,uk,vk,um,vm,1,1);
+        const auto face=BRepBuilderAPI_MakeFace(spline,trimmed?.5:0.,1.,0.,1.,1e-7).Face();
+        for(bool reverse:{false,true})for(auto placement:{fabrication::ThicknessPlacement::Outside,fabrication::ThicknessPlacement::Inside}) {
+            TopoDS_Shape source=face;if(reverse)source.Reverse();
+            const auto result=kernel::detail::ThickenPlanarSpline(source,.2,placement,{});
+            Require(result.has_value(),"valid trimmed planar face supports exact oriented prism");
+            IntCurvesFace_ShapeIntersector ray;ray.Load(*result,1e-7);
+            ray.Perform(gp_Lin(gp_Pnt(trimmed?1.5:5.,.5,-1),gp_Dir(0,0,1)),0,2);
+            Require(ray.NbPnt()==2,"prism has two skins at material point");
+            const double normal=(trimmed?-1.:1.)*(reverse?-1.:1.);
+            const double shift=normal*(placement==fabrication::ThicknessPlacement::Outside?.2:-.2);
+            test::RequireNear(std::min(ray.Pnt(1).Z(),ray.Pnt(2).Z()),std::min(0.,shift),1e-7,"oriented low skin");
+            test::RequireNear(std::max(ray.Pnt(1).Z(),ray.Pnt(2).Z()),std::max(0.,shift),1e-7,"oriented high skin");
+        }
+        if(trimmed) {
+            const auto folded=BRepBuilderAPI_MakeFace(spline,1e-7).Face();
+            Require(!kernel::detail::ThickenPlanarSpline(folded,.2,fabrication::ThicknessPlacement::Outside,{}),
+                "a source whose active cells reverse orientation is not flattened");
+        }
+    }
+}
+KACHA_V2_TEST(thicken_quality, redundant_bilinear_knots_keep_trim_placement_and_bounded_normal)
+{
+    NCollection_Array2<gp_Pnt> poles(1,97,1,2);
+    NCollection_Array1<double> uk(1,97),vk(1,2);NCollection_Array1<int> um(1,97),vm(1,2);
+    vk(1)=0;vk(2)=30;vm.Init(2);um.Init(1);um(1)=um(97)=2;
+    for(int i=1;i<=97;++i){uk(i)=double(i-1)/96;for(int j=1;j<=2;++j)poles(i,j)=gp_Pnt(30*uk(i),(j-1)*30,5*uk(i)*(j-1));}
+    const occ::handle<Geom_BSplineSurface> spline=new Geom_BSplineSurface(poles,uk,vk,um,vm,1,1);
+    const auto face=PerforatedFace(spline,1,30,true);
+    gp_Trsf placed;placed.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(0,1,0)),.7);placed.SetTranslationPart(gp_Vec(1000,-2000,3000));
+    for(bool reverse:{false,true}) {
+        auto source=BRepBuilderAPI_Transform(face,placed,false).Shape();if(reverse)source.Reverse();
+        const auto original=kernel::StoreShape(source);const auto before=kernel::CaptureOutputShape(original);
+        const auto simple=kernel::detail::BilinearSupportCopy(source,.4,.01);
+        Require(simple.has_value(),"redundant grid has bounded equivalent bilinear support");
+        TopExp_Explorer faces(*simple,TopAbs_FACE);const auto copy=TopoDS::Face(faces.Current());faces.Next();
+        Require(!faces.More()&&copy.Orientation()==source.Orientation(),"one face and its orientation remain");
+        BRepAdaptor_Surface adaptor(copy,false);const auto support=adaptor.BSpline();
+        Require(support->NbUKnots()==2&&support->NbVKnots()==2,"calculation support has no redundant knot seams");
+        for(int i=1;i<=97;++i)for(int j=1;j<=2;++j)
+            test::RequireNear(support->Value(uk(i),vk(j)).Distance(spline->Value(uk(i),vk(j)).Transformed(placed)),0,1e-9,"location and same UV preserved");
+        const auto wall=kernel::detail::ThickenSmoothSpans(source,.4,fabrication::ThicknessPlacement::Centered,{});
+        Require(wall.has_value(),"equivalent support thickens and passes strict STEP");
+        const auto handle=kernel::StoreShape(*wall);const auto step=kernel::OutputStep({handle});
+        Require(step.HasValue(),"curved two-hole notched bilinear wall exports through real STEP reader");
+        Require(before.Value()==kernel::CaptureOutputShape(original).Value(),"all original curves and redundant source knots remain unchanged");
+        kernel::ReleaseShape(handle);kernel::ReleaseShape(original);
+    }
+    auto changed=occ::handle<Geom_BSplineSurface>::DownCast(spline->Copy());
+    changed->SetPole(49,2,gp_Pnt(15,30,2.5+1e-7));
+    Require(!kernel::detail::BilinearSupportCopy(PerforatedFace(changed,1,30,true),.4,.01),"real geometric variation is not removed");
+    NCollection_Array2<gp_Pnt> narrow(1,3,1,2);NCollection_Array1<double> nk(1,3);NCollection_Array1<int> nm(1,3);
+    nk(1)=0;nk(2)=1e-10;nk(3)=1;nm(1)=nm(3)=2;nm(2)=1;
+    for(int i=1;i<=3;++i)for(int j=1;j<=2;++j)narrow(i,j)=gp_Pnt(30*nk(i),(j-1)*30,i==2?1e-11:0);
+    const occ::handle<Geom_Surface> sharp=new Geom_BSplineSurface(narrow,nk,vk,nm,vm,1,1);
+    Require(!kernel::detail::BilinearSupportCopy(BRepBuilderAPI_MakeFace(sharp,1e-7).Face(),.4,.01),
+        "small position error in a narrow cell cannot hide a large thickness normal error");
+}
 KACHA_V2_TEST(thicken_quality, c1_support_uses_existing_offset_without_c0_span_preprocessing)
 {
     NCollection_Array2<gp_Pnt> poles(1,4,1,2);

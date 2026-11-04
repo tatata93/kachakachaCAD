@@ -3,6 +3,8 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctPlanarSplineThicken.h"
+#include "kachakacha/kernel/OcctBilinearSupport.h"
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepLib_CheckCurveOnSurface.hxx>
@@ -291,6 +293,13 @@ std::optional<TopoDS_Shape> IndividualWalls(const TopoDS_Shape& source,double th
 std::optional<TopoDS_Shape> ThickenSmoothSpans(const TopoDS_Shape& source,double thickness,
     fabrication::ThicknessPlacement placement,const geometry::GeometryTolerance& tolerance,bool individualOnly) {
     try {
+        if(!individualOnly)if(const auto planar=ThickenPlanarSpline(source,thickness,placement,tolerance)) {
+            Trace("proven planar spline prism");return planar;
+        }
+        if(!individualOnly)if(const auto bilinear=BilinearSupportCopy(source,thickness,tolerance.modelLinearMm))
+            if(const auto wall=VerifiedSimpleWall(*bilinear,thickness,placement,tolerance.modelLinearMm)) {
+                Trace("bounded bilinear support wall");return wall;
+            }
         auto prepared=SplitSource(source,tolerance.modelLinearMm);if(!prepared)return std::nullopt;
         const double sourcePrecision=std::max(tolerance.modelLinearMm,MaximumTolerance(source));
         // This is exact parameter subdivision, not a way to fill genuine

@@ -13,7 +13,7 @@
 | WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
-| WP-07 | 進行中(Codex、2026-11-04段階11。freeze単独実測で多節点degree1支持面の厚み4回各19〜38秒を特定。平面同等形状の不要なパッチ化を調査。形状/出力検査を維持) | WP-06 | Part作成、押し出し、Boolean、Subshape |
+| WP-07 | 重点検証済み(Codex、2026-11-04段階11。平面/双一次の計算コピーを全極・法線偏差・境界・穴・内外・配置・STEPで検査。厚み品質25例と構造成功。degree1旧経路へ戻す実験はSTEP失敗で不採用。全体と配布検証は後段、性能目標未達あり) | WP-06 | Part作成、押し出し、Boolean、Subshape |
 | WP-08 | 重点検証済み(Codex、2026-11-04段階9。読込9/視点7経路成功。ガイドのみ・部品混在の逐次/有限並列一致と構造検査成功。全体・配布検証の候補) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |

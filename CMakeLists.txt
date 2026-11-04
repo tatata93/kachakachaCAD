@@ -794,6 +794,8 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
     src/next_occt/kachakacha/kernel/OcctSpanThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctPlanarSplineThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctBilinearSupport.cpp
     src/next_occt/kachakacha/kernel/OcctThickenToFace.cpp
     src/next_occt/kachakacha/kernel/OcctCorrectedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp

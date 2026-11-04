@@ -18,8 +18,10 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <BRepTools_Quilt.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <Geom_BSplineSurface.hxx>
+#include <Geom_BSplineCurve.hxx>
 #include <Geom_Surface.hxx>
 #include <GeomAbs_JoinType.hxx>
 #include <GProp_GProps.hxx>
@@ -50,6 +52,7 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <atomic>
 #include <Standard_Type.hxx>
 #include <Standard_Failure.hxx>
 
@@ -65,6 +68,19 @@ void Trace(const std::string& why) {
 std::optional<TopoDS_Shape> Unavailable(const std::string& why) {
     Trace(why);
     return std::nullopt;
+}
+void TraceSupport(const TopoDS_Shape& shape,const char* name) {
+    if(!std::getenv("KACHACAD_SPAN_TRACE"))return;
+    int faces=0,edges=0,maxU=0,maxV=0,maxCurve=0,trimmed=0;
+    for(TopExp_Explorer f(shape,TopAbs_FACE);f.More();f.Next()) {
+        ++faces;BRepAdaptor_Surface s(TopoDS::Face(f.Current()),false);
+        if(s.GetType()==GeomAbs_BSplineSurface){maxU=std::max(maxU,s.BSpline()->NbUPoles());maxV=std::max(maxV,s.BSpline()->NbVPoles());}
+    }
+    for(TopExp_Explorer e(shape,TopAbs_EDGE);e.More();e.Next()) {
+        ++edges;double first,last;const auto b=occ::handle<Geom_BSplineCurve>::DownCast(BRep_Tool::Curve(TopoDS::Edge(e.Current()),first,last));
+        if(!b.IsNull()){maxCurve=std::max(maxCurve,b->NbPoles());if(first>b->FirstParameter()+1e-12||last<b->LastParameter()-1e-12)++trimmed;}
+    }
+    Trace(std::string(name)+" faces="+std::to_string(faces)+" edges="+std::to_string(edges)+" poles="+std::to_string(maxU)+"/"+std::to_string(maxV)+" curvePoles="+std::to_string(maxCurve)+" trimmed="+std::to_string(trimmed));
 }
 class ExactKnotSplit final : public ShapeUpgrade_SplitSurface {
     static void Split(occ::handle<NCollection_HSequence<double>>& values,
@@ -161,6 +177,7 @@ std::optional<TopoDS_Shape> SplitSource(const TopoDS_Shape& source,double tolera
     split.SetMinTolerance(Precision::Confusion());split.SetMaxTolerance(limit);split.Perform();
     if(split.Status(ShapeExtend_FAIL))return Unavailable("native split reported failure");
     const auto result=split.Result();
+    TraceSupport(result,"split support");
     Trace("end exact span split");
     if(result.IsNull()||!BRepCheck_Analyzer(result).IsValid())return Unavailable("invalid split");
     if(MaximumTolerance(result)>limit+1e-10&&!RestoreProvenTolerance(result,limit))
@@ -207,14 +224,17 @@ std::optional<TopoDS_Shape> VerifiedSimpleWall(const TopoDS_Shape& source,double
     try {
         BRepBuilderAPI_Copy copy(source,true,false);if(!copy.IsDone())return std::nullopt;
         TopoDS_Shape base=copy.Shape();
+        Trace("simple: copy complete");
         if(placement==fabrication::ThicknessPlacement::Centered) {
             BRepOffsetAPI_MakeOffsetShape offset;offset.PerformBySimple(base,-thickness*.5);
-            if(!offset.IsDone())return std::nullopt;base=offset.Shape();
+            if(!offset.IsDone())return std::nullopt;base=offset.Shape();Trace("simple: initial offset complete");
         }
         BRepOffsetAPI_MakeThickSolid maker;
         maker.MakeThickSolidBySimple(base,placement==fabrication::ThicknessPlacement::Inside?-thickness:thickness);
+        Trace("simple: thick maker complete");
         if(!maker.IsDone())return std::nullopt;
         const auto solid=OrientedWall(maker.Shape());if(!solid)return std::nullopt;
+        Trace("simple: native orientation valid");TraceSupport(*solid,"wall support");
         const auto handle=StoreShape(*solid);
         struct Guard {modeling::KernelShapeHandle handle;~Guard(){ReleaseShape(handle);}}guard{handle};
         const auto exported=BuildStepText(handle,tolerance);
@@ -293,6 +313,9 @@ std::optional<TopoDS_Shape> IndividualWalls(const TopoDS_Shape& source,double th
 std::optional<TopoDS_Shape> ThickenSmoothSpans(const TopoDS_Shape& source,double thickness,
     fabrication::ThicknessPlacement placement,const geometry::GeometryTolerance& tolerance,bool individualOnly) {
     try {
+        if(const auto* prefix=std::getenv("KACHACAD_SPAN_CAPTURE_PREFIX")) {
+            static std::atomic<unsigned> number=0;std::ofstream capture(std::string(prefix)+"-"+std::to_string(number++)+".brep");BRepTools::Write(source,capture);
+        }
         if(!individualOnly)if(const auto planar=ThickenPlanarSpline(source,thickness,placement,tolerance)) {
             Trace("proven planar spline prism");return planar;
         }

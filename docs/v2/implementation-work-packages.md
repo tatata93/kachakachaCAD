@@ -8,12 +8,12 @@
 | --- | --- | --- | --- |
 | WP-00 | 完了(`25d9982`、文書監査、Windows 18試験、self-test) | なし | 規範文書と受入基準の凍結 |
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
-| WP-02 | 進行中(Codex、2026-11-04段階12。実装済み形状転送診断KER-X001の台帳登録漏れを整合) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
+| WP-02 | 完了(Codex、2026-11-04段階12。形状転送KER-X001を台帳へ整合、診断台帳13例成功) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 重点検証済み(Codex、2026-11-04段階3。型付きUUIDと依存順序の一度検証。document/構造試験成功、1000線確定42.54→13.27 ms。全体検証は後段) | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
-| WP-07 | 重点検証済み(Codex、2026-11-04段階11。平面/双一次の計算コピーを全極・法線偏差・境界・穴・内外・配置・STEPで検査。厚み品質25例と構造成功。degree1旧経路へ戻す実験はSTEP失敗で不採用。全体と配布検証は後段、性能目標未達あり) | WP-06 | Part作成、押し出し、Boolean、Subshape |
+| WP-07 | 進行中(Codex、2026-11-04段階13。配布UIの曲げ固定180秒超過を調査。元の形状・精度・厳密STEP検査を保ち、区間計測から修正する。平面/双一次25例は重点通過済み) | WP-06 | Part作成、押し出し、Boolean、Subshape |
 | WP-08 | 重点検証済み(Codex、2026-11-04段階9。読込9/視点7経路成功。ガイドのみ・部品混在の逐次/有限並列一致と構造検査成功。全体・配布検証の候補) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |

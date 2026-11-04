@@ -174,8 +174,11 @@ QImage V2GpuRenderer::Render(const std::vector<Item>& items, std::uint64_t revis
     s.renderSucceeded=false;
     if(width<=0||height<=0||!s.Initialize())return {};
     std::vector<std::uint64_t> style;
-    for(const auto& item:items)style.push_back(std::uint64_t(item.fill)|(std::uint64_t(item.edge)<<24)
-        |(std::uint64_t(item.visible)<<48)|(std::uint64_t(item.emphasized)<<49));
+    if(!s.paintingFrame) {
+        style.reserve(items.size());
+        for(const auto& item:items)style.push_back(std::uint64_t(item.fill)|(std::uint64_t(item.edge)<<24)
+            |(std::uint64_t(item.visible)<<48)|(std::uint64_t(item.emphasized)<<49));
+    }
     if(!s.paintingFrame && s.cachedRevision==revision && s.cachedMatrix==mapping.matrix && s.cachedStyle==style
         && s.cachedImageRevision==imageRevision&&s.cachedImages==images
         && s.cachedImage.size()==QSize(width,height)){s.renderSucceeded=true;return s.cachedImage;}

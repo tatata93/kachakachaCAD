@@ -48,6 +48,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 //! 視点。V1の「見る向き」と同じ6面 + 等角。
 enum class ViewDirection {
@@ -846,6 +847,8 @@ private:
     bool EditCursorFieldForKey(int key);
     mutable V2GpuRenderer gpuRenderer_;
     std::uint64_t shapeViewRevision_ = 0;
+    mutable std::uint64_t meshedViewRevision_ = 0;
+    mutable std::unordered_set<kachakacha::v2::base::EntityId> meshedEntityIds_;
     std::uint64_t imageViewRevision_ = 0, analysisViewRevision_ = 0;
     mutable InteractionMetrics interactionMetrics_;
     mutable QImage smoothRaster_;
@@ -870,6 +873,7 @@ private:
     void DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, const QColor& edge,
         bool emphasized) const;
     void DrawDocument(QPainter& painter) const;
+    const std::unordered_set<kachakacha::v2::base::EntityId>& MeshedEntities() const;
     void DrawPoints(QPainter& painter) const;
     //! 閉じた輪郭の内側。線の下へ半透明で敷く。
     void DrawProfileRegions(QPainter& painter) const;

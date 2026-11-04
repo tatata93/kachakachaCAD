@@ -416,10 +416,11 @@ kachakacha::v2::app::SemanticState V2Viewport::CurveStateOf(
 
 void V2Viewport::DrawPoints(QPainter& painter) const
 {
+    const auto& selection=V2RenderSelectionOf(*this);
     for (const auto& point : session_->Scene().points) {
         const auto screen = ToScreen(point.position);
         if (!screen.has_value()) continue;
-        const SemanticState state = V2RenderSelectionOf(*this).Entity(point.entityId)?SemanticState::Selected
+        const SemanticState state = selection.Entity(point.entityId)?SemanticState::Selected
             :(!hoveredEntityId_.IsNil()&&point.entityId==hoveredEntityId_?SemanticState::Hover:SemanticState::Default);
         if (!EntityShown(point.entityId)) continue;
         const bool plain = state == SemanticState::Default;
@@ -432,14 +433,24 @@ void V2Viewport::DrawPoints(QPainter& painter) const
     }
 }
 
+const std::unordered_set<kachakacha::v2::base::EntityId>& V2Viewport::MeshedEntities() const
+{
+    if(meshedViewRevision_!=shapeViewRevision_) {
+        meshedEntityIds_.clear();meshedEntityIds_.reserve(shapeViews_.size());
+        for(const auto& shape:shapeViews_)meshedEntityIds_.insert(shape.entityId);
+        meshedViewRevision_=shapeViewRevision_;
+    }
+    return meshedEntityIds_;
+}
 void V2Viewport::DrawDocument(QPainter& painter) const
 {
     const auto& scene = session_->Scene();
     // 作図中は、作図面の上にない線を薄くして、自分の線を見やすくする(V1 の #6)。
     const bool dimming = session_->DrawingPlaneOnly() && display_.dimOffPlaneLines
         && kachakacha::v2::app::UsesDrawingPlaneFocus(session_->CurrentTool());
-    std::unordered_set<kachakacha::v2::base::EntityId> meshed;
-    if (display_.shapesVisible) for (const auto& shape : shapeViews_) meshed.insert(shape.entityId);
+    const std::unordered_set<kachakacha::v2::base::EntityId> empty;
+    const auto& meshed=display_.shapesVisible?MeshedEntities():empty;
+    const auto& selection=V2RenderSelectionOf(*this);
     std::vector<const kachakacha::v2::modeling::SnapCurve*> selectedCurves;
     std::vector<const kachakacha::v2::modeling::SnapCurve*> hoveredCurves;
     const auto drawCurve=[&](const auto& curve,SemanticState state) {
@@ -456,7 +467,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         // 「選択だけ」と、掴んで動かす影は **物体単位** で見る。
         // 線分1本を選んだだけで折れ線の残りが消えたり、片方だけ動いて見えたりすると、
         // 実際に動くもの(物体まるごと)と画面が食い違う。
-        const bool entitySelected = V2RenderSelectionOf(*this).Entity(curve.entityId);
+        const bool entitySelected = selection.Entity(curve.entityId);
         // 意味状態は core が決める(app/SemanticState)。
         // 選んだ線分だけが Selected になり、同じワイヤーの残りは通常表示のままになる。
         // 通常表示のときだけデータ種類(補助線)の色と太さを使う。
@@ -504,7 +515,10 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         }
     };
     for(const auto& curve:scene.curves) {
-        const auto state=CurveStateOf(curve.entityId,curve.segmentId);
+        if(meshed.contains(curve.entityId)&&!selection.Entity(curve.entityId)&&curve.entityId!=hoveredEntityId_)continue;
+        const auto state=selection.Curve(curve.entityId,curve.segmentId)?SemanticState::Selected:
+            !hoveredEntityId_.IsNil()&&hoveredEntityId_==curve.entityId
+                &&(hoveredSegmentId_.IsNil()||hoveredSegmentId_==curve.segmentId)?SemanticState::Hover:SemanticState::Default;
         if(state==SemanticState::Selected)selectedCurves.push_back(&curve);
         else if(state==SemanticState::Hover)hoveredCurves.push_back(&curve);
         else drawCurve(curve,state);
@@ -787,6 +801,7 @@ void V2Viewport::DrawShapes(QPainter& painter) const
         return;
     }
     DrawSmoothShapes(painter);
+    painter.setBrush(Qt::NoBrush);
     if (!display_.shapesVisible) return;
     for (const ShapeView& shape : shapeViews_) {
         if(!EntityShown(shape.entityId))continue;
@@ -831,8 +846,12 @@ void V2Viewport::DrawSurfaceGrid(QPainter& painter, const ShapeView& shape, cons
 
 void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
 {
+    if(!shape.surface||shape.mesh.isoLines.empty())return;
+    const int gridMode=property("surfaceGridMode").isValid()?property("surfaceGridMode").toInt():1;
+    if(gridMode!=1&&gridMode!=2)return;
     const bool selected = !shape.entityId.IsNil()
         && V2RenderSelectionOf(*this).Entity(shape.entityId);
+    if(gridMode==1&&!selected)return;
     const bool hovered = !selected && !shape.entityId.IsNil()
         && shape.entityId == hoveredEntityId_;
     // 稜線を上から重ねる。三角形の網だけだと継ぎ目が全部見えて形が読めない。
@@ -848,10 +867,7 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
     painter.setBrush(Qt::NoBrush);
     // 面の格子(U/V 線)。稜線より細く薄く、稜線の下に。塗りだけだと膨らみやねじれが読めない
     // (オーナー指示 2026-09-25「作った面の形がわかりにくいからグリッドを入れて」)。
-    const int gridMode=property("surfaceGridMode").isValid()?property("surfaceGridMode").toInt():1;
-    if (shape.surface && !shape.mesh.isoLines.empty() && (gridMode==2||(gridMode==1&&selected))) {
-        DrawSurfaceGrid(painter, shape, edge, selected || hovered);
-    }
+    DrawSurfaceGrid(painter, shape, edge, selected || hovered);
     painter.setPen(QPen(edge, selected || hovered ? 2.0 : 1.1, Qt::SolidLine, Qt::RoundCap,
         Qt::RoundJoin));
     // 稜線は DrawSmoothShapes で面と同じ深度を使って描く。

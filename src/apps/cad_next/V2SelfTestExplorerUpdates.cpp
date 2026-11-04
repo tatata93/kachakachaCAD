@@ -254,11 +254,35 @@ bool SurfaceGridChoice(V2MainWindow& w){
     if(!Explain("grid display changes pixels without splitting native faces",off!=all&&v.ShapeViews().front().mesh.faceCount==faces&&v.ShapeViews().front().mesh.triangles.size()==triangles))return false;
     choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedOnly=v.grab().toImage();
     if(!Explain("unselected surface does not draw a UV grid in selected-only mode",selectedOnly==off))return false;
+    v.SetSelection(app::SelectionSet{{v.ShapeViews().front().entityId}});
+    choice.surfaceGridMode=0;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedOff=v.grab().toImage();
+    choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedGrid=v.grab().toImage();
+    choice.surfaceGridMode=2;w.ApplyGridChoice(choice);QApplication::processEvents();const auto selectedAll=v.grab().toImage();
+    if(!Explain("selected-only grid matches all-surfaces grid for the selected face",selectedGrid!=selectedOff&&selectedGrid==selectedAll))return false;
+    v.SetSelection({});choice.surfaceGridMode=1;w.ApplyGridChoice(choice);QApplication::processEvents();
     w.ShowGridDock();QApplication::processEvents();
     auto* details=w.findChild<QToolButton*>("gridDetails");if(!details)return false;details->setChecked(true);
     auto* combo=w.findChild<QComboBox*>("surfaceGridMode");
     if(!combo||!combo->isVisible())return false;combo->setFocus();HumanKey(combo,Qt::Key_Home);
     return Explain("keyboard grid choice is view-only and synchronized",v.property("surfaceGridMode").toInt()==0&&w.Session().GetDocument().Snapshot().revision==before);
+}
+bool MeshDisplayCycle(V2MainWindow& w){
+    w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.25,.25,.65,.65);if(wire.IsNil())return false;
+    auto& v=w.Viewport();v.SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");
+    HumanKey(&v,Qt::Key_Return);w.RunCommand("selection.activate");
+    if(v.ShapeViews().empty())return false;
+    auto* row=w.ItemOfEntity(wire);if(!row)return false;row->setCheckState(0,Qt::Unchecked);v.SetSelection({});
+    auto choice=w.CurrentGridChoice();choice.grid.visible=false;choice.surfaceGridMode=0;w.ApplyGridChoice(choice);QApplication::processEvents();
+    const auto revision=w.Session().GetDocument().Snapshot().revision;const auto before=v.grab().toImage();
+    const auto faces=v.ShapeViews().front().mesh.faceCount,triangles=v.ShapeViews().front().mesh.triangles.size();
+    auto display=v.DisplaySettingsNow();
+    for(int i=0;i<2;++i){
+        display.shapesVisible=false;v.SetDisplaySettings(display);QApplication::processEvents();const auto hidden=v.grab().toImage();
+        display.shapesVisible=true;v.SetDisplaySettings(display);QApplication::processEvents();const auto restored=v.grab().toImage();
+        if(!Explain("surface display cycles restore the exact pixels without drawing duplicate mesh edges",hidden!=before&&restored==before))return false;
+    }
+    return Explain("surface display keeps native topology and document revision",v.ShapeViews().front().mesh.faceCount==faces
+        &&v.ShapeViews().front().mesh.triangles.size()==triangles&&w.Session().GetDocument().Snapshot().revision==revision);
 }
 bool ConfirmFolderAction(V2MainWindow& w,const char* button){
     bool found=false;QTimer poll,deadline;deadline.setSingleShot(true);
@@ -406,7 +430,8 @@ bool FolderMenuStable(V2MainWindow& w){
 
 }
 
-std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-XP-06 bulk categories preserve selection and Undo",Categories},
+std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-PERF-04 mesh display cycles retain exact surface image",MeshDisplayCycle},
+    {"HP-XP-06 bulk categories preserve selection and Undo",Categories},
     {"HP-UX-TREE selected checkbox and small pointer motion preserve selection",SelectedVisibilityClicks},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},
     {"HP-XP-09 overlap preview and reference-picking roles",Overlap},

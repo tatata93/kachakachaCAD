@@ -11,6 +11,7 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctMeshCache.h"
 #include "kachakacha/kernel/OcctBoundaryDistance.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Builder.hxx>
@@ -38,6 +39,7 @@
 #include <TopoDS.hxx>
 #include <BRep_Tool.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Trsf.hxx>
 #include <STEPControl_Reader.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <BRepGProp.hxx>
@@ -664,6 +666,39 @@ KACHA_V2_TEST(kernel_export, legacy_offset_refusal_preserves_original)
     const auto after=kernel::CaptureOutputShape(handle);
     Require(after.HasValue()&&before.Value()==after.Value(),"export copy preserves original surface, trims and IDs");
     kernel::ReleaseShape(handle);
+}
+
+KACHA_V2_TEST(kernel_export, binary_ipc_preserves_native_geometry_and_rejects_corruption_before_restore)
+{
+    using namespace kachakacha::v2;
+    auto source=BRepPrimAPI_MakeBox(10,20,30).Shape();
+    gp_Trsf place;place.SetTranslation(gp_Vec(1234.56789,-987.654321,.123456789));source.Move(place);
+    source.Reverse();const auto handle=kernel::StoreShape(source);
+    const auto text=kernel::CaptureOutputShape(handle),bytes=kernel::CaptureTransferShape(handle);
+    Require(text.HasValue()&&bytes.HasValue(),"native text and disposable binary capture");
+    const auto restored=kernel::RestoreTransferShape(bytes.Value());Require(restored.HasValue(),"complete binary restore");
+    const auto exact=kernel::CaptureOutputShape(restored.Value());
+    Require(exact.HasValue()&&exact.Value()==text.Value(),"position orientation tolerances curves and topology retain exact native text");
+    kernel::ReleaseShape(restored.Value());const auto count=kernel::CachedShapeCount();
+    Require(!kernel::RestoreTransferShape(bytes.Value()+"extra").HasValue(),"extra bytes refused");
+    for(std::size_t n:{0u,1u,16u,40u})Require(!kernel::RestoreTransferShape(bytes.Value().substr(0,n)).HasValue(),"truncated header refused");
+    for(std::size_t i=0;i<bytes.Value().size();++i) {
+        auto corrupt=bytes.Value();corrupt[i]^=1;
+        Require(!kernel::RestoreTransferShape(corrupt).HasValue(),"every single-byte corruption rejected before native reader");
+    }
+    Require(kernel::CachedShapeCount()==count,"failed restore never leaks a native handle");
+    Require(kernel::CaptureOutputShape(handle).Value()==text.Value(),"source native geometry unchanged");
+    kernel::ReleaseShape(handle);
+    Require(!kernel::CaptureTransferShape(handle).HasValue(),"released handles are not restored from a stale cache");
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"offset-panel-c0.brep");
+    TopoDS_Shape curved;BRep_Builder builder;BRepTools::Read(curved,input,builder);
+    Require(!curved.IsNull(),"complex C0 trimmed native solid fixture");
+    const auto complex=kernel::StoreShape(curved);const auto original=kernel::CaptureOutputShape(complex);
+    const auto binary=kernel::CaptureTransferShape(complex);Require(binary.HasValue(),"offset carrier binary capture");
+    const auto recovered=kernel::RestoreTransferShape(binary.Value());Require(recovered.HasValue(),"offset carrier exact restore");
+    Require(original.HasValue()&&kernel::CaptureOutputShape(recovered.Value()).Value()==original.Value(),
+        "complex curved skins and all native trims survive without STEP healing or approximation");
+    kernel::ReleaseShape(complex);kernel::ReleaseShape(recovered.Value());
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

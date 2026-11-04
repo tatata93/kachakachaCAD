@@ -802,6 +802,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctMatchedLoft.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
+    src/next_occt/kachakacha/kernel/OcctShapeTransfer.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
     src/next_occt/kachakacha/kernel/OcctIntersectionPartition.cpp
     src/next_occt/kachakacha/kernel/OcctBoundaryCurves.cpp

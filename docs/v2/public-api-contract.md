@@ -663,6 +663,8 @@ public:
   同一配布版のプロセス間専用とする。戻り値は`Result<string>` / `Result<KernelShapeHandle>`、
   Qt/OCCT型を外へ出さない。版付きbinary BRepの完全読込と妥当性を検査し、形状の近似・修復はしない。
   使い捨てキャッシュと転送でのみ使い、永続KCDや独立部品のテキストBRepを置換しない。
+  バイナリreaderが旧C0オフセットを扱えないため、オフセット等の複合表現は同じ封筒内の
+  既存テキスト表現へ切り替える。形式・長さ・CRCをnative readerの前に検査する。
   未知の版・切断・余剰データ・無効形状は拒否し、元文書を保持して定義からの再評価へ戻す。
 
 ## 13. Modeling preview services

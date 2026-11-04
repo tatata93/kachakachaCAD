@@ -73,6 +73,21 @@ struct Fixture {
 
 } // namespace
 
+KACHA_V2_TEST(session, prompt_reads_input_stage_without_snap_or_geometry_work)
+{
+    static_assert(std::is_same_v<decltype(std::declval<const DrawingSession&>().Prompt()),kachakacha::v2::modeling::ToolPrompt>);
+    Fixture f;auto scene=PlaneScene();scene.points.push_back({f.ids.NextTyped<kachakacha::v2::base::IdKind::Entity>(),{10,10,0}});
+    f.session.SetScene(scene);int filterCalls=0;
+    f.session.SetSnapEntityFilter([&](auto){++filterCalls;return true;});
+    const auto before=f.session.Prompt();const auto revision=f.session.GetDocument().Revision();
+    for(int i=0;i<100;++i)Require(f.session.Prompt().messageJa==before.messageJa,"stable stage without pointer evaluation");
+    Require(filterCalls==0&&f.session.GetDocument().Revision()==revision,"instructions neither collect snaps nor edit document");
+    Require(f.session.Click(f.At({10,10,0})).placedPoint,"normal snapped click still works");
+    Require(f.session.Prompt().remainingPoints!=before.remainingPoints,"prompt follows first placed point");
+    filterCalls=0;(void)f.session.Prompt();Require(filterCalls==0,"second-point instruction also skips snap work");
+    f.session.CancelTool();Require(f.session.Prompt().messageJa==before.messageJa,"cancel restores first-point instruction");
+}
+
 KACHA_V2_TEST(session, 線を1本引くと文書が変わる)
 {
     Fixture fixture;

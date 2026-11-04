@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
+#include <unordered_map>
 
 namespace kachakacha::v2::app {
 namespace {
@@ -51,11 +53,11 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
 [[nodiscard]] std::vector<SelectionRef> EffectiveRefs(const SelectionSet& selection)
 {
     std::vector<SelectionRef> refs = selection.ordered;
+    std::unordered_set<base::EntityId> represented;
+    represented.reserve(refs.size()+selection.entityIds.size());
+    for(const auto& ref:refs)represented.insert(ref.entityId);
     for (const base::EntityId id : selection.entityIds) {
-        const bool represented = std::any_of(refs.begin(), refs.end(), [id](const auto& ref) {
-            return ref.entityId == id;
-        });
-        if (!represented) {
+        if (represented.insert(id).second) {
             SelectionRef ref;
             ref.entityId = id;
             refs.push_back(ref);
@@ -68,9 +70,10 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
 {
     SelectionSet selection;
     selection.ordered = std::move(refs);
+    std::unordered_set<base::EntityId> represented;
+    represented.reserve(selection.ordered.size());
     for (const auto& ref : selection.ordered) {
-        if (std::find(selection.entityIds.begin(), selection.entityIds.end(), ref.entityId)
-            == selection.entityIds.end()) {
+        if (represented.insert(ref.entityId).second) {
             selection.entityIds.push_back(ref.entityId);
         }
     }
@@ -480,27 +483,32 @@ SelectionSet ApplyBoxSelection(const SelectionSet& current,
 
 bool IsSelected(const SelectionSet& selection, base::EntityId entityId)
 {
-    const auto refs = EffectiveRefs(selection);
-    return std::any_of(refs.begin(), refs.end(), [entityId](const auto& ref) {
+    return std::find(selection.entityIds.begin(),selection.entityIds.end(),entityId)!=selection.entityIds.end()
+        ||std::any_of(selection.ordered.begin(), selection.ordered.end(), [entityId](const auto& ref) {
         return ref.entityId == entityId;
     });
 }
 
 bool IsSelected(const SelectionSet& selection, const SelectionRef& target)
 {
-    const auto refs = EffectiveRefs(selection);
-    return std::any_of(refs.begin(), refs.end(), [&](const auto& ref) {
+    if(std::any_of(selection.ordered.begin(), selection.ordered.end(), [&](const auto& ref) {
         return SameTarget(ref, target);
-    });
+    }))return true;
+    // Compatibility IDs imply a whole Object only when no ordered reference
+    // represents that entity. A picked Face must never turn into all its edges.
+    if(std::any_of(selection.ordered.begin(),selection.ordered.end(),[&](const auto& ref){return ref.entityId==target.entityId;}))return false;
+    SelectionRef object;object.entityId=target.entityId;
+    return SameTarget(object,target)&&std::find(selection.entityIds.begin(),selection.entityIds.end(),target.entityId)!=selection.entityIds.end();
 }
 
 bool IsCurveSelected(const SelectionSet& selection, base::EntityId entityId,
     base::SegmentId segmentId)
 {
-    const auto refs = EffectiveRefs(selection);
-    return std::any_of(refs.begin(), refs.end(), [&](const auto& ref) {
+    if(std::any_of(selection.ordered.begin(), selection.ordered.end(), [&](const auto& ref) {
         return RefCoversCurve(ref, entityId, segmentId);
-    });
+    }))return true;
+    if(std::any_of(selection.ordered.begin(),selection.ordered.end(),[&](const auto& ref){return ref.entityId==entityId;}))return false;
+    return std::find(selection.entityIds.begin(),selection.entityIds.end(),entityId)!=selection.entityIds.end();
 }
 
 std::size_t SelectionItemCount(const SelectionSet& selection)
@@ -574,16 +582,19 @@ std::vector<geometry::CurveSegment> SelectedCurves(const SelectionSet& selection
     const modeling::SnapScene& scene)
 {
     std::vector<geometry::CurveSegment> curves;
-    std::vector<std::pair<base::EntityId, base::SegmentId>> added;
+    if(selection.entityIds.empty()&&selection.ordered.empty())return curves;
+    std::unordered_map<base::EntityId,std::vector<const modeling::SnapCurve*>> byEntity;
+    for(const auto& curve:scene.curves)byEntity[curve.entityId].push_back(&curve);
+    std::unordered_map<base::EntityId,std::unordered_set<base::SegmentId>> added;
     for (const auto& ref : EffectiveRefs(selection)) {
-        for (const auto& curve : scene.curves) {
-            if (!RefCoversCurve(ref, curve.entityId, curve.segmentId)) {
+        if(ref.kind!=SelectionElementKind::Object&&ref.kind!=SelectionElementKind::Edge)continue;
+        const auto found=byEntity.find(ref.entityId);if(found==byEntity.end())continue;
+        for (const auto* curve : found->second) {
+            if (!RefCoversCurve(ref, curve->entityId, curve->segmentId)) {
                 continue;
             }
-            const auto key = std::make_pair(curve.entityId, curve.segmentId);
-            if (std::find(added.begin(), added.end(), key) == added.end()) {
-                added.push_back(key);
-                curves.push_back(curve.segment);
+            if (added[curve->entityId].insert(curve->segmentId).second) {
+                curves.push_back(curve->segment);
             }
         }
     }
@@ -594,12 +605,12 @@ std::vector<geometry::CurveSegment> SelectedWholeCurves(const SelectionSet& sele
     const modeling::SnapScene& scene)
 {
     std::vector<geometry::CurveSegment> curves;
+    if(selection.entityIds.empty())return curves;
+    std::unordered_map<base::EntityId,std::vector<const modeling::SnapCurve*>> byEntity;
+    for(const auto& curve:scene.curves)byEntity[curve.entityId].push_back(&curve);
     for (const base::EntityId& id : selection.entityIds) {
-        for (const auto& curve : scene.curves) {
-            if (curve.entityId == id) {
-                curves.push_back(curve.segment);
-            }
-        }
+        const auto found=byEntity.find(id);if(found==byEntity.end())continue;
+        for(const auto* curve:found->second)curves.push_back(curve->segment);
     }
     return curves;
 }

@@ -1339,6 +1339,26 @@ KACHA_V2_TEST(snap, grid_is_local_releases_quickly_and_leaves_gaps_when_dense)
     Require(free&&free->kind==SnapKind::FreeOnPlane,"midway between dense grid points stays free");
 }
 
+KACHA_V2_TEST(snap, dense_extension_targets_keep_identity_and_deduplicate_repeated_sources)
+{
+    SceneBuilder builder;builder.scene.workPlane.active=true;
+    builder.scene.workPlane.normal={0,0,1};
+    for(int i=0;i<256;++i)builder.AddLine({70.+i*.001,50,0},{80.+i*.001,50,0});
+    const auto repeated=builder.scene.curves;
+    builder.scene.curves.insert(builder.scene.curves.end(),repeated.begin(),repeated.end());
+    const auto map=TopView();const auto pointer=At(map,{60,50,0});SnapSettings settings;settings.maximumExtensionMm=100;
+    const auto forward=CollectSnapCandidates(builder.scene,map,pointer,settings,Tolerance());
+    Require(std::count_if(forward.begin(),forward.end(),[](const auto& c){return c.kind==SnapKind::Extension;})==256,
+        "coincident extensions from different wires remain distinct, repeated sources merge");
+    std::reverse(builder.scene.curves.begin(),builder.scene.curves.end());
+    const auto backward=CollectSnapCandidates(builder.scene,map,pointer,settings,Tolerance());
+    Require(forward.size()==backward.size(),"source order never changes target count");
+    for(std::size_t i=0;i<forward.size();++i) {
+        Require(SameSnapTarget(forward[i],backward[i]),"priority, distance and stable target order retained");
+        RequireNear((forward[i].position-backward[i].position).Length(),0,1e-10,"same exact snapped positions");
+    }
+}
+
 KACHA_V2_TEST_MAIN("snap_tests")
 
 KACHA_V2_TEST(snap, distant_geometry_does_not_change_local_intersections)

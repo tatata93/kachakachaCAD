@@ -36,8 +36,8 @@ void V2MainWindow::RunShelfCommand(std::string_view id)
     if(id=="dimension.open"){V2DimensionTool::Open(*this);return;}
     if (id == "measure.open") {
         // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
-        RefreshMeasurements();
         ShowShelf(kachakacha::v2::app::Shelf::Measure);
+        RefreshMeasurements();
         SetStatus(measureDock_->SummaryText());
         return;
     }
@@ -55,6 +55,11 @@ void V2MainWindow::RefreshMeasurements()
 {
     if (measureDock_ == nullptr || viewport_ == nullptr) {
         return;
+    }
+    // Selection changes also refresh hidden shelves. Measuring every native
+    // edge and rebuilding thousands of rows is only useful in an open panel.
+    if(!ShelfShown(kachakacha::v2::app::Shelf::Measure)&&session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Measure) {
+        viewport_->SetMeasureOverlay({});return;
     }
     viewport_->SetMeasurePointCount(kachakacha::v2::app::MeasurePointCount(measureDock_->Mode()));
     const auto request = CurrentMeasureRequest();

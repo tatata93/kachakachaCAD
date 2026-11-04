@@ -9,7 +9,7 @@
 | WP-00 | 完了(`25d9982`、文書監査、Windows 18試験、self-test) | なし | 規範文書と受入基準の凍結 |
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 完了(`codex/v2-wp01-build-scaffold`、v2_foundation_tests 22件) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
-| WP-03 | 完了(`codex/v2-wp01-build-scaffold`、v2_document_tests 21件) | WP-02 | Document、Feature DAG、Command、Undo |
+| WP-03 | 進行中(Codex、2026-11-04段階3。文書検証のUUID文字列化・依存順序二重計算を削減。公開API・診断・Undo断面は保持) | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 完了(Codex、2026-11-04。短辺接続、自己交差、折返し・内部閉輪25例成功。全体・UI経路は後段で実施) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 完了(Codex、2026-11-04。実境界付き面のオフセットを修正、kernel_surface 63例成功。全体・UI経路は後段で実施) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
@@ -20,7 +20,7 @@
 | WP-11 | 重点検証済み(Codex、2026-11-04。選択STEPの単一モデル化・剛体配置。出力UI10例成功。旧C0壁の厳密拒否は維持し、全体検証は後段) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
 | WP-12 | 進行中(Claude。ER1/ER2 の受入モデル、図つきマニュアル、見本 .kcd2、文書を開く道、配布 script は完了。実機での配布zip確認と切替が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
 | WP-13 | 保留(オーナー指示待ち。「V2が満足いくものになるまでV1は消すな。満足したら指示する」2026-09-09)。準備だけ進める | WP-12 | 旧実装削除と最終整理 |
-| WP-14 | 進行中(Codex、2026-11-04。段階2。選択照合・作図意味状態の反復計算を削減し同条件計測。既存UI/部分選択契約を保持) | WP-08 | 統合UI/UX、選択、カーソル、スナップ、ToolSession、プロパティ、プレビュー、画面復元 |
+| WP-14 | 重点検証済み(Codex、2026-11-04段階2。選択・候補照合索引、非表示測定遅延。UI13経路成功、ホバー中央値7.07→0.75 ms。全体検証は後段) | WP-08 | 統合UI/UX、選択、カーソル、スナップ、ToolSession、プロパティ、プレビュー、画面復元 |
 
 状態は `未着手 / 進行中(担当、branch、date) / blocked(理由、試行) / 完了(commit、試験)` のいずれか。
 担当開始時と完了時は、この表だけを変更する独立コミットを先にpushする。

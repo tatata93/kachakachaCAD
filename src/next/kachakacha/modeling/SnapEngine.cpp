@@ -9,6 +9,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <vector>
+#include <unordered_map>
+#include <functional>
 
 namespace kachakacha::v2::modeling {
 
@@ -41,6 +43,16 @@ bool IsGridSnap(SnapKind kind) {
     return first.segmentId < second.segmentId;
 }
 
+struct TargetHash {
+    std::size_t operator()(const SnapTargetKey& key) const noexcept {
+        std::size_t value=static_cast<std::size_t>(key.kind);
+        const auto mix=[&](std::size_t hash){value^=hash+0x9e3779b97f4a7c15ULL+(value<<6)+(value>>2);};
+        mix(std::hash<EntityId>{}(key.entityId));mix(std::hash<SegmentId>{}(key.segmentId));
+        mix(std::hash<EntityId>{}(key.otherEntityId));mix(std::hash<SegmentId>{}(key.otherSegmentId));
+        mix(std::hash<std::int64_t>{}(key.featureIndex));mix(std::hash<std::int64_t>{}(key.latticeV));
+        return value;
+    }
+};
 //! 候補を1つ足す道具。画面へ写せない点(カメラの後ろ)は捨てる。
 class Collector {
 public:
@@ -76,12 +88,11 @@ public:
             return;
         }
         // 同じ吸着先の候補は1つにする。位置が同じでも、吸着先が違えば別に残す。
-        const auto known = std::find_if(candidates_.begin(), candidates_.end(),
-            [&](const SnapCandidate& other) { return SameSnapTarget(other, candidate); });
-        if (known == candidates_.end()) {
+        const auto [known,inserted]=indices_.try_emplace(TargetKeyOf(candidate),candidates_.size());
+        if (inserted) {
             candidates_.push_back(candidate);
-        } else if (candidate.screenDistancePx < known->screenDistancePx) {
-            *known = candidate;
+        } else if (candidate.screenDistancePx < candidates_[known->second].screenDistancePx) {
+            candidates_[known->second] = candidate;
         }
     }
 
@@ -94,6 +105,7 @@ private:
     const GeometryTolerance& tolerance_;
     double gridRadius_=4.0;
     std::vector<SnapCandidate> candidates_;
+    std::unordered_map<SnapTargetKey,std::size_t,TargetHash> indices_;
 };
 
 //! いま使うグリッドの間隔。副点が画面で詰まりすぎるときは主点だけにする。

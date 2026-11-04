@@ -130,6 +130,20 @@ bool DrawingAppendRows(V2MainWindow& w){
     return Explain("new row rename survives native save/reopen",saved
         &&w.Session().GetDocument().FindEntity(id)->displayName=="new drawn wire");
 }
+bool HiddenMeasurement(V2MainWindow& w){
+    auto ids=Prepare(w);if(ids.size()!=2)return false;
+    w.Viewport().SetSelection(app::SelectionSet{ids});w.RunCommand("measure.open");
+    auto& dock=w.MeasureDock();
+    if(!Explain("opening measurement computes selected geometry",w.ShelfShown(app::Shelf::Measure)&&dock.RowCount()>0))return false;
+    w.RunCommand("selection.activate");
+    if(!Explain("switching tools closes the measurement page",!w.ShelfShown(app::Shelf::Measure)))return false;
+    const auto builds=dock.property("measurementBuilds").toULongLong();
+    w.Viewport().SetSelection({});w.Viewport().SetSelection(app::SelectionSet{{ids.front()}});
+    if(!Explain("hidden measurement does not rebuild on selection changes",dock.property("measurementBuilds").toULongLong()==builds))return false;
+    w.RunCommand("measure.open");
+    return Explain("reopening measurement immediately reflects current selection",w.ShelfShown(app::Shelf::Measure)&&dock.RowCount()>0
+        &&dock.property("measurementBuilds").toULongLong()>builds);
+}
 bool DrawingBenchmark(V2MainWindow& w){
     const auto output=qEnvironmentVariable("KACHACAD_DRAWING_PERF_OUTPUT");if(output.isEmpty())return true;
     w.RunCommand("file.new");auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Top);v.SetVisibleWidthMm(250);
@@ -154,7 +168,7 @@ bool DrawingBenchmark(V2MainWindow& w){
     QFile file(output);if(!file.open(QIODevice::WriteOnly))return false;
     file.write(QJsonDocument(QJsonObject{{"wire_count",count},{"viewport_width",v.width()},{"viewport_height",v.height()},
         {"section_view",v.SectionViewActive()},{"isolation",v.IsolationActive()},{"plane_wire_only",PlaneWireDisplayActive(v)},
-        {"measure","synchronous real Qt mouse input, no screenshot or GPU wait"},{"results",rows}}).toJson());return true;
+        {"measure","hover: direct HoverAt; commit: two endpoint Qt mouse clicks; no screenshot or GPU wait"},{"results",rows}}).toJson());return true;
 }
 }
 std::vector<SelfTestCase> CopyDrawingCases(){
@@ -162,7 +176,8 @@ std::vector<SelfTestCase> CopyDrawingCases(){
         {"HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",CopyGhost},
         {"HP-COPY-03 role rectangle Escape and tool switch",CopyRoleBox},
         {"HP-COPY-04 numeric ghost matches Enter",CopyNumeric},
-        {"HP-DRAW-01 appended rows visibility rename and fold state",DrawingAppendRows}};
+        {"HP-DRAW-01 appended rows visibility rename and fold state",DrawingAppendRows},
+        {"HP-DRAW-02 closed measurement defers work and reopens current selection",HiddenMeasurement}};
     if(qEnvironmentVariableIsSet("KACHACAD_DRAWING_PERF_OUTPUT"))cases.push_back({"HP-DRAW-PERF line hover and commit latency",DrawingBenchmark});
     return cases;
 }

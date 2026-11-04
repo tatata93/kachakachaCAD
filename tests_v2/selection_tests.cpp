@@ -18,6 +18,7 @@ using kachakacha::v2::app::BoxTouchesSegment;
 using kachakacha::v2::app::CollectBoxPickCandidates;
 using kachakacha::v2::app::CollectPickCandidates;
 using kachakacha::v2::app::IsSelected;
+using kachakacha::v2::app::IsCurveSelected;
 using kachakacha::v2::app::MakeBoxSelection;
 using kachakacha::v2::app::ScreenBox;
 using kachakacha::v2::app::PickCandidate;
@@ -831,6 +832,28 @@ KACHA_V2_TEST(selection, 欄の印で選ばれている物も押し直せば外�
     picked.entityId = Ent(5);
     Require(ApplySelection(current, picked, SelectionMode::Subtract).entityIds.size() == 1,
         "別の物では減らない");
+}
+
+KACHA_V2_TEST(selection, membership_preserves_ordered_parts_and_compatibility_fallback)
+{
+    SelectionSet selected;selected.entityIds={Ent(1),Ent(2),Ent(2),Ent(3),Ent(4)};
+    SelectionRef edge;edge.entityId=Ent(1);edge.kind=SelectionElementKind::Edge;edge.segmentId=Seg(7);
+    SelectionRef face;face.entityId=Ent(2);face.kind=SelectionElementKind::Face;
+    SelectionRef onlyOrdered;onlyOrdered.entityId=Ent(5);
+    selected.ordered={edge,face,onlyOrdered};
+    Require(IsSelected(selected,Ent(1))&&IsSelected(selected,Ent(2))&&IsSelected(selected,Ent(5)),"all ordered element kinds imply entity membership");
+    Require(IsSelected(selected,Ent(3))&&!IsSelected(selected,Ent(6)),"legacy IDs are included, absent IDs excluded");
+    Require(IsSelected(selected,edge)&&IsSelected(selected,face),"exact partial targets remain selected");
+    Require(IsCurveSelected(selected,Ent(1),Seg(7))&&!IsCurveSelected(selected,Ent(1),Seg(8)),"an edge does not select its neighbour");
+    Require(!IsCurveSelected(selected,Ent(2),Seg(7)),"compatibility ID cannot broaden a Face into its edges");
+    Require(IsCurveSelected(selected,Ent(3),Seg(8))&&IsCurveSelected(selected,Ent(5),Seg(8)),"implicit and explicit Objects cover curves");
+    SelectionRef object;object.entityId=Ent(2);Require(!IsSelected(selected,object),"Face projection is not a whole Object");
+    object.entityId=Ent(3);Require(IsSelected(selected,object),"unrepresented compatibility ID is a whole Object");
+    Require(SelectionItemCount(selected)==5,"duplicate compatibility IDs do not add selections");
+    const auto normalized=ApplySelection(selected,std::nullopt,SelectionMode::Add);
+    Require(normalized.ordered.size()==5&&normalized.ordered[0].segmentId==Seg(7)
+        &&normalized.ordered[1].kind==SelectionElementKind::Face&&normalized.ordered[2].entityId==Ent(5)
+        &&normalized.ordered[3].entityId==Ent(3)&&normalized.ordered[4].entityId==Ent(4),"normalization preserves ordered elements then first-seen compatibility order");
 }
 
 KACHA_V2_TEST_MAIN("selection_tests")

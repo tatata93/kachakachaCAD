@@ -69,6 +69,8 @@ public:
     //! いまの道具の設定(作り方など)。画面がカーソル横の欄を出すかを決めるのに読む。
     [[nodiscard]] const ToolSettings& CurrentToolSettings() const noexcept { return toolSettings_; }
     [[nodiscard]] DrawingTool CurrentTool() const noexcept { return tool_; }
+    //! 入力段階だけを読む。吸着候補・プレビューを計算せず、持ち越しを変えない。
+    [[nodiscard]] modeling::ToolPrompt Prompt() const { return session_->Prompt(); }
 
     //! 吸着の相手を差し替える。持ち越しも捨てる。
     //!

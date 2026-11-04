@@ -142,6 +142,7 @@ void V2MeasureDock::SetKeptCount(int count)
 
 void V2MeasureDock::SetRequest(const kachakacha::v2::app::MeasureRequest& request)
 {
+    setProperty("measurementBuilds",property("measurementBuilds").toULongLong()+1);
     request_ = request;
     Refresh();
 }

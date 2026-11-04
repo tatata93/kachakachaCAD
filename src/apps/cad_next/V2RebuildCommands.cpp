@@ -18,6 +18,7 @@
 #include "V2DocumentTiming.h"
 #include "V2GeometryJob.h"
 #include "V2GuideBuildJobs.h"
+#include "V2ExtrudeBuildJobs.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include "V2EdgeFinishTool.h"
@@ -46,6 +47,19 @@ namespace {
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::geometry::CurveSegment;
 
+kachakacha::v2::modeling::ExtrudeRequest SavedExtrudeRequest(
+    const kachakacha::v2::domain::ExtrudeDefinition& definition,
+    std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles) {
+    using namespace kachakacha::v2;
+    modeling::ExtrudeRequest request;request.profiles=std::move(profiles);
+    request.directionMode=modeling::ExtrudeDirectionMode::CustomXYZ;request.customDirection=definition.direction;
+    request.extent=static_cast<modeling::ExtrudeExtentMode>(definition.extentMode);
+    request.distanceMm=definition.distance.value;request.secondDistanceMm=definition.secondDistanceMm;
+    request.outputs.part=true;request.outputs.endProfileWire=true;request.outputs.sideBoundaryWires=true;
+    request.booleanMode=static_cast<modeling::ExtrudeBooleanMode>(definition.booleanMode);
+    return request;
+}
+
 } // namespace
 
 bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& feature,
@@ -64,26 +78,12 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
         return RebuildSurfaceExtrude(*definition, output, ordinal);
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    ExtrudeRequest request;
-    request.profiles = ExtrudeProfilesFor(definition->profiles, definition->profileSeeds);
+    ExtrudeRequest request=SavedExtrudeRequest(*definition,ExtrudeProfilesFor(definition->profiles,definition->profileSeeds));
     if (request.profiles.empty()) {
         return false;
     }
-    // 向きは保存してある値をそのまま使う。いまの作業平面から作り直さない。
-    // 作り直すと、開いたときの作業平面しだいで形が変わってしまう。
-    request.directionMode = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-    request.customDirection = definition->direction;
-    request.extent = static_cast<kachakacha::v2::modeling::ExtrudeExtentMode>(
-        definition->extentMode);
-    request.distanceMm = definition->distance.value;
-    request.secondDistanceMm = definition->secondDistanceMm;
-    request.outputs.part = true;
-    request.outputs.endProfileWire = true;
-    request.outputs.sideBoundaryWires = true;
     // 足す・引くも作り直す。作り直さないと、開いたときだけ足し引きが消えて
     // 別の立体が2つ並ぶ。相手は定義が覚えている立体である。
-    request.booleanMode =
-        static_cast<kachakacha::v2::modeling::ExtrudeBooleanMode>(definition->booleanMode);
     kachakacha::v2::modeling::KernelShapeHandle booleanTarget;
     if (request.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
         if (definition->targets.empty()) {
@@ -97,6 +97,7 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
         request.hasSelectedPart = true;
     }
     const auto built = [&]() {
+        if(auto ready=V2ExtrudeBuildJobs::Take(*this,feature.id))return std::move(*ready);
         if (request.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget || definition->endCap.Planar()) {
             kachakacha::v2::app::ExtrudeChoice choice;
             choice.customDirection = definition->direction;
@@ -412,6 +413,9 @@ void V2MainWindow::RebuildKernelShapes()
         return;
     }
     int made = 0, completed = 0;
+    V2ExtrudeBuildJobs independentParts(*this,steps,[&](const auto& definition) {
+        return SavedExtrudeRequest(definition,ExtrudeProfilesFor(definition.profiles,definition.profileSeeds));
+    });
     V2GuideBuildJobs independentGuides(*this,steps);
     V2DocumentTiming timing("rebuild");
     std::vector<std::string> failed;

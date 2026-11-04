@@ -1,5 +1,6 @@
 #include <QObject>
 #include "V2GuideBuildJobs.h"
+#include "V2ExtrudeBuildJobs.h"
 #include "V2DocumentOpen.h"
 #include "V2MainWindow.h"
 #include "kachakacha/app/GuideTableBuild.h"
@@ -41,7 +42,8 @@ struct V2GuideBuildJobs::Impl {
     }
 };
 V2GuideBuildJobs::V2GuideBuildJobs(V2MainWindow& w,const std::vector<app::ShapeRebuildStep>& steps):QObject(&w),impl_(std::make_unique<Impl>()) {
-    if(!V2DocumentOpen::IsWorker()||qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")||QThread::idealThreadCount()<4)return;
+    if(!V2DocumentOpen::IsWorker()||qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")||QThread::idealThreadCount()<4
+        ||V2ExtrudeBuildJobs::HasIndependentWork(w))return;
     const auto& document=w.Session().GetDocument();const auto& tolerance=document.Snapshot().settings.tolerance;
     for(const auto& step:steps) {
         if(step.kind!=app::ShapeRebuildKind::GuideSurface)continue;

@@ -13,6 +13,7 @@
 #include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ShapeMesh.h"
+#include "kachakacha/geometry/CurveSegment.h"
 #include <QApplication>
 #include <QByteArray>
 #include <QDir>
@@ -29,6 +30,7 @@
 #include <QTimer>
 #include <QImage>
 #include <QColor>
+#include <QDoubleSpinBox>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QCryptographicHash>
@@ -245,28 +247,56 @@ bool HiddenMesh(V2MainWindow& w) {
     if(!Explain("Undo of visibility retains the native shape",w.Viewport().ShapeViews().empty()&&w.KernelShapeCount()==1))return false;
     return Explain("warm hidden read is still exact and source remains intact",w.OpenDocumentFile(path)&&w.Viewport().ShapeViews().empty()&&w.KernelShapeCount()==1&&io::ReadWholeFile(path.toStdString()).Value()==bytes.Value());
 }
-bool ParallelRead(V2MainWindow& w) {
-    QTemporaryDir folder;if(!folder.isValid())return false;w.RunCommand("file.new");
-    if(!MakeCurvedGuideSurface(w))return false;auto file=V2DocumentOpen::FileForSave(w);
+bool ParallelReadMode(V2MainWindow& w,bool withParts) {
+    QTemporaryDir folder;if(!Explain("independent rebuild temporary folder",folder.isValid()))return false;w.RunCommand("file.new");
+    if(!MakeCurvedGuideSurface(w))return false;
+    if(withParts) {
+    std::vector<geometry::CurveSegment> outline;
+    const std::vector<geometry::Vector3> corners{{30,0,0},{40,0,0},{40,10,0},{30,10,0}};
+    for(std::size_t i=0;i<corners.size();++i)outline.push_back(geometry::CurveSegment::MakeLine(corners[i],corners[(i+1)%corners.size()]).Value());
+    const auto wire=w.Session().AddWire(outline,false,"independent source profile");
+    if(!Explain("create independent source profile",wire.committed))return false;
+    const bool reopened=w.SaveAndReopen(folder.filePath("independent-source.kcd2"));
+    if(!Explain(("reopen independent source: "+w.StatusText().toStdString()).c_str(),reopened))return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire.createdEntityIds.front()}});
+    w.RunCommand("part.extrude");
+    auto* distance=w.findChild<QDoubleSpinBox*>("extrudeDistance");if(distance)distance->setValue(3);
+    const bool accepted=w.HandleToolKey(Qt::Key_Return,nullptr);
+    if(!Explain(("independent source extrusion: parts="+std::to_string(CountOfKind(w,domain::EntityKind::Part))
+        +"; "+w.StatusText().toStdString()).c_str(),accepted&&CountOfKind(w,domain::EntityKind::Part)==1))return false;
+    }
+    auto file=V2DocumentOpen::FileForSave(w);
     const auto source=std::find_if(file.snapshot.entities.begin(),file.snapshot.entities.end(),[](const auto& e){return e.kind==domain::EntityKind::GuideSurface;});
-    if(source==file.snapshot.entities.end())return false;
+    if(!Explain("independent fixture retains guide surface",source!=file.snapshot.entities.end()))return false;
     const auto feature=std::find_if(file.snapshot.features.begin(),file.snapshot.features.end(),[&](const auto& f){return f.id==source->createdBy;});
-    if(feature==file.snapshot.features.end())return false;base::DeterministicIdGenerator ids(940000);
+    if(!Explain("guide surface retains feature",feature!=file.snapshot.features.end()))return false;base::DeterministicIdGenerator ids(940000);
     auto clone=*feature;auto entity=*source;clone.id=ids.NextTyped<base::IdKind::Feature>();entity.id=ids.NextTyped<base::IdKind::Entity>();
     entity.createdBy=clone.id;clone.outputs={{"surface",entity.id,entity.kind}};file.snapshot.features.push_back(clone);file.snapshot.entities.push_back(entity);
-    const auto path=folder.filePath("independent.kcd2");if(!Write(path,file))return false;
+    if(withParts) {
+    const auto part=std::find_if(file.snapshot.entities.begin(),file.snapshot.entities.end(),[](const auto& e){return e.kind==domain::EntityKind::Part;});
+    const auto partFeature=part==file.snapshot.entities.end()?file.snapshot.features.end():
+        std::find_if(file.snapshot.features.begin(),file.snapshot.features.end(),[&](const auto& f){return f.id==part->createdBy;});
+    if(!Explain("extrusion retains saved feature",partFeature!=file.snapshot.features.end()))return false;
+    auto partClone=*partFeature;auto partEntity=*part;partClone.id=ids.NextTyped<base::IdKind::Feature>();partEntity.id=ids.NextTyped<base::IdKind::Entity>();
+    // Identical saved definitions encode successive outputs of one operation.
+    // A different distance represents a second independent extrusion instead.
+    std::get<domain::ExtrudeDefinition>(partClone.definition).distance.value=4;
+    partEntity.createdBy=partClone.id;partClone.outputs={{"part",partEntity.id,partEntity.kind}};
+    file.snapshot.features.push_back(partClone);file.snapshot.entities.push_back(partEntity);
+    }
+    const auto path=folder.filePath("independent.kcd2");if(!Explain("write independent rebuild fixture",Write(path,file)))return false;
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
     struct SerialFlag {QByteArray previous=qgetenv("KACHACAD_OPEN_SERIAL");~SerialFlag(){if(previous.isNull())qunsetenv("KACHACAD_OPEN_SERIAL");else qputenv("KACHACAD_OPEN_SERIAL",previous);}}flag;
     std::optional<V2PreparedDocument> serial,parallel;
     for(bool sequential:{true,false}) {
         CacheScope scope;if(!scope.folder.isValid())return false;
         if(sequential)qputenv("KACHACAD_OPEN_SERIAL","1");else qunsetenv("KACHACAD_OPEN_SERIAL");
-        if(!w.OpenDocumentFile(path))return false;
-        auto data=V2DocumentCache::Read(original.Value());if(!data)return false;
+        if(!Explain(("open independent fixture: "+w.StatusText().toStdString()).c_str(),w.OpenDocumentFile(path)))return false;
+        auto data=V2DocumentCache::Read(original.Value());if(!Explain("read prepared independent fixture",data.has_value()))return false;
         (sequential?serial:parallel)=std::move(data);
     }
     if(!Explain("parallel cold read preserves exact native BRep, editable archive and curve correspondence",serial&&parallel&&serial->guides.size()==2
-        &&serial->guides==parallel->guides&&serial->parts==parallel->parts&&serial->archive==parallel->archive
+        &&serial->parts.size()==(withParts?2u:0u)&&serial->guides==parallel->guides&&serial->parts==parallel->parts&&serial->archive==parallel->archive
         &&serial->guideEdges.size()==parallel->guideEdges.size()&&serial->meshes.size()==parallel->meshes.size()))return false;
     for(const auto& [id,edges]:serial->guideEdges) {
         if(!parallel->guideEdges.contains(id)||edges.size()!=parallel->guideEdges.at(id).size())return false;
@@ -277,6 +307,9 @@ bool ParallelRead(V2MainWindow& w) {
     }
     for(const auto& [id,mesh]:serial->meshes)if(!Explain("parallel rebuild retains exact display triangles normals and face indices",parallel->meshes.contains(id)&&SameMesh(mesh,parallel->meshes.at(id))))return false;
     return Explain("parallel rebuild does not overwrite the user's model",io::ReadWholeFile(path.toStdString()).Value()==original.Value());
+}
+bool ParallelRead(V2MainWindow& w) {
+    return ParallelReadMode(w,false)&&ParallelReadMode(w,true);
 }
 void InteractionTiming(V2MainWindow& w,const char* label,ViewDirection direction=ViewDirection::Top) {
     auto& v=w.Viewport();w.resize(1500,950);QApplication::processEvents();

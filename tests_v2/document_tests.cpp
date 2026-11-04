@@ -4,6 +4,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/Document.h"
 
+#include <algorithm>
 #include <string>
 
 using kachakacha::v2::base::DeterministicIdGenerator;
@@ -409,6 +410,33 @@ KACHA_V2_TEST(document, the_evaluation_order_is_the_same_every_time)
 }
 
 // ---- 検証 ----
+
+KACHA_V2_TEST(document, shared_inputs_keep_the_same_order_through_rejection_and_undo)
+{
+    DeterministicIdGenerator ids(1181);
+    Document document = NewDocument(ids);
+    Maker maker;
+    const auto a = maker.MakePoint("A");
+    const auto b = maker.MakePoint("B", {a.entity.id, a.entity.id});
+    const auto c = maker.MakePoint("C", {a.entity.id, b.entity.id});
+    Require(document.Run(AddFeatureCommand(a.feature, {a.entity}, "A")).committed, "add A");
+    Require(document.Run(AddFeatureCommand(b.feature, {b.entity}, "B")).committed, "add B");
+    const auto before = document.Snapshot().evaluationOrder;
+    Require(document.Run(AddFeatureCommand(c.feature, {c.entity}, "C")).committed, "add C");
+    const std::vector<FeatureId> expected{a.feature.id, b.feature.id, c.feature.id};
+    Require(document.Snapshot().evaluationOrder == expected, "shared and repeated inputs are ordered");
+    auto invalid = maker.MakePoint("invalid", {ids.NextTyped<IdKind::Entity>()});
+    Require(!document.Run(AddFeatureCommand(invalid.feature, {invalid.entity}, "invalid")).committed,
+        "a missing input is refused");
+    Require(document.Snapshot().evaluationOrder == expected, "rejection preserves the live order");
+    Require(document.Undo(), "undo C");
+    Require(document.Snapshot().evaluationOrder == before, "undo restores the previous order");
+    Require(document.Redo(), "redo C");
+    Require(document.Snapshot().evaluationOrder == expected, "redo restores the committed order");
+    auto reversed = document.Snapshot();
+    std::reverse(reversed.features.begin(), reversed.features.end());
+    Require(Document::TopologicalOrder(reversed) == expected, "storage order does not affect evaluation");
+}
 
 KACHA_V2_TEST(document, validation_catches_a_cycle)
 {

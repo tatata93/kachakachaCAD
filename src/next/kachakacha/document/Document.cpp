@@ -31,18 +31,19 @@ Document::Document(DocumentId id, DocumentSettings settings)
 
 // ---------------- 検証 ----------------
 
-std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
+namespace {
+std::vector<Diagnostic> ValidateAndOrder(const DocumentSnapshot& snapshot, std::vector<FeatureId>& order)
 {
     std::vector<Diagnostic> diagnostics = ValidateDrivingDimensions(snapshot);
 
-    std::unordered_set<std::string> entityIds;
+    std::unordered_set<EntityId> entityIds;entityIds.reserve(snapshot.entities.size());
     for (const Entity& entity : snapshot.entities) {
         if (entity.id.IsNil()) {
             diagnostics.push_back(MakeError(kEmptyId,
                 "IDの無いオブジェクトがあります。", entity.displayName));
             continue;
         }
-        if (!entityIds.insert(entity.id.ToString()).second) {
+        if (!entityIds.insert(entity.id).second) {
             diagnostics.push_back(MakeError(kDuplicateEntity,
                 "同じIDのオブジェクトが2つあります。", entity.id.ToString()));
         }
@@ -53,14 +54,14 @@ std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
             image && !domain::ValidImagePlacement(*image))
             diagnostics.push_back(MakeError("IMG-002","画像の寸法・配置が不正です。","画像と基準点、倍率を確認してください。"));
     }
-    std::unordered_set<std::string> featureIds;
+    std::unordered_set<FeatureId> featureIds;featureIds.reserve(snapshot.features.size());
     for (const Feature& feature : snapshot.features) {
         if (feature.id.IsNil()) {
             diagnostics.push_back(MakeError(kEmptyId,
                 "IDの無い操作履歴があります。", feature.displayName));
             continue;
         }
-        if (!featureIds.insert(feature.id.ToString()).second) {
+        if (!featureIds.insert(feature.id).second) {
             diagnostics.push_back(MakeError(kDuplicateFeature,
                 "同じIDの操作履歴が2つあります。", feature.id.ToString()));
         }
@@ -69,14 +70,14 @@ std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
     // 入力参照が実在すること。最寄りへ勝手に付け替えない。
     for (const Feature& feature : snapshot.features) {
         for (const EntityId& input : feature.inputEntityIds) {
-            if (entityIds.find(input.ToString()) == entityIds.end()) {
+            if (entityIds.find(input) == entityIds.end()) {
                 diagnostics.push_back(MakeError(kBrokenReference,
                     "操作履歴が、もう無いものを参照しています。",
                     feature.displayName + " → " + input.ToString()));
             }
         }
         for (const domain::FeatureOutput& output : feature.outputs) {
-            if (entityIds.find(output.entityId.ToString()) == entityIds.end()) {
+            if (entityIds.find(output.entityId) == entityIds.end()) {
                 diagnostics.push_back(MakeError(kBrokenReference,
                     "操作履歴の出力が見つかりません。",
                     feature.displayName + " → " + output.key));
@@ -87,14 +88,15 @@ std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
     // すべての幾何Entityは、いずれかのFeatureの出力であること。
     for (const Entity& entity : snapshot.entities) {
         if (entity.createdBy.IsNil()
-            || featureIds.find(entity.createdBy.ToString()) == featureIds.end()) {
+            || featureIds.find(entity.createdBy) == featureIds.end()) {
             diagnostics.push_back(MakeError(kOrphanEntity,
                 "どの操作からも作られていないオブジェクトがあります。",
                 entity.displayName + " (" + entity.id.ToString() + ")"));
         }
     }
 
-    if (TopologicalOrder(snapshot).size() != snapshot.features.size()) {
+    order=Document::TopologicalOrder(snapshot);
+    if (order.size() != snapshot.features.size()) {
         diagnostics.push_back(MakeError(kCycle,
             "操作履歴が循環しています。",
             "ある操作が、自分の下流の結果を入力にしています。"));
@@ -102,13 +104,20 @@ std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
     return diagnostics;
 }
 
+} // namespace
+
+std::vector<Diagnostic> Document::Validate(const DocumentSnapshot& snapshot)
+{
+    std::vector<FeatureId> order;return ValidateAndOrder(snapshot,order);
+}
+
 std::vector<FeatureId> Document::TopologicalOrder(const DocumentSnapshot& snapshot)
 {
     // EntityId -> それを作ったFeatureId
-    std::unordered_map<std::string, std::string> producer;
+    std::unordered_map<EntityId, FeatureId> producer;producer.reserve(snapshot.entities.size());
     for (const Feature& feature : snapshot.features) {
         for (const domain::FeatureOutput& output : feature.outputs) {
-            producer[output.entityId.ToString()] = feature.id.ToString();
+            producer[output.entityId] = feature.id;
         }
     }
     // 決定的にするため、FeatureId順に並べてから走査する。
@@ -120,28 +129,23 @@ std::vector<FeatureId> Document::TopologicalOrder(const DocumentSnapshot& snapsh
     std::sort(ordered.begin(), ordered.end(),
         [](const Feature* l, const Feature* r) { return l->id < r->id; });
 
-    std::unordered_map<std::string, int> remaining;
-    std::unordered_map<std::string, std::vector<std::string>> downstream;
+    std::unordered_map<FeatureId, int> remaining;remaining.reserve(snapshot.features.size());
+    std::unordered_map<FeatureId, std::vector<FeatureId>> downstream;downstream.reserve(snapshot.features.size());
     for (const Feature* feature : ordered) {
         int count = 0;
         for (const EntityId& input : feature->inputEntityIds) {
-            const auto found = producer.find(input.ToString());
-            if (found == producer.end() || found->second == feature->id.ToString()) {
+            const auto found = producer.find(input);
+            if (found == producer.end() || found->second == feature->id) {
                 continue;
             }
             ++count;
-            downstream[found->second].push_back(feature->id.ToString());
+            downstream[found->second].push_back(feature->id);
         }
-        remaining[feature->id.ToString()] = count;
-    }
-
-    std::unordered_map<std::string, const Feature*> byId;
-    for (const Feature* feature : ordered) {
-        byId[feature->id.ToString()] = feature;
+        remaining[feature->id] = count;
     }
 
     // 入次数0のものを、ID順で取り出していく。
-    std::set<std::string> ready;
+    std::set<FeatureId> ready;
     for (const auto& [id, count] : remaining) {
         if (count == 0) {
             ready.insert(id);
@@ -150,10 +154,10 @@ std::vector<FeatureId> Document::TopologicalOrder(const DocumentSnapshot& snapsh
     std::vector<FeatureId> result;
     result.reserve(snapshot.features.size());
     while (!ready.empty()) {
-        const std::string current = *ready.begin();
+        const FeatureId current = *ready.begin();
         ready.erase(ready.begin());
-        result.push_back(byId[current]->id);
-        for (const std::string& next : downstream[current]) {
+        result.push_back(current);
+        for (const FeatureId& next : downstream[current]) {
             if (--remaining[next] == 0) {
                 ready.insert(next);
             }
@@ -177,7 +181,7 @@ CommandResult Document::Run(const DocumentCommand& command)
         return result;
     }
 
-    std::vector<Diagnostic> structural = Validate(candidate);
+    std::vector<Diagnostic> structural = ValidateAndOrder(candidate,candidate.evaluationOrder);
     if (std::any_of(structural.begin(), structural.end(),
             [](const Diagnostic& diagnostic) { return diagnostic.IsError(); })) {
         diagnostics.insert(diagnostics.end(), structural.begin(), structural.end());
@@ -186,7 +190,6 @@ CommandResult Document::Run(const DocumentCommand& command)
     }
     diagnostics.insert(diagnostics.end(), structural.begin(), structural.end());
 
-    candidate.evaluationOrder = TopologicalOrder(candidate);
     candidate.revision = snapshot_.revision + 1;
 
     DocumentDelta delta;

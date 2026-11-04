@@ -49,7 +49,10 @@ void Reveal(QWidget& widget)
 
 bool Mouse(QWidget& widget,QPointF point,Qt::KeyboardModifiers modifiers=Qt::NoModifier)
 {
-    Reveal(widget);if(!widget.isVisible()||!widget.isEnabled())return false;
+    // 3Dの位置は PickWire/PickShape が配置確定後に求めている。ここで
+    // 再度イベントを処理すると、下見済みの位置を次の配置へ持ち越してしまう。
+    if(!dynamic_cast<V2Viewport*>(&widget))Reveal(widget);
+    if(!widget.isVisible()||!widget.isEnabled())return false;
     if(dynamic_cast<QPushButton*>(&widget))point=widget.rect().center();
     for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}) {
         QMouseEvent event(type,point,QPointF(widget.mapToGlobal(point.toPoint())),Qt::LeftButton,
@@ -108,16 +111,29 @@ EntityId Coordinates(V2MainWindow& w,int kind,const std::vector<Vector3>& points
 bool PickWire(V2MainWindow& w,EntityId id)
 {
     auto& view=w.Viewport();
+    // パネル変更後の配置を確定してから、人が見る現在の線の位置を求める。
+    // Mouse() 内のイベント処理より前の古い座標を使うと別の線を押してしまう。
+    Reveal(view);
     for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==id) {
         const auto screen=view.Mapping().Project(curve.segment.Evaluate(.37));if(!screen)continue;
         const QPointF p(screen->x,screen->y);view.HoverAt(p);
         for(std::size_t i=0,n=view.CandidateCount();i<n;++i) {
             const auto candidate=view.CurrentCandidate();
             if(candidate&&candidate->entityId==id&&candidate->segmentId==curve.segmentId) {
+                const auto sizeBefore=view.size();
                 if(!Mouse(view,p,Qt::ControlModifier))return false;
                 const auto& selected=view.Selection().entityIds;
+                std::string actual;for(const auto chosen:selected)actual+=chosen.ToString()+" ";
+                const auto projected=view.Mapping().Project(curve.segment.Evaluate(.37));
+                const auto after=view.CurrentCandidate();
                 const auto message="clicked wire "+id.ToString()+"; selected "+std::to_string(selected.size())
+                    +" ["+actual+"]; candidate "+(after?after->entityId.ToString():"none")
+                    +"; viewport "+std::to_string(sizeBefore.width())+"/"+std::to_string(view.width())
+                    +"; pixel "+std::to_string(p.x())+"/"+std::to_string(p.y())
+                    +" -> "+(projected?std::to_string(projected->x)+"/"+std::to_string(projected->y):"none")
                     +"; "+w.StatusText().toStdString();
+                if(std::find(selected.begin(),selected.end(),id)==selected.end())
+                    w.grab().save(qEnvironmentVariable("KACHACAD_GENERIC_OUTPUT")+"-pick-failure.png");
                 return Explain(message.c_str(),std::find(selected.begin(),selected.end(),id)!=selected.end());
             }
             view.CycleCandidate(false);
@@ -129,6 +145,7 @@ bool PickWire(V2MainWindow& w,EntityId id)
 bool PickShape(V2MainWindow& w,EntityId id,Qt::KeyboardModifiers modifiers=Qt::NoModifier)
 {
     auto& view=w.Viewport();
+    Reveal(view);
     for(const auto& shape:view.ShapeViews())if(shape.entityId==id)
         for(const auto& triangle:shape.mesh.triangles) {
             const auto p=(triangle.points[0]+triangle.points[1]+triangle.points[2])*(1.0/3);
@@ -136,7 +153,15 @@ bool PickShape(V2MainWindow& w,EntityId id,Qt::KeyboardModifiers modifiers=Qt::N
             const QPointF pixel(screen->x,screen->y);view.HoverAt(pixel);
             for(std::size_t i=0,n=view.CandidateCount();i<n;++i) {
                 const auto candidate=view.CurrentCandidate();
-                if(candidate&&candidate->entityId==id)return Mouse(view,pixel,modifiers);
+                if(candidate&&candidate->entityId==id) {
+                    const auto size=view.size();const bool clicked=Mouse(view,pixel,modifiers);
+                    const auto& picked=view.Selection().entityIds;
+                    const bool selected=std::find(picked.begin(),picked.end(),id)!=picked.end();
+                    const auto message="shape click "+id.ToString()+"; width "+std::to_string(size.width())
+                        +"/"+std::to_string(view.width())+"; "+w.StatusText().toStdString();
+                    if(!selected)w.grab().save(qEnvironmentVariable("KACHACAD_GENERIC_OUTPUT")+"-shape-failure.png");
+                    return Explain(message.c_str(),clicked&&selected);
+                }
                 view.CycleCandidate(false);
             }
         }
@@ -258,7 +283,8 @@ bool SeparatedCut(V2MainWindow& w)
     w.RunCommand("file.new");const auto base=Box(w,0,0,10,10),cutter=Box(w,4,-1,6,11);
     if(base.IsNil()||cutter.IsNil())return false;
     Note("cut: pick base and cutter");View(w);w.RunCommand("part.boolean_cut");if(!PickShape(w,base)||!PickShape(w,cutter))return false;
-    if(!Explain("preview tells the user it will make two parts",w.BooleanDock().StatusTextJa().contains(QStringLiteral("2 個"))))return false;
+    if(!Explain(("preview tells the user it will make two parts: "+w.BooleanDock().StatusTextJa().toStdString()
+        +"; "+w.StatusText().toStdString()).c_str(),w.BooleanDock().StatusTextJa().contains(QStringLiteral("2 個"))))return false;
     Note("cut: confirm");if(!w.HandleToolKey(Qt::Key_Return,nullptr)||CountOfKind(w,EntityKind::Part)!=4)return false;
     Shot(w,"-separated-cut");w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Part)!=2)return false;
     w.RunCommand("edit.redo");QTemporaryDir dir;Note("cut: save reopen");if(!w.SaveAndReopen(dir.filePath("cut.kcd2")))return false;

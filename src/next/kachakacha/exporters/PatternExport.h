@@ -10,10 +10,12 @@
 //!   - 同じ入力からは同じバイト列が出る(版管理に載せられるように)。
 
 #include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/base/Ids.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <string>
+#include <optional>
 #include <vector>
 
 namespace kachakacha::v2::exporters {
@@ -39,12 +41,15 @@ struct PatternCurve {
     //! 折り線のとき、山折りなら true。
     bool mountainFold = false;
     std::string label;   //!< 部材番号、Fold番号、MatePair番号など
+    //! Transient ownership in the source model evaluation; never a display-name reference.
+    std::optional<std::size_t> ownerPanelIndex;
 };
 
 struct PatternPage {
     double widthMm = 210.0;
     double heightMm = 297.0;
     std::vector<PatternCurve> curves;
+    base::EntityId sourceModelId;
 };
 
 struct PatternDocument {

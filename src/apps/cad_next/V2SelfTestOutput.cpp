@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2EntityTree.h"
 #include "V2OutputTool.h"
+#include "V2ExportDock.h"
 #include "V2OutputPreview.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -188,6 +189,38 @@ bool OutputAcrossDocuments(V2MainWindow& w) {
         &&output->SaveTo(folder.filePath("after.step")));
     if(output)output->close();return passed;
 }
+bool SelectedPatternPanels(V2MainWindow& w)
+{
+    w.RunCommand("file.new");if(!MakeCurvedGuideSurface(w))return false;
+    auto* automatic=w.findChild<QComboBox*>("fabricationAutomaticGeneration");if(!automatic)return false;automatic->setCurrentIndex(0);
+    auto& parts=w.FabricationDock();parts.SetGenerationDestination(0);parts.SetEqualPartCount(3);parts.SetSplitAtCorners(false);
+    w.RunCommand("fabrication.create");w.RunCommand("fabrication.create");
+    if(!Explain("three fabrication panels for selection",w.FabricationPanelCount()==3))return false;
+    w.RunCommand("fabrication.create_pattern");parts.SetPartNumbersText(QStringLiteral("2"));w.RunCommand("export.svg");
+    auto& out=w.ExportDock();
+    if(!Explain("export count is the chosen panel rather than all three",out.Counts().selectedFabricationPanels==1))return false;
+    QTemporaryDir dir;const auto revision=w.Session().GetDocument().Revision();
+    if(!out.ChooseTarget(app::ExportTarget::SelectedFabricationPanels))return false;
+    for(const auto format:{app::ExportFormat::Svg,app::ExportFormat::Dxf,app::ExportFormat::Pdf}) {
+        if(!out.ChooseFormat(format))return false;
+        const auto suffix=QString::fromUtf8(app::ExportFormatExtension(format).data());
+        parts.SetPartNumbersText(QStringLiteral("すべて"));out.ChoosePath(dir.filePath("all"+suffix));
+        if(!out.RunNow())return false;const auto all=io::ReadWholeFile(dir.filePath("all"+suffix).toStdString());
+        parts.SetPartNumbersText(QStringLiteral("2"));out.ChoosePath(dir.filePath("one"+suffix));
+        if(!out.RunNow())return false;const auto one=io::ReadWholeFile(dir.filePath("one"+suffix).toStdString());
+        if(!Explain("every 2D format excludes non-selected panel geometry",all.HasValue()&&one.HasValue()
+            &&one.Value().size()>100&&one.Value().size()<all.Value().size()))return false;
+    }
+    for(const auto bad:{QStringLiteral("99"),QStringLiteral("abc"),QStringLiteral(","),QString()}) {
+        parts.SetPartNumbersText(bad);out.ChoosePath(dir.filePath("bad.pdf"));
+        if(!Explain("invalid or blank target never exports all panels",out.Counts().selectedFabricationPanels==0
+            &&!out.RunNow()&&!QFile::exists(dir.filePath("bad.pdf"))))return false;
+    }
+    parts.SetPartNumbersText(QStringLiteral("2, 2"));
+    return Explain("selection and export preserve source pattern and document",out.Counts().selectedFabricationPanels==1
+        &&w.Session().GetDocument().Revision()==revision);
+}
+
 bool CaseOutputOwnership(V2MainWindow& w){
     if(!OutputBox(w))return false;
     w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
@@ -201,5 +234,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

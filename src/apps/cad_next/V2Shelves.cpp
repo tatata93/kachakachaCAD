@@ -86,6 +86,7 @@ void V2MainWindow::BuildEditingShelves()
     fabricationDock_->SetPartNumbersChangedHandler([this] {
         RefreshFoldEmphasis();
         RefreshFabricationPartInfo(CurrentFabricationModelId());
+        RefreshExportCounts();
     });
     // 近似の「キャンセル Esc」(共通の枠、C-10)。Esc と同じ道。
     fabricationDock_->SetCancelHandler([this] {

@@ -489,6 +489,7 @@ void V2MainWindow::RunCreatePattern()
     for (auto& page : pages) {
         page.widthMm = paper.widthMm;
         page.heightMm = paper.heightMm;
+        page.sourceModelId = CurrentFabricationModelId();
     }
     const auto* definition=CurrentFabricationDefinition();
     const auto sources=definition?FabricationSourcesFor(definition->parts,definition->splitSolidFaces):std::vector<kachakacha::v2::app::FabricationSource>{};
@@ -516,7 +517,8 @@ void V2MainWindow::RunCreatePattern()
             if (page >= pages.size()) {
                 continue;
             }
-            for (const auto& curve : curves.Value()) {
+            for (auto curve : curves.Value()) {
+                curve.ownerPanelIndex = index;
                 pages[page].curves.push_back(curve);
             }
         }

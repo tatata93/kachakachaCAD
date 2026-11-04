@@ -48,4 +48,10 @@ struct WirePatternRequest {
 //! 文書そのものを kcd2 の中身にする。
 [[nodiscard]] base::Result<std::string> MakeProjectContent(const io::DocumentFile& file);
 
+//! Keep the original sheet coordinates; indices are zero-based in this exact model evaluation.
+//! Empty indices select all panels. Reject missing/foreign ownership before writing a file.
+[[nodiscard]] base::Result<std::vector<exporters::PatternPage>> SelectPatternPanels(
+    const std::vector<exporters::PatternPage>& pages, base::EntityId model,
+    std::size_t panelCount, const std::vector<std::size_t>& indices, int currentPage, bool allPages);
+
 } // namespace kachakacha::v2::app

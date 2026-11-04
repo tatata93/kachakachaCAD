@@ -203,4 +203,58 @@ KACHA_V2_TEST(export_content, 中身は空にならない)
     }
 }
 
+namespace {
+auto OwnedPages()
+{
+    using namespace kachakacha::v2;
+    const auto id=*base::EntityId::Parse("b0000000-0000-4000-8000-000000000711");
+    std::vector<exporters::PatternPage> pages(3);
+    for(std::size_t i=0;i<pages.size();++i) {
+        pages[i].sourceModelId=id;
+        for(const auto layer:{exporters::PatternLine::Outline,exporters::PatternLine::Opening,
+            exporters::PatternLine::Fold,exporters::PatternLine::Cut}) {
+            exporters::PatternCurve curve{layer,Line({10.0+i*20,10,0},{15.0+i*20,15,0}),false,"same display label",i};
+            pages[i].curves.push_back(curve);
+        }
+    }
+    return pages;
+}
+}
+
+KACHA_V2_TEST(export_content, selected_panels_keep_all_layers_and_original_page_coordinates)
+{
+    using namespace kachakacha::v2;
+    const auto pages=OwnedPages();
+    const auto selected=app::SelectPatternPanels(pages,pages.front().sourceModelId,3,{1},1,false);
+    Require(selected.HasValue()&&selected.Value().size()==1,"current page is filtered");
+    const auto& page=selected.Value().front();
+    Require(page.curves.size()==4,"outline opening fold and cut remain together");
+    for(const auto& curve:page.curves){Require(curve.ownerPanelIndex==1,"only chosen owner");RequireNear(curve.segment.StartPoint().x,30,1e-9,"placement unchanged");}
+    Require(pages[0].curves.size()==4&&pages[2].curves.size()==4,"source pages unchanged");
+    Require(!app::SelectPatternPanels(pages,pages[0].sourceModelId,3,{1},0,false).HasValue(),"current page without target refuses rather than switching pages");
+}
+
+KACHA_V2_TEST(export_content, selected_pdf_pages_keep_order_skip_empty_and_do_not_duplicate)
+{
+    using namespace kachakacha::v2;const auto pages=OwnedPages();
+    const auto selected=app::SelectPatternPanels(pages,pages[0].sourceModelId,3,{2,0,2},0,true);
+    Require(selected.HasValue()&&selected.Value().size()==2,"only occupied PDF pages");
+    Require(selected.Value()[0].curves.front().ownerPanelIndex==0&&selected.Value()[1].curves.front().ownerPanelIndex==2,"source page order, not selection order");
+    const auto all=app::SelectPatternPanels(pages,pages[0].sourceModelId,3,{},0,true);
+    Require(all.HasValue()&&all.Value().size()==3,"explicit all keeps every page");
+}
+
+KACHA_V2_TEST(export_content, selected_patterns_reject_stale_or_unowned_pages_and_bad_indices)
+{
+    using namespace kachakacha::v2;auto pages=OwnedPages();const auto model=pages[0].sourceModelId;
+    const auto other=*base::EntityId::Parse("b0000000-0000-4000-8000-000000000712");
+    Require(!app::SelectPatternPanels(pages,other,3,{0},0,true).HasValue(),"another model cannot reuse indices");
+    Require(!app::SelectPatternPanels(pages,model,3,{3},0,true).HasValue(),"out of range rejected");
+    Require(!app::SelectPatternPanels(pages,model,3,{0},9,false).HasValue(),"bad page rejected");
+    pages[1].curves.front().ownerPanelIndex.reset();
+    Require(!app::SelectPatternPanels(pages,model,3,{0},0,true).HasValue(),"missing ownership never guessed from label");
+    pages=OwnedPages();pages[1].curves.front().ownerPanelIndex=5;
+    Require(!app::SelectPatternPanels(pages,model,3,{0},0,true).HasValue(),"old subdivision indices rejected");
+}
+
 KACHA_V2_TEST_MAIN("export_content_tests")

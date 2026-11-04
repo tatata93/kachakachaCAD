@@ -117,4 +117,33 @@ Result<std::string> MakeProjectContent(const io::DocumentFile& file)
     return io::SaveDocument(file);
 }
 
+Result<std::vector<exporters::PatternPage>> SelectPatternPanels(
+    const std::vector<exporters::PatternPage>& pages,base::EntityId model,
+    std::size_t panelCount,const std::vector<std::size_t>& indices,int currentPage,bool allPages)
+{
+    using Out=Result<std::vector<exporters::PatternPage>>;
+    const auto stale=[] {return MakeError("EXP-P004","型紙を作り直してください。",
+        "型紙と現在の製作モデル・部材の対応を確認できません。「型紙を作る」で更新してください。");};
+    if(model.IsNil()||panelCount==0||pages.empty())return Out::Failure(stale());
+    for(const auto index:indices)if(index>=panelCount)return Out::Failure(MakeError("EXP-P005",
+        "対象の部材番号が範囲外です。","存在する部材を選ぶか「すべて」を指定してください。"));
+    for(const auto& page:pages) {
+        if(page.sourceModelId!=model)return Out::Failure(stale());
+        for(const auto& curve:page.curves)
+            if(!curve.ownerPanelIndex||*curve.ownerPanelIndex>=panelCount)return Out::Failure(stale());
+    }
+    if(!allPages&&(currentPage<0||static_cast<std::size_t>(currentPage)>=pages.size()))return Out::Failure(stale());
+    std::vector<exporters::PatternPage> selected;
+    for(std::size_t i=0;i<pages.size();++i) {
+        if(!allPages&&i!=static_cast<std::size_t>(currentPage))continue;
+        auto page=pages[i];
+        if(!indices.empty())std::erase_if(page.curves,[&](const auto& curve){
+            return std::find(indices.begin(),indices.end(),*curve.ownerPanelIndex)==indices.end();});
+        if(!page.curves.empty())selected.push_back(std::move(page));
+    }
+    if(selected.empty())return Out::Failure(MakeError("EXP-P006","このページに選択した部材がありません。",
+        "型紙のページを切り替えるか、選択部材の全ページを出すPDFを使用してください。"));
+    return Out::Success(std::move(selected));
+}
+
 } // namespace kachakacha::v2::app

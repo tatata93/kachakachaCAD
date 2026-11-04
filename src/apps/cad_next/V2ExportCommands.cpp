@@ -28,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <set>
 
 namespace {
 kachakacha::v2::base::Result<std::string> MakePatternContent(
@@ -52,6 +53,19 @@ kachakacha::v2::base::Result<std::string> MakePatternContent(
         static_cast<int>(pages.size()) - 1))];
     return format == app::ExportFormat::Svg
         ? exporters::WritePatternSvg(page, title) : exporters::WritePatternDxf(page);
+}
+kachakacha::v2::base::Result<std::string> SelectedPanelPattern(
+    const kachakacha::v2::app::ExportRequest& request,
+    const std::vector<kachakacha::v2::exporters::PatternPage>& original,
+    kachakacha::v2::base::EntityId model,std::size_t total,const V2PartNumberSelection& chosen,
+    int currentPage,double scale)
+{
+    using namespace kachakacha::v2;using Out=base::Result<std::string>;
+    if(chosen.unreadable||(!chosen.blank&&chosen.numbers.empty()))return Out::Failure(
+        base::MakeError("EXP-P005","対象部材を指定してください。","存在する部材番号か「すべて」を指定してください。"));
+    const auto pages=app::SelectPatternPanels(original,model,total,chosen.numbers,currentPage,request.format==app::ExportFormat::Pdf);
+    if(!pages.HasValue())return Out::Failure(pages.Diagnostics());
+    return MakePatternContent(pages.Value(),0,request.format,scale,"選択した部材");
 }
 } // namespace
 
@@ -169,7 +183,12 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         // 部材の絵は型紙と同じものである。別に作ると食い違う。
         if (request.format == ExportFormat::Svg || request.format == ExportFormat::Dxf
             || request.format == ExportFormat::Pdf) {
-            return patternContent("部材");
+            const auto model=CurrentFabricationModelId();
+            const auto found=fabricationModels_.find(model.ToString());
+            return SelectedPanelPattern(request,patternPages_,model,
+                found==fabricationModels_.end()?0:found->second.panels.size(),ReadPartNumbers(),
+                patternDock_?patternDock_->CurrentPage():0,
+                kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),kachakacha::v2::app::ParameterId::ScaleDenominator));
         }
         // 立体で出すときは、その部材のもとになった部品の形を出す。
         return MakeSolidContent(PanelSourceShapes(), request.format);
@@ -290,8 +309,15 @@ void V2MainWindow::RefreshExportCounts()
             snapshot, kachakacha::v2::domain::EntityKind::Part);
         context.selectedEntityCount = static_cast<int>(selection.entityIds.size());
     }
-    exportDock_->SetCounts(kachakacha::v2::app::ExportCountsFrom(context, visibleParts,
-        true));
+    auto counts=kachakacha::v2::app::ExportCountsFrom(context,visibleParts,true);
+    const auto chosen=ReadPartNumbers();
+    const auto model=fabricationModels_.find(CurrentFabricationModelId().ToString());
+    const auto total=model==fabricationModels_.end()?0:model->second.panels.size();
+    const bool valid=!chosen.unreadable&&(chosen.blank||!chosen.numbers.empty())
+        &&std::all_of(chosen.numbers.begin(),chosen.numbers.end(),[&](auto index){return index<total;});
+    const std::set<std::size_t> unique(chosen.numbers.begin(),chosen.numbers.end());
+    counts.selectedFabricationPanels=valid?static_cast<int>(chosen.blank?total:unique.size()):0;
+    exportDock_->SetCounts(counts);
 }
 
 void V2MainWindow::ValidateSelectedSolid()

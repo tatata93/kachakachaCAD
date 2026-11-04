@@ -136,8 +136,9 @@ void V2ExportDock::SetContentMaker(
 void V2ExportDock::SetCounts(const kachakacha::v2::app::ExportCounts& counts)
 {
     counts_ = counts;
-    // 数が変わったら選び直す。自分で選んだ対象が出せる間は動かさない(core が決める)。
-    state_ = kachakacha::v2::app::RetargetForCounts(state_, counts_);
+    // A typed selection can briefly be empty. Never turn an explicit subset export
+    // into an export of another target while the user is editing that selection.
+    if(!state_.targetChosenByUser)state_=kachakacha::v2::app::RetargetForCounts(state_,counts_);
     if (overwriteAction_ != nullptr) {
         overwriteAction_->setChecked(state_.overwrite);
     }

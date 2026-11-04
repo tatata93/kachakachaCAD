@@ -10,6 +10,7 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ShapeMesh.h"
 #include <QApplication>
@@ -205,6 +206,12 @@ bool TransferValidation(V2MainWindow& w) {
         {"sha256",QString::fromLatin1(QCryptographicHash::hash(content,QCryptographicHash::Sha256).toHex())}};
     manifest.write(QJsonDocument(info).toJson());manifest.close();
     if(!Explain("matching SHA cannot legitimize malformed cache fields",!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
+    if(!w.OpenDocumentFile(model))return false;
+    auto badNative=V2DocumentCache::Read(bytes.Value());if(!badNative||badNative->guides.empty())return false;
+    auto& native=badNative->guides.begin()->second;if(native.empty())return false;native.back()^=1;
+    if(!V2DocumentCache::Write(bytes.Value(),*badNative))return false;
+    if(!Explain("matching outer hash cannot legitimize corrupted native shape bytes",
+        V2DocumentCache::HasMatchingPayload(bytes.Value())&&!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
     return Explain("malformed cache falls back to original model with native geometry intact",w.OpenDocumentFile(model)
         &&w.KernelShapeCount()==1&&V2DocumentCache::Read(bytes.Value()).has_value()
         &&io::ReadWholeFile(model.toStdString()).Value()==bytes.Value());
@@ -227,9 +234,9 @@ bool HiddenMesh(V2MainWindow& w) {
     const auto cached=V2DocumentCache::Read(bytes.Value());
     if(!Explain("hidden face keeps native geometry and history without eager display meshing",cached&&cached->guides.size()==1&&cached->guides==visibleData->guides&&cached->meshes.empty()&&w.KernelShapeCount()==1&&w.Viewport().ShapeViews().empty()))return false;
     w.RunCommand("view.show_all");
-    // Transfer uses a BRep text round-trip. Remeshing that same transferred
+    // Remeshing that same transferred
     // native shape must be exact; a worker mesh can differ at sub-ulp edge ends.
-    const auto restored=kernel::RestoreOutputShape(cached->guides.begin()->second);
+    const auto restored=kernel::RestoreTransferShape(cached->guides.begin()->second);
     if(!restored.HasValue())return false;
     const auto eager=kernel::BuildShapeMesh(restored.Value(),0.0,8);kernel::ReleaseShape(restored.Value());
     if(!Explain("lazy and eager display meshes of the transferred native face are identical",eager.HasValue()

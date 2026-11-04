@@ -1,4 +1,6 @@
 #include "V2DocumentCache.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -77,8 +79,10 @@ QString Key(const std::string& source) {
     hash.addData(QByteArray::fromStdString(source));return QString::fromLatin1(hash.result().toHex());
 }
 bool HasMatchingPayload(const std::string& source) {
+    const QDir dir(Root());
+    if(!dir.exists()||dir.entryList({"*.json"},QDir::Files,QDir::NoSort).isEmpty())return false;
     const auto key=Key(source);if(key.isEmpty())return false;
-    const QDir dir(Root());const auto path=dir.filePath(key+".bin");
+    const auto path=dir.filePath(key+".bin");
     QFile manifest(dir.filePath(key+".json"));
     if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return false;
     const auto info=QJsonDocument::fromJson(manifest.readAll()).object();
@@ -95,21 +99,26 @@ std::optional<V2PreparedDocument> Read(const std::string& source) {
     return std::move(*restored.Value());
 }
 bool Write(const std::string& source,V2PreparedDocument& data) {
-    const auto key=Key(source);if(key.isEmpty())return false;
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;
+    const auto key=Key(source);if(key.isEmpty())return false;
     const auto path=dir.filePath(key+".bin");
     if(!WritePreparedDocument(path,key,data))return false;
     return WriteManifest(dir,key,path);
 }
 bool Transfer(const std::string& source,const QString& destination,const QString& token) {
     // Retain full semantic validation, including malformed data with a matching manifest hash.
-    if(!Read(source))return false;
+    const auto data=Read(source);if(!data)return false;
+    for(const auto* shapes:{&data->parts,&data->guides})for(const auto& [id,bytes]:*shapes) {
+        const auto shape=kachakacha::v2::kernel::RestoreTransferShape(bytes);
+        if(!shape.HasValue())return false;
+        kachakacha::v2::kernel::ReleaseShape(shape.Value());
+    }
     const auto key=Key(source);
     return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token);
 }
 bool StoreTransfer(const std::string& source,const QString& transfer,const QString& token) {
-    const auto key=Key(source);if(key.isEmpty())return false;
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;
+    const auto key=Key(source);if(key.isEmpty())return false;
     const auto path=dir.filePath(key+".bin");
     if(!CopyPreparedDocument(transfer,token,path,key))return false;
     return WriteManifest(dir,key,path);

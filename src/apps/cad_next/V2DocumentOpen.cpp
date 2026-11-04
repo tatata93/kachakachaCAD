@@ -9,6 +9,7 @@
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QObject>
 #include <QFileInfo>
@@ -40,7 +41,7 @@ base::Result<bool> Restore(const std::map<std::string,std::string>& source,Shape
         const auto id=base::EntityId::Parse(entry.first);
         const auto found=id?kinds.find(*id):kinds.end();
         if(found==kinds.end()||found->second!=kind)return base::Result<bool>::Failure(base::MakeError(app::kGeometryJobFailed,"再構築結果の参照が文書と一致しません。"));
-        const auto shape=kernel::RestoreOutputShape(entry.second);
+        const auto shape=kernel::RestoreTransferShape(entry.second);
         if(!shape.HasValue())return base::Result<bool>::Failure(shape.Diagnostics());
         shapes.emplace(entry.first,shape.Value());
     }
@@ -79,8 +80,12 @@ bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSna
     }
     if(install)install();else w.RebuildKernelShapes();
     timing.Mark("install-or-rebuild-shapes");
-    w.AdoptCurrentDocument(bool(install));timing.Mark("adopt-ui");
-    w.RefreshWorkPlaneDock();w.viewport_->update();timing.Mark("refresh-docks");return true;
+    // A private rebuild worker has no visible explorer, ribbon or viewport.
+    // Geometry, derived wires and source scene were installed above; defer only
+    // their presentation to the visible process that adopts the transfer.
+    if(!IsWorker())w.AdoptCurrentDocument(bool(install));timing.Mark("adopt-ui");
+    if(!IsWorker()){w.RefreshWorkPlaneDock();w.viewport_->update();}
+    timing.Mark("refresh-docks");return true;
 }
 bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
     using namespace kachakacha::v2;

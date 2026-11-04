@@ -6,6 +6,7 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QCoreApplication>
 #include <QDir>
@@ -32,7 +33,7 @@ base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2Main
     using Captured=base::Result<std::unique_ptr<V2PreparedDocument>>;
     auto result=std::make_unique<V2PreparedDocument>();auto& data=*result;data.archive=std::move(archive);
     const auto capture=[](const auto& source,auto& target)->base::Result<bool>{
-        for(const auto& entry:source){const auto shape=kernel::CaptureOutputShape(entry.second);
+        for(const auto& entry:source){const auto shape=kernel::CaptureTransferShape(entry.second);
             if(!shape.HasValue())return base::Result<bool>::Failure(shape.Diagnostics());target[entry.first]=shape.Value();}
         return base::Result<bool>::Success(true);
     };

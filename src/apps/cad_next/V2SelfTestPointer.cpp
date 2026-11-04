@@ -20,6 +20,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/geometry/Vector3.h"
+#include "kachakacha/view/ViewOrientation.h"
 
 #include <QApplication>
 #include <QAction>
@@ -1035,11 +1036,32 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         && !window.WorkPlanePreviewShown());
 }
 
+bool CameraModifiersDoNotRepick(V2MainWindow&)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids(987400);
+    app::DrawingSession session(ids.NextTyped<base::IdKind::Document>(),ids);
+    V2Viewport view(session);view.resize(800,600);view.SetVisibleWidthMm(40);
+    view.SetWorkPlane(modeling::StandardPlane(modeling::StandardPlaneKind::XY));
+    session.SelectTool(modeling::DrawingTool::Line);view.ClickAt({400,300});
+    if(!Explain("unfinished line has a first point on an active workplane",session.PlacedPointCount()==1))return false;
+    const auto revision=session.GetDocument().Revision();const auto before=view.Orientation();
+    int hovers=0;view.SetHoverChangedCallback([&]{++hovers;});const QPointF start(500,350);
+    SendMouse(view,QEvent::MouseButtonPress,start,Qt::MiddleButton,Qt::MiddleButton,Qt::ShiftModifier);
+    SendMouse(view,QEvent::MouseMove,start+QPointF(30,20),Qt::NoButton,Qt::MiddleButton,Qt::ShiftModifier);
+    SendMouse(view,QEvent::MouseButtonRelease,start+QPointF(30,20),Qt::MiddleButton,Qt::NoButton,Qt::ShiftModifier);
+    const bool quiet=hovers==0&&session.PlacedPointCount()==1&&session.GetDocument().Revision()==revision
+        &&kachakacha::v2::view::AngleBetween(view.Orientation(),before)>1e-9;
+    view.SetAxisConstraintByKey(false);
+    return Explain("camera Shift never repicks or changes unfinished input; drawing constraint resumes immediately",quiet&&hovers==1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
 {
     return {
+        {"HP-NAV-07 camera modifier avoids tool hover recalculation", CameraModifiersDoNotRepick},
         {"HP-INT-04 surface and revolve buttons restore panes without applying", CaseSurfaceButtonsRestorePane},
         {"HP-INT-03 workplane tool-first and common keys", CaseWorkPlaneUsesCommonKeys},
         {"HP-INT-01 context actions preserve unfinished input", CaseContextActionsPreserveInput},

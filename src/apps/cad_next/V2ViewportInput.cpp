@@ -154,7 +154,9 @@ void V2Viewport::SetAxisConstraintByKey(bool constrained)
         return;
     }
     axisConstrainedByKey_ = constrained;
-    HoverAt(cursorPosition_); // Also update the numeric direction without requiring a mouse move.
+    // Camera drags keep tool input unchanged. Shift controls orbit there;
+    // repicking every edge at its transition causes a visible first-drag stall.
+    if(!panning_&&!gadgetDrag_&&!cubeDrag_.active)HoverAt(cursorPosition_);
 }
 
 //! 吸着のあとに点を寄せる(Shift の拘束と、直角スナップ)。当て方は core が決める。

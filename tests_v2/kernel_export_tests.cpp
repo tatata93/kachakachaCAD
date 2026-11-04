@@ -21,12 +21,17 @@
 #include <TopoDS.hxx>
 #include <BRep_Tool.hxx>
 #include <gp_Pnt.hxx>
+#include <STEPControl_Reader.hxx>
+#include <IFSelect_ReturnStatus.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 #endif
 
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <vector>
 
 using kachakacha::v2::geometry::CurveSegment;
@@ -407,6 +412,10 @@ KACHA_V2_TEST(kernel_export, 10部材のうち2つを選ぶと2つだけ出る)
     Require(exported.HasValue(), "出せる");
     RequireEqual(std::to_string(exported.Value().componentCount), "2", "2つ");
     Require(!exported.Value().content.empty(), "中身がある");
+    STEPControl_Reader reader;std::istringstream input(exported.Value().content);
+    Require(reader.ReadStream("selected.step",input)==IFSelect_RetDone&&reader.TransferRoots(),"one STEP model rereads");
+    std::size_t restored=0;for(TopExp_Explorer e(reader.OneShape(),TopAbs_SOLID);e.More();e.Next())++restored;
+    Require(restored==2,"STEP reader restores both selected solids, not just the first document");
     // 体積は選んだ2つぶんだけ。選ばなかった8つが混ざっていない。
     const double expected = (10.0 + 2) * 10.0 * 10.0 + (10.0 + 7) * 10.0 * 10.0;
     RequireNear(exported.Value().totalVolumeMm3, expected, 1e-6,
@@ -523,6 +532,43 @@ KACHA_V2_TEST(kernel_export, validated_cache_detects_native_mutation_and_selecte
     Require(!check.HasValue()||!check.Value().Ok(),"mutating a shared native shape invalidates the validation cache");
     Require(!kachakacha::v2::kernel::OutputStep({handle}).HasValue(),"a cached good STEP never hides new invalid geometry");
     kachakacha::v2::kernel::ReleaseShape(handle);kachakacha::v2::kernel::ReleaseShape(other);
+}
+
+KACHA_V2_TEST(kernel_export, rigid_output_copy_preserves_geometry_and_ownership)
+{
+    using namespace kachakacha::v2;
+    const auto source=kernel::StoreShape(BRepPrimAPI_MakeBox(2,3,4).Shape());
+    const auto before=kernel::CaptureOutputShape(source);Require(before.HasValue(),"native box captured");
+    geometry::OutputPlacement placement;placement.keepPosition=false;
+    placement.source.origin={1,2,3};placement.destination={{30,20,10},{0,1,0},{1,0,0}};
+    const auto moved=kernel::PlaceOutputShape(source,placement);Require(moved.HasValue(),"rigid copy placed");
+    TopoDS_Shape shape;Require(kernel::LookupShape(moved.Value(),shape),"placed native shape exists");
+    GProp_GProps facts;BRepGProp::VolumeProperties(shape,facts);
+    RequireNear(facts.Mass(),24,1e-8,"rotation and translation preserve volume");
+    const auto center=placement.Point({1,1.5,2});
+    RequireNear(facts.CentreOfMass().Distance(gp_Pnt(center.x,center.y,center.z)),0,1e-8,"native centroid follows frame placement");
+    Require(kernel::OutputStep({moved.Value()}).HasValue(),"placed native copy survives STEP readback");
+    TopExp_Explorer vertices(shape,TopAbs_VERTEX);Require(vertices.More(),"copy has a vertex");
+    BRep_Builder builder;builder.UpdateVertex(TopoDS::Vertex(vertices.Current()),gp_Pnt(100,100,100),1e-6);
+    const auto after=kernel::CaptureOutputShape(source);
+    Require(after.HasValue()&&before.Value()==after.Value(),"mutating output copy never changes source topology or geometry");
+    kernel::ReleaseShape(source);kernel::ReleaseShape(moved.Value());
+}
+
+KACHA_V2_TEST(kernel_export, legacy_offset_refusal_preserves_original)
+{
+    using namespace kachakacha::v2;
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"offset-panel-c0.brep");
+    Require(input.good(),"C0 offset regression fixture exists");
+    TopoDS_Shape shape;BRep_Builder builder;BRepTools::Read(shape,input,builder);
+    Require(!shape.IsNull()&&BRepCheck_Analyzer(shape).IsValid(),"original C0 panel is valid");
+    const auto handle=kernel::StoreShape(shape);
+    const auto before=kernel::CaptureOutputShape(handle);Require(before.HasValue(),"source captured");
+    const auto step=kernel::OutputStep({handle});
+    Require(!step.HasValue()&&step.FirstCode()=="EXP-P003","old offset remains a precise refusal until rebuilt");
+    const auto after=kernel::CaptureOutputShape(handle);
+    Require(after.HasValue()&&before.Value()==after.Value(),"export copy preserves original surface, trims and IDs");
+    kernel::ReleaseShape(handle);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

@@ -17,6 +17,8 @@
 #include <QListWidgetItem>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QElapsedTimer>
+#include <iostream>
 #include <algorithm>
 using namespace kachakacha::v2;
 void V2OutputAsset::OwnShape(modeling::KernelShapeHandle handle) {
@@ -25,7 +27,11 @@ void V2OutputAsset::OwnShape(modeling::KernelShapeHandle handle) {
         [](auto* owned){kernel::ReleaseShape(*owned);delete owned;});
 }
 V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
-    window.EndArmedTools();window.SelectTool(modeling::DrawingTool::Select);
+    QElapsedTimer total;total.start();
+    window.EndArmedTools();
+    if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"output end tools"<<total.elapsed()<<std::endl;
+    window.SelectTool(modeling::DrawingTool::Select);
+    if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"output select tool"<<total.elapsed()<<std::endl;
     for (auto* child : window.findChildren<QDialog*>()) {
         if (auto* active=dynamic_cast<V2OutputTool*>(child); active && active->isVisible()) {
             if (active->documentId_ != window.session_->GetDocument().Snapshot().id) {
@@ -36,7 +42,9 @@ V2OutputTool* V2OutputTool::Open(V2MainWindow& window,int format) {
             return active;
         }
     }
-    auto* dialog=new V2OutputTool(window,format);dialog->TakeSelection();dialog->show();return dialog;
+    auto* dialog=new V2OutputTool(window,format);
+    if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"output construct"<<total.elapsed()<<std::endl;
+    dialog->TakeSelection();dialog->show();return dialog;
 }
 V2OutputTool::V2OutputTool(V2MainWindow& window,int format):QDialog(&window),window_(window) {
     setObjectName("selectionOutput");setWindowTitle(QStringLiteral("選択を出力・配置"));setAttribute(Qt::WA_DeleteOnClose);resize(1120,780);
@@ -78,6 +86,7 @@ void V2OutputTool::FillTargets() {
     loading_=false;RefreshPreview();preview_->Fit();
 }
 bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
+    QElapsedTimer total;total.start();
     assets_.clear();if(ids.empty()){SetProblem(QStringLiteral("3Dビューまたは左ペインで出すものを選び、選択を取り込んでください。"));return false;}
     for(const auto& id:ids){const auto* entity=window_.session_->GetDocument().FindEntity(id);if(entity!=nullptr && entity->kind==domain::EntityKind::FabricationModel)return CaptureModels(ids);}
     const bool needsScene=std::any_of(ids.begin(),ids.end(),[&](const auto& id){
@@ -96,7 +105,10 @@ bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
             const auto found=shapes.find(id.ToString());if(found==shapes.end()){SetProblem(QString::fromStdString(entity->displayName)+QStringLiteral(": 実形状がありません。"));return false;}
             // Generated geometry is rolled back and rebuilt after capture. Own a copy.
             geometry::OutputPlacement copy;copy.keepPosition=false;
+            QElapsedTimer timer;timer.start();
             const auto captured=kernel::PlaceOutputShape(found->second,copy);
+            if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT")&&timer.elapsed()>100)
+                std::cout<<"output capture asset"<<entity->displayName<<" ms="<<timer.elapsed()<<std::endl;
             if(!captured.HasValue()){SetProblem(QString::fromStdString(captured.FirstSummaryJa()));return false;}
             asset.OwnShape(captured.Value());
         }else if(entity->kind==domain::EntityKind::Wire){for(const auto& curve:scene.curves)if(curve.entityId==id)asset.curves.push_back(curve.segment);
@@ -106,6 +118,7 @@ bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
         }else {SetProblem(QString::fromStdString(entity->displayName)+QStringLiteral(": 製作の生成で現在形状を取り出してから選んでください。"));return false;}
         assets_.push_back(std::move(asset));
     }
+    if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"output capture total"<<total.elapsed()<<std::endl;
     return true;
 }
 bool V2OutputTool::Prepare() {

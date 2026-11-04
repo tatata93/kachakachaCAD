@@ -250,6 +250,8 @@ bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,s
 
 std::string StepText(const std::vector<TopoDS_Shape>& shapes,bool divide) {
     STEPControl_Writer writer;
+    BRep_Builder builder;TopoDS_Compound selection;builder.MakeCompound(selection);
+    TopoDS_Shape single;
     for(auto shape:shapes) {
         BRepBuilderAPI_Copy exportCopy(shape,true,false);shape=exportCopy.Shape();
         bool composite=false;
@@ -268,8 +270,11 @@ std::string StepText(const std::vector<TopoDS_Shape>& shapes,bool divide) {
             if(split.Result().IsNull()||!BRepCheck_Analyzer(split.Result()).IsValid())return {};
             shape=split.Result();
         }
-        if(writer.Transfer(shape,STEPControl_AsIs)!=IFSelect_RetDone)return {};
+        single=shape;builder.Add(selection,shape);
     }
+    // Transfer the complete forest once. Repeated Transfer calls reprocess an
+    // ever-growing STEP model; a compound keeps separate solids without fusing.
+    if(writer.Transfer(shapes.size()==1?single:TopoDS_Shape(selection),STEPControl_AsIs)!=IFSelect_RetDone)return {};
     std::ostringstream out;if(writer.WriteStream(out)!=IFSelect_RetDone)return {};
     return out.str();
 }
@@ -310,7 +315,12 @@ Result<KernelShapeHandle> PlaceOutputShape(KernelShapeHandle handle,const Output
         if(!placement.Valid())return Failed<KernelShapeHandle>();
         TopoDS_Shape shape;if(!LookupShape(handle,shape))return Failed<KernelShapeHandle>();
         if(placement.keepPosition)return Result<KernelShapeHandle>::Success(handle);
-        BRepBuilderAPI_Transform moved(shape,Placement(placement),true);
+        // A frame placement is a proper rigid motion. Keep the private native
+        // geometry in its original coordinates and move its location, rather
+        // than rewriting every supporting surface and pcurve.
+        BRepBuilderAPI_Copy copy(shape,true,false);
+        if(!copy.IsDone())return Failed<KernelShapeHandle>();
+        BRepBuilderAPI_Transform moved(copy.Shape(),Placement(placement),false);
         if(!moved.IsDone()||!BRepCheck_Analyzer(moved.Shape()).IsValid())return Failed<KernelShapeHandle>();
         return Result<KernelShapeHandle>::Success(StoreShape(moved.Shape()));
     }catch(...){return Failed<KernelShapeHandle>();}

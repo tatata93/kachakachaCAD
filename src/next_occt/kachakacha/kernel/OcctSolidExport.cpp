@@ -111,52 +111,6 @@ template<class Function>
         + (z1 - z0) * (z1 - z0));
 }
 
-//! 一時ファイルを使って STEP の本文を取り出す。
-//! OCCT の STEP 書き出しはファイルにしか書けないので、
-//! いったん人目に触れない場所へ書いてから読み戻す。
-//! 利用者の指定した場所へは、検査を全部通ってから原子的に置く。
-[[nodiscard]] std::filesystem::path ScratchPath(const char* suffix)
-{
-    static std::atomic<unsigned long long> counter{0};
-    static const auto nonce = [] {std::random_device r;return
-        (static_cast<unsigned long long>(r())<<32)^r();}();
-    return std::filesystem::temp_directory_path()
-        / ("kachakacha_v2_export_" + std::to_string(nonce)+"_"+std::to_string(++counter) + suffix);
-}
-
-[[nodiscard]] std::string ReadAndRemove(const std::filesystem::path& path)
-{
-    std::ifstream stream(path, std::ios::binary);
-    std::string content;
-    if (stream) {
-        content.assign((std::istreambuf_iterator<char>(stream)),
-            std::istreambuf_iterator<char>());
-    }
-    stream.close();
-    std::error_code code;
-    std::filesystem::remove(path, code);
-    return content;
-}
-
-//! OCCT の印字先を一時的に外す。抜けるときに元へ戻す。
-//! 型の名前は版によって変わるので、書かずに推論させる。
-class SilentMessenger {
-public:
-    SilentMessenger() : saved_(Message::DefaultMessenger()->Printers())
-    {
-        Message::DefaultMessenger()->ChangePrinters().Clear();
-    }
-    ~SilentMessenger()
-    {
-        Message::DefaultMessenger()->ChangePrinters() = saved_;
-    }
-    SilentMessenger(const SilentMessenger&) = delete;
-    SilentMessenger& operator=(const SilentMessenger&) = delete;
-
-private:
-    std::decay_t<decltype(Message::DefaultMessenger()->Printers())> saved_;
-};
-
 bool ManifoldEdgeUse(const TopoDS_Shape& shape)
 {
     TopTools_IndexedMapOfShape edges;
@@ -326,7 +280,8 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
 
 namespace {
 
-[[nodiscard]] Result<TopoDS_Shape> Checked(KernelShapeHandle handle, double toleranceMm)
+[[nodiscard]] Result<TopoDS_Shape> Checked(KernelShapeHandle handle, double toleranceMm,
+    SolidExportCheck* facts=nullptr)
 {
     TopoDS_Shape shape;
     if (!LookupShape(handle, shape)) {
@@ -352,6 +307,7 @@ namespace {
             "形が自分自身と交わっています。",
             "このまま書き出すと、受け取った側で開けません。"));
     }
+    if(facts)*facts=check.Value();
     return Result<TopoDS_Shape>::Success(shape);
 }
 
@@ -363,33 +319,7 @@ Result<std::string> BuildStepText(KernelShapeHandle handle, double toleranceMm)
     if (!shape.HasValue()) {
         return Result<std::string>::Failure(shape.Diagnostics());
     }
-    return Guarded([&]() -> Result<std::string> {
-        // OCCT の STEP 書き出しは標準出力へ統計を吐く。
-        // 試験の出力に混ざって読めなくなるので、書いているあいだは黙らせる。
-        SilentMessenger silence;
-        STEPControl_Writer writer;
-        const IFSelect_ReturnStatus transferred =
-            writer.Transfer(shape.Value(), STEPControl_AsIs);
-        if (transferred != IFSelect_RetDone) {
-            return Result<std::string>::Failure(MakeError(kExportFailed,
-                "STEP へ移せませんでした。", {}));
-        }
-        const std::filesystem::path scratch = ScratchPath(".step");
-        const IFSelect_ReturnStatus written =
-            writer.Write(scratch.string().c_str());
-        if (written != IFSelect_RetDone) {
-            std::error_code code;
-            std::filesystem::remove(scratch, code);
-            return Result<std::string>::Failure(MakeError(kExportFailed,
-                "STEP を書けませんでした。", {}));
-        }
-        std::string content = ReadAndRemove(scratch);
-        if (content.empty()) {
-            return Result<std::string>::Failure(MakeError(kExportFailed,
-                "STEP の中身が空でした。", "0バイトのファイルは残しません。"));
-        }
-        return Result<std::string>::Success(std::move(content));
-    }, "STEP の作成");
+    return OutputStep({handle});
 }
 
 namespace {
@@ -501,7 +431,7 @@ namespace {
 //! 選んだ形を1つの集まりへまとめる。数はここで数える。
 [[nodiscard]] Result<TopoDS_Compound> GatherSelection(
     const std::vector<KernelShapeHandle>& selected, std::size_t& componentCount,
-    double& totalVolume)
+    double& totalVolume,bool measureVolume=true)
 {
     using Out = Result<TopoDS_Compound>;
     if (selected.empty()) {
@@ -528,9 +458,10 @@ namespace {
         }
         // 選ばれていないものを混ぜない。渡された形だけを足す。
         builder.Add(compound, shape);
-        GProp_GProps properties;
-        detail::VolumeProperties(shape, properties);
-        totalVolume += std::abs(properties.Mass());
+        if(measureVolume) {
+            GProp_GProps properties;detail::VolumeProperties(shape, properties);
+            totalVolume += std::abs(properties.Mass());
+        }
         ++componentCount;
     }
     return Out::Success(compound);
@@ -542,7 +473,7 @@ Result<std::size_t> CountSolidComponents(const std::vector<KernelShapeHandle>& s
 {
     std::size_t count = 0;
     double volume = 0.0;
-    const auto gathered = GatherSelection(selected, count, volume);
+    const auto gathered = GatherSelection(selected, count, volume,false);
     if (!gathered.HasValue()) {
         return Result<std::size_t>::Failure(gathered.Diagnostics());
     }
@@ -559,28 +490,20 @@ Result<SelectedExport> BuildStepForSelection(
     const std::vector<KernelShapeHandle>& selected, double toleranceMm)
 {
     using Out = Result<SelectedExport>;
-    // 1つずつ検査してから出す。壊れたものが混ざったまま出さない。
+    if(selected.empty())return Out::Failure(MakeError(kExportFailed,
+        "書き出せませんでした。","出す部材が1つも選ばれていません。"));
+    SelectedExport result;std::vector<std::uint64_t> seen;
     for (const KernelShapeHandle& handle : selected) {
-        const auto check = CheckSolidForExport(handle, toleranceMm);
-        if (!check.HasValue()) {
-            return Out::Failure(check.Diagnostics());
-        }
+        if(std::find(seen.begin(),seen.end(),handle.value)!=seen.end())return Out::Failure(
+            MakeError(kExportFailed,"書き出せませんでした。","同じ部材が2度選ばれています。"));
+        seen.push_back(handle.value);SolidExportCheck facts;
+        const auto checked=Checked(handle,toleranceMm,&facts);
+        if(!checked.HasValue())return Out::Failure(checked.Diagnostics());
+        result.totalVolumeMm3+=facts.volumeMm3;++result.componentCount;
     }
-    SelectedExport result;
-    const auto gathered = GatherSelection(selected, result.componentCount,
-        result.totalVolumeMm3);
-    if (!gathered.HasValue()) {
-        return Out::Failure(gathered.Diagnostics());
-    }
-    std::string text;
-    for (const KernelShapeHandle& handle : selected) {
-        const auto part = BuildStepText(handle, toleranceMm);
-        if (!part.HasValue()) {
-            return Out::Failure(part.Diagnostics());
-        }
-        text += part.Value();
-    }
-    result.content = std::move(text);
+    const auto step=OutputStep(selected);
+    if(!step.HasValue())return Out::Failure(step.Diagnostics());
+    result.content=step.Value();
     return Out::Success(std::move(result));
 }
 

@@ -14,7 +14,7 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 重点検証済み(Codex、2026-11-05段階13。offscreen固定180.50秒を再現。native分割/厚み形状の作成は1秒未満、BuildStepTextに集中。構造/台帳成功、出力側へ調査を移す。全体未完了) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 進行中(Codex、2026-11-05追加形状段階1。戦闘機/重機/設備を汎用UIで作る受入を追加。先細り/ねじれ、開口、曲管、極と継ぎ目、保存/近似/出力を確認。幾何修正は再現後に別WPへ) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中(Codex、2026-11-05追加形状は実装・重点確認済み。7a72eba64、通常UI89例と最終版追加12例成功。汎用操作で翼/筒/曲管/多穴フランジ/曲面外板/球容器/連通枝管/凹形アームを作成。共有区画と境界被覆、距離/板厚分離を修正。全体・配布ゲートの結果はrefactoring-planに記録) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 重点検証済み(Codex、2026-11-05段階14。STEP検査を文書幾何精度へ整合。offscreen固定180.50→92.08秒、出力UI11例成功。小部品の厳密STEP追加。STL精度/実再読込を維持、全体は後段) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

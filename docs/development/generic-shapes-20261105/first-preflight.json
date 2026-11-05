@@ -1,0 +1,56 @@
+[
+  {
+    "name": "verification_infrastructure_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "test_raw_evidence_and_union_are_rechecked (verification.test_retry_package_timeout.RetryEvidenceTests.test_raw_evidence_and_union_are_rechecked) ... ok\ntest_reject_empty_duplicate_skip_failure_and_incomplete (verification.test_retry_package_timeout.RetryEvidenceTests.test_reject_empty_duplicate_skip_failure_and_incomplete) ... ok\ntest_union_requires_real_successful_retry (verification.test_retry_package_timeout.RetryEvidenceTests.test_union_requires_real_successful_retry) ... ok\ntest_invalid_timeout_does_not_launch_the_child (verification.test_ui_watchdog.UiWatchdogTests.test_invalid_timeout_does_not_launch_the_child) ... ok\ntest_killing_wrapper_also_kills_child_and_grandchild (verification.test_ui_watchdog.UiWatchdogTests.test_killing_wrapper_also_kills_child_and_grandchild) ... ok\ntest_partial_or_unchanged_progress_does_not_reset_the_deadline (verification.test_ui_watchdog.UiWatchdogTests.test_partial_or_unchanged_progress_does_not_reset_the_deadline) ... ok\ntest_plain_ctest_package_uses_a_unique_repo_outpu...\n[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]\n"
+  },
+  {
+    "name": "v2_harness_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS harness / require_passes_on_true\nPASS harness / require_throws_on_false\nPASS harness / require_near_uses_tolerance\nPASS harness / a_failing_case_does_not_stop_the_rest\nPASS harness / cases_are_registered\nharness_tests: 5 passed, 0 failed, 5 total\n"
+  },
+  {
+    "name": "v2_architecture_tests",
+    "status": "failed",
+    "failure": "",
+    "output": "PASS architecture / repo_root_is_reachable\nPASS architecture / v2_core_has_no_qt_or_occt_include\nPASS architecture / v2_sources_stay_under_the_file_line_limit\nPASS architecture / v2_functions_stay_under_the_line_limit\nPASS architecture / v2_sources_carry_no_unfinished_marker\nPASS architecture / occt_types_are_included_where_used\nPASS architecture / v2_test_names_are_valid_identifiers\nFAIL architecture / v2_sources_avoid_names_that_are_macros_elsewhere\n     no V2 source names a variable after a Qt or Windows macro: V2ProfileRegionPicking.cpp:122 near\nPASS architecture / screen_sources_include_the_qt_headers_they_use\nPASS architecture / every_v2_target_gets_the_shared_compile_options\nPASS architecture / every_screen_source_is_built_and_type_checked\nPASS architecture / every_screen_method_has_a_body\nPASS architecture / paths_with_japanese_names_do_not_go_through_narrow_literals\nPASS architecture / the_local_review_pipeline_is_present_and_runs_on_windows_powershell\nPASS architecture / every_ledger_event_the_scripts_write_is_written_down\nPASS architecture / the_scanner_itself_detects_a_planted_violation\narchitecture_tests: 15 passed, 1 failed, 16 total\n"
+  },
+  {
+    "name": "v2_scaffold_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS scaffold / v2_core_links_and_reports_a_version\nPASS scaffold / the_migration_notice_is_present\nPASS scaffold / the_kernel_adapter_links\nscaffold_tests: 3 passed, 0 failed, 3 total\n"
+  },
+  {
+    "name": "v2_coverage_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS coverage / 台帳が仕様の全IDを覆っている\nPASS coverage / 状態は3つのうちのどれかである\nPASS coverage / 済と書いた項目には本当に試験がある\nPASS coverage / 未と部分には理由が書いてある\nPASS coverage / 台帳に載っている試験ファイルはすべて登録されている\nPASS coverage / V1同等性の表に未が残っていない\ncoverage_tests: 6 passed, 0 failed, 6 total\n"
+  },
+  {
+    "name": "v2_command_catalog_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS commands / 実装の一覧に重複が無い\nPASS commands / 仕様のIDがすべて実装にある\nPASS commands / 実装のIDがすべて仕様にある\nPASS commands / 件数が仕様と一致する\nPASS commands / どのコマンドにも日本語の表示名がある\nPASS commands / どのコマンドにも記号がある\nPASS commands / どのコマンドにも操作の案内がある\nPASS commands / どのコマンドにも受入試験が結びついている\nPASS commands / 受入試験のIDが仕様に実在する\nPASS commands / 条件の不成立理由が日本語で書いてある\nPASS commands / 視点と表示の操作は文書を変えない\nPASS commands / 作図の操作は文書を変える\nPASS commands / ショートカットが重なっていない\nPASS commands / IDで引ける\nPASS commands / 道具のコマンドは道具として出る\nPASS commands / 条件の名前がすべて言葉になっている\nPASS commands / 並びが決まっている\nPASS commands / どのコマンド...\n[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]\n"
+  },
+  {
+    "name": "v2_command_availability_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS availability / 閉じた四角は閉じた輪郭として数える\nPASS availability / 立体の面を選べば押し引きとして押せる\nPASS availability / 開いた線は閉じた輪郭ではない\nPASS availability / 5つの別ワイヤーが一周つながれば押し出せる\nPASS availability / 離れた2本は鎖2つになる\nPASS availability / 1本だけでは鎖2つの条件を満たさない\nPASS availability / 作業平面を1つ選べば作業中にできる\nPASS availability / 作業平面を2つ選ぶとどちらか決まらない\nPASS availability / 部品の数で分かれる\nPASS availability / 書き出しと製作モデルは何個でも選べる\nPASS availability / 製作は部品からでも形状ガイドからでも始められる\nPASS availability / selected_fabrication_model_is_not_the_document_total\nPASS availability / 製作モデルと型紙は画面から数をもらう\nPASS availability / 何も選んでいなければ選択に依る条件はすべて通らない\nPASS ...\n[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]\n"
+  },
+  {
+    "name": "v2_core_ui_wiring_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS wiring / 届かないヘッダはすべて台帳にある\nPASS wiring / 台帳に載っているものは本当に届いていない\nPASS wiring / 走査が本当に届き方を見ている\ncore_ui_wiring_tests: 3 passed, 0 failed, 3 total\n"
+  },
+  {
+    "name": "v2_manual_tests",
+    "status": "passed",
+    "failure": null,
+    "output": "PASS manual / 説明書がある\nPASS manual / 指している図がすべてある\nPASS manual / 置いてある図はすべて使われている\nPASS manual / 書き出しの表が実装と同じ\nPASS manual / 挙げている番号が台帳にある\nPASS manual / 図を撮る名前をすべて挙げている\nPASS manual / 作り方の手順書がある\nPASS manual / 手順書が各工程の思想を書いている\nPASS manual / 手順書の書き出しの表が実装と同じ\nPASS manual / 手順書が挙げている番号が台帳にある\nPASS manual / 手順書がショートカットを台帳どおりに書いている\nPASS manual / HTML版はV2の完全マニュアル\nPASS manual / HTML版は全コマンドを一度ずつ説明する\nPASS manual / HTML版が指す図と鉄道見本がある\nPASS manual / 全ツールに固有の図付き手順がある\nmanual_tests: 15 passed, 0 failed, 15 total\n"
+  }
+]

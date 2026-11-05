@@ -1,0 +1,68 @@
+{
+  "source_commit": "7e35c42ae3eac1df03475077e16fe71ac363e8c1",
+  "source_sha256": "1f9d57a3155c7480c50dc8f1289058a5397ecb9b14d96168c682afb2f826b66d",
+  "full_run_id": "extended-shapes-release2-20261105",
+  "status": "passed",
+  "preflight": {
+    "total": 9,
+    "skipped": []
+  },
+  "ctest": {
+    "total": 195,
+    "skipped": []
+  },
+  "ui_cases": [
+    680,
+    680
+  ],
+  "steps": [
+    {
+      "name": "doctor",
+      "exit_code": 0,
+      "seconds": 2.3084848998114467
+    },
+    {
+      "name": "configure",
+      "exit_code": 0,
+      "seconds": 21.608813000144437
+    },
+    {
+      "name": "inventory",
+      "exit_code": 0,
+      "seconds": 0.27637999993748963
+    },
+    {
+      "name": "build-3",
+      "exit_code": 0,
+      "seconds": 26.945959100034088
+    },
+    {
+      "name": "preflight",
+      "exit_code": 0,
+      "seconds": 45.48409949988127
+    },
+    {
+      "name": "build-5",
+      "exit_code": 0,
+      "seconds": 327.9061865999829
+    },
+    {
+      "name": "ui-inventory",
+      "exit_code": 0,
+      "seconds": 0.6629576000850648
+    },
+    {
+      "name": "tests",
+      "exit_code": 0,
+      "seconds": 3289.9660597001202
+    },
+    {
+      "name": "legacy-self-test",
+      "exit_code": 0,
+      "seconds": 31.80738449981436
+    }
+  ],
+  "package_zip_sha256": "12aaa1254d4063894eb43493da74ac907ddef4d77bdcb99e9a3584e3e6eea96b",
+  "models_zip_sha256": "d89f4236b4c471677152279514c14e1be36e7a2447c3bd6d3092e269486ea59c",
+  "models_zip_bytes": 2274043
+}

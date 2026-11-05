@@ -1,0 +1,723 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 3472.1648,
+      "end": "2026-11-05T07:58:30.967Z",
+      "name": "HP-SCOPE planar and spatial",
+      "start": "2026-11-05T07:58:27.495Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 864.4054,
+      "end": "2026-11-05T07:58:31.833Z",
+      "name": "HP-NUM direction follows snap",
+      "start": "2026-11-05T07:58:30.969Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1687.119,
+      "end": "2026-11-05T07:58:33.521Z",
+      "name": "HP-NUM decimal dimensions",
+      "start": "2026-11-05T07:58:31.834Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1730.365,
+      "end": "2026-11-05T07:58:35.257Z",
+      "name": "HP-NUM actual tool fields and geometry thickness",
+      "start": "2026-11-05T07:58:33.527Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 908.2213,
+      "end": "2026-11-05T07:58:36.171Z",
+      "name": "作図中に入力列が出て数で線が決まる",
+      "start": "2026-11-05T07:58:35.262Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1861.7727,
+      "end": "2026-11-05T07:58:38.035Z",
+      "name": "中ボタンで画面が動く",
+      "start": "2026-11-05T07:58:36.173Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1689.0732,
+      "end": "2026-11-05T07:58:39.725Z",
+      "name": "軌道回転で視点が回る",
+      "start": "2026-11-05T07:58:38.037Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 912.131,
+      "end": "2026-11-05T07:58:40.656Z",
+      "name": "Escで入力を取り消し道具を維持する",
+      "start": "2026-11-05T07:58:39.743Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 728.0025,
+      "end": "2026-11-05T07:58:41.385Z",
+      "name": "Shiftで水平になりSで吸着が止まる",
+      "start": "2026-11-05T07:58:40.657Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 793.8991,
+      "end": "2026-11-05T07:58:42.179Z",
+      "name": "吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる",
+      "start": "2026-11-05T07:58:41.386Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 746.1119,
+      "end": "2026-11-05T07:58:42.930Z",
+      "name": "主要キーが操作キーと競合しない",
+      "start": "2026-11-05T07:58:42.184Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 856.9147,
+      "end": "2026-11-05T07:58:43.793Z",
+      "name": "移動と複製が本当に効く",
+      "start": "2026-11-05T07:58:42.937Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 758.2456,
+      "end": "2026-11-05T07:58:44.553Z",
+      "name": "つぶれた変換は断る",
+      "start": "2026-11-05T07:58:43.795Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 728.7072,
+      "end": "2026-11-05T07:58:45.288Z",
+      "name": "選んだ物を掴んで動かせる",
+      "start": "2026-11-05T07:58:44.560Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 726.124,
+      "end": "2026-11-05T07:58:46.017Z",
+      "name": "押しただけでは動かない",
+      "start": "2026-11-05T07:58:45.291Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 743.3205,
+      "end": "2026-11-05T07:58:46.765Z",
+      "name": "制御点を掴んで動かせる",
+      "start": "2026-11-05T07:58:46.022Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 723.2752,
+      "end": "2026-11-05T07:58:47.489Z",
+      "name": "制御点は選んだ線にだけ出る",
+      "start": "2026-11-05T07:58:46.766Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 787.734,
+      "end": "2026-11-05T07:58:48.279Z",
+      "name": "表示の段に数字のキーがある",
+      "start": "2026-11-05T07:58:47.491Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 865.4794,
+      "end": "2026-11-05T07:58:49.146Z",
+      "name": "一覧で名前を変えられる",
+      "start": "2026-11-05T07:58:48.280Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1085.1824,
+      "end": "2026-11-05T07:58:50.231Z",
+      "name": "HP-EX-01 拾って押して確定すると立体になる",
+      "start": "2026-11-05T07:58:49.147Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 814.6141,
+      "end": "2026-11-05T07:58:51.048Z",
+      "name": "HP-UI-01 押し出しの最中は棚が見えている",
+      "start": "2026-11-05T07:58:50.233Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 971.4567,
+      "end": "2026-11-05T07:58:52.021Z",
+      "name": "HP-UI-03 右の欄へ打ったあとも Enter と Esc が効く",
+      "start": "2026-11-05T07:58:51.049Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1290.0866,
+      "end": "2026-11-05T07:58:53.312Z",
+      "name": "HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+      "start": "2026-11-05T07:58:52.022Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 793.8789,
+      "end": "2026-11-05T07:58:54.107Z",
+      "name": "HP-EX-OUTPUT-06 全部 OFF は確定できない",
+      "start": "2026-11-05T07:58:53.313Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1086.5554,
+      "end": "2026-11-05T07:58:55.197Z",
+      "name": "HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+      "start": "2026-11-05T07:58:54.111Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 908.0516,
+      "end": "2026-11-05T07:58:56.107Z",
+      "name": "HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+      "start": "2026-11-05T07:58:55.199Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 927.6304,
+      "end": "2026-11-05T07:58:57.037Z",
+      "name": "HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+      "start": "2026-11-05T07:58:56.108Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 993.3366,
+      "end": "2026-11-05T07:58:58.031Z",
+      "name": "HP-SF-01 面を作る棚と下見が見え、文書はまだ増えない",
+      "start": "2026-11-05T07:58:57.038Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1045.2769,
+      "end": "2026-11-05T07:58:59.077Z",
+      "name": "HP-SF-02 Enter で面が1枚できて棚が片付く",
+      "start": "2026-11-05T07:58:58.032Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 977.0566,
+      "end": "2026-11-05T07:59:00.055Z",
+      "name": "HP-SF-03 Esc で何も作らずやめる",
+      "start": "2026-11-05T07:58:59.078Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1053.4415,
+      "end": "2026-11-05T07:59:01.110Z",
+      "name": "HP-SF-04 作り方を変えても入れたものが消えない",
+      "start": "2026-11-05T07:59:00.056Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1435.584,
+      "end": "2026-11-05T07:59:02.545Z",
+      "name": "HP-SF-05 5本の別ワイヤーを1輪郭として面と押し出しに使える",
+      "start": "2026-11-05T07:59:01.110Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1311.4074,
+      "end": "2026-11-05T07:59:03.859Z",
+      "name": "PROFILE-03〜05/07 穴・複数・解除・開いた輪郭を画面で扱える",
+      "start": "2026-11-05T07:59:02.547Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 992.3551,
+      "end": "2026-11-05T07:59:04.852Z",
+      "name": "HP-EX-03 立体の面を画面から拾って押す",
+      "start": "2026-11-05T07:59:03.860Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4213.2757,
+      "end": "2026-11-05T07:59:09.067Z",
+      "name": "HP-SF-06 3D のクリックがどの欄へ入るかがいつも見えている",
+      "start": "2026-11-05T07:59:04.853Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2501.039,
+      "end": "2026-11-05T07:59:11.569Z",
+      "name": "HP-SF-07 ロフトの断面順は採用順を出し、手動固定はそのまま生成順になる",
+      "start": "2026-11-05T07:59:09.067Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 762.1918,
+      "end": "2026-11-05T07:59:12.332Z",
+      "name": "HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
+      "start": "2026-11-05T07:59:11.570Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1522.0056,
+      "end": "2026-11-05T07:59:13.855Z",
+      "name": "HP-FAB-01 面を拾い70%曲げからワイヤーを作る",
+      "start": "2026-11-05T07:59:12.333Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1566.6334,
+      "end": "2026-11-05T07:59:15.423Z",
+      "name": "HP-EX-WIRES stop wire only Undo save",
+      "start": "2026-11-05T07:59:13.857Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1582.5978,
+      "end": "2026-11-05T07:59:17.006Z",
+      "name": "HP-EX-WIRES stop wire plus solid Undo save",
+      "start": "2026-11-05T07:59:15.424Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1764.9948,
+      "end": "2026-11-05T07:59:18.773Z",
+      "name": "HP-EX-WIRES stop end-only Undo save",
+      "start": "2026-11-05T07:59:17.007Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 986.1287,
+      "end": "2026-11-05T07:59:19.760Z",
+      "name": "HP-EX-REPEAT commit and lost mouse release",
+      "start": "2026-11-05T07:59:18.774Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1623.9783,
+      "end": "2026-11-05T07:59:21.385Z",
+      "name": "HP-EX-CAP distance orientation Undo save",
+      "start": "2026-11-05T07:59:19.761Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2649.3856,
+      "end": "2026-11-05T07:59:24.036Z",
+      "name": "HP-EX-CAP native face orientation save",
+      "start": "2026-11-05T07:59:21.387Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 845.4201,
+      "end": "2026-11-05T07:59:24.883Z",
+      "name": "HP-EX-UI tool first settings and direction pick",
+      "start": "2026-11-05T07:59:24.037Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4149.1253,
+      "end": "2026-11-05T07:59:29.035Z",
+      "name": "HP-EX-UI target solid first",
+      "start": "2026-11-05T07:59:24.887Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1920.6707,
+      "end": "2026-11-05T07:59:30.961Z",
+      "name": "HP-EX-UI face and direction independent",
+      "start": "2026-11-05T07:59:29.040Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1456.1342,
+      "end": "2026-11-05T07:59:32.419Z",
+      "name": "HP-EX-UI hovered face fill",
+      "start": "2026-11-05T07:59:30.963Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2679.1674,
+      "end": "2026-11-05T07:59:35.099Z",
+      "name": "HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存",
+      "start": "2026-11-05T07:59:32.420Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 5442.6275,
+      "end": "2026-11-05T07:59:40.543Z",
+      "name": "HP-EX-LINE 曲面フェイスから線まで・非表示・冷再計算・保存",
+      "start": "2026-11-05T07:59:35.100Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2921.0771,
+      "end": "2026-11-05T07:59:43.465Z",
+      "name": "HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存",
+      "start": "2026-11-05T07:59:40.544Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1123.2948,
+      "end": "2026-11-05T07:59:44.593Z",
+      "name": "HP-CALC-01 計算バー・GUI応答・取消・形状の解放",
+      "start": "2026-11-05T07:59:43.470Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1183.256,
+      "end": "2026-11-05T07:59:45.778Z",
+      "name": "HP-CALC-02 分割取消で両側の内部形状を解放",
+      "start": "2026-11-05T07:59:44.595Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3234.2003,
+      "end": "2026-11-05T07:59:49.013Z",
+      "name": "HP-GENERIC-01 numeric fine concave lip through UI",
+      "start": "2026-11-05T07:59:45.779Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 5907.3577,
+      "end": "2026-11-05T07:59:54.923Z",
+      "name": "HP-GENERIC-02 perforated concave mask offset thickness through UI",
+      "start": "2026-11-05T07:59:49.016Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 5764.0789,
+      "end": "2026-11-05T08:00:00.688Z",
+      "name": "HP-GENERIC-03 separating boolean produces independent reopened parts through UI",
+      "start": "2026-11-05T07:59:54.924Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 11913.2085,
+      "end": "2026-11-05T08:00:12.602Z",
+      "name": "HP-GENERIC-04 rounded organic loft shell through UI and STEP",
+      "start": "2026-11-05T08:00:00.688Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 6540.9554,
+      "end": "2026-11-05T08:00:19.144Z",
+      "name": "HP-GENERIC-05 separate curved perforated regions through UI",
+      "start": "2026-11-05T08:00:12.603Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3315.0607,
+      "end": "2026-11-05T08:00:22.459Z",
+      "name": "HP-EXTENDED-01 swept wing plate through ordinary UI",
+      "start": "2026-11-05T08:00:19.145Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 8084.8034,
+      "end": "2026-11-05T08:00:30.548Z",
+      "name": "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+      "start": "2026-11-05T08:00:22.463Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 8174.1981,
+      "end": "2026-11-05T08:00:38.723Z",
+      "name": "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+      "start": "2026-11-05T08:00:30.549Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 10288.1974,
+      "end": "2026-11-05T08:00:49.012Z",
+      "name": "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+      "start": "2026-11-05T08:00:38.724Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 6629.0195,
+      "end": "2026-11-05T08:00:55.642Z",
+      "name": "HP-EXTENDED-05 open curved bucket skin through UI",
+      "start": "2026-11-05T08:00:49.013Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 7782.749,
+      "end": "2026-11-05T08:01:03.431Z",
+      "name": "HP-EXTENDED-06 tapered twisted airfoil loft through UI",
+      "start": "2026-11-05T08:00:55.648Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 9470.1242,
+      "end": "2026-11-05T08:01:12.946Z",
+      "name": "HP-EXTENDED-07 spherical vessel poles seam and open port through UI",
+      "start": "2026-11-05T08:01:03.477Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 14702.8513,
+      "end": "2026-11-05T08:01:27.651Z",
+      "name": "HP-EXTENDED-08 communicating hollow pipe tee through UI",
+      "start": "2026-11-05T08:01:12.948Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 5565.4157,
+      "end": "2026-11-05T08:01:33.221Z",
+      "name": "HP-EXTENDED-09 concave link arm with independent pin holes through UI",
+      "start": "2026-11-05T08:01:27.655Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1468.6991,
+      "end": "2026-11-05T08:01:34.691Z",
+      "name": "HP-EXTENDED-10 mixed interior and individual boundary selection through UI",
+      "start": "2026-11-05T08:01:33.222Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4560.9047,
+      "end": "2026-11-05T08:01:39.256Z",
+      "name": "HP-EXTENDED-11 adjacent profile seeds and spanning source edge preservation through UI",
+      "start": "2026-11-05T08:01:34.695Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3123.7886,
+      "end": "2026-11-05T08:01:42.381Z",
+      "name": "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",
+      "start": "2026-11-05T08:01:39.257Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1357.5448,
+      "end": "2026-11-05T08:01:43.743Z",
+      "name": "面の押し引きをやめても文書が変わらない",
+      "start": "2026-11-05T08:01:42.386Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1350.3618,
+      "end": "2026-11-05T08:01:45.094Z",
+      "name": "押し出しは1回の取り消しで完全に戻る",
+      "start": "2026-11-05T08:01:43.744Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1252.6338,
+      "end": "2026-11-05T08:01:46.348Z",
+      "name": "棚で選んだ演算のまま作られる",
+      "start": "2026-11-05T08:01:45.095Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1083.968,
+      "end": "2026-11-05T08:01:47.433Z",
+      "name": "棚で選んだ向きが矢印と確定と保存まで通る",
+      "start": "2026-11-05T08:01:46.348Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 908.8318,
+      "end": "2026-11-05T08:01:48.342Z",
+      "name": "輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
+      "start": "2026-11-05T08:01:47.434Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 669.9584,
+      "end": "2026-11-05T08:01:49.013Z",
+      "name": "詳細の窓は渡した決めごとをそのまま見せる",
+      "start": "2026-11-05T08:01:48.343Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 820.0725,
+      "end": "2026-11-05T08:01:49.834Z",
+      "name": "詳細の窓で選んだ向きが矢印と確定と次回まで通る",
+      "start": "2026-11-05T08:01:49.014Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 836.2652,
+      "end": "2026-11-05T08:01:50.672Z",
+      "name": "面の縁の線が押し出しの入力として記録される",
+      "start": "2026-11-05T08:01:49.835Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 867.9223,
+      "end": "2026-11-05T08:01:51.546Z",
+      "name": "面の縁を直すと押し出しが計算し直す対象に入る",
+      "start": "2026-11-05T08:01:50.678Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1741.7959,
+      "end": "2026-11-05T08:01:53.288Z",
+      "name": "面の押し引きは保存して開き直しても残る",
+      "start": "2026-11-05T08:01:51.547Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 853.7279,
+      "end": "2026-11-05T08:01:54.143Z",
+      "name": "面の押し引きは1回の取り消しとやり直しで往復する",
+      "start": "2026-11-05T08:01:53.290Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 780.4525,
+      "end": "2026-11-05T08:01:54.925Z",
+      "name": "断られた押し出しは覚えている形にも跡を残さない",
+      "start": "2026-11-05T08:01:54.144Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1475.4352,
+      "end": "2026-11-05T08:01:56.405Z",
+      "name": "輪郭 2 つの押し出しは部品ごとに自分の輪郭を持ち開き直しても別の場所にある",
+      "start": "2026-11-05T08:01:54.929Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1787.6219,
+      "end": "2026-11-05T08:01:58.194Z",
+      "name": "違う平面の輪郭は平面ごとに押し出し下見に全部出て1回で戻る",
+      "start": "2026-11-05T08:01:56.406Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1557.6053,
+      "end": "2026-11-05T08:01:59.752Z",
+      "name": "違う平面の輪郭の足すは前の結果を次の相手につなぎ1回で戻る",
+      "start": "2026-11-05T08:01:58.195Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3690.0021,
+      "end": "2026-11-05T08:02:03.443Z",
+      "name": "HP-SF-13 おまかせ: 線を押すだけで役割と作り方が決まり、理由と候補が出て、役割を直せる",
+      "start": "2026-11-05T08:01:59.753Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1586.626,
+      "end": "2026-11-05T08:02:05.033Z",
+      "name": "HP-SF-10 境界面は外周と内側の線をまとめて選んでも外周を輪にし内側を通る線にする",
+      "start": "2026-11-05T08:02:03.446Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 4581.8448,
+      "end": "2026-11-05T08:02:09.620Z",
+      "name": "HP-SF-11 ロフトは断面3本とガイド3本を普通のクリックで受けて全部を使う",
+      "start": "2026-11-05T08:02:05.039Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1195.9897,
+      "end": "2026-11-05T08:02:10.819Z",
+      "name": "HP-SF-12 四辺面を4辺から作り張り方を選べる",
+      "start": "2026-11-05T08:02:09.623Z",
+      "status": "passed"
+    }
+  ],
+  "selected": [
+    "HP-SCOPE planar and spatial",
+    "HP-NUM direction follows snap",
+    "HP-NUM decimal dimensions",
+    "HP-NUM actual tool fields and geometry thickness",
+    "作図中に入力列が出て数で線が決まる",
+    "中ボタンで画面が動く",
+    "軌道回転で視点が回る",
+    "Escで入力を取り消し道具を維持する",
+    "Shiftで水平になりSで吸着が止まる",
+    "吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる",
+    "主要キーが操作キーと競合しない",
+    "移動と複製が本当に効く",
+    "つぶれた変換は断る",
+    "選んだ物を掴んで動かせる",
+    "押しただけでは動かない",
+    "制御点を掴んで動かせる",
+    "制御点は選んだ線にだけ出る",
+    "表示の段に数字のキーがある",
+    "一覧で名前を変えられる",
+    "HP-EX-01 拾って押して確定すると立体になる",
+    "HP-UI-01 押し出しの最中は棚が見えている",
+    "HP-UI-03 右の欄へ打ったあとも Enter と Esc が効く",
+    "HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+    "HP-EX-OUTPUT-06 全部 OFF は確定できない",
+    "HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+    "HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+    "HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+    "HP-SF-01 面を作る棚と下見が見え、文書はまだ増えない",
+    "HP-SF-02 Enter で面が1枚できて棚が片付く",
+    "HP-SF-03 Esc で何も作らずやめる",
+    "HP-SF-04 作り方を変えても入れたものが消えない",
+    "HP-SF-05 5本の別ワイヤーを1輪郭として面と押し出しに使える",
+    "PROFILE-03〜05/07 穴・複数・解除・開いた輪郭を画面で扱える",
+    "HP-EX-03 立体の面を画面から拾って押す",
+    "HP-SF-06 3D のクリックがどの欄へ入るかがいつも見えている",
+    "HP-SF-07 ロフトの断面順は採用順を出し、手動固定はそのまま生成順になる",
+    "HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
+    "HP-FAB-01 面を拾い70%曲げからワイヤーを作る",
+    "HP-EX-WIRES stop wire only Undo save",
+    "HP-EX-WIRES stop wire plus solid Undo save",
+    "HP-EX-WIRES stop end-only Undo save",
+    "HP-EX-REPEAT commit and lost mouse release",
+    "HP-EX-CAP distance orientation Undo save",
+    "HP-EX-CAP native face orientation save",
+    "HP-EX-UI tool first settings and direction pick",
+    "HP-EX-UI target solid first",
+    "HP-EX-UI face and direction independent",
+    "HP-EX-UI hovered face fill",
+    "HP-EX-NATIVE 曲面フェイスの道具先行・取消・Undo・保存",
+    "HP-EX-LINE 曲面フェイスから線まで・非表示・冷再計算・保存",
+    "HP-EX-POINT 曲面フェイスから点まで・非表示・冷再計算・保存",
+    "HP-CALC-01 計算バー・GUI応答・取消・形状の解放",
+    "HP-CALC-02 分割取消で両側の内部形状を解放",
+    "HP-GENERIC-01 numeric fine concave lip through UI",
+    "HP-GENERIC-02 perforated concave mask offset thickness through UI",
+    "HP-GENERIC-03 separating boolean produces independent reopened parts through UI",
+    "HP-GENERIC-04 rounded organic loft shell through UI and STEP",
+    "HP-GENERIC-05 separate curved perforated regions through UI",
+    "HP-EXTENDED-01 swept wing plate through ordinary UI",
+    "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+    "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+    "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+    "HP-EXTENDED-05 open curved bucket skin through UI",
+    "HP-EXTENDED-06 tapered twisted airfoil loft through UI",
+    "HP-EXTENDED-07 spherical vessel poles seam and open port through UI",
+    "HP-EXTENDED-08 communicating hollow pipe tee through UI",
+    "HP-EXTENDED-09 concave link arm with independent pin holes through UI",
+    "HP-EXTENDED-10 mixed interior and individual boundary selection through UI",
+    "HP-EXTENDED-11 adjacent profile seeds and spanning source edge preservation through UI",
+    "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",
+    "面の押し引きをやめても文書が変わらない",
+    "押し出しは1回の取り消しで完全に戻る",
+    "棚で選んだ演算のまま作られる",
+    "棚で選んだ向きが矢印と確定と保存まで通る",
+    "輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
+    "詳細の窓は渡した決めごとをそのまま見せる",
+    "詳細の窓で選んだ向きが矢印と確定と次回まで通る",
+    "面の縁の線が押し出しの入力として記録される",
+    "面の縁を直すと押し出しが計算し直す対象に入る",
+    "面の押し引きは保存して開き直しても残る",
+    "面の押し引きは1回の取り消しとやり直しで往復する",
+    "断られた押し出しは覚えている形にも跡を残さない",
+    "輪郭 2 つの押し出しは部品ごとに自分の輪郭を持ち開き直しても別の場所にある",
+    "違う平面の輪郭は平面ごとに押し出し下見に全部出て1回で戻る",
+    "違う平面の輪郭の足すは前の結果を次の相手につなぎ1回で戻る",
+    "HP-SF-13 おまかせ: 線を押すだけで役割と作り方が決まり、理由と候補が出て、役割を直せる",
+    "HP-SF-10 境界面は外周と内側の線をまとめて選んでも外周を輪にし内側を通る線にする",
+    "HP-SF-11 ロフトは断面3本とガイド3本を普通のクリックで受けて全部を使う",
+    "HP-SF-12 四辺面を4辺から作り張り方を選べる"
+  ],
+  "total": 89,
+  "failed": 0,
+  "passed": 89
+}

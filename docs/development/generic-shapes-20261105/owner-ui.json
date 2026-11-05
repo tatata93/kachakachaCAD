@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 26844.0397,
+      "end": "2026-11-05T09:25:25.455Z",
+      "name": "PROJ OWNER existing projected planar window face and solid",
+      "start": "2026-11-05T09:24:58.611Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 155278.1545,
+      "end": "2026-11-05T09:28:00.734Z",
+      "name": "PROJ OWNER existing projected panorama face and solid",
+      "start": "2026-11-05T09:25:25.457Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 77146.6496,
+      "end": "2026-11-05T09:29:17.883Z",
+      "name": "PROJ OWNER existing projected left panorama face and solid",
+      "start": "2026-11-05T09:28:00.736Z",
+      "status": "passed"
+    }
+  ],
+  "selected": [
+    "PROJ OWNER existing projected planar window face and solid",
+    "PROJ OWNER existing projected panorama face and solid",
+    "PROJ OWNER existing projected left panorama face and solid"
+  ],
+  "total": 3,
+  "failed": 0,
+  "source_preservation": {
+    "source_name": "115投影.kcd2",
+    "source_bytes": 1035067,
+    "before_sha256": "f472858638de8413d47da0395e41b7655ca08c55bf3cfc2f256acf86946b1dca",
+    "after_sha256": "f472858638de8413d47da0395e41b7655ca08c55bf3cfc2f256acf86946b1dca",
+    "unchanged": true,
+    "exit_code": 0
+  }
+}

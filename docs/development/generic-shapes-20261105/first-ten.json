@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 5088.3916,
+      "end": "2026-11-05T06:55:30.752Z",
+      "name": "HP-EXTENDED-01 swept wing plate through ordinary UI",
+      "start": "2026-11-05T06:55:25.663Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2338.8394,
+      "end": "2026-11-05T06:55:33.092Z",
+      "name": "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+      "start": "2026-11-05T06:55:30.753Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 5881.69,
+      "end": "2026-11-05T06:55:38.974Z",
+      "name": "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+      "start": "2026-11-05T06:55:33.093Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 5302.3196,
+      "end": "2026-11-05T06:55:44.278Z",
+      "name": "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+      "start": "2026-11-05T06:55:38.975Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3743.9959,
+      "end": "2026-11-05T06:55:48.023Z",
+      "name": "HP-EXTENDED-05 open curved bucket skin through UI",
+      "start": "2026-11-05T06:55:44.279Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1839.7208,
+      "end": "2026-11-05T06:55:49.864Z",
+      "name": "HP-EXTENDED-06 tapered twisted airfoil loft through UI",
+      "start": "2026-11-05T06:55:48.024Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 4483.648,
+      "end": "2026-11-05T06:55:54.349Z",
+      "name": "HP-EXTENDED-07 spherical vessel poles seam and open port through UI",
+      "start": "2026-11-05T06:55:49.865Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 2926.1039,
+      "end": "2026-11-05T06:55:57.278Z",
+      "name": "HP-EXTENDED-08 communicating hollow pipe tee through UI",
+      "start": "2026-11-05T06:55:54.353Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 3973.6736,
+      "end": "2026-11-05T06:56:01.253Z",
+      "name": "HP-EXTENDED-09 concave link arm with independent pin holes through UI",
+      "start": "2026-11-05T06:55:57.279Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1151.3636,
+      "end": "2026-11-05T06:56:02.405Z",
+      "name": "HP-EXTENDED-10 mixed interior and individual boundary selection through UI",
+      "start": "2026-11-05T06:56:01.254Z",
+      "status": "failed"
+    }
+  ],
+  "selected": [
+    "HP-EXTENDED-01 swept wing plate through ordinary UI",
+    "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+    "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+    "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+    "HP-EXTENDED-05 open curved bucket skin through UI",
+    "HP-EXTENDED-06 tapered twisted airfoil loft through UI",
+    "HP-EXTENDED-07 spherical vessel poles seam and open port through UI",
+    "HP-EXTENDED-08 communicating hollow pipe tee through UI",
+    "HP-EXTENDED-09 concave link arm with independent pin holes through UI",
+    "HP-EXTENDED-10 mixed interior and individual boundary selection through UI"
+  ],
+  "total": 10,
+  "failed": 5,
+  "passed": 5
+}

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 4137.7933,
+      "end": "2026-11-05T06:23:10.118Z",
+      "name": "HP-EXTENDED-01 swept wing plate through ordinary UI",
+      "start": "2026-11-05T06:23:05.980Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 1313.2265,
+      "end": "2026-11-05T06:23:11.434Z",
+      "name": "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+      "start": "2026-11-05T06:23:10.120Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 6628.415,
+      "end": "2026-11-05T06:23:18.064Z",
+      "name": "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+      "start": "2026-11-05T06:23:11.436Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2352.1537,
+      "end": "2026-11-05T06:23:20.416Z",
+      "name": "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+      "start": "2026-11-05T06:23:18.065Z",
+      "status": "failed"
+    },
+    {
+      "duration_ms": 2322.9678,
+      "end": "2026-11-05T06:23:22.743Z",
+      "name": "HP-EXTENDED-05 open curved bucket skin through UI",
+      "start": "2026-11-05T06:23:20.420Z",
+      "status": "failed"
+    }
+  ],
+  "selected": [
+    "HP-EXTENDED-01 swept wing plate through ordinary UI",
+    "HP-EXTENDED-02 hollow cylinder and independent rod through UI",
+    "HP-EXTENDED-03 hollow curved elbow through UI and STEP",
+    "HP-EXTENDED-04 multi-hole flange and pipe union through UI",
+    "HP-EXTENDED-05 open curved bucket skin through UI"
+  ],
+  "total": 5,
+  "failed": 4,
+  "passed": 1
+}

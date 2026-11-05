@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 3113.6478,
+      "end": "2026-11-05T07:49:54.350Z",
+      "name": "HP-EX-UI tool first settings and direction pick",
+      "start": "2026-11-05T07:49:51.236Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 3603.7936,
+      "end": "2026-11-05T07:49:57.957Z",
+      "name": "HP-EXTENDED-11 adjacent profile seeds and spanning source edge preservation through UI",
+      "start": "2026-11-05T07:49:54.354Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 2131.0043,
+      "end": "2026-11-05T07:50:00.094Z",
+      "name": "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",
+      "start": "2026-11-05T07:49:57.963Z",
+      "status": "passed"
+    },
+    {
+      "duration_ms": 1277.5803,
+      "end": "2026-11-05T07:50:01.377Z",
+      "name": "棚で選んだ演算のまま作られる",
+      "start": "2026-11-05T07:50:00.099Z",
+      "status": "passed"
+    }
+  ],
+  "selected": [
+    "HP-EX-UI tool first settings and direction pick",
+    "HP-EXTENDED-11 adjacent profile seeds and spanning source edge preservation through UI",
+    "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",
+    "棚で選んだ演算のまま作られる"
+  ],
+  "total": 4,
+  "failed": 0,
+  "passed": 4
+}

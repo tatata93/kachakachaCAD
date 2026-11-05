@@ -1,0 +1,182 @@
+[
+  {
+    "file": "swept-wing-plate.kcd2",
+    "bytes": 11915,
+    "sha256": "a3be1fa6e16a61378dd4934853a82c19b2ca429d654e6f8c5e40473a36347225"
+  },
+  {
+    "file": "swept-wing-plate.png",
+    "bytes": 112936,
+    "sha256": "f255ea674cb01cdc6e8c41a178425aee12b0415f83f480d272b20f0fac5a7f56"
+  },
+  {
+    "file": "swept-wing-plate.step",
+    "bytes": 16040,
+    "sha256": "a9a8e17f18993e431197cc653e286b96f260811d66788ba1a0d1c445b9e46121"
+  },
+  {
+    "file": "swept-wing-plate.stl",
+    "bytes": 684,
+    "sha256": "8378e53b0009a5a2d9162b8fb2ac540412912d148ee1a6796276e4a8ae3f7474"
+  },
+  {
+    "file": "hydraulic-cylinder-rod.kcd2",
+    "bytes": 13561,
+    "sha256": "92e6fa6c79cc59c7b44c4b931e41b68769019922b98d9193570a8e8e137824c7"
+  },
+  {
+    "file": "hydraulic-cylinder-rod.png",
+    "bytes": 146442,
+    "sha256": "deda28c31ea47d153e2ad2129e04f32dcab48e4ba720cd9595fc453f414ba1d0"
+  },
+  {
+    "file": "hydraulic-cylinder-rod.step",
+    "bytes": 16885,
+    "sha256": "320942c106f298b41a8d2558e20eacc05ecb432e83e9bd9aa155eeb8181b6a0f"
+  },
+  {
+    "file": "hydraulic-cylinder-rod.stl",
+    "bytes": 62884,
+    "sha256": "9825c861b795338cc0b10b7cdea70a9dd4c697cbf33f2dc0a5f18f9ce82198f3"
+  },
+  {
+    "file": "hollow-elbow.kcd2",
+    "bytes": 12995,
+    "sha256": "fa6441ebdd36c139948b8cd870c8fdfb28ef30d1ca223a54d86de2f4c9d0e70b"
+  },
+  {
+    "file": "hollow-elbow.png",
+    "bytes": 137293,
+    "sha256": "acbfccf5bcf8a9643250464de027b51a966db2bfd2ba7da73343203e844904da"
+  },
+  {
+    "file": "hollow-elbow.step",
+    "bytes": 9735,
+    "sha256": "e4c53ddb28b398bfe8da30c7f02774d1ec3d98eae375ed3922d43f88ee2f500f"
+  },
+  {
+    "file": "hollow-elbow.stl",
+    "bytes": 703584,
+    "sha256": "d2c9c452e4bf7832b33286419f33f4c262fe2246282cecf17dfe8000bd3f2e66"
+  },
+  {
+    "file": "flanged-pipe-five-holes.kcd2",
+    "bytes": 21440,
+    "sha256": "bd2d45f94d8aa3a9073564cea018bb34d4e0c678344245f459dd2f9b21189474"
+  },
+  {
+    "file": "flanged-pipe-five-holes.png",
+    "bytes": 139563,
+    "sha256": "e90f156f6e1393ad38b7edc3dd295b3a901950493df6b0e79c76c347f43e41e2"
+  },
+  {
+    "file": "flanged-pipe-five-holes.step",
+    "bytes": 28640,
+    "sha256": "aa99d93f4ad4c9501e481e19c294a399e373a735b4c10ca1f2f7ed347353c83b"
+  },
+  {
+    "file": "flanged-pipe-five-holes.stl",
+    "bytes": 151284,
+    "sha256": "746cae505faa40ffa4b7cc129f49bf46df83836fa63b0d4af565046e914ebb2f"
+  },
+  {
+    "file": "open-curved-bucket-skin.kcd2",
+    "bytes": 15207,
+    "sha256": "dd37039623f6fd0a7e5c95c9fb67c9ca7dc6509536713431cdef586c7261039a"
+  },
+  {
+    "file": "open-curved-bucket-skin.png",
+    "bytes": 140725,
+    "sha256": "d9e05937333913251380ac96a0b7865e0dc06ede50b524d4f3fda3e53557249f"
+  },
+  {
+    "file": "open-curved-bucket-skin.step",
+    "bytes": 21594,
+    "sha256": "5b0487d265118d1d092ac1bb302588e85645c1d2a1cc84b2a968941a568f4600"
+  },
+  {
+    "file": "open-curved-bucket-skin.stl",
+    "bytes": 23084,
+    "sha256": "68522ddcbfb8af19ca99be8c04fb5fab678044049cbd5556c9f84ee68e5d5489"
+  },
+  {
+    "file": "tapered-twisted-airfoil.kcd2",
+    "bytes": 19829,
+    "sha256": "0424951b6f8db4685d084e534c8be6c3b78bc98da2dd4538bfc38a7819b680c3"
+  },
+  {
+    "file": "tapered-twisted-airfoil.png",
+    "bytes": 149179,
+    "sha256": "abd8b06f2db83fc791d9b5101c5fa30b8165e2523dbaf9db5a661af589284899"
+  },
+  {
+    "file": "tapered-twisted-airfoil.step",
+    "bytes": 17471,
+    "sha256": "628a38300d977c30b5b260ce92e4af630d072f62481e47e736dd6441fc1cfbd5"
+  },
+  {
+    "file": "tapered-twisted-airfoil.stl",
+    "bytes": 338184,
+    "sha256": "9a2ce4555049c284472786be90ba8dafcb66b72b1e207a4251fc7b736c6cc0e0"
+  },
+  {
+    "file": "pierced-spherical-vessel.kcd2",
+    "bytes": 18047,
+    "sha256": "defa08bcc10d5ee93a0dbd56af342ffde329f5665d882910ba14d9a4a914e471"
+  },
+  {
+    "file": "pierced-spherical-vessel.png",
+    "bytes": 173916,
+    "sha256": "dd73ff2b59a8053986947d9b5960ddbdd46dd4b1ef503cd2c0b0e280701d268e"
+  },
+  {
+    "file": "pierced-spherical-vessel.step",
+    "bytes": 12119,
+    "sha256": "e17d4f56d4133be982501202fd76aaf13f4481109b93704b483dddbc237f2b24"
+  },
+  {
+    "file": "pierced-spherical-vessel.stl",
+    "bytes": 1187584,
+    "sha256": "3f04efa613a53c6d2c65aa942a460be2277687cf4ee9de9981b7d7f81edfd9ee"
+  },
+  {
+    "file": "communicating-pipe-tee.kcd2",
+    "bytes": 23081,
+    "sha256": "4faa792d3e4df3bfea930a611816704d04747e26c46f9d3f7aede3e934e8b27a"
+  },
+  {
+    "file": "communicating-pipe-tee.png",
+    "bytes": 137593,
+    "sha256": "21543f75da53c1bb41a2cde71f08b2c6daf97ca1dcafceb6ba002b8c30aaaf0f"
+  },
+  {
+    "file": "communicating-pipe-tee.step",
+    "bytes": 188512,
+    "sha256": "0a3aeb6213c499a43453278f7aaa13b44c57202b2d966b3b79d007427f148d31"
+  },
+  {
+    "file": "communicating-pipe-tee.stl",
+    "bytes": 122984,
+    "sha256": "12389d4c87ce9b93eefd8b01c42861cd269cdf8d39d7b3e9d2dfe2c3c018ca6d"
+  },
+  {
+    "file": "concave-link-arm-two-bores.kcd2",
+    "bytes": 17932,
+    "sha256": "ae299ffb1eaa8eff12a9c247700f367b62ac03063e4212a948c8344cff73c529"
+  },
+  {
+    "file": "concave-link-arm-two-bores.png",
+    "bytes": 116651,
+    "sha256": "7db2ce043971cfb500348b2e152ea36f4ae5933c27bb88c3171dbc336405c6bf"
+  },
+  {
+    "file": "concave-link-arm-two-bores.step",
+    "bytes": 30081,
+    "sha256": "30aa11b131c4e7ec9fa16869ee0c7da4fb27c99c1902133d67fae9e4446d3eb2"
+  },
+  {
+    "file": "concave-link-arm-two-bores.stl",
+    "bytes": 43484,
+    "sha256": "0af01e03da90b9a12642e5177daa772d01bc34cf84ac4cf3966f90699188dad7"
+  }
+]

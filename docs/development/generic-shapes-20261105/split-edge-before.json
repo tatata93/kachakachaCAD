@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "error": "",
+  "cases": [
+    {
+      "duration_ms": 2882.8203,
+      "end": "2026-11-05T07:46:17.936Z",
+      "name": "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",
+      "start": "2026-11-05T07:46:15.053Z",
+      "status": "failed"
+    }
+  ],
+  "selected": [
+    "HP-EXTENDED-12 whole edge covered by split pieces in one region through UI"
+  ],
+  "total": 1,
+  "failed": 1,
+  "passed": 0
+}

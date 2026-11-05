@@ -401,6 +401,110 @@ KACHA_V2_TEST(thicken_quality, corrected_normal_is_independent_of_spline_paramet
         kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source);
     }
 }
+KACHA_V2_TEST(thicken_quality, corrected_normal_handles_interior_stationary_parameters)
+{
+    // x(t)=5+40*(t-.5)^3 is monotone and covers the square exactly once,
+    // although D1 and D2 vanish at its interior stationary parameter.
+    for(int mode:{0,1,2}) {
+        NCollection_Array2<gp_Pnt> poles(1,4,1,4);
+        const std::array<double,4> positions{0,10,0,10};
+        for(int i=1;i<=4;++i)for(int j=1;j<=4;++j)
+            poles(i,j)=gp_Pnt(positions[i-1],positions[j-1],0);
+        auto face=BRepBuilderAPI_MakeFace(new Geom_BezierSurface(poles),1e-7).Face();
+        if(mode==1)face.Reverse();
+        if(mode==2){gp_Trsf tr;tr.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.73);
+            tr.SetTranslationPart(gp_Vec(21,-32,41));face=TopoDS::Face(BRepBuilderAPI_Transform(face,tr,true).Shape());}
+        Require(BRepCheck_Analyzer(face).IsValid(),"stationary parameter does not invalidate the planar face");
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        const auto wall=kernel::detail::CorrectedThicken(source,.5,fabrication::ThicknessPlacement::Inside,{});
+        Diagnose(wall);Require(wall.HasValue(),"unique limiting normal permits corrected thickness");
+        Require(wall.Value().normalThicknessMinMm>.49999&&wall.Value().normalThicknessMaxMm<.50001,
+            "interior stationary parameters do not alter wall thickness");
+        const auto check=kernel::CheckSolidForExport(wall.Value().handle,1e-6);
+        Require(check.HasValue()&&check.Value().Ok()&&std::abs(check.Value().volumeMm3-50)<1e-4,
+            "stationary surface makes an oriented closed solid with analytic volume");
+        Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"stationary source is unchanged");
+        kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source);
+    }
+}
+KACHA_V2_TEST(thicken_quality, corrected_normal_handles_independent_parameter_rates_on_a_curved_surface)
+{
+    // An exact R5 quarter cylinder: regular circular U, stationary monotone Z(V).
+    // Translating it must not require the two sampling directions to share a step.
+    NCollection_Array2<gp_Pnt> poles(1,3,1,4);NCollection_Array2<double> weights(1,3,1,4);
+    const std::array<double,4> heights{0,10,0,10};
+    for(int i=1;i<=3;++i)for(int j=1;j<=4;++j) {
+        poles(i,j)=gp_Pnt(i==3?0:5,i==1?0:5,heights[j-1]);
+        weights(i,j)=i==2?std::sqrt(.5):1;
+    }
+    NCollection_Array1<double> knots(1,2);knots(1)=0;knots(2)=1;
+    NCollection_Array1<int> um(1,2),vm(1,2);um.Init(3);vm.Init(4);
+    const occ::handle<Geom_Surface> surface=new Geom_BSplineSurface(poles,weights,knots,knots,um,vm,2,3);
+    const auto face=BRepBuilderAPI_MakeFace(surface,1e-7).Face();
+    gp_Trsf tr;tr.SetTranslation(gp_Vec(1000,2000,3000));
+    const auto shifted=BRepBuilderAPI_Transform(face,tr,true).Shape();
+    Require(BRepCheck_Analyzer(shifted).IsValid(),"stationary cylinder remains a valid translated source");
+    const auto source=kernel::StoreShape(shifted);const auto before=kernel::CaptureOutputShape(source);
+    const auto wall=kernel::detail::CorrectedThicken(source,.5,fabrication::ThicknessPlacement::Inside,{});
+    Diagnose(wall);Require(wall.HasValue(),"independent parameter steps resolve the unique curved normal");
+    Require(wall.Value().normalThicknessMinMm>.4&&wall.Value().normalThicknessMaxMm<.50001,
+        "corrected inner skin reports positive bounded thickness");
+    const auto check=kernel::CheckSolidForExport(wall.Value().handle,1e-6);
+    Require(check.HasValue()&&check.Value().Ok()&&check.Value().volumeMm3>30&&check.Value().volumeMm3<38,
+        "corrected cylinder passes native checks and annular volume bounds");
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"translated cylinder source remains exact");
+    kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source);
+}
+KACHA_V2_TEST(thicken_quality, corrected_crease_reports_both_sided_normals_at_stationary_parameters)
+{
+    // Two planes meet at a real native C0 knot; the other parameter is monotone
+    // but stationary internally. Neither condition moves or refits the source.
+    NCollection_Array2<gp_Pnt> poles(1,3,1,4);const std::array<double,4> positions{0,10,0,10};
+    for(int i=1;i<=3;++i)for(int j=1;j<=4;++j)
+        poles(i,j)=gp_Pnt(5*(i-1),positions[j-1],i==3?1:0);
+    NCollection_Array1<double> uk(1,3),vk(1,2);uk(1)=0;uk(2)=.5;uk(3)=1;vk(1)=0;vk(2)=1;
+    NCollection_Array1<int> um(1,3),vm(1,2);um.Init(2);um(2)=1;vm.Init(4);
+    const occ::handle<Geom_Surface> surface=new Geom_BSplineSurface(poles,uk,vk,um,vm,1,3);
+    const auto face=BRepBuilderAPI_MakeFace(surface,1e-7).Face();
+    Require(BRepCheck_Analyzer(face).IsValid(),"one native face can include a geometric crease");
+    const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+    const auto wall=kernel::detail::CorrectedThicken(source,.5,fabrication::ThicknessPlacement::Inside,{});
+    Diagnose(wall);Require(wall.HasValue(),"explicit opposite-skin correction handles both sides of a crease");
+    Require(wall.Value().normalThicknessMinMm>.45&&wall.Value().normalThicknessMaxMm<.50001,
+        "all one-sided normal thicknesses remain positive and bounded");
+    const auto check=kernel::CheckSolidForExport(wall.Value().handle,1e-6);
+    Require(check.HasValue()&&check.Value().Ok(),"creased corrected skin passes native solid checks");
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"creased source remains exact");
+    kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source);
+}
+KACHA_V2_TEST(thicken_quality, corrected_normal_does_not_bridge_a_folded_parameter_sheet)
+{
+    const auto baseline=kernel::CachedShapeCount();
+    NCollection_Array2<gp_Pnt> poles(1,4,1,2);const std::array<double,4> positions{0,10,10,0};
+    for(int i=1;i<=4;++i)for(int j=1;j<=2;++j)poles(i,j)=gp_Pnt(positions[i-1],10*(j-1),0);
+    const auto source=kernel::StoreShape(BRepBuilderAPI_MakeFace(new Geom_BezierSurface(poles),1e-7).Face());
+    const auto before=kernel::CaptureOutputShape(source);
+    const auto wall=kernel::detail::CorrectedThicken(source,.5,fabrication::ThicknessPlacement::Inside,{});
+    const bool refused=!wall.HasValue();if(wall.HasValue())kernel::ReleaseShape(wall.Value().handle);
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"refused folded source remains unchanged");
+    kernel::ReleaseShape(source);
+    Require(refused&&kernel::CachedShapeCount()==baseline,"opposite normal limits cannot create a wall or leak a handle");
+}
+KACHA_V2_TEST(thicken_quality, corrected_normal_refuses_a_corner_with_path_dependent_limits)
+{
+    // S(u,v)=(u*u,v*v,u*v). The two boundary approaches give different
+    // limiting normals at (0,0), although none of its four edges is collapsed.
+    NCollection_Array2<gp_Pnt> poles(1,3,1,3);const std::array<double,3> square{0,0,1};
+    for(int i=1;i<=3;++i)for(int j=1;j<=3;++j)
+        poles(i,j)=gp_Pnt(square[i-1],square[j-1],(i-1)*(j-1)*.25);
+    const auto face=BRepBuilderAPI_MakeFace(new Geom_BezierSurface(poles),1e-7).Face();
+    Require(BRepCheck_Analyzer(face).IsValid(),"singular corner can belong to a topologically valid source");
+    const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+    const auto wall=kernel::detail::CorrectedThicken(source,.1,fabrication::ThicknessPlacement::Outside,{});
+    const bool refused=!wall.HasValue();if(wall.HasValue())kernel::ReleaseShape(wall.Value().handle);
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"nonunique source corner remains unchanged");
+    kernel::ReleaseShape(source);Require(refused,"a parameter aspect ratio must not invent a unique corner normal");
+}
 KACHA_V2_TEST(thicken_quality, corrected_centered_preserves_reference_and_rejects_excessive_thickness)
 {
     const auto source=kernel::StoreShape(TightParabola());const auto original=kernel::CaptureOutputShape(source);

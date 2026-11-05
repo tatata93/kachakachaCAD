@@ -10,11 +10,11 @@
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 完了(Codex、2026-11-04段階12。形状転送KER-X001を台帳へ整合、診断台帳13例成功) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 重点検証済み(Codex、2026-11-04段階3。型付きUUIDと依存順序の一度検証。document/構造試験成功、1000線確定42.54→13.27 ms。全体検証は後段) | WP-02 | Document、Feature DAG、Command、Undo |
-| WP-04 | 進行中(Codex、2026-11-06。添付模型の床板で結合順の誤りと閉輪オフセットの角のすきまを通常UIから再現。元線と曲線種類を保全し、直線・円弧の閉輪と下見/確定の一致を修正する。WP-08の模型作成は一時中断) | WP-02 | Curve/Wire/Chain、編集、数式 |
+| WP-04 | 重点確認済み(Codex、2026-11-06、150e51542。結合のSegmentId参照と直線/円弧の閉輪オフセットを修正。関連コア4群、複数輪郭の下見/確定/面生成/保存のHP-OFFSET-LOOP、添付床板の通常UI経路が成功。全体ゲートは後段。現在の所有をWP-08へ戻す) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 重点検証済み(Codex、2026-11-05段階13。offscreen固定180.50秒を再現。native分割/厚み形状の作成は1秒未満、BuildStepTextに集中。構造/台帳成功、出力側へ調査を移す。全体未完了) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 進行中(Codex、2026-11-06。WP-11段階15の修正・配布公開後、添付115投影の通常UIモデリングを再開。前面中央の扉開口を修正し、元断面から一体屋根と板厚を考慮した床板を作成・検査中。以前の追加形状・全体ゲートの履歴はrefactoring-plan参照) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中(Codex、2026-11-06。閉輪修正後、添付側板のネイティブ曲面の切り欠きが製作入力で埋まり、1枚指定が最大5.321mmずれることを再現。元面・開口・偏差を保つ製作入力アダプターと、方式選択後も以前の候補が確定されるUI経路を修正する。以前の追加形状・全体ゲートの履歴はrefactoring-plan参照) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(今回の段階15追加修正、Codex、2026-11-06。線だけの独立コピーの全形状再構築を除去。出力UI12件、コピー後の配列入力、52面車体の同一経路104.25→50.98秒が成功。CTest195、UI685×2、通常起動を通しv0.1.0-20261106-update1を公開。WP全体の未完了事項は残し、現在の所有をWP-08へ移す。履歴と限界はrefactoring-plan参照) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

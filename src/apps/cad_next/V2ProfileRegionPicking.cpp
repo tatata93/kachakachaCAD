@@ -119,9 +119,9 @@ void v2ui::MatchSeededBoundaryReference(PickCandidate& candidate,
         if (ref.entityId != candidate.entityId || !ref.profileSeed) continue;
         for (const auto& region : regions) {
             if (!kachakacha::v2::app::ProfileRegionContains(region, *ref.profileSeed, 1e-6)) continue;
-            bool near = BoundaryNearScreen(region.outer, mapping, position, edgePickPx);
-            for (const auto& hole : region.holes) near |= BoundaryNearScreen(hole, mapping, position, edgePickPx);
-            if (!near) continue;
+            bool boundaryHit = BoundaryNearScreen(region.outer, mapping, position, edgePickPx);
+            for (const auto& hole : region.holes) boundaryHit |= BoundaryNearScreen(hole, mapping, position, edgePickPx);
+            if (!boundaryHit) continue;
             if (matched && matched != &ref) return; // Preserve both cells at an ambiguous shared border.
             matched = &ref;
         }

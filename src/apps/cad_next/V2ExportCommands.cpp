@@ -14,6 +14,7 @@
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/SubDocument.h"
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -118,7 +119,7 @@ void V2MainWindow::BuildExportDock()
         if(state.format!=app::ExportFormat::Stl && state.format!=app::ExportFormat::Step && state.target!=app::ExportTarget::SelectedEntities)return false;
         if(state.target==app::ExportTarget::VisibleParts){app::SelectionSet selection;
             for(const auto& entity:session_->GetDocument().Snapshot().entities)
-                if(entity.kind==domain::EntityKind::Part && entity.visibility==domain::Visibility::Visible)selection.entityIds.push_back(entity.id);
+                if(entity.kind==domain::EntityKind::Part && app::EntityEffectivelyVisible(session_->GetDocument().Snapshot(),entity))selection.entityIds.push_back(entity.id);
             viewport_->SetSelection(selection);
         }
         V2OutputTool::Open(*this,state.format==app::ExportFormat::Stl?0:state.format==app::ExportFormat::Step?1:2);return true;
@@ -220,7 +221,7 @@ std::vector<kachakacha::v2::modeling::KernelShapeHandle> V2MainWindow::PartShape
                 || !kachakacha::v2::app::IsSelected(viewport_->Selection(), entity.id)) {
                 continue;
             }
-        } else if (entity.visibility != kachakacha::v2::domain::Visibility::Visible) {
+        } else if (!kachakacha::v2::app::EntityEffectivelyVisible(snapshot,entity)) {
             continue;
         }
         const auto found = partShapes_.find(key);
@@ -300,7 +301,7 @@ void V2MainWindow::RefreshExportCounts()
     int visibleParts = 0;
     for (const auto& entity : snapshot.entities) {
         if (entity.kind == kachakacha::v2::domain::EntityKind::Part
-            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            && kachakacha::v2::app::EntityEffectivelyVisible(snapshot,entity)) {
             ++visibleParts;
         }
     }

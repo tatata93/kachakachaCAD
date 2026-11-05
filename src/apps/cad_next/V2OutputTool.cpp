@@ -60,7 +60,7 @@ void V2OutputTool::BuildUi(int format) {
     format_=new QComboBox(this);format_->setObjectName("outputFormat");format_->addItems({QStringLiteral("STL（面の近似三角形）"),QStringLiteral("STEP（立体・面・線）"),QStringLiteral("別KCD2（現在形状の独立コピー）"),QStringLiteral("同一KCD（現在形状の独立コピー）")});
     format_->setCurrentIndex(format<0?2:format);settings->addWidget(format_);BuildPlacement(settings);
     settings->addWidget(new QLabel(QStringLiteral("元への追従はしません。厚みのない面には厚みを追加しません。"),this));
-    status_=new QLabel(this);status_->setWordWrap(true);settings->addWidget(status_);settings->addStretch();
+    status_=new QLabel(this);status_->setObjectName("outputStatus");status_->setWordWrap(true);settings->addWidget(status_);settings->addStretch();
     row->addLayout(settings);auto* right=new QVBoxLayout();preview_=new V2OutputPreview(this);right->addWidget(preview_,1);
     right->addWidget(new QLabel(QStringLiteral("出力形状プレビュー：ドラッグで回転、中ドラッグで移動、ホイールで拡大"),this));
     auto* fit=new QPushButton(QStringLiteral("全体表示"),this);right->addWidget(fit);row->addLayout(right,1);root->addLayout(row,1);
@@ -95,6 +95,9 @@ bool V2OutputTool::Capture(const std::vector<base::EntityId>& ids) {
     modeling::SnapScene scene;
     if(needsScene){auto snapshot=window_.session_->GetDocument().Snapshot();
         for(auto& entity:snapshot.entities)entity.visibility=domain::Visibility::Visible;
+        // Explicit selection may include objects in hidden ancestor groups.
+        // Reveal only this read-only scene snapshot; source states stay intact.
+        for(auto& group:snapshot.groups)group.visible=true;
         scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);}
     for(const auto& id:ids){const auto* entity=window_.session_->GetDocument().FindEntity(id);
         if(entity==nullptr){SetProblem(QStringLiteral("選んだ対象が文書にありません。"));return false;}

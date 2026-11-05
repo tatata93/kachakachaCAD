@@ -3,6 +3,7 @@
 #include "V2EntityTree.h"
 #include "V2OutputTool.h"
 #include "V2ExportDock.h"
+#include "V2OperationPanelHost.h"
 #include "V2OutputPreview.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -10,6 +11,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
+#include "kachakacha/app/GroupTree.h"
 #include <QCoreApplication>
 #include <QEvent>
 #include "kachakacha/kernel/OcctTessellate.h"
@@ -26,6 +28,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QPushButton>
+#include <QToolButton>
 #include <cmath>
 #include <QElapsedTimer>
 #include <QPointer>
@@ -48,6 +51,96 @@ bool DrawOutputRectangle(V2MainWindow& window,double visibleWidth=200) {
     return !viewport.Selection().entityIds.empty();
 }
 bool OutputBox(V2MainWindow& window){window.RunCommand("file.new");if(!DrawOutputRectangle(window))return false;window.RunCommand("part.extrude");window.RunCommand("part.extrude");return CountOfKind(window,domain::EntityKind::Part)==1;}
+struct HiddenOutputFixture {base::EntityId wire,part,visiblePart;base::GroupId parent;};
+bool PrepareHiddenOutput(V2MainWindow& w,HiddenOutputFixture& made)
+{
+    if(!OutputBox(w))return false;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities){
+        if(e.kind==domain::EntityKind::Wire)made.wire=e.id;
+        if(e.kind==domain::EntityKind::Part)made.part=e.id;
+    }
+    w.Viewport().SetSelection(app::SelectionSet{{made.part}});
+    auto* copy=V2OutputTool::Open(w,3);if(!copy->SaveTo(QString()))return false;copy->close();
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::Part&&e.id!=made.part)made.visiblePart=e.id;
+    if(made.visiblePart.IsNil())return false;
+    w.EntityTree()->clearSelection();w.Viewport().SetSelection({});w.RunCommand("group.create");
+    made.parent=w.Session().GetDocument().Snapshot().groups.back().id;
+    auto* parent=w.EntityTree()->FindKey("group:"+QString::fromStdString(made.parent.ToString()));
+    if(!parent)return false;parent->setSelected(true);w.RunCommand("group.create");
+    const auto child=w.Session().GetDocument().Snapshot().groups.back().id;
+    auto* childRow=w.EntityTree()->FindKey("group:"+QString::fromStdString(child.ToString()));
+    if(!childRow||child==made.parent)return false;
+    w.EntityTree()->DropOnto({w.ItemOfEntity(made.wire),w.ItemOfEntity(made.part)},childRow);
+    parent=w.EntityTree()->FindKey("group:"+QString::fromStdString(made.parent.ToString()));
+    if(!parent)return false;parent->setCheckState(0,Qt::Unchecked);QApplication::processEvents();
+    const auto& snapshot=w.Session().GetDocument().Snapshot();
+    const auto* part=w.Session().GetDocument().FindEntity(made.part);
+    return part&&part->groupId==child&&part->visibility==domain::Visibility::Visible
+        &&!app::EntityEffectivelyVisible(snapshot,*part);
+}
+bool VisibleOutputHonorsAncestors(V2MainWindow& w)
+{
+    HiddenOutputFixture made;if(!PrepareHiddenOutput(w,made))return false;
+    w.Viewport().SetSelection({});w.SetMode(app::UiMode::Output);
+    w.OperationHost().SetShelves({app::Shelf::Export});
+    auto& dock=w.ExportDock();
+    Note(dock.TargetRowText(0).toUtf8().constData());
+    if(!Explain("visible output count includes ancestor visibility",dock.TargetRowText(0).endsWith(QStringLiteral("表示している部品(1)"))))return false;
+    if(!dock.ChooseTarget(app::ExportTarget::VisibleParts)||!dock.ChooseFormat(app::ExportFormat::Step))return false;
+    QApplication::processEvents();
+    // The dock's body is hosted in the current-operation panel.
+    bool pressed=false;for(auto* b:w.findChildren<QToolButton*>())
+        if(b->isVisible()&&b->isEnabled()&&b->visibleRegion().contains(b->rect().center())
+            &&b->text()==QStringLiteral("プレビュー・配置…")){b->click();pressed=true;break;}
+    if(!Explain("visible export preview action is reachable",pressed))return false;
+    V2OutputTool* output=nullptr;for(auto* dialog:w.findChildren<QDialog*>())
+        if(dialog->isVisible())if(auto* candidate=dynamic_cast<V2OutputTool*>(dialog))output=candidate;
+    if(!Explain("visible output preview excludes the hidden ancestor's part",output&&output->AssetCount()==1
+        &&w.Viewport().Selection().entityIds==std::vector<base::EntityId>{made.visiblePart}))return false;
+    output->close();return true;
+}
+bool ExplicitHiddenOutput(V2MainWindow& w)
+{
+    HiddenOutputFixture made;if(!PrepareHiddenOutput(w,made))return false;
+    w.Viewport().SetSelection(app::SelectionSet{{made.wire,made.part}});
+    const auto before=w.Session().GetDocument().Snapshot();auto* output=V2OutputTool::Open(w,2);
+    if(!Explain("explicitly selected hidden wire and solid are captured",output->AssetCount()==2))return false;
+    QTemporaryDir folder;const auto path=folder.filePath("explicit-hidden.kcd2");
+    if(!output->SaveTo(path))return false;output->close();
+    const auto bytes=io::ReadWholeFile(path.toStdString());if(!bytes.HasValue())return false;
+    const auto file=io::LoadDocument(bytes.Value());
+    if(!Explain("hidden selection exports only its independent wire and solid",file.HasValue()&&file.Value().snapshot.entities.size()==2))return false;
+    const auto* originalWire=w.Session().GetDocument().FindEntity(made.wire);
+    const auto* originalFeature=originalWire?w.Session().GetDocument().FindFeature(originalWire->createdBy):nullptr;
+    const auto* originalDefinition=originalFeature?std::get_if<domain::CreateWireDefinition>(&originalFeature->definition):nullptr;
+    if(!originalDefinition||originalDefinition->segmentIds.empty())return false;
+    app::SelectionRef edge;edge.entityId=made.wire;edge.kind=app::SelectionElementKind::Edge;
+    edge.segmentId=originalDefinition->segmentIds.front();app::SelectionSet subset;
+    subset.entityIds={made.wire};subset.ordered={edge};w.Viewport().SetSelection(subset);
+    auto* partial=V2OutputTool::Open(w,2);auto* scope=partial->findChild<QComboBox*>("outputScope");
+    if(!scope)return false;scope->setCurrentIndex(1);
+    if(!Explain("an explicitly selected edge in a hidden ancestor is captured",partial->AssetCount()==1))return false;
+    const auto edgePath=folder.filePath("explicit-hidden-edge.kcd2");
+    if(!partial->SaveTo(edgePath))return false;partial->close();
+    const auto edgeBytes=io::ReadWholeFile(edgePath.toStdString());if(!edgeBytes.HasValue())return false;
+    const auto edgeFile=io::LoadDocument(edgeBytes.Value());
+    if(!edgeFile.HasValue()||edgeFile.Value().snapshot.features.size()!=1)return false;
+    const auto* exported=std::get_if<domain::CreateWireDefinition>(&edgeFile.Value().snapshot.features.front().definition);
+    if(!Explain("partial output preserves just the selected source segment",exported&&exported->segments.size()==1
+        &&exported->segments.front().Kind()==originalDefinition->segments.front().Kind()
+        &&geometry::Distance(exported->segments.front().StartPoint(),originalDefinition->segments.front().StartPoint())<1e-9
+        &&geometry::Distance(exported->segments.front().EndPoint(),originalDefinition->segments.front().EndPoint())<1e-9))return false;
+    const auto* wire=w.Session().GetDocument().FindEntity(made.wire);
+    const auto* part=w.Session().GetDocument().FindEntity(made.part);
+    if(!Explain("reading hidden inputs does not alter their source visibility or revision",wire&&part
+        &&wire->visibility==domain::Visibility::Visible&&part->visibility==domain::Visibility::Visible
+        &&w.Session().GetDocument().Snapshot().revision==before.revision
+        &&!app::EntityEffectivelyVisible(w.Session().GetDocument().Snapshot(),*wire)))return false;
+    if(!w.OpenDocumentFile(path))return false;
+    return Explain("independent hidden selection reopens as editable wire and closed solid",CountOfKind(w,domain::EntityKind::Wire)==1
+        &&CountOfKind(w,domain::EntityKind::Part)==1&&w.Viewport().ShapeViewCount()==1&&w.Viewport().ShapeViews().front().mesh.closed);
+}
 app::SelectionSet OutputSelection(V2MainWindow& window,bool wires){app::SelectionSet selection;for(const auto& entity:window.Session().GetDocument().Snapshot().entities)if(entity.kind==domain::EntityKind::Part || (wires&&entity.kind==domain::EntityKind::Wire))selection.entityIds.push_back(entity.id);return selection;}
 bool OutputPreviewReuse(V2MainWindow& window) {
     const auto model=qEnvironmentVariable("KACHACAD_OUTPUT_PERF_MODEL");
@@ -285,5 +378,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

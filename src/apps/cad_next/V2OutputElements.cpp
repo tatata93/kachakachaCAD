@@ -13,6 +13,7 @@ bool V2OutputTool::CaptureElements() {
         return ref.kind==app::SelectionElementKind::Edge&&entity&&entity->kind==domain::EntityKind::Wire;})) {
         auto snapshot=window_.session_->GetDocument().Snapshot();
         for(auto& entity:snapshot.entities)entity.visibility=domain::Visibility::Visible;
+        for(auto& group:snapshot.groups)group.visible=true;
         scene=app::BuildSceneFromDocument(snapshot,*window_.ids_);
     }
     std::vector<V2OutputAsset> selected;

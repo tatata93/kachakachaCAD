@@ -38,6 +38,7 @@ std::vector<SelfTestCase> TrimPreservationCases();
 std::vector<SelfTestCase> PanelSupportCases();
 std::vector<SelfTestCase> UiReplayCases();
 namespace {
+QStringList caseMessages;
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
 [[nodiscard]] bool RunOneCase(const SelfTestCase& item)
@@ -73,10 +74,10 @@ namespace {
         V2ToolEvidence::EndCase(window,passed);
         return passed;
     } catch (const std::exception& error) {
-        std::cout << "  例外: " << error.what() << std::endl;
+        Note(error.what());
         return false;
     } catch (...) {
-        std::cout << "  未知の例外" << std::endl;
+        Note("未知の例外");
         return false;
     }
 }
@@ -217,6 +218,7 @@ int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind)
 bool Explain(const char* what, bool ok)
 {
     if (!ok) {
+        caseMessages.append(QStringLiteral("期待が外れた: ")+QString::fromUtf8(what));
         std::cerr << "  期待が外れた: " << what << '\n';
     }
     return ok;
@@ -224,6 +226,7 @@ bool Explain(const char* what, bool ok)
 
 void Note(const char* what)
 {
+    caseMessages.append(QString::fromUtf8(what));
     std::cerr << "  調べた: " << what << '\n';
 }
 
@@ -253,9 +256,10 @@ int RunSelfTest()
         std::cout << "RUN  " << item.name << std::endl;
         const auto tick = std::chrono::steady_clock::now();
         const auto started = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        caseMessages.clear();
         const bool passed = RunOneCase(item);
         const double milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tick).count();
-        reporting.Add(item.name, passed, milliseconds, started);
+        reporting.Add(item.name, passed, milliseconds, started, caseMessages);
         if (passed) {
             std::cout << "PASS " << item.name << std::endl;
         } else {

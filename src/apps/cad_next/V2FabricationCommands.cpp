@@ -442,12 +442,12 @@ void V2MainWindow::SetAssemblyPercent(double percent, const QString& parts)
     }
     RefreshFabricationView();
     if (!numbers.Value().empty()) {
-        SetStatus(QStringLiteral("選んだ %1 枚の部材を組立 %2%% にしました(他の部材は変わりません)。")
+        SetStatus(QStringLiteral("選んだ %1 枚の部材を組立 %2% にしました(他の部材は変わりません)。")
                 .arg(static_cast<int>(numbers.Value().size()))
                 .arg(percent));
         return;
     }
-    SetStatus(QStringLiteral("組立状態を %1%% にしました(%2)。")
+    SetStatus(QStringLiteral("組立状態を %1% にしました(%2)。")
             .arg(definition.masterPercent)
             .arg(QString::fromStdString(
                 kachakacha::v2::app::FoldStateSummaryJa(definition))));

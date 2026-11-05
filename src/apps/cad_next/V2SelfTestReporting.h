@@ -12,7 +12,8 @@ public:
     [[nodiscard]] bool Valid() const noexcept { return error_.isEmpty(); }
     [[nodiscard]] bool Contains(const char* name) const;
     [[nodiscard]] bool ListOnly() const noexcept { return listOnly_; }
-    void Add(const char* name, bool passed, double milliseconds, const QString& started);
+    void Add(const char* name, bool passed, double milliseconds, const QString& started,
+        const QStringList& messages = {});
     [[nodiscard]] bool Save() const;
     [[nodiscard]] QString Error() const { return error_; }
 private:

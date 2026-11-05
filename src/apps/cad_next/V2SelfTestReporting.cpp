@@ -84,13 +84,15 @@ bool Reporting::Contains(const char* name) const
     return selected_.contains(QString::fromUtf8(name));
 }
 
-void Reporting::Add(const char* name, bool passed, double milliseconds, const QString& started)
+void Reporting::Add(const char* name, bool passed, double milliseconds, const QString& started,
+    const QStringList& messages)
 {
     if (!passed) ++failed_;
     results_.append(QJsonObject{{QStringLiteral("name"), QString::fromUtf8(name)},
         {QStringLiteral("status"), passed ? QStringLiteral("passed") : QStringLiteral("failed")},
         {QStringLiteral("duration_ms"), milliseconds}, {QStringLiteral("start"), started},
-        {QStringLiteral("end"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)}});
+        {QStringLiteral("end"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+        {QStringLiteral("messages"), QJsonArray::fromStringList(messages)}});
     // A timeout must retain completed case timings without treating a partial run as success.
     if(!path_.isEmpty()) {
         QFile progress(path_+QStringLiteral(".progress.jsonl"));

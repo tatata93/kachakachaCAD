@@ -114,9 +114,16 @@ bool GenerationBendStates(V2MainWindow& window)
     std::vector<double> lengths;
     for(double percent:{0.0,37.0,100.0}) {
         auto& dock=window.FabricationDock(); dock.SetPartNumbersText(QStringLiteral("2"));
-        dock.TypeAssemblyPercent(percent); dock.PressApplyAssembly(); Note(window.StatusText().toStdString().c_str()); window.RunCommand("fabrication.freeze_state");
+        dock.TypeAssemblyPercent(percent); dock.PressApplyAssembly(); Note(window.StatusText().toStdString().c_str());
+        if(!Explain("assembly percentage uses a single percent sign",!window.StatusText().contains(QStringLiteral("%%"))))return false;
+        window.RunCommand("fabrication.freeze_state");
         const auto generated=Generated(window);
-        if(!Explain("every bend state has a closed four-edge boundary",generated.size()==4 && ClosedEndpoints(window,generated))) { return false; }
+        Note(QStringLiteral("bend=%1 generated wires=%2").arg(percent).arg(generated.size()).toUtf8().constData());
+        // A native trimmed face can produce one closed contour instead of the
+        // four separate rails of a rectangular chart. Check the material boundary.
+        if(!Explain("every bend state has closed wire boundaries",!generated.empty()
+            && std::all_of(generated.begin(),generated.end(),[](const auto& e){return e.kind==domain::EntityKind::Wire;})
+            && ClosedEndpoints(window,generated))) { return false; }
         std::vector<geometry::Vector3> points; double length=0;
         for(const auto& entity:generated) {
             const auto* feature=window.Session().GetDocument().FindFeature(entity.createdBy);
@@ -124,10 +131,11 @@ bool GenerationBendStates(V2MainWindow& window)
             if(!wire) { return false; }
             for(const auto& segment:wire->segments) { points.push_back(segment.StartPoint()); length+=segment.TotalLength(1e-6); }
         }
+        Note(QStringLiteral("bend=%1 boundary vertices=%2 length=%3mm").arg(percent).arg(points.size()).arg(length,0,'g',12).toUtf8().constData());
         states.push_back(std::move(points)); lengths.push_back(length); window.RunCommand("edit.undo");
     }
     for(std::size_t i=1;i<states.size();++i) {
-        if(states[i].size()!=states[0].size()) { return false; }
+        if(!Explain("boundary correspondence remains consistent",states[i].size()==states[0].size())) { return false; }
         double difference=0;
         for(std::size_t j=0;j<states[i].size();++j) { difference=std::max(difference,geometry::Distance(states[i][j],states[i-1][j])); }
         if(!Explain("0/37/100 percent produce different positions",difference>0.01)) { return false; }

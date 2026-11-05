@@ -34,6 +34,7 @@
 #include <QPlainTextEdit>
 #include <QTextEdit>
 #include <QScrollArea>
+#include <QScopeGuard>
 #include <QStyle>
 #include <QString>
 #include <QStyleOptionViewItem>
@@ -252,7 +253,9 @@ struct Replay {
         for(auto* p=row->parent();p;p=p->parent())p->setExpanded(true);
         QApplication::processEvents();
         tree->scrollToItem(row);QApplication::processEvents();
-        const auto point=tree->visualItemRect(row).center();
+        // Long labels can make the logical row wider than the viewport. A
+        // person clicks its visible portion, rather than the offscreen centre.
+        const auto point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
         std::cout<<"UI tree "<<Resolve(step["id"].toString()).toStdString()<<" row="<<row->text(0).toStdString()
             <<" pixel="<<point.x()<<","<<point.y()<<" viewport="<<tree->viewport()->width()<<","<<tree->viewport()->height()<<std::endl;
         if(!Mouse(*tree->viewport(),point,step["add"].toBool()?Qt::ControlModifier:Qt::NoModifier))return false;
@@ -405,6 +408,11 @@ struct Replay {
     bool Run(const QJsonObject& phase)
     {
         if(phase["name"].toString().isEmpty()||!phase["steps"].isArray()||phase["steps"].toArray().isEmpty())return false;
+        // Exercise the real Qt file chooser. The optional event replay cannot
+        // send its widget events into a Windows-native file picker.
+        const bool nativeDialogsDisabled=QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+        QApplication::setAttribute(Qt::AA_DontUseNativeDialogs,true);
+        const auto restoreDialogs=qScopeGuard([&]{QApplication::setAttribute(Qt::AA_DontUseNativeDialogs,nativeDialogsDisabled);});
         w.resize(1600,1000);QApplication::processEvents();
         const auto input=phase["input"].toString();
         if(!input.isEmpty()&&!w.OpenDocumentFile(QFileInfo(input).isAbsolute()?input:QDir(root).absoluteFilePath(input)))return false;
@@ -430,6 +438,10 @@ bool Smoke(V2MainWindow& w)
         {"drawingCoordinateP2_0",5},{"drawingCoordinateP2_1",7}})
         if(!replay.Act({{"op","number"},{"widget",field.first},{"value",field.second}}))return false;
     if(!replay.Act({{"op","click"},{"widget","drawingCreateCoordinates"}})||CountOfKind(w,domain::EntityKind::Wire)!=1)return false;
+    const QString longName(160,QChar('W'));
+    if(!replay.Act({{"op","remember"},{"kind",2},{"as","longLabel"}})
+        ||!replay.Act({{"op","select"},{"id","$longLabel"},{"rename",longName}})
+        ||!replay.Act({{"op","select"},{"id","$longLabel"}}))return false;
     // Unknown operations and hidden UI must fail; they cannot silently become API calls.
     if(replay.Act({{"op","create_shape"}})||replay.Act({{"op","click"},{"widget","does-not-exist"}})
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;

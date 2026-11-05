@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QLabel>
 #include <QPushButton>
+#include <algorithm>
 using namespace kachakacha::v2;
 namespace {
 base::Result<domain::Feature> OutputFeature(const V2OutputAsset& asset,base::IdGenerator& ids,domain::Entity& entity) {
@@ -38,8 +39,13 @@ bool AppendOutputs(document::Document& document,base::IdGenerator& ids,const std
 }
 }
 bool V2OutputTool::CopyIntoDocument() {
+    // Independent points, planes and wires introduce fresh UUIDs. Existing
+    // native shapes cannot depend on them and must keep their cached geometry.
+    const bool nativeOutput=std::any_of(prepared_.begin(),prepared_.end(),[](const auto& asset){
+        return asset.entity.kind==domain::EntityKind::Part||asset.entity.kind==domain::EntityKind::GuideSurface;
+    });
     QString error;if(!AppendOutputs(window_.session_->GetDocument(),*window_.ids_,prepared_,error)){SetProblem(error);return false;}
-    window_.AdoptCurrentDocument();window_.RebuildKernelShapes();window_.RefreshShapeViews();window_.SetStatus(QStringLiteral("選んだ形状の独立コピーを作成しました。元の対象は残しています。"));return true;
+    window_.AdoptCurrentDocument();if(nativeOutput)window_.RebuildKernelShapes();window_.RefreshShapeViews();window_.SetStatus(QStringLiteral("選んだ形状の独立コピーを作成しました。元の対象は残しています。"));return true;
 }
 bool V2OutputTool::SaveTo(const QString& path) {
     if(window_.session_->GetDocument().Revision()!=revision_ || window_.session_->GetDocument().Snapshot().id!=documentId_){SetProblem(QStringLiteral("文書が変更されています。対象を取り込み直してプレビューを確認してください。"));return false;}

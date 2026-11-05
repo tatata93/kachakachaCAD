@@ -8,6 +8,8 @@
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/app/ExtrudeOptions.h"
+#include "kachakacha/app/ExtrudePlan.h"
 #include <QCoreApplication>
 #include <QEvent>
 #include "kachakacha/kernel/OcctTessellate.h"
@@ -235,6 +237,41 @@ bool SmallAccurateStep(V2MainWindow& w) {
         &&bytes.Value().find("END-ISO-10303-21;")!=std::string::npos&&w.Session().GetDocument().Revision()==revision
         &&w.Session().GetDocument().Snapshot().settings.tolerance.interactiveJoinMm==.01);
 }
+bool WireCopyKeepsExistingShapes(V2MainWindow& w) {
+    if(!OutputBox(w))return false;
+    const auto parts=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::Part);
+    const auto wires=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::Wire);
+    if(parts.entityIds.size()!=1||wires.entityIds.size()!=1)return false;
+    app::ExtrudeChoice choice;choice.makePart=true;choice.booleanMode=modeling::ExtrudeBooleanMode::AddToPart;
+    app::ExtrudePlan plan;plan.targetSolid=parts.entityIds.front();
+    const auto before=w.BooleanTargetShapeFor(choice,plan);
+    const auto original=w.Viewport().ShapeViews().front().mesh;
+    if(!before)return false;
+    w.Viewport().SetSelection(wires);w.RunCommand("output.copy");
+    V2OutputTool* output=nullptr;
+    for(auto* dialog:w.findChildren<QDialog*>())
+        if(dialog->isVisible()&&dialog->objectName()=="selectionOutput")output=dynamic_cast<V2OutputTool*>(dialog);
+    auto* format=output?output->findChild<QComboBox*>("outputFormat"):nullptr;
+    auto* confirm=output?output->findChild<QPushButton*>("outputConfirm"):nullptr;
+    if(!format||!confirm||!confirm->isVisible())return false;
+    format->setCurrentIndex(3);confirm->click();QApplication::processEvents();
+    const auto after=w.BooleanTargetShapeFor(choice,plan);
+    if(!Explain("wire-only independent copy retains existing native shape handles",after&&after->value==before->value
+        &&CountOfKind(w,domain::EntityKind::Wire)==2&&CountOfKind(w,domain::EntityKind::Part)==1))return false;
+    const auto& copy=w.Session().GetDocument().Snapshot().features.back();
+    if(!Explain("copied wire is editable and independent of its source",copy.type==domain::FeatureType::CreateWire
+        &&copy.inputEntityIds.empty()))return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("one Undo removes only the independent wire",CountOfKind(w,domain::EntityKind::Wire)==1
+        &&CountOfKind(w,domain::EntityKind::Part)==1))return false;
+    w.RunCommand("edit.redo");
+    if(!w.SaveAndReopen(QStringLiteral("wire-copy-keeps-shapes.kcd2")))return false;
+    const auto& restored=w.Viewport().ShapeViews();
+    return Explain("wire copy survives Redo and reopen without altering the original solid",CountOfKind(w,domain::EntityKind::Wire)==2
+        &&restored.size()==1&&restored.front().mesh.closed
+        &&geometry::Distance(restored.front().mesh.minimum,original.minimum)<1e-9
+        &&geometry::Distance(restored.front().mesh.maximum,original.maximum)<1e-9);
+}
 bool CaseOutputOwnership(V2MainWindow& w){
     if(!OutputBox(w))return false;
     w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
@@ -248,5 +285,5 @@ bool CaseOutputOwnership(V2MainWindow& w){
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

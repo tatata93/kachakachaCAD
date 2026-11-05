@@ -13,8 +13,8 @@
 | WP-04 | 重点確認済み(Codex、2026-11-06、150e51542。結合のSegmentId参照と直線/円弧の閉輪オフセットを修正。関連コア4群、複数輪郭の下見/確定/面生成/保存のHP-OFFSET-LOOP、添付床板の通常UI経路が成功。全体ゲートは後段。現在の所有をWP-08へ戻す) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
-| WP-07 | 進行中(Codex、2026-11-06。添付車体の前頭部屋根の明示的な反対面補正がUndefined source normalで停止。私有の補正法線評価について、微分の速さによる判定と幾何学的な退化を切り分ける。元面と厚み・偏差・native安全検査を保持し、再現試験と実モデルUIで確認する。公開APIは変更しない) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 重点検証済み(Codex、2026-11-06、1f85123ae。切り欠きを保つ製作入力と方式選択の回帰、添付側板の最大偏差0.000475288mmを確認。祖先の表示判定と非表示対象の明示選択出力を修正し出力UI14件成功。全体・配布ゲートは未完了。現在の所有をWP-07へ移す。詳細はrefactoring-plan参照) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-07 | 重点検証済み(Codex、2026-11-06、82aaa3ad6。微分の速さだけで補正法線が消える汎用不具合を再現し修正。厚み品質26件成功、元面・解析体積・厚みを照合。添付前頭部屋根は通常Qt UI再試験でも法線未定義で未解決。公開APIとnative安全検査は不変。全体・配布検証は後段。現在の所有をWP-08へ戻す) | WP-06 | Part作成、押し出し、Boolean、Subshape |
+| WP-08 | 進行中(Codex、2026-11-06、1f85123ae/82aaa3ad6。切り欠きを保つ製作入力と方式選択の回帰、添付側板の最大偏差0.000475288mmを確認。祖先の表示判定と非表示対象の明示選択出力を修正し出力UI14件成功。全体・配布検証後、添付模型の残る製作工程を通常UIで進める。前頭部屋根の厚みと車体完成は未完了。詳細はrefactoring-plan参照) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(今回の段階15追加修正、Codex、2026-11-06。線だけの独立コピーの全形状再構築を除去。出力UI12件、コピー後の配列入力、52面車体の同一経路104.25→50.98秒が成功。CTest195、UI685×2、通常起動を通しv0.1.0-20261106-update1を公開。WP全体の未完了事項は残し、現在の所有をWP-08へ移す。履歴と限界はrefactoring-plan参照) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

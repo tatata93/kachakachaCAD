@@ -10,13 +10,16 @@
 #include <QAbstractSpinBox>
 #include <QAction>
 #include <QApplication>
+#include <QChar>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QFocusEvent>
 #include <QFormLayout>
+#include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -27,10 +30,12 @@
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPixmap>
+#include <QPointF>
 #include <QPlainTextEdit>
 #include <QTextEdit>
 #include <QScrollArea>
 #include <QStyle>
+#include <QString>
 #include <QStyleOptionViewItem>
 #include <QTabWidget>
 #include <QTabBar>
@@ -38,6 +43,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QTreeWidgetItem>
+#include <QWidget>
 #include <algorithm>
 #include <array>
 #include <cmath>

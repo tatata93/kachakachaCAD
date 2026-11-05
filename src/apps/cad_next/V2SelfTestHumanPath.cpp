@@ -241,7 +241,7 @@ namespace {
     // 輪郭の大きさで指定距離を変えない。薄い部材も入力値のまま下見する。
     if (!Explain("押し始めの距離は設定値を維持する",
             std::abs(window.Viewport().ExtrudeHandleDistanceMm() - kachakacha::v2::app::ParameterValueOf(
-                window.ParameterDock().Values(), kachakacha::v2::app::ParameterId::ExtrudeDistance)) < 1.0e-9)) {
+                window.ParameterDock().Values(), kachakacha::v2::app::ParameterId::ExtrudeLengthMm)) < 1.0e-9)) {
         return false;
     }
     window.RunCommand("part.extrude");   // 確定

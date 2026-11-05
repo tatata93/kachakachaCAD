@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
+#include "V2ProfileRegionSelection.h"
 
 #include <QBrush>
 #include <QColor>
@@ -76,7 +77,60 @@ void AddBoundary(QPainterPath& path, const V2Viewport& viewport,
     }
 }
 
+bool WholeSegmentInRegion(const kachakacha::v2::app::ProfileRegion& region,
+    const kachakacha::v2::modeling::SnapCurve& source, double tolerance)
+{
+    // Network pieces partition their source parameter range. A face walk can
+    // visit a bridge twice, so count each forward/reversed piece only once.
+    std::vector<const kachakacha::v2::geometry::CurveSegment*> pieces;
+    double covered = 0;
+    const auto append = [&](const kachakacha::v2::app::ProfileBoundary& boundary) {
+        for (std::size_t i = 0; i < boundary.segmentIds.size() && i < boundary.segments.size(); ++i) {
+            if (boundary.segmentIds[i] != source.segmentId) continue;
+            const auto& piece = boundary.segments[i];
+            bool duplicate = false;
+            for (const auto* prior : pieces) {
+                bool forward = true, reverse = true;
+                for (int j = 0; j <= 4; ++j) {
+                    const auto point = piece.Evaluate(j / 4.);
+                    forward &= (point - prior->Evaluate(j / 4.)).Length() <= tolerance;
+                    reverse &= (point - prior->Evaluate(1 - j / 4.)).Length() <= tolerance;
+                }
+                duplicate |= forward || reverse;
+            }
+            if (duplicate) continue;
+            pieces.push_back(&piece); covered += piece.TotalLength(tolerance);
+        }
+    };
+    append(region.outer); for (const auto& hole : region.holes) append(hole);
+    return covered >= source.segment.TotalLength(tolerance) - tolerance;
+}
+
 } // namespace
+
+void v2ui::MatchSeededBoundaryReference(PickCandidate& candidate,
+    const kachakacha::v2::app::SelectionSet& selection,
+    const std::vector<kachakacha::v2::app::ProfileRegion>& regions,
+    const kachakacha::v2::geometry::ScreenMapping& mapping,
+    const QPointF& position, double edgePickPx)
+{
+    const kachakacha::v2::app::SelectionRef* matched = nullptr;
+    for (const auto& ref : selection.ordered) {
+        if (ref.entityId != candidate.entityId || !ref.profileSeed) continue;
+        for (const auto& region : regions) {
+            if (!kachakacha::v2::app::ProfileRegionContains(region, *ref.profileSeed, 1e-6)) continue;
+            bool near = BoundaryNearScreen(region.outer, mapping, position, edgePickPx);
+            for (const auto& hole : region.holes) near |= BoundaryNearScreen(hole, mapping, position, edgePickPx);
+            if (!near) continue;
+            if (matched && matched != &ref) return; // Preserve both cells at an ambiguous shared border.
+            matched = &ref;
+        }
+    }
+    if (!matched) return;
+    candidate.kind = matched->kind;
+    candidate.segmentId = matched->segmentId.value_or(kachakacha::v2::base::SegmentId{});
+    candidate.profileSeed = matched->profileSeed;
+}
 
 void V2Viewport::SetProfileRegionPicking(bool active, bool wiresFirst)
 {
@@ -134,6 +188,25 @@ std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) 
     // 輪郭がまとめて入ったり外れたりすると、線を 1 本ずつ選べない(おまかせで起きた)。
     if (profileRegionWiresFirst_ && WireUnderCursor(position)) {
         return std::nullopt;
+    }
+    // Extrusion also accepts individual boundary wires, even after its first
+    // valid profile has changed the next-needed slot to None. Interior points,
+    // construction lines and generated part edges must not suppress a region.
+    if (toolPickActive_ && !profileRegionWiresFirst_
+        && pickSlot_ != kachakacha::v2::app::ExtrudeSlot::Target) {
+        const auto candidates = kachakacha::v2::app::CollectPickCandidates(
+            session_->Scene(), mapping_, ScreenPoint{position.x(), position.y()},
+            session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+        for (const auto& candidate : candidates) {
+            const auto* entity = session_->GetDocument().FindEntity(candidate.entityId);
+            if (!entity || entity->kind != kachakacha::v2::domain::EntityKind::Wire
+                || !EntityShown(candidate.entityId)) continue;
+            for (const auto& region : profileRegions_) {
+                const auto ids = ProfileRegionEntityIds(region);
+                if (std::find(ids.begin(), ids.end(), candidate.entityId) != ids.end())
+                    return std::nullopt;
+            }
+        }
     }
     const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
     if (!ray.has_value()) {
@@ -235,7 +308,30 @@ bool V2Viewport::ToggleProfileRegionAt(const QPointF& position)
     }
     const bool remove = ProfileRegionSelected(*index);
     auto next = selection_;
+    std::set<kachakacha::v2::base::SegmentId> boundarySegments;
+    const auto& region = profileRegions_[*index];
+    boundarySegments.insert(region.outer.segmentIds.begin(), region.outer.segmentIds.end());
+    for (const auto& hole : region.holes)
+        boundarySegments.insert(hole.segmentIds.begin(), hole.segmentIds.end());
     for (const auto& id : ProfileRegionEntityIds(profileRegions_[*index])) {
+        // Individually selected full boundaries have Edge refs rather than a
+        // seeded Object ref. Remove those exact refs too, preserving segments
+        // outside this region and any other seeded region on the same wire.
+        if (remove) for (const auto& ref : selection_.ordered) {
+            if (ref.entityId != id || ref.kind != SelectionElementKind::Edge
+                || !ref.segmentId || !boundarySegments.contains(*ref.segmentId)) continue;
+            const auto& curves = session_->Scene().curves;
+            const auto source = std::find_if(curves.begin(), curves.end(), [&](const auto& curve) {
+                return curve.entityId == id && curve.segmentId == *ref.segmentId;
+            });
+            if (source == curves.end()) continue;
+            const double tolerance = session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
+            if (!WholeSegmentInRegion(region, *source, tolerance)) continue;
+            PickCandidate edge; edge.entityId = id; edge.kind = ref.kind;
+            edge.segmentId = *ref.segmentId; edge.subshapeKey = ref.subshapeKey;
+            edge.profileSeed = ref.profileSeed;
+            next = ApplySelection(next, edge, SelectionMode::Subtract);
+        }
         PickCandidate candidate;
         candidate.entityId = id;
         candidate.kind = SelectionElementKind::Object;

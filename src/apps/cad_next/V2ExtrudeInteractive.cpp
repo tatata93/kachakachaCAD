@@ -16,6 +16,7 @@
 
 #include "V2ExtrudeDialog.h"
 #include "V2ExtrudeDock.h"
+#include "V2ExtrudeInputDistance.h"
 #include "V2ParameterDock.h"
 #include "V2Viewport.h"
 
@@ -148,7 +149,7 @@ void V2MainWindow::BeginExtrudePreview()
     // 向きは1か所(ExtrudeDirectionNow)から取る。矢印・下見・確定を必ず揃える。
     handle.direction = ExtrudeDirectionNow();
     // Keep the requested distance, including thin parts, when a source is selected.
-    handle.distanceMm = ExtrudeDistanceMm();
+    handle.distanceMm = v2ui::ExtrudeInputDistance(*parameterDock_, *extrudeDock_, extrudeShelfShown_);
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
     viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
@@ -344,7 +345,7 @@ std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewFaces(double dista
         : extrudeOutlines_;
     std::vector<std::vector<Vector3>> faces;
     std::size_t at = 0;
-    for (const auto& outline : outlines) {
+    for (std::size_t index = 0; index < outlines.size(); ++index) {
         if (at + 1 >= loops.size() || loops[at].empty() || loops[at + 1].empty()) {
             break;
         }
@@ -365,8 +366,15 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 {
     // 右の欄も同じ値にする。片方だけ動くと、どちらが本当か分からなくなる。
     extrudeDock_->SetDistanceMm(distanceMm);
-    parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
-        QString::number(distanceMm, 'f', 3));
+    // Extrusion length is independent of fabrication stock thickness. The
+    // signed live distance stays in the tool; the number shelf stores its
+    // magnitude only when it fits that shelf's positive-length range.
+    const auto id = kachakacha::v2::app::ParameterId::ExtrudeLengthMm;
+    const auto* definition = kachakacha::v2::app::FindParameter(id);
+    const double length = std::abs(distanceMm);
+    if (definition && length >= definition->minimum && length <= definition->maximum
+        && kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(), id) != length)
+        parameterDock_->Apply(id, QString::number(length, 'f', 3));
     if (!viewport_->ExtrudeHandleShown()) return;
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();
@@ -490,7 +498,8 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     // 棚のふだんの2つで表せない決め方も、棚が3つ目に名前で出す。
     extrudeDock_->ChooseDirection(extrudeChoice_.direction);
     extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleShown()
-        ? viewport_->ExtrudeHandleDistanceMm() : ExtrudeDistanceMm());
+        ? viewport_->ExtrudeHandleDistanceMm()
+        : v2ui::ExtrudeInputDistance(*parameterDock_, *extrudeDock_, extrudeShelfShown_));
     // 出力の欄に、いま作ろうとしているものを映す。
     kachakacha::v2::app::ExtrudeOutputs outputs;
     outputs.body = extrudeChoice_.makePart;

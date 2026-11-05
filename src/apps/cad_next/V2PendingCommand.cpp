@@ -131,7 +131,7 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
         // 構えている間はずっと、素のクリックで役割の違うものを足せる(§5)。
         viewport_->SetToolPickActive(true);
-        // 線を1本ずつ拾わせず、閉じた線の内側を押し出し輪郭として拾う。
+        // 線上は個別の入力、閉じた線の内側は領域として拾う。
         viewport_->SetProfileRegionPicking(true);
         // 入力が空でも押し出し専用棚を先に見せる。
         ShowExtrudeShelf(PlanExtrudeFromSelection());

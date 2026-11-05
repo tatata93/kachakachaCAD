@@ -11,6 +11,9 @@
 //! 文書は「どう作ったか」だけを持ち、形は作り直す。
 
 #include "V2MainWindow.h"
+#include "V2ParameterDock.h"
+#include "V2ExtrudeInputDistance.h"
+#include "V2ParameterDock.h"
 #include "V2WireSource.h"
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/app/SolidOutputMode.h"
@@ -383,7 +386,7 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     // 距離は矢印が持っている値を使う。引いた結果と作る形を必ず一致させる。
     choice.distanceMm = viewport_->ExtrudeHandleShown()
         ? viewport_->ExtrudeHandleDistanceMm()
-        : ExtrudeDistanceMm();
+        : v2ui::ExtrudeInputDistance(*parameterDock_, *extrudeDock_, extrudeShelfShown_);
     choice.hasSelectedPart = facts.parts > 0;
     if (extrudeShelfShown_) {
         // 棚が出ているなら、そこに出ている値がそのまま作る形になる。

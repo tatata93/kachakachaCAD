@@ -484,7 +484,8 @@ bool V2Viewport::BeginBodyDrag(const QPointF& position)
 {
     using kachakacha::v2::geometry::ScreenPoint;
     bodyDrag_ = BodyDrag{};
-    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+    if (toolPickActive_ || PickPending()
+        || session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
         return false;
     }
     const ScreenPoint pointer{position.x(), position.y()};
@@ -583,7 +584,8 @@ bool V2Viewport::BeginControlPointDrag(const QPointF& position)
 {
     using kachakacha::v2::geometry::ScreenPoint;
     controlDrag_ = ControlDrag{};
-    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+    if (toolPickActive_ || PickPending()
+        || session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
         return false;
     }
     const auto found = kachakacha::v2::app::PickControlPoint(session_->Scene(),
@@ -1029,6 +1031,13 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
     if (V2ToolSelection::Active(*this)||mode != SelectionMode::Replace || !picked.has_value()) {
         return mode;
     }
+    // A profile can contain many independent wires (including holes). Keep
+    // normal boundary clicks additive/removable after a preview is available.
+    const auto kind = PickedKindOf(*picked);
+    if (toolPickActive_ && profileRegionPicking_ && !profileRegionWiresFirst_
+        && pickSlot_ != kachakacha::v2::app::ExtrudeSlot::Target
+        && (kind == PickedKind::OpenWire || kind == PickedKind::ClosedWire))
+        return SelectionMode::Toggle;
     // 決まりは core にある。**スロットではなく「道具が動いているか」で決める。**
     // スロットは輪郭が入った時点で None になるので、それで判断すると
     // 次に相手の立体を押した瞬間に輪郭が消える。
@@ -1040,7 +1049,7 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
         existing.kind = ref.kind;
         already.push_back(PickedKindOf(existing));
     }
-    return kachakacha::v2::app::PlainClickShouldAdd(toolPickActive_, PickedKindOf(*picked),
+    return kachakacha::v2::app::PlainClickShouldAdd(toolPickActive_, kind,
                already)
         ? SelectionMode::Add
         : mode;

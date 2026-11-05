@@ -473,7 +473,7 @@ public:
     //! 押し出し・平面Surfaceでは線そのものではなく、閉じた線の内側を拾う。
     //! 領域はWireから都度作る一時状態で、Documentへ保存しない。
     //! wiresFirst(面を作る): 線の上を押したら線を 1 本だけ拾い、線の無い内側を押したときだけ
-    //! 輪郭をまとめて拾う。押し出しは縁を押しても輪郭を拾う(従来どおり)。
+    //! 輪郭をまとめて拾う。押し出しも境界Wire上は個別、内側は領域を拾う。
     void SetProfileRegionPicking(bool active, bool wiresFirst = false);
     [[nodiscard]] bool ProfileRegionPicking() const noexcept
     {

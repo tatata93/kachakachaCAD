@@ -286,6 +286,17 @@ bool V2Viewport::BeginExtrudeDrag(const QPointF& position)
     if (distance > kGrabPx) {
         return false;
     }
+    // A thin profile can lie inside the arrow's grab radius. Its visible wire
+    // remains selectable; the rest of the arrow still adjusts the distance.
+    if (toolPickActive_ && profileRegionPicking_) {
+        const auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
+            {position.x(), position.y()}, session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+        for (const auto& candidate : candidates) {
+            const auto* entity = session_->GetDocument().FindEntity(candidate.entityId);
+            if (entity && entity->kind == kachakacha::v2::domain::EntityKind::Wire
+                && EntityShown(candidate.entityId) && candidate.distancePx <= 2.0) return false;
+        }
+    }
     extrudeHandle_.dragging = true;
     extrudeHandle_.pressedPx = position;
     extrudeHandle_.distanceAtPressMm = extrudeHandle_.handle.distanceMm;

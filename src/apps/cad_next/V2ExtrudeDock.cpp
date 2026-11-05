@@ -63,7 +63,7 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
     state_->setWordWrap(true);
     layout->addWidget(state_);
     auto* note = new QLabel(QStringLiteral(
-        "押す面・閉じた輪郭を選び、方向と距離を設定します。"),
+        "押す面・閉じた輪郭を選び、方向と距離を設定します。線上のクリックで1本ずつ追加・解除、内側のクリックで領域を選べます。"),
         body_);
     note->setWordWrap(true);
     layout->addWidget(note);

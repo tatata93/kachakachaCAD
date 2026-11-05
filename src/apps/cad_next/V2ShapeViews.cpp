@@ -145,7 +145,7 @@ void V2MainWindow::RefreshPartDock(const kachakacha::v2::app::SelectionFacts* sh
         return;
     }
     const auto& values = parameterDock_->Values();
-    for (const ParameterId id : {ParameterId::ExtrudeDistance, ParameterId::OffsetDistanceMm,
+    for (const ParameterId id : {ParameterId::ExtrudeDistance, ParameterId::ExtrudeLengthMm, ParameterId::OffsetDistanceMm,
              ParameterId::RevolveAngleDeg, ParameterId::JigClearanceMm,
              ParameterId::JigThicknessMm}) {
         partDock_->SetParameterMm(id, kachakacha::v2::app::ParameterValueOf(values, id));

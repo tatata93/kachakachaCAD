@@ -4,6 +4,7 @@
 #include "V2TransformPreview.h"
 #include "V2DrawingCommit.h"
 #include "V2RenderSelection.h"
+#include "V2ProfileRegionSelection.h"
 #include "V2NavigatorHighlight.h"
 #include "V2QuickDisplayControls.h"
 #include "V2NativeCanvas.h"
@@ -1037,6 +1038,14 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // 輪郭がもう入っているなら、拾った面は **相手の立体** を指している(§5)。
     // そのまま面として受けると「面と輪郭の両方」で止まり、理由が分からない。
     picked = AsSolidIfProfileTaken(picked);
+    // An interior click records Object+profileSeed. A subsequent boundary
+    // click must toggle that same reference, rather than adding a second Edge
+    // reference that would leave the profile selected after its region clears.
+    if (picked && profileRegionPicking_ && !profileRegionWiresFirst_ && toolPickActive_
+        && ModeForToolPick(picked, mode) == kachakacha::v2::app::SelectionMode::Toggle) {
+        v2ui::MatchSeededBoundaryReference(*picked, selection_, profileRegions_, mapping_, position,
+            session_->GetDocument().Snapshot().settings.tolerance.edgePickPx);
+    }
     // 押すたび入れる/外す の最中は、押した当人を窓へ伝える(選択の差分では移し替えが読めない)。
     lastToolPick_ = (toolPickToggle_ && picked.has_value())
         ? std::optional<kachakacha::v2::base::EntityId>{picked->entityId}

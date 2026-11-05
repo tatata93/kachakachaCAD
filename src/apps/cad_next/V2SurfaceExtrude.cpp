@@ -3,6 +3,9 @@
 #include "V2Calculation.h"
 #include "V2MainWindow.h"
 #include "V2ExtrudeDock.h"
+#include "V2ParameterDock.h"
+#include "V2ExtrudeInputDistance.h"
+#include "V2ParameterDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/kernel/OcctSurfaceExtrude.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
@@ -94,7 +97,7 @@ bool V2MainWindow::HandleSurfaceExtrude(bool confirm)
         kachakacha::v2::app::ExtrudeHandle initial;
         initial.origin = center;
         initial.direction = ExtrudeDirectionNow();
-        initial.distanceMm = ExtrudeDistanceMm();
+        initial.distanceMm = v2ui::ExtrudeInputDistance(*parameterDock_, *extrudeDock_, extrudeShelfShown_);
         viewport_->ShowExtrudeHandle(initial, {});
         ShowExtrudeShelf(plan);
     }

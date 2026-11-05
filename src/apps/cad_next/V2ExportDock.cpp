@@ -7,6 +7,7 @@
 #include <QFontMetrics>
 #include <QLabel>
 #include <QObject>
+#include <QScrollArea>
 #include <QString>
 #include <QToolBar>
 #include <QTreeWidget>
@@ -45,8 +46,15 @@ V2ExportDock::V2ExportDock(QWidget* parent)
 void V2ExportDock::BuildBody()
 {
     auto* body = new QWidget(this);
-    auto* layout = new QVBoxLayout(body);
-    layout->setContentsMargins(6, 6, 6, 6);
+    auto* root = new QVBoxLayout(body);
+    root->setContentsMargins(6, 6, 6, 6);
+    root->setSpacing(4);
+    auto* scroll = new QScrollArea(body);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto* contents = new QWidget(scroll);
+    auto* layout = new QVBoxLayout(contents);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
     targetView_ = new QTreeWidget(body);
@@ -72,8 +80,14 @@ void V2ExportDock::BuildBody()
     messageLabel_ = new QLabel(body);
     messageLabel_->setWordWrap(true);
     layout->addWidget(messageLabel_);
+    scroll->setWidget(contents);
+    root->addWidget(scroll, 1);
 
+    // Keep output actions outside the scrolling options. A horizontal toolbar
+    // otherwise hides the primary action in its overflow menu in a narrow pane.
     auto* bar = new QToolBar(body);
+    bar->setOrientation(Qt::Vertical);
+    bar->setToolButtonStyle(Qt::ToolButtonTextOnly);
     auto* chooseAction = new QAction(QStringLiteral("出す先を選ぶ…"), bar);
     bar->addAction(chooseAction);
     overwriteAction_ = new QAction(QStringLiteral("上書きしてよい"), bar);
@@ -81,9 +95,8 @@ void V2ExportDock::BuildBody()
     bar->addAction(overwriteAction_);
     runAction_ = new QAction(QStringLiteral("出す"), bar);
     bar->addAction(runAction_);
-    layout->addWidget(bar);
+    root->addWidget(bar);
 
-    body->setLayout(layout);
     setWidget(body);
 
     QObject::connect(targetView_, &QTreeWidget::itemClicked, this,

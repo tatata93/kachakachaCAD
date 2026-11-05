@@ -88,17 +88,29 @@ bool VisibleOutputHonorsAncestors(V2MainWindow& w)
     Note(dock.TargetRowText(0).toUtf8().constData());
     if(!Explain("visible output count includes ancestor visibility",dock.TargetRowText(0).endsWith(QStringLiteral("表示している部品(1)"))))return false;
     if(!dock.ChooseTarget(app::ExportTarget::VisibleParts)||!dock.ChooseFormat(app::ExportFormat::Step))return false;
-    QApplication::processEvents();
-    // The dock's body is hosted in the current-operation panel.
-    bool pressed=false;for(auto* b:w.findChildren<QToolButton*>())
-        if(b->isVisible()&&b->isEnabled()&&b->visibleRegion().contains(b->rect().center())
-            &&b->text()==QStringLiteral("プレビュー・配置…")){b->click();pressed=true;break;}
-    if(!Explain("visible export preview action is reachable",pressed))return false;
-    V2OutputTool* output=nullptr;for(auto* dialog:w.findChildren<QDialog*>())
-        if(dialog->isVisible())if(auto* candidate=dynamic_cast<V2OutputTool*>(dialog))output=candidate;
-    if(!Explain("visible output preview excludes the hidden ancestor's part",output&&output->AssetCount()==1
-        &&w.Viewport().Selection().entityIds==std::vector<base::EntityId>{made.visiblePart}))return false;
-    output->close();return true;
+    const auto shots=qEnvironmentVariable("KACHACAD_OUTPUT_UI_SHOTS");
+    const auto originalTheme=w.Theme();const auto originalSize=w.size();
+    for(const auto theme:{UiTheme::Normal,UiTheme::Windows95})for(const auto size:{QSize(1000,700),QSize(900,600)}) {
+        w.ApplyTheme(theme);w.resize(size);w.Viewport().SetSelection({});
+        w.OperationHost().SetShelves({app::Shelf::Export});QApplication::processEvents();
+        if(!shots.isEmpty())w.grab().save(shots+QString("-%1-%2.png").arg(int(theme)).arg(size.width()));
+        // The dock's body is hosted in the current-operation panel. The primary
+        // action must remain directly reachable, without a toolbar overflow menu.
+        bool pressed=false;for(auto* b:w.findChildren<QToolButton*>())
+            if(b->text()==QStringLiteral("プレビュー・配置…")){
+                Note(QString("output action visible=%1 enabled=%2 reachable=%3 size=%4x%5 window=%6x%7")
+                    .arg(b->isVisible()).arg(b->isEnabled()).arg(b->visibleRegion().contains(b->rect().center()))
+                    .arg(b->width()).arg(b->height()).arg(w.width()).arg(w.height()).toUtf8().constData());
+                if(b->isVisible()&&b->isEnabled()&&b->visibleRegion().contains(b->rect().center())){b->click();pressed=true;break;}
+            }
+        if(!Explain("visible export preview action is reachable",pressed))return false;
+        V2OutputTool* output=nullptr;for(auto* dialog:w.findChildren<QDialog*>())
+            if(dialog->isVisible())if(auto* candidate=dynamic_cast<V2OutputTool*>(dialog))output=candidate;
+        if(!Explain("visible output preview excludes the hidden ancestor's part",output&&output->AssetCount()==1
+            &&w.Viewport().Selection().entityIds==std::vector<base::EntityId>{made.visiblePart}))return false;
+        output->close();QApplication::processEvents();
+    }
+    w.ApplyTheme(originalTheme);w.resize(originalSize);return true;
 }
 bool ExplicitHiddenOutput(V2MainWindow& w)
 {

@@ -494,4 +494,22 @@ KACHA_V2_TEST(reeval, disconnected_batch_corners_reject_unmatched_edges) {
     }
 }
 
+KACHA_V2_TEST(reevaluation, closed_wire_offset_keeps_the_corners_connected)
+{
+    TransformWireDefinition offset;offset.method=WireTransformMethod::Offset;
+    offset.vectorArgument={0,0,1};offset.scalarArgument.value=.55;
+    const auto source=Rectangle(20,50);
+    const auto made=kachakacha::v2::document::EvaluateWireTransform(offset,source);
+    Require(made.HasValue(),"a reasonable inset exists");
+    Require(made.Value().size()==4,"the four straight edges remain straight edges");
+    for(std::size_t i=0;i<4;++i)
+        RequireNear(kachakacha::v2::geometry::Distance(made.Value()[i].EndPoint(),
+            made.Value()[(i+1)%4].StartPoint()),0.,1e-6,"inset corners stay closed");
+    for(const auto& curve:made.Value())for(const double t:{0.,1.}){
+        const auto p=curve.Evaluate(t);
+        Require(p.x>=.55-1e-6&&p.x<=19.45+1e-6&&p.y>=.55-1e-6&&p.y<=49.45+1e-6,
+            "the inset lies inside the unchanged source rectangle");
+    }
+}
+
 KACHA_V2_TEST_MAIN("feature_reevaluation_tests")

@@ -17,6 +17,25 @@
 using namespace kachakacha::v2;
 namespace {
 V2OffsetTool* Active(V2MainWindow& w){return dynamic_cast<V2OffsetTool*>(w.OperationHost().TemporaryPage());}
+base::Result<std::vector<geometry::CurveSegment>> PreviewOffsets(V2MainWindow& w,
+    const domain::TransformWireDefinition& definition) {
+    using Out=base::Result<std::vector<geometry::CurveSegment>>;
+    const auto& selection=w.Viewport().Selection();
+    if(selection.entityIds.size()<=1)
+        return document::EvaluateWireTransform(definition,app::SelectedCurves(selection,w.Session().Scene()));
+    std::vector<geometry::CurveSegment> combined;
+    // Confirmation offsets each selected wire separately. Preview the same groups,
+    // rather than accidentally joining edges from different objects into a contour.
+    for(const auto id:selection.entityIds){
+        app::SelectionSet one;one.entityIds={id};
+        for(const auto& ref:selection.ordered)if(ref.entityId==id)one.ordered.push_back(ref);
+        const auto curves=app::SelectedCurves(one,w.Session().Scene());if(curves.empty())continue;
+        const auto made=document::EvaluateWireTransform(definition,curves);
+        if(!made.HasValue())return Out::Failure(made.Diagnostics());
+        combined.insert(combined.end(),made.Value().begin(),made.Value().end());
+    }
+    return Out::Success(std::move(combined));
+}
 }
 void V2OffsetTool::Open(V2MainWindow& w) {
     if(Active(w))return;
@@ -69,7 +88,7 @@ void V2OffsetTool::Preview() {
     const auto plane=PlaneFor(window_,inputs);
     if(!plane.HasValue()){status_->setText(QString::fromStdString(plane.FirstSummaryJa())+QStringLiteral(" 平面候補を変更すると3Dで確認できます。"));return;}
     domain::TransformWireDefinition d;d.method=domain::WireTransformMethod::Offset;d.vectorArgument=plane.Value().normal;d.scalarArgument.value=distance_->value();
-    const auto made=document::EvaluateWireTransform(d,inputs);
+    const auto made=PreviewOffsets(window_,d);
     if(!made.HasValue()){status_->setText(QString::fromStdString(made.FirstSummaryJa()));return;}
     view.ShowToolPreview(app::SurfaceBoundaryLines(made.Value(),24));
     status_->setText(QStringLiteral("加工平面：%1。%2辺の下見。Enterで確定、Escで入力だけ取り消します。")
@@ -81,7 +100,7 @@ void V2OffsetTool::Confirm() {
     const auto inputs=app::SelectedCurves(window_.Viewport().Selection(),window_.Session().Scene());
     const auto plane=PlaneFor(window_,inputs);if(!plane.HasValue()){Preview();return;}
     domain::TransformWireDefinition d;d.method=domain::WireTransformMethod::Offset;d.vectorArgument=plane.Value().normal;d.scalarArgument.value=distance_->value();
-    if(!document::EvaluateWireTransform(d,inputs).HasValue()){Preview();return;}
+    if(!PreviewOffsets(window_,d).HasValue()){Preview();return;}
     if(!window_.ParameterDock().Apply(app::ParameterId::OffsetDistanceMm,QString::number(distance_->value()))){status_->setText(QStringLiteral("距離を適用できません。値を見直してください。"));return;}
     const auto revision=window_.Session().GetDocument().Revision();window_.RunCommand("wire.offset");
     if(window_.Session().GetDocument().Revision()!=revision)window_.Viewport().SetSelection({});

@@ -743,6 +743,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/WireChain.cpp
     src/next/kachakacha/geometry/WireConnect.cpp
     src/next/kachakacha/geometry/WireEdit.cpp
+    src/next/kachakacha/geometry/PlanarWireOffset.cpp
     src/next/kachakacha/geometry/ChainTrim.cpp
     src/next/kachakacha/geometry/CurveFit.cpp
     src/next/kachakacha/geometry/ControlPointEdit.cpp

@@ -225,4 +225,23 @@ KACHA_V2_TEST(wire_connect, 1本だけでは結合できない)
     RequireEqual(FirstCode(joined.Diagnostics()), std::string("GEO-E016"), "コード");
 }
 
+KACHA_V2_TEST(wire_connect, unordered_closed_edges_follow_the_analyzed_segment_ids)
+{
+    const std::vector<CurveSegment> input{
+        Line({0,0,0},{10,0,0}),Line({10,6,0},{0,6,0}),
+        Line({10,6,0},{10,0,0}),Line({0,0,0},{0,6,0})};
+    const auto joined=JoinCurves(input,kTolerance);
+    Require(joined.HasValue(),"a shuffled and partly reversed rectangle joins");
+    Require(joined.Value().size()==input.size(),"every original edge is retained once");
+    for(std::size_t i=0;i<input.size();++i){
+        const auto& current=joined.Value()[i];
+        RequireNear(GapBetween(current.EndPoint(),joined.Value()[(i+1)%input.size()].StartPoint()),
+            0.,1e-9,"the returned traversal really connects, including the closing edge");
+        bool original=false;
+        for(const auto& source:input)original=original||
+            GapBetween(current.Evaluate(.5),source.Evaluate(.5))<1e-9;
+        Require(original,"ordering does not replace or deform an edge");
+    }
+}
+
 KACHA_V2_TEST_MAIN("wire_connect_tests")

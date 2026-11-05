@@ -23,8 +23,11 @@
 #include "kachakacha/app/MeasurePanel.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/geometry/CurveIntersection.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <QColor>
+#include <QDoubleSpinBox>
 #include <QApplication>
 #include <QMouseEvent>
 #include <QEvent>
@@ -34,6 +37,8 @@
 #include <QString>
 
 #include <cmath>
+#include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -312,6 +317,68 @@ using kachakacha::v2::modeling::ToolSettings;
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
     return CountOfKind(window, EntityKind::Wire) == 2;
+}
+
+[[nodiscard]] bool CaseClosedOffsetViaVisiblePanel(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    const double scale=PrepareTopView(window);auto& view=window.Viewport();
+    const QPointF center(view.width()*.5,view.height()*.5);
+    const auto click=[&](double x,double y){view.ClickAt(center+QPointF(x*scale,-y*scale));};
+    window.SelectTool(DrawingTool::Line);
+    for(const auto edge:std::vector<std::array<double,4>>{
+        {-30,-20,10,-20},{10,20,-30,20},{10,20,10,-20},{-30,-20,-30,20}}){
+        click(edge[0],edge[1]);click(edge[2],edge[3]);
+    }
+    window.SelectTool(DrawingTool::Select);
+    view.SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),EntityKind::Wire));
+    auto& ribbon=window.Ribbon();
+    if(!ribbon.ClickCategory(QStringLiteral("編集"))||!ribbon.ClickTool(QStringLiteral("結合"))
+        ||CountOfKind(window,EntityKind::Wire)!=1)return false;
+    window.SelectTool(DrawingTool::Rectangle);click(30,-20);click(60,20);
+    window.SelectTool(DrawingTool::Select);
+    view.SetSelection(app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),EntityKind::Wire));
+    const auto originalIds=view.Selection().entityIds;
+    const auto originalCurves=window.Session().Scene().curves;
+    if(originalIds.size()!=2||!ribbon.ClickCategory(QStringLiteral("編集"))
+        ||!ribbon.ClickTool(QStringLiteral("オフセット")))return false;
+    auto* distance=window.findChild<QDoubleSpinBox*>(QStringLiteral("offsetDistance"));
+    auto* confirm=window.findChild<QPushButton*>(QStringLiteral("offsetConfirm"));
+    if(!distance||!distance->isVisible()||!confirm||!confirm->isVisible())return false;
+    distance->setValue(2);QApplication::processEvents();const auto preview=view.ToolPreview();
+    if(!Explain("two selected contours have eight preview edges",preview.size()==8))return false;
+    confirm->click();QApplication::processEvents();
+    if(!Explain("offset retains both originals and creates two wires",CountOfKind(window,EntityKind::Wire)==4))return false;
+    app::SelectionSet made;
+    for(const auto& entity:window.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==EntityKind::Wire&&std::find(originalIds.begin(),originalIds.end(),entity.id)==originalIds.end())
+            made.entityIds.push_back(entity.id);
+    std::vector<geometry::CurveSegment> outputs;
+    for(const auto id:made.entityIds){
+        app::SelectionSet one;one.entityIds={id};const auto curves=app::SelectedCurves(one,window.Session().Scene());
+        if(!Explain("each offset is a closed contour",geometry::SegmentsFormClosedLoop(curves,{})))return false;
+        outputs.insert(outputs.end(),curves.begin(),curves.end());
+    }
+    for(const auto& line:preview)for(const auto point:line){
+        double nearest=1e9;
+        for(const auto& curve:outputs)nearest=std::min(nearest,geometry::Distance(point,geometry::ClosestOnCurve(curve,point).point));
+        if(!Explain("visible preview matches the committed wire",nearest<1e-6))return false;
+    }
+    for(const auto& original:originalCurves){
+        const auto& now=window.Session().Scene().curves;
+        const auto found=std::find_if(now.begin(),now.end(),[&](const auto& curve){
+            return curve.entityId==original.entityId&&curve.segmentId==original.segmentId;
+        });
+        if(found==now.end())return false;
+        for(double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),original.segment.Evaluate(t))>1e-9)return false;
+    }
+    window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Wire)!=2)return false;
+    window.RunCommand("edit.redo");if(CountOfKind(window,EntityKind::Wire)!=4)return false;
+    window.RunCommand("selection.activate");view.SetSelection(made);
+    if(!ribbon.ClickCategory(QStringLiteral("面作成"))||!ribbon.ClickTool(QStringLiteral("面にする"))
+        ||!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    return Explain("offset contours can be made into faces",CountOfKind(window,EntityKind::GuideSurface)==2)
+        &&window.SaveAndReopen(QStringLiteral("closed-offset-ui.kcd2"))&&window.RebuildProblems().isEmpty();
 }
 
 [[nodiscard]] bool CaseOffsetKeepsOriginalAndMeetLinesJoins(V2MainWindow& window)
@@ -943,6 +1010,7 @@ std::vector<SelfTestCase> DrawingCases()
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"角の加工は何本選んでも線ごとに作り1回で戻る", &CasePolylineCornersPerWire},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
+        {"HP-OFFSET-LOOP 順不同の結合と複数輪郭オフセットの下見確定が一致する", &CaseClosedOffsetViaVisiblePanel},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
         {"形から中心や端点に点を作れる", &CasePointsFromCurveShape},
         {"右の棚が道具に合わせて変わる", &CaseShelfFollowsTheTool},

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
+#include <map>
 
 namespace kachakacha::v2::geometry {
 namespace {
@@ -228,13 +229,16 @@ Result<std::vector<CurveSegment>> JoinCurves(const std::vector<CurveSegment>& cu
     }
     std::vector<ChainInput> inputs;
     inputs.reserve(curves.size());
+    std::map<base::SegmentId,std::size_t> sourceIndices;
     for (std::size_t index = 0; index < curves.size(); ++index) {
         // 連結解析は「同じ線を二度入れた」をIDで見分ける。
         // 全部ゼロのIDにすると、別の線どうしが同じものに見えてしまう。
         // 並び順から作った目印を付ける。文書のIDとは別物で、ここでしか使わない。
         std::array<std::uint8_t, 16> bytes{};
-        bytes[15] = static_cast<std::uint8_t>((index + 1) & 0xFF);
-        bytes[14] = static_cast<std::uint8_t>(((index + 1) >> 8) & 0xFF);
+        const auto marker=static_cast<std::uint64_t>(index)+1;
+        for(std::size_t byte=0;byte<sizeof(marker);++byte)
+            bytes[15-byte]=static_cast<std::uint8_t>((marker>>(byte*8))&0xff);
+        sourceIndices.emplace(base::SegmentId(base::Uuid(bytes)),index);
         inputs.push_back(ChainInput{base::EntityId{},
             base::SegmentId(base::Uuid(bytes)), curves[index]});
     }
@@ -249,8 +253,8 @@ Result<std::vector<CurveSegment>> JoinCurves(const std::vector<CurveSegment>& cu
     ordered.reserve(curves.size());
     for (std::size_t index = 0; index < analysis.Value().order.segments.size(); ++index) {
         const auto& oriented = analysis.Value().order.segments[index];
-        // AnalyzeChain は入力の並びを保つので、添字で引ける。
-        const CurveSegment& segment = curves[index];
+        // The traversal reorders edges. Its position is not an input index.
+        const CurveSegment& segment = curves[sourceIndices.at(oriented.segmentId)];
         if (!oriented.reversed) {
             ordered.push_back(segment);
             continue;

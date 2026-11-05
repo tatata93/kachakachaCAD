@@ -1,8 +1,11 @@
 // V1同等性(docs/v2/v1-drawing-parity.md)の編集アクションと、geometry-contract §5。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/PlanarWireOffset.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <cmath>
+#include <algorithm>
 
 using kachakacha::v2::geometry::ChamferLines;
 using kachakacha::v2::geometry::CurveKind;
@@ -455,6 +458,92 @@ KACHA_V2_TEST(edit, degenerate_transforms_are_refused)
         "a zero rotation axis is refused");
     Require(!MirrorCurve(line, {0, 0, 0}, {0, 0, 0}).HasValue(),
         "a zero plane normal is refused");
+}
+
+namespace {
+std::vector<CurveSegment> RoundedSteppedContour() {
+    return {L({3,-10,0},{8,-10,0}),
+        CurveSegment::MakeCircularArc({8,-8,0},{0,0,1},{1,0,0},2,-kPi/2,kPi/2).Value(),
+        L({10,-8,0},{10,40,0}),L({10,40,0},{-10,40,0}),L({-10,40,0},{-10,-8,0}),
+        CurveSegment::MakeCircularArc({-8,-8,0},{0,0,1},{1,0,0},2,kPi,kPi/2).Value(),
+        L({-8,-10,0},{-3,-10,0}),L({-3,-10,0},{-3,-11,0}),
+        L({-3,-11,0},{3,-11,0}),L({3,-11,0},{3,-10,0})};
+}
+void RequireClosedOffset(const std::vector<CurveSegment>& curves) {
+    Require(!curves.empty(),"a contour is present");
+    for(std::size_t i=0;i<curves.size();++i)
+        RequireNear(Distance(curves[i].EndPoint(),curves[(i+1)%curves.size()].StartPoint()),
+            0.,1e-6,"all offset corners meet without connector fragments");
+}
+}
+KACHA_V2_TEST(edit, closed_mixed_contour_offset_preserves_arcs_notches_and_three_dimensional_placement)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto source=RoundedSteppedContour();
+    for(const double angle:{0.,.7,1.8}){
+        std::vector<CurveSegment> placed;
+        for(const auto& curve:source)placed.push_back(TranslateCurve(
+            RotateCurve(curve,{0,0,0},{1,0,0},angle).Value(),{7,-3,9}));
+        const Vector3 normal{0,-std::sin(angle),std::cos(angle)};
+        const auto made=OffsetCurvesInPlane(placed,normal,.55);
+        Require(made.HasValue(),"a concave contour with rounded corners has a connected inset");
+        RequireClosedOffset(made.Value());
+        Require(made.Value().size()==source.size(),"no line fragments or extra joins are introduced");
+        int arcs=0;
+        for(const auto& curve:made.Value())if(curve.Kind()==CurveKind::CircularArc){
+            ++arcs;RequireNear(curve.Radius(),1.45,1e-9,"both opposite rounded corners inset consistently");
+        }
+        Require(arcs==2,"two exact arcs remain arcs");
+        std::vector<CurveSegment> reversed;
+        for(const auto& curve:placed)reversed.push_back(ReverseCurve(curve).Value());
+        const auto other=OffsetCurvesInPlane(reversed,normal,-.55);
+        Require(other.HasValue(),"reversing traversal and offset sign keeps the same geometry");
+        RequireClosedOffset(other.Value());
+        for(const auto& curve:made.Value())for(double t:{0.,.25,.5,.75,1.}){
+            const auto p=curve.Evaluate(t);double nearest=1e9;
+            for(const auto& candidate:other.Value())nearest=std::min(nearest,
+                Distance(p,ClosestOnCurve(candidate,p).point));
+            RequireNear(nearest,0.,1e-6,"reversed traversal follows the same exact offset curves");
+        }
+    }
+}
+KACHA_V2_TEST(edit, offset_trims_a_line_and_semicircle_to_their_new_intersections)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto arc=CurveSegment::MakeCircularArc({0,0,0},{0,0,1},{1,0,0},4,0,kPi).Value();
+    const std::vector<CurveSegment> source{L({-4,0,0},{4,0,0}),arc};
+    for(double distance:{.5,-.5}){
+        const auto made=OffsetCurvesInPlane(source,{0,0,1},distance);
+        Require(made.HasValue(),"a line/arc corner can be trimmed inward or extended outward");
+        RequireClosedOffset(made.Value());
+        RequireNear(made.Value()[1].Radius(),4-distance,1e-9,"the arc remains an exact parallel circle");
+        RequireNear(made.Value()[0].StartPoint().y,distance,1e-9,"the chord stays parallel");
+    }
+}
+KACHA_V2_TEST(edit, offset_trims_two_arcs_at_circle_intersections)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto a=CurveSegment::MakeCircularArc({-2,0,0},{0,0,1},{1,0,0},4,-kPi/3,2*kPi/3).Value();
+    const auto b=CurveSegment::MakeCircularArc({2,0,0},{0,0,1},{1,0,0},4,2*kPi/3,2*kPi/3).Value();
+    const auto made=OffsetCurvesInPlane({a,b},{0,0,1},.5);
+    Require(made.HasValue(),"a curved lens has a connected inset");RequireClosedOffset(made.Value());
+    for(const auto& curve:made.Value()){
+        RequireNear(curve.Radius(),3.5,1e-9,"each edge stays on its parallel circle");
+        RequireNear(std::abs(curve.StartPoint().y),std::sqrt(3.5*3.5-4),1e-6,
+            "the corners use the new intersection rather than the old vertex");
+    }
+}
+KACHA_V2_TEST(edit, collapsed_and_self_crossing_contour_offsets_are_rejected)
+{
+    using namespace kachakacha::v2::geometry;
+    const std::vector<CurveSegment> small{L({0,0,0},{1,0,0}),L({1,0,0},{1,1,0}),
+        L({1,1,0},{0,1,0}),L({0,1,0},{0,0,0})};
+    Require(!OffsetCurvesInPlane(small,{0,0,1},.6).HasValue(),"an inset cannot invert an edge");
+    const std::vector<CurveSegment> crossed{L({0,0,0},{4,4,0}),L({4,4,0},{0,4,0}),
+        L({0,4,0},{4,0,0}),L({4,0,0},{0,0,0})};
+    Require(!OffsetCurvesInPlane(crossed,{0,0,1},.1).HasValue(),"a self-crossing source has no implicit material side");
+    Require(!OffsetCurvesInPlane(RoundedSteppedContour(),{1,0,0},.2).HasValue(),
+        "a wrong processing plane is not silently accepted");
 }
 
 KACHA_V2_TEST_MAIN("wire_edit_tests")

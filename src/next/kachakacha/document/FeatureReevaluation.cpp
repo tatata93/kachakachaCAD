@@ -1,4 +1,5 @@
 #include "kachakacha/document/FeatureReevaluation.h"
+#include "kachakacha/geometry/PlanarWireOffset.h"
 
 #include "kachakacha/geometry/PolylineCorners.h"
 
@@ -145,18 +146,8 @@ namespace {
     // 編集の許容差。文書の許容差を渡せる形にするまでは、対話用の既定値を使う。
     constexpr double tolerance = 0.01;
     if (definition.method == WireTransformMethod::Offset) {
-        // オフセットは相手の線が要らない。1本ずつ動かす。
-        std::vector<CurveSegment> offsets;
-        offsets.reserve(inputs.size());
-        for (const CurveSegment& segment : inputs) {
-            const auto moved = geometry::OffsetCurveInPlane(segment,
-                definition.vectorArgument, definition.scalarArgument.value);
-            if (!moved.HasValue()) {
-                return Out::Failure(moved.Diagnostics());
-            }
-            offsets.push_back(moved.Value());
-        }
-        return Out::Success(std::move(offsets));
+        return geometry::OffsetCurvesInPlane(inputs,definition.vectorArgument,
+            definition.scalarArgument.value);
     }
     if (definition.method == WireTransformMethod::CornerChamfer
         || definition.method == WireTransformMethod::CornerFillet) {

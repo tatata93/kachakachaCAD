@@ -28,6 +28,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QPushButton>
+#include <QSize>
 #include <QToolButton>
 #include <cmath>
 #include <QElapsedTimer>

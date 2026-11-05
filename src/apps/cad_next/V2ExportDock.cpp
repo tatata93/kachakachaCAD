@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QFrame>
 #include <QFontMetrics>
 #include <QLabel>
 #include <QObject>

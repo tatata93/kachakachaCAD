@@ -66,12 +66,23 @@ KACHA_V2_TEST(approx_input, 候補は同じ作り方に方式の違いを重ね�
     Require(c.method == 1 && c.automaticBoundaries && c.maximumPartCount == 1, "C は帯1枚");
     for (const auto* made : {&a, &b, &c}) {
         Require(made->fidelity == 9 && made->openingWires.size() == 1
-                && made->parts.size() == 1,
+                && made->parts == base.parts&&made->splitSolidFaces==base.splitSolidFaces,
             "基本の作り方は変えない");
     }
+    base.splitSolidFaces=true;
+    for(int candidate=0;candidate<3;++candidate){const auto made=ApproxCandidateDefinition(base,candidate);
+        Require(made.parts==base.parts&&made.splitSolidFaces,
+            "native source acquisition can be shared across every candidate");}
     Require(ApproxCandidateSpecs().size() == 3, "候補は3つ");
     Require(ApproxCandidateForMethod(0) == 0 && ApproxCandidateForMethod(1) == 1,
         "棚の方式は A か B に当たる");
+}
+
+KACHA_V2_TEST(approx_input, sub_micron_nonzero_deviation_is_not_displayed_as_zero)
+{
+    ApproxCandidateOutcome result{true,true,1,.000475288,true,""};
+    const auto text=ApproxCandidateLineJa(ApproxCandidateSpecs()[1],result);
+    Require(text.find("0.000475288 mm")!=std::string::npos,"retain significant digits for small measured deviations");
 }
 
 KACHA_V2_TEST(approx_input, 既定は棚の方式どおり_作れなければ収まる最少部材)

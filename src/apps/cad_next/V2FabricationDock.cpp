@@ -510,8 +510,8 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form_->addRow(MakePanelSectionTitle(formWidget, QStringLiteral("近似条件")));
     method_ = new QComboBox(formWidget);
-    method_->addItem(QStringLiteral("V1方式(帯へ近似し直す)"));
-    method_->addItem(QStringLiteral("V2方式(面を分類して展開)"));
+    method_->addItem(QStringLiteral("帯に分けて近似"));
+    method_->addItem(QStringLiteral("面の形から展開"));
     form_->addRow(QStringLiteral("方式"), method_);
     // 切る向きは人の言葉で(縦 = 上下に走る線で割る「みかんの皮」、横 = 水平の帯)。
     // U/V は面のパラメータで、面によって向きが違うので後ろに置く(オーナー指示 2026-09-25)。
@@ -932,6 +932,8 @@ void V2FabricationDock::SyncPercentFromRadius()
 void V2FabricationDock::Connect()
 {
     QObject::connect(method_, &QComboBox::currentIndexChanged, this, [this] {
+        if(!loading_&&candidateHandler_)
+            candidateHandler_(method_->currentIndex()==0?1:0);
         RefreshMethodRows();
         Emit();
     });

@@ -8,11 +8,16 @@
 
 #include "V2FabricationDock.h"
 #include "V2FabricationMaterial.h"
+#include "V2FabricationSources.h"
 #include "V2MainWindow.h"
 #include "V2ParameterDock.h"
 #include "V2ProjectionTool.h"
 
 #include "kachakacha/app/CommandParameters.h"
+#include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctSurfaceRegion.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -672,6 +677,65 @@ bool CaseMaterialSupportWarpRetained(V2MainWindow& window)
     return true;
 }
 
+bool CaseNativeMaterialAcrossTangentFaces(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;using geometry::Vector3;using geometry::CurveSegment;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    base::DeterministicIdGenerator ids{2301};const auto sourceId=ids.NextTyped<base::IdKind::Entity>();
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const auto profile=[&](double y,double top,double bottom){
+        return std::vector<CurveSegment>{line({0,y,top},{0,y,7}),CurveSegment::MakeCircularArc(
+            {-30,y,7},{0,-1,0},{1,0,0},30,0,-std::asin((7-bottom)/30)).Value()};
+    };
+    const auto front=profile(0,20,0),rear=profile(40,20,0);
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;
+    request.keepSectionOrder=true;
+    for(int i=0;i<2;++i){modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;
+        chain.index=i+1;chain.sourceEntityId=ids.NextTyped<base::IdKind::Entity>();chain.segments=i?rear:front;
+        request.chains.push_back(std::move(chain));}
+    const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);if(!analysis.HasValue())return false;
+    const auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);
+    if(!support.HasValue())return false;
+    const auto releaseSupport=qScopeGuard([&]{kernel::ReleaseShape(support.Value().handle);});
+    std::vector<std::vector<CurveSegment>> loops{front};
+    loops[0].push_back(line(front.back().EndPoint(),rear.back().EndPoint()));
+    for(auto i=rear.rbegin();i!=rear.rend();++i)loops[0].push_back(geometry::ReverseCurve(*i).Value());
+    loops[0].push_back(line(rear.front().StartPoint(),front.front().StartPoint()));
+    // A trim's correctness must not depend on coinciding with a regular UV scan.
+    auto door=profile(10.13,14,1);const auto other=profile(16.13,14,1);
+    door.push_back(line(door.back().EndPoint(),other.back().EndPoint()));
+    for(auto i=other.rbegin();i!=other.rend();++i)door.push_back(geometry::ReverseCurve(*i).Value());
+    door.push_back(line(other.front().StartPoint(),door.front().StartPoint()));loops.push_back(std::move(door));
+    loops.push_back({line({0,26,12},{0,32,12}),line({0,32,12},{0,32,16}),
+        line({0,32,16},{0,26,16}),line({0,26,16},{0,26,12})});
+    const auto trimmed=kernel::TrimSurfaceRegion({support.Value().handle},loops,tolerance);
+    if(!Explain("a closed opening crosses the tangent plane/cylinder seam",trimmed.HasValue()))return false;
+    const auto releaseTrim=qScopeGuard([&]{kernel::ReleaseShape(trimmed.Value());});
+    std::vector<app::FabricationSource> sources;
+    AppendNativeFabricationSources(trimmed.Value(),sourceId,"connected faces",sources);
+    if(!Explain("two native material regions remain",sources.size()==2))return false;
+    for(const auto& source:sources)if(source.samples&&
+        !Explain("curved trim uses its support surface and explicit material boundary",!source.materialRegionsUv.empty()))return false;
+    domain::CreateFabricationModelDefinition definition;definition.parts={sourceId};definition.method=1;
+    definition.equalPartCount=definition.maximumPartCount=1;definition.splitAtCorners=false;definition.splitAxis=2;
+    definition.targetMaxDeviation.value=.1;definition.materialThickness.value=.5;
+    const auto made=app::EvaluateFabrication(definition,sources,{},tolerance.interactiveJoinMm);
+    if(!Explain("a one-axis sheet with a crossing opening stays within tolerance",made.HasValue()
+        &&made.Value().reachedTolerance&&made.Value().maximumDeviationMm<=.1))return false;
+    if(!Explain("small nonzero deviations are not presented as exact zero",
+        made.Value().maximumDeviationMm==0||made.Value().summaryJa.find("最大 0 mm")==std::string::npos))return false;
+    const auto area=[](const auto& polygon){double sum=0;for(std::size_t i=0;i<polygon.size();++i){
+        const auto a=polygon[i],b=polygon[(i+1)%polygon.size()];sum+=a.u*b.v-a.v*b.u;}return std::abs(sum)*.5;};
+    double materialArea=0;std::size_t holes=0;
+    for(const auto& panel:made.Value().panels){materialArea+=area(panel.outline);holes+=panel.openings.size();
+        for(const auto& opening:panel.openings)materialArea-=area(opening);}
+    const double expected=(40*13-6*7-6*4)+40*30*std::asin(7./30)-6*30*std::asin(6./30);
+    Note(QStringLiteral("native material area: actual=%1 expected=%2 max=%3mm")
+        .arg(materialArea,0,'g',12).arg(expected,0,'g',12).arg(made.Value().maximumDeviationMm,0,'g',8).toUtf8().constData());
+    return Explain("window and crossing notch are removed from the actual 1:1 patterns",
+        made.Value().panels.size()==2&&holes==1&&std::abs(materialArea-expected)<.01);
+}
+
 bool CaseMaterialSupportShortFoldRetained(V2MainWindow& window)
 {
     using namespace kachakacha::v2;
@@ -692,6 +756,7 @@ bool CaseMaterialSupportShortFoldRetained(V2MainWindow& window)
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"HP-FAB-NATIVE-TRIM tangent faces preserve crossing cutouts in one-piece patterns",CaseNativeMaterialAcrossTangentFaces},
         {"HP-FAB-COMPACT straight support runs preserve bends and multiple holes",CaseMaterialSupportStraightRuns},
         {"HP-FAB-COMPACT twisted cells retain their triangle geometry",CaseMaterialSupportWarpRetained},
         {"HP-FAB-COMPACT nonuniform knot density retains surface orientation",CaseMaterialSupportOrientationRetained},

@@ -88,6 +88,9 @@ void V2MainWindow::EvaluateApproxCandidates()
         return;
     }
     const auto base = ApproxBaseDefinition();
+    // Candidate definitions vary the method and split settings, not their
+    // source entities/faces. Keep one immutable native region snapshot per batch.
+    const auto sources=FabricationSourcesFor(base.parts,base.splitSolidFaces);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     for (std::size_t index = 0; index < specs.size(); ++index) {
@@ -96,7 +99,6 @@ void V2MainWindow::EvaluateApproxCandidates()
         approxDefinitions_[index] = definition;
         auto& outcome = approxOutcomes_[index];
         outcome.evaluated = true;
-        const auto sources = FabricationSourcesFor(definition.parts, definition.splitSolidFaces);
         if (sources.empty()) {
             outcome.available = false;
             outcome.refusalJa = "元になる面が取れません";

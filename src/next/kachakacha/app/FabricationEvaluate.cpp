@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <limits>
 #include <cmath>
+#include <cstdio>
 
 namespace kachakacha::v2::app {
 namespace {
@@ -22,6 +23,8 @@ using fabrication::PatternPanel;
 
 [[nodiscard]] std::string Rounded(double value)
 {
+    if(value!=0&&std::abs(value)<.001){char buffer[64];
+        std::snprintf(buffer,sizeof(buffer),"%.6g",value);return buffer;}
     const double snapped = std::round(value * 1000.0) / 1000.0;
     std::string text = std::to_string(snapped);
     while (text.size() > 1 && text.back() == '0') {

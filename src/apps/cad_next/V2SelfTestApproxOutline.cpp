@@ -159,6 +159,26 @@ bool GeneratedMatchesRails(V2MainWindow& window)
     Note(QStringLiteral("生成面とレールの点対応: %1面 / 最大差%2mm").arg(count).arg(maximum,0,'g',8).toUtf8().constData());
     return Explain("生成面の外周短辺内部は下見と同じ対応",count==12 && maximum<1e-7);
 }
+bool ExplicitMethodAfterOnePiece(V2MainWindow& window)
+{
+    if(!MakeCurvedGuideSurface(window))return false;
+    const auto source=window.Viewport().Selection().entityIds;
+    window.ActivateCommand("fabrication.create");
+    auto* one=window.findChild<QPushButton*>(QStringLiteral("fabricationOnePiece"));
+    auto* details=window.findChild<QPushButton*>(QStringLiteral("fabricationDetailsToggle"));
+    auto* method=window.findChild<QComboBox*>(QStringLiteral("fabricationMethod"));
+    if(!one||!details||!method||!one->isVisible())return false;
+    one->click();if(!details->isChecked())details->click();method->setCurrentIndex(1);
+    if(!Explain("explicit face classification replaces a previously chosen band candidate",
+        window.ApproxInput().selectedCandidate==0))return false;
+    if(!window.HandleToolKey(Qt::Key_Return,nullptr))return false;
+    bool exactChoice=false;
+    for(const auto& feature:window.Session().GetDocument().Snapshot().features)
+        if(const auto* definition=std::get_if<domain::CreateFabricationModelDefinition>(&feature.definition))
+            exactChoice=definition->method==0&&definition->parts==source;
+    return Explain("the stored method is the explicitly selected method",exactChoice)
+        &&window.SaveAndReopen(QStringLiteral("explicit-fabrication-method.kcd2"));
+}
 bool MeasureOriginalDeviation(const app::FabricationSource& source,
     const domain::CreateFabricationModelDefinition& definition,const app::FabricationEvaluation& result)
 {
@@ -445,7 +465,8 @@ bool CheckPracticalUnfold(V2MainWindow& window,const app::FabricationEvaluation&
 std::vector<SelfTestCase> ApproxOutlineCases()
 {
     std::vector<SelfTestCase> cases{{"HP-AP-QUICK 日常設定詳細折畳みと実面下見とGPT製作入口廃止",QuickSettings},
-        {"HP-AP-SWITCH 面作成直後から近似へ移ると日常設定が表示される",SwitchAfterFaceCreationCases}};
+        {"HP-AP-SWITCH 面作成直後から近似へ移ると日常設定が表示される",SwitchAfterFaceCreationCases},
+        {"HP-AP-METHOD 1枚指定後の方式選択が候補と保存へ反映される",ExplicitMethodAfterOnePiece}};
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE"))
         cases.push_back({"HP-AP-OUTLINE-115 元の実曲面を5方向と等間隔自動間隔で近似生成",OwnerOutline});
     return cases;

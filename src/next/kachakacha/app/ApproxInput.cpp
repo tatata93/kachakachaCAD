@@ -1,12 +1,16 @@
 #include "kachakacha/app/ApproxInput.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 
 namespace kachakacha::v2::app {
 namespace {
 
 [[nodiscard]] std::string Millimetres3(double value)
 {
+    if(value!=0&&std::abs(value)<.001){char buffer[64];
+        std::snprintf(buffer,sizeof(buffer),"%.6g mm",value);return buffer;}
     const long long micro = static_cast<long long>(value * 1000.0 + (value < 0 ? -0.5 : 0.5));
     const long long whole = micro / 1000;
     const long long rest = std::llabs(micro % 1000);

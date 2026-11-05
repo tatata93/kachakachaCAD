@@ -38,7 +38,7 @@ std::vector<Vector3> CircleCircle(const CurveSegment& a,const CurveSegment& b,
     const auto delta=Cross(normal,direction)*std::sqrt(std::max(0.,height2));
     return {center+delta,center-delta};
 }
-std::optional<Vector3> Joint(const CurveSegment& a,const CurveSegment& b,Vector3 near,
+std::optional<Vector3> Joint(const CurveSegment& a,const CurveSegment& b,Vector3 referencePoint,
     Vector3 normal,const GeometryTolerance& tolerance) {
     if(Distance(a.EndPoint(),b.StartPoint())<=tolerance.modelLinearMm)
         return (a.EndPoint()+b.StartPoint())*.5;
@@ -52,7 +52,7 @@ std::optional<Vector3> Joint(const CurveSegment& a,const CurveSegment& b,Vector3
         CircleCircle(a,b,normal,tolerance);
     if(candidates.empty())return std::nullopt;
     return *std::min_element(candidates.begin(),candidates.end(),[&](const auto& p,const auto& q){
-        return Distance(p,near)<Distance(q,near);
+        return Distance(p,referencePoint)<Distance(q,referencePoint);
     });
 }
 base::Result<CurveSegment> TrimToJoints(const CurveSegment& curve,Vector3 start,Vector3 end,

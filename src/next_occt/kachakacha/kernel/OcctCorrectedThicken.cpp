@@ -64,12 +64,22 @@ std::vector<double> Greville(const NCollection_Array1<double>& knots,int degree,
     }
     return values;
 }
+gp_Vec TangentNormal(gp_Vec du,gp_Vec dv) {
+    // Parameter speed is unrelated to the geometric angle. Scale before
+    // squaring so valid small derivatives cannot underflow into degeneracy.
+    for(auto* tangent:{&du,&dv}) {
+        const double scale=std::max({std::abs(tangent->X()),std::abs(tangent->Y()),std::abs(tangent->Z())});
+        if(!std::isfinite(scale)||scale==0)return gp_Vec(0,0,0);
+        *tangent/=scale;tangent->Normalize();
+    }
+    return du.Crossed(dv);
+}
 gp_Vec Normal(const Surface& surface,const Domain& d,double u,double v,double sign,gp_Pnt& p) {
-    gp_Vec du,dv;surface->D1(u,v,p,du,dv);auto n=du.Crossed(dv);
+    gp_Vec du,dv;surface->D1(u,v,p,du,dv);auto n=TangentNormal(du,dv);
     if(n.SquareMagnitude()<1e-24) {
         gp_Pnt unused;surface->D1(std::clamp(u,d.u0+(d.u1-d.u0)*1e-7,d.u1-(d.u1-d.u0)*1e-7),
             std::clamp(v,d.v0+(d.v1-d.v0)*1e-7,d.v1-(d.v1-d.v0)*1e-7),unused,du,dv);
-        n=du.Crossed(dv);
+        n=TangentNormal(du,dv);
     }
     if(n.SquareMagnitude()<1e-24)throw Standard_Failure("Undefined source normal");
     n.Normalize();return n*sign;

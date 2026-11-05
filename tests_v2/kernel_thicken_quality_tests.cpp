@@ -378,6 +378,29 @@ KACHA_V2_TEST(thicken_quality, corrected_opposite_retains_source_and_passes_nati
         kernel::ReleaseShape(restored.Value());kernel::ReleaseShape(wall.handle);kernel::ReleaseShape(source);
     }
 }
+KACHA_V2_TEST(thicken_quality, corrected_normal_is_independent_of_spline_parameter_speed)
+{
+    // Both surfaces are the same 10 mm square. Their endpoint tangent speeds
+    // approach zero independently of the angle between those tangents.
+    for(double slow:{0.0,1e-10}) {
+        NCollection_Array2<gp_Pnt> poles(1,6,1,6);
+        const std::array<double,6> positions{0,slow,2*slow,10-2*slow,10-slow,10};
+        for(int i=1;i<=6;++i)for(int j=1;j<=6;++j)
+            poles(i,j)=gp_Pnt(positions[i-1],positions[j-1],0);
+        const auto face=BRepBuilderAPI_MakeFace(new Geom_BezierSurface(poles),1e-7).Face();
+        Require(BRepCheck_Analyzer(face).IsValid(),"slowly parametrized planar source is valid");
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        const auto wall=kernel::detail::CorrectedThicken(source,.5,fabrication::ThicknessPlacement::Inside,{});
+        Diagnose(wall);Require(wall.HasValue(),"small derivative magnitudes do not erase a valid normal");
+        Require(wall.Value().normalThicknessMinMm>.49999&&wall.Value().normalThicknessMaxMm<.50001,
+            "parameter speed does not change measured thickness");
+        const auto check=kernel::CheckSolidForExport(wall.Value().handle,1e-6);
+        Require(check.HasValue()&&check.Value().Ok()&&std::abs(check.Value().volumeMm3-50)<1e-4,
+            "corrected square is a closed native solid with analytic volume");
+        Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"slow source remains byte-identical");
+        kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source);
+    }
+}
 KACHA_V2_TEST(thicken_quality, corrected_centered_preserves_reference_and_rejects_excessive_thickness)
 {
     const auto source=kernel::StoreShape(TightParabola());const auto original=kernel::CaptureOutputShape(source);

@@ -683,7 +683,12 @@ bool V2LoopFacesTool::Confirm()
         inputSelection_ = originalInput;
         window_.AdoptCurrentDocument();
         window_.RebuildKernelShapes();
-        if (Replan()) ShowPreview();
+        if (Replan()) {
+            ShowPreview();
+            // Finish the restored preview before restoring the failure text.
+            // A queued preview must not replace the reason confirmation failed.
+            if (previewPending_) BuildSurfacePreview();
+        }
         window_.SetStatus(problem);
         return true;
     }

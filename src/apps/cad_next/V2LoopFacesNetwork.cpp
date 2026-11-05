@@ -256,21 +256,6 @@ app::LoopFacePlan NetworkDisplayPlan(const std::vector<modeling::GuideTable>& ta
     return plan;
 }
 
-std::vector<geometry::CurveSegment> JoinedStraightIntervals(std::vector<geometry::CurveSegment> curves,double epsilon)
-{
-    bool changed=true;
-    while(changed&&curves.size()>1){changed=false;
-        for(std::size_t i=0;i<curves.size();++i){const auto next=(i+1)%curves.size();const auto& a=curves[i];const auto& b=curves[next];
-            if(a.Kind()!=geometry::CurveKind::Line||b.Kind()!=geometry::CurveKind::Line
-                ||geometry::Distance(a.EndPoint(),b.StartPoint())>epsilon)continue;
-            const auto start=a.StartPoint(),end=b.EndPoint();
-            if(geometry::Dot(a.EndPoint()-start,end-b.StartPoint())<=0||ChordDistance(a.EndPoint(),start,end)>epsilon)continue;
-            const auto joined=geometry::CurveSegment::MakeLine(start,end);if(!joined.HasValue())continue;
-            curves[i]=joined.Value();curves.erase(curves.begin()+next);changed=true;break;
-        }
-    }
-    return curves;
-}
 // Work on exact original curve values. A duplicate and a dangling overlap tail
 // must not turn an otherwise closed window into a branched chain. This does not
 // join near endpoints, refit splines, edit source wires, or raise the cycle limit.
@@ -480,7 +465,9 @@ app::SurfaceNetworkPlan SelectedNotches(const std::vector<app::RoleWire>& source
         }
         for(std::size_t i=0;i<row.segments.size();++i)
             if(geometry::Distance(row.segments[i].EndPoint(),row.segments[(i+1)%row.segments.size()].StartPoint())>exact.modelLinearMm)return {};
-        row.segments=JoinedStraightIntervals(std::move(row.segments),exact.modelLinearMm);
+        // Keep the original interval boundaries even on a straight run. The
+        // adopted face stores a UUID and parameter range for each source
+        // segment; a merged interval may span two sources and cannot be saved.
         const auto points=geometry::SampleChain(row.segments,tolerance.interactiveJoinMm*.125);
         const auto fit=geometry::FitPlane(points);if(!fit.valid)continue;
         modeling::GuideTable table;
@@ -539,6 +526,12 @@ app::SurfaceNetworkPlan IndependentPlanarHoles(const std::vector<app::RoleWire>&
     for(const auto& b:boundaries)points.insert(points.end(),b.sampled.begin(),b.sampled.end());
     const auto fit=geometry::FitPlane(points);
     if(!fit.valid||fit.maximumDeviationMm>exact.modelLinearMm)return {};
+    // Nesting applies only to disjoint contours. A circle crossing an outer
+    // edge is a notch; classifying it here can select the circle alone and
+    // silently omit an outer outline made from separate wires.
+    for(std::size_t a=0;a<boundaries.size();++a)for(std::size_t b=a+1;b<boundaries.size();++b)
+        for(const auto& first:boundaries[a].segments)for(const auto& second:boundaries[b].segments)
+            if(!geometry::IntersectCurves(first,second,exact).empty())return {};
     // All selected intervals must belong to a closed boundary. In particular,
     // never accept just the outer rectangle while an inner contour is open.
     for(const auto& c:scene.curves){
@@ -561,6 +554,22 @@ app::SurfaceNetworkPlan IndependentPlanarHoles(const std::vector<app::RoleWire>&
     return result;
 }
 
+app::SurfaceNetworkPlan ContactComponentPlan(const std::vector<app::RoleWire>& wires,
+    const geometry::GeometryTolerance& tolerance,std::vector<modeling::GuideTableSelection>& unused)
+{
+    // Resolve contacts within their own connected group, before combining it
+    // with independent holes. Otherwise unrelated holes exhaust the contact
+    // solver's bounded interval budget and the outer skin can be lost.
+    auto plan=SelectedNotches(wires,tolerance);
+    if(plan.tables.empty())return app::PlanSurfaceNetwork(wires,tolerance);
+    // Only proven exterior/overlapping remainders may be omitted. Keep them in
+    // the final diagnostic list; an open inner boundary remains a refusal.
+    if(!NetworkOmissionsAllowed(plan,tolerance))return {};
+    unused.insert(unused.end(),plan.unusedSegments.begin(),plan.unusedSegments.end());
+    plan.unusedSegments.clear();
+    return plan;
+}
+
 // Resolve each disconnected outline before classifying nesting. The bounded
 // cycle search counts junctions; an outer and an inner projected outline must
 // not exhaust its budget merely because both contain independent spline spans.
@@ -572,12 +581,31 @@ app::SurfaceNetworkPlan IndependentSpatialLoops(const std::vector<app::RoleWire>
         if(!WithinSamplingBudget(curve))return {};inputs.push_back({wire.id,curve});
     }
     const auto count=inputs.size();
-    if(count>128)return {};
+    std::vector<std::pair<geometry::Vector3,geometry::Vector3>> boxes;
+    boxes.reserve(count);
+    for(const auto& input:inputs)boxes.push_back(ContainingBox(input.curve));
     std::vector<std::size_t> component(count);
     for(std::size_t i=0;i<count;++i)component[i]=i;
     const auto root=[&](std::size_t i){while(component[i]!=i)i=component[i];return i;};
     const double join=tolerance.interactiveJoinMm;
-    for(std::size_t a=0;a<count;++a)for(std::size_t b=a+1;b<count;++b){
+    if(count==0)return {};
+    auto minimum=boxes.front().first,maximum=boxes.front().second;
+    for(const auto& [lo,hi]:boxes){
+        minimum={std::min(minimum.x,lo.x),std::min(minimum.y,lo.y),std::min(minimum.z,lo.z)};
+        maximum={std::max(maximum.x,hi.x),std::max(maximum.y,hi.y),std::max(maximum.z,hi.z)};
+    }
+    const auto extent=maximum-minimum;
+    const int axis=extent.x>=extent.y&&extent.x>=extent.z?0:extent.y>=extent.z?1:2;
+    const auto coordinate=[axis](geometry::Vector3 p){return axis==0?p.x:axis==1?p.y:p.z;};
+    std::vector<std::size_t> order(count);for(std::size_t i=0;i<count;++i)order[i]=i;
+    std::stable_sort(order.begin(),order.end(),[&](auto a,auto b){return coordinate(boxes[a].first)<coordinate(boxes[b].first);});
+    for(std::size_t ai=0;ai<count;++ai)for(std::size_t bi=ai+1;bi<count;++bi){
+        const auto a=order[ai],b=order[bi];
+        const auto& [amin,amax]=boxes[a];const auto& [bmin,bmax]=boxes[b];
+        if(coordinate(bmin)>coordinate(amax)+join)break;
+        if(amax.x+join<bmin.x||bmax.x+join<amin.x
+            ||amax.y+join<bmin.y||bmax.y+join<amin.y
+            ||amax.z+join<bmin.z||bmax.z+join<amin.z)continue;
         bool touches=false;
         const auto& first=inputs[a].curve;const auto& second=inputs[b].curve;
         for(const auto p:{first.StartPoint(),first.EndPoint()})
@@ -603,6 +631,8 @@ app::SurfaceNetworkPlan IndependentSpatialLoops(const std::vector<app::RoleWire>
     std::vector<std::pair<base::EntityId,std::vector<base::EntityId>>> sources;
     std::vector<modeling::GuideTableSelection> unused;
     for(const auto& group:groups){
+        std::size_t intervals=0;for(const auto& wire:group)intervals+=wire.segments.size();
+        if(intervals>128)return {}; // Bound the contact solver, not the number of independent holes.
         auto normalized=group;
         std::stable_sort(normalized.begin(),normalized.end(),[](const auto& a,const auto& b){return a.id.ToString()<b.id.ToString();});
         std::vector<geometry::CurveSegment> unique;
@@ -626,7 +656,7 @@ app::SurfaceNetworkPlan IndependentSpatialLoops(const std::vector<app::RoleWire>
                     return SameInterval(curve,prior,tolerance.modelLinearMm,tolerance.modelLinearMm);});});
             if(!kept)unused.push_back({wire.id,"輪の外に延びた区間",{curve}});
         }
-        auto planned=app::PlanSurfaceNetwork(closed,tolerance);
+        auto planned=ContactComponentPlan(closed,tolerance,unused);
         if(planned.tables.empty()||!planned.unusedSegments.empty())return {}; // Never fill over a still-open inner outline.
         for(const auto& table:planned.tables){
             app::RoleWire cycle;cycle.id=ids.NextTyped<base::IdKind::Entity>();
@@ -641,7 +671,8 @@ app::SurfaceNetworkPlan IndependentSpatialLoops(const std::vector<app::RoleWire>
             sources.push_back({cycle.id,std::move(input)});cycles.push_back(std::move(cycle));
         }
     }
-    auto nested=app::PlanSurfaceNetwork(cycles,tolerance);
+    auto nested=IndependentPlanarHoles(cycles,tolerance);
+    if(nested.tables.empty())nested=app::PlanSurfaceNetwork(cycles,tolerance);
     if(nested.tables.empty()||!nested.unusedSegments.empty())return {};
     for(auto& table:nested.tables)for(auto& row:table.rows){
         std::vector<base::EntityId> original;

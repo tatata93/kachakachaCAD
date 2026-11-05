@@ -18,6 +18,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/modeling/MeshPick.h"
 #include <QApplication>
 #include <QString>
 #include <QDoubleSpinBox>
@@ -29,6 +30,9 @@
 #include <QByteArray>
 #include <QIODevice>
 #include <QPixmap>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <algorithm>
 #include <iostream>
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -164,6 +168,106 @@ bool Fixture(V2MainWindow& w,bool hidden,bool first)
         &&w.RebuildProblems().isEmpty()&&CheckStoredSkin(w,made,source));
 }
 
+// Adjacent straight source intervals must keep their separate UUID references.
+// The notch solver used to merge them for preview, then fail only on adoption.
+bool SplitStraightNotch(V2MainWindow& w,bool seamOnBoundary=false)
+{
+    QJsonArray checks;
+    const auto check=[&](const char* stage,bool ok){
+        checks.append(QJsonObject{{"stage",stage},{"ok",ok},{"status",w.StatusText()},
+            {"faces",CountOfKind(w,EntityKind::GuideSurface)},{"summary",w.LoopFacesTool().Dock()->SummaryTextJa()}});
+        const auto path=qEnvironmentVariable("KACHACAD_VERIFICATION_RUN_DIR");
+        if(!path.isEmpty()){QFile file(path+"/split-notch-checks.json");
+            if(file.open(QIODevice::WriteOnly))file.write(QJsonDocument(checks).toJson());}
+        return Explain(stage,ok);
+    };
+    w.RunCommand("file.new");app::SelectionSet selected;
+    const auto line=[](Vector3 a,Vector3 b){return CurveSegment::MakeLine(a,b).Value();};
+    const std::vector<CurveSegment> outline{line({0,0,0},{3,0,0}),line({3,0,0},{10,0,0}),
+        line({10,0,0},{10,10,0}),line({10,10,0},{0,10,0}),line({0,10,0},{0,0,0}),
+        CurveSegment::MakeCircle({7,0,0},{0,0,1},seamOnBoundary?Vector3{1,0,0}:Vector3{0,1,0},1).Value()};
+    for(const auto& curve:outline){
+        const auto added=w.Session().AddWire({curve},false,"境界の元線");
+        if(!added.committed)return false;selected.entityIds.push_back(added.createdEntityIds.front());
+    }
+    if(!check("fixture reopens",w.SaveAndReopen("split-straight-notch-input.kcd2")))return false;
+    const auto original=w.Session().Scene().curves;
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");QApplication::processEvents();
+    if(!check("a boundary-touching circle is previewed on a split straight perimeter",
+        w.LoopFacesTool().Dock()->ConfirmEnabled()&&w.Viewport().ToolPreviewFaceCount()>0))return false;
+    if(!w.LoopFacesTool().Dock()->ClickConfirm()
+        ||!check("preview can be adopted without merging source intervals",CountOfKind(w,EntityKind::GuideSurface)==1))return false;
+    const auto made=w.Session().GetDocument().Snapshot().entities.back().id;
+    const auto* definition=Definition(w,made);if(!definition)return false;
+    for(const auto id:{selected.entityIds[0],selected.entityIds[1]}){
+        bool referenced=false;for(const auto& chain:definition->chains)for(const auto& ref:chain.segments)
+            referenced=referenced||ref.entityId==id;
+        if(!check("both collinear source wire UUIDs are retained",referenced))return false;
+    }
+    for(const auto& curve:original){
+        const auto& now=w.Session().Scene().curves;
+        const auto found=std::find_if(now.begin(),now.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;});
+        if(found==now.end())return false;
+        for(double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),curve.segment.Evaluate(t))>1e-12)return false;
+    }
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::GuideSurface)!=0)return false;
+    w.RunCommand("edit.redo");
+    if(!check("result reopens",w.SaveAndReopen("split-straight-notch.kcd2")&&w.RebuildProblems().isEmpty()))return false;
+    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==made){
+        const auto hit=[&](Vector3 p){return std::any_of(shape.mesh.triangles.begin(),shape.mesh.triangles.end(),
+            [&](const auto& t){return modeling::RayHitsTriangle(p,{0,0,-1},t);});};
+        return check("reopened notch stays empty and surrounding material stays present",
+            !hit({7,.4,1})&&hit({3,5,1}));
+    }
+    return false;
+}
+
+// Many disconnected holes must not consume the bounded contact-graph budget.
+// Each notch crosses a flat skin and continues onto a different lower skin.
+bool ManyHolesAndNotches(V2MainWindow& w)
+{
+    w.RunCommand("file.new");app::SelectionSet selected;
+    const auto add=[&](const std::vector<Vector3>& points){
+        std::vector<CurveSegment> curves;
+        for(std::size_t i=0;i<points.size();++i)
+            curves.push_back(CurveSegment::MakeLine(points[i],points[(i+1)%points.size()]).Value());
+        const auto made=w.Session().AddWire(curves,false,"複数の穴と境界接触の輪郭");
+        if(!made.committed)return false;selected.entityIds.push_back(made.createdEntityIds.front());return true;
+    };
+    if(!add({{0,0,0},{0,200,0},{0,200,20},{0,0,20}}))return false;
+    for(int i=0;i<15;++i){
+        const double y=6+12*i;
+        if(!add({{0,y-3,10},{0,y,10},{0,y+3,10},{0,y+3,13.5},
+            {0,y+3,17},{0,y,17},{0,y-3,17},{0,y-3,13.5}}))return false;
+    }
+    for(const double y:{20.,85.,150.})
+        if(!add({{.4,y-3,-5},{.4,y+3,-5},{0,y+3,0},{0,y+3,5},{0,y-3,5},{0,y-3,0}}))return false;
+    if(!w.SaveAndReopen("many-holes-notch-input.kcd2"))return false;
+    const auto original=w.Session().Scene().curves;
+    w.Viewport().SetSelection(selected);w.RunCommand("surface.from_lines");QApplication::processEvents();
+    const auto& tool=w.LoopFacesTool();
+    if(!Explain("142 selected intervals resolve to one skin with 15 holes and 3 notches",
+        original.size()==142&&tool.Plan()&&tool.Plan()->faces.size()==1&&tool.Dock()->ConfirmEnabled()))return false;
+    if(!tool.Dock()->ClickConfirm()||CountOfKind(w,EntityKind::GuideSurface)!=1)return false;
+    const auto made=w.Session().GetDocument().Snapshot().entities.back().id;
+    for(const auto& curve:original){
+        const auto& now=w.Session().Scene().curves;
+        const auto found=std::find_if(now.begin(),now.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;});
+        if(found==now.end())return false;
+        for(double t:{0.,.25,.5,.75,1.})if(geometry::Distance(found->segment.Evaluate(t),curve.segment.Evaluate(t))>1e-12)return false;
+    }
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::GuideSurface)!=0)return false;
+    w.RunCommand("edit.redo");if(!w.SaveAndReopen("many-holes-notch-result.kcd2")||!w.RebuildProblems().isEmpty())return false;
+    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==made){
+        const auto hit=[&](double y,double z){return std::any_of(shape.mesh.triangles.begin(),shape.mesh.triangles.end(),
+            [&](const auto& t){return modeling::RayHitsTriangle({10,y,z},{-1,0,0},t);});};
+        for(int i=0;i<15;++i)if(hit(6+12*i,13.5))return false;
+        for(const double y:{20.,85.,150.})if(hit(y,2)||!hit(y,8))return false;
+        return Explain("every hole remains empty and the web above each notch remains material",hit(1,8));
+    }
+    return false;
+}
+
 bool Owner(V2MainWindow& w)
 {
     if(!w.OpenDocumentFile(qEnvironmentVariable("KACHACAD_PANEL_OWNER_INPUT")))return false;
@@ -237,7 +341,10 @@ std::vector<SelfTestCase> PanelSupportCases()
 {
     std::vector<SelfTestCase> cases{
         {"HP-SKIN-01 隠した裾絞り面の切り欠きを保持",[](V2MainWindow& w){return Fixture(w,true,true);}},
-        {"HP-SKIN-02 選択後の帯ボタンでも元面の形を保持",[](V2MainWindow& w){return Fixture(w,false,false);}}
+        {"HP-SKIN-02 選択後の帯ボタンでも元面の形を保持",[](V2MainWindow& w){return Fixture(w,false,false);}},
+        {"HP-SKIN-03 同一直線上の別ワイヤーを保持して切欠き面を確定",[](V2MainWindow& w){return SplitStraightNotch(w);}},
+        {"HP-SKIN-04 円の継ぎ目が境界上でも切欠き面を確定",[](V2MainWindow& w){return SplitStraightNotch(w,true);}},
+        {"HP-SKIN-05 多数の離れた穴と複数面を横切る切欠き",ManyHolesAndNotches}
     };
     if(qEnvironmentVariableIsSet("KACHACAD_PANEL_OWNER_INPUT"))cases.push_back({"HP-SKIN-115 添付13辺の車体面・厚み・近似",Owner});
     return cases;

@@ -36,6 +36,7 @@ std::vector<SelfTestCase> ProjectionCases();
 std::vector<SelfTestCase> NavigationCases();
 std::vector<SelfTestCase> TrimPreservationCases();
 std::vector<SelfTestCase> PanelSupportCases();
+std::vector<SelfTestCase> UiReplayCases();
 namespace {
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
@@ -195,6 +196,8 @@ namespace {
     cases.insert(cases.end(), gptFabrication.begin(), gptFabrication.end());
     const auto gptSurface = WithSuite(GptSurfaceCases(), "GptSurface");
     cases.insert(cases.end(), gptSurface.begin(), gptSurface.end());
+    const auto replay = WithSuite(UiReplayCases(), "UiReplay");
+    cases.insert(cases.end(), replay.begin(), replay.end());
     return cases;
 }
 

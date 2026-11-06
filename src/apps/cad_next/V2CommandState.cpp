@@ -1,12 +1,15 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandAvailability.h"
+#include "kachakacha/app/SelectionFactsCounts.h"
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ToolTargeting.h"
 #include <QAction>
 #include <QElapsedTimer>
 #include <QString>
 #include <QVariant>
+#include <vector>
 using namespace kachakacha::v2::app;
 void V2MainWindow::RefreshCommandVisibility(const SelectionFacts* sharedFacts)
 {
@@ -19,7 +22,10 @@ void V2MainWindow::RefreshCommandVisibility(const SelectionFacts* sharedFacts)
         const CommandDescriptor* command = FindCommand(entry.first);
         // Tool-first entries stay enabled without building a geometric preview.
         // Exact extrusion planning still runs when the tool is invoked.
-        const bool ready=command&&((entry.first=="edit.delete"&&SelectedGroupId().has_value())||
+        const bool profileInput=command&&facts.wires>0
+            &&(command->predicate==SelectionPredicate::OneClosedProfile
+                ||command->predicate==SelectionPredicate::ClosedProfilesOrSolidFace);
+        const bool ready=command&&(profileInput||(entry.first=="edit.delete"&&SelectedGroupId().has_value())||
             kachakacha::v2::app::SelectionSatisfies(command->predicate,facts));
         if(!ready&&command)reason=QString::fromUtf8(std::string(command->predicateFailureJa).c_str());
         const bool canSelectTarget = command != nullptr
@@ -56,11 +62,12 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
     external.guideRows = static_cast<int>(guideTable_.rows.size());
     external.selectedGuideRows = CurrentGuideRow().has_value() ? 1 : 0;
     const kachakacha::v2::app::SelectionSet empty;
-    return kachakacha::v2::app::BuildSelectionFacts(
+    // Merely selecting objects must not perform the region search. Exact
+    // extrusion planning runs when the user invokes the tool.
+    return kachakacha::v2::app::detail::CountSelection(
         viewport_ == nullptr ? empty : viewport_->Selection(),
         session_->GetDocument().Snapshot(), session_->Scene(),
-        session_->GetDocument().Snapshot().settings.tolerance, external,
-        session_->HasPlacedPoints() || session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
+        external, session_->HasPlacedPoints() || session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo()).facts;
 }
 
 bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
@@ -73,9 +80,19 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
         return false;
     }
     // 判断は core にある。ここで数えると、画面を出さないと確かめられなくなる。
+    auto facts=BuildFactsForCommands();
+    if(id!="part.extrude"&&(command->predicate==SelectionPredicate::OneClosedProfile
+        ||command->predicate==SelectionPredicate::ClosedProfilesOrSolidFace)){
+        std::vector<kachakacha::v2::base::EntityId> wires;
+        for(const auto& selected:viewport_->Selection().entityIds){
+            const auto* entity=session_->GetDocument().FindEntity(selected);
+            if(entity&&entity->kind==kachakacha::v2::domain::EntityKind::Wire)wires.push_back(selected);
+        }
+        for(const auto& region:DetectProfileRegions(session_->Scene(),wires,
+            session_->GetDocument().Snapshot().settings.tolerance))facts.closedProfiles+=1+int(region.holes.size());
+    }
     const bool ok = (id=="edit.delete"&&SelectedGroupId().has_value()) || (id == "part.extrude" ? PlanExtrudeFromSelection().readyToPreview
-        : kachakacha::v2::app::SelectionSatisfies(command->predicate,
-        BuildFactsForCommands()));
+        : kachakacha::v2::app::SelectionSatisfies(command->predicate,facts));
     if (!ok && reasonOut != nullptr) {
         *reasonOut = QString::fromUtf8(
             std::string(command->predicateFailureJa).c_str());

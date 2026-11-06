@@ -1,6 +1,7 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
 #include "V2Viewport.h"
+#include "V2DocumentTiming.h"
 #include "V2TransformPreview.h"
 #include "V2DrawingCommit.h"
 #include "V2RenderSelection.h"
@@ -954,6 +955,7 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
+    V2DocumentTiming timing("viewport-selection");timing.Mark("begin");
     if (elementPickHandler_ && !V2ToolSelection::Active(*this)) {
         for (const auto& ref : selection.ordered) {
             kachakacha::v2::app::PickCandidate pick;
@@ -972,11 +974,15 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     selection_ = std::move(selection);
     if(selection_.entityIds.empty())V2DrawingSelection::Of(*this).ResumeInput();
     V2RenderSelectionOf(*this).Update(selection_);
+    timing.Mark("render-selection");
     v2ui::AppendTransformGhost(*this,*session_,selection_,hover_,cursorPanel_,cursorDelta_);
+    timing.Mark("transform-ghost");
     ApplyVisibilityFilter();
+    timing.Mark("visibility");
     if (selectionChangedCallback_) {
         selectionChangedCallback_();
     }
+    timing.Mark("callback");
     update();
 }
 

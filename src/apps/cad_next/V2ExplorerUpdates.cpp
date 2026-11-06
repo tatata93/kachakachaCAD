@@ -20,7 +20,7 @@
 #include <algorithm>
 using namespace kachakacha::v2;
 namespace {
-bool Category(const QTreeWidgetItem* item){return item&&V2EntityTree::KeyOf(item).contains("/section:");}
+bool Category(const QTreeWidgetItem* item){return item&&(V2EntityTree::KeyOf(item).contains("/section:")||V2EntityTree::KeyOf(item).endsWith("/generated"));}
 bool GroupCategory(const QTreeWidgetItem* item){return Category(item)&&V2EntityTree::KeyOf(item).endsWith("/section:"+QString::number(int(app::ExplorerSection::Groups)));}
 struct Targets {std::set<base::EntityId> entities;std::set<base::GroupId> groups;};
 void Collect(QTreeWidgetItem* item,Targets& targets){

@@ -5,6 +5,7 @@
 #include "V2GeneratedCurves.h"
 #include "V2LoopFacesTool.h"
 #include "V2SurfaceDock.h"
+#include "V2FabricationDock.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/geometry/CurveFit.h"
 #include <QApplication>
@@ -39,6 +40,7 @@
 #include <QVariant>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -191,6 +193,59 @@ bool SelectedVisibilityClicks(V2MainWindow& w){
     SaveInteractionShot(w,"selected-visibility");w.RunCommand("edit.undo");
     return Explain("visibility toggle is one undoable edit",visible(a)&&visible(b));
 }
+bool GeneratedCategories(V2MainWindow& w){
+    w.RunCommand("file.new");
+    const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{wire}});w.RunCommand("surface.from_lines");HumanKey(&w.Viewport(),Qt::Key_Return);
+    base::EntityId source;for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::GuideSurface)source=e.id;
+    if(source.IsNil())return false;
+    w.Viewport().SetSelection(app::SelectionSet{{source}});w.FabricationDock().SetEqualPartCount(1);
+    w.RunCommand("fabrication.create");w.RunCommand("fabrication.create");
+    base::EntityId model;for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::FabricationModel)model=e.id;
+    if(!Explain("a normal plane creates a fabrication model",!model.IsNil()))return false;
+    auto* output=w.findChild<QComboBox*>("fabricationGenerationOutput");if(!output)return false;
+    for(int kind:{3,1}){
+        w.Viewport().SetSelection(app::SelectionSet{{model}});output->setCurrentIndex(kind);w.RunCommand("fabrication.freeze_state");
+    }
+    std::vector<base::EntityId> wires,faces,parts;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.generatedFrom==model){
+        if(e.kind==domain::EntityKind::Wire)wires.push_back(e.id);
+        if(e.kind==domain::EntityKind::GuideSurface)faces.push_back(e.id);
+        if(e.kind==domain::EntityKind::Part)parts.push_back(e.id);
+    }
+    if(!Explain("generated fixture includes wire surface and solid outputs",!wires.empty()&&!faces.empty()&&!parts.empty()))return false;
+    auto* tree=w.EntityTree();const auto root="entity:"+QString::fromStdString(model.ToString())+"/generated";
+    const auto category=[&](int kind){return tree->FindKey(root+"/section:"+QString::number(kind));};
+    if(!Explain("generated objects have the same type categories as ordinary groups",category(3)&&category(4)&&category(5)))return false;
+    const auto visible=[&](base::EntityId id){return w.Session().GetDocument().FindEntity(id)->visibility==domain::Visibility::Visible;};
+    const auto current=w.Session().GetDocument().Snapshot();
+    const auto unchangedOthers=[&]{for(const auto& e:current.entities)
+        if(std::find(wires.begin(),wires.end(),e.id)==wires.end()
+            &&w.Session().GetDocument().FindEntity(e.id)->visibility!=e.visibility)return false;return true;};
+    const auto click=[&](QTreeWidgetItem* row){
+        if(!row)return false;for(auto* p=row->parent();p;p=p->parent())p->setExpanded(true);
+        tree->scrollToItem(row);QApplication::processEvents();HumanClick(tree->viewport(),CheckPosition(*tree,row));return true;};
+    auto* selected=w.ItemOfEntity(wires.front());for(auto* p=selected->parent();p;p=p->parent())p->setExpanded(true);
+    tree->scrollToItem(selected);QApplication::processEvents();HumanClick(tree->viewport(),tree->visualItemRect(selected).center());
+    const auto selection=w.Viewport().Selection().entityIds;
+    if(!click(category(3)))return false;
+    if(!Explain("wire checkbox preserves selected row other types and source",unchangedOthers()
+        &&w.Viewport().Selection().entityIds==selection
+        &&std::none_of(wires.begin(),wires.end(),visible)))return false;
+    w.RunCommand("edit.undo");if(!Explain("one undo restores all generated wires",std::all_of(wires.begin(),wires.end(),visible)))return false;
+    w.RunCommand("edit.redo");if(std::any_of(wires.begin(),wires.end(),visible))return false;
+    if(!click(tree->FindKey(root)))return false;
+    if(!Explain("mixed generated folder can show its complete contents",std::all_of(wires.begin(),wires.end(),visible)
+        &&std::all_of(faces.begin(),faces.end(),visible)&&std::all_of(parts.begin(),parts.end(),visible)))return false;
+    if(!click(category(4)))return false;
+    return Explain("type visibility survives save and reopen without hiding source or other types",w.SaveAndReopen("generated-categories.kcd2")
+        &&visible(source)&&visible(wire)&&std::all_of(wires.begin(),wires.end(),visible)
+        &&std::none_of(faces.begin(),faces.end(),visible)&&std::all_of(parts.begin(),parts.end(),visible)
+        &&w.RebuildProblems().isEmpty());
+}
+
 bool FolderInputs(V2MainWindow& w){
     w.RunCommand("file.new");const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
     w.Viewport().SetSelection(app::SelectionSet{{wire}});
@@ -431,6 +486,7 @@ bool FolderMenuStable(V2MainWindow& w){
 }
 
 std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-PERF-04 mesh display cycles retain exact surface image",MeshDisplayCycle},
+    {"HP-XP-GENERATED type folders preserve other outputs Undo and reload",GeneratedCategories},
     {"HP-XP-06 bulk categories preserve selection and Undo",Categories},
     {"HP-UX-TREE selected checkbox and small pointer motion preserve selection",SelectedVisibilityClicks},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},

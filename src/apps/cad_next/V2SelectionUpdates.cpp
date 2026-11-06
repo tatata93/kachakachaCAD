@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2DocumentTiming.h"
 #include "V2OffsetTool.h"
 #include "V2ToolSelection.h"
 #include "V2GptFabricationTool.h"
@@ -16,7 +17,8 @@
 void V2MainWindow::HandleSelectionChanged()
 {
     QElapsedTimer timer;timer.start();
-    const auto tick=[&](const char* name){if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"selection "<<name<<" ms="<<timer.restart()<<std::endl;};
+    V2DocumentTiming timing("selection");timing.Mark("begin");
+    const auto tick=[&](const char* name){timing.Mark(name);if(qEnvironmentVariableIsSet("KACHACAD_OUTPUT_PERF_OUTPUT"))std::cout<<"selection "<<name<<" ms="<<timer.restart()<<std::endl;};
     // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
     HighlightTreeForSelection();tick("tree");
     if(V2ToolSelection::Active(*viewport_)){V2ToolSelection::Refresh(*viewport_);RefreshCommandVisibility();return;}

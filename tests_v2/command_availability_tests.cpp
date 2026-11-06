@@ -5,6 +5,7 @@
 // それに気づけたのは PC のビルドまで来たときである。
 // 判断を core へ移したので、いまは雲の側で数秒で分かる。
 #include "kachakacha/app/CommandAvailability.h"
+#include "kachakacha/app/SelectionFactsCounts.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/domain/Entity.h"
@@ -494,6 +495,26 @@ KACHA_V2_TEST(availability, freeze_accepts_multiple_selected_models)
         if(command.id=="fabrication.create_pattern")
             Require(!SelectionSatisfies(command.predicate,facts),"pattern needs one model");
     }
+}
+
+KACHA_V2_TEST(availability, lightweight_counts_keep_exact_profile_queries_separate)
+{
+    Bench bench;
+    const auto closed=bench.AddRectangle(20,10),open=bench.AddOpenLine(30);
+    bench.selection.entityIds={closed,open};
+    ExternalCounts external;external.patterns=3;external.fabricationPanels=4;
+    const auto counted=kachakacha::v2::app::detail::CountSelection(
+        bench.selection,bench.snapshot,bench.scene,external,true,true);
+    Require(counted.wireIds==bench.selection.entityIds,"counting retains ordered source identities");
+    Require(counted.facts.wires==2&&counted.facts.curves==5&&counted.facts.wireChains==2,
+        "UI counts still describe both open and closed source wires");
+    Require(counted.facts.closedProfiles==0,"counting does not claim a geometric closure result");
+    Require(counted.facts.canUndo&&counted.facts.canRedo&&counted.facts.patterns==3
+        &&counted.facts.fabricationPanels==4,"non-geometric command inputs remain available");
+    const auto exact=BuildSelectionFacts(bench.selection,bench.snapshot,bench.scene,
+        bench.tolerance,external,true,true);
+    Require(exact.closedProfiles==1&&exact.wires==counted.facts.wires
+        &&exact.curves==counted.facts.curves,"the existing exact API still recognizes the closed region");
 }
 
 KACHA_V2_TEST_MAIN("command_availability_tests")

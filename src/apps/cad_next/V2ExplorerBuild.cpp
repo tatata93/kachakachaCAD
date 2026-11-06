@@ -69,6 +69,17 @@ void MarkIfActiveWorkPlane(QTreeWidgetItem* item, bool active)
     return item;
 }
 
+ExplorerSection GeneratedSection(EntityKind kind)
+{
+    switch (kind) {
+    case EntityKind::Wire: case EntityKind::Point: return ExplorerSection::Wires;
+    case EntityKind::GuideSurface: return ExplorerSection::Surfaces;
+    case EntityKind::Part: return ExplorerSection::Solids;
+    case EntityKind::WorkPlane: return ExplorerSection::WorkPlanes;
+    default: return ExplorerSection::Generated;
+    }
+}
+
 bool AppendDrawingRows(V2MainWindow& window,const QStringList& ids,
     const std::function<QTreeWidgetItem*(QTreeWidgetItem*,const kachakacha::v2::domain::Entity&)>& add){
     std::vector<const kachakacha::v2::domain::Entity*> added;
@@ -278,8 +289,15 @@ void V2MainWindow::AddGeneratedRows(QTreeWidgetItem* modelItem,
     node->setToolTip(0, QStringLiteral("この近似モデルから「生成」で作ったもの。"
                                        "近似モデルを消しても残ります(固定したものは独立)。"));
     node->setFlags(node->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+    std::map<ExplorerSection, QTreeWidgetItem*> sections;
     for (const auto* entity : generated) {
-        AddEntityRow(node, *entity);
+        auto& category=sections[GeneratedSection(entity->kind)];
+        if(!category){
+            category=MakeSectionItem(node,GeneratedSection(entity->kind));
+            // A display classification does not assign a generating model.
+            category->setFlags(category->flags()&~Qt::ItemIsDropEnabled);
+        }
+        AddEntityRow(category, *entity);
     }
 }
 

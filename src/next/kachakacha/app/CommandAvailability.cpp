@@ -1,4 +1,5 @@
 #include "kachakacha/app/CommandAvailability.h"
+#include "kachakacha/app/SelectionFactsCounts.h"
 
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/GroupTree.h"
@@ -125,12 +126,12 @@ namespace {
 
 } // namespace
 
-SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
+detail::SelectionCounts detail::CountSelection(const SelectionSet& selection,
     const document::DocumentSnapshot& snapshot, const modeling::SnapScene& scene,
-    const geometry::GeometryTolerance& tolerance, const ExternalCounts& external,
-    bool canUndo, bool canRedo)
+    const ExternalCounts& external, bool canUndo, bool canRedo)
 {
-    SelectionFacts facts;
+    SelectionCounts counted;
+    auto& facts = counted.facts;
     facts.hasDocument = true;
     facts.canUndo = canUndo;
     facts.canRedo = canRedo;
@@ -143,7 +144,7 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.patterns = external.patterns;
     facts.selectedGuideRows = external.selectedGuideRows;
     facts.guideRows = external.guideRows;
-    std::vector<base::EntityId> selectedWireIds;
+    auto& selectedWireIds = counted.wireIds;
     std::set<base::EntityId> selectedModels;
     for(const auto& entity:snapshot.entities) {
         if(entity.kind!=domain::EntityKind::FabricationModel)continue;
@@ -235,14 +236,24 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
             ++facts.derivedEntities;
         }
     }
-    // コマンドの有効判定も、画面の内側選択と押し出し本体と同じ領域認識へ聞く。
+    facts.groups = static_cast<int>(groups.size());
+    return counted;
+}
+
+SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
+    const document::DocumentSnapshot& snapshot, const modeling::SnapScene& scene,
+    const geometry::GeometryTolerance& tolerance, const ExternalCounts& external,
+    bool canUndo, bool canRedo)
+{
+    auto counted = detail::CountSelection(selection, snapshot, scene, external, canUndo, canRedo);
+    auto& facts = counted.facts;
+    // コマンドの厳密な判定は、画面の内側選択と押し出し本体と同じ領域認識へ聞く。
     // ここだけEntityごとに閉鎖を調べると、5本で囲んだ輪郭が画面では選べても
     // 押し出しボタンだけが無効になる。
-    const auto regions = DetectProfileRegions(scene, selectedWireIds, tolerance);
+    const auto regions = DetectProfileRegions(scene, counted.wireIds, tolerance);
     for (const auto& region : regions) {
         facts.closedProfiles += 1 + static_cast<int>(region.holes.size());
     }
-    facts.groups = static_cast<int>(groups.size());
     return facts;
 }
 

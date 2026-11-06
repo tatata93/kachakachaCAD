@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <sstream>
 #include <string_view>
+#include <exception>
+#include <utility>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BinTools.hxx>
@@ -16,6 +18,7 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Edge.hxx>
+#include <Standard_Failure.hxx>
 #include <BRep_Builder.hxx>
 #include <TopoDS_Shape.hxx>
 #endif
@@ -24,9 +27,10 @@ namespace kachakacha::v2::kernel {
 namespace {
 constexpr std::string_view magic="kachakacha-shape-transfer-v1\n";
 constexpr std::size_t headerSize=magic.size()+12;
-template<class T> base::Result<T> Refused() {
+template<class T> base::Result<T> Refused(std::string reason={}) {
     return base::Result<T>::Failure(base::MakeError("KER-X001","計算済み形状の転送内容を確認できませんでした。",
-        "元の文書は変更していません。文書を開き直して形状を再計算してください。"));
+        "元の文書は変更していません。"+(reason.empty()
+            ?std::string("文書を開き直して形状を再計算してください。"):std::move(reason))));
 }
 void AppendInteger(std::string& bytes,std::uint64_t value,int size) {
     for(int i=0;i<size;++i)bytes.push_back(static_cast<char>((value>>(i*8))&255));
@@ -61,17 +65,22 @@ base::Result<std::string> CaptureTransferShape(modeling::KernelShapeHandle handl
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
         TopoDS_Shape shape;
-        if(!LookupShape(handle,shape)||shape.IsNull()||!BRepCheck_Analyzer(shape).IsValid())return Refused<std::string>();
+        if(!LookupShape(handle,shape)||shape.IsNull())return Refused<std::string>("転送する形状が見つかりません。");
+        if(!BRepCheck_Analyzer(shape).IsValid())return Refused<std::string>("形状の境界・接続の検査に失敗しました。");
         std::ostringstream output(std::ios::out|std::ios::binary);
         const bool text=NeedsText(shape);
         output.put(text?'T':'B');
         if(text)BRepTools::Write(shape,output,false,false,TopTools_FormatVersion_CURRENT);
         else BinTools::Write(shape,output,false,false,BinTools_FormatVersion_CURRENT);
-        if(!output)return Refused<std::string>();
+        if(!output)return Refused<std::string>("形状の転送データを書き込めませんでした。");
         const auto payload=output.str();std::string bytes(magic);bytes.reserve(headerSize+payload.size());
         AppendInteger(bytes,payload.size(),8);AppendInteger(bytes,io::Crc32(payload),4);bytes+=payload;
         return base::Result<std::string>::Success(std::move(bytes));
-    }catch(...){return Refused<std::string>();}
+    }catch(const Standard_Failure& failure){
+        return Refused<std::string>("形状の転送データを作成できませんでした: "+std::string(failure.what()));
+    }catch(const std::exception& failure){
+        return Refused<std::string>("形状の転送データを作成できませんでした: "+std::string(failure.what()));
+    }catch(...){return Refused<std::string>("形状の転送データを作成中に問題が発生しました。");}
 #else
     (void)handle;return Refused<std::string>();
 #endif

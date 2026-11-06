@@ -950,6 +950,11 @@ Result<GuideSurfaceResult> FinishSurfaceResult(const TopoDS_Shape& shape,
         return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceBuildFailed,
             "面が1枚も出来ませんでした。", {}));
     }
+    if (!BRepCheck_Analyzer(shape).IsValid()) {
+        return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceBuildFailed,
+            "面の境界・接続が不正なため採用しませんでした。",
+            "入力の区間の対応、交差、退化を確認してください。元の形状は変更していません。"));
+    }
     const TopoDS_Face face = FirstFace(shape);
     GuideSurfaceResult result;
     result.samples = SampleFace(face);

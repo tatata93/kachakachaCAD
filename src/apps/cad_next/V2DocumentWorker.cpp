@@ -32,9 +32,18 @@ base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2Main
     V2DocumentTiming timing("capture");
     using Captured=base::Result<std::unique_ptr<V2PreparedDocument>>;
     auto result=std::make_unique<V2PreparedDocument>();auto& data=*result;data.archive=std::move(archive);
-    const auto capture=[](const auto& source,auto& target)->base::Result<bool>{
+    const auto capture=[&w](const auto& source,auto& target)->base::Result<bool>{
         for(const auto& entry:source){const auto shape=kernel::CaptureTransferShape(entry.second);
-            if(!shape.HasValue())return base::Result<bool>::Failure(shape.Diagnostics());target[entry.first]=shape.Value();}
+            if(!shape.HasValue()){
+                auto diagnostics=shape.Diagnostics();const auto id=base::EntityId::Parse(entry.first);
+                const auto* entity=id?w.Session().GetDocument().FindEntity(*id):nullptr;
+                for(auto& diagnostic:diagnostics){
+                    diagnostic.summaryJa=(entity?entity->displayName:entry.first)+": "+diagnostic.summaryJa;
+                    diagnostic.detailsJa+=" ("+entry.first+")";
+                }
+                return base::Result<bool>::Failure(std::move(diagnostics));
+            }
+            target[entry.first]=shape.Value();}
         return base::Result<bool>::Success(true);
     };
     const auto parts=capture(w.partShapes_,data.parts),guides=capture(w.guideShapes_,data.guides);

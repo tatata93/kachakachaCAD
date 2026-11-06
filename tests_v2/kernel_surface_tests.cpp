@@ -15,6 +15,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctFiniteDistance.h"
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -1231,6 +1232,33 @@ KACHA_V2_TEST(kernel_surface, private_parallel_deviation_keeps_finite_holes_orde
     }
     Require(before.Value()==kernel::CaptureOutputShape(handle).Value(),"parallel searches do not mutate source topology or curves");
     kernel::ReleaseShape(handle);
+}
+
+KACHA_V2_TEST(kernel_surface, unequal_tapered_polyline_rails_never_succeed_with_invalid_native_topology)
+{
+    using namespace kachakacha::v2;
+#include "fixtures/tapered-unequal-rails.inc"
+    GuideSurfaceRequest request;request.method=GuideSurfaceMethod::RuledSections;
+    request.keepSectionOrder=true;
+    for(std::size_t row=0;row<unequalRails.size();++row){
+        GuideChain chain;chain.role=ChainRole::Section;chain.index=int(row)+1;
+        for(std::size_t i=1;i<unequalRails[row].size();++i)
+            chain.segments.push_back(Line(unequalRails[row][i-1],unequalRails[row][i]));
+        request.chains.push_back(std::move(chain));
+    }
+    const auto before=CachedShapeCount();const auto made=Build(request);
+    if(!made.HasValue()){
+        Require(made.FirstCode()=="KER-S001","invalid native loft is a clear build refusal");
+        Require(CachedShapeCount()==before,"a refusal leaves no broken native result");return;
+    }
+    TopoDS_Shape shape;Require(kernel::LookupShape(made.Value().handle,shape),"successful handle exists");
+    Require(BRepCheck_Analyzer(shape).IsValid(),"success must be a valid face, not only a nonempty loft");
+    const auto transfer=kernel::CaptureTransferShape(made.Value().handle);
+    Require(transfer.HasValue(),"successful native faces survive the document worker transfer");
+    const auto restored=kernel::RestoreTransferShape(transfer.Value());
+    Require(restored.HasValue(),"successful native faces restore without healing");
+    ReleaseShape(restored.Value());ReleaseShape(made.Value().handle);
+    Require(CachedShapeCount()==before,"roundtrip and original handles are released");
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

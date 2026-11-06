@@ -390,6 +390,29 @@ bool CaseOutputOwnership(V2MainWindow& w){
     output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
+bool NativePartialDeletePreservesObjects(V2MainWindow& w,base::EntityId copied,bool face)
+{
+    const auto revision=w.Session().GetDocument().Revision();
+    const auto before=w.Session().GetDocument().Snapshot().entities.size();
+    const bool hadUndo=w.Session().GetDocument().CanUndo();
+    app::SelectionRef ref;ref.entityId=copied;ref.pickedFaceIndex=0;
+    for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==copied){ref.segmentId=curve.segmentId;break;}
+    for(const auto kind:{app::SelectionElementKind::Edge,app::SelectionElementKind::Vertex,
+            app::SelectionElementKind::ControlPoint,app::SelectionElementKind::Face}){
+        if(face&&kind==app::SelectionElementKind::Face)continue;
+        ref.kind=kind;w.Viewport().SetSelection(app::SelectionSet{{copied},{ref}});w.RunCommand("edit.delete");
+        if(!Explain("native partial Delete preserves geometry and history",w.Session().GetDocument().Revision()==revision
+            &&w.Session().GetDocument().Snapshot().entities.size()==before&&w.Session().GetDocument().CanUndo()==hadUndo
+            &&w.StatusText().contains(QStringLiteral("部分だけ"))))return false;
+    }
+    const auto wires=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::Wire);
+    if(wires.entityIds.empty())return false;
+    app::SelectionRef whole;whole.entityId=wires.entityIds.front();ref.kind=app::SelectionElementKind::Edge;
+    w.Viewport().SetSelection(app::SelectionSet{{whole.entityId,copied},{whole,ref}});w.RunCommand("edit.delete");
+    return Explain("mixed whole-wire and native partial deletion is atomic",w.Session().GetDocument().Revision()==revision
+        &&w.Session().GetDocument().FindEntity(whole.entityId)&&w.Session().GetDocument().FindEntity(copied)
+        &&w.Session().GetDocument().Snapshot().entities.size()==before);
+}
 bool FrozenCopyKeepsPickableEdgesCase(V2MainWindow& w,bool face)
 {
     if(!OutputBox(w))return false;
@@ -415,10 +438,15 @@ bool FrozenCopyKeepsPickableEdgesCase(V2MainWindow& w,bool face)
     const auto originalBrep=brep();
     const int expected=face?4:12;
     if(!Explain("independent native copy has all pickable edges",edgeCount()==expected&&!originalBrep.empty()))return false;
+    if(!NativePartialDeletePreservesObjects(w,copied,face))return false;
     if(!w.SaveAndReopen(QStringLiteral("native-copy-pickable-edges.kcd2")))return false;
-    return Explain("native edge restoration preserves the authoritative BRep after reopen",
+    if(!Explain("native edge restoration preserves the authoritative BRep after reopen",
         edgeCount()==expected&&brep()==originalBrep&&CountOfKind(w,domain::EntityKind::Part)==(face?1:2)
-        &&CountOfKind(w,domain::EntityKind::Wire)==1);
+        &&CountOfKind(w,domain::EntityKind::Wire)==1))return false;
+    w.Viewport().SetSelection(app::SelectionSet{{copied}});w.RunCommand("edit.delete");
+    if(!Explain("explicit whole-object deletion remains available",!w.Session().GetDocument().FindEntity(copied)))return false;
+    w.RunCommand("edit.undo");
+    return Explain("whole-object Delete Undo restores the exact native object",brep()==originalBrep&&edgeCount()==expected);
 }
 bool FrozenCopyKeepsPickableEdges(V2MainWindow& w)
 {

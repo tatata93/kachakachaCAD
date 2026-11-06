@@ -34,6 +34,28 @@ void ExpandFolderSelection(const document::DocumentSnapshot& before,const std::s
         app::SelectionRef whole;whole.entityId=entity.id;selection.ordered.push_back(whole);
     }
 }
+bool RequiresWholeObjectSelection(const domain::Entity& entity,const app::SelectionSet& selection)
+{
+    if(entity.kind!=domain::EntityKind::Part&&entity.kind!=domain::EntityKind::GuideSurface)return false;
+    bool partial=false;
+    for(const auto& ref:selection.ordered)if(ref.entityId==entity.id){
+        if(ref.kind==app::SelectionElementKind::Object)return false;
+        // A face click is the usual whole-guide selection. A solid face,
+        // edge or vertex must never silently mean deletion of the solid.
+        partial=partial||entity.kind==domain::EntityKind::Part||ref.kind!=app::SelectionElementKind::Face;
+    }
+    return partial;
+}
+std::set<base::GroupId> RemoveSelectedFolders(document::DocumentSnapshot& after,
+    const std::set<base::GroupId>& folders)
+{
+    auto all=folders;
+    for(std::size_t pass=0;pass<after.groups.size();++pass)
+        for(const auto& group:after.groups)if(group.parentId&&all.contains(*group.parentId))all.insert(group.id);
+    std::erase_if(after.groups,[&](const auto& group){return all.contains(group.id);});
+    if(after.settings.activeGroupId&&all.contains(*after.settings.activeGroupId))after.settings.activeGroupId.reset();
+    return all;
+}
 }
 
 void V2MainWindow::DeleteSelected()
@@ -44,12 +66,8 @@ void V2MainWindow::DeleteSelected()
     for(const auto& [row,id]:groupItems_)if(row->isSelected())folders.insert(id);
     if(selection.entityIds.empty()&&folders.empty()){SetStatus(QStringLiteral("削除: 先に選んでください。"));return;}
     auto after=session_->GetDocument().Snapshot();const auto before=after;
-    auto allFolders=folders;
-    for(std::size_t pass=0;pass<before.groups.size();++pass)
-        for(const auto& group:before.groups)if(group.parentId&&allFolders.contains(*group.parentId))allFolders.insert(group.id);
+    const auto allFolders=RemoveSelectedFolders(after,folders);
     ExpandFolderSelection(before,allFolders,selection);
-    std::erase_if(after.groups,[&](const auto& group){return allFolders.contains(group.id);});
-    if(after.settings.activeGroupId&&allFolders.contains(*after.settings.activeGroupId))after.settings.activeGroupId.reset();
     std::set<base::FeatureId> roots;
     std::set<base::SegmentId> cutIds;
     QStringList partialNames;bool dependencyCascade=false;
@@ -64,6 +82,9 @@ void V2MainWindow::DeleteSelected()
     for(const auto& id:selection.entityIds){
         const auto* original=session_->GetDocument().FindEntity(id);
         if(!original)continue;
+        if(RequiresWholeObjectSelection(*original,selection)){
+            fail(QStringLiteral("選んだ部分だけは削除できません。全体を消す場合は、左ペインで物体全体を選んでください。"));return;
+        }
         roots.insert(original->createdBy);
         auto entity=std::find_if(after.entities.begin(),after.entities.end(),[&](const auto& e){return e.id==id;});
         if(entity==after.entities.end())continue; // already included by another selected parent's cascade

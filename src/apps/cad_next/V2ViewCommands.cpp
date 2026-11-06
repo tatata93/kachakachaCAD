@@ -26,6 +26,7 @@
 #include "V2FabricationDock.h"
 
 #include "kachakacha/app/SurfaceFacing.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 
 #include <algorithm>
@@ -233,6 +234,9 @@ void V2MainWindow::AdoptTreeSelection()
             }
         }
         next.entityIds.push_back(id);
+        kachakacha::v2::app::SelectionRef ref;
+        ref.entityId=id; // A tree row selects the whole object, never a guessed subshape.
+        next.ordered.push_back(ref);
     };
     // 近似モデルの下の「部材 n」の行: その近似モデルを選び、「対象部材」を n にする。
     // 行だけ選んでも何も起きず、曲げ状態が最後のモデルにしか当たらなかった(オーナー報告 2026-09-28)。

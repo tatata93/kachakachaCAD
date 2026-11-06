@@ -68,7 +68,8 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     layout->setSpacing(4);
 
     // 2. 入力。欄の名前と入れたものを 1 行ずつ。3D で押すと入り、押し直すと外れる。
-    auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("入力(3D で押すと入り、押し直すと外れます)"));
+    auto* inputTitle = MakePanelSectionTitle(body, QStringLiteral("入力"));
+    inputTitle->setToolTip(QStringLiteral("3Dビューまたは左一覧から選びます。縁が必要な操作では、3Dビューで縁の近くを選んでください。"));
     layout->addWidget(inputTitle);
     BuildRoleButtons(layout);
     entries_ = new QTreeWidget(body);
@@ -103,6 +104,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     // 4. 状態。
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
     status_ = new QLabel(body);
+    status_->setObjectName(QStringLiteral("surfaceEditStatus"));
     status_->setWordWrap(true);
     layout->addWidget(status_);
     layout->addStretch(1);
@@ -140,9 +142,8 @@ void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)
     const auto& operations = kachakacha::v2::app::SurfaceEditOperations();
     for (std::size_t index = 0; index < operations.size() && index < cards_.size(); ++index) {
         const SurfaceEditOperation operation = operations[index];
-        auto* card = new QPushButton(Text(kachakacha::v2::app::SurfaceEditLabelJa(operation))
-                + QStringLiteral("  ─  ") + Text(kachakacha::v2::app::SurfaceEditHintJa(operation)),
-            widget());
+        auto* card = new QPushButton(Text(kachakacha::v2::app::SurfaceEditLabelJa(operation)),widget());
+        card->setToolTip(Text(kachakacha::v2::app::SurfaceEditHintJa(operation)));
         card->setCheckable(true);
         QObject::connect(card, &QPushButton::clicked, this, [this, operation] {
             if (!loading_ && operationHandler_) {

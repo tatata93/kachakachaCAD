@@ -27,6 +27,9 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QRect>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QVariant>
 
 #include <string>
@@ -306,6 +309,57 @@ bool SurfaceFolderPreview(V2MainWindow& w){
     return Explain("a real native source change still recalculates the preview",fresh.size()==1&&fresh.front().value!=withTolerance.front().value&&w.SurfaceEdit().Outcome().available&&w.RebuildProblems().isEmpty());
 }
 
+bool SurfaceTreeSelectionHandoff(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    const auto wire=DrawRectangleAtByHand(w,.25,.3,.55,.65);
+    if(!Explain("tree fixture wire created",!wire.IsNil()))return false;
+    const auto surface=SurfaceFromRectangle(w,wire);if(!Explain("tree fixture surface created",!surface.IsNil()))return false;
+    const auto clickTree=[&]{
+        auto* tree=w.EntityTree();auto* row=w.ItemOfEntity(surface);if(!tree||!row)return false;
+        for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
+        tree->scrollToItem(row);QApplication::processEvents();
+        const QPointF point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+        for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}) {
+            QMouseEvent event(type,point,tree->viewport()->mapToGlobal(point.toPoint()),Qt::LeftButton,
+                type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(),&event);
+        }
+        QApplication::processEvents();return app::IsSelected(w.Viewport().Selection(),surface);
+    };
+    w.RunCommand("selection.activate");w.Viewport().SetSelection({});
+    if(!Explain("mouse can select source row",clickTree()))return false;
+    const auto& selected=w.Viewport().Selection();
+    if(!Explain("tree mouse selection publishes one whole-object reference",selected.ordered.size()==1
+        &&selected.ordered.front().entityId==surface&&selected.ordered.front().kind==app::SelectionElementKind::Object))return false;
+    w.RunCommand("surface.mirror");
+    if(!Explain("preselected tree surface enters mirror without another click",w.SurfaceEdit().Input().surfaces.size()==1
+        &&w.SurfaceEdit().Outcome().available))return false;
+    QApplication::processEvents();const auto* scroll=w.findChild<QScrollArea*>("surfaceEditScroll");
+    if(!Explain("surface edit instructions fit the right pane without horizontal scrolling",scroll
+        &&scroll->horizontalScrollBar()->maximum()==0))return false;
+    w.RunCommand("surface.iso_curves");const int outputs=static_cast<int>(w.SurfaceEdit().Outcome().outputs);
+    if(!Explain("switching mirror to iso retains the selected surface",outputs>0&&w.SurfaceEdit().Outcome().available))return false;
+    const int before=CountOfKind(w,EntityKind::Wire);
+    if(!Explain("iso confirmation key accepted",w.HandleToolKey(Qt::Key_Return,nullptr))
+        ||!Explain("iso outputs committed",CountOfKind(w,EntityKind::Wire)==before+outputs))return false;
+    w.RunCommand("edit.undo");if(!Explain("iso undo restores original wires",CountOfKind(w,EntityKind::Wire)==before))return false;
+    w.RunCommand("edit.redo");if(!Explain("iso redo restores all outputs",CountOfKind(w,EntityKind::Wire)==before+outputs))return false;
+    w.RunCommand("edit.undo");w.RunCommand("selection.activate");w.Viewport().SetSelection({});
+    if(!Explain("source row selectable after undo",clickTree()))return false;w.RunCommand("surface.match");
+    if(!Explain("whole surface selection cannot invent an edge near the origin",w.SurfaceEdit().Input().edges.empty()
+        &&!w.SurfaceEdit().Outcome().available))return false;
+    if(!Explain("match cancellation accepted",w.HandleToolKey(Qt::Key_Escape,nullptr)))return false;
+    if(!Explain("Esc preserves the armed tool with empty inputs",w.SurfaceEdit().Active()&&w.SurfaceEdit().Input().edges.empty()))return false;
+    w.RunCommand("surface.refit");
+    if(!Explain("source selectable after switching the armed tool to refit",clickTree()))return false;
+    if(!Explain("refit receives the surface and explains its analytic refusal",w.SurfaceEdit().Input().surfaces.size()==1
+        &&w.SurfaceEdit().Outcome().refusalJa.find("いちばん簡単")!=std::string::npos))return false;
+    if(!Explain("refit cancellation accepted",w.HandleToolKey(Qt::Key_Escape,nullptr)))return false;
+    return Explain("cancelled edits preserve source and unrelated wires",CountOfKind(w,EntityKind::GuideSurface)==1
+        &&CountOfKind(w,EntityKind::Wire)==before&&w.Session().GetDocument().FindEntity(surface)!=nullptr&&w.RebuildProblems().isEmpty());
+}
+
 std::vector<SelfTestCase> SurfaceEditCases()
 {
     std::vector<SelfTestCase> cases{
@@ -319,6 +373,7 @@ std::vector<SelfTestCase> SurfaceEditCases()
         {"HP-SE-05 surface creation preview ownership",SurfaceCreationOwnership},
         {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
         {"HP-SE-07 folder metadata preserves preview but geometry invalidates it",SurfaceFolderPreview},
+        {"HP-SE-08 tree selection enters surface edits and survives tool switches",SurfaceTreeSelectionHandoff},
     };
     const auto general=GenericShapesCases();cases.insert(cases.end(),general.begin(),general.end());return cases;
 }

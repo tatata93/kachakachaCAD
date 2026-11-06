@@ -126,6 +126,9 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
         if (entity->kind == EntityKind::GuideSurface) {
             int edge = -1;
             if (kachakacha::v2::app::SurfaceEditSlotsFor(operation).edges > 0) {
+                // A whole-object row has no hit position from which to choose
+                // an edge. Wait for the user's explicit pick in the 3D view.
+                if(ref.kind==kachakacha::v2::app::SelectionElementKind::Object)continue;
                 const auto found = window_.guideShapes_.find(ref.entityId.ToString());
                 if (found != window_.guideShapes_.end()) {
                     const auto nearest = kachakacha::v2::kernel::NearestSurfaceEdge(found->second,
@@ -144,9 +147,13 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
     window_.viewport_->SetToolPickToggle(true);
     MirrorToSelection();
     Refresh();
-    window_.SetStatus(Text(std::string(kachakacha::v2::app::SurfaceEditLabelJa(operation))
-        + ": 3D で面を押してください(縁は面の縁の近くを押す。押し直すと外れます)。"
-          "Enter で確定、Esc でやめます。元の面はそのまま残ります。"));
+    const bool hasInput=!input_.surfaces.empty()||!input_.wires.empty()||!input_.edges.empty();
+    const std::string next=hasInput?(outcome_.available?"下見を確認し、Enterで確定します。":outcome_.refusalJa)
+        :kachakacha::v2::app::SurfaceEditSlotsFor(operation).edges>0
+            ?"3Dビューで、使う縁の近くを選んでください。"
+            :"3Dビューまたは左一覧から対象を選んでください。";
+    window_.SetStatus(Text(std::string(kachakacha::v2::app::SurfaceEditLabelJa(operation))+": "+next
+        +" Escで入力を取り消します。元の形は残ります。"));
 }
 
 void V2SurfaceEditTool::Choose(SurfaceEditOperation operation)
@@ -643,8 +650,8 @@ bool V2SurfaceEditTool::AddWireFeature(
 void V2SurfaceEditTool::Confirm()
 {
     if (!outcome_.available) {
-        window_.SetStatus(Text(std::string(kachakacha::v2::app::SurfaceEditLabelJa(input_.operation))
-            + ": まだ作れません。右の棚の「4. 状態」を見てください。"));
+        window_.SetStatus(Text(std::string(kachakacha::v2::app::SurfaceEditLabelJa(input_.operation))+": "
+            +(outcome_.refusalJa.empty()?"入力と設定を確認してください。":outcome_.refusalJa)));
         RefreshDock();
         return;
     }

@@ -7,6 +7,7 @@
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QAbstractButton>
+#include <QAbstractItemView>
 #include <QAbstractSpinBox>
 #include <QAction>
 #include <QApplication>
@@ -103,12 +104,24 @@ bool Text(QLineEdit& input,const QString& value,bool commit=true,bool exact=true
 bool Number(QWidget* field,double value)
 {
     if(!field||!std::isfinite(value))return false;
+    auto* spin=dynamic_cast<QAbstractSpinBox*>(field);
+    if(!spin)return false;
     auto* input=field->findChild<QLineEdit*>();
     if(!input||!Text(*input,QString::number(value,'g',12),false,false))return false;
     // Enter is the normal tool confirmation shortcut. Leave a numeric field
     // with Tab so a multi-field tool can be configured before confirmation.
     if(!Key(*input,"Tab"))return false;
+    // The embedded editor can receive our synthetic focus while its spin box
+    // is not the platform focus widget (also with offscreen Qt). Complete the
+    // departure at the owning control, as a real click on the next field does.
+    // Qt validates/commits the text; never assign the value or skip comparison.
+    QFocusEvent leave(QEvent::FocusOut,Qt::TabFocusReason);
+    QApplication::sendEvent(spin,&leave);
+    QApplication::processEvents();
     bool ok=false;const auto actual=field->property("value").toDouble(&ok);
+    if(!ok||std::abs(actual-value)>1e-7*std::max(1.,std::abs(value)))
+        std::cerr<<"UI numeric wanted="<<value<<" actual="<<actual<<" text="
+                 <<input->text().toStdString()<<std::endl;
     return ok&&std::abs(actual-value)<=1e-7*std::max(1.,std::abs(value));
 }
 
@@ -246,16 +259,24 @@ struct Replay {
     {
         const auto parsed=EntityId::Parse(Resolve(step["id"].toString()).toStdString());
         auto* tree=w.EntityTree();if(!parsed||!tree)return false;
-        auto* row=w.ItemOfEntity(*parsed);bool group=false;
-        if(!row)row=tree->FindKey("group:"+Resolve(step["id"].toString()));
+        // Platform mouse dispatch focuses the item view before its press. Our
+        // direct Qt events must do this before scrolling, otherwise focus can
+        // reveal the previous current row after we have located the new row.
+        tree->setFocus(Qt::MouseFocusReason);QApplication::processEvents();
+        const auto findRow=[&]{auto* row=w.ItemOfEntity(*parsed);
+            return row?row:tree->FindKey("group:"+Resolve(step["id"].toString()));};
+        auto* row=findRow();bool group=false;
         if(row)group=V2EntityTree::KeyOf(row).startsWith("group:");
         if(!row)return false;
         for(auto* p=row->parent();p;p=p->parent())p->setExpanded(true);
         QApplication::processEvents();
-        tree->scrollToItem(row);QApplication::processEvents();
+        tree->doItemsLayout();
+        tree->scrollToItem(row,QAbstractItemView::PositionAtCenter);QApplication::processEvents();
+        row=findRow();if(!row)return false;
         // Long labels can make the logical row wider than the viewport. A
         // person clicks its visible portion, rather than the offscreen centre.
         const auto point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+        if(tree->itemAt(point)!=row)return false;
         std::cout<<"UI tree "<<Resolve(step["id"].toString()).toStdString()<<" row="<<row->text(0).toStdString()
             <<" pixel="<<point.x()<<","<<point.y()<<" viewport="<<tree->viewport()->width()<<","<<tree->viewport()->height()<<std::endl;
         if(!Mouse(*tree->viewport(),point,step["add"].toBool()?Qt::ControlModifier:Qt::NoModifier))return false;
@@ -415,7 +436,10 @@ struct Replay {
         const auto restoreDialogs=qScopeGuard([&]{QApplication::setAttribute(Qt::AA_DontUseNativeDialogs,nativeDialogsDisabled);});
         w.resize(1600,1000);QApplication::processEvents();
         const auto input=phase["input"].toString();
-        if(!input.isEmpty()&&!w.OpenDocumentFile(QFileInfo(input).isAbsolute()?input:QDir(root).absoluteFilePath(input)))return false;
+        if(!input.isEmpty()&&!w.OpenDocumentFile(QFileInfo(input).isAbsolute()?input:QDir(root).absoluteFilePath(input))){
+            Inspect(QDir(root).filePath("replay-failure.json"));
+            w.grab().save(QDir(root).filePath("replay-failure.png"));return false;
+        }
         for(const auto& value:phase["steps"].toArray()){
             const auto step=value.toObject();const bool ok=Act(step);
             trace.append(QJsonObject{{"step",index},{"input",step},{"ok",ok},{"status",w.StatusText()}});
@@ -434,6 +458,11 @@ bool Smoke(V2MainWindow& w)
     const QJsonObject tool{{"op","tool"},{"command","draw.line"}};
     if(!replay.Act(tool)||!replay.Act({{"op","tab"},{"widget","drawingInputModes"},{"index",1}}))return false;
     if(!replay.Act({{"op","combo"},{"widget","drawingCoordinateKind"},{"index",0}}))return false;
+    // Consecutive edits must leave Qt's committed value equal to the text and
+    // must not run the tool's Enter action while configuring its fields.
+    for(double value:{.025,-.125,1.0})
+        if(!replay.Act({{"op","number"},{"widget","drawingCoordinateP1_0"},{"value",value}})
+            ||CountOfKind(w,domain::EntityKind::Wire)!=0)return false;
     for(const auto& field:std::vector<std::pair<QString,double>>{{"drawingCoordinateP1_0",1},{"drawingCoordinateP1_1",2},
         {"drawingCoordinateP2_0",5},{"drawingCoordinateP2_1",7}})
         if(!replay.Act({{"op","number"},{"widget",field.first},{"value",field.second}}))return false;

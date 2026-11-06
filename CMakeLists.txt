@@ -769,6 +769,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctGptFabrication.cpp
     src/next_occt/kachakacha/kernel/OcctGptSurface.cpp
     src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
+    src/next_occt/kachakacha/kernel/OcctSurfaceRefit.cpp
     src/next_occt/kachakacha/kernel/OcctWireProjection.cpp
     src/next_occt/kachakacha/kernel/OcctProjectedRegions.cpp
     src/next_occt/kachakacha/kernel/OcctWireWrap.cpp

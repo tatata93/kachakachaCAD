@@ -19,7 +19,6 @@
 #include <BRepTools.hxx>
 #include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
-#include <GeomAPI_PointsToBSplineSurface.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAbs_Shape.hxx>
 #include <GeomAbs_SurfaceType.hxx>
@@ -803,130 +802,6 @@ Result<SurfaceEditResult> BridgeSurfaceEdges(const KernelShapeHandle& first, int
             + Mm(tension, 2) + ")。";
         return Out::Success(std::move(result), finished.Diagnostics());
     }, kEditBridgeFailed, "面をつなぐの");
-}
-
-namespace {
-
-[[nodiscard]] bool IsAnalytic(const TopoDS_Face& face)
-{
-    const BRepAdaptor_Surface surface(face);
-    switch (surface.GetType()) {
-    case GeomAbs_Plane:
-    case GeomAbs_Cylinder:
-    case GeomAbs_Cone:
-    case GeomAbs_Sphere:
-    case GeomAbs_Torus:
-        return true;
-    default:
-        return false;
-    }
-}
-
-[[nodiscard]] int PoleCount(const occ::handle<Geom_Surface>& surface)
-{
-    const occ::handle<Geom_BSplineSurface> spline =
-        GeomConvert::SurfaceToBSplineSurface(surface);
-    return spline.IsNull() ? 0 : spline->NbUPoles() * spline->NbVPoles();
-}
-
-//! 新しい面を、元の面と同じ縁で切る(切っていない面なら全体を使う)。
-[[nodiscard]] TopoDS_Face TrimLike(const TopoDS_Face& original,
-    const occ::handle<Geom_Surface>& surface)
-{
-    if (BRep_Tool::NaturalRestriction(original)) {
-        BRepBuilderAPI_MakeFace maker{surface, Precision::Confusion()};
-        return maker.IsDone() ? maker.Face() : TopoDS_Face();
-    }
-    const TopoDS_Wire outer = BRepTools::OuterWire(original);
-    BRepBuilderAPI_MakeFace maker(surface, outer, true);
-    if (!maker.IsDone()) {
-        return TopoDS_Face();
-    }
-    for (TopExp_Explorer explorer(original, TopAbs_WIRE); explorer.More(); explorer.Next()) {
-        const TopoDS_Wire wire = TopoDS::Wire(explorer.Current());
-        if (!wire.IsSame(outer)) {
-            maker.Add(wire);
-        }
-    }
-    ShapeFix_Face fix(maker.Face());
-    fix.Perform();
-    return fix.Face();
-}
-
-} // namespace
-
-Result<SurfaceEditResult> RefitSurface(const KernelShapeHandle& source, double toleranceMm,
-    const GeometryTolerance& tolerance)
-{
-    using Out = Result<SurfaceEditResult>;
-    return Guarded([&]() -> Out {
-        const auto face = FaceOf(source);
-        if (!face.HasValue()) {
-            return Out::Failure(face.Diagnostics());
-        }
-        if (!(toleranceMm > 0.0)) {
-            return Out::Failure(MakeError(kEditRefitFailed, "許容は 0 より大きくしてください。",
-                "いまの値 " + Mm(toleranceMm, 4) + " mm。"));
-        }
-        if (IsAnalytic(face.Value())) {
-            return Out::Failure(MakeError(kEditRefitFailed,
-                "平面・円筒・円錐・球などの面は、すでにいちばん簡単な形です。",
-                "整え直す必要はありません(形を変えずに制御点を減らす余地がありません)。"));
-        }
-        const occ::handle<Geom_Surface> original = BRep_Tool::Surface(face.Value());
-        const int before = PoleCount(original);
-        double u0 = 0.0;
-        double u1 = 0.0;
-        double v0 = 0.0;
-        double v1 = 0.0;
-        BRepTools::UVBounds(face.Value(), u0, u1, v0, v1);
-        constexpr int kSamples = 30;
-        NCollection_Array2<gp_Pnt> grid(1, kSamples + 1, 1, kSamples + 1);
-        for (int i = 0; i <= kSamples; ++i) {
-            for (int j = 0; j <= kSamples; ++j) {
-                grid.SetValue(i + 1, j + 1,
-                    original->Value(u0 + (u1 - u0) * i / kSamples, v0 + (v1 - v0) * j / kSamples));
-            }
-        }
-        // 3 次、C2。形は許容の半分で合わせ、残りを縁の切り直しの余裕に取る。
-        GeomAPI_PointsToBSplineSurface fit(grid, 3, 3, GeomAbs_C2, toleranceMm * 0.5);
-        if (!fit.IsDone() || fit.Surface().IsNull()) {
-            return Out::Failure(MakeError(kEditRefitFailed, "面を整え直せませんでした。",
-                "許容を大きくしてください。"));
-        }
-        const occ::handle<Geom_Surface> refit = fit.Surface();
-        const int after = fit.Surface()->NbUPoles() * fit.Surface()->NbVPoles();
-        if (before > 0 && after >= before) {
-            return Out::Failure(MakeError(kEditRefitFailed,
-                "整えても制御点が減りません(前 " + std::to_string(before) + "、後 "
-                    + std::to_string(after) + ")。",
-                "許容を大きくするか、この面はそのまま使ってください。形は変えていません。"));
-        }
-        const TopoDS_Face made = TrimLike(face.Value(), refit);
-        if (made.IsNull()) {
-            return Out::Failure(MakeError(kEditRefitFailed, "整えた面を元の縁で切れませんでした。", {}));
-        }
-        const double moved = std::max(MaximumDistance(face.Value(), made),
-            MaximumDistance(made, face.Value()));
-        if (moved > toleranceMm) {
-            return Out::Failure(MakeError(kEditRefitFailed,
-                "整えると、元の面から許容を超えて動きます。",
-                "最大 " + Mm(moved, 4) + " mm(許容 " + Mm(toleranceMm, 4)
-                    + " mm)。許容を大きくしてください。"));
-        }
-        auto finished = detail::FinishSurfaceResult(made, tolerance);
-        if (!finished.HasValue()) {
-            return Out::Failure(finished.Diagnostics());
-        }
-        SurfaceEditResult result;
-        result.surface = finished.Value();
-        result.deviationMm = moved;
-        result.polesBefore = before;
-        result.polesAfter = after;
-        result.noteJa = "制御点 " + std::to_string(before) + " → " + std::to_string(after)
-            + "、元の面から最大 " + Mm(moved, 4) + " mm(許容 " + Mm(toleranceMm, 4) + " mm)。";
-        return Out::Success(std::move(result), finished.Diagnostics());
-    }, kEditRefitFailed, "面を整えるの");
 }
 
 Result<SurfaceEditResult> MirrorSurface(const KernelShapeHandle& source,

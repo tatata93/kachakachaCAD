@@ -11,9 +11,47 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepClass_FaceClassifier.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#include <BRepLib.hxx>
+#include <BRepTools.hxx>
+#include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_Curve.hxx>
+#include <GeomConvert.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom_RectangularTrimmedSurface.hxx>
+#include <Geom_Surface.hxx>
+#include <Geom_SurfaceOfRevolution.hxx>
+#include <NCollection_Array1.hxx>
+#include <NCollection_Array2.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Wire.hxx>
+#include <TopoDS_Shape.hxx>
+#include <gp_Dir2d.hxx>
+#include <gp_Pnt2d.hxx>
+#include <gp_Pnt.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Ax1.hxx>
+#include <gp_Dir.hxx>
+#endif
 
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::GeometryTolerance;
@@ -201,6 +239,217 @@ KACHA_V2_TEST(kernel_surface_edit, 整えるは制御点を減らし元の面か
             + std::to_string(refit.Value().polesAfter) + ")");
     Require(refit.Value().deviationMm <= 0.05, "元の面から許容の内側("
             + std::to_string(refit.Value().deviationMm) + " mm)");
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_preserves_a_local_ridge_between_uniform_parameter_samples)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    // A piecewise cubic ridge is concentrated in V=.501..502 and Y=9.3..9.5.
+    // Both the old 30-interval fit and 16-interval checks can miss it entirely.
+    NCollection_Array2<gp_Pnt> poles(1, 4, 1, 10);
+    const double ys[10]{0, 3.1, 6.2, 9.3, 9.3+.2/3, 9.3+.4/3, 9.5, 13, 16.5, 20};
+    for (int i = 1; i <= 4; ++i) {
+        for (int j = 1; j <= 10; ++j) {
+            poles(i,j) = gp_Pnt(10.*(i-1)/3, ys[j-1], j == 5 || j == 6 ? 1.3 : 0);
+        }
+    }
+    NCollection_Array1<double> uk(1,2), vk(1,4);
+    uk(1) = 0; uk(2) = 1;
+    vk(1) = 0; vk(2) = .501; vk(3) = .502; vk(4) = 1;
+    NCollection_Array1<int> um(1,2), vm(1,4);
+    um.Init(4); vm.Init(3); vm(1) = vm(4) = 4;
+    const occ::handle<Geom_BSplineSurface> surface = new Geom_BSplineSurface(poles, uk, vk, um, vm, 3, 3);
+    for (int i = 1; i < 60; ++i) {
+        surface->InsertUKnot(i/60., 1, 1e-12, false);
+        surface->InsertVKnot(i/60., 1, 1e-12, false);
+    }
+    const auto face = BRepBuilderAPI_MakeFace(surface, 1e-7).Face();
+    Require(BRepCheck_Analyzer(face).IsValid(), "localized ridge is a valid native surface");
+    const auto source = kernel::StoreShape(face);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto refit = kernel::RefitSurface(source, .01, Tolerance());
+    Require(refit.HasValue(), "localized ridge can be refit: " + Why(refit));
+    TopoDS_Shape native;
+    Require(kernel::LookupShape(refit.Value().surface.handle, native), "refit native result exists");
+    const auto resultFace = TopoDS::Face(TopExp_Explorer(native, TopAbs_FACE).Current());
+    Require(surface->Value(.5, .5015).Z() > .9, "source contains a genuine local ridge");
+    const double peakMoved = surface->Value(.5, .5015).Distance(
+        BRep_Tool::Surface(resultFace)->Value(.5, .5015));
+    Require(peakMoved <= .01,
+        "the ridge remains within tolerance rather than silently becoming a plane");
+    Require(refit.Value().polesAfter < refit.Value().polesBefore, "refit actually reduces redundant control points");
+    Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "authoritative source is byte-identical after refit");
+    kernel::ReleaseShape(refit.Value().surface.handle);
+    kernel::ReleaseShape(source);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_preserves_two_trimmed_holes_and_reversed_orientation)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const auto support = ManyPoleSurface();
+    TopoDS_Shape native;
+    Require(kernel::LookupShape(support, native), "curved support exists");
+    const auto face = TopoDS::Face(TopExp_Explorer(native, TopAbs_FACE).Current());
+    const auto surface = BRep_Tool::Surface(face);
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(face, u0, u1, v0, v1);
+    const auto uv = [&](double u, double v) { return gp_Pnt2d(u0 + (u1-u0)*u, v0 + (v1-v0)*v); };
+    const auto hole = [&](const std::vector<gp_Pnt2d>& points) {
+        BRepBuilderAPI_MakeWire wire;
+        for (std::size_t i = 0; i < points.size(); ++i) {
+            const auto& a = points[i];
+            const auto& b = points[(i + 1) % points.size()];
+            const occ::handle<Geom2d_Curve> line = new Geom2d_Line(a,
+                gp_Dir2d(b.X()-a.X(), b.Y()-a.Y()));
+            BRepBuilderAPI_MakeEdge edge(line, surface, 0, a.Distance(b));
+            Require(edge.IsDone(), "a trim edge can be created on the support");
+            wire.Add(edge.Edge());
+        }
+        Require(wire.IsDone(), "a complete trim loop can be created");
+        return wire.Wire();
+    };
+    BRepBuilderAPI_MakeFace maker(surface, u0, u1, v0, v1, 1e-7);
+    maker.Add(hole({uv(.15,.15), uv(.15,.45), uv(.4,.45), uv(.4,.15)}));
+    maker.Add(hole({uv(.6,.2), uv(.6,.8), uv(.85,.8), uv(.85,.6), uv(.72,.6), uv(.72,.2)}));
+    TopoDS_Face trimmed = maker.Face();
+    BRepLib::BuildCurves3d(trimmed);
+    Require(BRepCheck_Analyzer(trimmed).IsValid(), "two holes, including a concave one, are valid");
+    for (const auto orientation : {TopAbs_FORWARD, TopAbs_REVERSED}) {
+        trimmed.Orientation(orientation);
+        const auto source = kernel::StoreShape(trimmed);
+        const auto before = kernel::CaptureOutputShape(source);
+        const auto refit = kernel::RefitSurface(source, .05, Tolerance());
+        Require(refit.HasValue(), "trimmed curved face can be simplified: " + Why(refit));
+        TopoDS_Shape output;
+        Require(kernel::LookupShape(refit.Value().surface.handle, output), "refit shape exists");
+        const auto made = TopoDS::Face(TopExp_Explorer(output, TopAbs_FACE).Current());
+        Require(made.Orientation() == orientation, "surface orientation is preserved");
+        int loops = 0;
+        for (TopExp_Explorer at(made, TopAbs_WIRE); at.More(); at.Next()) ++loops;
+        Require(loops == 3, "outer loop and both holes remain distinct");
+        const std::vector<std::pair<gp_Pnt2d, TopAbs_State>> probes{
+            {uv(.25,.3),TopAbs_OUT}, {uv(.65,.5),TopAbs_OUT}, {uv(.8,.7),TopAbs_OUT},
+            {uv(.8,.4),TopAbs_IN}, {uv(.5,.5),TopAbs_IN}, {uv(.95,.95),TopAbs_IN}};
+        for (const auto& [point, expected] : probes) {
+            Require(BRepClass_FaceClassifier(made, point, 1e-7).State() == expected,
+                "material and openings, including the concave notch, remain in place");
+        }
+        Require(kernel::CaptureOutputShape(source).Value() == before.Value(),
+            "the source's geometry and trim pcurves are byte-identical");
+        kernel::ReleaseShape(refit.Value().surface.handle);
+        kernel::ReleaseShape(source);
+    }
+    kernel::ReleaseShape(support);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_preserves_rational_curvature_and_a_periodic_seam)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const double pi = std::acos(-1.0);
+    for (const double sweep : {pi/2, 2*pi}) {
+        const occ::handle<Geom_Surface> cylinder = new Geom_CylindricalSurface(
+            gp_Ax3(gp_Pnt(10000,-20000,30000), gp_Dir(0,0,1)), 10);
+        const occ::handle<Geom_Surface> bounded = new Geom_RectangularTrimmedSurface(
+            cylinder, 0., sweep, 0., 20.);
+        const auto surface = GeomConvert::SurfaceToBSplineSurface(bounded);
+        if (sweep > pi) surface->SetUPeriodic();
+        for (int i = 1; i < 40; ++i) {
+            surface->InsertUKnot(sweep*i/40., 1, 1e-12, false);
+            surface->InsertVKnot(20.*i/40, 1, 1e-12, false);
+        }
+        TopoDS_Face face = BRepBuilderAPI_MakeFace(surface, 1e-7).Face();
+        BRep_Builder().NaturalRestriction(face, false); // Also exercise retained seam pcurves.
+        Require(BRepCheck_Analyzer(face).IsValid(), "native rational surface is valid");
+        const auto source = kernel::StoreShape(face);
+        const auto before = kernel::CaptureOutputShape(source);
+        const auto refit = kernel::RefitSurface(source, .01, Tolerance());
+        Require(refit.HasValue(), "rational curved face can be simplified: " + Why(refit));
+        TopoDS_Shape output;
+        Require(kernel::LookupShape(refit.Value().surface.handle, output), "refit exists");
+        const auto made = TopoDS::Face(TopExp_Explorer(output, TopAbs_FACE).Current());
+        const auto fitted = BRep_Tool::Surface(made);
+        for (int i = 0; i <= 80; ++i) {
+            const double u = sweep*i/80.;
+            Require(surface->Value(u, 10).Distance(fitted->Value(u, 10))
+                    <= refit.Value().deviationMm + 1e-8,
+                "reported conservative bound covers rational surface between knots");
+        }
+        Require(kernel::CaptureOutputShape(source).Value() == before.Value(),
+            "rational weights, seam and source are unchanged");
+        kernel::ReleaseShape(refit.Value().surface.handle);
+        kernel::ReleaseShape(source);
+    }
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_never_drops_a_second_face_or_accepts_nonfinite_tolerance)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const auto a = ManyPoleSurface(), b = FlatRectangle(0,10,0,10,50);
+    TopoDS_Shape faceA, faceB;
+    Require(kernel::LookupShape(a, faceA) && kernel::LookupShape(b, faceB), "both faces exist");
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    builder.Add(compound, faceA);
+    builder.Add(compound, faceB);
+    const auto source = kernel::StoreShape(compound);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto count = kernel::CachedShapeCount();
+    const auto refit = kernel::RefitSurface(source, .05, Tolerance());
+    Require(!refit.HasValue(), "unsupported compound is refused instead of returning only its first face");
+    for (double tolerance : {0., -1., std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::quiet_NaN()}) {
+        Require(!kernel::RefitSurface(a, tolerance, Tolerance()).HasValue(),
+            "non-positive and nonfinite tolerances cannot produce a shape");
+    }
+    Require(kernel::CachedShapeCount() == count, "failed operations do not leak native handles");
+    Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "failed refit leaves input intact");
+    kernel::ReleaseShape(source);
+    kernel::ReleaseShape(a);
+    kernel::ReleaseShape(b);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_converts_a_trimmed_revolution_together_with_its_boundary)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    NCollection_Array1<gp_Pnt> poles(1, 4);
+    poles(1) = gp_Pnt(8,0,0); poles(2) = gp_Pnt(9,0,6);
+    poles(3) = gp_Pnt(12,0,13); poles(4) = gp_Pnt(10,0,20);
+    NCollection_Array1<double> knots(1,2);
+    knots(1) = 0; knots(2) = 1;
+    NCollection_Array1<int> multiplicities(1,2);
+    multiplicities.Init(4);
+    const occ::handle<Geom_BSplineCurve> profile = new Geom_BSplineCurve(poles, knots, multiplicities, 3);
+    for (int i = 1; i < 40; ++i) profile->InsertKnot(i/40., 1, 1e-12, false);
+    const occ::handle<Geom_Surface> surface = new Geom_SurfaceOfRevolution(profile,
+        gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)));
+    BRepBuilderAPI_MakeFace maker(surface, 0., std::acos(-1.0)/2, 0., 1., 1e-7);
+    const std::vector<gp_Pnt2d> points{{.2,.2}, {.2,.6}, {.6,.6}, {.6,.2}};
+    BRepBuilderAPI_MakeWire wire;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const auto& a = points[i];
+        const auto& b = points[(i+1)%points.size()];
+        const occ::handle<Geom2d_Curve> line = new Geom2d_Line(a, gp_Dir2d(b.X()-a.X(), b.Y()-a.Y()));
+        wire.Add(BRepBuilderAPI_MakeEdge(line, surface, 0., a.Distance(b)).Edge());
+    }
+    maker.Add(wire.Wire());
+    TopoDS_Face face = maker.Face();
+    BRepLib::BuildCurves3d(face);
+    Require(BRepCheck_Analyzer(face).IsValid(), "trimmed non-analytic revolution is valid");
+    const auto source = kernel::StoreShape(face);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto refit = kernel::RefitSurface(source, .01, Tolerance());
+    Require(refit.HasValue(), "angular surface and its trim are converted consistently: " + Why(refit));
+    TopoDS_Shape output;
+    Require(kernel::LookupShape(refit.Value().surface.handle, output), "refitted revolution exists");
+    const auto made = TopoDS::Face(TopExp_Explorer(output, TopAbs_FACE).Current());
+    Require(BRepClass_FaceClassifier(made, surface->Value(.4,.4), 1e-6).State() == TopAbs_OUT,
+        "opening stays at its original 3D location after angular reparameterization");
+    Require(BRepClass_FaceClassifier(made, surface->Value(1.,.8), 1e-6).State() == TopAbs_IN,
+        "surrounding material remains");
+    Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "source revolution is unchanged");
+    kernel::ReleaseShape(refit.Value().surface.handle);
+    kernel::ReleaseShape(source);
 }
 
 KACHA_V2_TEST(kernel_surface_edit, 平面は整え直さず理由を言う)

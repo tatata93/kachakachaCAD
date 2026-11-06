@@ -371,7 +371,9 @@ void V2MainWindow::RefreshFabricationView()
         groups.clear();
     }
     foldGroups_ = std::move(groups);
-    viewport_->SetFoldPreview(std::move(rails), FoldEmphasisFor(foldGroups_),std::move(materialLoops));
+    std::vector<kachakacha::v2::base::EntityId> owners;
+    for(const auto& group:foldGroups_)owners.insert(owners.end(),group.pairs,group.model);
+    viewport_->SetFoldPreview(std::move(rails), FoldEmphasisFor(foldGroups_),std::move(materialLoops),std::move(owners));
     RefreshShapeViews();
     processContext_.fabricationBuilt = !fabricationPanels_.empty();
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());

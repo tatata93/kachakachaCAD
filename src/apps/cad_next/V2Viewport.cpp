@@ -311,7 +311,7 @@ void V2Viewport::FitToDocument(bool selectedOnly)
     // Include that actual pose when fitting an unfolded or partly assembled sheet.
     for(std::size_t rail=0;rail<foldPreview_.size();++rail){
         const auto band=rail/2;
-        if(selectedOnly&&(band>=foldEmphasis_.size()||foldEmphasis_[band]==0))continue;
+        if(!FoldBandShown(band,selectedOnly))continue;
         for(const auto& point:foldPreview_[rail])include(point);
     }
     if(!any&&selectedOnly)return;
@@ -1071,6 +1071,7 @@ std::vector<int> V2Viewport::FoldBandsAt(const QPointF& position) const
     // 帯の輪(下レール → 上レールの逆順)を画面へ映し、偶奇則で内側かを見る。
     std::vector<int> hits;
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
+        if(!FoldBandShown(index/2))continue;
         if(index/2<foldMaterialLoops_.size()&&foldMaterialLoops_[index/2]){
             QPainterPath material;material.setFillRule(Qt::OddEvenFill);
             for(const auto& loop:*foldMaterialLoops_[index/2]){

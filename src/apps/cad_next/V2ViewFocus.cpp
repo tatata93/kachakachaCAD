@@ -1,6 +1,7 @@
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
 #include "V2QuickDisplayControls.h"
+#include "kachakacha/app/GroupTree.h"
 #include <QPushButton>
 #include <QPointer>
 #include <QString>
@@ -8,6 +9,26 @@
 #include <algorithm>
 #include <unordered_set>
 using namespace kachakacha::v2;
+bool V2Viewport::FoldBandShown(std::size_t band,bool selectedOnly) const {
+    if(band>=foldOwners_.size()||foldOwners_[band].IsNil())
+        return !selectedOnly||(band<foldEmphasis_.size()&&foldEmphasis_[band]!=0);
+    const auto owner=foldOwners_[band];
+    if(selectedOnly&&!app::IsSelected(selection_,owner))return false;
+    if(DeletionPreviewContains(owner))return true;
+    const auto& document=session_->GetDocument();const auto& snapshot=document.Snapshot();
+    // Visibility depends on document edits, not camera frames. Refresh the
+    // small owner mask only when its document, revision or rail set changes.
+    if(foldVisibilityDocument_!=snapshot.id||foldVisibilityRevision_!=document.Revision()
+        ||foldVisibility_.size()!=foldOwners_.size()){
+        foldVisibilityDocument_=snapshot.id;foldVisibilityRevision_=document.Revision();
+        foldVisibility_.assign(foldOwners_.size(),true);
+        for(std::size_t i=0;i<foldOwners_.size();++i)if(!foldOwners_[i].IsNil()){
+            const auto* entity=document.FindEntity(foldOwners_[i]);
+            foldVisibility_[i]=entity&&app::EntityEffectivelyVisible(snapshot,*entity);
+        }
+    }
+    return foldVisibility_[band]&&EntityShown(owner);
+}
 bool V2Viewport::IsolationActive() const {
     return isolationActive_&&isolationDocument_==session_->GetDocument().Snapshot().id;
 }

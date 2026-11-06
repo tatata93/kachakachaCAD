@@ -546,10 +546,13 @@ void V2Viewport::DrawKeptDimensions(QPainter& painter) const
 
 void V2Viewport::SetFoldPreview(
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails, std::vector<int> emphasis,
-    std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops)
+    std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops,
+    std::vector<kachakacha::v2::base::EntityId> owners)
 {
     foldPreview_ = std::move(rails);
     foldEmphasis_ = std::move(emphasis);
+    foldOwners_ = std::move(owners);
+    foldVisibility_.clear();
     foldMaterialLoops_=std::move(materialLoops);
     update();
 }
@@ -589,7 +592,7 @@ void V2Viewport::DrawFoldPreview(QPainter& painter) const
 void V2Viewport::DrawFoldBands(QPainter& painter, int level) const
 {
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
-        if (FoldPreviewEmphasis(static_cast<int>(index / 2)) != level) {
+        if (!FoldBandShown(index/2) || FoldPreviewEmphasis(static_cast<int>(index / 2)) != level) {
             continue;
         }
         if(index/2<foldMaterialLoops_.size()&&foldMaterialLoops_[index/2].has_value()){

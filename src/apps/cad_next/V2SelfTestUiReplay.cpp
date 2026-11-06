@@ -590,6 +590,81 @@ bool RealSettings(V2MainWindow& w)
         &&std::abs(shapes.front().mesh.maximum.z-20.5)<1e-6);
 }
 
+bool FoldOwnerFocus(V2MainWindow& w)
+{
+    if(!MakeCurvedGuideSurface(w))return false;
+    w.RunCommand("fabrication.create");w.RunCommand("fabrication.create");
+    const auto models=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::FabricationModel);
+    if(models.entityIds.size()!=1||w.Viewport().FoldPreviewRailCount()<2)return false;
+    const auto model=models.entityIds.front();
+    const std::array<geometry::Vector3,4> corners{{{250,0,30},{260,0,30},{260,10,30},{250,10,30}}};
+    std::vector<geometry::CurveSegment> curves;
+    for(std::size_t i=0;i<corners.size();++i){
+        const auto line=geometry::CurveSegment::MakeLine(corners[i],corners[(i+1)%corners.size()]);
+        if(!line.HasValue())return false;curves.push_back(line.Value());
+    }
+    const auto made=w.Session().AddWire(curves,false,"separate focus target");
+    if(!made.committed||made.createdEntityIds.size()!=1)return false;
+    if(!w.SaveAndReopen(QStringLiteral("fold-owner-fixture.kcd2")))return false;
+    const auto target=QString::fromStdString(made.createdEntityIds.front().ToString());
+    const auto owner=QString::fromStdString(model.ToString());
+    const auto root=QDir::current().filePath("fold-owner");if(!QDir().mkpath(root))return false;
+    Replay replay{w,root,{},{},0};
+    const QJsonArray startSteps{
+        QJsonObject{{"op","click"},{"within","modeBar"},{"text",QStringLiteral("選択")}},
+        QJsonObject{{"op","select"},{"id",owner}},
+        QJsonObject{{"op","fit"}},QJsonObject{{"op","select"},{"id",target}},
+        QJsonObject{{"op","tool"},{"command","view.fit_selection"}}};
+    if(!replay.Run({{"name","focus an unrelated object"},{"steps",startSteps}}))return false;
+    if(!Explain("selection zoom excludes unrelated manufacturing models",w.Viewport().VisibleWidthMm()<40))return false;
+    if(!replay.Act({{"op","fit"}}))return false;
+    std::optional<QPointF> bandPoint;
+    for(int y=100;y<w.Viewport().height()&&!bandPoint;y+=16)
+        for(int x=8;x<w.Viewport().width()&&!bandPoint;x+=16)
+            if(!w.Viewport().FoldBandsAt(QPointF(x,y)).empty())bandPoint=QPointF(x,y);
+    if(!Explain("visible manufacturing pose is pickable",bandPoint.has_value()))return false;
+    if(!replay.Act({{"op","visibility"},{"id",owner},{"value",false}})
+        ||!Explain("hidden manufacturing pose cannot intercept picking",w.Viewport().FoldBandsAt(*bandPoint).empty())
+        ||!replay.Act({{"op","visibility"},{"id",owner},{"value",true}})
+        ||!Explain("showing the model restores picking",!w.Viewport().FoldBandsAt(*bandPoint).empty())
+        ||!replay.Act({{"op","select"},{"id",target}})
+        ||!replay.Act({{"op","tool"},{"command","view.isolate"}})
+        ||!Explain("isolating another object hides manufacturing picking",w.Viewport().FoldBandsAt(*bandPoint).empty())
+        ||!replay.Act({{"op","tool"},{"command","view.restore_isolation"}})
+        ||!Explain("leaving isolation restores manufacturing picking",!w.Viewport().FoldBandsAt(*bandPoint).empty())
+        ||!replay.Act({{"op","select"},{"id",owner}})
+        ||!replay.Act({{"op","tool"},{"command","view.fit_selection"}})
+        ||!Explain("the manufacturing model itself fits its current pose",w.Viewport().VisibleWidthMm()>40&&w.Viewport().VisibleWidthMm()<200))return false;
+    w.RunCommand("group.create");
+    const auto& groups=w.Session().GetDocument().Snapshot().groups;
+    if(groups.empty())return false;
+    const auto parent=QString::fromStdString(groups.back().id.ToString());
+    if(!replay.Act({{"op","fit"}}))return false;
+    bandPoint.reset();
+    for(int y=100;y<w.Viewport().height()&&!bandPoint;y+=16)
+        for(int x=8;x<w.Viewport().width()&&!bandPoint;x+=16)
+            if(!w.Viewport().FoldBandsAt(QPointF(x,y)).empty())bandPoint=QPointF(x,y);
+    if(!bandPoint||!replay.Act({{"op","visibility"},{"id",parent},{"group",true},{"value",false}})
+        ||!Explain("a hidden parent hides its manufacturing pose",w.Viewport().FoldBandsAt(*bandPoint).empty())
+        ||!replay.Act({{"op","visibility"},{"id",parent},{"group",true},{"value",true}})
+        ||!Explain("showing the parent restores manufacturing picking",!w.Viewport().FoldBandsAt(*bandPoint).empty()))return false;
+    for(const int percent:{0,50,100}){
+        if(!replay.Act({{"op","select"},{"id",owner}}))return false;
+        w.RunCommand("fabrication.set_assembly");
+        if(!replay.Act({{"op","click"},{"within","bendWidget"},{"text",QString::number(percent)}})
+            ||!replay.Act({{"op","click"},{"text",QStringLiteral("曲げを適用")}})
+            ||!replay.Act({{"op","tool"},{"command","view.fit_selection"}})
+            ||!Explain("each bend state focuses on its owner",w.Viewport().VisibleWidthMm()>40&&w.Viewport().VisibleWidthMm()<200)
+            ||!replay.Act({{"op","select"},{"id",target}})
+            ||!replay.Act({{"op","tool"},{"command","view.fit_selection"}})
+            ||!Explain("each bend state excludes unrelated rails",w.Viewport().VisibleWidthMm()<40))return false;
+    }
+    if(!w.SaveAndReopen(QStringLiteral("fold-owner.kcd2")))return false;
+    return replay.Act({{"op","select"},{"id",target}})
+        &&replay.Act({{"op","tool"},{"command","view.fit_selection"}})
+        &&Explain("reloaded selection zoom excludes the other model",w.Viewport().VisibleWidthMm()<40);
+}
+
 constexpr std::size_t kMaximumPhases=128;
 std::array<QJsonObject,kMaximumPhases> phases;
 std::array<std::string,kMaximumPhases> names;
@@ -607,7 +682,8 @@ template<std::size_t... I> constexpr auto Runners(std::index_sequence<I...>)
 std::vector<SelfTestCase> UiReplayCases()
 {
     std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke},
-        {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings}};
+        {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings},
+        {"HP-REPLAY manufacturing ownership controls visibility picking and focus",FoldOwnerFocus}};
     const auto script=qEnvironmentVariable("KACHACAD_UI_REPLAY");if(script.isEmpty())return cases;
     const auto document=Read(script);replayRoot=QFileInfo(script).absolutePath();
     if(!document["phases"].isArray()||document["phases"].toArray().isEmpty()){

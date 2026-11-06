@@ -44,6 +44,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -687,7 +688,8 @@ public:
     //! 2 = 「対象部材」に挙げた部材(塗って目立たせる。オーナー指示 2026-09-28)。足りない分は 0。
     void SetFoldPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails,
         std::vector<int> emphasis = {},
-        std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops = {});
+        std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> materialLoops = {},
+        std::vector<kachakacha::v2::base::EntityId> owners = {});
     [[nodiscard]] int FoldPreviewRailCount() const
     {
         return static_cast<int>(foldPreview_.size());
@@ -882,6 +884,7 @@ private:
     void DrawControlPoints(QPainter& painter) const;
     //! 近似モデルの曲げ状態。帯のレールを折れ線で出す。
     void DrawFoldPreview(QPainter& painter) const;
+    [[nodiscard]] bool FoldBandShown(std::size_t band, bool selectedOnly = false) const;
     void DrawFoldBands(QPainter& painter, int level) const;
     //! 残した寸法。測った点を結ぶ細い線と、両端の短い印、名前と値。
     void DrawMeasureOverlay(QPainter& painter) const;
@@ -1208,6 +1211,10 @@ private:
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> foldPreview_;
     std::vector<int> foldEmphasis_;   //!< 帯ごとの強調(SetFoldPreview)
+    std::vector<kachakacha::v2::base::EntityId> foldOwners_;
+    mutable kachakacha::v2::base::DocumentId foldVisibilityDocument_{};
+    mutable std::uint64_t foldVisibilityRevision_ = 0;
+    mutable std::vector<bool> foldVisibility_;
     std::vector<std::optional<std::vector<std::vector<kachakacha::v2::geometry::Vector3>>>> foldMaterialLoops_;
     std::optional<QPointF> lastSelectPoint_;   //!< 最後に押した画面の位置(SelectAt)
     std::vector<KeptDimensionView> keptDimensions_;

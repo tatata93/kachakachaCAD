@@ -1,9 +1,13 @@
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
 #include "V2ProfileRegionSelection.h"
+#include "V2DocumentTiming.h"
 
 #include <QBrush>
+#include <QByteArray>
+#include <QDataStream>
 #include <QColor>
+#include <QIODevice>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -11,6 +15,7 @@
 #include <QPolygonF>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <set>
@@ -132,10 +137,68 @@ void v2ui::MatchSeededBoundaryReference(PickCandidate& candidate,
     candidate.profileSeed = matched->profileSeed;
 }
 
+namespace {
+
+QByteArray ProfileRegionKey(const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+{
+    QByteArray key;
+    QDataStream out(&key, QIODevice::WriteOnly);
+    out << tolerance.numericEpsilon << tolerance.modelLinearMm << tolerance.modelAngularRad
+        << tolerance.interactiveJoinMm << tolerance.displayPickPx << tolerance.edgePickPx
+        << tolerance.snapPickPx << tolerance.candidateMenuPx << quint64(scene.curves.size());
+    const auto point = [&](const auto& p) { out << p.x << p.y << p.z; };
+    for (const auto& item : scene.curves) {
+        const auto& entity = item.entityId.Value().Bytes();
+        const auto& segment = item.segmentId.Value().Bytes();
+        out.writeRawData(reinterpret_cast<const char*>(entity.data()), int(entity.size()));
+        out.writeRawData(reinterpret_cast<const char*>(segment.data()), int(segment.size()));
+        const auto& curve = item.segment;
+        out << item.construction << qint32(curve.Kind()) << quint64(curve.ControlPoints().size());
+        for (const auto& p : curve.ControlPoints()) point(p);
+        point(curve.Center());point(curve.Normal());point(curve.ReferenceDirection());
+        out << curve.Radius() << curve.StartAngleRad() << curve.SweepAngleRad();
+    }
+    return key;
+}
+
+std::vector<kachakacha::v2::app::ProfileRegion> CachedProfileRegions(
+    const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance, bool includeSpatial)
+{
+    using namespace kachakacha::v2;
+    struct Entry { QByteArray key; std::vector<app::ProfileRegion> regions; };
+    // Bound memory to the last geometry for each of the two picking modes. Keys
+    // contain complete geometry and UUIDs, so reuse does not depend on a window's
+    // address, document revision, labels or hash collisions.
+    static thread_local std::array<Entry, 2> cache;
+    auto& entry = cache[includeSpatial ? 1 : 0];
+    auto key = ProfileRegionKey(scene, tolerance);
+    if (entry.key == key) {
+        V2DocumentTiming("profile-cache").Mark("hit");
+        return entry.regions;
+    }
+    auto result = app::DetectProfileRegions(scene, tolerance);
+    if (includeSpatial) for (auto boundary : app::DetectSpatialBoundaries(scene, tolerance)) {
+        const auto plane = geometry::FitPlane(boundary.sampled);
+        if (!plane.valid || plane.maximumDeviationMm <= tolerance.modelLinearMm) continue;
+        app::ProfileRegion region;
+        region.plane = plane;region.frame = geometry::MakeFrame(plane);
+        boundary.planar = geometry::ProjectToFrame(boundary.sampled, region.frame);
+        region.outer = std::move(boundary);result.push_back(std::move(region));
+    }
+    entry.key = std::move(key);entry.regions = result;
+    V2DocumentTiming("profile-cache").Mark("miss");
+    return result;
+}
+
+} // namespace
+
 void V2Viewport::SetProfileRegionPicking(bool active, bool wiresFirst)
 {
+    const bool previousWiresFirst = profileRegionWiresFirst_;
     profileRegionWiresFirst_ = active && wiresFirst;
-    if (profileRegionPicking_ == active) {
+    if (profileRegionPicking_ == active && previousWiresFirst == profileRegionWiresFirst_) {
         return;
     }
     profileRegionPicking_ = active;
@@ -156,6 +219,8 @@ void V2Viewport::RebuildProfileRegions()
     if (!profileRegionPicking_ || session_ == nullptr) {
         return;
     }
+    V2DocumentTiming timing("profile-regions");
+    timing.Mark("begin");
     auto wires = session_->Scene();
     std::set<kachakacha::v2::base::EntityId> wireIds;
     for(const auto& entity:session_->GetDocument().Snapshot().entities)
@@ -163,20 +228,11 @@ void V2Viewport::RebuildProfileRegions()
     wires.curves.erase(std::remove_if(wires.curves.begin(), wires.curves.end(), [&](const auto& c) {
         return !wireIds.contains(c.entityId);
     }), wires.curves.end());
-    profileRegions_ = kachakacha::v2::app::DetectProfileRegions(wires,
-        session_->GetDocument().Snapshot().settings.tolerance);
-    if(!profileRegionWiresFirst_) {
-        const auto tolerance=session_->GetDocument().Snapshot().settings.tolerance;
-        const auto boundaries=kachakacha::v2::app::DetectSpatialBoundaries(wires,tolerance);
-        for(auto boundary:boundaries) {
-            const auto plane=kachakacha::v2::geometry::FitPlane(boundary.sampled);
-            if(!plane.valid || plane.maximumDeviationMm<=tolerance.modelLinearMm)continue;
-            kachakacha::v2::app::ProfileRegion region;
-            region.plane=plane;region.frame=kachakacha::v2::geometry::MakeFrame(plane);
-            boundary.planar=kachakacha::v2::geometry::ProjectToFrame(boundary.sampled,region.frame);
-            region.outer=std::move(boundary);profileRegions_.push_back(std::move(region));
-        }
-    }
+    timing.Mark("wire-scene");
+    profileRegions_ = CachedProfileRegions(wires,
+        session_->GetDocument().Snapshot().settings.tolerance, !profileRegionWiresFirst_);
+    timing.Mark("planar-regions");
+    timing.Mark("complete");
 }
 
 std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) const

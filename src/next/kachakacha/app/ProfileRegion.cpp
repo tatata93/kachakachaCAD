@@ -1,5 +1,6 @@
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/ProfileNetwork.h"
+#include "kachakacha/app/ProfileCurveBounds.h"
 
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireEdit.h"
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <optional>
 
@@ -177,12 +179,21 @@ bool CoincidentWire(const std::vector<SnapCurve>& component,
 }
 
 bool InteractsWithOtherWires(const std::vector<SnapCurve>& component,
-    const std::vector<SnapCurve>& curves, const geometry::GeometryTolerance& tolerance)
+    const std::vector<SnapCurve>& curves, const std::vector<geometry::Bounds3>& bounds,
+    const geometry::GeometryTolerance& tolerance)
 {
+    std::map<base::EntityId, bool> coincident;
     for (const auto& own : component) {
-        for (const auto& other : curves) {
+        const auto ownBounds = detail::ProfileCurveBounds(own.segment);
+        for (std::size_t index = 0; index < curves.size(); ++index) {
+            const auto& other = curves[index];
             if (own.entityId == other.entityId) continue;
-            if (CoincidentWire(component, curves, other.entityId, tolerance.modelLinearMm)) continue;
+            if (!detail::ProfileBoundsTouch(ownBounds, bounds[index],
+                    tolerance.interactiveJoinMm)) continue;
+            auto [at, inserted] = coincident.try_emplace(other.entityId, false);
+            if (inserted) at->second = CoincidentWire(component, curves,
+                other.entityId, tolerance.modelLinearMm);
+            if (at->second) continue;
             // Coincident copies remain independently selectable, as before.
             const bool same = std::any_of(component.begin(), component.end(), [&](const auto& c) {
                 for (double t : {0.0, 0.25, 0.5, 0.75, 1.0})
@@ -221,6 +232,9 @@ std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
         curves.push_back(curve);
     }
     std::vector<FlatLoop> loops;
+    std::vector<geometry::Bounds3> bounds;
+    bounds.reserve(curves.size());
+    for (const auto& curve : curves) bounds.push_back(detail::ProfileCurveBounds(curve.segment));
     std::vector<SnapCurve> remaining;
     std::vector<base::EntityId> entities;
     for (const auto& curve : curves) {
@@ -240,9 +254,9 @@ std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
         for (auto& component : ConnectedComponents(std::move(owned),
                  tolerance.interactiveJoinMm)) {
             auto boundary = MakeBoundary(component, tolerance);
-            if (boundary.has_value() && !InteractsWithOtherWires(component, curves, tolerance)) {
+            if (boundary.has_value()) {
                 auto loop = FlattenBoundary(std::move(*boundary), tolerance);
-                if (loop.has_value()) {
+                if (loop.has_value() && !InteractsWithOtherWires(component, curves, bounds, tolerance)) {
                     loops.push_back(std::move(*loop));
                     continue;
                 }

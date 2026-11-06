@@ -1,4 +1,6 @@
 #include "kachakacha/app/ProfileNetwork.h"
+#include "kachakacha/app/ProfileCurveBounds.h"
+#include "kachakacha/app/ProfilePlaneIndex.h"
 #include "kachakacha/app/LoopGraph.h"
 #include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/WireEdit.h"
@@ -6,19 +8,13 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <map>
 
 namespace kachakacha::v2::app::detail {
 namespace {
 using geometry::Vector3;
 using geometry::CurveSegment;
 using modeling::SnapCurve;
-
-bool TouchBounds(const geometry::Bounds3& a, const geometry::Bounds3& b, double eps)
-{
-    return a.minimum.x <= b.maximum.x + eps && b.minimum.x <= a.maximum.x + eps
-        && a.minimum.y <= b.maximum.y + eps && b.minimum.y <= a.maximum.y + eps
-        && a.minimum.z <= b.maximum.z + eps && b.minimum.z <= a.maximum.z + eps;
-}
 
 void EndpointCuts(const CurveSegment& a, const CurveSegment& b,
     std::vector<double>& cuts, double eps)
@@ -35,10 +31,10 @@ std::vector<SnapCurve> SplitNetwork(const std::vector<SnapCurve>& curves,
     const double eps = tolerance.interactiveJoinMm;
     std::vector<std::vector<double>> cuts(curves.size(), {0.0, 1.0});
     std::vector<geometry::Bounds3> bounds;
-    for (const auto& curve : curves) bounds.push_back(curve.segment.Bounds(eps * 0.1));
+    for (const auto& curve : curves) bounds.push_back(ProfileCurveBounds(curve.segment));
     for (std::size_t a = 0; a < curves.size(); ++a) {
         for (std::size_t b = a + 1; b < curves.size(); ++b) {
-            if (!TouchBounds(bounds[a], bounds[b], eps)) continue;
+            if (!ProfileBoundsTouch(bounds[a], bounds[b], eps)) continue;
             EndpointCuts(curves[a].segment, curves[b].segment, cuts[a], eps);
             EndpointCuts(curves[b].segment, curves[a].segment, cuts[b], eps);
             for (const auto& hit : geometry::IntersectCurves(
@@ -158,25 +154,41 @@ void AppendCycles(std::vector<ProfileBoundary>& result, const std::vector<std::s
 }
 
 std::vector<HalfEdge> PlaneEdges(const std::vector<SnapCurve>& curves,
-    const std::vector<LoopEdge>& edges, const geometry::PlaneFit& plane, double eps)
+    const std::vector<LoopEdge>& edges, const geometry::PlaneFit& plane, double eps,
+    const std::vector<std::size_t>& candidates, const ProfilePlaneIndex& endpoints,
+    std::vector<std::size_t>& included, std::size_t generation)
 {
     const auto frame = geometry::MakeFrame(plane);
     std::vector<HalfEdge> result;
-    std::vector<std::size_t> included;
-    for (std::size_t i = 0; i < curves.size(); ++i) {
+    for (const auto i : candidates) {
         const auto& curve = curves[i].segment;
         if (!geometry::CurveLiesInPlane(curve, plane.origin, plane.normal, eps)) continue;
         bool duplicate = false;
-        for (auto j : included) {
-            const auto reversed = geometry::ReverseCurve(curves[j].segment);
-            if (SameGeometry(curve, curves[j].segment, eps)
-                || (reversed.HasValue() && SameGeometry(curve, reversed.Value(), eps))) {
+        const auto start = curve.StartPoint(), end = curve.EndPoint();
+        std::size_t previous = curves.size();
+        for (const auto point : endpoints.Near(start, eps)) {
+            const auto j = point / 2;
+            if (j == previous) continue;
+            previous = j;
+            if (included[j] != generation) continue;
+            const auto& other = curves[j].segment;
+            const auto otherStart = other.StartPoint(), otherEnd = other.EndPoint();
+            if ((start - otherStart).LengthSquared() <= eps * eps
+                && (end - otherEnd).LengthSquared() <= eps * eps
+                && SameGeometry(curve, other, eps)) {
+                duplicate = true;
+                break;
+            }
+            if ((start - otherEnd).LengthSquared() > eps * eps
+                || (end - otherStart).LengthSquared() > eps * eps) continue;
+            const auto reversed = geometry::ReverseCurve(other);
+            if (reversed.HasValue() && SameGeometry(curve, reversed.Value(), eps)) {
                 duplicate = true;
                 break;
             }
         }
         if (duplicate) continue;
-        included.push_back(i);
+        included[i] = generation;
         for (bool forward : {true, false}) {
             const auto tangent = forward ? curve.Evaluate(1e-5) - curve.StartPoint()
                                          : curve.Evaluate(1.0 - 1e-5) - curve.EndPoint();
@@ -190,19 +202,46 @@ std::vector<HalfEdge> PlaneEdges(const std::vector<SnapCurve>& curves,
 }
 
 std::vector<ProfileBoundary> WalkPlane(const std::vector<SnapCurve>& curves,
-    const std::vector<HalfEdge>& edges, std::size_t nodes,
-    const geometry::PlaneFit& plane, double eps)
+    const std::vector<HalfEdge>& edges, const geometry::PlaneFit& plane, double eps)
 {
-    std::vector<std::vector<std::size_t>> outgoing(nodes);
+    if (edges.empty()) return {};
+    // Most candidate planes touch only a few of the global graph's nodes.
+    // Keep the same half-edge order without allocating every unrelated node.
+    std::map<std::size_t, std::vector<std::size_t>> outgoing;
     for (std::size_t i = 0; i < edges.size(); ++i) outgoing[edges[i].from].push_back(i);
-    for (auto& around : outgoing) std::sort(around.begin(), around.end(), [&](auto a, auto b) {
-        return edges[a].angle < edges[b].angle;
-    });
+    // An edge ending in a leaf cannot belong to a closed region. Remove these
+    // branches before walking, rather than repeatedly constructing and sampling
+    // forward/backward walks whose area must be zero.
+    std::map<std::size_t, std::size_t> degree;
+    std::vector<std::size_t> tips;
+    for (const auto& [node, around] : outgoing) {
+        degree[node] = around.size();
+        if (around.size() == 1) tips.push_back(node);
+    }
+    std::vector<bool> alive(edges.size(), true);
+    std::size_t aliveCount = edges.size();
+    for (std::size_t cursor = 0; cursor < tips.size(); ++cursor) {
+        const auto node = tips[cursor];
+        if (degree[node] != 1) continue;
+        const auto& around = outgoing[node];
+        const auto found = std::find_if(around.begin(), around.end(), [&](auto edge) { return alive[edge]; });
+        if (found == around.end()) continue;
+        const auto edge = *found, other = edges[edge].to;
+        alive[edge] = alive[edge ^ 1] = false;
+        aliveCount -= 2;
+        --degree[node];
+        if (--degree[other] == 1) tips.push_back(other);
+    }
+    if (aliveCount == 0) return {};
+    for (auto& [node, around] : outgoing) {
+        around.erase(std::remove_if(around.begin(), around.end(), [&](auto edge) { return !alive[edge]; }), around.end());
+        std::sort(around.begin(), around.end(), [&](auto a, auto b) { return edges[a].angle < edges[b].angle; });
+    }
     std::vector<bool> visited(edges.size());
     std::vector<ProfileBoundary> result;
     const auto frame = geometry::MakeFrame(plane);
     for (std::size_t start = 0; start < edges.size(); ++start) {
-        if (visited[start]) continue;
+        if (!alive[start] || visited[start]) continue;
         std::vector<std::size_t> cycle;
         std::size_t at = start;
         do {
@@ -236,10 +275,24 @@ std::vector<ProfileBoundary> ProfileNetworkBoundaries(const std::vector<SnapCurv
     std::vector<LoopEdge> edges;
     for (std::size_t i = 0; i < curves.size(); ++i)
         edges.push_back(MakeLoopEdge(i, {curves[i].segment}, graph));
+    std::vector<Vector3> starts;
+    std::vector<Vector3> endpoints;
+    starts.reserve(curves.size());
+    endpoints.reserve(curves.size()*2);
+    for (const auto& curve : curves) {
+        starts.push_back(curve.segment.StartPoint());
+        endpoints.push_back(curve.segment.StartPoint());
+        endpoints.push_back(curve.segment.EndPoint());
+    }
+    const ProfilePlaneIndex index(std::move(starts));
+    const ProfilePlaneIndex endpointIndex(std::move(endpoints));
+    std::vector<std::size_t> included(curves.size(), 0);
+    std::size_t generation = 0;
     std::vector<ProfileBoundary> result;
-    for (const auto& plane : NetworkPlanes(edges, eps)) {
-        auto found = WalkPlane(curves, PlaneEdges(curves, edges, plane, eps),
-            graph.NodeCount(), plane, eps);
+    const auto planes = NetworkPlanes(edges, eps);
+    for (const auto& plane : planes) {
+        auto found = WalkPlane(curves, PlaneEdges(curves, edges, plane, eps,
+            index.Candidates(plane.origin, plane.normal, eps), endpointIndex, included, ++generation), plane, eps);
         result.insert(result.end(), std::make_move_iterator(found.begin()),
             std::make_move_iterator(found.end()));
     }

@@ -32,10 +32,12 @@
 #include <QColor>
 #include <QDoubleSpinBox>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QCryptographicHash>
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace kachakacha::v2::selftest {
@@ -380,6 +382,64 @@ bool Interaction(V2MainWindow& w) {
     display.shapesVisible=true;v.SetDisplaySettings(display);v.SetImageViews({});v.SetShapeViews({});
     return true;
 }
+bool ProfileCache(V2MainWindow& w) {
+    QTemporaryDir temp;if(!temp.isValid())return false;
+    w.RunCommand("file.new");
+    w.Viewport().SetProfileRegionPicking(true,true);
+    if(!Explain("new document has no stale profile regions",w.Viewport().ProfileRegionCount()==0))return false;
+    w.Viewport().SetProfileRegionPicking(false);
+    if(!DrawRectangleByHand(w))return false;
+    auto& v=w.Viewport();v.SetProfileRegionPicking(true,true);
+    if(!Explain("one visible rectangle is available",v.ProfileRegionCount()==1))return false;
+    v.SetProfileRegionPicking(false);
+    if(!DrawRectangleByHand(w))return false;
+    v.SetProfileRegionPicking(false);v.SetProfileRegionPicking(true,true);
+    if(!Explain("coincident source UUIDs stay independently selectable",v.ProfileRegionCount()==2))return false;
+    const auto original=V2DocumentOpen::FileForSave(w);
+    const auto originalPath=temp.filePath("original.kcd2"),changedPath=temp.filePath("same-ids.kcd2");
+    if(!Write(originalPath,original))return false;
+    auto root=QJsonDocument::fromJson(QByteArray::fromStdString(io::WriteDocumentJson(original))).object();
+    QString featureId,entityId;
+    for(const auto& entity:original.snapshot.entities)if(entity.kind==domain::EntityKind::Wire){
+        entityId=QString::fromStdString(entity.id.ToString());
+        featureId=QString::fromStdString(entity.createdBy.ToString());break;}
+    auto features=root["features"].toArray();bool shifted=false;
+    for(int i=0;i<features.size();++i){
+        auto feature=features[i].toObject();if(feature["id"].toString()!=featureId)continue;
+        auto definition=feature["definition"].toObject(),wire=definition["wire"].toObject();
+        auto segments=wire["segments"].toArray();
+        double low=std::numeric_limits<double>::max(),high=-low;
+        for(const auto& value:segments)for(const char* end:{"start","end"}){
+            const auto point=value.toObject()[end].toObject();
+            low=std::min(low,point["x"].toDouble());high=std::max(high,point["x"].toDouble());}
+        if(!(high>low)||segments.isEmpty())return false;
+        for(int j=0;j<segments.size();++j){
+            auto segment=segments[j].toObject();
+            for(const char* end:{"start","end"}){auto point=segment[end].toObject();
+                point["x"]=point["x"].toDouble()+(high-low)*.5;segment[end]=point;}
+            segments[j]=segment;
+        }
+        wire["segments"]=segments;definition["wire"]=wire;feature["definition"]=definition;features[i]=feature;shifted=true;
+    }
+    if(!shifted)return false;
+    root["features"]=features;
+    const auto changed=io::ReadDocumentJson(QJsonDocument(root).toJson(QJsonDocument::Compact).toStdString());
+    if(!changed.HasValue()||!Write(changedPath,changed.Value())||!w.OpenDocumentFile(changedPath))return false;
+    v.SetProfileRegionPicking(true,true);
+    if(!Explain("same UUIDs and revisions with moved geometry rebuild three overlap cells",v.ProfileRegionCount()==3))return false;
+    auto entities=root["entities"].toArray();
+    for(int i=0;i<entities.size();++i){auto entity=entities[i].toObject();
+        if(entity["id"].toString()==entityId){entity["visibility"]="hidden";entities[i]=entity;}}
+    root["entities"]=entities;
+    const auto hidden=io::ReadDocumentJson(QJsonDocument(root).toJson(QJsonDocument::Compact).toStdString());
+    const auto hiddenPath=temp.filePath("hidden.kcd2");
+    if(!hidden.HasValue()||!Write(hiddenPath,hidden.Value())||!w.OpenDocumentFile(hiddenPath))return false;
+    v.SetProfileRegionPicking(true,true);
+    if(!Explain("visibility changes invalidate region reuse",v.ProfileRegionCount()==1))return false;
+    if(!w.OpenDocumentFile(originalPath))return false;
+    v.SetProfileRegionPicking(true,true);
+    return Explain("restoring original source restores both independent profiles",v.ProfileRegionCount()==2);
+}
 bool OwnerRead(V2MainWindow& w) {
     CacheScope scope;const auto path=qEnvironmentVariable("KACHACAD_OWNER_OPEN_FILE");
     const auto original=io::ReadWholeFile(path.toStdString());if(!original.HasValue())return false;
@@ -405,6 +465,7 @@ std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-07 hidden native shapes mesh on first visibility",HiddenMesh},
     {"HP-OPEN-08 parallel independent surfaces match serial cold rebuild",ParallelRead},
     {"HP-OPEN-09 prepared transfer identities cancellation and poisoned cache",TransferValidation},
-    {"HP-PERF-01 dense face hover and image compositing",Interaction}};
+    {"HP-PERF-01 dense face hover and image compositing",Interaction},
+    {"HP-PROFILE-CACHE source identity geometry visibility and reload",ProfileCache}};
     if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}
 }

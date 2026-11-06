@@ -1,7 +1,9 @@
 #include "kachakacha/app/ProfileRegion.h"
+#include "kachakacha/app/ProfilePlaneIndex.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -292,6 +294,111 @@ KACHA_V2_TEST(profile_region, coincident_multi_segment_wires_remain_separate)
     Require(regions.size() == 2, "重なった閉ポリラインを別々に選べる");
     Require(app::ProfileRegionEntityIds(regions[0]) != app::ProfileRegionEntityIds(regions[1]),
         "輪郭の出所を混ぜない");
+}
+
+KACHA_V2_TEST(profile_region, disjoint_curved_profiles_preserve_small_holed_region)
+{
+    Bench bench;
+    const auto target = bench.ClosedWireRectangle(0, 0, 10, 8);
+    const auto hole = bench.ClosedWireRectangle(2, 2, 4, 4);
+    // Curved profiles in other planes must not change the selected small sheet.
+    // Four Bezier spans retain exact joins and exercise control-hull rejection.
+    for (int profile = 0; profile < 24; ++profile) {
+        const auto id = bench.ids.NextTyped<IdKind::Entity>();
+        const double x = profile * 15.0;
+        const Vector3 corners[] = {{x, 0, 50}, {x + 10, 0, 50},
+            {x + 10, 10, 50}, {x, 10, 50}};
+        for (int edge = 0; edge < 4; ++edge) {
+            const auto a = corners[edge], b = corners[(edge + 1) % 4];
+            const Vector3 bulge = edge % 2 ? Vector3{1, 0, 0} : Vector3{0, 1, 0};
+            const auto curve = CurveSegment::MakeCubicBezier(
+                {a, a + (b - a) * (1.0 / 3) + bulge,
+                    a + (b - a) * (2.0 / 3) + bulge, b});
+            Require(curve.HasValue(), "離れた曲線輪郭を作れる");
+            bench.scene.curves.push_back({id, bench.ids.NextTyped<IdKind::Segment>(), curve.Value()});
+        }
+    }
+    const auto all = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(all.size() == 25, "別平面の曲線輪郭と穴付き矩形を維持する");
+    const auto selected = app::DetectProfileRegions(bench.scene, {target, hole}, GeometryTolerance::Default());
+    Require(selected.size() == 1 && selected[0].holes.size() == 1,
+        "選んだ外周と穴だけで平面を作れる");
+    Require(std::abs(selected[0].areaMm2 - 76) < 1e-6,
+        "無関係な曲線を除いても面積と穴を変えない");
+    Require(app::ProfileRegionEntityIds(selected[0]).size() == 2,
+        "曲線の出所を混ぜない");
+}
+
+KACHA_V2_TEST(profile_region, plane_index_never_loses_full_curve_plane_matches)
+{
+    std::vector<CurveSegment> curves;
+    for (int i = 0; i < 160; ++i) {
+        const double z = i % 3 == 0 ? .01 : i % 3 == 1 ? -.01 : double(i);
+        const double x = (i % 2 ? 1 : -1) * i * 2.5;
+        curves.push_back(CurveSegment::MakeLine({x, 0, z}, {x + 1, 5, z}).Value());
+    }
+    curves.push_back(CurveSegment::MakeCubicBezier(
+        {{1, 0, 0}, {3, 8, 0}, {6, -8, 0}, {9, 0, 0}}).Value());
+    curves.push_back(CurveSegment::MakeCubicBSpline(
+        {{1, 0, .01}, {3, 8, .01}, {6, -8, .01}, {9, 0, .01}}).Value());
+    curves.push_back(CurveSegment::MakeCircle({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, 5).Value());
+    curves.push_back(CurveSegment::MakeCircularArc({0, 0, 0}, {1, 1, 1}, {1, -1, 0},
+        2, .14, 2.4).Value());
+    curves.push_back(CurveSegment::MakeLine({1e9, -1e9, 1e9}, {1e9 + 1, -1e9 + 2, 1e9}).Value());
+    curves.push_back(CurveSegment::MakeLine({1e9 + .01, -1e9, 1e9}, {1e9 + 1, -1e9, 1e9}).Value());
+    for (const auto point : std::vector<Vector3>{{.01, 0, .01}, {-.01, 0, .01}, {0, .01, .01}, {0, 0, .02}})
+        curves.push_back(CurveSegment::MakeLine(point, point + Vector3{1, 0, 0}).Value());
+    curves.push_back(curves[0]); // Coincident sources must retain both identities.
+    std::vector<Vector3> starts;
+    for (const auto& curve : curves) starts.push_back(curve.StartPoint());
+    const app::detail::ProfilePlaneIndex index(std::move(starts));
+    const std::vector<std::pair<Vector3, Vector3>> planes = {
+        {{0, 0, 0}, {0, 0, 7}}, {{0, 0, 0}, {1, 1, 1}},
+        {{10, 0, 0}, {3, 0, 0}}, {{1e9, -1e9, 1e9}, {0, 0, -11}}};
+    for (const auto& [origin, normal] : planes) {
+        const auto candidates = index.Candidates(origin, normal, .01);
+        Require(std::is_sorted(candidates.begin(), candidates.end()), "元の選択順を保つ");
+        Require(std::adjacent_find(candidates.begin(), candidates.end()) == candidates.end(),
+            "候補を重複しない");
+        for (std::size_t i = 0; i < curves.size(); ++i)
+            if (geometry::CurveLiesInPlane(curves[i], origin, normal, .01))
+                Require(std::binary_search(candidates.begin(), candidates.end(), i),
+                    "許容境界・曲線・重複・大きな座標の平面内曲線を落とさない");
+    }
+    for (const auto& curve : curves) {
+        const auto point = curve.StartPoint();
+        const auto candidates = index.Near(point, .01);
+        for (std::size_t i = 0; i < curves.size(); ++i)
+            if (geometry::Distance(curves[i].StartPoint(), point) <= .01)
+                Require(std::binary_search(candidates.begin(), candidates.end(), i),
+                    "近接点索引で重複・許容境界・大きな座標の端点を落とさない");
+    }
+}
+
+KACHA_V2_TEST(profile_region, dense_spatial_panel_rails_do_not_poison_planar_profile)
+{
+    Bench bench;
+    bench.ClosedWireRectangle(-20, -20, -10, -12);
+    const auto point = [](double x, double y) {
+        return Vector3{x + .03 * (x - 4) * std::sin(y * .5), y,
+            20 + .08 * x * x + .04 * y * y};
+    };
+    for (int band = 0; band < 8; ++band) {
+        for (int side = 0; side < 2; ++side) {
+            const auto id = bench.ids.NextTyped<IdKind::Entity>();
+            for (int station = 0; station < 64; ++station) {
+                const auto curve = CurveSegment::MakeLine(point(band + side, station * .2),
+                    point(band + side, (station + 1) * .2));
+                Require(curve.HasValue(), "細かい3D境界線を作れる");
+                bench.scene.curves.push_back({id, bench.ids.NextTyped<IdKind::Segment>(), curve.Value()});
+            }
+        }
+        bench.Line(point(band, 0), point(band + 1, 0));
+        bench.Line(point(band, 12.8), point(band + 1, 12.8));
+    }
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 1 && std::abs(regions[0].areaMm2 - 80) < 1e-6,
+        "千区間以上の隣接する3D輪郭を平面へ混ぜず、選べる矩形を保つ");
 }
 
 int main()

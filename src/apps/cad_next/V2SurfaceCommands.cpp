@@ -6,6 +6,7 @@
 
 #include "V2MainWindow.h"
 #include "V2ShapeLifetime.h"
+#include "V2DocumentTiming.h"
 #include "V2SurfaceAnalysisTool.h"
 
 #include "V2SurfaceDock.h"
@@ -364,12 +365,16 @@ void V2MainWindow::RefreshSurfacePreview()
 //! 「面を作る」を押した。選んだものを役割へ取り込み、作り方を薦めて棚を出す。
 void V2MainWindow::RunSurfaceCreate()
 {
+    V2DocumentTiming timing("surface-create");
+    timing.Mark("begin");
     if (!surfaceShelfShown_) {
         // 始めるとき。ほかの道具(近似など)は解く。2 つ構えたままにすると、片方をやめても
         // もう片方が画面の押下を取り続けて線が選べない。選んだものはそのまま取り込む。
         EndArmedTools();
+        timing.Mark("end-other-tools");
         // 選んだものを取り込み、作り方を薦める(§11)。
         const auto facts = SurfaceFactsNow();
+        timing.Mark("selection-facts");
         // 作り方を人が選んでいなければ、おまかせ(初心者の入口): 押した線の役割と作り方を
         // 線のつながりから決める(V2SurfaceRoles.cpp)。作り方のカードを押すと切れる。
         surfaceInput_.autoRoles = !surfaceInput_.methodChosenByUser;
@@ -382,7 +387,9 @@ void V2MainWindow::RunSurfaceCreate()
         surfaceInput_.activeSlot =
             kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method);
         AddSelectionToSurfaceSlot(surfaceInput_.activeSlot);
+        timing.Mark("intake");
         ReclassifySurfaceRoles();
+        timing.Mark("roles");
         surfaceShelfShown_ = true;
         viewport_->SetToolPickActive(true);
         // 以後の 3D クリックは「押すたびに入れる/外す」。欄が正本、3D はその印。
@@ -390,10 +397,14 @@ void V2MainWindow::RunSurfaceCreate()
         MirrorSurfaceEntriesToSelection();
         viewport_->SetProfileRegionPicking(
             surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary, true);
+        timing.Mark("region-picking");
         RefreshRightShelves();
+        timing.Mark("shelves");
         RefreshSurfacePreview();
+        timing.Mark("preview");
         RefreshSurfaceRoleLabels();
         RefreshSurfaceDock();
+        timing.Mark("dock");
         SetStatus(QStringLiteral("面を作る\n作り方: %1\n右の棚で作り方と入力を決めて、"
                                  "Enter で確定します。Esc でやめます。")
                 .arg(QString::fromUtf8(std::string(

@@ -3,6 +3,7 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2EntityTree.h"
+#include "V2DocumentTiming.h"
 #include "kachakacha/app/Ribbon.h"
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/modeling/MeshPick.h"
@@ -15,6 +16,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
@@ -137,18 +139,25 @@ bool Mode(V2MainWindow& w,app::UiMode mode)
 
 bool Tool(V2MainWindow& w,const QJsonObject& step)
 {
+    V2DocumentTiming timing("replay-tool");
+    timing.Mark("begin");
     const auto command=step["command"].toString();const auto label=step["label"].toString();
     for(const auto mode:app::AllUiModes())for(const auto& category:app::RibbonCategoriesFor(mode))
         for(const auto& tool:category.tools)if((!command.isEmpty()||!label.isEmpty())
             &&(command.isEmpty()||Utf8(tool.commandId)==command)
             &&(label.isEmpty()||Utf8(tool.labelJa)==label)){
             if(!Mode(w,mode))return false;
+            timing.Mark("mode");
             QToolButton* categoryButton=nullptr;
             for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))
                 if(b->text()==Utf8(category.labelJa))categoryButton=b;
             if(!categoryButton||!Mouse(*categoryButton,categoryButton->rect().center()))return false;
+            timing.Mark("category");
             for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))
-                if(b->text()==Utf8(tool.labelJa))return Mouse(*b,b->rect().center());
+                if(b->text()==Utf8(tool.labelJa)){
+                    const bool result=Mouse(*b,b->rect().center());
+                    timing.Mark("tool");return result;
+                }
             return false;
         }
     return false;
@@ -475,8 +484,10 @@ struct Replay {
             w.grab().save(QDir(root).filePath("replay-failure.png"));return false;
         }
         for(const auto& value:phase["steps"].toArray()){
+            QElapsedTimer elapsed;elapsed.start();
             const auto step=value.toObject();const bool ok=Act(step);
-            trace.append(QJsonObject{{"step",index},{"input",step},{"ok",ok},{"status",w.StatusText()}});
+            trace.append(QJsonObject{{"step",index},{"input",step},{"ok",ok},{"status",w.StatusText()},
+                {"elapsed_ms",elapsed.nsecsElapsed()/1000000.0}});
             Write(QDir(root).filePath("replay-trace.json"),{{"steps",trace},{"aliases",aliases}});
             if(!ok){Inspect(QDir(root).filePath("replay-failure.json"));w.grab().save(QDir(root).filePath("replay-failure.png"));
                 std::cerr<<"UI replay failed at "<<index<<" "<<QJsonDocument(step).toJson(QJsonDocument::Compact).constData()<<std::endl;return false;}

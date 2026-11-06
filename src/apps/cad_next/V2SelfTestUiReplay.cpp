@@ -472,6 +472,10 @@ struct Replay {
     bool Run(const QJsonObject& phase)
     {
         if(phase["name"].toString().isEmpty()||!phase["steps"].isArray()||phase["steps"].toArray().isEmpty())return false;
+        // RunOneCase installs automatic answers for older isolated tests. A
+        // human-operation replay must use the product's real settings instead.
+        w.SetPathChooser({});w.SetExtrudeChooser({});w.SetWorkPlaneChooser({});
+        w.SetAssemblyChooser({});w.SetGuideChoiceChooser({});
         // Exercise the real Qt file chooser. The optional event replay cannot
         // send its widget events into a Windows-native file picker.
         const bool nativeDialogsDisabled=QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
@@ -544,6 +548,48 @@ bool Smoke(V2MainWindow& w)
         &&!replay.Act({{"op","remember"},{"kind",2},{"as","not-created"},{"new",true}});
 }
 
+bool RealSettings(V2MainWindow& w)
+{
+    // Each isolated case has its own working directory. Keep event traces and
+    // failure captures there so a failed step remains inspectable.
+    const auto artifactRoot=QDir::current().filePath("real-settings");
+    if(!QDir().mkpath(artifactRoot))return false;
+    w.RunCommand("file.new");const int planes=CountOfKind(w,domain::EntityKind::WorkPlane);
+    Replay plane{w,artifactRoot+"/plane",{},{},0};
+    if(!QDir().mkpath(plane.root))return false;
+    const QJsonArray planeSteps{
+        QJsonObject{{"op","tool"},{"command","workplane.create"}},
+        QJsonObject{{"op","count"},{"kind",1},{"value",planes}},
+        QJsonObject{{"op","combo"},{"widget","workPlaneMethod"},{"text",QStringLiteral("平面から離す")}},
+        QJsonObject{{"op","combo"},{"widget","workPlaneReference"},{"text","top_XY"}},
+        QJsonObject{{"op","number"},{"widget","workPlaneDistance"},{"value",17.5}},
+        QJsonObject{{"op","count"},{"kind",1},{"value",planes}},
+        QJsonObject{{"op","click"},{"widget","panelConfirm"},{"text",QStringLiteral("平面を作る")}},
+        QJsonObject{{"op","count"},{"kind",1},{"value",planes+1}},
+        QJsonObject{{"op","click"},{"within","modeBar"},{"text",QStringLiteral("選択")}}};
+    if(!Explain("opening workplane settings does not auto-confirm a test answer",
+        plane.Run({{"name","real workplane settings"},{"steps",planeSteps}})))return false;
+    const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    Replay extrude{w,artifactRoot+"/extrude",{},{},0};
+    if(!QDir().mkpath(extrude.root))return false;
+    const QJsonArray extrudeSteps{
+        QJsonObject{{"op","select"},{"id",QString::fromStdString(wire.ToString())}},
+        QJsonObject{{"op","tool"},{"command","part.extrude"}},
+        QJsonObject{{"op","count"},{"kind",4},{"value",0}},
+        QJsonObject{{"op","number"},{"widget","extrudeDistance"},{"value",3}},
+        QJsonObject{{"op","combo"},{"widget","extrudeDirection"},{"text",QStringLiteral("Z方向")}},
+        QJsonObject{{"op","count"},{"kind",4},{"value",0}},
+        QJsonObject{{"op","key"},{"key","Return"}},
+        QJsonObject{{"op","count"},{"kind",4},{"value",1}}};
+    if(!Explain("extrusion is created only after visible settings and confirmation",
+        extrude.Run({{"name","real extrusion settings"},{"steps",extrudeSteps}})))return false;
+    const auto& shapes=w.Viewport().ShapeViews();
+    return Explain("entered plane offset and extrusion distance determine the actual shape",
+        shapes.size()==1&&shapes.front().mesh.closed
+        &&std::abs(shapes.front().mesh.minimum.z-17.5)<1e-6
+        &&std::abs(shapes.front().mesh.maximum.z-20.5)<1e-6);
+}
+
 constexpr std::size_t kMaximumPhases=128;
 std::array<QJsonObject,kMaximumPhases> phases;
 std::array<std::string,kMaximumPhases> names;
@@ -560,7 +606,8 @@ template<std::size_t... I> constexpr auto Runners(std::index_sequence<I...>)
 
 std::vector<SelfTestCase> UiReplayCases()
 {
-    std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke}};
+    std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke},
+        {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings}};
     const auto script=qEnvironmentVariable("KACHACAD_UI_REPLAY");if(script.isEmpty())return cases;
     const auto document=Read(script);replayRoot=QFileInfo(script).absolutePath();
     if(!document["phases"].isArray()||document["phases"].toArray().isEmpty()){

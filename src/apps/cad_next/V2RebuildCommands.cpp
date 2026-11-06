@@ -337,9 +337,21 @@ bool V2MainWindow::RebuildOneShape(const kachakacha::v2::app::ShapeRebuildStep& 
         if(!shape.HasValue()){ReportDiagnostics(shape.Diagnostics());break;}
         const auto* entity=session_->GetDocument().FindEntity(step.outputEntityId);
         if(entity==nullptr)break;
-        if(entity->kind==kachakacha::v2::domain::EntityKind::Part)partShapes_[step.outputEntityId.ToString()]=shape.Value();
+        if(entity->kind==kachakacha::v2::domain::EntityKind::Part) {
+            partShapes_[step.outputEntityId.ToString()]=shape.Value();
+            // The native BRep remains authoritative. Restore its pickable
+            // edges too, as for an ordinary extrusion or thickened part.
+            const auto edges=kachakacha::v2::kernel::OutputEdges(shape.Value(),
+                session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+            if(edges.HasValue())partEdges_[step.outputEntityId.ToString()]=edges.Value();
+            else ReportDiagnostics(edges.Diagnostics());
+        }
         else {
             guideShapes_[step.outputEntityId.ToString()]=shape.Value();
+            const auto edges=kachakacha::v2::kernel::OutputEdges(shape.Value(),
+                session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+            if(edges.HasValue())guideEdges_[step.outputEntityId.ToString()]=edges.Value();
+            else ReportDiagnostics(edges.Diagnostics());
             const auto count=kachakacha::v2::kernel::ShapeFaceCount(shape.Value());
             if(count.HasValue() && count.Value()==1) {
                 const auto sampled=kachakacha::v2::kernel::FaceSamplesOf(shape.Value(),0);

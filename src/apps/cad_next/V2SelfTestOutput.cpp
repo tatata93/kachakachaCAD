@@ -390,6 +390,40 @@ bool CaseOutputOwnership(V2MainWindow& w){
     output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);
 }
+bool FrozenCopyKeepsPickableEdgesCase(V2MainWindow& w,bool face)
+{
+    if(!OutputBox(w))return false;
+    const auto originals=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::Part);
+    app::SelectionRef ref;ref.entityId=originals.entityIds.front();ref.kind=app::SelectionElementKind::Face;ref.pickedFaceIndex=0;
+    w.Viewport().SetSelection(face?app::SelectionSet{originals.entityIds,{ref}}:originals);
+    auto* output=V2OutputTool::Open(w,3);
+    if(face)output->findChild<QComboBox*>("outputScope")->setCurrentIndex(1);
+    if(!output->SaveTo(QString()))return false;output->close();
+    base::EntityId copied;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==(face?domain::EntityKind::GuideSurface:domain::EntityKind::Part)
+            &&e.id!=originals.entityIds.front())copied=e.id;
+    if(copied.IsNil())return false;
+    const auto edgeCount=[&]{return std::count_if(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),
+        [&](const auto& curve){return curve.entityId==copied;});};
+    const auto brep=[&]{
+        const auto* e=w.Session().GetDocument().FindEntity(copied);
+        if(e)for(const auto& f:w.Session().GetDocument().Snapshot().features)if(f.id==e->createdBy)
+            if(const auto* frozen=std::get_if<domain::FreezeDerivedDefinition>(&f.definition))return frozen->frozenBrep;
+        return std::string{};
+    };
+    const auto originalBrep=brep();
+    const int expected=face?4:12;
+    if(!Explain("independent native copy has all pickable edges",edgeCount()==expected&&!originalBrep.empty()))return false;
+    if(!w.SaveAndReopen(QStringLiteral("native-copy-pickable-edges.kcd2")))return false;
+    return Explain("native edge restoration preserves the authoritative BRep after reopen",
+        edgeCount()==expected&&brep()==originalBrep&&CountOfKind(w,domain::EntityKind::Part)==(face?1:2)
+        &&CountOfKind(w,domain::EntityKind::Wire)==1);
 }
-std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
+bool FrozenCopyKeepsPickableEdges(V2MainWindow& w)
+{
+    return FrozenCopyKeepsPickableEdgesCase(w,false)&&FrozenCopyKeepsPickableEdgesCase(w,true);
+}
+}
+std::vector<SelfTestCase> OutputCases(){return {{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};}
 }

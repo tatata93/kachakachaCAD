@@ -14,7 +14,7 @@
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 全体検証済み(Codex、2026-11-06、f53a24e5a、更新3。曲面再近似を局所節点の削減と制御点比較による偏差上限へ変更。穴・表裏・有理面・周期継ぎ目・回転面の境界と元BRepを保全し、面編集13件と実屋根のQt操作が成功。全体ゲートの事前9件、CTest195件、開発版/配布版UI各691件、通常起動も成功。公開APIは変更しない。工作用模型は継続) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 全体検証済み(Codex、2026-11-06、90882f712の修正をf53a24e5aの更新3で検証。内部停留点・方向別の速度・C0の片側法線を修正。品質31件と全体ゲートが成功し、元面とnative安全検査を維持。添付屋根の真に法線が一意でない角の一定厚みは未対応で、強制成功にはしない) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 全体検証済み(Codex、2026-11-06、66ce13538の修正をf53a24e5aの更新3で検証。一覧の全体選択をorderedへ渡し、縁の無断推定を防止。面編集欄の横スクロールと案内も修正。全体ゲートの開発版/配布版UI各691件と通常起動が成功。現在の所有はWP-06) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 進行中(Codex、codex/v2-wp01-build-scaffold、2026-11-06。現在の所有。UI replayの数値確定イベントだけを調査。製品処理は変更しない。66ce13538までの一覧・面編集UIはf53a24e5aの更新3で全体検証済み) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(今回の段階15追加修正、Codex、2026-11-06。線だけの独立コピーの全形状再構築を除去。出力UI12件、コピー後の配列入力、52面車体の同一経路104.25→50.98秒が成功。CTest195、UI685×2、通常起動を通しv0.1.0-20261106-update1を公開。WP全体の未完了事項は残し、現在の所有をWP-08へ移す。履歴と限界はrefactoring-plan参照) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

@@ -112,7 +112,11 @@ bool ExerciseStop(V2MainWindow& w,int mode) {
     std::cout<<"document stop mode="<<mode<<", elapsed="<<total.elapsed()<<" ms, UI ticks="<<ticks<<'\n';
     std::cout<<"preserved: document="<<(Snapshot(w)==before)<<", revision="<<(w.Session().GetDocument().Revision()==baselineRevision)
         <<", cache="<<cache<<" -> "<<kernel::CachedShapeCount()<<", displayed shapes="<<shapes<<" -> "<<w.KernelShapeCount()<<'\n';
-    if(!Explain("file open failure/cancel preserves the old document and cache",(mode>=2||stopped)&&!timedOut&&ticks>0&&total.elapsed()<10000
+    const auto details=QStringLiteral("file open failure/cancel preserves the old document and cache: mode=%1, stopped=%2, timedOut=%3, ticks=%4, elapsedMs=%5, document=%6, revision=%7, cache=%8/%9, shapes=%10/%11, active=%12")
+        .arg(mode).arg(stopped).arg(timedOut).arg(ticks).arg(total.elapsed()).arg(Snapshot(w)==before)
+        .arg(w.Session().GetDocument().Revision()==baselineRevision).arg(cache).arg(kernel::CachedShapeCount())
+        .arg(shapes).arg(w.KernelShapeCount()).arg(V2GeometryJob::Active());
+    if(!Explain(details.toUtf8().constData(),(mode>=2||stopped)&&!timedOut&&ticks>0&&total.elapsed()<10000
         &&Snapshot(w)==before&&w.Session().GetDocument().Revision()==baselineRevision
         &&kernel::CachedShapeCount()==cache&&w.KernelShapeCount()==shapes&&!V2GeometryJob::Active()))return false;
     if(!Explain("input file remains byte identical",io::ReadWholeFile(input.toStdString()).Value()==inputBytes.Value()))return false;

@@ -12,9 +12,9 @@
 | WP-03 | 重点検証済み(Codex、2026-11-04段階3。型付きUUIDと依存順序の一度検証。document/構造試験成功、1000線確定42.54→13.27 ms。全体検証は後段) | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 重点確認済み(Codex、2026-11-06、150e51542。結合のSegmentId参照と直線/円弧の閉輪オフセットを修正。関連コア4群、複数輪郭の下見/確定/面生成/保存のHP-OFFSET-LOOP、添付床板の通常UI経路が成功。全体ゲートは後段。現在の所有をWP-08へ戻す) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 完了(v2_json / v2_zip / v2_document_file / v2_atomic_file。手書きのJSONとZIP。1バイト書き換えの総当たりも通す) | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
-| WP-06 | 重点検証済み(Codex、2026-11-04段階6/7。私有並列の偏差と互換性付き一時binary転送。kernel/構造成功、全体は後段) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
+| WP-06 | 進行中(Codex、2026-11-06。添付屋根の面再近似が許容0.01mmに対し約0.5022mm動くため拒否される。非一様な曲面の局所形状を見落とさない再近似と偏差検査を、一般化した再現から調査する。元面・穴・向き・許容を維持し、公開APIは変更しない) | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 重点検証済み(Codex、2026-11-06、90882f712。内部停留点・方向別の速度・C0の片側法線を修正し、品質31件と関連5群が成功。元面とnative安全検査を維持。実屋根は前端の角で未解決、追加修正の全体検証も未完了。現在の所有をWP-08へ移す) | WP-06 | Part作成、押し出し、Boolean、Subshape |
-| WP-08 | 進行中(Codex、2026-11-06。6fd905b17は全体検証と更新2公開済み。模型の通常UI作業で、左一覧からの選択が面編集開始時に入力されない経路を再現。選択の正本orderedへ全体選択を渡し、縁が未指定の場合に勝手な縁を推定しない接続と回帰を調査する。公開API・幾何・保存形式は変更しない) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
+| WP-08 | 重点検証済み(Codex、2026-11-06、66ce13538。一覧の全体選択をorderedへ渡し、縁の無断推定を防止。面編集欄の横スクロールと案内も修正。通常マウスの再現、UI160件、事前9件が成功。追加修正の全体検証と模型は未完了。現在の所有をWP-06へ移す) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
 | WP-11 | 完了(今回の段階15追加修正、Codex、2026-11-06。線だけの独立コピーの全形状再構築を除去。出力UI12件、コピー後の配列入力、52面車体の同一経路104.25→50.98秒が成功。CTest195、UI685×2、通常起動を通しv0.1.0-20261106-update1を公開。WP全体の未完了事項は残し、現在の所有をWP-08へ移す。履歴と限界はrefactoring-plan参照) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |

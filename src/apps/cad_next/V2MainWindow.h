@@ -565,7 +565,7 @@ public:
     //! 作り方に付いていかない、ただの線を1つ足す。足せたら EntityId を返す。
     kachakacha::v2::base::EntityId AddPlainWire(
         std::vector<kachakacha::v2::geometry::CurveSegment> segments,
-        const char* labelJa);
+        const char* labelJa, bool compactSegments = true);
     //! 選んだものを、作り方に付いていかない形にする。元は隠す。
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。

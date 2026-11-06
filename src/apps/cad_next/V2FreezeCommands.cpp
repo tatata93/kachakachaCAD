@@ -54,6 +54,40 @@ bool StraightBandRails(const std::vector<kachakacha::v2::geometry::Vector3>& a,
     return true;
 }
 
+struct BandRailWires {
+    EntityId bottom, top;
+    bool missingIntervals = false;
+};
+
+auto BandRailPoints(const std::vector<kachakacha::v2::geometry::Vector3>& bottom,
+    const std::vector<kachakacha::v2::geometry::Vector3>& top)
+{
+    // Remove redundant stations only when both rails are exactly straight
+    // and the retained endpoints preserve their original correspondence.
+    if (StraightBandRails(bottom, top)) {
+        return std::pair{std::vector{bottom.front(), bottom.back()},
+            std::vector{top.front(), top.back()}};
+    }
+    return std::pair{bottom, top};
+}
+
+BandRailWires AddBandRailWires(V2MainWindow& window,
+    const std::vector<kachakacha::v2::geometry::CurveSegment>& bottom,
+    const std::vector<kachakacha::v2::geometry::CurveSegment>& top,
+    std::size_t bottomPoints, std::size_t topPoints, const std::string& label,
+    bool compactRails)
+{
+    if (!compactRails && (bottom.size()+1 != bottomPoints
+        || top.size()+1 != topPoints || bottom.size()!=top.size())) {
+        return {{}, {}, true};
+    }
+    // The paired stations define the interior of the ruled face. Merging
+    // collinear runs independently changes their correspondence, even when
+    // both wires still have exactly the same boundary geometry.
+    return {window.AddPlainWire(bottom, (label + " 下").c_str(), compactRails),
+        window.AddPlainWire(top, (label + " 上").c_str(), compactRails)};
+}
+
 // Carry the source face's oriented side through the rigid folding of each band.
 // The geometric rail normal alone is insufficient: split axes can reverse it.
 kachakacha::v2::geometry::Vector3 FrozenBandNormal(
@@ -230,7 +264,8 @@ void V2MainWindow::FreezeFlatOutline()
 }
 
 kachakacha::v2::base::EntityId V2MainWindow::AddPlainWire(
-    std::vector<kachakacha::v2::geometry::CurveSegment> segments, const char* labelJa)
+    std::vector<kachakacha::v2::geometry::CurveSegment> segments, const char* labelJa,
+    bool compactSegments)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::CreateWireDefinition;
@@ -249,7 +284,7 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPlainWire(
     feature.displayName = labelJa;
     // 入力を持たせない。持たせると、また元に付いていってしまう。
     CreateWireDefinition definition;
-    definition.segments = V2CompactGeneratedCurves(segments);
+    definition.segments = compactSegments ? V2CompactGeneratedCurves(segments) : std::move(segments);
     for (std::size_t index = 0; index < definition.segments.size(); ++index) {
         definition.segmentIds.push_back(
             ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
@@ -527,14 +562,14 @@ bool V2MainWindow::FreezeWithDefinition(
         if (!selected.empty() && std::find(selected.begin(),selected.end(),panelIndex)==selected.end()) { continue; }
         const std::string label = modelName + " 部材"
             + std::to_string(panelIndex + 1) + " (" + stateName + ")";
-        // Preserve correspondence while removing redundant subdivisions of an
-        // exactly straight band. Hundreds of collinear B-Rep edges made even a
-        // rectangular cylinder panel need minutes for offset/fuse validation.
-        const bool straight = StraightBandRails(rails[band], rails[band+1]);
-        const auto bottomPoints = straight ? std::vector{rails[band].front(),rails[band].back()} : rails[band];
-        const auto topPoints = straight ? std::vector{rails[band+1].front(),rails[band+1].back()} : rails[band+1];
-        const auto bottom = AddPlainWire(PolylineOf(bottomPoints), (label + " 下").c_str());
-        const auto top = AddPlainWire(PolylineOf(topPoints), (label + " 上").c_str());
+        const auto [bottomPoints, topPoints] = BandRailPoints(rails[band], rails[band+1]);
+        const auto paired = AddBandRailWires(*this, PolylineOf(bottomPoints), PolylineOf(topPoints),
+            bottomPoints.size(), topPoints.size(), label, freezeOutput_ == FreezeOutput::WiresOnly);
+        if (paired.missingIntervals) {
+            SetStatus(QStringLiteral("生成面: 対応する断面に長さのない区間があります。分割位置や元の形状を確認してください。"));
+            return false;
+        }
+        const auto bottom = paired.bottom, top = paired.top;
         if (bottom.IsNil() || top.IsNil()) {
             return false;
         }

@@ -16,10 +16,17 @@
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/geometry/CurveSegment.h"
+#include "kachakacha/io/DocumentFile.h"
+#include "kachakacha/io/AtomicFile.h"
+#include "kachakacha/kernel/OcctOutput.h"
 
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QByteArray>
+#include <QTemporaryDir>
+#include <QScopeGuard>
 
 #include <functional>
 #include <string>
@@ -236,11 +243,49 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1);
 }
 
+bool CaseMatchedRailsSurviveColdReopen(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+#include "../../../tests_v2/fixtures/tapered-paired-stations.inc"
+    std::vector<base::EntityId> wires;
+    for(const auto& points:pairedRails){
+        std::vector<geometry::CurveSegment> curves;
+        for(std::size_t i=1;i<points.size();++i){
+            const auto line=geometry::CurveSegment::MakeLine(points[i-1],points[i]);
+            if(!line.HasValue())return false;curves.push_back(line.Value());
+        }
+        const auto id=window.AddPlainWire(curves,"対応する断面",false);
+        if(id.IsNil())return false;wires.push_back(id);
+    }
+    const auto guide=window.CreateGuideSurfaceFromWires(wires,"対応する断面からの面");
+    if(!Explain("the generated face keeps the station correspondence",!guide.IsNil()))return false;
+    const auto key=guide.ToString();const auto found=window.guideShapes_.find(key);
+    if(found==window.guideShapes_.end())return false;
+    const auto before=kernel::CaptureOutputShape(found->second);
+    if(!Explain("generated native geometry passes validity before saving",before.HasValue()))return false;
+    io::DocumentFile file;file.snapshot=window.Session().GetDocument().Snapshot();
+    const auto archive=io::SaveDocument(file);QTemporaryDir folder;
+    const auto path=folder.filePath("paired-generated.kcd2");
+    if(!archive.HasValue()||!io::WriteFileAtomically(path.toStdString(),archive.Value()).HasValue())return false;
+    const auto previous=qgetenv("KACHACAD_DOCUMENT_CACHE_DIR");
+    qputenv("KACHACAD_DOCUMENT_CACHE_DIR",folder.filePath("empty-cache").toUtf8());
+    const auto restore=qScopeGuard([&]{if(previous.isNull())qunsetenv("KACHACAD_DOCUMENT_CACHE_DIR");
+        else qputenv("KACHACAD_DOCUMENT_CACHE_DIR",previous);});
+    window.RunCommand("file.new");
+    if(!Explain("cold rebuild of the saved face succeeds",window.OpenDocumentFile(path)))return false;
+    const auto rebuilt=window.guideShapes_.find(key);if(rebuilt==window.guideShapes_.end())return false;
+    const auto after=kernel::CaptureOutputShape(rebuilt->second);
+    return Explain("cold rebuild preserves native curves, orientation and topology",after.HasValue()
+        &&after.Value()==before.Value()&&CountOfKind(window,EntityKind::GuideSurface)==1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> GenerateCases()
 {
     return {
+        {"HP-GN-04 corresponding generated rails survive cold rebuild",CaseMatchedRailsSurviveColdReopen},
         {"HP-GN-01 生成の作り方カードは 現在/Flat/Target で、Target 100% は固定物を作る",
             CaseGenerateCardsListStatesAndTargetFreezes},
         {"HP-GN-02 Flat 0% は線を作り、近似モデルは残り、1回の取り消しで線が全部消える",

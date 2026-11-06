@@ -51,6 +51,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <utility>
 
 namespace kachakacha::v2::selftest {
@@ -153,6 +154,28 @@ bool Tool(V2MainWindow& w,const QJsonObject& step)
     return false;
 }
 
+// Read positions from displayed edge polylines, then send the same mouse input
+// as a person. Never construct a selection reference or change model geometry.
+std::optional<geometry::Vector3> NativeEdgePoint(V2MainWindow& w,EntityId id,int edge,double parameter)
+{
+    if(edge<0||!std::isfinite(parameter)||parameter<0||parameter>1)return std::nullopt;
+    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==id){
+        if(static_cast<std::size_t>(edge)>=shape.mesh.edges.size())return std::nullopt;
+        const auto& points=shape.mesh.edges[static_cast<std::size_t>(edge)];
+        if(points.size()<2)return std::nullopt;
+        double length=0;for(std::size_t i=1;i<points.size();++i)length+=geometry::Distance(points[i-1],points[i]);
+        if(length<=1e-12)return std::nullopt;
+        double remaining=length*parameter;
+        for(std::size_t i=1;i<points.size();++i){
+            const double span=geometry::Distance(points[i-1],points[i]);
+            if(span>0&&remaining<=span)return points[i-1]+(points[i]-points[i-1])*(remaining/span);
+            remaining-=span;
+        }
+        return points.back();
+    }
+    return std::nullopt;
+}
+
 QJsonObject Read(const QString& path)
 {
     QFile file(path);if(!file.open(QIODevice::ReadOnly))return {};
@@ -242,17 +265,28 @@ struct Replay {
     bool Point(const QJsonObject& step)
     {
         const auto id=EntityId::Parse(Resolve(step["id"].toString()).toStdString());if(!id)return false;
-        int at=step["segment"].toInt();
-        for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==*id){
-            if(at-->0)continue;
-            const auto p=w.Viewport().Mapping().Project(curve.segment.Evaluate(step["parameter"].toDouble()));
-            if(!p)return false;const QPointF pixel(p->x,p->y);
-            QMouseEvent move(QEvent::MouseMove,pixel,QPointF(w.Viewport().mapToGlobal(pixel.toPoint())),
-                Qt::NoButton,Qt::NoButton,Qt::NoModifier);
-            QApplication::sendEvent(&w.Viewport(),&move);QApplication::processEvents();
-            return Mouse(w.Viewport(),pixel);
+        const double parameter=step["parameter"].toDouble();
+        if(!std::isfinite(parameter)||parameter<0||parameter>1)return false;
+        std::optional<geometry::Vector3> position;
+        if(step.contains("native_edge"))position=NativeEdgePoint(w,*id,step["native_edge"].toInt(-1),parameter);
+        else {
+            int at=step["segment"].toInt();
+            for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==*id&&at--==0){
+                position=curve.segment.Evaluate(parameter);break;
+            }
         }
-        return false;
+        if(!position)return false;
+        const auto p=w.Viewport().Mapping().Project(*position);if(!p)return false;
+        const QPointF pixel(p->x,p->y);
+        const auto modifiers=step["add"].toBool()?Qt::ControlModifier:Qt::NoModifier;
+        QMouseEvent move(QEvent::MouseMove,pixel,QPointF(w.Viewport().mapToGlobal(pixel.toPoint())),
+            Qt::NoButton,Qt::NoButton,modifiers);
+        QApplication::sendEvent(&w.Viewport(),&move);QApplication::processEvents();
+        const bool sent=Mouse(w.Viewport(),pixel,modifiers);
+        QString picked;for(const auto& selected:w.Viewport().Selection().entityIds)picked+=QString::fromStdString(selected.ToString())+' ';
+        Note(QStringLiteral("replay point %1 at %2,%3 add=%4 selected=%5")
+            .arg(Resolve(step["id"].toString())).arg(pixel.x()).arg(pixel.y()).arg(step["add"].toBool()).arg(picked).toUtf8().constData());
+        return sent;
     }
 
     bool Select(const QJsonObject& step)
@@ -471,6 +505,27 @@ bool Smoke(V2MainWindow& w)
     if(!replay.Act({{"op","remember"},{"kind",2},{"as","longLabel"}})
         ||!replay.Act({{"op","select"},{"id","$longLabel"},{"rename",longName}})
         ||!replay.Act({{"op","select"},{"id","$longLabel"}}))return false;
+    if(!replay.Act(tool))return false;
+    w.resize(1600,1000);QApplication::processEvents();
+    for(const auto& field:std::vector<std::pair<QString,double>>{{"drawingCoordinateP1_0",-40},{"drawingCoordinateP1_1",30},
+        {"drawingCoordinateP2_0",-10},{"drawingCoordinateP2_1",40}})
+        if(!replay.Act({{"op","number"},{"widget",field.first},{"value",field.second}}))return false;
+    if(!replay.Act({{"op","click"},{"widget","drawingCreateCoordinates"}})
+        ||!Explain("second coordinate line created",CountOfKind(w,domain::EntityKind::Wire)==2)
+        ||!replay.Act({{"op","remember"},{"kind",2},{"as","secondLine"}})
+        ||!replay.Act({{"op","click"},{"within","modeBar"},{"text",QStringLiteral("選択")}})
+        ||!replay.Act({{"op","fit"}})
+        ||!replay.Act({{"op","point"},{"id","$longLabel"},{"parameter",.5}})
+        ||!replay.Act({{"op","point"},{"id","$secondLine"},{"parameter",.5},{"add",true}}))return false;
+    Note(QStringLiteral("replay Ctrl-click: %1 entities, %2 ordered elements")
+        .arg(w.Viewport().Selection().entityIds.size()).arg(w.Viewport().Selection().ordered.size()).toUtf8().constData());
+    if(w.Viewport().Selection().entityIds.size()!=2){
+        replay.Inspect("replay-smoke-selection.json");w.grab().save("replay-smoke-selection.png");
+        Note(QJsonDocument(replay.aliases).toJson(QJsonDocument::Compact).constData());
+    }
+    if(!Explain("replay Ctrl-click adds a second visible wire",w.Viewport().Selection().entityIds.size()==2))return false;
+    if(replay.Act({{"op","point"},{"id","$secondLine"},{"native_edge",-1},{"parameter",.5}})
+        ||replay.Act({{"op","point"},{"id","$secondLine"},{"parameter",1.5}}))return false;
     // Unknown operations and hidden UI must fail; they cannot silently become API calls.
     if(replay.Act({{"op","create_shape"}})||replay.Act({{"op","click"},{"widget","does-not-exist"}})
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;

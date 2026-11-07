@@ -801,6 +801,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctThickenToFace.cpp
     src/next_occt/kachakacha/kernel/OcctCorrectedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctFoldedBandThicken.cpp
+    src/next_occt/kachakacha/kernel/OcctFoldedBandOffset.cpp
     src/next_occt/kachakacha/kernel/OcctPlanarSheetThicken.cpp
     src/next_occt/kachakacha/kernel/OcctRevolvedThicken.cpp
     src/next_occt/kachakacha/kernel/OcctMatchedLoft.cpp
@@ -1080,6 +1081,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     endfunction()
 
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_folded_offset_tests tests_v2/kernel_folded_offset_tests.cpp)
     kachakacha_add_v2_kernel_test(gpt_surface_tests tests_v2/gpt_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(gpt_fabrication_tests tests_v2/gpt_fabrication_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)

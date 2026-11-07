@@ -6,7 +6,15 @@
 #include <BRepTools_WireExplorer.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <Geom2d_Curve.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom2dAdaptor_Curve.hxx>
+#include <Geom2dAPI_InterCurveCurve.hxx>
+#include <Geom_BSplineSurface.hxx>
 #include <Geom_Surface.hxx>
+#include <NCollection_Array1.hxx>
+#include <gp_Dir2d.hxx>
+#include <gp_Pnt2d.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
@@ -19,6 +27,44 @@
 #include <stdexcept>
 #endif
 namespace kachakacha::v2::kernel {
+#ifdef KACHACAD_V2_WITH_OCCT
+namespace {
+std::vector<double> BoundaryIntervals(const occ::handle<Geom2d_Curve>& curve,
+    const occ::handle<Geom_Surface>& surface,double begin,double end)
+{
+    if(begin==end)return {begin,end};
+    const double low=std::min(begin,end),high=std::max(begin,end);
+    Geom2dAdaptor_Curve edge(curve,low,high);
+    const int count=edge.NbIntervals(GeomAbs_C1);
+    if(count<=0||count>20000)throw std::runtime_error("境界の折れ位置が多すぎます。");
+    NCollection_Array1<double> parameters(1,count+1);edge.Intervals(parameters,GeomAbs_C1);
+    std::vector<double> cuts;
+    for(int i=1;i<=count+1;++i)cuts.push_back(parameters(i));
+    // A smooth UV line can still cross a C0 fold in its supporting surface.
+    // Put that exact crossing at an interval endpoint instead of repeatedly
+    // bisecting across the corner until the recursion budget is exhausted.
+    const auto spline=occ::handle<Geom_BSplineSurface>::DownCast(surface);
+    if(!spline.IsNull()){
+        const occ::handle<Geom2d_Curve> bounded=new Geom2d_TrimmedCurve(curve,low,high);
+        for(const bool u:{false,true}){
+            const int knots=u?spline->NbUKnots():spline->NbVKnots();
+            for(int i=2;i<knots;++i){
+                if((u?spline->UMultiplicity(i):spline->VMultiplicity(i))<(u?spline->UDegree():spline->VDegree()))continue;
+                const double knot=u?spline->UKnot(i):spline->VKnot(i);
+                const occ::handle<Geom2d_Curve> line=new Geom2d_Line(
+                    u?gp_Pnt2d(knot,0):gp_Pnt2d(0,knot),u?gp_Dir2d(0,1):gp_Dir2d(1,0));
+                Geom2dAPI_InterCurveCurve hit(bounded,line,1e-12);
+                if(!hit.Intersector().IsDone())throw std::runtime_error("折れ目と境界の交差を確定できません。");
+                for(int j=1;j<=hit.NbPoints();++j){const double t=hit.Intersector().Point(j).ParamOnFirst();
+                    if(t>low&&t<high)cuts.push_back(t);}
+            }
+        }
+    }
+    std::sort(cuts.begin(),cuts.end());cuts.erase(std::unique(cuts.begin(),cuts.end()),cuts.end());
+    if(begin>end)std::reverse(cuts.begin(),cuts.end());return cuts;
+}
+}
+#endif
 base::Result<FabricationFaceRegion> FabricationRegionOf(modeling::KernelShapeHandle handle,
     std::size_t index,double tolerance)
 {
@@ -61,7 +107,9 @@ base::Result<FabricationFaceRegion> FabricationRegionOf(modeling::KernelShapeHan
                     require(std::isfinite(error),"境界の標本が不正です。");
                     if(depth<3||error>tolerance){require(depth<20&&loop.size()<20000,"境界標本の上限で許容差を満たせません。");const double mid=(a+b)*.5;sample(a,mid,depth+1);sample(mid,b,depth+1);}
                     else{require(totalPoints++<20000,"境界標本の上限に達しました。");result.boundarySamplingDeviationMm=std::max(result.boundarySamplingDeviationMm,error);loop.push_back(pa);}
-                };sample(begin,end,0);
+                };
+                const auto intervals=BoundaryIntervals(curve,surface,begin,end);
+                for(std::size_t i=1;i<intervals.size();++i)sample(intervals[i-1],intervals[i],0);
             }
             require(loop.size()>=3,"閉じた境界を取得できません。");result.loops.push_back(std::move(loop));
         }

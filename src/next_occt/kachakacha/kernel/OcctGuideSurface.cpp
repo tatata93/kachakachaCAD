@@ -24,6 +24,7 @@
 #include "kachakacha/kernel/OcctMatchedLoft.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctFiniteDistance.h"
+#include "kachakacha/kernel/OcctFoldedBandOffset.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <TopoDS_Edge.hxx>
@@ -588,6 +589,12 @@ constexpr int kNetworkPointsPerChain = 9;
         }
         std::vector<TopoDS_Face> made;
         for (const TopoDS_Face& face : faces) {
+            if(const auto folded=detail::OffsetFoldedBand(face,request.offsetDistanceMm,tolerance)){
+                if(!folded->HasValue())return Out::Failure(folded->Diagnostics());
+                for(TopExp_Explorer e(folded->Value(),TopAbs_FACE);e.More();e.Next())
+                    made.push_back(TopoDS::Face(e.Current()));
+                continue;
+            }
             auto surface = OffsetSurfaceOf(face, request.offsetDistanceMm);
             if (!surface.HasValue()) {
                 return Out::Failure(surface.Diagnostics());

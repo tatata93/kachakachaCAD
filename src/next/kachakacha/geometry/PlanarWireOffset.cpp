@@ -12,7 +12,7 @@ namespace {
 using Out=base::Result<std::vector<CurveSegment>>;
 Out Invalid(const char* detail) {
     return Out::Failure(base::MakeError("GEO-E004",
-        "この距離では閉じた輪郭をオフセットできません。",detail));
+        "この距離では輪郭をオフセットできません。",detail));
 }
 std::vector<Vector3> LineCircle(const CurveSegment& line,const CurveSegment& circle,
     const GeometryTolerance& tolerance) {
@@ -94,9 +94,13 @@ Out OffsetCurvesInPlane(const std::vector<CurveSegment>& curves,Vector3 planeNor
     double distanceMm,const GeometryTolerance& tolerance) {
     if(curves.size()<2)return Independently(curves,planeNormal,distanceMm);
     const auto joined=JoinCurves(curves,tolerance.interactiveJoinMm);
-    if(!joined.HasValue()||Distance(joined.Value().front().StartPoint(),joined.Value().back().EndPoint())>
-        tolerance.modelLinearMm)return Independently(curves,planeNormal,distanceMm);
+    if(!joined.HasValue())return Independently(curves,planeNormal,distanceMm);
     const auto& ordered=joined.Value();const auto normal=Normalized(planeNormal);
+    // Ordering nearby inputs must not silently repair an existing source gap.
+    for(std::size_t i=1;i<ordered.size();++i)
+        if(Distance(ordered[i-1].EndPoint(),ordered[i].StartPoint())>tolerance.modelLinearMm)
+            return Independently(curves,planeNormal,distanceMm);
+    const bool closed=Distance(ordered.front().StartPoint(),ordered.back().EndPoint())<=tolerance.modelLinearMm;
     if(!std::isfinite(distanceMm)||normal==Vector3{})return Invalid("距離と加工平面を確認してください。");
     for(const auto& curve:ordered){
         if(!CurveLiesInPlane(curve,ordered.front().StartPoint(),normal,tolerance.modelLinearMm))
@@ -105,7 +109,7 @@ Out OffsetCurvesInPlane(const std::vector<CurveSegment>& curves,Vector3 planeNor
         if(curve.Kind()!=CurveKind::Line&&curve.Kind()!=CurveKind::CircularArc)
             return Independently(curves,planeNormal,distanceMm);
     }
-    const auto originalCrossings=FindSelfIntersections(ordered,true,tolerance);
+    const auto originalCrossings=FindSelfIntersections(ordered,closed,tolerance);
     if(!originalCrossings.HasValue())return Out::Failure(originalCrossings.Diagnostics());
     if(!originalCrossings.Value().empty())return Invalid("元の輪郭が自身と交わっています。");
     std::vector<CurveSegment> shifted;shifted.reserve(ordered.size());
@@ -117,8 +121,9 @@ Out OffsetCurvesInPlane(const std::vector<CurveSegment>& curves,Vector3 planeNor
         if(!moved.HasValue())return Out::Failure(moved.Diagnostics());
         shifted.push_back(moved.Value());
     }
-    std::vector<Vector3> joints;const auto count=shifted.size();joints.reserve(count);
-    for(std::size_t i=0;i<count;++i){
+    std::vector<Vector3> joints;const auto count=shifted.size();
+    const auto jointCount=closed?count:count-1;joints.reserve(jointCount);
+    for(std::size_t i=0;i<jointCount;++i){
         const auto next=(i+1)%count;
         const auto point=Joint(shifted[i],shifted[next],
             (ordered[i].EndPoint()+ordered[next].StartPoint())*.5,normal,tolerance);
@@ -127,14 +132,16 @@ Out OffsetCurvesInPlane(const std::vector<CurveSegment>& curves,Vector3 planeNor
     }
     std::vector<CurveSegment> result;result.reserve(count);
     for(std::size_t i=0;i<count;++i){
-        const auto trimmed=TrimToJoints(shifted[i],joints[(i+count-1)%count],joints[i],tolerance);
+        const auto start=!closed&&i==0?shifted[i].StartPoint():joints[(i+count-1)%count];
+        const auto end=!closed&&i+1==count?shifted[i].EndPoint():joints[i];
+        const auto trimmed=TrimToJoints(shifted[i],start,end,tolerance);
         if(!trimmed.HasValue())return Out::Failure(trimmed.Diagnostics());
         result.push_back(trimmed.Value());
     }
-    for(std::size_t i=0;i<count;++i)
+    for(std::size_t i=0;i<jointCount;++i)
         if(Distance(result[i].EndPoint(),result[(i+1)%count].StartPoint())>tolerance.modelLinearMm)
             return Invalid("曲線の接続位置が許容差を超えます。元の輪郭は変更していません。");
-    const auto crossings=FindSelfIntersections(result,true,tolerance);
+    const auto crossings=FindSelfIntersections(result,closed,tolerance);
     if(!crossings.HasValue())return Out::Failure(crossings.Diagnostics());
     if(!crossings.Value().empty())return Invalid("オフセットした輪郭が自身と交わります。距離を小さくしてください。");
     return Out::Success(std::move(result));

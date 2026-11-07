@@ -546,4 +546,123 @@ KACHA_V2_TEST(edit, collapsed_and_self_crossing_contour_offsets_are_rejected)
         "a wrong processing plane is not silently accepted");
 }
 
+namespace {
+void RequireOpenOffset(const std::vector<CurveSegment>& curves) {
+    Require(curves.size()>1,"the open chain has several original edges");
+    for(std::size_t i=1;i<curves.size();++i)
+        RequireNear(Distance(curves[i-1].EndPoint(),curves[i].StartPoint()),0.,1e-6,
+            "adjacent offset edges meet without connector fragments");
+    Require(Distance(curves.front().StartPoint(),curves.back().EndPoint())>1e-3,
+        "offsetting an open chain does not close its ends");
+}
+std::vector<CurveSegment> ThreeArcOpenCrown() {
+    const auto left=CurveSegment::MakeCircularArc({-13.5,0,27},{0,1,0},{-1,0,0},
+        4.5,0,1.459455312453022).Value();
+    const auto middle=CurveSegment::MakeCircularArc({-2.0818902157770935e-12,0,-63.35728066542623},
+        {0,1,0},{-.14605046067248964,0,.989277141622788},95.85728066542625,
+        0,.29314947238302).Value();
+    const auto right=CurveSegment::MakeCircularArc({13.5,0,27},{0,1,0},{1,0,0},
+        4.5,-1.459455312453022,1.459455312453022).Value();
+    return {left,middle,right};
+}
+}
+KACHA_V2_TEST(edit, open_line_chain_offsets_keep_corners_free_ends_and_three_dimensional_placement)
+{
+    using namespace kachakacha::v2::geometry;
+    const std::vector<CurveSegment> original{L({0,0,0},{8,0,0}),L({8,0,0},{8,5,0}),
+        L({8,5,0},{12,5,0})};
+    for(double angle:{0.,.8})for(double distance:{.2,-.2}){
+        std::vector<CurveSegment> source;
+        for(const auto& c:original)source.push_back(TranslateCurve(
+            RotateCurve(c,{0,0,0},{1,0,0},angle).Value(),{7,-3,9}));
+        const Vector3 normal{0,-std::sin(angle),std::cos(angle)};
+        const auto made=OffsetCurvesInPlane(source,normal,distance);
+        Require(made.HasValue(),"a strictly connected open polyline can be offset");
+        RequireOpenOffset(made.Value());Require(made.Value().size()==source.size(),"edge count is retained");
+        const auto first=OffsetCurveInPlane(source.front(),normal,distance).Value();
+        const auto last=OffsetCurveInPlane(source.back(),normal,distance).Value();
+        RequireNear(Distance(made.Value().front().StartPoint(),first.StartPoint()),0.,1e-9,"the free start stays offset in place");
+        RequireNear(Distance(made.Value().back().EndPoint(),last.EndPoint()),0.,1e-9,"the free end stays offset in place");
+        for(std::size_t i=0;i<source.size();++i)RequireNear(Distance(source[i].Evaluate(.5),
+            TranslateCurve(RotateCurve(original[i],{0,0,0},{1,0,0},angle).Value(),{7,-3,9}).Evaluate(.5)),
+            0.,1e-12,"source geometry is unchanged");
+    }
+}
+KACHA_V2_TEST(edit, open_tangent_line_arc_chain_uses_the_same_material_side_for_either_plane_normal)
+{
+    using namespace kachakacha::v2::geometry;
+    const std::vector<CurveSegment> source{L({-5,0,0},{0,0,0}),
+        CurveSegment::MakeCircularArc({0,1,0},{0,0,1},{0,-1,0},1,0,kPi/2).Value(),
+        L({1,1,0},{1,5,0})};
+    for(double normalSign:{1.,-1.})for(double distance:{.2,-.2}){
+        const auto made=OffsetCurvesInPlane(source,{0,0,normalSign},distance);
+        Require(made.HasValue(),"line/arc/line remains connected");RequireOpenOffset(made.Value());
+        Require(made.Value().size()==3&&made.Value()[1].Kind()==CurveKind::CircularArc,
+            "the original exact arc is not replaced by short lines");
+        RequireNear(made.Value()[1].Radius(),1-normalSign*distance,1e-9,"plane orientation defines the same side for lines and arcs");
+        RequireNear(made.Value().front().StartPoint().y,normalSign*distance,1e-9,"the straight edge uses the same side");
+    }
+}
+KACHA_V2_TEST(edit, open_nontangent_arc_chain_offsets_trim_intersections_and_preserve_source_radii)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto original=ThreeArcOpenCrown();
+    for(double angle:{0.,.63})for(double distance:{.05,-.05}){
+        std::vector<CurveSegment> source;
+        for(const auto& c:original)source.push_back(TranslateCurve(
+            RotateCurve(c,{0,0,0},{1,0,0},angle).Value(),{3,-6,11}));
+        const Vector3 normal{0,std::cos(angle),std::sin(angle)};
+        const auto made=OffsetCurvesInPlane(source,normal,distance);
+        Require(made.HasValue(),"a three arc open crown has connected offset intersections");
+        RequireOpenOffset(made.Value());Require(made.Value().size()==3,"no tiny gap filler edges are created");
+        for(std::size_t i=0;i<source.size();++i){
+            Require(made.Value()[i].Kind()==CurveKind::CircularArc,"every curve stays an exact arc");
+            RequireNear(made.Value()[i].Radius(),source[i].Radius()-distance,1e-9,"only the requested radial offset is applied");
+            RequireNear(Distance(made.Value()[i].Center(),source[i].Center()),0.,1e-9,"the original centers are preserved");
+            RequireNear(source[i].Radius(),original[i].Radius(),1e-12,"source radii remain unchanged");
+        }
+        const auto first=OffsetCurveInPlane(source.front(),normal,-distance).Value();
+        const auto last=OffsetCurveInPlane(source.back(),normal,-distance).Value();
+        RequireNear(Distance(made.Value().front().StartPoint(),first.StartPoint()),0.,1e-9,"the first free angle is preserved");
+        RequireNear(Distance(made.Value().back().EndPoint(),last.EndPoint()),0.,1e-9,"the last free angle is preserved");
+        std::vector<CurveSegment> reversed;
+        for(auto it=source.rbegin();it!=source.rend();++it)reversed.push_back(ReverseCurve(*it).Value());
+        const auto other=OffsetCurvesInPlane(reversed,normal,-distance);
+        Require(other.HasValue(),"reversed traversal and sign produce the same open crown");RequireOpenOffset(other.Value());
+        for(std::size_t i=0;i<source.size();++i)for(double t:{0.,.25,.5,.75,1.})
+            RequireNear(Distance(made.Value()[i].Evaluate(t),other.Value()[source.size()-i-1].Evaluate(1-t)),
+                0.,1e-6,"reverse traversal preserves the offset locus");
+    }
+}
+KACHA_V2_TEST(edit, open_offset_does_not_join_disconnected_near_or_branched_inputs)
+{
+    using namespace kachakacha::v2::geometry;
+    for(double gap:{.0005,2.}){
+        const std::vector<CurveSegment> source{L({0,0,0},{4,0,0}),L({4+gap,0,0},{4+gap,4,0})};
+        const auto made=OffsetCurvesInPlane(source,{0,0,1},.2);
+        Require(made.HasValue()&&made.Value().size()==2,"disconnected inputs retain standalone semantics");
+        for(std::size_t i=0;i<source.size();++i){
+            const auto expected=OffsetCurveInPlane(source[i],{0,0,1},.2).Value();
+            RequireNear(Distance(made.Value()[i].StartPoint(),expected.StartPoint()),0.,1e-9,"no source gap is silently repaired");
+            RequireNear(Distance(made.Value()[i].EndPoint(),expected.EndPoint()),0.,1e-9,"no endpoint is pulled to a new join");
+        }
+    }
+    const auto arc=ThreeArcOpenCrown().front();
+    const auto single=OffsetCurvesInPlane({arc},{0,1,0},.2);
+    Require(single.HasValue(),"the single-arc API remains available");
+    RequireNear(single.Value().front().Radius(),arc.Radius()+.2,1e-9,"standalone arc radius semantics remain compatible");
+    const std::vector<CurveSegment> branch{L({-3,0,0},{0,0,0}),L({0,0,0},{3,0,0}),L({0,0,0},{0,3,0})};
+    const auto separate=OffsetCurvesInPlane(branch,{0,0,1},.2);
+    Require(separate.HasValue()&&separate.Value().size()==3,"a branch is not turned into an arbitrary connected chain");
+}
+KACHA_V2_TEST(edit, open_offset_rejects_collapse_crossings_and_wrong_processing_planes)
+{
+    using namespace kachakacha::v2::geometry;
+    const std::vector<CurveSegment> narrow{L({0,4,0},{0,0,0}),L({0,0,0},{1,0,0}),L({1,0,0},{1,4,0})};
+    Require(!OffsetCurvesInPlane(narrow,{0,0,1},.6).HasValue(),"an open inset cannot reverse its middle edge");
+    const std::vector<CurveSegment> crossed{L({0,0,0},{4,4,0}),L({4,4,0},{0,4,0}),L({0,4,0},{4,0,0})};
+    Require(!OffsetCurvesInPlane(crossed,{0,0,1},.1).HasValue(),"a self-crossing open chain is rejected");
+    Require(!OffsetCurvesInPlane(narrow,{1,0,0},.1).HasValue(),"a connected chain is not moved out of its processing plane");
+}
+
 KACHA_V2_TEST_MAIN("wire_edit_tests")

@@ -236,8 +236,9 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
     if (base == partShapes_.end()) {
         return false;
     }
+    // 下見と同じB-Rep精度で再生成する。候補探索の距離は使わない。
     const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+        session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     // 相手を順に足す・引く(何個でも。古い文書は相手 1 個)。
     std::vector<kachakacha::v2::modeling::KernelShapeHandle> tools;
     for (const auto& tool : definition->tools) {

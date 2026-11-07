@@ -332,7 +332,7 @@ void V2MainWindow::ValidateSelectedSolid()
     // 何が悪かったのかを、出来なかったファイルから読み取ることになる。
     // 選んだ部品を全部調べる(1 つ目だけを調べて「出せます」と言わない)。
     const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+        session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     int checkedCount = 0;
     double totalVolume = 0.0;
     double largestDiagonal = 0.0;

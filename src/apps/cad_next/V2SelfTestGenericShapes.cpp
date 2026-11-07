@@ -418,14 +418,13 @@ bool SelectVisiblePartRows(V2MainWindow& w)
 }
 
 #ifdef KACHACAD_V2_WITH_OCCT
-const std::vector<TopoDS_Shape>& NativeParts(V2MainWindow& w)
+std::vector<TopoDS_Shape> NativeParts(V2MainWindow& w)
 {
     // Inspect what the ordinary output dialog actually saves. This avoids a
     // private UI accessor or constructing substitute geometry in the test.
-    static std::string document;static std::uint64_t revision=0;static std::vector<TopoDS_Shape> shapes;
-    const auto snapshot=w.Session().GetDocument().Snapshot();
-    if(document==snapshot.id.ToString()&&revision==snapshot.revision)return shapes;
-    shapes.clear();document=snapshot.id.ToString();revision=snapshot.revision;
+    // Separate cases can reuse deterministic document IDs and revisions.
+    // Always inspect this document's actual exported geometry.
+    std::vector<TopoDS_Shape> shapes;
     if(!SelectVisiblePartRows(w))return shapes;
     QTemporaryDir temporary;const auto path=temporary.filePath("native-inspection.kcd2");
     auto* output=V2OutputTool::Open(w,2);if(!output)return shapes;
@@ -549,6 +548,64 @@ EntityId BooleanParts(V2MainWindow& w,EntityId target,EntityId tool,bool add)
     return Entities(w,EntityKind::Part).back();
 }
 
+EntityId SmallBoxByFields(V2MainWindow& w,double x)
+{
+    std::vector<EntityId> sides;
+    if(!Outline(w,{{x,0,0},{x+.1,0,0},{x+.1,.1,0},{x,.1,0}},false,sides))return {};
+    return ExtrudeWires(w,sides,.1);
+}
+
+bool SmallNativeVolumeIs(V2MainWindow& w,double expected)
+{
+    double volume=0;
+#ifdef KACHACAD_V2_WITH_OCCT
+    const auto shapes=NativeParts(w);
+    if(!Explain("tiny result has one actual exported native solid",shapes.size()==1))return false;
+    GProp_GProps mass;BRepGProp::VolumeProperties(shapes.front(),mass);volume=mass.Mass();
+#endif
+    return Explain(("tiny native volume "+std::to_string(volume)).c_str(),std::abs(volume-expected)<1e-10);
+}
+
+bool SmallBooleanPrecision(V2MainWindow& w,app::BooleanKind kind)
+{
+    w.RunCommand("file.new");
+    const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;
+    if(!Explain("candidate search and native modeling have distinct tolerances",
+        tolerance.interactiveJoinMm>tolerance.modelLinearMm*100))return false;
+    const auto first=SmallBoxByFields(w,0),second=SmallBoxByFields(w,.05);
+    if(first.IsNil()||second.IsNil())return false;
+    const auto wires=Entities(w,EntityKind::Wire);
+    const auto samples=SourceWireSamples(w);
+    View(w);
+    const auto command=kind==app::BooleanKind::Add?"part.boolean_add":
+        kind==app::BooleanKind::Cut?"part.boolean_cut":"part.boolean_intersect";
+    if(!ToolButton(w,command)||!PickShape(w,first,Qt::NoModifier,true)
+        ||!PickShape(w,second,Qt::NoModifier,true))return false;
+    const auto preview=w.BooleanDock().StatusTextJa().toStdString();
+    if(!Explain(("tiny Boolean preview: "+preview).c_str(),!w.Viewport().ToolPreview().empty())
+        ||!Explain("tiny result can be confirmed through the visible control",w.BooleanDock().ClickConfirm()))return false;
+    const double expected=kind==app::BooleanKind::Add?.0015:.0005;
+    const auto check=[&]() {
+        if(!Explain(("tiny result is present after evaluation: "+w.RebuildProblems().toStdString()).c_str(),
+            VisibleParts(w).size()==1&&w.RebuildProblems().isEmpty()))return false;
+        const auto now=w.Session().GetDocument().Snapshot().settings.tolerance;
+        return SmallNativeVolumeIs(w,expected)&&Explain("source geometry and tolerance settings are preserved",
+            now.modelLinearMm==tolerance.modelLinearMm
+            &&now.interactiveJoinMm==tolerance.interactiveJoinMm
+            &&Entities(w,EntityKind::Wire)==wires&&SameWireSamples(w,samples));
+    };
+    if(!check())return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("Undo restores both tiny source solids",VisibleParts(w).size()==2&&Entities(w,EntityKind::Part).size()==2))return false;
+    w.RunCommand("edit.redo");if(!check())return false;
+    QTemporaryDir directory;
+    if(!w.SaveAndReopen(directory.filePath("tiny-boolean.kcd2")))return false;
+    if(!Explain("tiny Boolean regenerates at modeling precision after save/reopen",check()))return false;
+    if(!ToolButton(w,"export.validate"))return false;
+    return Explain(("tiny solid pre-export validation: "+w.StatusText().toStdString()).c_str(),
+        w.StatusText().contains(QStringLiteral("出せます")));
+}
+
 EntityId RevolveWire(V2MainWindow& w,EntityId profile,EntityId axis,double degrees)
 {
     View(w);if(!ToolButton(w,"part.revolve")||!PickWire(w,profile,Qt::NoModifier)||!PickWire(w,axis,Qt::NoModifier))return {};
@@ -641,6 +698,29 @@ EntityId JoinWires(V2MainWindow& w,const std::vector<EntityId>& wires)
         if(entity&&entity->visibility==domain::Visibility::Visible)return id;
     }
     return {};
+}
+
+bool SmallSweepCutPrecision(V2MainWindow& w)
+{
+    w.RunCommand("file.new");const auto base=SmallBoxByFields(w,0);
+    std::vector<EntityId> sides;
+    if(base.IsNil()||!Outline(w,{{.05,0,0},{.15,0,0},{.15,.1,0},{.05,.1,0}},false,sides))return false;
+    const auto profile=JoinWires(w,sides),path=Coordinates(w,1,{{.1,.05,0},{.1,.05,.1}});
+    if(profile.IsNil()||path.IsNil())return false;
+    const auto wires=Entities(w,EntityKind::Wire);const auto samples=SourceWireSamples(w);
+    View(w);
+    if(!ToolButton(w,"part.sweep")||!PickWire(w,profile,Qt::NoModifier)
+        ||!PickWire(w,path,Qt::NoModifier))return false;
+    auto* dock=w.SolidTool().Dock();
+    if(!dock||!dock->ClickBoolean(2)||!PickShape(w,base,Qt::NoModifier,true))return false;
+    if(!Explain(("tiny sweep cut: "+dock->StatusTextJa().toStdString()).c_str(),dock->ConfirmEnabled())
+        ||!dock->ClickConfirm()||!SmallNativeVolumeIs(w,.0005))return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("sweep cut Undo restores original tiny base",VisibleParts(w)==std::vector<EntityId>{base}))return false;
+    w.RunCommand("edit.redo");QTemporaryDir directory;
+    return Explain("tiny sweep cut survives redo and saved regeneration",w.RebuildProblems().isEmpty()
+        &&w.SaveAndReopen(directory.filePath("tiny-sweep-cut.kcd2"))&&w.RebuildProblems().isEmpty()
+        &&SmallNativeVolumeIs(w,.0005)&&Entities(w,EntityKind::Wire)==wires&&SameWireSamples(w,samples));
 }
 
 Vector3 WingPoint(Vector3 p,double offset,double degrees)
@@ -839,6 +919,10 @@ std::vector<SelfTestCase> GenericShapesCases()
         {"HP-EXTENDED-09 concave link arm with independent pin holes through UI",LinkArm},
         {"HP-EXTENDED-10 mixed interior and individual boundary selection through UI",MixedProfilePicking},
         {"HP-EXTENDED-11 adjacent profile seeds and spanning source edge preservation through UI",AdjacentProfilePreservation},
-        {"HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",SplitBoundaryCoverage}};
+        {"HP-EXTENDED-12 whole edge covered by split pieces in one region through UI",SplitBoundaryCoverage},
+        {"HP-TINY-BOOLEAN-01 union preview undo and saved rebuild use model precision",[](auto& w){return SmallBooleanPrecision(w,app::BooleanKind::Add);}},
+        {"HP-TINY-BOOLEAN-02 difference preview undo and saved rebuild use model precision",[](auto& w){return SmallBooleanPrecision(w,app::BooleanKind::Cut);}},
+        {"HP-TINY-BOOLEAN-03 intersection preview undo and saved rebuild use model precision",[](auto& w){return SmallBooleanPrecision(w,app::BooleanKind::Intersect);}},
+        {"HP-TINY-BOOLEAN-04 sweep difference preview undo and saved rebuild use model precision",SmallSweepCutPrecision}};
 }
 }

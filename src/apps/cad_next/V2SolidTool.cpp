@@ -442,13 +442,13 @@ SolidResult V2SolidTool::Build(const CreateSolidDefinition& definition) const
         return SolidResult::Failure(kachakacha::v2::base::MakeError(
             kachakacha::v2::modeling::kSolidBadInput, "足す・引くの相手の部品の立体がまだありません。"));
     }
-    const double joinMm =
-        window_.session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    const double modelMm =
+        window_.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     const auto combined = V2Calculation::Call(nullptr, "部品の演算を計算しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildBoolean(values...); }, definition.booleanMode == 2
             ? kachakacha::v2::kernel::BooleanOperation::Difference
             : kachakacha::v2::kernel::BooleanOperation::Union,
-        target->second, made.Value().handle, joinMm);
+        target->second, made.Value().handle, modelMm);
     if (!combined.HasValue()) {
         return SolidResult::Failure(combined.Diagnostics());
     }

@@ -346,8 +346,9 @@ void V2MainWindow::RefreshBooleanPreview()
         booleanOutcome_.refusalJa = "選んだ部品の立体がまだありません";
         return;
     }
+    // 候補探索の距離を形状の精度・微小体積の判定へ流用しない。
     const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+        session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm;
     // 相手を順に足す・引く(何個でも)。1 つでもできなければ、何も作らない。
     std::vector<kachakacha::v2::modeling::KernelShapeHandle> tools;
     for (const EntityId& tool : booleanInput_.tools) {

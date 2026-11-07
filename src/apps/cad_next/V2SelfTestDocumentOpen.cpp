@@ -83,7 +83,7 @@ bool ExerciseStop(V2MainWindow& w,int mode) {
     QTemporaryDir temp;if(!temp.isValid())return false;w.RunCommand("file.new");
     const auto oldPath=temp.filePath("original.kcd2"),input=temp.filePath("incoming.kcd2");
     w.SetPathChooser([oldPath](bool){return oldPath;});w.RunCommand("file.save_as");
-    // Saving establishes a history boundary; add a real edit after that boundary.
+    // Start with a saved empty document, then add an edit whose history must survive cancellation.
     if(!DrawRectangleByHand(w))return false;
     if(!Explain("select rectangle for source face",ClickOnAnyCurve(w,Qt::NoModifier)))return false;
     w.RunCommand("surface.create");if(!Explain("confirm source face",w.HandleToolKey(Qt::Key_Return,nullptr)))return false;

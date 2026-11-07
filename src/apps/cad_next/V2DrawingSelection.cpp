@@ -54,7 +54,7 @@ V2DrawingSelection::Prefix V2DrawingSelection::Current(const app::DrawingSession
 void V2DrawingSelection::Deleted(const app::DrawingSession& session, std::uint64_t before, bool hadUndo)
 {
     SyncInputs(session);
-    if (!hadUndo) deletions_.clear(); // save/new/reset history boundary
+    if (!hadUndo) deletions_.clear(); // new/open/reset history boundary
     if (IsDrawing(session.CurrentTool()))
         deletions_[{before, session.GetDocument().Revision()}] = Current(session);
     selecting_ = false;

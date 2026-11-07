@@ -182,7 +182,7 @@ public:
     bool Undo();
     bool Redo();
 
-    //! ファイルを開く・新規作成・保存はUndo履歴の境界にする。
+    //! ファイルを開く・新規作成でUndo履歴を区切る。保存では呼ばない。
     void MarkHistoryBoundary();
 
     //! ファイルを開いたときに中身を入れ替える。Undo履歴は捨てる。

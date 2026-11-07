@@ -101,6 +101,40 @@ bool AlternateSaveDuringInput(V2MainWindow& w)
     w.ConfirmPendingCommand();
     return Explain("saved pending command can continue and commit",w.PendingCommandLabel().isEmpty()&&w.Session().GetDocument().Revision()>revision);
 }
+bool AlternateSavePreservesHistory(V2MainWindow& w)
+{
+    if(!AlternateSaveDuringInput(w))return false;
+    QTemporaryDir folder;if(!folder.isValid())return false;
+    const auto path=folder.filePath("joined.kcd2");
+    const auto read=[&]{QFile file(path);return file.open(QIODevice::ReadOnly)?file.readAll():QByteArray{};};
+    auto& doc=w.Session().GetDocument();
+    if(!Explain("joined-wire fixture has one wire and a committed undo",CountOfKind(w,domain::EntityKind::Wire)==1&&doc.CanUndo()))return false;
+    w.SetPathChooser([path](bool){return path;});w.ActivateCommand("file.save_as");
+    const auto joined=read();
+    if(!Explain("Save As retains editing history and writes the current shape",!joined.isEmpty()&&doc.CanUndo()&&!doc.CanRedo()))return false;
+    w.ActivateCommand("edit.undo");
+    if(!Explain("Undo after Save As restores the two input wires without rewriting disk",CountOfKind(w,domain::EntityKind::Wire)==2&&doc.CanRedo()&&read()==joined))return false;
+    w.ActivateCommand("edit.redo");
+    if(!Explain("Redo after Save As restores only the joined result",CountOfKind(w,domain::EntityKind::Wire)==1&&doc.CanUndo()))return false;
+    w.ActivateCommand("file.save");
+    if(!Explain("ordinary Save also retains Undo",doc.CanUndo()&&!doc.CanRedo()))return false;
+    w.ActivateCommand("edit.undo");
+    if(!Explain("ordinary Save is not an undo-clearing boundary",CountOfKind(w,domain::EntityKind::Wire)==2&&doc.CanRedo()))return false;
+    w.SetPathChooser([](bool){return QString();});w.ActivateCommand("file.save_as");
+    if(!Explain("cancelled Save As retains Redo and the saved bytes",doc.CanRedo()&&read()==joined))return false;
+    const auto blocked=folder.filePath("missing-parent/history.kcd2");
+    w.SetPathChooser([blocked](bool){return blocked;});w.ActivateCommand("file.save_as");
+    if(!Explain("failed Save As preserves history, path and disk",doc.CanRedo()&&w.DocumentPath()==path&&read()==joined))return false;
+    w.ActivateCommand("file.save");
+    const auto unjoined=read();
+    if(!Explain("saving an undone state retains Redo",doc.CanRedo()&&!unjoined.isEmpty()&&unjoined!=joined))return false;
+    w.ActivateCommand("edit.redo");
+    if(!Explain("Redo does not rewrite the saved undone state",CountOfKind(w,domain::EntityKind::Wire)==1&&read()==unjoined))return false;
+    if(!w.OpenDocumentFile(path))return false;
+    if(!Explain("opening a file still starts a fresh document history",CountOfKind(w,domain::EntityKind::Wire)==2&&!w.Session().GetDocument().CanUndo()&&!w.Session().GetDocument().CanRedo()))return false;
+    w.ActivateCommand("file.new");
+    return Explain("new document still has no inherited history",CountOfKind(w,domain::EntityKind::Wire)==0&&!w.Session().GetDocument().CanUndo()&&!w.Session().GetDocument().CanRedo());
+}
 bool AlternateOwnerModel(V2MainWindow& w)
 {
     const auto path=qEnvironmentVariable("KACHACAD_MODELING_OWNER_INPUT");

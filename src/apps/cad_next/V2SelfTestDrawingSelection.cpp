@@ -164,13 +164,17 @@ bool CancelAndReopen(V2MainWindow& w)
     Click(v,{-20,20,0},Qt::ControlModifier);Key(v,Qt::Key_Delete);
     v.CancelTool();Click(v,{-50,-30,0});w.RunCommand("edit.undo");
     if(!Inputs(w,0,1))return false;w.RunCommand("edit.undo");if(!Inputs(w,0,2))return false;
-    // Use the real Save command, whose successful completion establishes a history boundary.
+    // Saving retains committed editing history; opening a file starts a new one.
     QTemporaryDir temporary;const auto path=temporary.filePath("drawing-selection-save.kcd2");
     const auto id=w.Session().Scene().curves.front().entityId;
     if(!w.Session().GetDocument().Run(document::SetConstructionCommand({id},true)).committed
         ||!w.Session().GetDocument().CanUndo())return false;
     w.SetPathChooser([&](bool){return path;});w.RunCommand("file.save_as");
-    if(!QFileInfo::exists(path)||QFileInfo(path).size()==0||w.Session().GetDocument().CanUndo())return false;
+    if(!QFileInfo::exists(path)||QFileInfo(path).size()==0||!w.Session().GetDocument().CanUndo())return false;
+    w.RunCommand("edit.undo");const auto* undone=w.Session().GetDocument().FindEntity(id);
+    if(!undone||undone->construction)return false;
+    w.RunCommand("edit.redo");const auto* redone=w.Session().GetDocument().FindEntity(id);
+    if(!redone||!redone->construction)return false;
     Click(v,{-40,-30,0});Click(v,{-20,20,0},Qt::ControlModifier);Key(v,Qt::Key_Delete);
     w.RunCommand("edit.undo");if(!Inputs(w,1,2))return false;
     v.CancelTool();if(!w.Session().GetDocument().CanRedo())return false;

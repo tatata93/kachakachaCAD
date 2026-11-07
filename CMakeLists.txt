@@ -1087,6 +1087,8 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_dome_tests tests_v2/kernel_dome_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_edit_tests tests_v2/kernel_surface_edit_tests.cpp)
+    target_compile_definitions(kachakacha_v2_kernel_surface_edit_tests PRIVATE
+        KACHACAD_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests_v2/fixtures")
     kachakacha_add_v2_kernel_test(kernel_wire_projection_tests tests_v2/kernel_wire_projection_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_analysis_tests tests_v2/kernel_surface_analysis_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)

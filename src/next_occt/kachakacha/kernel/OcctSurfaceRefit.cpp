@@ -5,10 +5,12 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepLib_CheckCurveOnSurface.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <BRep_Builder.hxx>
@@ -21,11 +23,14 @@
 #include <ShapeFix_ShapeTolerance.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
+#include <NCollection_Map.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 
@@ -184,8 +189,54 @@ struct Knot {
     return count;
 }
 
+// A stored tolerance is not a measurement. Verify the new face's actual 3D
+// curves, pcurves and endpoint positions before reducing inherited allowances.
+// In particular, never turn a genuine gap into a successful bounded refit.
+[[nodiscard]] bool TightenVerifiedBoundary(const TopoDS_Face& face,
+    double maximumError, double modelTolerance)
+{
+    if (!std::isfinite(maximumError) || !(maximumError > 0)
+        || !std::isfinite(modelTolerance) || !(modelTolerance > 0)) return false;
+    double required = 0;
+    NCollection_Map<TopoDS_Shape, TopTools_ShapeMapHasher> poleVertices;
+    for (TopExp_Explorer at(face, TopAbs_EDGE); at.More(); at.Next()) {
+        const auto edge = TopoDS::Edge(at.Current());
+        // No 3D curve exists on a degenerate edge. Leave such topology to the
+        // existing validity check, retaining its original allowance.
+        if (BRep_Tool::Degenerated(edge)) {
+            for (TopExp_Explorer v(edge, TopAbs_VERTEX); v.More(); v.Next()) poleVertices.Add(v.Current());
+            continue;
+        }
+        if (!BRep_Tool::SameParameter(edge)) return false;
+        BRepLib_CheckCurveOnSurface check(edge, face);
+        check.Perform();
+        if (!check.IsDone() || !std::isfinite(check.MaxDistance()) || check.MaxDistance() < 0) return false;
+        required = std::max(required, check.MaxDistance());
+        const BRepAdaptor_Curve curve(edge);
+        const auto first = TopExp::FirstVertex(edge), last = TopExp::LastVertex(edge);
+        if (first.IsNull() || last.IsNull()) return false;
+        const double firstError = BRep_Tool::Pnt(first).Distance(curve.Value(curve.FirstParameter()));
+        const double lastError = BRep_Tool::Pnt(last).Distance(curve.Value(curve.LastParameter()));
+        if (!std::isfinite(firstError) || !std::isfinite(lastError)) return false;
+        required = std::max({required, firstError, lastError});
+        if (!std::isfinite(required) || required > maximumError) return false;
+    }
+    // Use the document's numerical allowance, not a new hard-coded precision.
+    const double allowance = required + modelTolerance;
+    if (!std::isfinite(allowance)) return false;
+    for (TopExp_Explorer at(face, TopAbs_EDGE); at.More(); at.Next()) {
+        const auto edge = TopoDS::Edge(at.Current());
+        if (BRep_Tool::Degenerated(edge)) continue;
+        ShapeFix_ShapeTolerance().LimitTolerance(edge, allowance, allowance, TopAbs_EDGE);
+        for (TopExp_Explorer v(edge, TopAbs_VERTEX); v.More(); v.Next())
+            if (!poleVertices.Contains(v.Current()))
+                ShapeFix_ShapeTolerance().LimitTolerance(v.Current(), allowance, allowance, TopAbs_VERTEX);
+    }
+    return true;
+}
+
 [[nodiscard]] TopoDS_Face TrimLike(const TopoDS_Face& original, const Spline& surface,
-    double edgeTolerance)
+    double edgeTolerance, double maximumError, double modelTolerance)
 {
     TopoDS_Face made;
     if (BRep_Tool::NaturalRestriction(original) && WireCount(original) == 1) {
@@ -225,6 +276,7 @@ struct Knot {
             builder.Add(made, wire);
         }
         builder.NaturalRestriction(made, BRep_Tool::NaturalRestriction(original));
+        if (!TightenVerifiedBoundary(made, maximumError, modelTolerance)) return {};
     }
     if (!made.IsNull()) made.Orientation(original.Orientation());
     if (made.IsNull() || WireCount(made) != WireCount(original)
@@ -313,7 +365,7 @@ struct Knot {
         return Failed("元の面からの偏差が許容内であることを確認できませんでした。");
     }
     const TopoDS_Face made = TrimLike(face, best, std::max(Precision::Confusion(),
-        bound + tolerance.modelLinearMm));
+        bound + tolerance.modelLinearMm), toleranceMm, tolerance.modelLinearMm);
     if (made.IsNull()) return Failed("整えた面の境界や穴を保てませんでした。", "元の形は変更していません。");
     auto finished = detail::FinishSurfaceResult(made, tolerance);
     if (!finished.HasValue()) return Out::Failure(finished.Diagnostics());

@@ -11,6 +11,8 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <utility>
@@ -18,11 +20,15 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctSurfaceExtrude.h"
+#include "kachakacha/kernel/OcctSolidExport.h"
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
@@ -32,7 +38,10 @@
 #include <GeomConvert.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BSplineCurve.hxx>
+#include <ShapeFix_ShapeTolerance.hxx>
+#include <TopExp.hxx>
 #include <Geom_CylindricalSurface.hxx>
+#include <Geom_SphericalSurface.hxx>
 #include <Geom_RectangularTrimmedSurface.hxx>
 #include <Geom_Surface.hxx>
 #include <Geom_SurfaceOfRevolution.hxx>
@@ -448,6 +457,128 @@ KACHA_V2_TEST(kernel_surface_edit, refit_converts_a_trimmed_revolution_together_
     Require(BRepClass_FaceClassifier(made, surface->Value(1.,.8), 1e-6).State() == TopAbs_IN,
         "surrounding material remains");
     Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "source revolution is unchanged");
+    kernel::ReleaseShape(refit.Value().surface.handle);
+    kernel::ReleaseShape(source);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_replaces_unneeded_large_trim_tolerances_only_after_checking_actual_boundary)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    for (int mode : {0, 1, 2}) {
+        const auto support = ManyPoleSurface();
+        TopoDS_Shape native;
+        Require(kernel::LookupShape(support, native), "source native face exists");
+        auto face = TopoDS::Face(TopExp_Explorer(native, TopAbs_FACE).Current());
+        BRep_Builder().NaturalRestriction(face, false);
+        ShapeFix_ShapeTolerance().SetTolerance(face, 17.0, TopAbs_WIRE);
+        if (mode == 1) face.Reverse();
+        if (mode == 2) {
+            gp_Trsf tr;
+            tr.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(1,2,3)), .71);
+            tr.SetTranslationPart(gp_Vec(12,-23,34));
+            face = TopoDS::Face(BRepBuilderAPI_Transform(face, tr, true).Shape());
+        }
+        const auto source = kernel::StoreShape(face);
+        const auto before = kernel::CaptureOutputShape(source);
+        const auto refit = kernel::RefitSurface(source, .05, Tolerance());
+        Require(refit.HasValue(), "valid trim survives refit: " + Why(refit));
+        TopoDS_Shape output;
+        Require(kernel::LookupShape(refit.Value().surface.handle, output), "refit native exists");
+        TopExp_Explorer originalEdges(face, TopAbs_EDGE), newEdges(output, TopAbs_EDGE);
+        for (; originalEdges.More() && newEdges.More(); originalEdges.Next(), newEdges.Next()) {
+            const auto edge = TopoDS::Edge(newEdges.Current());
+            Require(BRep_Tool::Tolerance(edge) <= .05 + Tolerance().modelLinearMm,
+                "17 mm inherited tolerance is replaced by a measured bounded value");
+            BRepAdaptor_Curve a(TopoDS::Edge(originalEdges.Current())), b(edge);
+            for (double t : {0., .2, .5, .8, 1.}) {
+                const double u = a.FirstParameter() + (a.LastParameter()-a.FirstParameter())*t;
+                const double v = b.FirstParameter() + (b.LastParameter()-b.FirstParameter())*t;
+                Require(a.Value(u).Distance(b.Value(v)) < 1e-9, "actual 3D boundary stays in place");
+            }
+        }
+        Require(!originalEdges.More() && !newEdges.More(), "no boundary edges are dropped or added");
+        Require(TopoDS::Face(TopExp_Explorer(output, TopAbs_FACE).Current()).Orientation() == face.Orientation(),
+            "material-side orientation remains unchanged");
+        Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "source tolerances and geometry are byte-identical");
+        kernel::ReleaseShape(refit.Value().surface.handle);
+        kernel::ReleaseShape(source);
+        kernel::ReleaseShape(support);
+    }
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_does_not_hide_a_real_boundary_error_behind_large_input_tolerance)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const auto support = ManyPoleSurface();
+    TopoDS_Shape native;
+    Require(kernel::LookupShape(support, native), "source native face exists");
+    auto face = TopoDS::Face(TopExp_Explorer(native, TopAbs_FACE).Current());
+    BRep_Builder builder;
+    builder.NaturalRestriction(face, false);
+    ShapeFix_ShapeTolerance().SetTolerance(face, 17.0, TopAbs_WIRE);
+    const auto edge = TopoDS::Edge(TopExp_Explorer(face, TopAbs_EDGE).Current());
+    const auto vertex = TopExp::FirstVertex(edge);
+    builder.UpdateVertex(vertex, BRep_Tool::Pnt(vertex).Translated(gp_Vec(0,0,1)), 17.0);
+    const auto source = kernel::StoreShape(face);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto refit = kernel::RefitSurface(source, .05, Tolerance());
+    Require(!refit.HasValue(), "a real 1 mm endpoint error cannot be called a .05 mm refit");
+    Require(kernel::CaptureOutputShape(source).Value() == before.Value(), "refusal preserves the original exactly");
+    kernel::ReleaseShape(source);
+    kernel::ReleaseShape(support);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_retains_collapsed_pole_edges_without_lowering_their_unmeasured_allowances)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const double pi = std::acos(-1.0);
+    const occ::handle<Geom_Surface> sphere = new Geom_SphericalSurface(gp_Ax3(), 10);
+    const auto surface = GeomConvert::SurfaceToBSplineSurface(
+        new Geom_RectangularTrimmedSurface(sphere, 0., 2*pi, -pi/2, pi/2));
+    for (int i=1; i<40; ++i) {
+        surface->InsertUKnot(2*pi*i/40., 1, 1e-12, false);
+        surface->InsertVKnot(-pi/2+pi*i/40., 1, 1e-12, false);
+    }
+    auto face = BRepBuilderAPI_MakeFace(surface, 1e-7).Face();
+    BRep_Builder().NaturalRestriction(face, false);
+    int collapsed=0;
+    for (TopExp_Explorer e(face, TopAbs_EDGE); e.More(); e.Next())
+        if (BRep_Tool::Degenerated(TopoDS::Edge(e.Current()))) ++collapsed;
+    Require(collapsed==2, "sphere has two actual collapsed pole edges");
+    const auto source = kernel::StoreShape(face);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto refit = kernel::RefitSurface(source, .01, Tolerance());
+    Require(refit.HasValue(), "rational sphere keeps its pole topology: " + Why(refit));
+    TopoDS_Shape output;
+    Require(kernel::LookupShape(refit.Value().surface.handle, output), "sphere refit exists");
+    Require(BRepCheck_Analyzer(output).IsValid(), "collapsed boundaries remain consistent");
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(), "original poles and allowances are unchanged");
+    kernel::ReleaseShape(refit.Value().surface.handle);
+    kernel::ReleaseShape(source);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, refit_trimmed_curved_panel_allows_safe_directional_extrusion_and_step_output)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"trimmed-curved-panel-integration.brep");
+    Require(input.good(), "actual trimmed curved panel fixture is available");
+    TopoDS_Shape shape;
+    BRepTools::Read(shape, input, BRep_Builder());
+    const auto source = kernel::StoreShape(shape);
+    const auto before = kernel::CaptureOutputShape(source);
+    const auto refit = kernel::RefitSurface(source, .05, Tolerance());
+    Require(refit.HasValue(), "actual trimmed panel can be simplified: " + Why(refit));
+    Require(refit.Value().deviationMm < .000074, "complete surface deviation remains within the measured bound");
+    const auto extrusion = kernel::BuildSurfaceExtrude(refit.Value().surface.handle, {-1,1,-1}, 0, .3, Tolerance());
+    Require(extrusion.HasValue() && extrusion.Value().parts.size()==1, "the panel produces one closed directional prism");
+    const auto solid = extrusion.Value().parts.front().handle;
+    const auto checked = kernel::CheckSolidForExport(solid, Tolerance().modelLinearMm);
+    Require(checked.HasValue() && checked.Value().Ok(), "independent closure, mass and self-intersection checks all succeed");
+    const auto step = kernel::BuildStepText(solid, Tolerance().modelLinearMm);
+    Require(step.HasValue() && step.Value().find("ISO-10303-21")!=std::string::npos,
+        "the same exact native solid can be exported to STEP: " + Why(step));
+    Require(kernel::CaptureOutputShape(source).Value()==before.Value(), "refit, extrusion and export preserve the original byte-for-byte");
+    kernel::ReleaseShape(solid);
     kernel::ReleaseShape(refit.Value().surface.handle);
     kernel::ReleaseShape(source);
 }

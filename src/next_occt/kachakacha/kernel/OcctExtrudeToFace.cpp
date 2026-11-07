@@ -8,6 +8,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctExtrudeWires.h"
+#include "kachakacha/kernel/OcctPlanarExtrudeClosure.h"
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRep_Tool.hxx>
@@ -110,7 +111,7 @@ Result<double> Reach(const modeling::ShapeMesh& mesh, const TopoDS_Face& target,
     for (const auto& edge : mesh.edges) points.insert(points.end(), edge.begin(), edge.end());
     for (const auto& triangle : mesh.triangles) points.push_back(triangle.Center());
     for (const auto& point : points) {
-        intersector.Perform(gp_Lin(ToPoint(point), gp_Dir(ToVector(direction))), tolerance, 1.0e8);
+        intersector.Perform(gp_Lin(ToPoint(point), gp_Dir(ToVector(direction))), -tolerance, 1.0e8);
         if (!intersector.IsDone() || intersector.NbPnt() == 0) {
             return Result<double>::Failure(MakeError("EXT-003", "終端面に届かない場所があります。",
                 "押し出す向き、終端の大きさ、元の面との交差を確認してください。"));
@@ -256,6 +257,10 @@ Out BuildExtrudeToFace(const ExtrudeRequest& request, KernelShapeHandle source,
         }
         const auto reach = Reach(mesh.Value(), targetFace.Value(), direction, tolerance.modelLinearMm);
         if (!reach.HasValue()) return Out::Failure(reach.Diagnostics());
+        if(LookupShape(source,shape)) {
+            const auto closed=detail::TryPlanarExtrudeClosure(shape,targetFace.Value(),direction,tolerance);
+            if(closed)return *closed;
+        }
         const double length=ConservativeReach(source,targetFace.Value(),direction,reach.Value());
         const auto extended = BuildSurfaceExtrude(source, direction, 0.0,
             length + std::max(1.0, length * 0.1), tolerance);

@@ -405,6 +405,21 @@ struct Replay {
         if(op=="visibility")return Visibility(step);
         if(op=="ray")return Ray(step);
         if(op=="point")return Point(step);
+        if(op=="navigator_home") {
+            QApplication::processEvents();
+            auto& viewport=w.Viewport();const auto revision=w.Session().GetDocument().Revision();
+            const auto layout=viewport.ViewGadgets();
+            for(std::size_t i=0;i<layout.gadgets.size();++i) {
+                const auto& gadget=layout.gadgets[i];
+                if(gadget.kind==view::ViewGadgetKind::Home) {
+                    const QPointF at(gadget.CenterXPx(),gadget.CenterYPx());
+                    const auto hit=viewport.ViewButtonAt(at);
+                    return hit==i&&Mouse(viewport,at)
+                        &&w.Session().GetDocument().Revision()==revision;
+                }
+            }
+            return false;
+        }
         if(op=="number")return Number(Field(step),step["value"].toDouble());
         if(op=="text"){
             auto* field=dynamic_cast<QLineEdit*>(Field(step));
@@ -575,7 +590,7 @@ bool Smoke(V2MainWindow& w)
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;
     if(!Explain("cancellation cannot pass without a live visible calculation",!replay.Act(
         {{"op","count"},{"kind",2},{"value",2},{"cancelCalculation",true}})))return false;
-    return replay.Act({{"op","mark"}})
+    return replay.Act({{"op","navigator_home"}})&&replay.Act({{"op","mark"}})
         &&!replay.Act({{"op","remember"},{"kind",2},{"as","not-created"},{"new",true}});
 }
 

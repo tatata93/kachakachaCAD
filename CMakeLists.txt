@@ -781,6 +781,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctSurfaceRegion.cpp
     src/next_occt/kachakacha/kernel/OcctCurvedEmboss.cpp
     src/next_occt/kachakacha/kernel/OcctExtrudeToFace.cpp
+    src/next_occt/kachakacha/kernel/OcctPlanarExtrudeClosure.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctFabricationSampling.cpp
@@ -1092,6 +1093,9 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_projection_tests tests_v2/kernel_wire_projection_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_surface_analysis_tests tests_v2/kernel_surface_analysis_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_plane_closure_tests tests_v2/kernel_plane_closure_tests.cpp)
+    target_compile_definitions(kachakacha_v2_kernel_plane_closure_tests PRIVATE
+        KACHACAD_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests_v2/fixtures")
     kachakacha_add_v2_kernel_test(curved_emboss_tests tests_v2/curved_emboss_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_boolean_tests tests_v2/kernel_boolean_tests.cpp)
     target_compile_definitions(kachakacha_v2_kernel_boolean_tests PRIVATE

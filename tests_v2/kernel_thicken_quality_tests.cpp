@@ -893,6 +893,29 @@ KACHA_V2_TEST(thicken_quality, genuinely_creased_carrier_is_not_misclassified_as
     kernel::ReleaseShape(made.Value().handle);kernel::ReleaseShape(handle);
 }
 
+KACHA_V2_TEST(thicken_quality, nonsmooth_curved_panel_refuses_unverified_strict_offset_without_changing_source)
+{
+    // Native guide retained from the real UI reproduction. The failure occurs
+    // in a planar rim's mass integration, before a solid can be accepted.
+    std::ifstream input(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"trimmed-curved-panel-integration.brep");
+    Require(input.good(),"trimmed curved panel fixture exists");
+    TopoDS_Shape panel;BRep_Builder builder;BRepTools::Read(panel,input,builder);
+    Require(!panel.IsNull()&&BRepCheck_Analyzer(panel).IsValid(),"valid native curved source");
+    for(bool reverse:{false,true}) {
+        auto oriented=panel;if(reverse)oriented.Reverse();
+        const auto source=kernel::StoreShape(oriented);
+        const auto before=kernel::CaptureOutputShape(source);Require(before.HasValue(),"source captured before thin wall");
+        const auto placement=reverse?fabrication::ThicknessPlacement::Outside:fabrication::ThicknessPlacement::Inside;
+        Require(!kernel::detail::ThickenSmoothSpans(oriented,.1,placement,{}),
+            "actual geometric creases are not reinterpreted as smooth parameter spans");
+        const auto made=kernel::ThickenSurface(source,.1,placement,{});
+        Require(!made.HasValue()&&!made.Diagnostics().empty()&&made.Diagnostics().front().code==kernel::kThickenFailed,
+            "an unverified nonsmooth native offset remains a bounded refusal, not a fabricated successful solid");
+        Require(before.Value()==kernel::CaptureOutputShape(source).Value(),"mass integration never changes source geometry");
+        kernel::ReleaseShape(source);
+    }
+}
+
 KACHA_V2_TEST(thicken_quality, open_spline_panel_with_notch_and_diagonal_hole_has_analytic_prism_mass)
 {
     NCollection_Array2<gp_Pnt> poles(1,3,1,3);

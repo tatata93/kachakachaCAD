@@ -38,6 +38,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
 | `kernel/OcctFabricationTrim.h` | トリム曲面を実外周内の単一区間へ対応させる | **実行時は接続済み。**`FabricationEvaluatorOf` の分離実装 `OcctFabricationSampling.cpp` から呼ぶ。走査は公開 `OcctFaceQuery.h` と同名の `.cpp` しか辿らないため分離実装の呼出を検出できない。UIへ内部ヘッダを直接公開しない |
+| `kernel/OcctPlanarExtrudeClosure.h` | 元曲面が終端平面に接する押し出しの内部閉鎖処理 | **実行時は接続済み。**通常の押し出しUI → `BuildExtrudeToFace` の分離実装 `OcctExtrudeToFace.cpp` → この補助へ到達する。公開宣言は `OcctSurfaceExtrude.h` にあり、同名でない分離 `.cpp` を走査が辿れない。実UI109/110と保存再読込・STEPで確認済み。内部のOCCT型をUIへ公開するためのincludeは追加しない |
 
 ### 繋いだもの
 

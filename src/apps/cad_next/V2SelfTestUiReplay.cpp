@@ -34,8 +34,10 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QObject>
 #include <QPixmap>
 #include <QPointF>
+#include <QPushButton>
 #include <QPlainTextEdit>
 #include <QTextEdit>
 #include <QScrollArea>

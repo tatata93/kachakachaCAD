@@ -22,6 +22,7 @@
 #include <BRepLib_CheckCurveOnSurface.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepTools.hxx>
+#include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
@@ -31,7 +32,10 @@
 #include <TopExp_Explorer.hxx>
 #include <TopExp.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS_Wire.hxx>
 #include <TopoDS_Solid.hxx>
+#include <TopTools_MapOfShape.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
 #include <algorithm>

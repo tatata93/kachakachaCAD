@@ -8,8 +8,14 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include <BRepClass3d_SolidClassifier.hxx>
 #include <TopoDS_Shape.hxx>
 #include <BRepTools.hxx>
+#include <gp_Pnt.hxx>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <sstream>
 #endif
 
@@ -217,6 +223,69 @@ KACHA_V2_TEST(kernel_boolean, inward_input_is_rejected_instead_of_hidden_by_abso
     kachakacha::v2::kernel::ReleaseShape(a);
     kachakacha::v2::kernel::ReleaseShape(b);
     kachakacha::v2::kernel::ReleaseShape(bad);
+}
+
+namespace {
+void DenseCommonDisagreement(bool reverse)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto load=[](const char* suffix) {
+        const auto path=std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)
+            /(std::string("dense-curved-overlap-")+suffix+".kshape");
+        std::ifstream file(path,std::ios::binary);
+        Require(file.good(),"native curved fixture is available");
+        const std::string bytes(std::istreambuf_iterator<char>(file),{});
+        const auto restored=kernel::RestoreOutputShape(bytes);
+        Require(restored.HasValue(),restored.FirstSummaryJa());
+        return restored.Value();
+    };
+    const auto left=load("left"),right=load("right");
+    const auto beforeLeft=kernel::CaptureOutputShape(left),beforeRight=kernel::CaptureOutputShape(right);
+    Require(beforeLeft.HasValue()&&beforeRight.HasValue(),"input bytes captured");
+    for(const auto handle:{left,right}) {
+        TopoDS_Shape native;Require(kernel::LookupShape(handle,native),"native input exists");
+        Require(BRepClass3d_SolidClassifier(native,gp_Pnt(0,-5,32.4),1e-6).State()==TopAbs_IN,
+            "independent point lies strictly in both solids");
+    }
+    const auto result=BuildBoolean(BooleanOperation::Intersection,reverse?right:left,reverse?left:right,1e-6);
+    Require(!result.HasValue()&&FirstCode(result.Diagnostics())==kernel::kBooleanFailed,
+        "contradictory empty native result must not be described as disjoint: "+result.FirstSummaryJa());
+    RequireEqual(kernel::CaptureOutputShape(left).Value(),beforeLeft.Value(),"left source bytes preserved");
+    RequireEqual(kernel::CaptureOutputShape(right).Value(),beforeRight.Value(),"right source bytes preserved");
+    kernel::ReleaseShape(left);kernel::ReleaseShape(right);
+}
+}
+
+KACHA_V2_TEST(kernel_boolean, dense_curved_empty_common_contradicts_overlap_left_first)
+{
+    DenseCommonDisagreement(false);
+}
+KACHA_V2_TEST(kernel_boolean, dense_curved_empty_common_contradicts_overlap_right_first)
+{
+    DenseCommonDisagreement(true);
+}
+
+KACHA_V2_TEST(kernel_boolean, touching_faces_do_not_become_a_positive_overlap_witness)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto a=Box(0,0,10,10,0,10),b=Box(10,0,20,10,0,10);
+    const auto result=BuildBoolean(BooleanOperation::Intersection,a,b,1e-6);
+    Require(!result.HasValue()&&FirstCode(result.Diagnostics())==kernel::kBooleanNothingLeft,
+        "face contact alone has no common solid volume");
+    kernel::ReleaseShape(a);kernel::ReleaseShape(b);
+}
+
+KACHA_V2_TEST(kernel_boolean, overlapping_bounds_with_material_inside_a_hole_remain_disjoint)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto outer=Box(0,0,10,10,0,10),cutter=Box(2,2,8,8,-1,12);
+    const auto ring=BuildBoolean(BooleanOperation::Difference,outer,cutter,1e-6);
+    Require(ring.HasValue(),ring.FirstSummaryJa());
+    const auto insideHole=Box(3,3,7,7,1,8);
+    const auto result=BuildBoolean(BooleanOperation::Intersection,ring.Value().handle,insideHole,1e-6);
+    Require(!result.HasValue()&&FirstCode(result.Diagnostics())==kernel::kBooleanNothingLeft,
+        "overlapping bounding boxes do not establish overlapping material");
+    for(const auto handle:{outer,cutter,ring.Value().handle,insideHole})kernel::ReleaseShape(handle);
 }
 
 KACHA_V2_TEST(kernel_boolean, 重なる2つの箱を足す引く交差すると体積が合う)

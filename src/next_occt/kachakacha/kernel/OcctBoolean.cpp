@@ -14,6 +14,10 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepClass3d_SolidClassifier.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepGProp.hxx>
 #include "kachakacha/kernel/OcctMassProperties.h"
 #include <GProp_GProps.hxx>
@@ -23,6 +27,10 @@
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
+#include <TopoDS.hxx>
+#include <NCollection_IndexedMap.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
 
 #endif
 
@@ -41,6 +49,44 @@ namespace {
     GProp_GProps properties;
     detail::VolumeProperties(shape, properties);
     return properties.Mass();
+}
+
+// A bounded contradiction check, never a replacement for Boolean geometry or
+// an assertion that no overlap exists when no witness was found. In particular,
+// nearly coincident curved solids can produce distinct images of their common
+// cell and an empty native Common without an error flag.
+bool HasOverlapWitness(const TopoDS_Shape& first,const TopoDS_Shape& second,double toleranceMm)
+{
+    Bnd_Box a,b;BRepBndLib::Add(first,a,false);BRepBndLib::Add(second,b,false);
+    if(a.IsOut(b))return false;
+    const auto left=BRepBuilderAPI_Copy(first,true,false).Shape();
+    const auto right=BRepBuilderAPI_Copy(second,true,false).Shape();
+    const double tolerance=std::max(toleranceMm,1e-7);
+    std::size_t remaining=512;
+    for(const bool reverse:{false,true}) {
+        const auto& source=reverse?right:left;
+        const auto& other=reverse?left:right;
+        BRepClass3d_SolidClassifier sourceClassifier(source),otherClassifier(other);
+        NCollection_IndexedMap<TopoDS_Shape,TopTools_ShapeMapHasher> edges;
+        TopExp::MapShapes(source,TopAbs_EDGE,edges);
+        for(const auto& item:edges) {
+            const auto edge=TopoDS::Edge(item);
+            if(BRep_Tool::Degenerated(edge)||edge.Orientation()==TopAbs_INTERNAL)continue;
+            const BRepAdaptor_Curve curve(edge);
+            const double lo=curve.FirstParameter(),hi=curve.LastParameter();
+            if(!std::isfinite(lo)||!std::isfinite(hi))continue;
+            for(const double fraction:{.25,.5,.75}) {
+                if(remaining==0)return false;
+                --remaining;
+                const auto point=curve.Value(std::lerp(lo,hi,fraction));
+                sourceClassifier.Perform(point,tolerance);
+                if(sourceClassifier.State()!=TopAbs_ON)continue;
+                otherClassifier.Perform(point,tolerance);
+                if(otherClassifier.State()==TopAbs_IN)return true;
+            }
+        }
+    }
+    return false;
 }
 
 template<class Operation>
@@ -175,6 +221,10 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
                 "接合部の隙間・重なり・自己交差を確認してください。"));
         }
         if (after <= 0.0) {
+            if(operation==BooleanOperation::Intersection&&HasOverlapWitness(base,other,toleranceMm))
+                return Out::Failure(MakeError(kBooleanFailed,
+                    "重なりの検査と演算結果が一致しないため、変更しませんでした。",
+                    "入力部品は保持しています。重なりがないと断定できないため、空の結果を採用しません。"));
             // 引き切った・重ならないものを交差させた。消えた部品を持ち続けない。
             return Out::Failure(NothingLeft(operation));
         }

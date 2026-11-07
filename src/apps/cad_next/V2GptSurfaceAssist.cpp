@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/GptSurfaceAuto.h"
+#include "kachakacha/app/SceneBuilder.h"
 #include <QCheckBox>
 #include <QColor>
 #include <QObject>
@@ -11,8 +12,33 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <limits>
+#include <optional>
+#include <set>
 
 using namespace kachakacha::v2;
+
+namespace {
+// Tree selection may explicitly name hidden source wires. Resolve only these
+// missing inputs in a private scene; never expose them to viewport picking.
+std::optional<modeling::SnapScene> HiddenInputScene(const document::Document& document,
+    const modeling::SnapScene& scene, const domain::CreateGuideSurfaceDefinition& definition)
+{
+    std::set<base::EntityId> missing;
+    for (const auto& chain : definition.chains)
+        for (const auto& ref : chain.segments) missing.insert(ref.entityId);
+    for (const auto& curve : scene.curves) missing.erase(curve.entityId);
+    if (missing.empty()) return std::nullopt;
+    auto snapshot = document.Snapshot();
+    for (auto& entity : snapshot.entities) entity.visibility = domain::Visibility::Visible;
+    for (auto& group : snapshot.groups) group.visible = true;
+    base::DeterministicIdGenerator ids;
+    const auto stored = app::BuildSceneFromDocument(snapshot, ids);
+    auto resolved = scene;
+    for (const auto& curve : stored.curves)
+        if (missing.contains(curve.entityId)) resolved.curves.push_back(curve);
+    return resolved;
+}
+}
 
 int V2GptSurfaceTool::PickedRow(const base::EntityId& id) const
 {
@@ -59,7 +85,9 @@ bool V2GptSurfaceTool::AutoBoundary()
 {
     autoSummary_.clear();
     if (!automatic_->isChecked() || definition_.method != app::kGptBoundaryMethod) { return true; }
-    const auto result = app::AutoGptSurfaceBoundary(window_.session_->Scene(), definition_,
+    const auto inputs = HiddenInputScene(window_.session_->GetDocument(), window_.session_->Scene(), definition_);
+    const auto& scene = inputs ? *inputs : window_.session_->Scene();
+    const auto result = app::AutoGptSurfaceBoundary(scene, definition_,
         window_.session_->GetDocument().Snapshot().settings.tolerance, candidate_);
     nextBoundary_->setEnabled(result.HasValue() && result.Value().candidateCount > 1);
     if (!result.HasValue()) {
@@ -81,6 +109,8 @@ void V2GptSurfaceTool::RefreshMarks()
     if (!active_) { return; }
     std::vector<V2Viewport::PlacedRoleLabel> marks;
     std::vector<std::pair<base::EntityId, QColor>> colors;
+    const auto inputs = HiddenInputScene(window_.session_->GetDocument(), window_.session_->Scene(), definition_);
+    const auto& scene = inputs ? *inputs : window_.session_->Scene();
     const int selected = list_->indexOfTopLevelItem(list_->currentItem());
     for (std::size_t row = 0; row < definition_.chains.size(); ++row) {
         const auto& chain = definition_.chains[row];
@@ -93,7 +123,7 @@ void V2GptSurfaceTool::RefreshMarks()
         for (std::size_t index = 0; index < chain.segments.size(); ++index) {
             const auto& ref = chain.segments[index];
             colors.push_back({ref.entityId, color});
-            for (const auto& source : window_.session_->Scene().curves) {
+            for (const auto& source : scene.curves) {
                 if (source.entityId != ref.entityId || (!ref.segmentId.IsNil() && source.segmentId != ref.segmentId)) { continue; }
                 const bool reverse = !chain.reversed.empty() && chain.reversed[index];
                 marks.push_back({source.segment.Evaluate(.5), QStringLiteral("%1%2 %3")

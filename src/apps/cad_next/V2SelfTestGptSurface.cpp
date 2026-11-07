@@ -78,6 +78,68 @@ bool Boundary(V2MainWindow& window)
         && window.KernelShapeCount() == 1 && window.Viewport().ShapeTriangleCount() > 0);
 }
 
+bool HiddenSourceBoundary(V2MainWindow& window)
+{
+    DrawLine(window, .3, .3, .7, .3);
+    DrawLine(window, .7, .3, .7, .7);
+    DrawLine(window, .7, .7, .3, .7);
+    DrawLine(window, .3, .7, .3, .3);
+    SelectWires(window);
+    window.RunCommand("view.hide_selected");
+    const auto sourcesRemainHidden = [&window] {
+        int wires = 0;
+        for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+            if (entity.kind != domain::EntityKind::Wire) continue;
+            ++wires;
+            if (entity.visibility != domain::Visibility::Hidden) return false;
+            for (const auto& curve : window.Session().Scene().curves)
+                if (curve.entityId == entity.id) return false;
+        }
+        return wires == 4;
+    };
+    if (!Explain("hidden inputs remain absent from the pick scene", sourcesRemainHidden())
+        || !window.SaveAndReopen(QStringLiteral("gpt_hidden_inputs.kcd2"))) return false;
+    // Select-all deliberately skips hidden objects. Model explicit explorer
+    // selection instead, as in the attached-file replay.
+    std::vector<app::SelectionRef> refs;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind != domain::EntityKind::Wire) continue;
+        app::SelectionRef ref;
+        ref.entityId = entity.id;
+        refs.push_back(ref);
+    }
+    app::SelectionSet selected;
+    for (const auto& ref : refs) selected.entityIds.push_back(ref.entityId);
+    selected.ordered = std::move(refs);
+    window.Viewport().SetSelection(std::move(selected));
+    if (!Explain("fixture explicitly selects four hidden explorer inputs",
+            window.Viewport().Selection().entityIds.size() == 4)) return false;
+    const auto before = window.Session().GetDocument().Revision();
+    window.RunCommand("surface.gpt_create");
+    if (!Click(window, "gptSurfacePreview")) return false;
+    if (!Explain("automatic boundary resolves selected hidden source wires",
+            window.Viewport().ToolPreviewFaceCount() > 0)) {
+        Note(window.findChild<QLabel*>(QStringLiteral("gptSurfaceStatus"))->text().toStdString().c_str());
+        return false;
+    }
+    if (!Explain("preview preserves visibility, source count and revision",
+            sourcesRemainHidden() && window.Session().GetDocument().Revision() == before)
+        || !Click(window, "gptSurfaceConfirm")) return false;
+    if (!Explain("only a guide is added", CountOfKind(window, domain::EntityKind::GuideSurface) == 1
+            && sourcesRemainHidden())) return false;
+    window.RunCommand("edit.undo");
+    if (!Explain("undo retains all hidden inputs", CountOfKind(window, domain::EntityKind::GuideSurface) == 0
+            && sourcesRemainHidden())) return false;
+    window.RunCommand("edit.redo");
+    if (!Explain("redo and reopening rebuild hidden-source guide",
+            CountOfKind(window, domain::EntityKind::GuideSurface) == 1 && sourcesRemainHidden()
+            && window.SaveAndReopen(QStringLiteral("gpt_hidden_created.kcd2"))
+            && window.KernelShapeCount() == 1 && sourcesRemainHidden())) return false;
+    window.RunCommand("draw.line");
+    return Explain("drawing remains usable after hidden-input surface",
+        window.ShelfShown(app::Shelf::Drawing));
+}
+
 bool Sections(V2MainWindow& window)
 {
     DrawLine(window, .3, .35, .7, .35);
@@ -254,6 +316,7 @@ std::vector<SelfTestCase> GptSurfaceCases()
         {"HP-GPT-03 不完全な外周を拒否・取消で文書不変", CancelAndReject},
         {"HP-GPT-04 クリックで複合断面を追加・並べ替え・確定", PickCompositeSections},
         {"HP-GPT-05 分岐から外周自動判定・番号矢印・クリック修正", AutomaticBranchAndMarks},
-        {"HP-GPT-06 前頭部の滑らかな開いた殻・面表示", SmoothHeadShell}};
+        {"HP-GPT-06 前頭部の滑らかな開いた殻・面表示", SmoothHeadShell},
+        {"HP-GPT-07 非表示の元線から自動判定・作成・再読込", HiddenSourceBoundary}};
 }
 }

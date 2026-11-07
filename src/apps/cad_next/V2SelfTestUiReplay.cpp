@@ -72,9 +72,26 @@ void Reveal(QWidget& widget)
     QApplication::processEvents();
 }
 
+bool ActivateForInput(QWidget& widget)
+{
+    auto* window=widget.window();
+    if(!window||!window->isVisible())return false;
+    if(auto* modal=QApplication::activeModalWidget();modal&&modal->window()!=window)
+        return false;
+    // sendEvent bypasses the platform activation caused by a person's click.
+    // A finished calculation dialog can leave no active Qt window. Restore the
+    // input window through the normal window API before dispatching shortcuts;
+    // never trigger a QAction or alter document history to make the replay pass.
+    if(!window->isActiveWindow()) {
+        window->activateWindow();QApplication::processEvents();
+    }
+    return window->isActiveWindow();
+}
+
 bool Mouse(QWidget& widget,QPointF p,Qt::KeyboardModifiers modifiers=Qt::NoModifier)
 {
     if(!widget.isVisible()||!widget.isEnabled()||!widget.rect().contains(p.toPoint()))return false;
+    if(!ActivateForInput(widget))return false;
     for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
         QMouseEvent event(type,p,QPointF(widget.mapToGlobal(p.toPoint())),Qt::LeftButton,
             type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,modifiers);
@@ -86,6 +103,7 @@ bool Mouse(QWidget& widget,QPointF p,Qt::KeyboardModifiers modifiers=Qt::NoModif
 bool Key(QWidget& target,const QString& sequence)
 {
     const QKeySequence keys(sequence);if(keys.isEmpty()||keys.count()!=1)return false;
+    if(!ActivateForInput(target))return false;
     const auto chord=keys[0];
     QKeyEvent press(QEvent::KeyPress,chord.key(),chord.keyboardModifiers());
     QKeyEvent release(QEvent::KeyRelease,chord.key(),chord.keyboardModifiers());
@@ -208,6 +226,32 @@ struct Replay {
     QJsonArray trace;
     int index=0;
     std::vector<EntityId> markedEntities;
+
+    QJsonObject InputRuntime() const
+    {
+        const auto widget=[](QWidget* value) {
+            return value ? QJsonObject{{"name",value->objectName()},
+                {"type",value->metaObject()->className()},{"visible",value->isVisible()}}
+                : QJsonObject{};
+        };
+        const auto action=[&](const char* id) {
+            const auto* value=w.ActionFor(id);
+            return value ? QJsonObject{{"enabled",value->isEnabled()},{"visible",value->isVisible()},
+                {"shortcut",value->shortcut().toString()}} : QJsonObject{};
+        };
+        auto* focus=QApplication::focusWidget();
+        return {{"windowActive",w.isActiveWindow()},
+            {"applicationState",int(QApplication::applicationState())},
+            {"activeWindowIsSelf",QApplication::activeWindow()==&w},
+            {"activeWindow",widget(QApplication::activeWindow())},
+            {"activeModal",widget(QApplication::activeModalWidget())},
+            {"activePopup",widget(QApplication::activePopupWidget())},
+            {"focus",widget(focus)},{"focusWindowIsSelf",focus&&focus->window()==&w},
+            {"canUndo",w.Session().GetDocument().CanUndo()},
+            {"canRedo",w.Session().GetDocument().CanRedo()},
+            {"undoAction",action("edit.undo")},{"redoAction",action("edit.redo")},
+            {"calculationActive",V2GeometryJob::Active()}};
+    }
 
     QWidget* Field(const QJsonObject& step) const
     {
@@ -512,6 +556,7 @@ struct Replay {
             for(auto* list:dock->findChildren<QListWidget*>())
                 for(int i=0;i<list->count();++i)notices.append(list->item(i)->text());
         return Write(path,{{"entities",entities},{"groups",groups},{"fields",fields},{"notices",notices},
+            {"inputRuntime",InputRuntime()},
             {"aliases",aliases},{"status",w.StatusText()}});
     }
 
@@ -535,8 +580,9 @@ struct Replay {
         }
         for(const auto& value:phase["steps"].toArray()){
             QElapsedTimer elapsed;elapsed.start();
-            const auto step=value.toObject();const bool ok=Act(step);
+            const auto step=value.toObject();const auto before=InputRuntime();const bool ok=Act(step);
             trace.append(QJsonObject{{"step",index},{"input",step},{"ok",ok},{"status",w.StatusText()},
+                {"inputRuntimeBefore",before},{"inputRuntimeAfter",InputRuntime()},
                 {"elapsed_ms",elapsed.nsecsElapsed()/1000000.0}});
             Write(QDir(root).filePath("replay-trace.json"),{{"steps",trace},{"aliases",aliases}});
             if(!ok){Inspect(QDir(root).filePath("replay-failure.json"));w.grab().save(QDir(root).filePath("replay-failure.png"));
@@ -592,6 +638,21 @@ bool Smoke(V2MainWindow& w)
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;
     if(!Explain("cancellation cannot pass without a live visible calculation",!replay.Act(
         {{"op","count"},{"kind",2},{"value",2},{"cancelCalculation",true}})))return false;
+    // Reproduce the observed test-fixture state after a calculation dialog
+    // closes. Only window activation is changed here, never document history.
+    const auto deactivate=[&] {
+        const bool previous=w.testAttribute(Qt::WA_ShowWithoutActivating);
+        w.setAttribute(Qt::WA_ShowWithoutActivating,true);w.hide();w.show();
+        QApplication::processEvents();w.setAttribute(Qt::WA_ShowWithoutActivating,previous);
+        return QApplication::activeWindow()==nullptr;
+    };
+    if(!Explain("replay fixture has no active window",deactivate())
+        ||!replay.Act({{"op","key"},{"key","Ctrl+Z"}})
+        ||!Explain("real Ctrl+Z removes the last wire after window reactivation",
+            CountOfKind(w,domain::EntityKind::Wire)==1))return false;
+    if(!deactivate()||!replay.Act({{"op","key"},{"key","Ctrl+Y"}})
+        ||!Explain("real Ctrl+Y restores the same wire after window reactivation",
+            CountOfKind(w,domain::EntityKind::Wire)==2))return false;
     return replay.Act({{"op","navigator_home"}})&&replay.Act({{"op","mark"}})
         &&!replay.Act({{"op","remember"},{"kind",2},{"as","not-created"},{"new",true}});
 }

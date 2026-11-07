@@ -20,6 +20,7 @@
 #include <QDialog>
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QFocusEvent>
@@ -83,7 +84,14 @@ bool ActivateForInput(QWidget& widget)
     // input window through the normal window API before dispatching shortcuts;
     // never trigger a QAction or alter document history to make the replay pass.
     if(!window->isActiveWindow()) {
-        window->activateWindow();QApplication::processEvents();
+        QElapsedTimer timeout;timeout.start();
+        while(!window->isActiveWindow()&&timeout.elapsed()<1000) {
+            window->activateWindow();
+            QEventLoop wait;QTimer::singleShot(10,&wait,&QEventLoop::quit);
+            wait.exec(QEventLoop::ExcludeUserInputEvents);
+            if(auto* modal=QApplication::activeModalWidget();modal&&modal->window()!=window)
+                return false;
+        }
     }
     return window->isActiveWindow();
 }
@@ -638,15 +646,16 @@ bool Smoke(V2MainWindow& w)
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;
     if(!Explain("cancellation cannot pass without a live visible calculation",!replay.Act(
         {{"op","count"},{"kind",2},{"value",2},{"cancelCalculation",true}})))return false;
-    // Reproduce the observed test-fixture state after a calculation dialog
-    // closes. Only window activation is changed here, never document history.
+    // Give another owned window focus through the real window API. Hide/show
+    // can receive queued native activation; a distinct window makes the
+    // inactive-main-window precondition explicit before dispatching keys.
+    QWidget other;other.setWindowTitle(QStringLiteral("入力試験"));other.resize(160,80);other.show();
     const auto deactivate=[&] {
-        const bool previous=w.testAttribute(Qt::WA_ShowWithoutActivating);
-        w.setAttribute(Qt::WA_ShowWithoutActivating,true);w.hide();w.show();
-        QApplication::processEvents();w.setAttribute(Qt::WA_ShowWithoutActivating,previous);
-        return QApplication::activeWindow()==nullptr;
+        const bool ready=ActivateForInput(other)&&QApplication::activeWindow()==&other&&!w.isActiveWindow();
+        Note(QJsonDocument(replay.InputRuntime()).toJson(QJsonDocument::Compact).constData());
+        return ready;
     };
-    if(!Explain("replay fixture has no active window",deactivate())
+    if(!Explain("replay fixture focuses another owned window",deactivate())
         ||!replay.Act({{"op","key"},{"key","Ctrl+Z"}})
         ||!Explain("real Ctrl+Z removes the last wire after window reactivation",
             CountOfKind(w,domain::EntityKind::Wire)==1))return false;

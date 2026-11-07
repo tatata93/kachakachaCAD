@@ -2,6 +2,7 @@
 // never by constructing features or passing shapes into the document.
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
+#include "V2GeometryJob.h"
 #include "V2EntityTree.h"
 #include "V2DocumentTiming.h"
 #include "kachakacha/app/Ribbon.h"
@@ -16,6 +17,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QDialog>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QFile>
@@ -368,6 +370,33 @@ struct Replay {
 
     bool Act(const QJsonObject& step)
     {
+        if(step["cancelCalculation"].toBool()) {
+            auto action=step;action.remove("cancelCalculation");
+            const auto revision=w.Session().GetDocument().Revision();
+            const int minimum=std::clamp(step["minimumCalculationMs"].toInt(0),0,30000);
+            bool attempted=false,clicked=false;qint64 pid=0;QString phase;
+            QElapsedTimer live;QTimer timer;timer.setInterval(1);
+            QObject::connect(&timer,&QTimer::timeout,&w,[&]{
+                if(attempted)return;
+                auto* dialog=w.findChild<QDialog*>("geometryJobDialog");
+                if(!dialog||!dialog->isVisible())return;
+                const auto process=dialog->property("calculationPid").toLongLong();if(process<=0)return;
+                if(!live.isValid())live.start();
+                if(live.elapsed()<minimum)return;
+                auto* button=dialog->findChild<QPushButton*>("geometryJobCancel");
+                if(!button||!button->isVisible()||!button->isEnabled())return;
+                attempted=true;timer.stop();pid=process;phase=dialog->property("calculationPhase").toString();
+                if(step.contains("calculationSnapshot"))
+                    dialog->grab().save(QDir(root).filePath(step["calculationSnapshot"].toString()));
+                clicked=Mouse(*button,button->rect().center());
+            });
+            timer.start();const bool acted=Act(action);timer.stop();
+            const bool unchanged=w.Session().GetDocument().Revision()==revision;
+            Note(QStringLiteral("replay visible calculation cancel: clicked=%1 pid=%2 live_ms=%3 phase=%4 unchanged=%5 active=%6")
+                .arg(clicked).arg(pid).arg(live.isValid()?live.elapsed():-1).arg(phase)
+                .arg(unchanged).arg(V2GeometryJob::Active()).toUtf8().constData());
+            return acted&&clicked&&pid>0&&unchanged&&!V2GeometryJob::Active();
+        }
         const auto op=step["op"].toString();
         if(op=="tool")return Tool(w,step);
         if(op=="select")return Select(step);
@@ -544,6 +573,8 @@ bool Smoke(V2MainWindow& w)
     // Unknown operations and hidden UI must fail; they cannot silently become API calls.
     if(replay.Act({{"op","create_shape"}})||replay.Act({{"op","click"},{"widget","does-not-exist"}})
         ||replay.Act({{"op","number"},{"widget","drawingCoordinateP3_0"},{"value",4}}))return false;
+    if(!Explain("cancellation cannot pass without a live visible calculation",!replay.Act(
+        {{"op","count"},{"kind",2},{"value",2},{"cancelCalculation",true}})))return false;
     return replay.Act({{"op","mark"}})
         &&!replay.Act({{"op","remember"},{"kind",2},{"as","not-created"},{"new",true}});
 }
@@ -584,10 +615,29 @@ bool RealSettings(V2MainWindow& w)
     if(!Explain("extrusion is created only after visible settings and confirmation",
         extrude.Run({{"name","real extrusion settings"},{"steps",extrudeSteps}})))return false;
     const auto& shapes=w.Viewport().ShapeViews();
-    return Explain("entered plane offset and extrusion distance determine the actual shape",
+    if(!Explain("entered plane offset and extrusion distance determine the actual shape",
         shapes.size()==1&&shapes.front().mesh.closed
         &&std::abs(shapes.front().mesh.minimum.z-17.5)<1e-6
-        &&std::abs(shapes.front().mesh.maximum.z-20.5)<1e-6);
+        &&std::abs(shapes.front().mesh.maximum.z-20.5)<1e-6))return false;
+    // Re-extrude the same visible profile as a second independent part, then
+    // exercise the actual Cancel button while the Boolean child process lives.
+    const QJsonArray secondSteps{
+        QJsonObject{{"op","select"},{"id",QString::fromStdString(wire.ToString())}},
+        QJsonObject{{"op","tool"},{"command","part.extrude"}},
+        QJsonObject{{"op","number"},{"widget","extrudeDistance"},{"value",3}},
+        QJsonObject{{"op","key"},{"key","Return"}},
+        QJsonObject{{"op","count"},{"kind",4},{"value",2}}};
+    if(!extrude.Run({{"name","second ordinary extrusion"},{"steps",secondSteps}}))return false;
+    std::vector<EntityId> parts;for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::Part)parts.push_back(e.id);
+    if(parts.size()!=2)return false;
+    const QJsonArray cancelSteps{
+        QJsonObject{{"op","select"},{"id",QString::fromStdString(parts[0].ToString())}},
+        QJsonObject{{"op","select"},{"id",QString::fromStdString(parts[1].ToString())},{"add",true}},
+        QJsonObject{{"op","tool"},{"command","part.boolean_add"},{"cancelCalculation",true}},
+        QJsonObject{{"op","count"},{"kind",4},{"value",2}}};
+    return Explain("replay clicks a real running job's Cancel without changing parts",
+        extrude.Run({{"name","cancel live Boolean"},{"steps",cancelSteps}}));
 }
 
 bool FoldOwnerFocus(V2MainWindow& w)

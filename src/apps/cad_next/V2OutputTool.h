@@ -10,6 +10,7 @@
 #include <memory>
 class V2MainWindow;
 class V2OutputPreview;
+class V2OutputMergeTarget;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -54,6 +55,7 @@ private:
     bool Prepare();
     bool PreparePreview();
     bool CopyIntoDocument();
+    bool MergeIntoNewDocument(const QString& path);
     void Run();
     void SetProblem(const QString& problem);
     V2MainWindow& window_;
@@ -67,6 +69,7 @@ private:
     QLabel* status_=nullptr;
     QPushButton* save_=nullptr;
     V2OutputPreview* preview_=nullptr;
+    V2OutputMergeTarget* mergeTarget_=nullptr;
     QWidget* placementFields_=nullptr;
     std::array<QDoubleSpinBox*,3> sourcePoint_{},sourceNormal_{},sourceX_{},targetPoint_{},targetNormal_{},targetX_{};
     int pickRole_=0;

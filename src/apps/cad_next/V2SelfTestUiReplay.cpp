@@ -518,7 +518,8 @@ struct Replay {
         }
         if(op=="snapshot"){
             QDir().mkpath(QFileInfo(Path(step)).absolutePath());QApplication::processEvents();
-            return w.grab().save(Path(step));
+            auto* target=step.contains("widget")?Field(step):static_cast<QWidget*>(&w);
+            return target&&target->grab().save(Path(step));
         }
         if(op=="fit"){
             w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();

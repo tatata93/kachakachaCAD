@@ -1,7 +1,9 @@
 #include "V2Calculation.h"
 #include <QString>
 #include "V2OutputTool.h"
+#include "V2OutputMergeTarget.h"
 #include "V2MainWindow.h"
+#include "kachakacha/app/DocumentIds.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -37,6 +39,16 @@ bool AppendOutputs(document::Document& document,base::IdGenerator& ids,const std
         if(!added.committed){error=QStringLiteral("独立コピーを文書に追加できません。");return false;}}
     return transaction.Commit();
 }
+base::Result<std::string> MergedArchive(io::DocumentFile file,const document::DocumentSnapshot& source,
+    const std::vector<V2OutputAsset>& assets,const std::string& title) {
+    using Out=base::Result<std::string>;base::DeterministicIdGenerator ids;
+    app::AdvanceIdsPastDocument(ids,file.snapshot);app::AdvanceIdsPastDocument(ids,source);
+    base::RandomIdGenerator documentIds;file.snapshot.id=documentIds.NextTyped<base::IdKind::Document>();
+    document::Document document(file.snapshot.id);const auto problems=document.ResetTo(file.snapshot);
+    if(std::any_of(problems.begin(),problems.end(),[](const auto& d){return d.IsError();}))return Out::Failure(problems);
+    QString error;if(!AppendOutputs(document,ids,assets,error))return Out::Failure(base::MakeError("EXP-P004",error.toStdString()));
+    file.snapshot=document.Snapshot();file.metadata.title=title;return io::SaveDocument(file);
+}
 }
 bool V2OutputTool::CopyIntoDocument() {
     // Independent points, planes and wires introduce fresh UUIDs. Existing
@@ -53,6 +65,7 @@ bool V2OutputTool::SaveTo(const QString& path) {
     if(format_->currentIndex()==3)return CopyIntoDocument();
     if(path.isEmpty())return false;
     if(!window_.documentPath_.isEmpty() && QFileInfo(path).absoluteFilePath().compare(QFileInfo(window_.documentPath_).absoluteFilePath(),Qt::CaseInsensitive)==0){SetProblem(QStringLiteral("現在開いているKCDを出力先に上書きできません。別名にしてください。"));return false;}
+    if(format_->currentIndex()==4)return MergeIntoNewDocument(path);
     std::string bytes;
     if(format_->currentIndex()==2){auto settings=window_.session_->GetDocument().Snapshot().settings;settings.activeGroupId.reset();
         document::Document document(window_.ids_->NextTyped<base::IdKind::Document>(),settings);QString error;
@@ -67,4 +80,20 @@ bool V2OutputTool::SaveTo(const QString& path) {
         if(!content.HasValue()){SetProblem(QString::fromStdString(content.FirstSummaryJa()+"\n"+content.FirstDetailsJa()));return false;}bytes=content.Value();}
     const auto written=io::WriteFileAtomically(path.toStdString(),bytes);if(!written.HasValue()){SetProblem(QString::fromStdString(written.FirstMessageJa()));return false;}
     window_.SetStatus(QStringLiteral("プレビューした%1個の形状を%2へ出力しました。").arg(prepared_.size()).arg(path));return true;
+}
+bool V2OutputTool::MergeIntoNewDocument(const QString& path) {
+    QString error;if(!mergeTarget_->CheckUnchanged(error)){SetProblem(error);return false;}
+    const auto resolved=[](const QString& value){const QFileInfo info(value);return info.exists()?info.canonicalFilePath():info.absoluteFilePath();};
+    const auto destination=resolved(path);
+    for(const auto& source:{mergeTarget_->Path(),window_.documentPath_})if(!source.isEmpty()&&destination.compare(resolved(source),Qt::CaseInsensitive)==0){
+        SetProblem(QStringLiteral("元のファイルへ上書きできません。新しい名前で保存してください。"));return false;}
+    const auto archive=V2Calculation::Call(this,"文書を組み合わせて検査しています…",MergedArchive,
+        mergeTarget_->File(),window_.session_->GetDocument().Snapshot(),prepared_,QFileInfo(path).fileName().toStdString());
+    if(!archive.HasValue()){SetProblem(QString::fromStdString(archive.FirstMessageJa()));return false;}
+    if(window_.session_->GetDocument().Revision()!=revision_||window_.session_->GetDocument().Snapshot().id!=documentId_){
+        SetProblem(QStringLiteral("計算中に文書が変わりました。対象を取り込み直してください。"));return false;}
+    if(!mergeTarget_->CheckUnchanged(error)){SetProblem(error);return false;}
+    const auto written=io::WriteFileAtomically(path.toStdString(),archive.Value());
+    if(!written.HasValue()){SetProblem(QString::fromStdString(written.FirstMessageJa()));return false;}
+    window_.SetStatus(QStringLiteral("%1へ%2個を追加した文書を%3に保存しました。両原本は保持しています。").arg(mergeTarget_->Description()).arg(prepared_.size()).arg(path));return true;
 }

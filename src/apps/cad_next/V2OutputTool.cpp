@@ -3,6 +3,7 @@
 #include <QString>
 #include "V2OutputTool.h"
 #include "V2OutputPreview.h"
+#include "V2OutputMergeTarget.h"
 #include "V2MainWindow.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -57,8 +58,11 @@ void V2OutputTool::BuildUi(int format) {
     auto* scope=new QComboBox(this);scope->setObjectName("outputScope");scope->addItems({QStringLiteral("選択した物体全体"),QStringLiteral("選択した面・辺・点だけ")});settings->addWidget(scope);
     QObject::connect(scope,&QComboBox::currentIndexChanged,this,[this]{TakeSelection();});
     targets_=new QListWidget(this);targets_->setObjectName("outputTargets");targets_->setMaximumHeight(145);settings->addWidget(targets_);
-    format_=new QComboBox(this);format_->setObjectName("outputFormat");format_->addItems({QStringLiteral("STL（面の近似三角形）"),QStringLiteral("STEP（立体・面・線）"),QStringLiteral("別KCD2（現在形状の独立コピー）"),QStringLiteral("同一KCD（現在形状の独立コピー）")});
+    format_=new QComboBox(this);format_->setObjectName("outputFormat");format_->addItems({QStringLiteral("STL（面の近似三角形）"),QStringLiteral("STEP（立体・面・線）"),QStringLiteral("別KCD2（現在形状の独立コピー）"),QStringLiteral("同一KCD（現在形状の独立コピー）"),QStringLiteral("別のKCD2とまとめて新規保存")});
     format_->setCurrentIndex(format<0?2:format);settings->addWidget(format_);BuildPlacement(settings);
+    mergeTarget_=new V2OutputMergeTarget(this,[this]{
+        return window_.pathChooser_?window_.pathChooser_(false):QFileDialog::getOpenFileName(this,QStringLiteral("組み合わせる既存ファイル"),QString(),QStringLiteral("KCD2 (*.kcd2)"));
+    },[this]{RefreshPreview();});settings->addWidget(mergeTarget_);mergeTarget_->setVisible(format_->currentIndex()==4);
     settings->addWidget(new QLabel(QStringLiteral("元への追従はしません。厚みのない面には厚みを追加しません。"),this));
     status_=new QLabel(this);status_->setObjectName("outputStatus");status_->setWordWrap(true);settings->addWidget(status_);settings->addStretch();
     row->addLayout(settings);auto* right=new QVBoxLayout();preview_=new V2OutputPreview(this);right->addWidget(preview_,1);
@@ -135,6 +139,7 @@ bool V2OutputTool::Prepare() {
 }
 void V2OutputTool::RefreshPreview() {
     if(loading_||status_==nullptr)return;
+    mergeTarget_->setVisible(format_->currentIndex()==4);
     if(window_.session_->GetDocument().Revision()!=revision_||window_.session_->GetDocument().Snapshot().id!=documentId_){SetProblem(QStringLiteral("文書が変更されています。対象を取り込み直してください。"));return;}
     if(!PreparePreview())return;
     QString notes;
@@ -146,7 +151,10 @@ void V2OutputTool::RefreshPreview() {
         if(format_->currentIndex()==1&&asset.curves.empty())error=QString::fromStdString(asset.entity.displayName)+QStringLiteral(": STEPには形状のある対象を選んでください。");
         if(!error.isEmpty()){status_->setText(error);save_->setEnabled(false);return;}
     }
-    save_->setEnabled(true);save_->setText(format_->currentIndex()==3?QStringLiteral("同一KCDへコピーを作成"):QStringLiteral("保存先を選んで出力…"));status_->setText(QStringLiteral("%1個の出力形状。%2").arg(prepared_.size()).arg(notes));
+    const bool merge=format_->currentIndex()==4;
+    save_->setEnabled(!merge||mergeTarget_->Ready());
+    save_->setText(merge?QStringLiteral("別名で組み合わせて保存…"):format_->currentIndex()==3?QStringLiteral("同一KCDへコピーを作成"):QStringLiteral("保存先を選んで出力…"));
+    status_->setText(merge?(mergeTarget_->Ready()?QStringLiteral("%1へ%2個を追加して新規保存します。").arg(mergeTarget_->Description()).arg(prepared_.size()):QStringLiteral("組み合わせる既存KCD2を選んでください。")):QStringLiteral("%1個の出力形状。%2").arg(prepared_.size()).arg(notes));
 }
 void V2OutputTool::Run(){if(format_->currentIndex()==3){if(SaveTo(QString()))close();return;}
     const QString extension=format_->currentIndex()==0?QStringLiteral("stl"):format_->currentIndex()==1?QStringLiteral("step"):QStringLiteral("kcd2");

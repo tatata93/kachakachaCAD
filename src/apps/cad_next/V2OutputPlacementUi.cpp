@@ -1,5 +1,4 @@
 #include "V2ToolSelection.h"
-#include "V2NumericSpinBox.h"
 #include <QObject>
 #include <QString>
 #include <QWidget>
@@ -14,6 +13,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QPointer>
@@ -22,12 +22,30 @@
 #include <limits>
 using namespace kachakacha::v2;
 namespace {
+// Keep native placement coordinates precise without filling ordinary values
+// with trailing zeroes. Display precision must not tilt a planar stock part.
+class PlacementNumber final : public QDoubleSpinBox {
+public:
+    explicit PlacementNumber(QWidget* parent):QDoubleSpinBox(parent){
+        setKeyboardTracking(false);setDecimals(12);
+    }
+protected:
+    QString textFromValue(double value) const override {
+        auto text=QDoubleSpinBox::textFromValue(value);
+        const auto decimal=locale().decimalPoint();
+        if(text.contains(decimal)){
+            while(text.endsWith(QLatin1Char('0')))text.chop(1);
+            if(text.endsWith(decimal))text.chop(decimal.size());
+        }
+        return text==QStringLiteral("-0")?QStringLiteral("0"):text;
+    }
+};
 geometry::Vector3 Vector(const std::array<QDoubleSpinBox*,3>& boxes){return {boxes[0]->value(),boxes[1]->value(),boxes[2]->value()};}
 void Values(const std::array<QDoubleSpinBox*,3>& boxes,geometry::Vector3 v){boxes[0]->setValue(v.x);boxes[1]->setValue(v.y);boxes[2]->setValue(v.z);}
 }
 void V2OutputTool::AddVectorRow(QFormLayout* layout,const QString& label,std::array<QDoubleSpinBox*,3>& values,const geometry::Vector3& initial) {
     auto* row=new QWidget(this);auto* fields=new QHBoxLayout(row);fields->setContentsMargins(0,0,0,0);
-    for(auto& value:values){value=new V2NumericSpinBox(row);value->setRange(-1e9,1e9);value->setDecimals(6);value->setMaximumWidth(105);fields->addWidget(value);}
+    for(auto& value:values){value=new PlacementNumber(row);value->setRange(-1e9,1e9);value->setMaximumWidth(105);fields->addWidget(value);}
     Values(values,initial);layout->addRow(label,row);
     for(auto* value:values)QObject::connect(value,&QDoubleSpinBox::valueChanged,this,[this]{RefreshPreview();});
 }
@@ -36,6 +54,20 @@ void V2OutputTool::BuildPlacement(QVBoxLayout* layout) {
     placementFields_=new QWidget(this);auto* fields=new QVBoxLayout(placementFields_);fields->setContentsMargins(0,0,0,0);
     auto* form=new QFormLayout();AddVectorRow(form,QStringLiteral("元の基準点 XYZ"),sourcePoint_,{});AddVectorRow(form,QStringLiteral("元の法線 XYZ"),sourceNormal_,{0,0,1});AddVectorRow(form,QStringLiteral("元の面内X方向"),sourceX_,{1,0,0});
     AddVectorRow(form,QStringLiteral("配置点 XYZ"),targetPoint_,{});AddVectorRow(form,QStringLiteral("配置面の法線"),targetNormal_,{0,0,1});AddVectorRow(form,QStringLiteral("配置面のX方向"),targetX_,{1,0,0});fields->addLayout(form);
+    const auto identify=[](auto& values,const char* prefix,const QString& label){
+        const char* axes[]={"X","Y","Z"};
+        for(std::size_t axis=0;axis<values.size();++axis){
+            const auto hint=label+QStringLiteral(" ")+QString::fromLatin1(axes[axis]);
+            values[axis]->setObjectName(QString::fromLatin1(prefix)+QStringLiteral("_%1").arg(axis));
+            values[axis]->setAccessibleName(hint);values[axis]->setToolTip(hint);
+        }
+    };
+    identify(sourcePoint_,"outputSourcePoint",QStringLiteral("元の基準点"));
+    identify(sourceNormal_,"outputSourceNormal",QStringLiteral("元の法線"));
+    identify(sourceX_,"outputSourceX",QStringLiteral("元の面内X方向"));
+    identify(targetPoint_,"outputTargetPoint",QStringLiteral("配置点"));
+    identify(targetNormal_,"outputTargetNormal",QStringLiteral("配置面の法線"));
+    identify(targetX_,"outputTargetX",QStringLiteral("配置面のX方向"));
     const std::pair<QString,int> picks[]{{QStringLiteral("基準点を3Dで指定"),1},{QStringLiteral("元の向きを面から指定"),2},{QStringLiteral("配置先を面上で指定"),3},{QStringLiteral("選択中の作業平面へ配置"),4}};
     for(const auto& [label,role]:picks){auto* button=new QPushButton(label,this);fields->addWidget(button);QObject::connect(button,&QPushButton::clicked,this,[this,role]{Pick(role);});}
     fields->addWidget(new QLabel(QStringLiteral("平面・曲面の配置点をクリック。曲面は接平面の向きを使います。"),this));layout->addWidget(placementFields_);placementFields_->hide();

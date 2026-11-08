@@ -154,13 +154,51 @@ void Key(QWidget& widget,int key,Qt::KeyboardModifiers modifiers=Qt::NoModifier)
     QKeyEvent press(QEvent::KeyPress,key,modifiers),release(QEvent::KeyRelease,key,modifiers);
     QApplication::sendEvent(&widget,&press);QApplication::sendEvent(&widget,&release);QApplication::processEvents();
 }
-bool Number(QWidget* widget,const QString& number) {
+bool Number(QWidget* widget,const QString& number,bool enter=true) {
     if(!widget||!Press(widget))return false;
     const auto* floating=dynamic_cast<QDoubleSpinBox*>(widget);const auto* integer=dynamic_cast<QSpinBox*>(widget);
     const bool changing=(floating&&floating->value()!=number.toDouble())||(integer&&integer->value()!=number.toInt());
     auto* input=widget->findChild<QLineEdit*>();if(!input)return false;
     input->setFocus();input->selectAll();QInputMethodEvent text;text.setCommitString(number);QApplication::sendEvent(input,&text);
-    if(changing)Key(*input,Qt::Key_Return);Key(*input,Qt::Key_Tab);Settle();return true;
+    if(changing&&enter)Key(*input,Qt::Key_Return);Key(*input,Qt::Key_Tab);Settle();return true;
+}
+bool OutputPrecisePlacement(V2MainWindow& w) {
+    if(!DrawRectangleByHand(w)||w.Session().Scene().curves.empty())return false;
+    base::EntityId source;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==domain::EntityKind::Wire)source=entity.id;
+    std::vector<geometry::CurveSegment> original;
+    for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==source)original.push_back(curve.segment);
+    if(!Explain("placement source is the drawn wire",!source.IsNil()&&!original.empty()))return false;
+    // Isolate numeric placement here. The actual model replay separately
+    // exercises selecting its stock part through the ordinary explorer UI.
+    w.SelectTool(modeling::DrawingTool::Select);w.Viewport().SetSelection(app::SelectionSet{{source}});
+    if(!Ribbon(w,"export.selection"))return false;
+    auto* dialog=w.findChild<QDialog*>("selectionOutput");if(!Explain("placement dialog opens",dialog!=nullptr))return false;
+    auto* format=dialog->findChild<QComboBox*>("outputFormat");
+    auto* placement=dialog->findChild<QComboBox*>("outputPlacement");if(!Explain("placement format and frame controls exist",format&&placement))return false;
+    format->setCurrentIndex(3);placement->setCurrentIndex(1);QApplication::processEvents();
+    const geometry::Vector3 delta{.123456789123,-.987654321987,.000000123456};
+    const QString values[]={QStringLiteral("0.123456789123"),QStringLiteral("-0.987654321987"),QStringLiteral("0.000000123456")};
+    for(int axis=0;axis<3;++axis){
+        auto* field=dialog->findChild<QDoubleSpinBox*>(QStringLiteral("outputTargetPoint_%1").arg(axis));
+        if(!Explain("placement coordinate accepts normal keyboard input",Number(field,values[axis],false)))return false;
+    }
+    const auto before=CountOfKind(w,domain::EntityKind::Wire);
+    if(!Explain("placed wire copies into the current document",Press(dialog->findChild<QPushButton*>("outputConfirm"))&&CountOfKind(w,domain::EntityKind::Wire)==before+1))return false;
+    base::EntityId made;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==domain::EntityKind::Wire&&entity.id!=source)made=entity.id;
+    std::vector<geometry::CurveSegment> moved;
+    for(const auto& curve:w.Session().Scene().curves)if(curve.entityId==made)moved.push_back(curve.segment);
+    if(moved.size()!=original.size())return false;
+    for(std::size_t i=0;i<moved.size();++i)for(const double t:{0.0,.37,1.0})
+        if(!Explain("typed placement keeps sub-micrometre coordinates without changing curve kind",
+            moved[i].Kind()==original[i].Kind()&&geometry::Distance(moved[i].Evaluate(t),original[i].Evaluate(t)+delta)<1e-10))return false;
+    Key(w.Viewport(),Qt::Key_Z,Qt::ControlModifier);
+    if(CountOfKind(w,domain::EntityKind::Wire)!=before)return false;
+    Key(w.Viewport(),Qt::Key_Y,Qt::ControlModifier);
+    return CountOfKind(w,domain::EntityKind::Wire)==before+1&&DrawAfter(w);
 }
 bool SpacedPoints(V2MainWindow& w) {
     w.resize(1500,950);QApplication::processEvents();auto& v=w.Viewport();v.SetVisibleWidthMm(120);v.SetSnapSuppressed(true);
@@ -379,6 +417,7 @@ std::vector<SelfTestCase> ToolContinuityCases(){return {
     {"HP-CONTINUITY support-face pick to loft wire via ribbon",EmbossToLoft},
     {"HP-CONTINUITY output destination pick to drawing via ribbon",OutputToDrawing},
     {"HP-CONTINUITY output point and face picks reuse and close safely",OutputPickReuse},
+    {"HP-CONTINUITY precise typed output placement preserves curves and history",OutputPrecisePlacement},
     {"HP-CONTINUITY face action pauses during selection editing",FaceSelectionPause},
     {"HP-CONTINUITY fabrication partition Escape and mode change",FabricationCancel},
     {"HP-CONTINUITY visible ribbon tool variants allow the next drawing operation",RibbonToolExits},

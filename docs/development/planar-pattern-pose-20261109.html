@@ -21,6 +21,20 @@
 読み取り専用の輪郭比較はSVG/DXF約0.000033 mm、SVG/PDF約0.000447 mm以下（有限標本の比較であり解析的最大誤差ではない）。</p>
 <img src="planar-pattern-pose-20261109/before.png" alt="実UI227で平面の床板型紙を書き出せない状態">
 <img src="planar-pattern-pose-20261109/after.png" alt="同じ保存入力から修正候補で型紙の書き出しに成功した実画面">
+<h2>平板を接合するための配置入力</h2>
+<p>既存の配置欄は小数6桁へ丸めていた。同じ裾部を通常の数値欄から配置した実UI248では、
+平面に約4.8e-7 mmの高さ差が残った。保持桁数を増やし、表示では余分な末尾0を省く。
+各欄にX/Y/Zの識別名・アクセシブル名・ヒントを付けた。配置行列と元の幾何計算は変更しない。</p>
+<p>実UI248bの同じ配置は高さ差約6.4e-12 mm、体積差約1e-13 mm³。
+実UI251では上部と裾を重ね代なしで一枚の平板部品へ結合し、保存・Ctrl+Z/Y・STEPが成功した。
+ここでの値はCADの座標整合の検査であり、実物の工作精度を示す値ではない。</p>
+<p>通常の欄入力→同じ文書へコピー→曲線座標→Undo/Redo→次の作図を確認する新しい回帰を追加。
+小数6桁の実装で座標比較が失敗し、保持精度を改善した実装で成功した。
+最初の2回は回帰側の選択準備で止まり、精度の修正前後の比較から除外した。
+この単独回帰は選択済みの線を前提に入力精度を隔離し、実モデルの別リプレイで通常の一覧選択を確認する。</p>
+<img src="planar-pattern-pose-20261109/placement.png" alt="既存の数値配置欄を使った実際のCAD操作">
+<p>側板の曲線付きDXFは外部読み込み器で不正なSPLINEとして拒否された。これは別件として記録し、
+全形式が検証済みとは扱わない。型紙と製作モデル全体の作業は続ける。</p>
 <p>証拠: <code>out/series115-plaboard-20261105/planar-pose-before-20261109</code>、
 <code>planar-pose-final-20261109</code>、<code>actual-candidate13-final-floor-export-20261109</code>、
 <code>244-floor-cut-proof.json</code>、<code>245-floor-original-preservation-proof.json</code>。

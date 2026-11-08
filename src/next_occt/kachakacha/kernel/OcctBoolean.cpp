@@ -23,6 +23,7 @@
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Iterator.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -89,11 +90,30 @@ bool HasOverlapWitness(const TopoDS_Shape& first,const TopoDS_Shape& second,doub
     return false;
 }
 
+// A pure container does not change a solid's material. Some native Booleans
+// nevertheless lose the larger operand when a container's sole solid has a
+// reversed relative orientation. Pass that same solid with the accumulated
+// location/orientation; never rewrite the cached source or discard siblings.
+TopoDS_Shape BooleanOperand(const TopoDS_Shape& source)
+{
+    auto candidate=source;
+    while(candidate.ShapeType()==TopAbs_COMPOUND||candidate.ShapeType()==TopAbs_COMPSOLID) {
+        TopoDS_Iterator children(candidate,true,true);
+        if(!children.More())return source;
+        const auto child=children.Value();children.Next();
+        if(children.More())return source;
+        candidate=child;
+    }
+    if(candidate.ShapeType()!=TopAbs_SOLID
+        ||(candidate.Orientation()!=TopAbs_FORWARD&&candidate.Orientation()!=TopAbs_REVERSED))return source;
+    return candidate;
+}
+
 template<class Operation>
 TopoDS_Shape NonDestructiveOperation(const TopoDS_Shape& base,const TopoDS_Shape& other,
     std::string& stoppedAt,const char* failure)
 {
-    TopTools_ListOfShape arguments,tools;arguments.Append(base);tools.Append(other);
+    TopTools_ListOfShape arguments,tools;arguments.Append(BooleanOperand(base));tools.Append(BooleanOperand(other));
     Operation operation;operation.SetArguments(arguments);operation.SetTools(tools);
     operation.SetNonDestructive(true);operation.Build();
     if(operation.IsDone())operation.SimplifyResult(true,true);
@@ -293,7 +313,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         double sum = before, largest = before;
         if (!std::isfinite(before) || before <= 0) return Out::Failure(MakeError(kBooleanFailed, "土台の体積が不正です。", {}));
         TopTools_ListOfShape arguments, others;
-        arguments.Append(base);
+        arguments.Append(BooleanOperand(base));
         for (const auto handle : tools) {
             TopoDS_Shape shape;
             if (!LookupShape(handle, shape)) return Out::Failure(MakeError(kBooleanTargetMissing, "相手の部品がありません。", {}));
@@ -301,7 +321,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
             if (!std::isfinite(volume) || volume <= 0) return Out::Failure(MakeError(kBooleanFailed, "相手の体積が不正です。", {}));
             sum += volume;
             largest = std::max(largest, volume);
-            others.Append(shape);
+            others.Append(BooleanOperand(shape));
         }
         BRepAlgoAPI_Fuse fuse;
         fuse.SetArguments(arguments);

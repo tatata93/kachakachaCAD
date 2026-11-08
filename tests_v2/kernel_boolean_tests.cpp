@@ -12,8 +12,15 @@
 #include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <gp_Ax1.hxx>
+#include <gp_Ax2.hxx>
 #include <gp_Trsf.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Iterator.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Solid.hxx>
+#include <TopLoc_Location.hxx>
+#include <BRep_Builder.hxx>
 #include <TopoDS_Shape.hxx>
 #include <BRepTools.hxx>
 #include <gp_Pnt.hxx>
@@ -107,6 +114,102 @@ KACHA_V2_TEST(kernel_boolean_absent, カーネルが無い版は足し引きせ�
 }
 
 #else
+
+namespace {
+// Preserve the material orientation while representing its solid and shells
+// with reversed relative orientations inside otherwise empty containers.
+// This is the representation produced by some legitimate mirrored/trimmed parts.
+KernelShapeHandle WrappedSolid(KernelShapeHandle handle,int depth)
+{
+    using namespace kachakacha::v2;
+    TopoDS_Shape shape;Require(kernel::LookupShape(handle,shape),"source exists");
+    TopExp_Explorer solids(shape,TopAbs_SOLID);Require(solids.More(),"one source solid");
+    const auto source=solids.Current();solids.Next();Require(!solids.More(),"exactly one source solid");
+    BRep_Builder builder;TopoDS_Solid reversed;builder.MakeSolid(reversed);
+    for(TopExp_Explorer shells(source,TopAbs_SHELL);shells.More();shells.Next())
+        builder.Add(reversed,shells.Current().Reversed());
+    reversed.Reverse();shape=reversed;
+    for(int i=0;i<depth;++i){TopoDS_Compound parent;builder.MakeCompound(parent);builder.Add(parent,shape);shape=parent;}
+    return kernel::StoreShape(shape);
+}
+
+void RequireMaterialAt(KernelShapeHandle handle,Vector3 point,TopAbs_State wanted)
+{
+    TopoDS_Shape shape;Require(kachakacha::v2::kernel::LookupShape(handle,shape),"solid exists");
+    BRepClass3d_SolidClassifier classifier(shape,gp_Pnt(point.x,point.y,point.z),1e-7);
+    Require(classifier.State()==wanted,"material classification at the specified point");
+}
+}
+
+KACHA_V2_TEST(kernel_boolean, pure_single_solid_containers_preserve_all_boolean_material)
+{
+    using namespace kachakacha::v2;
+    const auto a=Box(0,0,10,20,0,1),b=Box(9,5,11,10,0,1),c=Box(10,5,12,10,0,1);
+    const auto wrappedA=WrappedSolid(a,3),wrappedB=WrappedSolid(b,1),wrappedC=WrappedSolid(c,2);
+    const auto aa=kernel::CaptureOutputShape(wrappedA),bb=kernel::CaptureOutputShape(wrappedB);
+    Require(aa.HasValue()&&bb.HasValue(),"wrapped native operands can be captured");
+    RequireNear(kernel::ShapeVolume(wrappedA).Value(),200,1e-6,"containers do not change source material");
+    for(const bool reverse:{false,true})for(const auto operation:{BooleanOperation::Union,BooleanOperation::Difference,BooleanOperation::Intersection}){
+        const auto result=BuildBoolean(operation,reverse?wrappedB:wrappedA,reverse?wrappedA:wrappedB,1e-6);
+        Require(result.HasValue(),result.FirstSummaryJa());
+        const double expected=operation==BooleanOperation::Union?205:operation==BooleanOperation::Intersection?5:reverse?5:195;
+        RequireNear(result.Value().volumeMm3,expected,1e-6,"Boolean must retain the actual solid, independent of its container");
+        kernel::ReleaseShape(result.Value().handle);
+    }
+    const auto batch=kernel::BuildBooleans(BooleanOperation::Union,wrappedA,{wrappedB,wrappedC},1e-6);
+    Require(batch.HasValue(),batch.FirstSummaryJa());RequireNear(batch.Value().volumeMm3,210,1e-6,"all wrapped tools contribute to one connected result");
+    kernel::ReleaseShape(batch.Value().handle);
+    RequireEqual(kernel::CaptureOutputShape(wrappedA).Value(),aa.Value(),"source container, locations, and orientations are not rewritten");
+    RequireEqual(kernel::CaptureOutputShape(wrappedB).Value(),bb.Value(),"tool container remains unchanged");
+    for(const auto handle:{a,b,c,wrappedA,wrappedB,wrappedC})kernel::ReleaseShape(handle);
+}
+
+KACHA_V2_TEST(kernel_boolean, wrapped_perforated_panel_union_preserves_holes_after_rigid_motion)
+{
+    using namespace kachakacha::v2;
+    const auto outer=Box(0,0,20,20,0,1),opening=Box(5,5,15,15,-1,3);
+    const auto panel=BuildBoolean(BooleanOperation::Difference,outer,opening,1e-6);Require(panel.HasValue(),panel.FirstSummaryJa());
+    const auto rimOuter=Box(4.9,4.9,15.1,15.1,0,1),rimOpening=Box(5.25,5.25,14.75,14.75,-1,3);
+    const auto rim=BuildBoolean(BooleanOperation::Difference,rimOuter,rimOpening,1e-6);Require(rim.HasValue(),rim.FirstSummaryJa());
+    const auto wrappedPanel=WrappedSolid(panel.Value().handle,2),wrappedRim=WrappedSolid(rim.Value().handle,1);
+    const auto panelBytes=kernel::CaptureOutputShape(wrappedPanel).Value(),rimBytes=kernel::CaptureOutputShape(wrappedRim).Value();
+    for(const int placement:{0,1,2,3}){
+        const bool moved=placement!=0;
+        gp_Trsf transform;
+        if(placement==1||placement==3){transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.53);transform.SetTranslationPart(gp_Vec(12,-7,9));}
+        else if(placement==2)transform.SetMirror(gp_Ax2(gp_Pnt(0,0,0),gp_Dir(1,0,0)));
+        const auto transformed=[&](KernelShapeHandle handle){
+            TopoDS_Shape shape;Require(kernel::LookupShape(handle,shape),"source exists");
+            return kernel::StoreShape(placement==3?shape.Moved(TopLoc_Location(transform))
+                :BRepBuilderAPI_Transform(shape,transform,true).Shape());
+        };
+        const auto a=transformed(wrappedPanel),b=transformed(wrappedRim);
+        const auto result=BuildBoolean(BooleanOperation::Union,moved?b:a,moved?a:b,1e-6);
+        Require(result.HasValue(),result.FirstSummaryJa());RequireNear(result.Value().volumeMm3,309.75,1e-5,"outer panel is preserved and its opening becomes 9.5 by 9.5");
+        for(const auto sample:std::vector<std::pair<Vector3,TopAbs_State>>{{{2,2,.5},TopAbs_IN},{{5.1,10,.5},TopAbs_IN},{{10,10,.5},TopAbs_OUT},{{30,30,.5},TopAbs_OUT}}){
+            gp_Pnt point(sample.first.x,sample.first.y,sample.first.z);point.Transform(transform);
+            RequireMaterialAt(result.Value().handle,{point.X(),point.Y(),point.Z()},sample.second);
+        }
+        const auto step=kernel::OutputStep({result.Value().handle});Require(step.HasValue()&&!step.Value().empty(),"perforated union exports STEP");
+        for(const auto handle:{a,b,result.Value().handle})kernel::ReleaseShape(handle);
+    }
+    RequireEqual(kernel::CaptureOutputShape(wrappedPanel).Value(),panelBytes,"original perforated panel and container are unchanged");
+    RequireEqual(kernel::CaptureOutputShape(wrappedRim).Value(),rimBytes,"original rim is unchanged");
+    for(const auto handle:{outer,opening,panel.Value().handle,rimOuter,rimOpening,rim.Value().handle,wrappedPanel,wrappedRim})kernel::ReleaseShape(handle);
+}
+
+KACHA_V2_TEST(kernel_boolean, disconnected_multi_solid_containers_are_not_reduced_to_one_child)
+{
+    using namespace kachakacha::v2;
+    const auto near=Box(0,0,10,10,0,1),far=Box(30,0,40,10,0,1),tool=Box(9,0,11,10,0,1);
+    BRep_Builder builder;TopoDS_Compound compound;builder.MakeCompound(compound);
+    for(const auto handle:{near,far}){TopoDS_Shape shape;Require(kernel::LookupShape(handle,shape),"source exists");builder.Add(compound,shape);}
+    const auto container=kernel::StoreShape(compound);const auto bytes=kernel::CaptureOutputShape(container).Value();
+    const auto result=BuildBoolean(BooleanOperation::Union,container,tool,1e-6);
+    Require(!result.HasValue(),"normalization must not discard the distant solid");
+    RequireEqual(kernel::CaptureOutputShape(container).Value(),bytes,"refused multi-solid input is not rewritten");
+    for(const auto handle:{near,far,tool,container})kernel::ReleaseShape(handle);
+}
 
 KACHA_V2_TEST(kernel_boolean, disconnected_addition_is_refused_without_leaking_or_touching_inputs)
 {

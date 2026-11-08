@@ -753,9 +753,77 @@ bool CaseMaterialSupportShortFoldRetained(V2MainWindow& window)
         &&geometry::Cross(frame.Value().normal,normal).Length()<tolerance.modelAngularRad);
 }
 
+bool CaseNativeRectangularCurvedMaterial(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;
+    using geometry::Vector3;
+    using geometry::CurveSegment;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    const double angle=std::asin(4./30.);
+    for(const bool transformed:{false,true}){
+        const auto rotate=[&](Vector3 p){
+            if(!transformed)return p;
+            const auto axis=geometry::Normalized(Vector3{1,2,3});const double theta=.73;
+            return p*std::cos(theta)+geometry::Cross(axis,p)*std::sin(theta)
+                +axis*(geometry::Dot(axis,p)*(1-std::cos(theta)));
+        };
+        const auto point=[&](Vector3 p){return rotate(p)+(transformed?Vector3{12,-3,5}:Vector3{});};
+        modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::RuledSections;
+        request.keepSectionOrder=true;
+        for(int row=0;row<2;++row){
+            const auto arc=CurveSegment::MakeCircularArc(point({-12.2,-12+row*6.5,7}),
+                rotate({0,-1,0}),rotate({1,0,0}),29.85,0,-angle);
+            if(!arc.HasValue())return false;
+            modeling::GuideChain chain;chain.role=modeling::ChainRole::Section;chain.index=row+1;
+            chain.segments.push_back(transformed?geometry::ReverseCurve(arc.Value()).Value():arc.Value());
+            request.chains.push_back(std::move(chain));
+        }
+        const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);
+        if(!analysis.HasValue())return false;
+        const auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);
+        if(!Explain("a hole-free cylindrical face builds",support.HasValue()))return false;
+        const auto release=qScopeGuard([&]{kernel::ReleaseShape(support.Value().handle);});
+        const auto original=kernel::CaptureOutputShape(support.Value().handle);
+        std::vector<app::FabricationSource> sources;
+        AppendNativeFabricationSources(support.Value().handle,{},"curved rectangle",sources);
+        if(!Explain("a rectangular UV chart retains its native material boundary",sources.size()==1
+            &&sources[0].samples&&sources[0].materialRegionsUv.size()==1
+            &&sources[0].materialRegionsUv[0].loops.size()==1))return false;
+        domain::CreateFabricationModelDefinition definition;definition.method=0;
+        definition.targetMaxDeviation.value=.001;definition.materialThickness.value=.3;
+        const auto made=app::EvaluateFabrication(definition,sources,{},tolerance.modelLinearMm);
+        if(!Explain("classification retains both the pattern and its assembly correspondence",made.HasValue()
+            &&made.Value().panels.size()==1&&made.Value().bandMesh
+            &&made.Value().materialPanels.size()==1))return false;
+        const auto& material=made.Value().materialPanels[0];
+        for(const double percent:{0.,100.}){
+            auto state=definition;state.masterPercent=percent;
+            const auto rails=app::FoldedRailsOf(state,made.Value(),0);
+            if(!Explain("both flat and assembled states have their two rails",rails.size()==2))return false;
+            const auto loops=V2MaterialLoops(material,rails);
+            if(!Explain("one closed contour is available in either state",loops.size()==1&&loops[0].size()>=4))return false;
+            const auto curves=V2MaterialCurves(loops[0],true,tolerance.modelLinearMm);
+            if(!Explain("the generated contour can become an ordinary editable wire",!curves.empty()
+                &&!window.AddPlainWire(curves,"曲面の境界").IsNil()))return false;
+            if(percent==0){
+                Vector3 twiceArea{};const auto origin=loops[0][0];
+                for(std::size_t i=0;i<loops[0].size();++i)twiceArea=twiceArea
+                    +geometry::Cross(loops[0][i]-origin,loops[0][(i+1)%loops[0].size()]-origin);
+                if(!Explain("the flat contour retains the cylindrical material area",
+                    std::abs(twiceArea.Length()*.5-6.5*29.85*angle)<.001))return false;
+            }
+        }
+        const auto after=kernel::CaptureOutputShape(support.Value().handle);
+        if(!Explain("source native geometry is unchanged",original.HasValue()&&after.HasValue()
+            &&original.Value()==after.Value()))return false;
+    }
+    return true;
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"HP-FAB-NATIVE-RECT hole-free curved faces retain flat and assembled contours",CaseNativeRectangularCurvedMaterial},
         {"HP-FAB-NATIVE-TRIM tangent faces preserve crossing cutouts in one-piece patterns",CaseNativeMaterialAcrossTangentFaces},
         {"HP-FAB-COMPACT straight support runs preserve bends and multiple holes",CaseMaterialSupportStraightRuns},
         {"HP-FAB-COMPACT twisted cells retain their triangle geometry",CaseMaterialSupportWarpRetained},

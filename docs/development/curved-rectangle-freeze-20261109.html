@@ -17,5 +17,5 @@
 <tr><td>出力した型紙</td><td>6.5×3.9919 mm、閉じた輪郭1個。独立読み込みの有限標本差はSVG/DXF約0.000012 mm、SVG/PDF約0.00015 mm。物理印刷や工作の証明ではない。</td></tr>
 </table>
 <figure><img src="curved-rectangle-freeze-20261109/after.png" alt="実際のCADで再読込した0.3mm厚の平板部品"><figcaption>修正後に作成し、独立KCD2を再読込した平板部品。</figcaption></figure>
-<p>再現・証拠は作業出力の<code>curved-rectangle-before-20261109</code>、<code>curved-rectangle-after-20261109</code>、<code>curved-rectangle-related-fabrication-20261109</code>、<code>actual-candidate15-right-cab-neutral-20261109</code>、<code>actual-candidate15-right-cab-reopen-step-20261109</code>、<code>294-right-cab-cut-proof.json</code>に保存した。全体ゲートの結果は完了後に追記する。</p>
+<p>再現・証拠は作業出力の<code>curved-rectangle-before-20261109</code>、<code>curved-rectangle-after-20261109</code>、<code>curved-rectangle-related-fabrication-20261109</code>、<code>actual-candidate15-right-cab-neutral-20261109</code>、<code>actual-candidate15-right-cab-reopen-step-20261109</code>、<code>294-right-cab-cut-proof.json</code>に保存した。全体ゲートの結果は完了後に追記する。</p><p>最初の全体ゲートはHP-OUT-04の旧期待値（4本のワイヤと面の5資産）で失敗を確認して中断した。取得した境界を保持した結果は閉輪郭1本と面1枚である。既存試験を、独立出力を読み戻して同じ指定部材の範囲・全辺の接続・生成面上の輪郭・配置取消時の文書保持も検査する内容へ更新した。強化した試験は成功。試験追加中の最初の重点実行では生成先を同じ文書のまま保存したため失敗し、独立KCD2と元位置を明示して再試験した。製品の許容差や安全条件は変更していない。中断記録は旧runのinterruption.json。新しい全体ゲートを実施する。</p>
 </html>

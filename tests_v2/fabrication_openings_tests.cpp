@@ -330,4 +330,54 @@ KACHA_V2_TEST(material_evaluation, nearly_extruded_sheet_uses_parallel_generator
     const auto& original=exact.Value().bandMesh->world;
     for(std::size_t i=0;i<original[0].size();++i)test::RequireNear(geometry::Distance(original[0][i],source.evaluate(0,exact.Value().bandMesh->longitudinalParameters[i])),0,1e-10,"insufficient adjustment budget retains the original rail geometry");
 }
+KACHA_V2_TEST(material_region, near_cut_boundary_vertices_keep_one_closed_sheet_and_holes)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;
+    // Native p-curves can pass gradually through the existing UV epsilon.
+    // Treating one edge as a cut boundary and its neighbor as interior left
+    // a dangling endpoint instead of a closed material perimeter.
+    const std::vector<std::vector<P>> original{
+        {{0,0},{1,0},{1,1},{0,1},{0,.15},{.5e-9,.121},{.9e-9,.119},
+         {1.32e-9,.117},{1.74e-9,.115},{3e-9,.1}},
+        {{.2,.2},{.4,.2},{.4,.4},{.2,.4}},
+        {{.6,.6},{.8,.6},{.8,.8},{.6,.8}}};
+    for(bool reverseSide:{false,true})for(auto axis:{fabrication::BandSplitAxis::U,fabrication::BandSplitAxis::V}){
+        auto input=original;
+        for(auto& loop:input)for(auto& p:loop){if(reverseSide)p.u=1-p.u;if(axis==fabrication::BandSplitAxis::V)std::swap(p.u,p.v);}
+        const auto made=fabrication::ClipBandMaterial(input,axis,0,1);
+        Require(made.HasValue(),std::string(reverseSide?"upper cut / ":"lower cut / ")
+            +(axis==fabrication::BandSplitAxis::U?"U: ":"V: ")+made.FirstMessageJa());
+        Require(made.Value().size()==1&&made.Value()[0].loops.size()==3,"near-boundary noise must not open or fill the sheet or either hole");
+        const auto area=[](const auto& loop){double value=0;for(std::size_t i=0;i<loop.size();++i){auto a=loop[i],b=loop[(i+1)%loop.size()];value+=a.u*b.v-a.v*b.u;}return std::abs(value)*.5;};
+        double material=area(made.Value()[0].loops.front());
+        for(std::size_t i=1;i<made.Value()[0].loops.size();++i)material-=area(made.Value()[0].loops[i]);
+        test::RequireNear(material,.92,1e-8,"both holes and the complete material area remain");
+    }
+}
+KACHA_V2_TEST(material_region, a_real_narrow_ligament_at_a_cut_is_preserved)
+{
+    using namespace kachakacha::v2;using P=geometry::Point2;
+    const std::vector<std::vector<P>> original{
+        {{0,0},{1,0},{1,1},{0,1}},
+        {{5e-9,.3},{.25,.3},{.25,.7},{5e-9,.7}}};
+    for(auto axis:{fabrication::BandSplitAxis::U,fabrication::BandSplitAxis::V}){
+        auto input=original;
+        if(axis==fabrication::BandSplitAxis::V)for(auto& loop:input)for(auto& p:loop)std::swap(p.u,p.v);
+        const auto made=fabrication::ClipBandMaterial(input,axis,0,.5);
+        Require(made.HasValue(),made.FirstMessageJa());
+        Require(made.Value().size()==1&&made.Value()[0].loops.size()==2,"the narrow ligament stays connected and the enclosed hole stays a hole");
+        double closest=1;
+        for(auto p:made.Value()[0].loops[1])closest=std::min(closest,axis==fabrication::BandSplitAxis::U?p.u:p.v);
+        test::RequireNear(closest,5e-9,1e-15,"a genuine gap outside the existing epsilon is not snapped away");
+        // Original touching topology remains invalid, including a sub-epsilon
+        // gap; normalization is not a repair path for invalid input.
+        for(double gap:{0.,.5e-9}){
+            auto touching=input;
+            for(auto& p:touching[1])if((axis==fabrication::BandSplitAxis::U?p.u:p.v)==5e-9){
+                if(axis==fabrication::BandSplitAxis::U)p.u=gap;else p.v=gap;
+            }
+            Require(!fabrication::ClipBandMaterial(touching,axis,0,.5).HasValue(),"touching or ambiguous sub-epsilon hole clearance is still refused");
+        }
+    }
+}
 KACHA_V2_TEST_MAIN("fabrication_openings")

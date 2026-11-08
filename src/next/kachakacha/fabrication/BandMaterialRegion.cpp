@@ -63,6 +63,26 @@ base::Result<std::vector<BandMaterialRegion>> ClipBandMaterial(
     if(!BoundariesValid(loops))return fail();
     for(std::size_t i=1;i<loops.size();++i){if(!Inside(loops.front(),loops[i].front()))return fail();
         for(std::size_t j=1;j<i;++j)if(Inside(loops[j],loops[i].front())||Inside(loops[i],loops[j].front()))return fail();}
+    // Use the same boundary coordinates for clipping and graph construction.
+    // Otherwise adjacent edges can straddle the existing epsilon: one is
+    // removed as a boundary edge while the other keeps an interior endpoint,
+    // leaving a valid native perimeter open. Do not enlarge the epsilon or
+    // repair invalid input; validate both the original and normalized loops.
+    for(std::size_t i=0;i<loops.size();++i){
+        Loop normalized;
+        for(auto p:loops[i]){
+            const double a=std::abs(p.u-low),b=std::abs(p.u-high);
+            if(a<=eps&&a<=b)p.u=low;else if(b<=eps)p.u=high;
+            if(normalized.empty()||Dist(normalized.back(),p)>eps)normalized.push_back(p);
+        }
+        if(normalized.size()>1&&Dist(normalized.front(),normalized.back())<=eps)normalized.pop_back();
+        if(normalized.size()<3||std::abs(Area(normalized))<eps*eps
+            ||((Area(normalized)>0)!=(i==0)))return fail();
+        loops[i]=std::move(normalized);
+    }
+    if(!BoundariesValid(loops))return fail();
+    for(std::size_t i=1;i<loops.size();++i){if(!Inside(loops.front(),loops[i].front()))return fail();
+        for(std::size_t j=1;j<i;++j)if(Inside(loops[j],loops[i].front())||Inside(loops[i],loops[j].front()))return fail();}
     struct Edge{std::size_t a,b;bool used=false;};std::vector<Edge> edges;
     std::vector<Point2> nodes;std::vector<std::vector<std::size_t>> outgoing;
     using Key=std::pair<std::int64_t,std::int64_t>;
@@ -98,8 +118,11 @@ base::Result<std::vector<BandMaterialRegion>> ClipBandMaterial(
         for(std::size_t i=1;i<c.size();++i){
             if(c[i]-c[i-1]<eps)continue;
             // Probe strictly inside this band. Never bridge a hole across a seam.
-            const double nudge=std::min((high-low)*1e-6,1e-8);
-            if(!Material(loops,{x+(k?-nudge:nudge),(c[i]+c[i-1])*.5}))continue;
+            // A fixed nudge can jump across a genuine near-boundary edge and
+            // add a second, branching seam. Probe the nearest representable
+            // coordinate inside the band, after consistent endpoint snapping.
+            const double inside=std::nextafter(x,k?low:high);
+            if(!Material(loops,{inside,(c[i]+c[i-1])*.5}))continue;
             Point2 a{x,c[i-1]},b{x,c[i]};if(!k)std::swap(a,b);add(a,b);
         }
     }

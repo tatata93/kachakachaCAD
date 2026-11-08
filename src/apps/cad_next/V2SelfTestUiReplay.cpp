@@ -727,6 +727,55 @@ bool RealSettings(V2MainWindow& w)
         extrude.Run({{"name","cancel live Boolean"},{"steps",cancelSteps}}));
 }
 
+bool PointNormalSettings(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    const auto root=QDir::current().filePath("real-point-normal-settings");
+    if(!QDir().mkpath(root))return false;
+    Replay replay{w,root,{},{},0};
+    const int planes=CountOfKind(w,domain::EntityKind::WorkPlane);
+    const auto revision=w.Session().GetDocument().Revision();
+    if(!replay.Run({{"name","invalid normal through actual field"},{"steps",QJsonArray{
+        QJsonObject{{"op","tool"},{"command","workplane.create"}},
+        QJsonObject{{"op","combo"},{"widget","workPlaneMethod"},{"index",1}},
+        QJsonObject{{"op","number"},{"widget","workPlaneNormal_2"},{"value",0}}}}}))return false;
+    // A disabled confirm or a diagnostic on confirm both refuse invalid input.
+    (void)replay.Act({{"op","click"},{"widget","panelConfirm"}});
+    if(!Explain("zero normal cannot create a plane or change the document",
+        w.Session().GetDocument().Revision()==revision
+        &&CountOfKind(w,domain::EntityKind::WorkPlane)==planes))return false;
+    QJsonArray valid;
+    for(const auto& row:std::array<std::pair<const char*,std::array<double,3>>,3>{{
+        {"workPlaneOrigin_",{2,-27,4}}, {"workPlaneNormal_",{0,-1,0}}, {"workPlaneUAxis_",{1,0,0}}}})
+        for(int i=0;i<3;++i)valid.append(QJsonObject{{"op","number"},
+            {"widget",QString::fromLatin1(row.first)+QString::number(i)},{"value",row.second[i]}});
+    valid.append(QJsonObject{{"op","click"},{"widget","panelConfirm"}});
+    valid.append(QJsonObject{{"op","tool"},{"command","view.align_workplane"}});
+    if(!replay.Run({{"name","create and align entered point normal plane"},{"steps",valid}}))return false;
+    const auto id=w.ActiveWorkPlaneId();
+    const auto correct=[&] {
+        const auto* entity=w.Session().GetDocument().FindEntity(id);
+        const auto* feature=entity?w.Session().GetDocument().FindFeature(entity->createdBy):nullptr;
+        const auto* plane=feature?std::get_if<domain::CreateWorkPlaneDefinition>(&feature->definition):nullptr;
+        const auto p=w.Viewport().Mapping().Project({2,-27,4});
+        const auto x=w.Viewport().Mapping().Project({3,-27,4});
+        const auto z=w.Viewport().Mapping().Project({2,-27,5});
+        return plane && (plane->origin-geometry::Vector3{2,-27,4}).Length()<1e-9
+            && (plane->normal-geometry::Vector3{0,-1,0}).Length()<1e-9
+            && (plane->uDirection-geometry::Vector3{1,0,0}).Length()<1e-9
+            && p&&x&&z && x->x>p->x && z->y<p->y
+            && std::abs(x->y-p->y)<1e-6 && std::abs(z->x-p->x)<1e-6;
+    };
+    if(!Explain("entered plane values and upright screen axes agree",correct()))return false;
+    if(!replay.Run({{"name","save real numeric plane"},{"steps",QJsonArray{
+        QJsonObject{{"op","save"},{"path","point-normal.kcd2"}}}}}))return false;
+    w.RunCommand("file.new");
+    const bool reopened=replay.Run({{"name","reopen and align saved plane"},{"input","point-normal.kcd2"},
+        {"steps",QJsonArray{QJsonObject{{"op","select"},{"id",QString::fromStdString(id.ToString())}},
+            QJsonObject{{"op","tool"},{"command","view.align_selection"}}}}});
+    return Explain("saved plane preserves entered geometry and visible alignment",reopened&&correct());
+}
+
 bool FoldOwnerFocus(V2MainWindow& w)
 {
     if(!MakeCurvedGuideSurface(w))return false;
@@ -820,6 +869,7 @@ std::vector<SelfTestCase> UiReplayCases()
 {
     std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke},
         {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings},
+        {"HP-REPLAY point normal workplane through visible numeric fields",PointNormalSettings},
         {"HP-REPLAY manufacturing ownership controls visibility picking and focus",FoldOwnerFocus}};
     const auto script=qEnvironmentVariable("KACHACAD_UI_REPLAY");if(script.isEmpty())return cases;
     const auto document=Read(script);replayRoot=QFileInfo(script).absolutePath();

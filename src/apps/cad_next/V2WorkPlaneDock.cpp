@@ -31,6 +31,14 @@ using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::StandardPlaneKind;
 using kachakacha::v2::modeling::WorkPlaneMethod;
 
+// Stable identities distinguish the existing controls without setting their
+// values or replacing the numeric controls' normal validation.
+void IdentifyVector(const std::array<QDoubleSpinBox*,3>& fields,const QString& prefix)
+{
+    for(std::size_t i=0;i<fields.size();++i)
+        fields[i]->setObjectName(prefix+QString::number(i));
+}
+
 [[nodiscard]] QString Text(std::string_view value)
 {
     return QString::fromUtf8(std::string(value).c_str());
@@ -126,6 +134,9 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     origin_ = AddVectorRow(QStringLiteral("通過点 mm"), Vector3{0.0, 0.0, 0.0}, 1.0);
     normal_ = AddVectorRow(QStringLiteral("法線"), Vector3{0.0, 0.0, 1.0}, 0.1);
     uAxis_ = AddVectorRow(QStringLiteral("横方向"), Vector3{1.0, 0.0, 0.0}, 0.1);
+    IdentifyVector(origin_,QStringLiteral("workPlaneOrigin_"));
+    IdentifyVector(normal_,QStringLiteral("workPlaneNormal_"));
+    IdentifyVector(uAxis_,QStringLiteral("workPlaneUAxis_"));
 
     const WorkPlaneChoice defaults;
     for (std::size_t index = 0; index < 3; ++index) {

@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QString>
+#include <QTemporaryDir>
 #include <QVBoxLayout>
 #include <QWidget>
 using namespace kachakacha::v2;
@@ -31,16 +32,27 @@ void V2OutputMergeTarget::Choose() {
     const auto path=QFileInfo(chosen).absoluteFilePath();
     const auto original=io::ReadWholeFile(path.toStdString());
     if(!original.HasValue()){status_->setText(QString::fromStdString(original.FirstMessageJa()));return;}
+    // The rebuild worker can add standard planes to its transfer archive.
+    // Validate an immutable copy of the selected bytes, rather than comparing
+    // that normalized archive with the source ZIP or accepting a read race.
+    QTemporaryDir snapshot;
+    if(!snapshot.isValid()){status_->setText(QStringLiteral("検証用の一時ファイルを作れません。再試行してください。"));return;}
+    const auto snapshotPath=snapshot.filePath(QStringLiteral("selected.kcd2"));
+    const auto written=io::WriteFileAtomically(snapshotPath.toStdString(),original.Value());
+    if(!written.HasValue()){status_->setText(QString::fromStdString(written.FirstMessageJa()));return;}
     std::optional<io::DocumentFile> file;
-    const auto ready=V2GeometryJob::PrepareDocument(this,path,[&](const QString& dataPath,const QString& token,const std::function<bool()>& pulse){
+    const auto ready=V2GeometryJob::PrepareDocument(this,snapshotPath,[&](const QString& dataPath,const QString& token,const std::function<bool()>& pulse){
         auto result=ReadPreparedDocument(dataPath,token,pulse);
         if(!result.HasValue())return base::Result<bool>::Failure(result.Diagnostics());
-        if(result.Value()->archive!=original.Value())return base::Result<bool>::Failure(base::MakeError("EXP-P004","読込中にファイルが変わりました。選び直してください。"));
-        const auto loaded=io::LoadDocument(result.Value()->archive);
+        const auto loaded=io::LoadDocument(original.Value());
         if(!loaded.HasValue())return base::Result<bool>::Failure(loaded.Diagnostics());
         file=loaded.Value();return base::Result<bool>::Success(true);
     });
     if(!ready.HasValue()){status_->setText(QString::fromStdString(ready.FirstSummaryJa()));return;}
+    const auto current=io::ReadWholeFile(path.toStdString());
+    if(!current.HasValue()||current.Value()!=original.Value()){
+        status_->setText(QStringLiteral("読込中にファイルが変わりました。選び直してください。"));return;
+    }
     path_=path;archive_=original.Value();file_=std::move(file);
     status_->setText(Description()+QStringLiteral("\n元の履歴・グループ・画像を残し、選択形状のコピーを追加します。プレビューは追加分です。"));
     changed_();

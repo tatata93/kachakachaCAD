@@ -1,7 +1,9 @@
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2OutputTool.h"
+#include "V2GeometryJob.h"
 #include "kachakacha/app/DocumentIds.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -12,9 +14,11 @@
 #include <QEvent>
 #include <QFile>
 #include <QLabel>
+#include <QObject>
 #include <QPushButton>
 #include <QString>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <algorithm>
 
 namespace kachakacha::v2::selftest {
@@ -60,6 +64,88 @@ V2OutputTool* OpenMerge(V2MainWindow& w,const QString& target) {
 }
 bool SameFile(const QString& path,const std::string& bytes) {
     const auto current=io::ReadWholeFile(path.toStdString());return current.HasValue()&&current.Value()==bytes;
+}
+bool MakeIndependentTarget(const QString& path,io::DocumentFile& file,std::string& bytes) {
+    V2MainWindow target;target.resize(1200,800);target.show();QApplication::processEvents();
+    if(!MakeSource(target))return false;
+    auto* output=V2OutputTool::Open(target,2);const bool saved=output->SaveTo(path);output->close();
+    QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+    const auto raw=io::ReadWholeFile(path.toStdString());if(!saved||!raw.HasValue())return false;
+    const auto loaded=io::LoadDocument(raw.Value());if(!loaded.HasValue())return false;
+    file=loaded.Value();bytes=raw.Value();
+    return file.snapshot.entities.size()==1&&file.snapshot.entities.front().kind==domain::EntityKind::Part
+        &&file.snapshot.features.size()==1&&file.snapshot.features.front().type==domain::FeatureType::FreezeDerived;
+}
+bool MergeIndependentWithoutPlanes(V2MainWindow& w) {
+    QTemporaryDir dir;io::DocumentFile original;std::string bytes;
+    if(!dir.isValid()||!MakeIndependentTarget(dir.filePath("target.kcd2"),original,bytes)||!MakeSource(w))return false;
+    const auto target=dir.filePath("target.kcd2"),mergedPath=dir.filePath("merged.kcd2");
+    const auto revision=w.Session().GetDocument().Revision();const auto owners=kernel::CachedShapeCount();
+    auto* output=OpenMerge(w,target);if(!output)return false;
+    if(!Explain("independent native document without origin planes is a valid merge target",
+        output->findChild<QPushButton*>("outputConfirm")->isEnabled()&&output->SaveTo(mergedPath)))return false;
+    const auto raw=io::ReadWholeFile(mergedPath.toStdString());if(!raw.HasValue())return false;
+    const auto merged=io::LoadDocument(raw.Value());if(!merged.HasValue())return false;
+    const auto& snapshot=merged.Value().snapshot;
+    if(snapshot.features.empty())return Explain("merged independent document retains its original feature",false);
+    const auto* retained=std::get_if<domain::FreezeDerivedDefinition>(&snapshot.features.front().definition);
+    const auto* expected=std::get_if<domain::FreezeDerivedDefinition>(&original.snapshot.features.front().definition);
+    if(!Explain("merge retains original definitions without persisting worker-added planes",
+        snapshot.entities.size()==2&&snapshot.features.size()==2
+        &&snapshot.entities.front().id==original.snapshot.entities.front().id
+        &&snapshot.features.front().id==original.snapshot.features.front().id
+        &&retained&&expected&&retained->frozenBrep==expected->frozenBrep
+        &&SameFile(target,bytes)&&w.Session().GetDocument().Revision()==revision))return false;
+    output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+    if(!Explain("independent target validation releases all worker shape owners",kernel::CachedShapeCount()==owners))return false;
+    if(!w.OpenDocumentFile(mergedPath)||!w.RebuildProblems().isEmpty())return false;
+    w.Viewport().SetSelection(app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),domain::EntityKind::Part));
+    output=V2OutputTool::Open(w,1);const bool exported=output->SaveTo(dir.filePath("both.step"));output->close();
+    return Explain("both merged independent solids reopen and export",exported&&CountOfKind(w,domain::EntityKind::Part)==2);
+}
+bool MergeChangedDuringRead(V2MainWindow& w) {
+    QTemporaryDir dir;io::DocumentFile original;std::string bytes;
+    const auto target=dir.filePath("target.kcd2");
+    if(!dir.isValid()||!MakeIndependentTarget(target,original,bytes)||!MakeSource(w))return false;
+    auto altered=original;altered.metadata.description="actual concurrent file change";
+    const auto archive=io::SaveDocument(altered);if(!archive.HasValue())return false;
+    const auto revision=w.Session().GetDocument().Revision();
+    for(bool remove:{false,true}) {
+        if(!io::WriteFileAtomically(target.toStdString(),bytes).HasValue())return false;
+        w.RunCommand("output.copy");auto* output=CurrentOutput(w);if(!output)return false;
+        output->ChooseFormat(4);w.SetPathChooser([target](bool){return target;});
+        bool changed=false;QTimer timer;timer.setInterval(1);
+        QObject::connect(&timer,&QTimer::timeout,&w,[&]{
+            if(changed||!V2GeometryJob::Active())return;
+            changed=remove?QFile::remove(target):io::WriteFileAtomically(target.toStdString(),archive.Value()).HasValue();
+            timer.stop();
+        });
+        timer.start();output->findChild<QPushButton*>("outputMergeChoose")->click();timer.stop();
+        if(!Explain("actual changes or deletion during validation remain a refusal",changed
+            &&!output->findChild<QPushButton*>("outputConfirm")->isEnabled()
+            &&!output->SaveTo(dir.filePath("must-not-exist.kcd2"))
+            &&!QFile::exists(dir.filePath("must-not-exist.kcd2"))
+            &&w.Session().GetDocument().Revision()==revision))return false;
+        output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+    }
+    return true;
+}
+bool MergeInvalidNativeTarget(V2MainWindow& w) {
+    QTemporaryDir dir;io::DocumentFile original;std::string bytes;
+    const auto target=dir.filePath("valid.kcd2"),badPath=dir.filePath("bad.kcd2");
+    if(!dir.isValid()||!MakeIndependentTarget(target,original,bytes)||!MakeSource(w))return false;
+    auto invalid=original;std::get<domain::FreezeDerivedDefinition>(invalid.snapshot.features.front().definition).frozenBrep="invalid native geometry";
+    const auto archive=io::SaveDocument(invalid);if(!archive.HasValue()
+        ||!io::WriteFileAtomically(badPath.toStdString(),archive.Value()).HasValue())return false;
+    auto* output=OpenMerge(w,badPath);if(!output)return false;
+    const auto out=dir.filePath("must-not-exist.kcd2");
+    if(!Explain("a valid archive containing invalid native geometry is not accepted",
+        !output->findChild<QPushButton*>("outputConfirm")->isEnabled()&&!output->SaveTo(out)
+        &&!QFile::exists(out)&&SameFile(badPath,archive.Value())))return false;
+    w.SetPathChooser([target](bool){return target;});output->findChild<QPushButton*>("outputMergeChoose")->click();
+    const bool recovered=output->findChild<QPushButton*>("outputConfirm")->isEnabled()
+        &&output->SaveTo(dir.filePath("recovered.kcd2"))&&SameFile(target,bytes);
+    output->close();return Explain("selecting a valid independent target after native refusal restores merge",recovered);
 }
 bool MergeEntry(V2MainWindow& w) {
     w.RunCommand("file.new");
@@ -143,6 +229,9 @@ bool MergeFailureRecovery(V2MainWindow& w) {
 }
 }
 std::vector<SelfTestCase> OutputMergeCases(){return {{"HP-OUT-MERGE existing document entry",MergeEntry},
+    {"HP-OUT-MERGE independent target without origin planes",MergeIndependentWithoutPlanes},
+    {"HP-OUT-MERGE actual target change during validation",MergeChangedDuringRead},
+    {"HP-OUT-MERGE invalid native target remains a refusal",MergeInvalidNativeTarget},
     {"HP-OUT-MERGE existing definitions references and native output survive",MergePreservesTarget},
     {"HP-OUT-MERGE originals stale input cancellation and failed output",MergeFailureRecovery}};}
 }

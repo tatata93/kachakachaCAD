@@ -2,7 +2,7 @@
 <title>境界付近で有効な曲面の製作近似が失敗する経路</title>
 <style>body{font-family:system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 20px;line-height:1.8;color:#17283c}img{max-width:100%;border:1px solid #8997a8}code{overflow-wrap:anywhere}table{border-collapse:collapse}th,td{border:1px solid #9aa9b9;padding:8px}</style>
 <h1>境界付近で有効な曲面の製作近似が失敗する経路</h1>
-<p>2026-11-09。WP-09の既存材料領域処理だけを限定修正。コア13件と添付由来の実UIは成功したが、全体・配布版ゲートと公開は未完了。</p>
+<p>2026-11-09。WP-09の既存材料領域処理だけを限定修正。全体・配布版ゲートが成功し、5be3b4998の更新4を公開した。</p>
 <p>公開更新3で、前面の一枚近似面から通常の面オフセットで中立面を保存できた。しかし同じ保存面を近似すると、
 FAB-O001「材料の外周と穴を帯の範囲へ写せません」で確定できなかった。面ごとの方法・自動方向・許容誤差0.01/0.1 mmでも再現した。
 元・近似外面・中立面は読み取り専用native検査で各1フェイスとして取得できた。</p>
@@ -35,4 +35,5 @@ FAB-O001「材料の外周と穴を帯の範囲へ写せません」で確定で
 <code>277-material-clip-after.txt</code>、<code>277-material-clip-after3.txt</code>、
 <code>275-approx-neutral-material-uv.json</code>、<code>279-approx-neutral-production-clip-after.json</code>、
 <code>actual-candidate14-front-neutral-stock-20261109</code>、<code>actual-candidate14-front-stock-review-20261109</code>、
-<code>280-front-stock-cut-proof.json</code>。公開済み更新3のゲートと今回の修正を混同しない。</p></html>
+<code>280-front-stock-cut-proof.json</code>。全体証拠: <code>out/verification/material-boundary-release-20261109/result.json</code>。事前9件、CTest197件（skip0）、開発/配布UI各720件、通常Windows起動と従来自己試験が成功。GitHubのタグ・対象コミット・最新タグ・ZIPサイズとSHA256も照合済み。</p>
+<p><a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update4">全体・配布版検証済みの更新4を入手する</a>。全車体製作と全型紙、細分化の軽量化は継続する。</p></html>

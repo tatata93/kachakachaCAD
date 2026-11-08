@@ -1,0 +1,33 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>曲線付きDXFの外部読み込みを修正</title>
+<style>body{font-family:system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 20px;line-height:1.8;color:#17283c}img{max-width:100%;border:1px solid #8997a8}table{border-collapse:collapse}td,th{border:1px solid #a9b5c4;padding:8px 12px;text-align:left}code{overflow-wrap:anywhere}</style>
+<h1>曲線付きDXFの外部読み込み</h1>
+<p>2026-11-09。DXF writerの限定修正は重点検証済み。全体・配布版検証と公開はこれから行う。</p>
+<p>実UI252の側板はCAD上ではDXF出力に成功したが、外部読み込み器ezdxf 1.4.5は
+<code>missing AcDbSpline subclass</code>で拒否した。内部の成功表示だけでは外部で使える証拠にならなかった。</p>
+<h2>原因と修正</h2>
+<p>SPLINEに必須のサブクラス記録がなく、版と単位も宣言していなかった。
+<a href="https://help.autodesk.com/cloudhelp/2026/JPN/AutoCAD-DXF/files/GUID-E1F884F8-AA90-4864-A215-3182D47A9C74.htm">AutodeskのSPLINE仕様</a>と
+<a href="https://help.autodesk.com/cloudhelp/2026/ENU/AutoCAD-DXF/files/GUID-A85E8E67-27CD-4C59-BE61-4DC9FADBE74A.htm">HEADER仕様</a>に沿って、
+AC1015、mm単位、固有ハンドルと各種類のサブクラスを記録する。円弧はCircleとArcの両サブクラスを持つ。
+制御点・ノット・座標・レイヤー・円弧方向と非平面の拒否条件を変えず、曲線を折れ線へ置き換えない。</p>
+<h2>実操作と外部照合</h2>
+<p>追加した2回帰は修正前に失敗し、修正後は出力26件が成功。
+実UI256では同じ保存済み製作モデルを再読込し、型紙更新→SVG/DXF/PDFを通常の画面から再出力した。
+6組とも外部読み込みのエラー0・修復0、mm単位を確認した。</p>
+<table><tr><th>部材</th><th>切断寸法 mm</th><th>閉じた輪郭数</th></tr>
+<tr><td>右側板・上部と裾を一枚へ接合</td><td>27.0062 × 216.75</td><td>15（外形1、窓11、扉3）</td></tr>
+<tr><td>左側板・上部と裾を一枚へ接合</td><td>27.0062 × 216.75</td><td>17（外形1、窓13、扉3）</td></tr>
+<tr><td>床板</td><td>34.3438 × 243.75</td><td>1</td></tr>
+<tr><td>補強枠3枚</td><td>34.9 × 31.40003247</td><td>各2</td></tr></table>
+<p>右側板はLINE163・SPLINE7・ARC44、左側板はLINE171・SPLINE7・ARC52として読み込める。
+全6組のSVGは以前の正しい出力とバイト一致し、PDFの描画内容もバイト一致。
+床板PDFの縮尺注記は再読込時の初期値1/87から今回指定した1/80へ更新したが、原寸の図形は不変だった。</p>
+<p>監査では非クランプB-splineの有効ノット区間だけを独立評価する。ezdxfのflattening補助は区間外まで外挿したため、
+その結果をCADの曲線不良とは扱わない。有限標本によるSVG/DXF差は約0.000064 mm以下、SVG/PDF差は約0.000738 mm以下。
+解析的最大誤差、全ての外部CADでの動作、実印刷・工作を証明するものではない。</p>
+<img src="dxf-spline-format-20261109/side-ui.png" alt="修正候補の実CADから一枚の側板を出力した画面">
+<p>証拠: <code>out/series115-plaboard-20261105/255-dxf-before.xml</code>、<code>255-dxf-after.xml</code>、
+<code>256-stock-external-format-proof.json</code>、<code>actual-candidate13-valid-dxf-stock-20261109-progress.json</code>。
+診断用に形式記録を補ったコピーは納品物に使わず、実CADの再出力を照合した。
+全体・配布版ゲート、残りの全型紙と車体製作モデルは未完成。</p></html>

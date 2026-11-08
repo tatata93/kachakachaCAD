@@ -8,6 +8,7 @@
 #include <sstream>
 #include <array>
 #include <vector>
+#include <set>
 
 using kachakacha::v2::exporters::PatternCurve;
 using kachakacha::v2::exporters::PatternLine;
@@ -214,6 +215,50 @@ KACHA_V2_TEST(exportDxf, 自由曲線がSPLINEとして出る)
     Require(dxf.HasValue(), "書き出せること");
     Require(CountOf(dxf.Value(), "\nSPLINE\n") == 1, "SPLINE が1つ");
     Require(CountOf(dxf.Value(), "LWPOLYLINE") == 0, "折れ線にしていないこと");
+}
+
+KACHA_V2_TEST(exportDxf, 曲線を扱える版とmm単位を宣言する)
+{
+    const auto result=WritePatternDxf(SamplePage());Require(result.HasValue(),"DXF output");
+    const auto& text=result.Value();
+    const auto header=text.find("\n2\nHEADER\n"),entities=text.find("\n2\nENTITIES\n");
+    Require(header!=std::string::npos&&header<entities,"version and units precede drawing entities");
+    Require(text.find("\n9\n$ACADVER\n1\nAC1015\n",header)<entities,"AutoCAD 2000 supports spline entities");
+    Require(text.find("\n9\n$INSUNITS\n70\n4\n",header)<entities,"millimetres are explicit, not unitless");
+}
+
+KACHA_V2_TEST(exportDxf, 各種類がサブクラスと固有ハンドルを持つ)
+{
+    auto page=SamplePage();
+    page.curves.push_back({PatternLine::Outline,
+        CurveSegment::MakeCubicBezier({{1,2,0},{3,9,0},{8,-2,0},{13,4,0}}).Value(),false,""});
+    page.curves.push_back({PatternLine::Opening,
+        CurveSegment::MakeCubicBSpline({{1,2,0},{3,9,0},{8,-2,0},{13,4,0},{20,6,0}}).Value(),false,""});
+    const auto result=WritePatternDxf(page);Require(result.HasValue(),"mixed native curve output");
+    std::istringstream input(result.Value());std::string code,value;bool inEntities=false;
+    std::vector<std::vector<std::pair<int,std::string>>> entities;
+    while(std::getline(input,code)&&std::getline(input,value)){
+        const int group=std::stoi(code);
+        if(group==2&&value=="ENTITIES"){inEntities=true;continue;}
+        if(!inEntities)continue;
+        if(group==0&&value=="ENDSEC")break;
+        if(group==0)entities.emplace_back();
+        Require(!entities.empty(),"entity starts with a type");entities.back().emplace_back(group,value);
+    }
+    Require(entities.size()==page.curves.size(),"all input curves remain separate native entities");
+    std::set<std::string> handles,kinds;
+    for(const auto& entity:entities){
+        const auto kind=entity.front().second;kinds.insert(kind);
+        std::vector<std::string> classes;std::string handle;bool layer=false;
+        for(const auto& [group,text]:entity){if(group==100)classes.push_back(text);
+            if(group==5)handle=text;if(group==8)layer=true;}
+        Require(!handle.empty()&&handles.insert(handle).second,"every entity has a unique DXF handle");
+        Require(layer&&!classes.empty()&&classes.front()=="AcDbEntity","common entity subclass and layer");
+        const std::vector<std::string> expected=kind=="ARC"?std::vector<std::string>{"AcDbEntity","AcDbCircle","AcDbArc"}
+            :std::vector<std::string>{"AcDbEntity",kind=="LINE"?"AcDbLine":kind=="CIRCLE"?"AcDbCircle":"AcDbSpline"};
+        Require(classes==expected,"DXF subclass chain matches the actual curve kind");
+    }
+    Require(kinds==std::set<std::string>{"LINE","ARC","CIRCLE","SPLINE"},"all four external entity kinds exercised");
 }
 
 KACHA_V2_TEST(exportDxf, レイヤー名が入る)

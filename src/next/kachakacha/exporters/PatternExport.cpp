@@ -166,6 +166,21 @@ void PutDxf(std::string& out, int code, const std::string& value)
     out += "\n";
 }
 
+std::string DxfHandle(std::size_t value)
+{
+    char buffer[32];
+    std::snprintf(buffer,sizeof(buffer),"%llX",static_cast<unsigned long long>(value));
+    return buffer;
+}
+
+void BeginDxfEntity(std::string& out,const char* kind,const std::string& layer,std::size_t handle)
+{
+    PutDxf(out,0,kind);
+    PutDxf(out,5,DxfHandle(handle));
+    PutDxf(out,100,"AcDbEntity");
+    PutDxf(out,8,layer);
+}
+
 void PutLittleEndian(std::string& out, std::uint32_t value)
 {
     for (int index = 0; index < 4; ++index) {
@@ -264,13 +279,23 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
     }
     std::string dxf;
     PutDxf(dxf, 0, "SECTION");
+    PutDxf(dxf, 2, "HEADER");
+    PutDxf(dxf, 9, "$ACADVER");
+    PutDxf(dxf, 1, "AC1015"); // AutoCAD 2000: native SPLINE entities.
+    PutDxf(dxf, 9, "$INSUNITS");
+    PutDxf(dxf, 70, "4"); // Millimetres; no scaling of the stored coordinates.
+    PutDxf(dxf, 9, "$HANDSEED");
+    PutDxf(dxf, 5, DxfHandle(0x100 + page.curves.size()));
+    PutDxf(dxf, 0, "ENDSEC");
+    PutDxf(dxf, 0, "SECTION");
     PutDxf(dxf, 2, "ENTITIES");
+    std::size_t handle=0x100;
     for (const PatternCurve& curve : page.curves) {
         const std::string layer(PatternLineLayerName(curve.layer));
         switch (curve.segment.Kind()) {
         case CurveKind::Line: {
-            PutDxf(dxf, 0, "LINE");
-            PutDxf(dxf, 8, layer);
+            BeginDxfEntity(dxf,"LINE",layer,handle++);
+            PutDxf(dxf,100,"AcDbLine");
             PutDxf(dxf, 10, Number(curve.segment.StartPoint().x, 6));
             PutDxf(dxf, 20, Number(curve.segment.StartPoint().y, 6));
             PutDxf(dxf, 11, Number(curve.segment.EndPoint().x, 6));
@@ -278,8 +303,8 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
             break;
         }
         case CurveKind::Circle: {
-            PutDxf(dxf, 0, "CIRCLE");
-            PutDxf(dxf, 8, layer);
+            BeginDxfEntity(dxf,"CIRCLE",layer,handle++);
+            PutDxf(dxf,100,"AcDbCircle");
             PutDxf(dxf, 10, Number(curve.segment.Center().x, 6));
             PutDxf(dxf, 20, Number(curve.segment.Center().y, 6));
             PutDxf(dxf, 40, Number(curve.segment.Radius(), 6));
@@ -295,11 +320,12 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
             const double endAngle =
                 std::atan2(end.y - center.y, end.x - center.x) * 180.0 / 3.14159265358979323846;
             const bool reversed = curve.segment.SweepAngleRad()*curve.segment.Normal().z < 0.0;
-            PutDxf(dxf, 0, "ARC");
-            PutDxf(dxf, 8, layer);
+            BeginDxfEntity(dxf,"ARC",layer,handle++);
+            PutDxf(dxf,100,"AcDbCircle");
             PutDxf(dxf, 10, Number(center.x, 6));
             PutDxf(dxf, 20, Number(center.y, 6));
             PutDxf(dxf, 40, Number(curve.segment.Radius(), 6));
+            PutDxf(dxf,100,"AcDbArc");
             PutDxf(dxf, 50, Number(reversed ? endAngle : startAngle, 6));
             PutDxf(dxf, 51, Number(reversed ? startAngle : endAngle, 6));
             break;
@@ -308,8 +334,11 @@ Result<std::string> WritePatternDxf(const PatternPage& page)
         case CurveKind::CubicBSpline: {
             // SPLINE として制御点をそのまま出す。折れ線にしない。
             const auto& control = curve.segment.ControlPoints();
-            PutDxf(dxf, 0, "SPLINE");
-            PutDxf(dxf, 8, layer);
+            BeginDxfEntity(dxf,"SPLINE",layer,handle++);
+            PutDxf(dxf,100,"AcDbSpline");
+            PutDxf(dxf,210,"0");
+            PutDxf(dxf,220,"0");
+            PutDxf(dxf,230,"1");
             PutDxf(dxf, 70, "8");   // planar
             PutDxf(dxf, 71, "3");   // 次数
             PutDxf(dxf, 72, std::to_string(control.size() + 4));   // ノット数

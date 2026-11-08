@@ -59,12 +59,14 @@ void V2ExportDock::BuildBody()
     layout->setSpacing(4);
 
     targetView_ = new QTreeWidget(body);
+    targetView_->setObjectName(QStringLiteral("exportTargets"));
     targetView_->setColumnCount(1);
     targetView_->setHeaderLabels({QStringLiteral("何を出すか")});
     targetView_->setRootIsDecorated(false);
     layout->addWidget(targetView_);
 
     formatView_ = new QTreeWidget(body);
+    formatView_->setObjectName(QStringLiteral("exportFormats"));
     formatView_->setColumnCount(1);
     formatView_->setHeaderLabels({QStringLiteral("どの形式で")});
     formatView_->setRootIsDecorated(false);
@@ -173,7 +175,20 @@ bool V2ExportDock::ChooseTarget(kachakacha::v2::app::ExportTarget target)
 
 bool V2ExportDock::ChooseFormat(kachakacha::v2::app::ExportFormat format)
 {
-    const auto next = kachakacha::v2::app::SetExportPanelFormat(state_, format);
+    using namespace kachakacha::v2::app;
+    auto candidate=state_;
+    if(!candidate.targetChosenByUser&&!ExportFormatAllowed(candidate.target,format)) {
+        // A format command must be usable without hiding unrelated solids.
+        // Prefer selected objects; never override an explicitly chosen scope.
+        for(const auto target:{ExportTarget::SelectedParts,ExportTarget::SelectedWires,
+                ExportTarget::SelectedFabricationPanels,ExportTarget::CurrentPattern}) {
+            if(ExportCountFor(counts_,target)<=0||!ExportFormatAllowed(target,format))continue;
+            const auto chosen=SetExportPanelTarget(candidate,target,counts_);
+            if(chosen.HasValue())candidate=chosen.Value();
+            break;
+        }
+    }
+    const auto next = SetExportPanelFormat(candidate, format);
     if (!next.HasValue()) {
         Report(next.Diagnostics());
         return false;

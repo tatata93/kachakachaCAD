@@ -3,7 +3,9 @@
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
 #include "V2ToolSelection.h"
+#include "V2ShapeLifetime.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/document/Commands.h"
@@ -81,6 +83,7 @@ void V2FaceActions::Apply(const app::SelectionRef& ref)
     if(command!="workplane.from_face") {if(!Extract(ref))return;window.RunCommand("fabrication.create");return;}
     const auto face=kernel::OutputFace(found->second,*ref.pickedFaceIndex);
     if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return;}
+    v2ui::ShapeListOwner owner({face.Value()});
     const auto frame=kernel::OutputSurfaceFrame(face.Value(),ref.hitPoint);
     if(!frame.HasValue()){status_->setText(QString::fromStdString(frame.FirstSummaryJa()));return;}
     app::WorkPlaneChoice choice;choice.method=modeling::WorkPlaneMethod::PointNormal;
@@ -96,8 +99,13 @@ bool V2FaceActions::Extract(const app::SelectionRef& ref)
     auto& window=window_;
     const auto face=kernel::OutputFace(window.partShapes_.at(ref.entityId.ToString()),*ref.pickedFaceIndex);
     if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return false;}
+    v2ui::ShapeListOwner owner({face.Value()});
     const auto brep=kernel::CaptureOutputShape(face.Value());
     if(!brep.HasValue()){status_->setText(QString::fromStdString(brep.FirstSummaryJa()));return false;}
+    const auto edges=kernel::OutputEdges(face.Value(),window.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+    if(!edges.HasValue()){status_->setText(QString::fromStdString(edges.FirstSummaryJa()));return false;}
+    const auto samples=kernel::FaceSamplesOf(face.Value(),0);
+    if(!samples.HasValue()){status_->setText(QString::fromStdString(samples.FirstSummaryJa()));return false;}
     domain::Feature feature;feature.id=window.ids_->NextTyped<base::IdKind::Feature>();
     feature.type=domain::FeatureType::FreezeDerived;feature.displayName="フェイス（近似用・独立）";
     domain::FreezeDerivedDefinition definition;definition.frozenBrep=brep.Value();feature.definition=definition;
@@ -106,6 +114,11 @@ bool V2FaceActions::Extract(const app::SelectionRef& ref)
     feature.outputs.push_back({"face",entity.id,entity.kind});
     const auto added=window.session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},"近似用フェイスを取り出す"));
     if(!added.committed){window.ReportDiagnostics(added.diagnostics);return false;}
-    window.operationHost_->SetShelves({});window.AdoptCurrentDocument();window.RebuildKernelShapes();window.RefreshShapeViews();
+    // The added frozen face has no dependency on its source. Retain existing
+    // native shapes and install only this new guide, as on reopening the file.
+    const auto key=entity.id.ToString();
+    window.guideShapes_[key]=owner.Take(0);window.guideEdges_[key]=edges.Value();
+    window.guideSamples_[key]=samples.Value().samples;
+    window.operationHost_->SetShelves({});window.AdoptCurrentDocument();window.RefreshShapeViews();window.RefreshExportCounts();
     app::SelectionSet selection;selection.entityIds={entity.id};window.viewport_->SetSelection(selection);return true;
 }

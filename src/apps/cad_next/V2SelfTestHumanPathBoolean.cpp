@@ -638,10 +638,12 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
         QMouseEvent release(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
         QApplication::sendEvent(&viewport,&release); QApplication::processEvents();
     };
+    const auto nativeBefore=kernel::CachedShapeCount();
     viewport.SetSelection({}); window.RunCommand("workplane.from_face"); click();
     const auto* plane = window.Session().GetDocument().FindEntity(window.ActiveWorkPlaneId());
     if (!Explain((std::string("HP-FA フェイスから作業面1を作る: ")+window.StatusText().toStdString()+" planes="+std::to_string(CountOfKind(window,EntityKind::WorkPlane))).c_str(), plane && plane->displayName == "作業面1"
             && CountOfKind(window,EntityKind::WorkPlane) == 4)) return false;
+    if(!Explain("face workplane releases its temporary native face",kernel::CachedShapeCount()==nativeBefore))return false;
     window.SelectTool(modeling::DrawingTool::Select);
     for (const auto command : {"fabrication.from_face"}) {
         const int before = CountOfKind(window,EntityKind::GuideSurface);
@@ -663,6 +665,9 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
             if (!Explain("HP-FA GPT近似の面プレビュー",viewport.ToolPreviewFaceCount()>0))return false;
         }
         window.HandleToolKey(Qt::Key_Escape,nullptr);
+        window.RunCommand("selection.activate");
+        if(!Explain("face extraction retains only the independent native guide",
+            kernel::CachedShapeCount()==nativeBefore+before+1))return false;
     }
     for(const auto command:{"fabrication.create"}){
         const int before=CountOfKind(window,EntityKind::GuideSurface);
@@ -671,6 +676,17 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
         if(!Explain("HP-FA usual approximation honors selected solid face",CountOfKind(window,EntityKind::GuideSurface)==before+1))return false;
         window.HandleToolKey(Qt::Key_Escape,nullptr);
     }
+    window.RunCommand("selection.activate");
+    const auto nativeAfter=kernel::CachedShapeCount();
+    const int guidesAfter=CountOfKind(window,EntityKind::GuideSurface);
+    window.RunCommand("edit.undo");
+    if(!Explain("independent face Undo releases only the removed guide",
+        CountOfKind(window,EntityKind::GuideSurface)==guidesAfter-1
+        &&CountOfKind(window,EntityKind::Part)==1&&kernel::CachedShapeCount()==nativeAfter-1))return false;
+    window.RunCommand("edit.redo");
+    if(!Explain("independent face Redo restores one guide without leaked native handles",
+        CountOfKind(window,EntityKind::GuideSurface)==guidesAfter
+        &&kernel::CachedShapeCount()==nativeAfter&&window.RebuildProblems().isEmpty()))return false;
     if(!window.SaveAndReopen(QStringLiteral("face-actions.kcd2")))return false;
     app::SelectionSet selected;
     for(const auto& entity:window.Session().GetDocument().Snapshot().entities)

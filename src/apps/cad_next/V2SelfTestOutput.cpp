@@ -453,6 +453,31 @@ bool FrozenCopyKeepsPickableEdges(V2MainWindow& w)
 {
     return FrozenCopyKeepsPickableEdgesCase(w,false)&&FrozenCopyKeepsPickableEdgesCase(w,true);
 }
+
+bool FormatCommandResolvesCompatibleSelection(V2MainWindow&)
+{
+    V2ExportDock dock(nullptr);app::ExportCounts counts;
+    counts.visibleParts=2;counts.selectedFabricationPanels=3;counts.patternPages=1;counts.project=1;
+    dock.SetCounts(counts);
+    if(!Explain("PDF command resolves selected fabrication panels while solids stay visible",
+        dock.ChooseFormat(app::ExportFormat::Pdf)&&dock.State().target==app::ExportTarget::SelectedFabricationPanels
+        &&dock.State().targetChosenByUser))return false;
+    counts.selectedFabricationPanels=0;dock.SetCounts(counts);
+    if(!Explain("empty selected panels cannot silently become another export",dock.State().target==app::ExportTarget::SelectedFabricationPanels
+        &&!dock.CanRun()))return false;
+    if(!dock.ChooseTarget(app::ExportTarget::VisibleParts))return false;
+    if(!Explain("explicit solid scope is never replaced for a 2D format",!dock.ChooseFormat(app::ExportFormat::Svg)
+        &&dock.State().target==app::ExportTarget::VisibleParts))return false;
+    V2ExportDock wires(nullptr);counts.selectedWires=2;counts.selectedFabricationPanels=3;wires.SetCounts(counts);
+    if(!Explain("selected wires take precedence over an unrelated active manufacturing model",
+        wires.ChooseFormat(app::ExportFormat::Dxf)&&wires.State().target==app::ExportTarget::SelectedWires))return false;
+    V2ExportDock pattern(nullptr);counts.selectedWires=0;counts.selectedFabricationPanels=0;pattern.SetCounts(counts);
+    if(!Explain("current pattern can be exported beside visible solids",pattern.ChooseFormat(app::ExportFormat::Svg)
+        &&pattern.State().target==app::ExportTarget::CurrentPattern))return false;
+    V2ExportDock missing(nullptr);counts.patternPages=0;missing.SetCounts(counts);
+    return Explain("no compatible selected or pattern target remains a refusal",!missing.ChooseFormat(app::ExportFormat::Pdf)
+        &&missing.State().target==app::ExportTarget::VisibleParts);
 }
-std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
+}
+std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
 }

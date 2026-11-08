@@ -30,6 +30,7 @@ V2ParameterDock::V2ParameterDock(QWidget* parent)
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(6, 6, 6, 6);
     rows_ = new QTreeWidget(body);
+    rows_->setObjectName(QStringLiteral("parameterValues"));
     rows_->setColumnCount(2);
     rows_->setHeaderLabels({QStringLiteral("何を"), QStringLiteral("いくつ(式も書けます)")});
     rows_->setRootIsDecorated(false);

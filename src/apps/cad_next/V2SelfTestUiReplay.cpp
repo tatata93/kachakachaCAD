@@ -25,6 +25,7 @@
 #include <QFileInfo>
 #include <QFocusEvent>
 #include <QFormLayout>
+#include <QHeaderView>
 #include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -35,6 +36,8 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QMenu>
+#include <QMenuBar>
 #include <QObject>
 #include <QPixmap>
 #include <QPointF>
@@ -167,6 +170,26 @@ bool Mode(V2MainWindow& w,app::UiMode mode)
     return false;
 }
 
+bool MenuCommand(V2MainWindow& w,const QString& command)
+{
+    auto* action=w.ActionFor(command.toStdString());auto* bar=w.menuBar();
+    if(!action||!bar||!action->isEnabled())return false;
+    std::vector<QMenu*> path;
+    const std::function<bool(QMenu*)> find=[&](QMenu* menu) {
+        path.push_back(menu);
+        for(auto* entry:menu->actions())if(entry==action)return true;
+        for(auto* entry:menu->actions())if(entry->menu()&&find(entry->menu()))return true;
+        path.pop_back();return false;
+    };
+    for(auto* top:bar->actions())if(top->menu()&&find(top->menu())) {
+        if(!Mouse(*bar,bar->actionGeometry(top).center()))return false;
+        for(std::size_t i=1;i<path.size();++i)
+            if(!Mouse(*path[i-1],path[i-1]->actionGeometry(path[i]->menuAction()).center()))return false;
+        return Mouse(*path.back(),path.back()->actionGeometry(action).center());
+    }
+    return false;
+}
+
 bool Tool(V2MainWindow& w,const QJsonObject& step)
 {
     V2DocumentTiming timing("replay-tool");
@@ -190,7 +213,7 @@ bool Tool(V2MainWindow& w,const QJsonObject& step)
                 }
             return false;
         }
-    return false;
+    return !command.isEmpty()&&MenuCommand(w,command);
 }
 
 // Read positions from displayed edge polylines, then send the same mouse input
@@ -422,6 +445,37 @@ struct Replay {
         return Mouse(*field,field->rect().center());
     }
 
+    bool TreeRow(const QJsonObject& step)
+    {
+        auto* tree=dynamic_cast<QTreeWidget*>(Field(step));
+        const int column=step["column"].toInt(0);
+        if(!tree||column<0||column>=tree->columnCount())return false;
+        const auto find=[&]() -> QTreeWidgetItem* {
+            for(int i=0;i<tree->topLevelItemCount();++i)
+                if(tree->topLevelItem(i)->text(0)==step["text"].toString())return tree->topLevelItem(i);
+            return nullptr;
+        };
+        auto* row=find();if(!row||!(row->flags()&Qt::ItemIsEnabled))return false;
+        Reveal(*tree);tree->scrollToItem(row);QApplication::processEvents();
+        const QPoint at(tree->header()->sectionViewportPosition(column)+tree->header()->sectionSize(column)/2,
+            tree->visualItemRect(row).center().y());
+        if(!tree->viewport()->rect().contains(at)||tree->itemAt(at)!=row||!Mouse(*tree->viewport(),at))return false;
+        if(!step.contains("value"))return true;
+        // Enter can rebuild all rows and destroy the delegate editor. Never
+        // send a subsequent key to that editor or read an obsolete item.
+        QMouseEvent doubleClick(QEvent::MouseButtonDblClick,at,QPointF(tree->viewport()->mapToGlobal(at)),
+            Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        QMouseEvent release(QEvent::MouseButtonRelease,at,QPointF(tree->viewport()->mapToGlobal(at)),
+            Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(tree->viewport(),&doubleClick);QApplication::sendEvent(tree->viewport(),&release);
+        QApplication::processEvents();
+        auto* editor=tree->findChild<QLineEdit*>();
+        if(!editor||!editor->isVisible()||!Text(*editor,step["value"].toString(),false))return false;
+        if(!Key(*editor,"Return"))return false;
+        const auto* refreshed=find();
+        return refreshed&&refreshed->text(column)==step["value"].toString();
+    }
+
     bool Act(const QJsonObject& step)
     {
         if(step["cancelCalculation"].toBool()) {
@@ -456,6 +510,7 @@ struct Replay {
         if(op=="select")return Select(step);
         if(op=="combo")return Combo(step);
         if(op=="click")return Click(step);
+        if(op=="tree_row")return TreeRow(step);
         if(op=="visibility")return Visibility(step);
         if(op=="ray")return Ray(step);
         if(op=="point")return Point(step);

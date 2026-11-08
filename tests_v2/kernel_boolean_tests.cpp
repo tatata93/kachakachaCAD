@@ -10,6 +10,10 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include <BRepClass3d_SolidClassifier.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <gp_Ax1.hxx>
+#include <gp_Trsf.hxx>
+#include <TopExp_Explorer.hxx>
 #include <TopoDS_Shape.hxx>
 #include <BRepTools.hxx>
 #include <gp_Pnt.hxx>
@@ -17,6 +21,8 @@
 #include <fstream>
 #include <iterator>
 #include <sstream>
+#include <chrono>
+#include <iomanip>
 #endif
 
 #include <string>
@@ -263,6 +269,69 @@ KACHA_V2_TEST(kernel_boolean, dense_curved_empty_common_contradicts_overlap_left
 KACHA_V2_TEST(kernel_boolean, dense_curved_empty_common_contradicts_overlap_right_first)
 {
     DenseCommonDisagreement(true);
+}
+
+namespace {
+void DenseAdjacentUnion(bool rotated)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto load=[&](const char* side) {
+        const auto path=std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)
+            /(std::string("dense-curved-adjacent-")+side+".kshape");
+        std::ifstream file(path,std::ios::binary);
+        Require(file.good(),"native adjacent curved fixture is available");
+        const std::string bytes(std::istreambuf_iterator<char>(file),{});
+        const auto restored=kernel::RestoreOutputShape(bytes);
+        Require(restored.HasValue(),restored.FirstSummaryJa());
+        if(!rotated)return restored.Value();
+        TopoDS_Shape source;Require(kernel::LookupShape(restored.Value(),source),"native source exists");
+        gp_Trsf placement;placement.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.7);
+        placement.SetTranslationPart(gp_Vec(11,-7,5));
+        const auto placed=kernel::StoreShape(BRepBuilderAPI_Transform(source,placement,true).Shape());
+        kernel::ReleaseShape(restored.Value());return placed;
+    };
+    const auto a=load("right"),b=load("left");
+    const auto aa=kernel::CaptureOutputShape(a),bb=kernel::CaptureOutputShape(b);
+    Require(aa.HasValue()&&bb.HasValue(),"input geometry captured");
+    const auto started=std::chrono::steady_clock::now();
+    const auto result=BuildBoolean(BooleanOperation::Union,rotated?b:a,rotated?a:b,1e-6);
+    const auto seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+    Require(result.HasValue(),result.FirstSummaryJa());
+    Require(seconds<150,"dense curved addition finishes within the unchanged 180-second UI watchdog");
+    // Reference volume from exact native trim integration of the retained skin;
+    // no mesh, bounding-box overlap or absolute-volume substitute is accepted.
+    std::ostringstream massMessage;massMessage<<std::setprecision(17)
+        <<"placement and argument order preserve material volume; actual="<<result.Value().volumeMm3
+        <<" delta="<<result.Value().volumeMm3-3991.8371234911001;
+    // Rotating and reversing the native Boolean solve is not a byte-identical
+    // operation. Compare two independently resolved/integrated skins within
+    // twice the existing 1e-8 relative analysis-volume budget. The production
+    // validity, precision and per-candidate volume limits are unchanged.
+    const double referenceVolume=3991.8371234911001;
+    RequireNear(result.Value().volumeMm3,referenceVolume,rotated?2e-8*referenceVolume:1e-5,massMessage.str());
+    if(!rotated) {
+        TopoDS_Shape native;Require(kernel::LookupShape(result.Value().handle,native),"result exists");
+        int faces=0;for(TopExp_Explorer e(native,TopAbs_FACE);e.More();e.Next())++faces;
+        Require(faces==7,"analysis partitioning never replaces the seven-face stored result");
+    }
+    const auto solids=kernel::BooleanSolidComponents(result.Value().handle);
+    Require(solids.HasValue()&&solids.Value().size()==1,"addition is one connected solid");
+    for(const auto handle:solids.Value())kernel::ReleaseShape(handle);
+    RequireEqual(kernel::CaptureOutputShape(a).Value(),aa.Value(),"first source topology and curves preserved");
+    RequireEqual(kernel::CaptureOutputShape(b).Value(),bb.Value(),"second source topology and curves preserved");
+    const auto step=kernel::OutputStep({result.Value().handle});
+    Require(step.HasValue()&&!step.Value().empty(),"validated dense curved result exports STEP");
+    kernel::ReleaseShape(result.Value().handle);kernel::ReleaseShape(a);kernel::ReleaseShape(b);
+}
+}
+
+KACHA_V2_TEST(kernel_boolean, dense_curved_adjacent_addition_preserves_the_source_skin)
+{
+    DenseAdjacentUnion(false);
+}
+KACHA_V2_TEST(kernel_boolean, rotated_dense_curved_adjacent_addition_reverses_argument_order)
+{
+    DenseAdjacentUnion(true);
 }
 
 KACHA_V2_TEST(kernel_boolean, touching_faces_do_not_become_a_positive_overlap_witness)

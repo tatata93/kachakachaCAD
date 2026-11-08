@@ -146,24 +146,53 @@ TopoDS_Shape IntersectionAnalysisShape(const TopoDS_Shape& shape,double toleranc
     }
     if(!denseC0)return shape;
     try {
-    // Subdivide an analysis copy at C0 joins. The stored solid and exact source
-    // skin remain unchanged. This avoids solving a giant spline as one patch.
+    // Divide at existing spline knots before trying continuity correction.
+    // Continuity correction at a near-C1 junction can fail the unchanged
+    // volume/bounds guard, sending a giant spline back to the slow
+    // unsplit checker. Both candidates are analysis copies, never stored output.
     BRepBuilderAPI_Copy copy(shape,true,false);
-    ShapeUpgrade_ShapeDivideContinuity split(copy.Shape());
-    split.SetSurfaceCriterion(GeomAbs_C1);split.SetBoundaryCriterion(GeomAbs_C1);
-    split.SetPCurveCriterion(GeomAbs_C1);split.SetTolerance(1e-7);split.Perform();
     const double precision=std::clamp(toleranceMm,1e-7,1e-6);
-    ShapeFix_Shape fix(detail::PartitionIntersectionFaces(split.Result()));
-    fix.SetPrecision(1e-7);fix.SetMaxTolerance(precision);fix.Perform();
-    const auto analysis=fix.Shape();
-    if(analysis.IsNull()||!BRepCheck_Analyzer(analysis).IsValid()||!ManifoldEdgeUse(analysis))return shape;
-    GProp_GProps before,after;detail::VolumeProperties(shape,before);detail::VolumeProperties(analysis,after);
-    if(std::abs(before.Mass()-after.Mass())>std::max(1e-7,std::abs(before.Mass())*1e-8))return shape;
-    Bnd_Box a,b;BRepBndLib::AddOptimal(shape,a,false,false);BRepBndLib::AddOptimal(analysis,b,false,false);
-    if(a.IsVoid()||b.IsVoid())return shape;
-    double av[6],bv[6];a.Get(av[0],av[1],av[2],av[3],av[4],av[5]);b.Get(bv[0],bv[1],bv[2],bv[3],bv[4],bv[5]);
-    for(int i=0;i<6;++i)if(std::abs(av[i]-bv[i])>precision)return shape;
-    return analysis;
+    std::optional<double> sourceVolume;
+    const auto checkedCandidate=[&](const TopoDS_Shape& divided,bool requireSubdivision)->TopoDS_Shape {
+        try {
+            ShapeFix_Shape fix(detail::PartitionIntersectionFaces(divided));
+            fix.SetPrecision(1e-7);fix.SetMaxTolerance(precision);
+            fix.Perform();
+            const auto analysis=fix.Shape();
+            if(analysis.IsNull())return {};
+            if(requireSubdivision) {
+                int beforeCount=0,afterCount=0;
+                for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next())++beforeCount;
+                for(TopExp_Explorer e(analysis,TopAbs_FACE);e.More();e.Next())++afterCount;
+                if(afterCount<=beforeCount)return {};
+            }
+
+            if(!BRepCheck_Analyzer(analysis).IsValid()||!ManifoldEdgeUse(analysis))return {};
+
+            GProp_GProps after;
+            if(!sourceVolume) {GProp_GProps before;detail::VolumeProperties(shape,before);sourceVolume=before.Mass();}
+            detail::VolumeProperties(analysis,after);
+            const double allowedVolume=std::max(1e-7,std::abs(*sourceVolume)*1e-8);
+
+            if(std::abs(*sourceVolume-after.Mass())>allowedVolume)return {};
+            Bnd_Box a,b;BRepBndLib::AddOptimal(shape,a,false,false);BRepBndLib::AddOptimal(analysis,b,false,false);
+            if(a.IsVoid()||b.IsVoid())return {};
+            double av[6],bv[6];a.Get(av[0],av[1],av[2],av[3],av[4],av[5]);b.Get(bv[0],bv[1],bv[2],bv[3],bv[4],bv[5]);
+            for(int i=0;i<6;++i)if(std::abs(av[i]-bv[i])>precision)return {};
+
+            return analysis;
+        } catch(const Standard_Failure&) {return {};}
+          catch(const std::exception&) {return {};}
+    };
+    const auto bounded=checkedCandidate(copy.Shape(),true);
+    if(!bounded.IsNull())return bounded;
+    BRepBuilderAPI_Copy continuityCopy(shape,true,false);
+    ShapeUpgrade_ShapeDivideContinuity split(continuityCopy.Shape());
+    split.SetSurfaceCriterion(GeomAbs_C1);split.SetBoundaryCriterion(GeomAbs_C1);
+    split.SetPCurveCriterion(GeomAbs_C1);split.SetTolerance(1e-7);
+    split.Perform();
+    const auto continuity=checkedCandidate(split.Result(),false);
+    return continuity.IsNull()?shape:continuity;
     } catch(const Standard_Failure&) {return shape;}
       catch(const std::exception&) {return shape;}
 }

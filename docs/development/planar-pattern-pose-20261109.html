@@ -2,7 +2,7 @@
 <title>軸に近い平面の型紙変換</title>
 <style>body{font-family:system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 20px;line-height:1.8;color:#17283c}img{max-width:100%;border:1px solid #8997a8}code{overflow-wrap:anywhere}</style>
 <h1>軸に近い平面の型紙変換</h1>
-<p>2026-11-09。限定した私有UI変換の修正は重点検証済み。全体・配布版検証と公開はこれから行う。</p>
+<p>2026-11-09。私有UI変換と配置入力の限定修正は全体・配布版検証済み。f78387e85の公開更新3へ含めた。</p>
 <p>公開更新2の実UI227では、床板のフェイスから製作部材と型紙を作れたが、SVG・DXF・PDFの書き出しが
 「型紙の面に載っていない線」として拒否された。nativeで測定した元フェイスのZ偏差は約7e-11 mmで、実際には平面だった。</p>
 <h2>原因と変更範囲</h2>
@@ -34,8 +34,9 @@
 この単独回帰は選択済みの線を前提に入力精度を隔離し、実モデルの別リプレイで通常の一覧選択を確認する。</p>
 <img src="planar-pattern-pose-20261109/placement.png" alt="既存の数値配置欄を使った実際のCAD操作">
 <p>側板の曲線付きDXFは外部読み込み器で不正なSPLINEとして拒否された。これは別件として記録し、
-全形式が検証済みとは扱わない。型紙と製作モデル全体の作業は続ける。</p>
+<a href="dxf-spline-format-20261109.html">DXF writerの限定修正</a>も行い、実UI256の6組で外部読み込み・曲線・原寸を照合した。型紙と製作モデル全体の作業は続ける。</p>
 <p>証拠: <code>out/series115-plaboard-20261105/planar-pose-before-20261109</code>、
 <code>planar-pose-final-20261109</code>、<code>actual-candidate13-final-floor-export-20261109</code>、
 <code>244-floor-cut-proof.json</code>、<code>245-floor-original-preservation-proof.json</code>。
-車体の全製作モデル・全型紙・実工作と全体ゲートは未完了。</p></html>
+全体ゲートは成功。事前9件、CTest197件（skip0）、開発版・配布版UI各720件、通常Windows起動と従来自己試験が成功。GitHubのタグ・対象コミット・最新タグ・ZIP 76,019,288バイトとSHA256も照合した。車体の全製作モデル・全型紙・実工作は未完了。</p>
+<p><a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update3">検証済み更新3を入手する</a>。全体証拠: <code>out/verification/planar-placement-dxf-release-b-20261109/result.json</code>。</p></html>

@@ -2,7 +2,7 @@
 <title>曲線付きDXFの外部読み込みを修正</title>
 <style>body{font-family:system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 20px;line-height:1.8;color:#17283c}img{max-width:100%;border:1px solid #8997a8}table{border-collapse:collapse}td,th{border:1px solid #a9b5c4;padding:8px 12px;text-align:left}code{overflow-wrap:anywhere}</style>
 <h1>曲線付きDXFの外部読み込み</h1>
-<p>2026-11-09。DXF writerの限定修正は重点検証済み。全体・配布版検証と公開はこれから行う。</p>
+<p>2026-11-09。DXF writerの限定修正は全体・配布版検証済み。f78387e85の公開更新3へ含めた。</p>
 <p>実UI252の側板はCAD上ではDXF出力に成功したが、外部読み込み器ezdxf 1.4.5は
 <code>missing AcDbSpline subclass</code>で拒否した。内部の成功表示だけでは外部で使える証拠にならなかった。</p>
 <h2>原因と修正</h2>
@@ -30,4 +30,5 @@ AC1015、mm単位、固有ハンドルと各種類のサブクラスを記録す
 <p>証拠: <code>out/series115-plaboard-20261105/255-dxf-before.xml</code>、<code>255-dxf-after.xml</code>、
 <code>256-stock-external-format-proof.json</code>、<code>actual-candidate13-valid-dxf-stock-20261109-progress.json</code>。
 診断用に形式記録を補ったコピーは納品物に使わず、実CADの再出力を照合した。
-全体・配布版ゲート、残りの全型紙と車体製作モデルは未完成。</p></html>
+全体・配布版ゲートは成功。事前9件、CTest197件（skip0）、開発版・配布版UI各720件、通常Windows起動と従来自己試験が成功。GitHubのタグ・対象コミット・最新タグ・ZIP 76,019,288バイトとSHA256も照合した。残りの全型紙と車体製作モデルは未完成。</p>
+<p><a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update3">検証済み更新3を入手する</a>。全体証拠: <code>out/verification/planar-placement-dxf-release-b-20261109/result.json</code>。</p></html>

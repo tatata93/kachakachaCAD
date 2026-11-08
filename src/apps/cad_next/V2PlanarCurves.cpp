@@ -35,8 +35,11 @@ Vector3 Rotate(Vector3 p,Vector3 axis,double angle)
 Vector3 PoseVector(Vector3 p,const geometry::PlanarFrame& frame,double progress)
 {
     const Vector3 z{0,0,1};auto axis=geometry::Cross(z,frame.normal);
-    const double angle=std::acos(std::clamp(geometry::Dot(z,frame.normal),-1.0,1.0));
-    axis=axis.Length()>1e-9?geometry::Normalized(axis):Vector3{1,0,0};
+    // atan2 uses the normal direction, so a tiny norm residue cannot invent
+    // a tilt when the plane is parallel or antiparallel to the pattern plane.
+    const double angle=std::atan2(axis.Length(),geometry::Dot(z,frame.normal));
+    const double axisLength=axis.Length();
+    axis=axisLength>0?axis*(1/axisLength):Vector3{1,0,0};
     const auto x=Rotate({1,0,0},axis,angle);
     const double twist=std::atan2(geometry::Dot(geometry::Cross(x,frame.uDirection),frame.normal),
         geometry::Dot(x,frame.uDirection));
@@ -46,8 +49,9 @@ std::vector<geometry::CurveSegment> PoseCurves(const std::vector<geometry::Curve
     const geometry::PlanarFrame& frame,double progress)
 {
     const Vector3 z{0,0,1};auto axis=geometry::Cross(z,frame.normal);
-    const double angle=std::acos(std::clamp(geometry::Dot(z,frame.normal),-1.0,1.0));
-    axis=axis.Length()>1e-9?geometry::Normalized(axis):Vector3{1,0,0};
+    const double angle=std::atan2(axis.Length(),geometry::Dot(z,frame.normal));
+    const double axisLength=axis.Length();
+    axis=axisLength>0?axis*(1/axisLength):Vector3{1,0,0};
     const auto x=Rotate({1,0,0},axis,angle);
     const double twist=std::atan2(geometry::Dot(geometry::Cross(x,frame.uDirection),frame.normal),geometry::Dot(x,frame.uDirection));
     std::vector<geometry::CurveSegment> result;

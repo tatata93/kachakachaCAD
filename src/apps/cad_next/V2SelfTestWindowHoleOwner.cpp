@@ -658,6 +658,31 @@ bool V2WindowHoleExercise::Run(V2MainWindow& w,bool curved) {
 }
 bool V2WindowHoleExercise::PlanarGeneration(V2MainWindow& w) {
     using geometry::CurveSegment;using geometry::Vector3;
+    // SourceFrame permits the floating-point residue of solving a rigid frame.
+    // A nearly axial normal must not turn that length residue into a spurious
+    // tilt, especially for a long panel or a downward-facing plane.
+    for(const double tilt:{0.0,1e-10,.9,3.141592653589793-1e-10,3.141592653589793})
+    for(const double residue:{-1e-13,0.0,1e-13}){
+        geometry::PlanarFrame frame;frame.origin={7,-5,11};
+        frame.uDirection={std::cos(tilt),0,-std::sin(tilt)};frame.vDirection={0,1,0};
+        const Vector3 direction{std::sin(tilt),0,std::cos(tilt)};frame.normal=direction*(1+residue);
+        const auto line=CurveSegment::MakeLine(frame.origin-frame.uDirection*17-frame.vDirection*120,
+            frame.origin+frame.uDirection*17+frame.vDirection*120);if(!line.HasValue())return false;
+        for(const double progress:{0.0,.37,1.0}){
+            const auto posed=V2PlanarCurves::PoseCurves({line.Value()},frame,progress);
+            if(posed.size()!=1)return false;
+            if(!selftest::Explain("nearly axial planar pose retains rigid length",
+                std::abs(posed.front().TotalLength(1e-8)-line.Value().TotalLength(1e-8))<1e-8))return false;
+            for(const double t:{0.0,.37,1.0}){
+                const auto point=posed.front().Evaluate(t);
+                if(progress==0&&!selftest::Explain("axial planar cut lies on the pattern plane",
+                    std::abs(point.z)<1e-8))return false;
+                if(progress==1&&geometry::Distance(point,line.Value().Evaluate(t))>1e-8)return false;
+            }
+            if(std::abs(V2PlanarCurves::PoseVector({0,0,1},frame,progress).Length()-1)>1e-12)return false;
+            if(progress==1&&geometry::Distance(V2PlanarCurves::PoseVector({0,0,1},frame,progress),direction)>1e-12)return false;
+        }
+    }
     for(const double tilt:{.9,2.8}) {
         w.RunCommand("file.new");
         std::vector<CurveSegment> outer={CurveSegment::MakeLine({-10,-10,0},{10,-10,0}).Value(),

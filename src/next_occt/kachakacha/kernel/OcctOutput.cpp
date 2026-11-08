@@ -1,4 +1,5 @@
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctTrimmedExtents.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include <sstream>
@@ -243,7 +244,25 @@ bool StepRetainsSolids(const std::string& content,const StepSolidFacts& source,s
     source.MeasureBounds();restored.MeasureBounds();
     double a[6],b[6];source.bounds.Get(a[0],a[1],a[2],a[3],a[4],a[5]);
     restored.bounds.Get(b[0],b[1],b[2],b[3],b[4],b[5]);
-    for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4){reason+=" bound["+std::to_string(i)+"]="+std::to_string(a[i])+"/"+std::to_string(b[i]);return false;}
+    for(int i=0;i<6;++i)if(std::abs(a[i]-b[i])>1e-4){
+        // Native support rectangles can change when STEP reparameterizes a
+        // trimmed spline. Compare material extents before calling that a change
+        // of shape. Keep the same threshold and reject unmeasurable geometry.
+        const auto extent=[i](const std::vector<TopoDS_Shape>& solids)->std::optional<double> {
+            std::optional<double> value;
+            for(const auto& solid:solids) {
+                const auto measured=detail::TrimmedCoordinateExtent(solid,i);
+                if(!measured)return std::nullopt;
+                value=!value?*measured:(i<3?std::min(*value,*measured):std::max(*value,*measured));
+            }
+            return value;
+        };
+        const auto actualSource=extent(source.solids),actualRestored=extent(restored.solids);
+        if(!actualSource||!actualRestored
+            ||std::abs(*actualSource-*actualRestored)+2*detail::kTrimmedExtentPrecisionMm>1e-4) {
+            reason+=" bound["+std::to_string(i)+"]="+std::to_string(a[i])+"/"+std::to_string(b[i]);return false;
+        }
+    }
     return true;
     }catch(const Standard_Failure& failure){reason=failure.GetMessageString();return false;}
 }

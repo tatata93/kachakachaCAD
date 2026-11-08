@@ -7,6 +7,22 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctShellSplit.h"
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctTrimmedExtents.h"
+#include <BRepBuilderAPI_Transform.hxx>
+#include <TopoDS_Shape.hxx>
+#include <gp_Ax1.hxx>
+#include <gp_Trsf.hxx>
+#include <gp_Vec.hxx>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <chrono>
+#include <algorithm>
+#endif
 
 #include <cmath>
 #include <string>
@@ -99,6 +115,63 @@ KACHA_V2_TEST(kernel_shell_split_absent, カーネルが無い版はシェルも
 }
 
 #else
+
+namespace {
+void DenseCurvedStockSection(bool rotated)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    std::ifstream file(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"dense-curved-adjacent-union.kshape",std::ios::binary);
+    Require(file.good(),"real native union fixture exists");
+    const std::string bytes(std::istreambuf_iterator<char>(file),{});
+    const auto restored=kernel::RestoreOutputShape(bytes);Require(restored.HasValue(),restored.FirstSummaryJa());
+    auto input=restored.Value();Vector3 origin{0,0,27.15},normal{0,0,1};
+    if(rotated) {
+        TopoDS_Shape shape;Require(kernel::LookupShape(input,shape),"source exists");
+        gp_Trsf pose;pose.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.7);pose.SetTranslationPart(gp_Vec(11,-7,5));
+        const auto p=gp_Pnt(origin.x,origin.y,origin.z).Transformed(pose);const auto n=gp_Vec(0,0,1).Transformed(pose);
+        origin={p.X(),p.Y(),p.Z()};normal={n.X(),n.Y(),n.Z()};
+        const auto placed=kernel::StoreShape(BRepBuilderAPI_Transform(shape,pose,true).Shape());kernel::ReleaseShape(input);input=placed;
+    }
+    const auto before=kernel::CaptureOutputShape(input);Require(before.HasValue(),"native input captured");
+    const auto volume=kernel::ShapeVolume(input);Require(volume.HasValue(),volume.FirstSummaryJa());
+    if(!rotated) {
+        const auto start=std::chrono::steady_clock::now();
+        const auto outside=SplitSolidByPlane(input,{0,0,0},{0,0,1},Tolerance());
+        Require(!outside.HasValue()&&outside.FirstCode()==kernel::kShellSplitNoCut,"outside plane remains a refusal");
+        Require(std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count()<3,
+            "opening Split outside a dense solid does not wait for volume integration");
+    }
+    const auto split=SplitSolidByPlane(input,origin,normal,Tolerance());
+    Require(split.HasValue(),split.FirstSummaryJa());
+    Require(split.Value().positiveSolidCount==1&&split.Value().negativeSolidCount==1,"two physical sides");
+    RequireNear(split.Value().positiveVolumeMm3+split.Value().negativeVolumeMm3,volume.Value(),
+        std::max(volume.Value()*1e-6,Tolerance().modelLinearMm),"original volume gate is unchanged");
+    if(!rotated) {
+        TopoDS_Shape positive,negative;
+        Require(kernel::LookupShape(split.Value().positive,positive)&&kernel::LookupShape(split.Value().negative,negative),"both native sides exist");
+        const auto lo=kernel::detail::TrimmedCoordinateExtent(positive,2),hi=kernel::detail::TrimmedCoordinateExtent(negative,5);
+        Require(lo.has_value()&&hi.has_value(),"trimmed material bounds can be measured");
+        RequireNear(*lo,27.15,1e-6,"positive side begins at the chosen plane");
+        RequireNear(*hi,27.15,1e-6,"negative side stops at the chosen plane");
+    }
+    for(const auto side:{split.Value().positive,split.Value().negative}) {
+        const auto saved=kernel::CaptureOutputShape(side);Require(saved.HasValue(),"cut result captured");
+        const auto step=kernel::OutputStep({side});Require(step.HasValue(),step.FirstSummaryJa());
+        RequireEqual(kernel::CaptureOutputShape(side).Value(),saved.Value(),"STEP validation is read-only");
+        kernel::ReleaseShape(side);
+    }
+    RequireEqual(kernel::CaptureOutputShape(input).Value(),before.Value(),"source curves and topology unchanged");
+    kernel::ReleaseShape(input);
+}
+}
+KACHA_V2_TEST(kernel_shell_split, dense_curved_stock_midplane_and_both_step_outputs)
+{
+    DenseCurvedStockSection(false);
+}
+KACHA_V2_TEST(kernel_shell_split, rotated_dense_curved_stock_midplane_and_both_step_outputs)
+{
+    DenseCurvedStockSection(true);
+}
 
 KACHA_V2_TEST(kernel_shell_split, 箱の上の面を抜いてシェルにすると体積が式どおり)
 {

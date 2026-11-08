@@ -11,12 +11,15 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/kernel/OcctMeshCache.h"
 #include "kachakacha/kernel/OcctBoundaryDistance.h"
+#include "kachakacha/kernel/OcctTrimmedExtents.h"
 #include "kachakacha/kernel/OcctShapeTransfer.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include <BRep_Builder.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -650,6 +653,30 @@ KACHA_V2_TEST(kernel_export, boundary_coincidence_is_only_a_finite_trim_upper_bo
     const kernel::detail::NativeBoundaryDistance scaledProbe(scaledFace.Face());
     Require(!scaledProbe.Coincident(gp_Pnt(5e5,5e5+.0001,0),1e-7),
         "UV ON tolerance cannot admit an outside point farther than physical precision");
+}
+
+KACHA_V2_TEST(kernel_export, trimmed_native_extents_keep_holes_and_interior_surface_extrema)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    // A radius-five sphere bored by a radius-three cylinder is an eight-high
+    // napkin ring. Z extrema lie on the hole boundary; Y extrema lie inside
+    // the curved face. Neither full UV rectangles nor edges alone are enough.
+    const auto sphere=BRepPrimAPI_MakeSphere(gp_Pnt(20,-13,7),5).Shape();
+    const auto bore=BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(20,-13,1),gp_Dir(0,0,1)),3,12).Shape();
+    BRepAlgoAPI_Cut cut(sphere,bore);Require(cut.IsDone(),"analytic holed sphere can be built");
+    const auto handle=kernel::StoreShape(cut.Shape());
+    const auto before=kernel::CaptureOutputShape(handle);Require(before.HasValue(),"analytic source captured");
+    const double expected[6]={15,-18,3,25,-8,11};
+    for(int component=0;component<6;++component) {
+        const auto extent=kernel::detail::TrimmedCoordinateExtent(cut.Shape(),component);
+        Require(extent.has_value(),"trimmed sphere extent exists");
+        RequireNear(*extent,expected[component],1e-6,"trimmed spherical material matches analytic bounds");
+    }
+    Require(!kernel::detail::TrimmedCoordinateExtent(TopoDS_Shape{},0),"null native shape is rejected safely");
+    Require(!kernel::detail::TrimmedCoordinateExtent(cut.Shape(),6),"invalid axis is rejected safely");
+    const auto exported=kernel::OutputStep({handle});Require(exported.HasValue(),exported.FirstSummaryJa());
+    RequireEqual(kernel::CaptureOutputShape(handle).Value(),before.Value(),"native bounds and STEP leave source bytes unchanged");
+    kernel::ReleaseShape(handle);
 }
 
 KACHA_V2_TEST(kernel_export, legacy_offset_refusal_preserves_original)

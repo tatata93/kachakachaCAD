@@ -10,12 +10,14 @@
 
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctIntersectionPartition.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
@@ -30,6 +32,7 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
 #include <Standard_Failure.hxx>
+#include <ShapeFix_Shape.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopAbs_State.hxx>
 #include <TopExp.hxx>
@@ -415,12 +418,54 @@ namespace {
     if (!half.IsDone()) {
         return {};
     }
-    BRepAlgoAPI_Common common(shape, half.Solid());
+    TopTools_ListOfShape arguments,tools;arguments.Append(shape);tools.Append(half.Solid());
+    BRepAlgoAPI_Common common;common.SetArguments(arguments);common.SetTools(tools);
+    common.SetNonDestructive(true);
     common.Build();
     if (!common.IsDone()) {
         return {};
     }
     return common.Shape();
+}
+
+// Only a failed cut needs this alternate representation. Partition a private
+// copy at existing knots; never refit the surface or edit the source entity.
+[[nodiscard]] TopoDS_Shape PreparedPlaneCut(const TopoDS_Shape& source,double before,
+    const geometry::GeometryTolerance& tolerance)
+{
+    try {
+        BRepBuilderAPI_Copy copy(source,true,false);
+        ShapeFix_Shape fix(detail::PartitionIntersectionFaces(copy.Shape()));
+        fix.SetPrecision(1e-7);fix.SetMaxTolerance(std::clamp(tolerance.modelLinearMm,1e-7,1e-6));fix.Perform();
+        const auto prepared=fix.Shape();
+        if(prepared.IsNull()||CountOf(prepared,TopAbs_FACE)<=CountOf(source,TopAbs_FACE)
+            ||CountOf(prepared,TopAbs_SOLID)!=CountOf(source,TopAbs_SOLID)
+            ||!BRepCheck_Analyzer(prepared).IsValid())return {};
+        // Both this representation and the final sum must satisfy the original
+        // plane-cut volume gate against the unmodified source, not each other.
+        if(std::abs(VolumeOf(prepared)-before)>std::max(before*1e-6,tolerance.modelLinearMm))return {};
+        Bnd_Box a,b;BRepBndLib::AddOptimal(source,a,false,false);BRepBndLib::AddOptimal(prepared,b,false,false);
+        if(a.IsVoid()||b.IsVoid())return {};
+        double x[6],y[6];a.Get(x[0],x[1],x[2],x[3],x[4],x[5]);b.Get(y[0],y[1],y[2],y[3],y[4],y[5]);
+        const double precision=std::max(tolerance.modelLinearMm,1e-7);
+        for(int i=0;i<6;++i)if(std::abs(x[i]-y[i])>precision)return {};
+        return prepared;
+    } catch(const Standard_Failure&) {return {};}
+      catch(const std::exception&) {return {};}
+}
+
+bool EnclosureCrossesPlane(const TopoDS_Shape& shape,const Vector3& origin,const Vector3& normal)
+{
+    Bnd_Box box;BRepBndLib::Add(shape,box,false);
+    if(box.IsVoid()||box.IsWhole())return true;
+    double b[6];box.Get(b[0],b[1],b[2],b[3],b[4],b[5]);
+    double lo=std::numeric_limits<double>::infinity(),hi=-lo;
+    for(int x=0;x<2;++x)for(int y=0;y<2;++y)for(int z=0;z<2;++z) {
+        const double side=(b[x*3]-origin.x)*normal.x+(b[1+y*3]-origin.y)*normal.y+(b[2+z*3]-origin.z)*normal.z;
+        if(!std::isfinite(side))return true;
+        lo=std::min(lo,side);hi=std::max(hi,side);
+    }
+    return lo<=0&&hi>=0;
 }
 
 } // namespace
@@ -440,6 +485,10 @@ Result<SplitBuildResult> SplitSolidByPlane(const KernelShapeHandle& solid,
         if (!shape.HasValue()) {
             return Out::Failure(shape.Diagnostics());
         }
+        if(!EnclosureCrossesPlane(shape.Value(),planeOrigin,normal))
+            return Out::Failure(MakeError(kShellSplitNoCut,
+                "分ける平面が部品を通っていないので、2 つに分かれません。",
+                "平面の位置か向きを変えてください。"));
         // 無限の面ではなく、部品を十分に覆う有限の面で切る(厚みを平面で切る道と同じ形。
         // 無限の形をブール演算へ渡さない)。
         const double margin = MarginFor(shape.Value(), planeOrigin);
@@ -449,14 +498,31 @@ Result<SplitBuildResult> SplitSolidByPlane(const KernelShapeHandle& solid,
             return Out::Failure(MakeError(kShellSplitFailed, "分ける平面の面を作れませんでした。", {}));
         }
         const TopoDS_Face plane = maker.Face();
-        const TopoDS_Shape positive = SideOf(shape.Value(), plane, ToPoint(planeOrigin + normal));
-        const TopoDS_Shape negative = SideOf(shape.Value(), plane, ToPoint(planeOrigin - normal));
         const double before = VolumeOf(shape.Value());
+        auto positive = SideOf(shape.Value(), plane, ToPoint(planeOrigin + normal));
+        auto negative = SideOf(shape.Value(), plane, ToPoint(planeOrigin - normal));
+        const auto measured=[](const TopoDS_Shape& side) {
+            return side.IsNull()||CountOf(side,TopAbs_SOLID)==0?0.0:VolumeOf(side);
+        };
+        double positiveVolume=measured(positive),negativeVolume=measured(negative);
         const double minimum = std::max(before * 1.0e-9, tolerance.modelLinearMm);
+        const auto acceptable=[&] {
+            return positiveVolume>minimum&&negativeVolume>minimum
+                &&BRepCheck_Analyzer(positive).IsValid()&&BRepCheck_Analyzer(negative).IsValid()
+                &&std::abs(positiveVolume+negativeVolume-before)<=std::max(before*1e-6,tolerance.modelLinearMm);
+        };
+        if(!acceptable()) {
+            const auto prepared=PreparedPlaneCut(shape.Value(),before,tolerance);
+            if(!prepared.IsNull()) {
+                positive=SideOf(prepared,plane,ToPoint(planeOrigin+normal));
+                negative=SideOf(prepared,plane,ToPoint(planeOrigin-normal));
+                positiveVolume=measured(positive);negativeVolume=measured(negative);
+            }
+        }
         const bool positiveEmpty = positive.IsNull() || CountOf(positive, TopAbs_SOLID) == 0
-            || VolumeOf(positive) <= minimum;
+            || positiveVolume <= minimum;
         const bool negativeEmpty = negative.IsNull() || CountOf(negative, TopAbs_SOLID) == 0
-            || VolumeOf(negative) <= minimum;
+            || negativeVolume <= minimum;
         if (positiveEmpty || negativeEmpty) {
             return Out::Failure(MakeError(kShellSplitNoCut,
                 "分ける平面が部品を通っていないので、2 つに分かれません。",
@@ -467,8 +533,8 @@ Result<SplitBuildResult> SplitSolidByPlane(const KernelShapeHandle& solid,
                 "分けた形が立体として壊れているので、作れたことにしません。", {}));
         }
         SplitBuildResult result;
-        result.positiveVolumeMm3 = VolumeOf(positive);
-        result.negativeVolumeMm3 = VolumeOf(negative);
+        result.positiveVolumeMm3 = positiveVolume;
+        result.negativeVolumeMm3 = negativeVolume;
         const double sum = result.positiveVolumeMm3 + result.negativeVolumeMm3;
         if (std::abs(sum - before) > std::max(before * 1.0e-6, tolerance.modelLinearMm)) {
             return Out::Failure(MakeError(kShellSplitInvalid,

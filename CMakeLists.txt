@@ -792,6 +792,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctMeshCache.cpp
     src/next_occt/kachakacha/kernel/OcctBoundaryDistance.cpp
+    src/next_occt/kachakacha/kernel/OcctTrimmedExtents.cpp
     src/next_occt/kachakacha/kernel/OcctFiniteDistance.cpp
     src/next_occt/kachakacha/kernel/OcctMeshPlanarFaces.cpp
     src/next_occt/kachakacha/kernel/OcctMassProperties.cpp
@@ -1110,6 +1111,8 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_envelope_tests tests_v2/kernel_loft_envelope_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_edge_finish_tests tests_v2/kernel_edge_finish_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_shell_split_tests tests_v2/kernel_shell_split_tests.cpp)
+    target_compile_definitions(kachakacha_v2_kernel_shell_split_tests PRIVATE
+        KACHACAD_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests_v2/fixtures")
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_er_export_tests tests_v2/kernel_er_export_tests.cpp)

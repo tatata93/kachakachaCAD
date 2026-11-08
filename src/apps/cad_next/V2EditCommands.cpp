@@ -7,6 +7,7 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
 #include "V2DimensionTool.h"
+#include "V2HistoryShapePlan.h"
 
 #include "kachakacha/app/EntityEdit.h"
 #include "kachakacha/app/GuideTableBuild.h"
@@ -158,8 +159,10 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     auto& drawingSelection=V2DrawingSelection::Of(*viewport_);
     if(undo&&!V2ToolSelection::Active(*viewport_)&&!drawingSelection.PreferDocumentUndo(*session_)&&viewport_->StepBackInputPoint())return;
     const auto beforeRevision=session_->GetDocument().Revision();
-    const auto oldGeometry=ShapeInputs(session_->GetDocument().Snapshot());
+    const auto before=session_->GetDocument().Snapshot();
+    const auto oldGeometry=ShapeInputs(before);
     const bool hadErrors=!rebuildProblems_.isEmpty();
+    const bool hadPreview=!viewport_->ToolPreview().empty()||viewport_->ExtrudeHandleShown();
     // Keep the pre-history native edge identities until AdoptCurrentDocument
     // replaces overlays. The standalone session rebuilds only document geometry.
     const bool moved = undo ? session_->GetDocument().Undo() : session_->GetDocument().Redo();
@@ -177,7 +180,21 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     // 取り消したはずの近似モデルが数のうえでは残り、
     // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
-    if(hadErrors || oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot()))RebuildKernelShapes();
+    if(hadErrors || oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot())) {
+        const auto plan=(hadErrors||hadPreview) ? std::optional<v2ui::PartHistoryPlan>{}
+            : v2ui::PlanPartHistory(before,session_->GetDocument().Snapshot(),partShapes_,guideShapes_);
+        bool reused=plan.has_value();
+        if (plan) {
+            v2ui::RemoveHistoryParts(*plan,partShapes_,guideShapes_);
+            for (const auto& id:plan->removed) {partEdges_.erase(id);partFlatBoundary_.erase(id);}
+            for (const auto& step:plan->added) {
+                const auto* feature=session_->GetDocument().FindFeature(step.featureId);
+                if (!feature||!RebuildOneShape(step,*feature)) {reused=false;break;}
+            }
+        }
+        if (reused) {RefreshPartEdges();RefreshShapeViews();RefreshExportCounts();}
+        else RebuildKernelShapes();
+    }
     // 作り直せなかった形があれば、その知らせを「元に戻しました」で上書きしない。
     const QString problems = rebuildProblems_.isEmpty()
         ? QString()

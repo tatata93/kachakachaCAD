@@ -1134,6 +1134,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestGuide.cpp
         src/apps/cad_next/V2SelfTestHumanPath.cpp
         src/apps/cad_next/V2SelfTestHumanPathApprox.cpp
+        src/apps/cad_next/V2SelfTestPrimitiveUi.cpp
+        src/apps/cad_next/V2SelfTestHistoryRebuild.cpp
         src/apps/cad_next/V2SelfTestHumanPathBoolean.cpp
         src/apps/cad_next/V2SelfTestHumanPathCorner.cpp
         src/apps/cad_next/V2SelfTestRibbon.cpp
@@ -1406,6 +1408,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2FabricationSources.cpp
         src/apps/cad_next/V2FabricationDock.h
         src/apps/cad_next/V2EditCommands.cpp
+        src/apps/cad_next/V2HistoryShapePlan.cpp
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2ToolEvidence.cpp
         src/apps/cad_next/V2ToolLifecycle.cpp

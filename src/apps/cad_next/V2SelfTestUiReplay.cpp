@@ -40,6 +40,7 @@
 #include <QMenuBar>
 #include <QObject>
 #include <QPixmap>
+#include <QPoint>
 #include <QPointF>
 #include <QPushButton>
 #include <QPlainTextEdit>
@@ -54,6 +55,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <algorithm>

@@ -2,7 +2,8 @@
 <title>保存・変形した単一部品の結合拒否の修正</title>
 <style>body{font-family:system-ui,sans-serif;max-width:1060px;margin:32px auto;padding:0 20px;line-height:1.8;color:#17283c}img{max-width:100%;border:1px solid #8997a8}table{border-collapse:collapse}td,th{border:1px solid #a9b5c4;padding:8px 12px;text-align:left}code{overflow-wrap:anywhere}</style>
 <h1>保存・変形した単一部品の結合拒否</h1>
-<p>2026-11-09。限定したBoolean核の修正は重点検証済み。全体・配布版検証と公開はこれから行う。
+<p>2026-11-09。限定したBoolean核の修正は全体・配布版検証済み。
+<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update2">公開更新2</a>に含む（ソース86a0c3b2a）。
 公開更新1のUIで、左側板と穴付きの環を選んで「足す」と、体積矛盾で確定できなかった。</p>
 <h2>原因と一般化</h2>
 <p>有効な1ソリッドだけを包むコンテナの内部で相対向きが反転していると、native演算が大きい部品を結果から落とす場合があった。
@@ -25,13 +26,16 @@
 <h2>回帰とUI経路</h2>
 <p>箱、穴付き板、複数ソリッドを含むコンテナの3回帰を追加。修正前は2件が失敗した。
 修正後はBooleanの既存・追加18件が成功した。足す・引く・共通、順序反転、バッチ、剛体変換、鏡映、
-穴の内外、入力BRepの不変、STEPを確認。位置付き親コンテナの追加経路も全体ゲートへ含める。</p>
+穴の内外、入力BRepの不変、STEPを確認。位置付き親コンテナの追加経路も全体ゲートで成功した。</p>
 <p>実UI232/233では、失敗時と同じ保存入力を再読込し、通常の選択→足す→保存→Ctrl+Z/Y→独立コピー→STEPを実行した。
 元70部品の定義、ID、名前を保持する。結合の元部品が非表示になるのは既存の履歴動作で、元形状の削除とは区別する。
 幅36 mmの元車体を再スケールしていない。</p>
 <img src="single-solid-container-20261109/left-ui.png" alt="実際のCAD操作で左側板と一か所の環を結合した状態">
 <img src="single-solid-container-20261109/right-ui.png" alt="実際のCAD操作で右側の以前の結果を照合した状態">
-<p>全体証拠と公開の確認後に完了を記録する。車体全体の製作モデル、残りの窓枠、全型紙、実際の工作は未完成。</p>
+<p>事前9件、CTest197件（skip0）、開発版・配布版UI各719件、通常Windows起動と従来自己試験が成功。
+GitHubのタグ・対象コミット・最新タグ・ZIP 76,014,016バイトとSHA256を照合済み。
+全体証拠は<code>out/verification/single-solid-container-release-20261109/result.json</code>。
+今回の限定所有は完了。車体全体の製作モデル、残りの窓枠、全型紙、実際の工作は未完成。</p>
 <p>証拠: <code>out/series115-plaboard-20261105/231-container-before.log</code>、
 <code>231-container-after.log</code>、<code>234-rim-union-preservation-proof.json</code>。
 診断用に作った形状は読み取り専用の比較に使うだけで、納品モデルへ注入しない。</p></html>

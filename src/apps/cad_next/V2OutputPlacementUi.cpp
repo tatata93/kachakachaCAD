@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
+#include <QLatin1Char>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QPointer>

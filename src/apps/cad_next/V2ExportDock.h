@@ -77,6 +77,8 @@ private:
 
     kachakacha::v2::app::ExportCounts counts_;
     kachakacha::v2::app::ExportPanelState state_;
+    bool formatRequested_ = false;
+    bool formatTargetUnavailable_ = false;
     std::vector<kachakacha::v2::app::ExportTargetRow> targetRows_;
     std::vector<kachakacha::v2::app::ExportFormatRow> formatRows_;
     std::function<void(const QString&)> sink_;

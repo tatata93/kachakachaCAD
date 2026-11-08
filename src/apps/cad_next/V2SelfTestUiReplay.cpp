@@ -4,6 +4,7 @@
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
 #include "V2EntityTree.h"
+#include "V2ParameterDock.h"
 #include "V2DocumentTiming.h"
 #include "kachakacha/app/Ribbon.h"
 #include "kachakacha/app/GuideTableBuild.h"
@@ -465,11 +466,15 @@ struct Replay {
         if(!step.contains("value"))return true;
         // Enter can rebuild all rows and destroy the delegate editor. Never
         // send a subsequent key to that editor or read an obsolete item.
-        QMouseEvent doubleClick(QEvent::MouseButtonDblClick,at,QPointF(tree->viewport()->mapToGlobal(at)),
-            Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
-        QMouseEvent release(QEvent::MouseButtonRelease,at,QPointF(tree->viewport()->mapToGlobal(at)),
-            Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
-        QApplication::sendEvent(tree->viewport(),&doubleClick);QApplication::sendEvent(tree->viewport(),&release);
+        if(step.contains("editKey")) {
+            if(step["editKey"].toString()!="F2"||!Key(*tree,"F2"))return false;
+        }else {
+            QMouseEvent doubleClick(QEvent::MouseButtonDblClick,at,QPointF(tree->viewport()->mapToGlobal(at)),
+                Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease,at,QPointF(tree->viewport()->mapToGlobal(at)),
+                Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(),&doubleClick);QApplication::sendEvent(tree->viewport(),&release);
+        }
         QApplication::processEvents();
         auto* editor=tree->findChild<QLineEdit*>();
         if(!editor||!editor->isVisible()||!Text(*editor,step["value"].toString(),false))return false;
@@ -909,6 +914,34 @@ bool FoldOwnerFocus(V2MainWindow& w)
         &&Explain("reloaded selection zoom excludes the other model",w.Viewport().VisibleWidthMm()<40);
 }
 
+bool ParameterKeyboardEditing(V2MainWindow& w)
+{
+    w.RunCommand("file.new");if(!DrawRectangleByHand(w))return false;
+    base::EntityId wire;std::string originalName;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities)if(entity.kind==domain::EntityKind::Wire){wire=entity.id;originalName=entity.displayName;break;}
+    if(wire.IsNil())return false;
+    Replay replay{w,QString(),{}, {},0};
+    if(!replay.Act({{"op","select"},{"id",QString::fromStdString(wire.ToString())}})
+        ||!replay.Act({{"op","tool"},{"command","view.number_settings"}}))return false;
+    const QJsonObject row{{"op","tree_row"},{"widget","parameterValues"},{"text",QStringLiteral("縮尺の分母(1/◯)")},{"column",1}};
+    if(!replay.Act(row))return false;
+    auto* table=w.findChild<QTreeWidget*>("parameterValues");if(!table)return false;
+    QKeyEvent shortcut(QEvent::ShortcutOverride,Qt::Key_F2,Qt::NoModifier);shortcut.setAccepted(false);
+    QApplication::sendEvent(table,&shortcut);
+    if(!Explain("parameter table owns F2 instead of the entity rename shortcut",shortcut.isAccepted()))return false;
+    auto f2=row;f2["editKey"]="F2";f2["value"]="80";
+    if(!replay.Act(f2))return false;
+    const auto* entity=w.Session().GetDocument().FindEntity(wire);
+    if(!Explain("F2 changes the parameter without renaming the selected wire",entity&&entity->displayName==originalName
+        &&app::ParameterValueOf(w.ParameterDock().Values(),app::ParameterId::ScaleDenominator)==80))return false;
+    auto doubleClick=row;doubleClick["value"]="87";
+    if(!replay.Act(doubleClick))return false;
+    if(!replay.Act({{"op","select"},{"id",QString::fromStdString(wire.ToString())},{"rename","ordinary rename"}}))return false;
+    entity=w.Session().GetDocument().FindEntity(wire);
+    return Explain("double click parameter editing and ordinary entity F2 rename remain available",entity&&entity->displayName=="ordinary rename"
+        &&app::ParameterValueOf(w.ParameterDock().Values(),app::ParameterId::ScaleDenominator)==87);
+}
+
 constexpr std::size_t kMaximumPhases=128;
 std::array<QJsonObject,kMaximumPhases> phases;
 std::array<std::string,kMaximumPhases> names;
@@ -928,7 +961,8 @@ std::vector<SelfTestCase> UiReplayCases()
     std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke},
         {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings},
         {"HP-REPLAY point normal workplane through visible numeric fields",PointNormalSettings},
-        {"HP-REPLAY manufacturing ownership controls visibility picking and focus",FoldOwnerFocus}};
+        {"HP-REPLAY manufacturing ownership controls visibility picking and focus",FoldOwnerFocus},
+        {"HP-REPLAY parameter F2 edits values and preserves entity names",ParameterKeyboardEditing}};
     const auto script=qEnvironmentVariable("KACHACAD_UI_REPLAY");if(script.isEmpty())return cases;
     const auto document=Read(script);replayRoot=QFileInfo(script).absolutePath();
     if(!document["phases"].isArray()||document["phases"].toArray().isEmpty()){

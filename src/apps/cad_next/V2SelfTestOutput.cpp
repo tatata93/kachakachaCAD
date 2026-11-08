@@ -454,6 +454,44 @@ bool FrozenCopyKeepsPickableEdges(V2MainWindow& w)
     return FrozenCopyKeepsPickableEdgesCase(w,false)&&FrozenCopyKeepsPickableEdgesCase(w,true);
 }
 
+bool FormatSurvivesCountRefresh(V2MainWindow&)
+{
+    for(const auto format:{app::ExportFormat::Svg,app::ExportFormat::Dxf,app::ExportFormat::Pdf,app::ExportFormat::Step}) {
+        V2ExportDock dock(nullptr);app::ExportCounts counts;counts.selectedFabricationPanels=1;counts.patternPages=1;counts.project=1;
+        dock.SetCounts(counts);
+        if(!dock.ChooseFormat(format))return false;
+        dock.SetCounts(counts);
+        if(!Explain("unchanged export counts preserve the explicitly requested format",dock.State().format==format
+            &&dock.State().target==app::ExportTarget::SelectedFabricationPanels))return false;
+        counts.selectedFabricationPanels=2;dock.SetCounts(counts);
+        if(!Explain("positive subset count changes retain format and subset",dock.State().format==format
+            &&dock.State().target==app::ExportTarget::SelectedFabricationPanels))return false;
+        counts.selectedFabricationPanels=0;dock.SetCounts(counts);
+        if(!Explain("lost selected panels never become the whole pattern or another format",dock.State().format==format
+            &&dock.State().target==app::ExportTarget::SelectedFabricationPanels&&!dock.CanRun()))return false;
+        counts.selectedFabricationPanels=1;dock.SetCounts(counts);
+        if(dock.State().format!=format)return false;
+    }
+    V2ExportDock automatic(nullptr);app::ExportCounts counts;counts.visibleParts=1;counts.project=1;automatic.SetCounts(counts);
+    if(!automatic.ChooseFormat(app::ExportFormat::Step))return false;
+    QTemporaryDir folder;if(!folder.isValid())return false;
+    automatic.SetContentMaker([](const app::ExportRequest&){return base::Result<std::string>::Success("state test only; never written");});
+    automatic.ChoosePath(folder.filePath("unused.step"));
+    if(!Explain("compatible automatic export is initially ready",automatic.CanRun()))return false;
+    counts.visibleParts=0;counts.selectedWires=1;automatic.SetCounts(counts);
+    if(!Explain("incompatible automatic selection cannot silently change the requested format or export the old scope",
+        automatic.State().format==app::ExportFormat::Step&&!automatic.CanRun()
+        &&!automatic.RunNow()&&!QFile::exists(folder.filePath("unused.step"))))return false;
+    if(!automatic.ChooseFormat(app::ExportFormat::Svg))return false;
+    if(!Explain("choosing a supported format restores the new selected target",automatic.State().format==app::ExportFormat::Svg
+        &&automatic.State().target==app::ExportTarget::SelectedWires))return false;
+    V2ExportDock project(nullptr);counts={};counts.project=1;project.SetCounts(counts);
+    if(!project.ChooseFormat(app::ExportFormat::Kcd2))return false;
+    counts.selectedWires=1;counts.selectedEntities=1;project.SetCounts(counts);
+    return Explain("automatic KCD2 follows selected entities while preserving the requested format",
+        project.State().target==app::ExportTarget::SelectedEntities&&project.State().format==app::ExportFormat::Kcd2);
+}
+
 bool FormatCommandResolvesCompatibleSelection(V2MainWindow&)
 {
     V2ExportDock dock(nullptr);app::ExportCounts counts;
@@ -479,5 +517,5 @@ bool FormatCommandResolvesCompatibleSelection(V2MainWindow&)
         &&missing.State().target==app::ExportTarget::VisibleParts);
 }
 }
-std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
+std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-19 explicit export format survives count refresh",FormatSurvivesCountRefresh},{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
 }

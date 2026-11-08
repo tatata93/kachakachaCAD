@@ -34,6 +34,23 @@ constexpr int kValueRole = 32; // Qt::UserRole
     return QString::fromUtf8(std::string(text).c_str());
 }
 
+auto MatchFormat(kachakacha::v2::app::ExportPanelState candidate,
+    const kachakacha::v2::app::ExportCounts& counts, ExportFormat format)
+{
+    using namespace kachakacha::v2::app;
+    if(!candidate.targetChosenByUser
+        &&(!ExportFormatAllowed(candidate.target,format)||ExportCountFor(counts,candidate.target)<=0)) {
+        for(const auto target:{ExportTarget::SelectedParts,ExportTarget::SelectedWires,
+                ExportTarget::SelectedFabricationPanels,ExportTarget::SelectedEntities,ExportTarget::CurrentPattern}) {
+            if(ExportCountFor(counts,target)<=0||!ExportFormatAllowed(target,format))continue;
+            const auto chosen=SetExportPanelTarget(candidate,target,counts);
+            if(chosen.HasValue())candidate=chosen.Value();
+            break;
+        }
+    }
+    return SetExportPanelFormat(candidate,format);
+}
+
 } // namespace
 
 V2ExportDock::V2ExportDock(QWidget* parent)
@@ -154,7 +171,15 @@ void V2ExportDock::SetCounts(const kachakacha::v2::app::ExportCounts& counts)
     counts_ = counts;
     // A typed selection can briefly be empty. Never turn an explicit subset export
     // into an export of another target while the user is editing that selection.
-    if(!state_.targetChosenByUser)state_=kachakacha::v2::app::RetargetForCounts(state_,counts_);
+    if(!state_.targetChosenByUser) {
+        const auto candidate=kachakacha::v2::app::RetargetForCounts(state_,counts_);
+        if(!formatRequested_)state_=candidate;
+        else {
+            const auto kept=MatchFormat(candidate,counts_,state_.format);
+            formatTargetUnavailable_=!kept.HasValue();
+            if(kept.HasValue())state_=kept.Value();
+        }
+    }
     if (overwriteAction_ != nullptr) {
         overwriteAction_->setChecked(state_.overwrite);
     }
@@ -169,6 +194,7 @@ bool V2ExportDock::ChooseTarget(kachakacha::v2::app::ExportTarget target)
         return false;
     }
     state_ = next.Value();
+    formatTargetUnavailable_ = false;
     Refresh();
     return true;
 }
@@ -176,24 +202,21 @@ bool V2ExportDock::ChooseTarget(kachakacha::v2::app::ExportTarget target)
 bool V2ExportDock::ChooseFormat(kachakacha::v2::app::ExportFormat format)
 {
     using namespace kachakacha::v2::app;
-    auto candidate=state_;
-    if(!candidate.targetChosenByUser&&!ExportFormatAllowed(candidate.target,format)) {
-        // A format command must be usable without hiding unrelated solids.
-        // Prefer selected objects; never override an explicitly chosen scope.
-        for(const auto target:{ExportTarget::SelectedParts,ExportTarget::SelectedWires,
-                ExportTarget::SelectedFabricationPanels,ExportTarget::CurrentPattern}) {
-            if(ExportCountFor(counts_,target)<=0||!ExportFormatAllowed(target,format))continue;
-            const auto chosen=SetExportPanelTarget(candidate,target,counts_);
-            if(chosen.HasValue())candidate=chosen.Value();
-            break;
-        }
-    }
-    const auto next = SetExportPanelFormat(candidate, format);
+    const auto next = MatchFormat(state_,counts_,format);
     if (!next.HasValue()) {
         Report(next.Diagnostics());
         return false;
     }
     state_ = next.Value();
+    formatRequested_ = true;
+    formatTargetUnavailable_ = false;
+    // A format command for a selected subset confirms that subset. Losing its
+    // selection must never turn the request into the whole pattern/document.
+    if(state_.target==ExportTarget::SelectedParts||state_.target==ExportTarget::SelectedWires
+        ||state_.target==ExportTarget::SelectedFabricationPanels||state_.target==ExportTarget::SelectedEntities) {
+        const auto chosen=SetExportPanelTarget(state_,state_.target,counts_);
+        if(chosen.HasValue())state_=chosen.Value();
+    }
     Refresh();
     return true;
 }
@@ -277,7 +300,7 @@ void V2ExportDock::RefreshSummary()
     if(preview)summaryLabel_->setText(QStringLiteral("対象と配置をプレビューで確認してから出力します。"));
     if (runAction_ != nullptr) {
         runAction_->setText(preview?QStringLiteral("プレビュー・配置…"):QStringLiteral("出す"));
-        runAction_->setEnabled(reason.isEmpty() || preview);
+        runAction_->setEnabled(!formatTargetUnavailable_ && (reason.isEmpty() || preview));
     }
 }
 
@@ -340,6 +363,7 @@ QString V2ExportDock::SummaryText() const
 
 QString V2ExportDock::ReasonText() const
 {
+    if(formatTargetUnavailable_)return QStringLiteral("選んだ形式を使える対象がありません。対象か形式を選び直してください。");
     const std::string reason = kachakacha::v2::app::ExportBlockReasonJa(state_, counts_);
     if (!reason.empty()) {
         return QString::fromStdString(reason);
@@ -358,6 +382,7 @@ bool V2ExportDock::CanRun() const
 
 bool V2ExportDock::RunNow()
 {
+    if(formatTargetUnavailable_){SetMessage(ReasonText());return false;}
     const auto request = kachakacha::v2::app::ToExportRequest(state_, counts_);
     if (!request.HasValue()) {
         Report(request.Diagnostics());

@@ -1,6 +1,8 @@
 #include "V2ParameterDock.h"
 
 #include <QDockWidget>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QObject>
 #include <QString>
 #include <QTreeWidget>
@@ -12,6 +14,28 @@
 #include <utility>
 
 namespace {
+
+class ParameterValues final : public QTreeWidget {
+public:
+    using QTreeWidget::QTreeWidget;
+protected:
+    bool event(QEvent* event) override {
+        if(event->type()==QEvent::ShortcutOverride) {
+            const auto* key=static_cast<QKeyEvent*>(event);
+            if(key->key()==Qt::Key_F2&&key->modifiers()==Qt::NoModifier){event->accept();return true;}
+        }
+        return QTreeWidget::event(event);
+    }
+    void keyPressEvent(QKeyEvent* event) override {
+        if(event->key()==Qt::Key_F2&&event->modifiers()==Qt::NoModifier) {
+            if(auto* item=currentItem();item&&(item->flags()&Qt::ItemIsEditable)) {
+                setCurrentItem(item,1);editItem(item,1);
+            }
+            event->accept();return;
+        }
+        QTreeWidget::keyPressEvent(event);
+    }
+};
 
 [[nodiscard]] QString Text(std::string_view text)
 {
@@ -29,7 +53,7 @@ V2ParameterDock::V2ParameterDock(QWidget* parent)
     auto* body = new QWidget(this);
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(6, 6, 6, 6);
-    rows_ = new QTreeWidget(body);
+    rows_ = new ParameterValues(body);
     rows_->setObjectName(QStringLiteral("parameterValues"));
     rows_->setColumnCount(2);
     rows_->setHeaderLabels({QStringLiteral("何を"), QStringLiteral("いくつ(式も書けます)")});

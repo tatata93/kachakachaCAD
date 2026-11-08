@@ -17,6 +17,7 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QKeyEvent>
+#include <QScopedValueRollback>
 #include <QString>
 
 #include <cstdio>
@@ -109,6 +110,12 @@ V2ShellSplitTool::V2ShellSplitTool(V2MainWindow& window)
             End(true);
             window_.SetStatus(Text(label + ": やめました。何も作っていません。"));
         });
+}
+
+V2ShellSplitTool::~V2ShellSplitTool()
+{
+    if (built_) kachakacha::v2::kernel::ReleaseShape(*built_);
+    if (builtOther_) kachakacha::v2::kernel::ReleaseShape(*builtOther_);
 }
 
 bool V2ShellSplitTool::Handles(std::string_view commandId)
@@ -450,6 +457,7 @@ void V2ShellSplitTool::Confirm()
 //! 確定(シェル)。**下見に使った形をそのまま**文書へ入れる。元の部品を隠すのも含めて 1 回で戻せる。
 void V2ShellSplitTool::ConfirmShell()
 {
+    QScopedValueRollback<bool> confirming(mirroring_, true);
     const std::string label = LabelOf(0);
     ShellSplitDefinition definition;
     definition.method = 0;
@@ -500,6 +508,7 @@ void V2ShellSplitTool::ConfirmSplit()
     if (!builtOther_.has_value()) {
         return;
     }
+    QScopedValueRollback<bool> confirming(mirroring_, true);
     const std::string label = LabelOf(1);
     ShellSplitDefinition definition;
     definition.method = 1;
@@ -541,6 +550,55 @@ void V2ShellSplitTool::ConfirmSplit()
             .arg(outcome.otherVolumeMm3, 0, 'f', 4));
 }
 
+V2ShellSplitTool::RebuildBatch::RebuildBatch(V2ShellSplitTool& tool)
+    : tool_(tool), previous_(tool.rebuildBatch_)
+{
+    tool_.rebuildBatch_ = this;
+}
+
+V2ShellSplitTool::RebuildBatch::~RebuildBatch()
+{
+    tool_.rebuildBatch_ = previous_;
+}
+
+V2ShellSplitTool::RebuildBatch::Pair::~Pair() { Clear(); }
+
+void V2ShellSplitTool::RebuildBatch::Pair::Clear()
+{
+    if (positive) kachakacha::v2::kernel::ReleaseShape(*positive);
+    if (negative) kachakacha::v2::kernel::ReleaseShape(*negative);
+    positive.reset();
+    negative.reset();
+}
+
+std::optional<kachakacha::v2::modeling::KernelShapeHandle> V2ShellSplitTool::RebuildSplit(
+    const ShellSplitDefinition& definition, kachakacha::v2::modeling::KernelShapeHandle source)
+{
+    RebuildBatch::Pair scratch;
+    auto& pair = rebuildBatch_ ? rebuildBatch_->pair_ : scratch;
+    auto& chosen = definition.side < 0 ? pair.negative : pair.positive;
+    // Exact identity within an immutable evaluation pass; never a geometric
+    // tolerance comparison or a cache across edits, Undo, or documents.
+    if (pair.source.value != source.value || pair.origin != definition.planeOrigin
+        || pair.normal != definition.planeNormal || !chosen) {
+        pair.Clear();
+        const auto made = V2Calculation::Call(nullptr, "部品を分割しています…",
+            [](const auto&... values) { return kachakacha::v2::kernel::SplitSolidByPlane(values...); },
+            source, definition.planeOrigin, definition.planeNormal,
+            window_.session_->GetDocument().Snapshot().settings.tolerance);
+        if (!made.HasValue()) {
+            window_.ReportDiagnostics(made.Diagnostics());
+            return {};
+        }
+        pair.source = source;
+        pair.origin = definition.planeOrigin;
+        pair.normal = definition.planeNormal;
+        pair.positive = made.Value().positive;
+        pair.negative = made.Value().negative;
+    }
+    return std::exchange(chosen, std::nullopt);
+}
+
 bool V2ShellSplitTool::Rebuild(const kachakacha::v2::domain::Feature& feature, const EntityId& output)
 {
     const auto* definition = std::get_if<ShellSplitDefinition>(&feature.definition);
@@ -554,14 +612,8 @@ bool V2ShellSplitTool::Rebuild(const kachakacha::v2::domain::Feature& feature, c
     const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
     std::optional<kachakacha::v2::modeling::KernelShapeHandle> handle;
     if (definition->method == 1) {
-        const auto made = V2Calculation::Call(nullptr, "部品を分割しています…",
-        [](const auto&... values) { return kachakacha::v2::kernel::SplitSolidByPlane(values...); }, source->second,
-            definition->planeOrigin, definition->planeNormal, tolerance);
-        if (!made.HasValue()) {
-            window_.ReportDiagnostics(made.Diagnostics());
-            return false;
-        }
-        handle = definition->side < 0 ? made.Value().negative : made.Value().positive;
+        handle = RebuildSplit(*definition, source->second);
+        if (!handle) return false;
     } else {
         const auto made = V2Calculation::Call(nullptr, "部品のシェルを計算しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::ShellSolid(values...); }, source->second, definition->facePoints,

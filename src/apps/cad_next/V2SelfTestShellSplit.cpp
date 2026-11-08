@@ -122,7 +122,8 @@ struct Box3 {
 //! 開き直して、見えている部品がどれも形を持ち、作り直せなかったものが無い。
 [[nodiscard]] bool ReopenKeepsShapes(V2MainWindow& window, const QString& file, std::size_t visible)
 {
-    if (!Explain("保存して開き直せる", window.SaveAndReopen(file))) {
+    const bool opened=window.SaveAndReopen(file);
+    if (!Explain(("保存して開き直せる: "+window.StatusText().toStdString()).c_str(), opened)) {
         return false;
     }
     const auto reopened = VisibleParts(window);
@@ -284,11 +285,119 @@ bool CaseShellOutputs(V2MainWindow& window)
     }
     window.ApplyTheme(UiTheme::Normal);return true;
 }
+
+double VisibleMeshVolume(V2MainWindow& window)
+{
+    double total=0;
+    for (const auto& shape:window.Viewport().ShapeViews()) {
+        if (shape.surface) continue;
+        double volume=0;
+        for (const auto& triangle:shape.mesh.triangles) {
+            const auto& p=triangle.points;
+            volume+=(p[0].x*(p[1].y*p[2].z-p[1].z*p[2].y)
+                +p[0].y*(p[1].z*p[2].x-p[1].x*p[2].z)
+                +p[0].z*(p[1].x*p[2].y-p[1].y*p[2].x))/6;
+        }
+        total+=std::abs(volume);
+    }
+    return total;
+}
+
+bool LiveShellSplitHistory(V2MainWindow& window, int method, bool deleteOneSide=false)
+{
+    Box3 box{};
+    const auto source=MakeBox(window,box);
+    if (source.IsNil()) return false;
+    const auto baseline=kernel::CachedShapeCount();
+    const auto size=box.maximum-box.minimum;
+    const double original=size.x*size.y*size.z;
+    double expected=method==1 ? original : original-(size.x-2)*(size.y-2)*(size.z-1);
+    std::size_t outputs=method==1 ? 2:1;
+    window.RunCommand(method==1 ? "part.split":"part.shell");
+    auto& dock=*window.ShellSplitTool().Dock();
+    if ((method==0&&!dock.TypeThickness(1))||!PressAt(window,{(box.minimum.x+box.maximum.x)*.5,
+            (box.minimum.y+box.maximum.y)*.5,box.maximum.z})
+        ||(method==1&&!dock.TypeOffset((box.minimum.z+box.maximum.z)*.5
+            -window.Viewport().WorkPlane().origin.z))
+        ||!dock.ClickConfirm()) return false;
+    const auto valid=[&](std::size_t visible,double volume) {
+        window.RunCommand("selection.activate");
+        const auto parts=VisibleParts(window);
+        if (!Explain("live committed meshes retain analytic volume",parts.size()==visible
+            &&Near(VisibleMeshVolume(window),volume,1e-6))) return false;
+        for (const auto id:parts)
+            if (!Explain("each live output can be selected and exported before reopening",
+                PartBounds(window,id).has_value()&&window.SelectTreeRowForEntity(id)
+                    &&window.CanExportSelectedParts())) return false;
+        return true;
+    };
+    if (!valid(outputs,expected)
+        ||!Explain("confirmation transfers exactly the produced native shapes",
+            kernel::CachedShapeCount()==baseline+outputs)) return false;
+    for (int i=0;i<4;++i) {
+        window.RunCommand("edit.undo");
+        if (!valid(1,original)||!Explain("Undo releases both split outputs",
+            kernel::CachedShapeCount()==baseline)) return false;
+        window.RunCommand("edit.redo");
+        if (!valid(outputs,expected)||!Explain("Redo retains no unused split side",
+            kernel::CachedShapeCount()==baseline+outputs)) return false;
+    }
+    if (deleteOneSide) {
+        const auto parts=VisibleParts(window);
+        if (!window.SelectTreeRowForEntity(parts.front())) return false;
+        window.RunCommand("edit.delete");
+        outputs=1;
+        expected=original*.5;
+        if (!valid(outputs,expected)||!Explain("deleting one side releases only its orphaned native shape",
+            kernel::CachedShapeCount()==baseline+outputs)) return false;
+        window.RunCommand("edit.undo");
+        if (!valid(2,original)||!Explain("Undo deletion restores exactly the missing side",
+            kernel::CachedShapeCount()==baseline+2)) return false;
+        window.RunCommand("edit.redo");
+        if (!valid(outputs,expected)||!Explain("Redo deletion releases the restored side",
+            kernel::CachedShapeCount()==baseline+outputs)) return false;
+    }
+    return ReopenKeepsShapes(window,QStringLiteral("live-shell-split-history.kcd2"),outputs)
+        &&valid(outputs,expected)&&Explain("reopen releases unconsumed native results",
+            kernel::CachedShapeCount()==baseline+outputs);
+}
+
+bool ClosingShellSplitPreview(V2MainWindow&)
+{
+    const auto baseline=kernel::CachedShapeCount();
+    for (int method:{1,0}) {
+        {
+            V2MainWindow temporary;
+            temporary.show();
+            QApplication::processEvents();
+            Box3 box{};
+            if (MakeBox(temporary,box).IsNil()) return false;
+            temporary.RunCommand(method==1 ? "part.split":"part.shell");
+            auto& tool=temporary.ShellSplitTool();
+            if ((method==0&&!tool.Dock()->TypeThickness(1))
+                ||!PressAt(temporary,{(box.minimum.x+box.maximum.x)*.5,
+                    (box.minimum.y+box.maximum.y)*.5,box.maximum.z})
+                ||(method==1&&!tool.Dock()->TypeOffset((box.minimum.z+box.maximum.z)*.5))) return false;
+            if (!Explain("actual uncommitted native preview exists",tool.Outcome().available
+                &&kernel::CachedShapeCount()==baseline+(method==1?3:2))) return false;
+        }
+        if (!Explain("closing a window releases its uncommitted shell and split shapes",
+            kernel::CachedShapeCount()==baseline)) return false;
+    }
+    return true;
+}
 } // namespace
 
 std::vector<SelfTestCase> ShellSplitCases()
 {
     return {
+        {"HP-SH-LIVE split committed shapes survive callbacks and repeated history",
+            [](auto& window){return LiveShellSplitHistory(window,1);}},
+        {"HP-SH-LIVE shell committed shapes survive callbacks and repeated history",
+            [](auto& window){return LiveShellSplitHistory(window,0);}},
+        {"HP-SH-LIVE rebuilding only one split side releases its unused partner",
+            [](auto& window){return LiveShellSplitHistory(window,1,true);}},
+        {"HP-SH-LIVE closing an uncommitted shell or split releases its shapes",ClosingShellSplitPreview},
         {"HP-SH-OUTPUT all output kinds themes preview undo and saved boundaries",CaseShellOutputs},
         {"HP-SH-01 シェルは面を押して選び押し直すと外れ肉厚で内側へ残し1回で戻り開き直しても同じ",
             CaseShellTopFace},

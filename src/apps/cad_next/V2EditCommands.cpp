@@ -8,6 +8,7 @@
 #include "V2ToolSelection.h"
 #include "V2DimensionTool.h"
 #include "V2HistoryShapePlan.h"
+#include "V2ShellSplitTool.h"
 
 #include "kachakacha/app/EntityEdit.h"
 #include "kachakacha/app/GuideTableBuild.h"
@@ -185,6 +186,7 @@ void V2MainWindow::RunHistoryCommand(bool undo)
             : v2ui::PlanPartHistory(before,session_->GetDocument().Snapshot(),partShapes_,guideShapes_);
         bool reused=plan.has_value();
         if (plan) {
+            V2ShellSplitTool::RebuildBatch splitBatch(*shellSplitTool_);
             v2ui::RemoveHistoryParts(*plan,partShapes_,guideShapes_);
             for (const auto& id:plan->removed) {partEdges_.erase(id);partFlatBoundary_.erase(id);}
             for (const auto& step:plan->added) {

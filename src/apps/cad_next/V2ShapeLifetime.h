@@ -2,6 +2,7 @@
 
 #include "V2MainWindowTypes.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/document/Document.h"
 #include <map>
 #include <optional>
 #include <set>
@@ -41,5 +42,32 @@ inline void ReleaseDocumentShapes(NativeShapes& parts,NativeShapes& surfaces)
     for(const auto* shapes:{&parts,&surfaces})for(const auto& [id,shape]:*shapes)
         if(released.insert(shape.value).second)kachakacha::v2::kernel::ReleaseShape(shape);
     parts.clear();surfaces.clear();
+}
+
+inline void ReleaseDeletedShapes(const std::set<std::string>& liveEntities,
+    NativeShapes& parts,NativeShapes& surfaces)
+{
+    std::set<std::uint64_t> removed,retained;
+    for (auto* shapes:{&parts,&surfaces}) {
+        std::erase_if(*shapes,[&](const auto& entry) {
+            if (liveEntities.contains(entry.first)) return false;
+            removed.insert(entry.second.value);
+            return true;
+        });
+        for (const auto& [id,shape]:*shapes) retained.insert(shape.value);
+    }
+    for (const auto value:removed)
+        if (!retained.contains(value)) kachakacha::v2::kernel::ReleaseShape({value});
+}
+
+template<class... EntityMaps>
+void ReleaseDeletedShapes(const kachakacha::v2::document::DocumentSnapshot& snapshot,
+    NativeShapes& parts,NativeShapes& surfaces,EntityMaps&... derived)
+{
+    std::set<std::string> liveEntities;
+    for (const auto& entity:snapshot.entities) liveEntities.insert(entity.id.ToString());
+    ReleaseDeletedShapes(liveEntities,parts,surfaces);
+    const auto gone=[&](const auto& entry){return !liveEntities.contains(entry.first);};
+    (std::erase_if(derived,gone),...);
 }
 }

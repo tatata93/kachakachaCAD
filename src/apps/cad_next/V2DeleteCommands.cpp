@@ -7,6 +7,7 @@
 #include "V2ToolSelection.h"
 #include "V2EntityTree.h"
 #include "V2DeletionConfirmation.h"
+#include "V2ShapeLifetime.h"
 #include <QTreeWidgetItem>
 #include "kachakacha/document/Commands.h"
 #include <algorithm>
@@ -55,6 +56,20 @@ std::set<base::GroupId> RemoveSelectedFolders(document::DocumentSnapshot& after,
     std::erase_if(after.groups,[&](const auto& group){return all.contains(group.id);});
     if(after.settings.activeGroupId&&all.contains(*after.settings.activeGroupId))after.settings.activeGroupId.reset();
     return all;
+}
+
+template<class IsGone>
+bool RemoveAffectedDimensions(document::DocumentSnapshot& after,const IsGone& gone,
+    const std::set<base::SegmentId>& cutIds,QStringList& names)
+{
+    bool removed=false;
+    std::erase_if(after.referenceDimensions,[&](const auto& d){
+        const bool affected=std::any_of(d.targets.begin(),d.targets.end(),gone)
+            ||std::any_of(d.segments.begin(),d.segments.end(),[&](const auto& s){return gone(s.entityId)||cutIds.contains(s.segmentId);});
+        if(affected){names.push_back(QStringLiteral("寸法: ")+QString::fromStdString(d.label));removed=true;}
+        return affected;
+    });
+    return removed;
 }
 }
 
@@ -134,12 +149,7 @@ void V2MainWindow::DeleteSelected()
         if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())dependents=true;
     }
     for(auto id:selection.entityIds)if(std::find(preview.begin(),preview.end(),id)==preview.end())preview.push_back(id);
-    std::erase_if(after.referenceDimensions,[&](const auto& d){
-        const bool affected=std::any_of(d.targets.begin(),d.targets.end(),gone)
-            ||std::any_of(d.segments.begin(),d.segments.end(),[&](const auto& s){return gone(s.entityId)||cutIds.contains(s.segmentId);});
-        if(affected){names.push_back(QStringLiteral("寸法: ")+QString::fromStdString(d.label));dependents=true;}
-        return affected;
-    });
+    dependents=RemoveAffectedDimensions(after,gone,cutIds,names)||dependents;
     if(dependents){
         viewport_->SetDeletionPreview(preview);RefreshShapeViews();
         const int choice=v2ui::ConfirmDeletion(this,names,!folders.empty());
@@ -154,7 +164,10 @@ void V2MainWindow::DeleteSelected()
     if(!result.committed){ReportDiagnostics(result.diagnostics);return;}
     V2DrawingSelection::Of(*viewport_).Deleted(*session_,before.revision,hadUndo);
     if(!V2DrawingSelection::IsDrawing(session_->CurrentTool())&&!V2ToolSelection::Active(*viewport_))session_->CancelTool();
-    AdoptCurrentDocument();RefreshShapeViews();RefreshEntityList();
+    AdoptCurrentDocument();
+    v2ui::ReleaseDeletedShapes(session_->GetDocument().Snapshot(),partShapes_,guideShapes_,
+        partEdges_,partFlatBoundary_,guideEdges_,guideSamples_,fabricationModels_);
+    RefreshShapeViews();RefreshEntityList();
     SetStatus(keepContents?QStringLiteral("グループを解除しました。中身は残っています。Ctrl+Zで戻せます。"):
         QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));
 }

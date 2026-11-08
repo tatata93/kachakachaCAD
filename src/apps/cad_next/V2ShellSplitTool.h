@@ -30,7 +30,10 @@ class V2MainWindow;
 
 class V2ShellSplitTool final {
 public:
+    // One evaluation pass only. Unconsumed sides are released at scope exit.
+    class RebuildBatch;
     explicit V2ShellSplitTool(V2MainWindow& window);
+    ~V2ShellSplitTool();
 
     [[nodiscard]] V2ShellSplitDock* Dock() const noexcept { return dock_; }
     [[nodiscard]] bool Active() const noexcept { return active_; }
@@ -73,12 +76,16 @@ private:
     [[nodiscard]] SplitPlane CurrentSplitPlane() const;
     [[nodiscard]] std::string PlaneTextJa() const;
     [[nodiscard]] std::string NameOf(const kachakacha::v2::base::EntityId& id) const;
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::KernelShapeHandle> RebuildSplit(
+        const kachakacha::v2::domain::ShellSplitDefinition& definition,
+        kachakacha::v2::modeling::KernelShapeHandle source);
 
     V2MainWindow& window_;
     V2ShellSplitDock* dock_ = nullptr;
     bool active_ = false;
     bool pickingFaces_ = true;
     bool mirroring_ = false;
+    RebuildBatch* rebuildBatch_ = nullptr;
     kachakacha::v2::app::ShellSplitInputState input_;
     kachakacha::v2::app::ShellSplitOutcome outcome_;
     //! シェルの形 / 分割の法線の側。
@@ -88,4 +95,23 @@ private:
     kachakacha::v2::modeling::ShapeMesh builtMesh_;
     //! 下見を作ったときの平面(確定はこの平面を文書へ残す)。
     SplitPlane builtPlane_;
+};
+
+class V2ShellSplitTool::RebuildBatch final {
+public:
+    explicit RebuildBatch(V2ShellSplitTool& tool);
+    ~RebuildBatch();
+    RebuildBatch(const RebuildBatch&) = delete;
+    RebuildBatch& operator=(const RebuildBatch&) = delete;
+private:
+    friend class V2ShellSplitTool;
+    struct Pair {
+        ~Pair();
+        void Clear();
+        kachakacha::v2::modeling::KernelShapeHandle source;
+        kachakacha::v2::geometry::Vector3 origin, normal;
+        std::optional<kachakacha::v2::modeling::KernelShapeHandle> positive, negative;
+    } pair_;
+    V2ShellSplitTool& tool_;
+    RebuildBatch* previous_;
 };

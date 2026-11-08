@@ -430,6 +430,7 @@ void V2MainWindow::RebuildKernelShapes()
         return SavedExtrudeRequest(definition,ExtrudeProfilesFor(definition.profiles,definition.profileSeeds));
     });
     V2GuideBuildJobs independentGuides(*this,steps);
+    V2ShellSplitTool::RebuildBatch splitBatch(*shellSplitTool_);
     V2DocumentTiming timing("rebuild");
     std::vector<std::string> failed;
     for (const auto& step : steps) {

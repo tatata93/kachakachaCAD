@@ -9,6 +9,7 @@
 #include <QPolygonF>
 #include <QWheelEvent>
 #include <QVariant>
+#include <QVariantList>
 #include <algorithm>
 #include <cmath>
 using namespace kachakacha::v2;

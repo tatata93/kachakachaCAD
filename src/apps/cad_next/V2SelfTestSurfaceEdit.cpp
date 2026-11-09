@@ -37,6 +37,7 @@
 #include <QComboBox>
 #include <QKeyEvent>
 #include <QTemporaryDir>
+#include <QWidget>
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"

@@ -1,0 +1,24 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><title>厚み境界の曲線選択・緊急修正</title>
+<style>body{font:16px/1.7 sans-serif;max-width:960px;margin:32px auto;padding:0 24px}code{background:#eee}li{margin:.4em 0}</style>
+<h1>厚み境界の曲線選択・緊急修正（2026-11-10）</h1>
+<p>ソース <code>8c3adca27</code>。重点検証版であり、Windows全体・配布版ゲートは未実行。正式な完成配布版・GitHubの最新リリースとは扱わない。</p>
+<p>厚みの境界をnativeエッジごとに独立保存していた。新規生成の境界だけを、滑らかな一意の接続でまとめる。
+直線と曲線は分け、角、隙間、曖昧な分岐はまとめない。線形化や端点の移動を行わない。
+複数の曲線区間で構成される滑らかなワイヤーは、通常選択とツール内選択で全体を選ぶ。
+個別エッジを求める参照選択は従来のままとする。既存ワイヤーのUUIDを自動で統合・削除しない。</p>
+<ul><li>添付由来の曲面の帯に中央0.1 mm厚みを通常Qt UIで作成。78境界ワイヤーから40ワイヤーへ減少し、84区間の滑らかな曲線を1本として選択できた。</li>
+<li>3Dビューの実Ctrlクリック→Delete→Ctrl+Z/Y→保存が成功。復元した全FeatureのIDと定義が元の生成結果と完全一致。</li>
+<li>元の添付ファイルのSHA256は <code>f472858638de8413d47da0395e41b7655ca08c55bf3cfc2f256acf86946b1dca</code> のまま保全。</li>
+<li>反転した3D曲線、接線方向の直線、厚み方向の分岐、角、隙間、曖昧な分岐、閉曲線、選択・削除・Undo・再読込の追加回帰1件が成功。</li>
+<li>厚みの既存UI16件、面生成の既存UI19件、正式事前検査9件が成功。重点配布フォルダーから同じ厚み生成・履歴・保存と通常Windows起動が成功。</li></ul>
+<h2>使い方と制限</h2>
+<p>起動先はリポジトリ内 <code>out/thicken-boundary-20261110/package/kachakacha_cad_next.exe</code>。
+古い版で既に別ワイヤーとして生成した境界は、元面から再生成する。
+同じフォルダーの <code>tested-window-boundaries.kcd2</code> は今回の実操作試験結果で、添付原本を上書きしたものではない。</p>
+<p>密な非平面の境界2輪から「面にする」で面を作り直す追加試験は、修正版・公開済み更新7の両方で180秒の監視上限に達した。
+この経路は成功扱いにせず、性能・面生成の残件として保全した。「面を作る」は複数の閉輪の入力とは別の作り方であり、この試験では不連結の診断になった。
+境界選択の改善だけで全ての面再生成が直ったとは表現しない。</p>
+<p>証拠: <code>out/thicken-boundary-20261110/focused-report.json</code>、
+<code>out/verification/thicken-boundary-preflight-20261110/result.json</code>、
+<code>out/series115-plaboard-20261105/thickness-boundary-*</code>。全体ゲートは別工程として未完了。</p>
+</html>

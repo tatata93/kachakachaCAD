@@ -13,6 +13,7 @@
 #include "V2GeometryJob.h"
 #include "V2Calculation.h"
 #include "V2SolidOutputPreview.h"
+#include "V2GeneratedCurves.h"
 
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
@@ -56,10 +57,14 @@ auto BoundaryWiresFor(const V2ThickenPreviewState& state,
     using namespace kachakacha::v2;
     using Result=base::Result<std::vector<std::vector<geometry::CurveSegment>>>;
     const auto found=state.builtWires.find(handle.value);
-    if(found==state.builtWires.end())return kernel::OutputBoundaryWires(handle,tolerance);
+    if(found==state.builtWires.end()) {
+        auto result=kernel::OutputBoundaryWires(handle,tolerance);
+        if(result.HasValue())return Result::Success(V2GeneratedBoundaryRuns(result.Value(),tolerance),result.Diagnostics());
+        return result;
+    }
     if(found->second.empty())return Result::Failure(base::MakeWarning("EXP-W002",
         "厚みの境界ワイヤーを作れません。","ソリッドのみを選んでください。"));
-    return Result::Success(found->second);
+    return Result::Success(V2GeneratedBoundaryRuns(found->second,tolerance));
 }
 void AddThickenMeasurements(kachakacha::v2::app::ThickenPreviewOutcome& outcome,
     const kachakacha::v2::kernel::ThickenedSolid& built,bool first)

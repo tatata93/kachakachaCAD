@@ -8,6 +8,7 @@
 #include "V2FabricationDock.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/geometry/CurveFit.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include <QApplication>
 #include <QPushButton>
 #include <QTreeWidgetItem>
@@ -96,6 +97,52 @@ bool GroupCategoryScope(V2MainWindow& w) {
     w.RunCommand("edit.redo");if(visible(a)||visible(b)||!visible(c))return false;
     w.ItemOfEntity(a)->parent()->setCheckState(0,Qt::Checked);QApplication::processEvents();
     return Explain("group category can be shown again",visible(a)&&visible(b)&&visible(c));
+}
+bool SmoothBoundaryRuns(V2MainWindow& w) {
+    using namespace geometry;
+    const auto a=CurveSegment::MakeCubicBezier({{0,0,0},{1,0,0},{2,1,1},{3,1,1}}).Value();
+    const auto b=CurveSegment::MakeCubicBezier({{3,1,1},{5,1,1},{6,3,0},{7,4,0}}).Value();
+    const auto line=CurveSegment::MakeLine({-2,0,0},{0,0,0}).Value();
+    const auto seam=CurveSegment::MakeLine({3,1,1},{3,1,1.2}).Value();
+    const auto reversed=ReverseCurve(b).Value();
+    auto runs=V2GeneratedBoundaryRuns({{line},{reversed},{seam},{a}},1e-6);
+    if(!Explain("smooth 3D curves join through a solid seam; tangent line stays separate",runs.size()==3))return false;
+    const auto smooth=std::find_if(runs.begin(),runs.end(),V2IsSmoothCurvedWire);
+    if(!Explain("curved run retains both exact cubic spans",smooth!=runs.end()&&smooth->size()==2))return false;
+    for(const auto& c:*smooth)for(int i=0;i<=20;++i) {
+        const auto point=c.Evaluate(i/20.0);
+        if(!Explain("grouping leaves every sampled point on its original span",std::min(a.ClosestPoint(point).distance,b.ClosestPoint(point).distance)<1e-7))return false;
+    }
+    auto sharp=CurveSegment::MakeCubicBezier({{3,1,1},{3,2,1},{4,3,1},{5,3,1}}).Value();
+    auto gap=CurveSegment::MakeCubicBezier({{3.0001,1,1},{5,1,1},{6,3,0},{7,4,0}}).Value();
+    if(!Explain("corners gaps and ambiguous curved branches remain distinct",
+        V2GeneratedBoundaryRuns({{a},{sharp}},1e-6).size()==2
+        &&V2GeneratedBoundaryRuns({{a},{gap}},1e-6).size()==2
+        &&V2GeneratedBoundaryRuns({{a},{b},{b}},1e-6).size()==3))return false;
+    constexpr double pi=3.14159265358979323846;
+    std::vector<std::vector<CurveSegment>> circle;
+    for(int i=0;i<4;++i)circle.push_back({CurveSegment::MakeCircularArc({},{0,0,1},{1,0,0},3,i*pi/2,pi/2).Value()});
+    const auto closed=V2GeneratedBoundaryRuns(circle,1e-6);
+    if(!Explain("closed curved boundaries remain closed",closed.size()==1&&closed.front().size()==1&&closed.front().front().Kind()==CurveKind::Circle))return false;
+    w.RunCommand("file.new");const auto wire=w.AddPlainWire(*smooth,"境界の曲線",false);
+    const auto straight=w.AddPlainWire({line},"境界の直線",false);
+    if(wire.IsNil()||straight.IsNil())return false;
+    if(!w.SaveAndReopen("smooth-boundary-input.kcd2"))return false;
+    auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Isometric);view.FitToDocument();
+    w.RunCommand("selection.activate");view.SetSelection({});
+    if(!Explain("generated smooth curve is pickable in the rebuilt scene",ClickOnCurveOf(w,wire)&&view.Selection().ordered.size()==1))return false;
+    const auto selected=view.Selection().ordered.front();
+    if(!Explain("one actual 3D click selects the entire smooth curve only",selected.entityId==wire
+        &&selected.kind==app::SelectionElementKind::Object&&!selected.segmentId&&view.Selection().entityIds.size()==1))return false;
+    QKeyEvent remove(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);
+    QApplication::sendEvent(&view,&remove);QApplication::processEvents();
+    if(!Explain("delete removes only that curve",!w.Session().GetDocument().FindEntity(wire)
+        &&w.Session().GetDocument().FindEntity(straight)))return false;
+    w.RunCommand("edit.undo");
+    if(!Explain("undo and save restore the exact curved wire",w.Session().GetDocument().FindEntity(wire)
+        &&w.SaveAndReopen("smooth-thickness-boundary.kcd2")))return false;
+    return Explain("whole smooth curve is still pickable after reload",ClickOnCurveOf(w,wire)
+        &&view.Selection().ordered.size()==1&&view.Selection().ordered.front().kind==app::SelectionElementKind::Object);
 }
 bool Compact(V2MainWindow&) {
     using namespace geometry;
@@ -490,6 +537,7 @@ std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-PERF-04 mesh displa
     {"HP-XP-06 bulk categories preserve selection and Undo",Categories},
     {"HP-UX-TREE selected checkbox and small pointer motion preserve selection",SelectedVisibilityClicks},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},
+    {"HP-XP-BOUNDARY smooth thickness curves preserve geometry and whole UI picks",SmoothBoundaryRuns},
     {"HP-XP-09 overlap preview and reference-picking roles",Overlap},
     {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope},
     {"HP-FP-01 folder mouse keyboard naming and empty creation",FolderInputs},

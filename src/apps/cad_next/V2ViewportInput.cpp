@@ -1,5 +1,6 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
+#include "V2GeneratedWirePicking.h"
 #include "V2TransformPreview.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
@@ -922,6 +923,9 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     } else if (toolCandidateFilter_&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) { return !toolCandidateFilter_(c); });
     }
+    if(!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
+        ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select))
+        V2PickWholeSmoothCurves(session_->GetDocument(),candidates);
     return SortCandidatesForSlot(std::move(candidates));
 }
 

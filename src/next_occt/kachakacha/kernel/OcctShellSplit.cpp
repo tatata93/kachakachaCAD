@@ -64,10 +64,10 @@ using modeling::KernelShapeHandle;
 
 namespace {
 
-[[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
+[[nodiscard]] double VolumeOf(const TopoDS_Shape& shape,const gp_Pnt* reference=nullptr)
 {
     GProp_GProps properties;
-    detail::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties,false,reference);
     return std::abs(properties.Mass());
 }
 
@@ -431,7 +431,7 @@ namespace {
 // Only a failed cut needs this alternate representation. Partition a private
 // copy at existing knots; never refit the surface or edit the source entity.
 [[nodiscard]] TopoDS_Shape PreparedPlaneCut(const TopoDS_Shape& source,double before,
-    const geometry::GeometryTolerance& tolerance)
+    const geometry::GeometryTolerance& tolerance,const gp_Pnt& reference)
 {
     try {
         BRepBuilderAPI_Copy copy(source,true,false);
@@ -443,7 +443,7 @@ namespace {
             ||!BRepCheck_Analyzer(prepared).IsValid())return {};
         // Both this representation and the final sum must satisfy the original
         // plane-cut volume gate against the unmodified source, not each other.
-        if(std::abs(VolumeOf(prepared)-before)>std::max(before*1e-6,tolerance.modelLinearMm))return {};
+        if(std::abs(VolumeOf(prepared,&reference)-before)>std::max(before*1e-6,tolerance.modelLinearMm))return {};
         Bnd_Box a,b;BRepBndLib::AddOptimal(source,a,false,false);BRepBndLib::AddOptimal(prepared,b,false,false);
         if(a.IsVoid()||b.IsVoid())return {};
         double x[6],y[6];a.Get(x[0],x[1],x[2],x[3],x[4],x[5]);b.Get(y[0],y[1],y[2],y[3],y[4],y[5]);
@@ -498,11 +498,21 @@ Result<SplitBuildResult> SplitSolidByPlane(const KernelShapeHandle& solid,
             return Out::Failure(MakeError(kShellSplitFailed, "分ける平面の面を作れませんでした。", {}));
         }
         const TopoDS_Face plane = maker.Face();
-        const double before = VolumeOf(shape.Value());
+        // One deterministic local reference on the cut plane makes its planar
+        // caps have zero flux. Do not amplify their trim-area roundoff or mix
+        // different per-piece origins in the unchanged conservation check.
+        gp_Pnt reference=ToPoint(planeOrigin);
+        TopExp_Explorer vertex(shape.Value(),TopAbs_VERTEX);
+        if(vertex.More()) {
+            const auto local=BRep_Tool::Pnt(TopoDS::Vertex(vertex.Current()));
+            const gp_Vec direction(normal.x,normal.y,normal.z);
+            reference=local.Translated(direction*(-gp_Vec(ToPoint(planeOrigin),local).Dot(direction)));
+        }
+        const double before = VolumeOf(shape.Value(),&reference);
         auto positive = SideOf(shape.Value(), plane, ToPoint(planeOrigin + normal));
         auto negative = SideOf(shape.Value(), plane, ToPoint(planeOrigin - normal));
-        const auto measured=[](const TopoDS_Shape& side) {
-            return side.IsNull()||CountOf(side,TopAbs_SOLID)==0?0.0:VolumeOf(side);
+        const auto measured=[&](const TopoDS_Shape& side) {
+            return side.IsNull()||CountOf(side,TopAbs_SOLID)==0?0.0:VolumeOf(side,&reference);
         };
         double positiveVolume=measured(positive),negativeVolume=measured(negative);
         const double minimum = std::max(before * 1.0e-9, tolerance.modelLinearMm);
@@ -512,7 +522,7 @@ Result<SplitBuildResult> SplitSolidByPlane(const KernelShapeHandle& solid,
                 &&std::abs(positiveVolume+negativeVolume-before)<=std::max(before*1e-6,tolerance.modelLinearMm);
         };
         if(!acceptable()) {
-            const auto prepared=PreparedPlaneCut(shape.Value(),before,tolerance);
+            const auto prepared=PreparedPlaneCut(shape.Value(),before,tolerance,reference);
             if(!prepared.IsNull()) {
                 positive=SideOf(prepared,plane,ToPoint(planeOrigin+normal));
                 negative=SideOf(prepared,plane,ToPoint(planeOrigin-normal));

@@ -116,6 +116,44 @@ KACHA_V2_TEST(kernel_shell_split_absent, カーネルが無い版はシェルも
 
 #else
 
+KACHA_V2_TEST(kernel_shell_split, trimmed_notched_stock_splits_at_multiple_local_planes)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    std::ifstream file(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"trimmed-notched-curved-stock.kshape",std::ios::binary);
+    Require(file.good(),"native trimmed stock fixture exists");
+    const std::string bytes(std::istreambuf_iterator<char>(file),{});
+    const auto restored=kernel::RestoreOutputShape(bytes);Require(restored.HasValue(),restored.FirstSummaryJa());
+    const auto sourceBefore=kernel::CaptureOutputShape(restored.Value()).Value();
+    for(const int placement:{0,1,2}) {
+        gp_Trsf pose;
+        if(placement)pose.SetRotation(gp_Ax1(gp_Pnt(),gp_Dir(1,2,3)),.53);
+        if(placement==2)pose.SetTranslationPart(gp_Vec(1000,-2000,3000));
+        TopoDS_Shape native;Require(kernel::LookupShape(restored.Value(),native),"source exists");
+        const auto input=kernel::StoreShape(BRepBuilderAPI_Transform(native,pose,true).Shape());
+        const auto before=kernel::CaptureOutputShape(input).Value();
+        for(const double station:{6.75,3.25,.25})for(const double sign:{1.,-1.}) {
+            const auto p=gp_Pnt(0,0,station).Transformed(pose);
+            const auto n=gp_Vec(0,0,sign).Transformed(pose);
+            const auto result=SplitSolidByPlane(input,{p.X(),p.Y(),p.Z()},{n.X(),n.Y(),n.Z()},Tolerance());
+            Require(result.HasValue(),"placed trimmed stock split: "+std::to_string(placement)+" / "+std::to_string(station)+" "+result.FirstSummaryJa());
+            const int upper=station==6.75?2:1;
+            Require(result.Value().positiveSolidCount==(sign>0?upper:1)
+                &&result.Value().negativeSolidCount==(sign>0?1:upper),"both disconnected upper regions survive normal reversal");
+            RequireNear(result.Value().positiveVolumeMm3+result.Value().negativeVolumeMm3,44.14804,.0002,
+                "all source material is retained without widening the production gate");
+            for(const auto side:{result.Value().positive,result.Value().negative}) {
+                const auto saved=kernel::CaptureOutputShape(side);Require(saved.HasValue(),"both sides serialize");
+                const auto reopened=kernel::RestoreOutputShape(saved.Value());Require(reopened.HasValue(),"both sides reopen");
+                kernel::ReleaseShape(reopened.Value());kernel::ReleaseShape(side);
+            }
+            RequireEqual(kernel::CaptureOutputShape(input).Value(),before,"split never changes source curves or trims");
+        }
+        kernel::ReleaseShape(input);
+    }
+    RequireEqual(kernel::CaptureOutputShape(restored.Value()).Value(),sourceBefore,"original source bytes retained");
+    kernel::ReleaseShape(restored.Value());
+}
+
 namespace {
 void DenseCurvedStockSection(bool rotated)
 {

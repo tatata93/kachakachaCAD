@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><title>切り分けた曲面の整形とオフセット</title>
 <style>body{font:16px/1.7 sans-serif;max-width:1080px;margin:32px auto;padding:0 24px;color:#222}img{width:100%;height:auto;border:1px solid #888}code{overflow-wrap:anywhere}table{border-collapse:collapse}th,td{border:1px solid #aaa;padding:8px;text-align:left}</style>
 <h1>切り分けた曲面が整形・オフセットできない問題</h1>
-<p>2026-11-09。WP-06の既存SurfaceRefitとOffsetの非公開な支持範囲処理・対応回帰だけを修正した。重点確認済みで、全体・配布版検証はこれから行う。115系の全製作モデルと型紙、実際の工作は未完了。</p>
+<p>2026-11-09。WP-06の既存SurfaceRefitとOffsetの非公開な支持範囲処理・対応回帰だけを修正した。重点試験と全体・配布版検証が成功し、61e958af5の更新6を公開した。115系の全製作モデルと型紙、実際の工作は未完了。</p>
 <h2>利用者の操作で見つかった失敗</h2>
 <p>添付由来の車体裾部を通常の平面分割で前方の回り込みと側面に分け、側面の外面を選んで取り出した。この保存面を「面を整える」で処理しても制御点を減らせず、直接オフセットしても「Offset with no C1 Surface」で失敗した。元モデルと失敗時の操作を保全した。車体幅36 mmと外形を維持し、拡大縮小は行っていない。</p>
 <figure><img src="active-support-20261109/before.png" alt="実際のCADで切り分けた曲面のオフセットが拒否された画面"><figcaption>修正前。同じ独立面を読み込み、オフセットを試した。</figcaption></figure>
@@ -18,6 +18,6 @@
 </table>
 <figure><img src="active-support-20261109/after.png" alt="同じ保存曲面から通常のUIで作成した切り欠き付き厚み部品"><figcaption>修正後の実画面。保存した同じ曲面を使って作成した部品。</figcaption></figure>
 <p>証拠は<code>out/series115-plaboard-20261105/</code>以下の<code>343b-near-knot-before.txt</code>、<code>343b-near-knot-after.txt</code>、<code>cropped-support-surface-edit-ui-b-20261109</code>、<code>actual-cropped-support-b-after-20261109-*</code>、<code>346-cropped-support-native-proof.json</code>と2組のcut-proofに保存。診断で作った形状をCADへ読み戻して模型を置き換えることは行っていない。</p>
-<p>最初の全体入口は、追加した自己試験でQWidgetの直接includeが足りないことを事前構造検査が検出し停止した。直接includeを追加して、新しいrunで全体検証を行う。失敗証拠はactive-support-release-20261109に保全した。</p>
-<h2>検証状況</h2><p id="release-status">全体・配布版ゲート待ち。公開更新5までの検証記録は維持し、今回の修正を完成配布版とは扱わない。車体全体の製作近似・全型紙と組立確認は継続する。</p>
+<p>最初の全体入口は、追加した自己試験でQWidgetの直接includeが足りないことを事前構造検査が検出し停止した。直接includeを追加して、新しいrunで全体検証を行い成功した。失敗証拠はactive-support-release-20261109に保全した。</p>
+<h2>検証状況</h2><p id="release-status">事前9件、CTest197件（skip0）、開発/配布UI各722件、通常Windows起動・従来自己試験が成功。正式publish後、GitHubの対象コミット・最新タグ・ZIPサイズ/SHA256も一致した。全体証拠: <code>out/verification/active-support-release-b-20261109/result.json</code>。<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update6">検証済みの更新6</a>。最終候補の実UI344d/345cも成功し、測定した4形状とnativeバイト列が一致した。車体全体の製作近似・全型紙と実工作は継続する。</p>
 </html>

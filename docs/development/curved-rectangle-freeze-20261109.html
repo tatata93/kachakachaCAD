@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><title>穴のない曲面の展開・固定の修正</title>
 <style>body{font:16px/1.7 sans-serif;max-width:1080px;margin:32px auto;padding:0 24px;color:#222}img{width:100%;height:auto;border:1px solid #888}code{overflow-wrap:anywhere}table{border-collapse:collapse}th,td{border:1px solid #aaa;padding:8px;text-align:left}</style>
 <h1>穴のない曲面から型紙を作った後、輪郭を固定できない問題</h1>
-<p>2026-11-09。WP-09の既存native製作入力providerと方式分岐の非公開処理を限定修正。重点試験は成功。全体・配布版ゲートと公開はこれから行う。全車体の製作モデルと型紙、生成物の細分化の軽量化は未完了。</p>
+<p>2026-11-09。WP-09の既存native製作入力providerと方式分岐の非公開処理を限定修正。重点試験と全体・配布版ゲートが成功し、83b6248a6の更新5を公開した。全車体の製作モデルと型紙、生成物の細分化の軽量化は未完了。</p>
 <h2>実際の操作で見つかった問題</h2>
 <p>公開更新4で、部品の曲面を選択して独立面を取り出し、面オフセット−0.15 mmで板厚中央の面を作った。その面から「面の形から展開」で型紙を作り、SVG・DXF・PDFへ出力できた。しかし右乗務員扉の裾でFlat Wireを生成すると、変更を取り消して失敗した。左側の同等面は生成できた。</p>
 <figure><img src="curved-rectangle-freeze-20261109/before.png" alt="実際のCADでFlat Wire生成が失敗した画面"><figcaption>修正前。同じ保存中立面を保全し、生成できなかった経路を記録した。</figcaption></figure>
@@ -22,5 +22,5 @@
 <h2>途中で見つけた退行と最終候補</h2>
 <p>最初の全体ゲートでは、帯近似でも境界を一律に材料トリムへ渡したため、既存HP-OUT-04の4ワイヤと面の5資産が閉輪郭と面の2資産へ変わり失敗した。試験を独立出力の再読込・指定部材の範囲・閉輪郭・面上の全辺・取消時の文書保持まで確認するよう強化した。試験追加中の最初の重点実行では生成先を同じ文書のまま保存したため失敗し、独立KCD2と元位置を明示して再試験した。</p>
 <p>次の全体検証で、帯近似の2操作が約1.266→42.896秒、15.625→40.762秒へ悪化したため、公開せず中断した。方式分岐の上記最適化で帯近似の従来経路と4辺のワイヤを保ち、分類方式は閉輪郭と組立対応を保持する。新しいコア回帰は修正前に失敗し、修正後の15件が成功。明示矩形の有無によらず型紙・0/37/100%の姿勢・偏差が同じで、穴を残し不正な折り返し辺を拒否する。関連UI8件も成功し、2操作は今回の重点計測で1.612秒、17.929秒へ戻った。全体の高速化率や常時60fpsの証明ではない。</p>
-<p>中断した2回の全体検証は各runの<code>interruption.json</code>とログを保全。最終候補は新しい全体ゲートを実施する。</p>
+<p>中断した2回の全体検証は各runの<code>interruption.json</code>とログを保全。最終候補の新しい全体ゲートは成功した。</p><p>事前9件、CTest197件（skip0）、開発/配布UI各721件、通常Windows起動と従来自己試験が成功。正式publish後にGitHubのタグ・対象コミット・最新タグ・ZIPサイズとSHA256も照合した。全体証拠: <code>out/verification/curved-rectangle-release-c-20261109/result.json</code>。<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update5">全体・配布版検証済みの更新5</a>。全車体の製作モデルと型紙、細分化の軽量化は継続する。</p>
 </html>

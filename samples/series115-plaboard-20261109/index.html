@@ -13,7 +13,7 @@
 <figure><img src="assembly.png" alt="実際のCADで開いた114部品の車体と部位別フォルダー"><figcaption>実際のCAD操作画面。前頭部の積層の段差も近似モデルの形状として残しています。</figcaption></figure>
 <h2 id="files">1. ファイルを選ぶ</h2>
 <p>リリースの <code>series115-plaboard-36mm-20261109.zip</code> を展開します。
-CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動して「ファイル → 開く」からモデルを開きます。</p>
+CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動して「ファイル → 開く」からモデルを開きます。開いたら<strong>Fキー</strong>で全体を表示します。</p>
 <table><tr><th>ファイル</th><th>用途</th></tr>
 <tr><td>body-ideal.kcd2 / .step</td><td>元の外形に沿う理想モデル。70部品。</td></tr>
 <tr><td>body-approximation.kcd2 / .step</td><td>組立状態の近似モデル。114個の独立部品、9フォルダー。部品を一つずつ選べます。</td></tr>
@@ -25,7 +25,7 @@ CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動し�
 <tr><td>components.csv / components.json</td><td>部品番号・材質・板厚・加工上の注意。JSONには原寸出力の照合記録もあります。</td></tr></table>
 <p>外板の幅は36 mm、車体部分の長さは243.75 mmです。窓枠は外板から約0.05 mm出るため、突起を含む最大幅は約36.10 mmになります。
 外板を36.10 mmへ広げたものではありません。</p>
-<h3>切り出し用CADの確認</h3><ol><li><code>body-flat-stock-layout.kcd2</code>を開きます。横方向に5つの材料区画があります。</li><li>左ペインで希望の材料フォルダーを開き、P番号を選びます。部品名の末尾にも板厚を表示しています。</li><li>「選択を局所表示」「選択にズーム」で形と開口を確認します。全体へ戻すときは「局所表示を解除」を使います。</li><li>一個だけ確認するなら<code>flat-stock/P番号.kcd2</code>を直接開きます。印刷・切断には対応する<code>cuts</code>の2D型紙を使います。</li></ol><p>材料区画は364×257 mm、外周の余白5 mm、部品間の余白2 mmを基準にしています。配置CADは剛体回転・移動だけで作り、拡大縮小していません。表裏と左右の判断はP番号の型紙・部品名を基準にしてください。配置図の向きだけで裏表を決めません。</p><figure><img src="flat-layout.png" alt="実際のCADで開いた114個の平板と5つの材料フォルダー"><figcaption>切り出し前の平板を確認する実CAD画面。印刷には原寸PDF/SVG/DXFを使います。</figcaption></figure>
+<h3>切り出し用CADの確認</h3><ol><li><code>body-flat-stock-layout.kcd2</code>を開き、Fキーで全体を表示します。横方向に5つの材料区画があります。</li><li>左ペインで希望の材料フォルダーを開き、P番号を選びます。部品名の末尾にも板厚を表示しています。</li><li>「選択を局所表示」「選択にズーム」で形と開口を確認します。全体へ戻すときは「局所表示を解除」を使います。</li><li>一個だけ確認するなら<code>flat-stock/P番号.kcd2</code>を直接開きます。印刷・切断には対応する<code>cuts</code>の2D型紙を使います。</li></ol><p>材料区画は364×257 mm、外周の余白5 mm、部品間の余白2 mmを基準にしています。配置CADは剛体回転・移動だけで作り、拡大縮小していません。表裏と左右の判断はP番号の型紙・部品名を基準にしてください。配置図の向きだけで裏表を決めません。</p><figure><img src="flat-layout.png" alt="実際のCADで開いた114個の平板と5つの材料フォルダー"><figcaption>切り出し前の平板を確認する実CAD画面。印刷には原寸PDF/SVG/DXFを使います。</figcaption></figure>
 <details><summary>01 白0.1 mm・27部品の実画面</summary><img src="flat-board-01.png" alt="白0.1 mmの平板部品を実CADで表示"></details>
 <details><summary>02 白0.3 mm・30部品の実画面</summary><img src="flat-board-02.png" alt="白0.3 mmの平板部品を実CADで表示"></details>
 <details><summary>03 白0.5 mm・39部品の実画面</summary><img src="flat-board-03.png" alt="白0.5 mmの平板部品を実CADで表示"></details>

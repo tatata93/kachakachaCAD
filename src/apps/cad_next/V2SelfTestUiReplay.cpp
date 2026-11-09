@@ -85,6 +85,10 @@ bool ActivateForInput(QWidget& widget)
     if(!window||!window->isVisible())return false;
     if(auto* modal=QApplication::activeModalWidget();modal&&modal->window()!=window)
         return false;
+    // A menu is a visible popup, not an activatable top-level editor window.
+    // Dispatch only to the popup Qt actually owns, including an opened submenu.
+    if(window->windowType()==Qt::Popup)
+        return QApplication::activePopupWidget()==window;
     // sendEvent bypasses the platform activation caused by a person's click.
     // A finished calculation dialog can leave no active Qt window. Restore the
     // input window through the normal window API before dispatching shortcuts;
@@ -186,8 +190,18 @@ bool MenuCommand(V2MainWindow& w,const QString& command)
     };
     for(auto* top:bar->actions())if(top->menu()&&find(top->menu())) {
         if(!Mouse(*bar,bar->actionGeometry(top).center()))return false;
-        for(std::size_t i=1;i<path.size();++i)
-            if(!Mouse(*path[i-1],path[i-1]->actionGeometry(path[i]->menuAction()).center()))return false;
+        const auto opened=[](QMenu& menu) {
+            QElapsedTimer timeout;timeout.start();
+            while((!menu.isVisible()||QApplication::activePopupWidget()!=&menu)&&timeout.elapsed()<1000) {
+                QEventLoop wait;QTimer::singleShot(10,&wait,&QEventLoop::quit);wait.exec();
+            }
+            return menu.isVisible()&&QApplication::activePopupWidget()==&menu;
+        };
+        if(!opened(*path.front()))return false;
+        for(std::size_t i=1;i<path.size();++i) {
+            if(!Mouse(*path[i-1],path[i-1]->actionGeometry(path[i]->menuAction()).center())
+                ||!opened(*path[i]))return false;
+        }
         return Mouse(*path.back(),path.back()->actionGeometry(action).center());
     }
     return false;
@@ -729,6 +743,32 @@ bool Smoke(V2MainWindow& w)
         &&!replay.Act({{"op","remember"},{"kind",2},{"as","not-created"},{"new",true}});
 }
 
+bool NestedMenuInput(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    const auto wire=DrawRectangleAtByHand(w,.3,.3,.6,.6);if(wire.IsNil())return false;
+    Replay replay{w,QDir::currentPath(),{},{},0};
+    if(!replay.Act({{"op","click"},{"within","modeBar"},{"text",QStringLiteral("選択")}})
+        ||!replay.Act({{"op","select"},{"id",QString::fromStdString(wire.ToString())}})
+        ||!replay.Act({{"op","key"},{"key","Ctrl+G"}})
+        ||w.Session().GetDocument().Snapshot().groups.size()!=1
+        ||!replay.Act({{"op","remember"},{"group",true},{"as","nestedMenuGroup"}})
+        ||!replay.Act({{"op","select"},{"id","$nestedMenuGroup"},{"group",true}})
+        ||!Explain("real Edit/Group submenu dissolves selected group",
+            MenuCommand(w,"group.dissolve")
+            &&w.Session().GetDocument().Snapshot().groups.empty()))return false;
+    if(!Explain("submenu action keeps its wire and is one undo step",
+        CountOfKind(w,domain::EntityKind::Wire)==1
+        &&replay.Act({{"op","key"},{"key","Ctrl+Z"}})
+        &&w.Session().GetDocument().Snapshot().groups.size()==1
+        &&replay.Act({{"op","key"},{"key","Ctrl+Y"}})
+        &&w.Session().GetDocument().Snapshot().groups.empty()
+        &&CountOfKind(w,domain::EntityKind::Wire)==1))return false;
+    QMenu hidden(&w);
+    return Explain("closed popup never receives a synthetic menu click",
+        !Mouse(hidden,QPointF(0,0)));
+}
+
 bool RealSettings(V2MainWindow& w)
 {
     // Each isolated case has its own working directory. Keep event traces and
@@ -959,6 +999,7 @@ template<std::size_t... I> constexpr auto Runners(std::index_sequence<I...>)
 std::vector<SelfTestCase> UiReplayCases()
 {
     std::vector<SelfTestCase> cases{{"HP-REPLAY visible coordinate entry and rejected hidden operations",Smoke},
+        {"HP-REPLAY nested menu input preserves contents and history",NestedMenuInput},
         {"HP-REPLAY real workplane and extrusion settings require confirmation",RealSettings},
         {"HP-REPLAY point normal workplane through visible numeric fields",PointNormalSettings},
         {"HP-REPLAY manufacturing ownership controls visibility picking and focus",FoldOwnerFocus},

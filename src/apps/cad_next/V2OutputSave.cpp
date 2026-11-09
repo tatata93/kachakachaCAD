@@ -62,9 +62,12 @@ bool V2OutputTool::CopyIntoDocument() {
 bool V2OutputTool::SaveTo(const QString& path) {
     if(window_.session_->GetDocument().Revision()!=revision_ || window_.session_->GetDocument().Snapshot().id!=documentId_){SetProblem(QStringLiteral("文書が変更されています。対象を取り込み直してプレビューを確認してください。"));return false;}
     RefreshPreview();if(!save_->isEnabled())return false;
+    if(format_->currentIndex()!=3){
+        if(path.isEmpty())return false;
+        if(!window_.documentPath_.isEmpty() && QFileInfo(path).absoluteFilePath().compare(QFileInfo(window_.documentPath_).absoluteFilePath(),Qt::CaseInsensitive)==0){SetProblem(QStringLiteral("現在開いているKCDを出力先に上書きできません。別名にしてください。"));return false;}
+    }
+    if(!EnsurePrepared())return false;
     if(format_->currentIndex()==3)return CopyIntoDocument();
-    if(path.isEmpty())return false;
-    if(!window_.documentPath_.isEmpty() && QFileInfo(path).absoluteFilePath().compare(QFileInfo(window_.documentPath_).absoluteFilePath(),Qt::CaseInsensitive)==0){SetProblem(QStringLiteral("現在開いているKCDを出力先に上書きできません。別名にしてください。"));return false;}
     if(format_->currentIndex()==4)return MergeIntoNewDocument(path);
     std::string bytes;
     if(format_->currentIndex()==2){auto settings=window_.session_->GetDocument().Snapshot().settings;settings.activeGroupId.reset();

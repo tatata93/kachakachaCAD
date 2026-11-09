@@ -77,14 +77,14 @@ void V2OutputTool::BuildUi(int format) {
     QObject::connect(save_,&QPushButton::clicked,this,[this]{Run();});
 }
 void V2OutputTool::ChooseFormat(int format){format_->setCurrentIndex(format);}
-void V2OutputTool::SetProblem(const QString& text){previewKey_.clear();status_->setText(text);save_->setEnabled(false);preview_->SetModels({});}
+void V2OutputTool::SetProblem(const QString& text){previewKey_.clear();preparedKey_.clear();status_->setText(text);save_->setEnabled(false);preview_->SetModels({});}
 void V2OutputTool::TakeSelection() {
     generated_=false;
     if(!Capture(window_.viewport_->Selection().entityIds) || (findChild<QComboBox*>("outputScope")->currentIndex()==1 && !CaptureElements())){assets_.clear();loading_=true;targets_->clear();loading_=false;return;}
     revision_=window_.session_->GetDocument().Revision();documentId_=window_.session_->GetDocument().Snapshot().id;FillTargets();
 }
 void V2OutputTool::FillTargets() {
-    previewKey_.clear();prepared_.clear();
+    previewKey_.clear();preparedKey_.clear();previewSourceMeshes_.clear();prepared_.clear();
     loading_=true;targets_->clear();
     for(const auto& asset:assets_){auto* item=new QListWidgetItem(QString::fromStdString(asset.entity.displayName)+QStringLiteral(" / ")+QString::fromUtf8(domain::EntityKindNameJa(asset.entity.kind).data()),targets_);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Checked);}
     loading_=false;RefreshPreview();preview_->Fit();
@@ -132,7 +132,7 @@ bool V2OutputTool::Prepare() {
     prepared_.clear();const auto placement=Placement();if(!placement.Valid()){SetProblem(QStringLiteral("配置の法線と面内方向は、長さ0や平行にできません。"));return false;}
     for(int i=0;i<targets_->count();++i){if(targets_->item(i)->checkState()!=Qt::Checked)continue;auto asset=assets_[static_cast<std::size_t>(i)];
         if(!asset.curves.empty()){const auto curves=kernel::PlaceOutputCurves(asset.curves,placement,1e-7);if(!curves.HasValue()){SetProblem(QString::fromStdString(curves.FirstSummaryJa()));return false;}asset.curves=curves.Value();}
-        if(asset.entity.kind==domain::EntityKind::Part || asset.entity.kind==domain::EntityKind::GuideSurface){const auto shape=kernel::PlaceOutputShape(asset.shape,placement);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}if(shape.Value().value!=asset.shape.value)asset.OwnShape(shape.Value());}
+        if(asset.entity.kind==domain::EntityKind::Part || asset.entity.kind==domain::EntityKind::GuideSurface){const auto shape=kernel::PlaceOutputShape(asset.shape,placement);if(!shape.HasValue()){SetProblem(QString::fromStdString(shape.FirstSummaryJa()));return false;}if(shape.Value().value!=asset.shape.value)asset.OwnShape(shape.Value());setProperty("outputNativePlacementBuilds",property("outputNativePlacementBuilds").toULongLong()+1);}
         asset.frame.origin=placement.Point(asset.frame.origin);asset.frame.normal=placement.Direction(asset.frame.normal);asset.frame.xDirection=placement.Direction(asset.frame.xDirection);prepared_.push_back(std::move(asset));
     }
     if(prepared_.empty()){SetProblem(QStringLiteral("出す対象にチェックしてください。"));return false;}return true;

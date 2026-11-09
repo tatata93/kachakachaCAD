@@ -8,11 +8,14 @@
 #include <QPen>
 #include <QPolygonF>
 #include <QWheelEvent>
+#include <QVariant>
 #include <algorithm>
 #include <cmath>
 using namespace kachakacha::v2;
 V2OutputPreview::V2OutputPreview(QWidget* parent):QWidget(parent){setObjectName("outputPreview3d");setMinimumSize(440,360);}
-void V2OutputPreview::SetModels(std::vector<modeling::ShapeMesh> models){models_=std::move(models);bounds_={};for(const auto& m:models_){bounds_.Add(m.minimum);bounds_.Add(m.maximum);}update();}
+void V2OutputPreview::SetModels(std::vector<modeling::ShapeMesh> models){models_=std::move(models);bounds_={};for(const auto& m:models_){bounds_.Add(m.minimum);bounds_.Add(m.maximum);}
+    setProperty("previewBoundsMinimum",QVariantList{bounds_.minimum.x,bounds_.minimum.y,bounds_.minimum.z});
+    setProperty("previewBoundsMaximum",QVariantList{bounds_.maximum.x,bounds_.maximum.y,bounds_.maximum.z});update();}
 void V2OutputPreview::Fit(){zoom_=1;pan_={};update();}
 void V2OutputPreview::paintEvent(QPaintEvent*) {
     const geometry::Vector3 forward{-std::cos(pitch_)*std::cos(yaw_),-std::cos(pitch_)*std::sin(yaw_),-std::sin(pitch_)};

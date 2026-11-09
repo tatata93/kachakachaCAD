@@ -169,11 +169,25 @@ bool OutputPreviewReuse(V2MainWindow& window) {
     timer.restart();output->ChooseFormat(0);output->ChooseFormat(2);output->ChooseFormat(1);const double formats=timer.nsecsElapsed()/1e6;
     if(!Explain("format changes reuse prepared geometry and meshes",builds>0&&output->property("outputMeshBuilds").toULongLong()==builds))return false;
     geometry::OutputPlacement placement;placement.keepPosition=false;placement.destination.origin={10,3,4};
+    placement.destination.normal=geometry::Normalized(geometry::Vector3{0,1,1});
     output->SetPlacement(placement);const auto moved=output->property("outputMeshBuilds").toULongLong();
-    if(!Explain("changed placement rebuilds preview once",moved==builds*2))return false;
+    if(!Explain("rigid placement previews reuse source meshes without native placement",moved==builds
+        &&output->property("outputNativePlacementBuilds").toULongLong()==0))return false;
+    if(model.isEmpty()){
+        const auto& original=window.Viewport().ShapeViews().front().mesh;geometry::Bounds3 expected;
+        for(double x:{original.minimum.x,original.maximum.x})for(double y:{original.minimum.y,original.maximum.y})
+            for(double z:{original.minimum.z,original.maximum.z})expected.Add(placement.Point({x,y,z}));
+        auto* preview=output->findChild<QWidget*>("outputPreview3d");if(!preview)return false;
+        const auto vector=[&](const char* name){const auto values=preview->property(name).toList();
+            return values.size()==3?geometry::Vector3{values[0].toDouble(),values[1].toDouble(),values[2].toDouble()}:geometry::Vector3{};};
+        if(!Explain("the actual rendered preview follows the complete rigid frame",geometry::Distance(vector("previewBoundsMinimum"),expected.minimum)<1e-9
+            &&geometry::Distance(vector("previewBoundsMaximum"),expected.maximum)<1e-9))return false;
+    }
     timer.restart();if(!output->SaveTo(folder.filePath("reuse.step")))return false;const double step=timer.nsecsElapsed()/1e6;
+    if(!Explain("confirmation builds and checks the actual native output once",output->property("outputNativePlacementBuilds").toULongLong()==builds))return false;
     output->ChooseFormat(0);timer.restart();if(!output->SaveTo(folder.filePath("reuse.stl")))return false;const double stl=timer.nsecsElapsed()/1e6;
-    if(!Explain("saving the exact preview does not retessellate it",output->property("outputMeshBuilds").toULongLong()==moved))return false;
+    if(!Explain("saving another format reuses the checked native output and source mesh",output->property("outputMeshBuilds").toULongLong()==moved
+        &&output->property("outputNativePlacementBuilds").toULongLong()==builds))return false;
     const auto bytes=io::ReadWholeFile(folder.filePath("reuse.step").toStdString());
     if(!Explain("reused preview still exports complete STEP bytes",bytes.HasValue()&&bytes.Value().find("END-ISO-10303-21;")!=std::string::npos))return false;
     if(!model.isEmpty()) {
@@ -470,7 +484,7 @@ bool CaseOutputOwnership(V2MainWindow& w){
     if(!Explain("output owns a native snapshot",output->AssetCount()==1&&kernel::CachedShapeCount()==baseline+1))return false;
     geometry::OutputPlacement placement;placement.keepPosition=false;
     for(int i=0;i<6;++i){placement.destination.origin.x=i;output->SetPlacement(placement);
-        if(!Explain("output placement replaces its owned preview",kernel::CachedShapeCount()==baseline+2))return false;}
+        if(!Explain("output preview keeps one independent source without allocating placed native copies",kernel::CachedShapeCount()==baseline+1))return false;}
     QTemporaryDir folder;if(!output->SaveTo(folder.filePath("placed.kcd2")))return false;
     output->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
     return Explain("closing output releases snapshots without affecting the source",kernel::CachedShapeCount()==baseline&&CountOfKind(w,domain::EntityKind::Part)==1);

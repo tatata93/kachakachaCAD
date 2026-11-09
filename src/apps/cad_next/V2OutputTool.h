@@ -4,10 +4,12 @@
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/OutputPlacement.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 #include <array>
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
 class V2MainWindow;
 class V2OutputPreview;
 class V2OutputMergeTarget;
@@ -53,6 +55,7 @@ private:
     bool Capture(const std::vector<kachakacha::v2::base::EntityId>& ids);
     bool CaptureElements();
     bool Prepare();
+    bool EnsurePrepared();
     bool PreparePreview();
     bool CopyIntoDocument();
     bool MergeIntoNewDocument(const QString& path);
@@ -61,6 +64,8 @@ private:
     V2MainWindow& window_;
     std::vector<V2OutputAsset> assets_,prepared_;
     std::vector<double> previewKey_;
+    std::vector<double> preparedKey_;
+    std::map<std::uint64_t,kachakacha::v2::modeling::ShapeMesh> previewSourceMeshes_;
     std::uint64_t revision_=0;
     kachakacha::v2::base::DocumentId documentId_;
     QComboBox* format_=nullptr;

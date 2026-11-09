@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>115系 車体幅36 mm・理想モデルとプラ板用モデル</title>
+<style>body{font:16px/1.8 sans-serif;max-width:1080px;margin:32px auto;padding:0 20px;color:#17283d}img{width:100%;height:auto;border:1px solid #bbc5cf}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc5cf;padding:8px;text-align:left}aside{background:#fff4db;border-left:5px solid #c08400;padding:14px}nav a{display:inline-block;margin:5px 18px 5px 0}figure{margin:20px 0}h2{margin-top:44px}code{background:#eef2f6;padding:2px 5px}</style>
+<h1>115系の車体を、プラ板から作るためのモデルと型紙</h1>
+<p>添付モデルの車体幅<strong>36 mm</strong>を維持した1/80用の車体です。全体の拡大・縮小は行っていません。
+理想形状70部品から、切断・曲げ・積層・接着を使う114部品の近似モデルへ整理しました。
+台車・走行装置・屋上機器は今回の車体キットに含みません。</p>
+<nav><a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update7">CADと模型ZIPのリリース</a><a href="#files">ファイルの使い分け</a><a href="#assembly">組立順</a><a href="#limits">確認できた範囲</a></nav>
+<aside><strong>実材での工作は未実施です。</strong>型紙の原寸・輪郭・板厚、CAD上の形状と接合を確認しています。
+接着剤の厚さ、刃の切りしろ、曲げ戻り、印刷機の誤差は実材で仮合わせが必要です。
+特に透明板2部品の約2.35 mmという小さな曲げ半径は、冷間で割れずに曲げられることを保証していません。端材で先に試してください。</aside>
+<figure><img src="assembly.png" alt="実際のCADで開いた114部品の車体と部位別フォルダー"><figcaption>実際のCAD操作画面。前頭部の積層の段差も近似モデルの形状として残しています。</figcaption></figure>
+<h2 id="files">1. ファイルを選ぶ</h2>
+<p>リリースの <code>series115-plaboard-36mm-20261109.zip</code> を展開します。
+CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動して「ファイル → 開く」からモデルを開きます。</p>
+<table><tr><th>ファイル</th><th>用途</th></tr>
+<tr><td>body-ideal.kcd2 / .step</td><td>元の外形に沿う理想モデル。70部品。</td></tr>
+<tr><td>body-approximation.kcd2 / .step</td><td>組立状態の近似モデル。114個の独立部品、9フォルダー。部品を一つずつ選べます。</td></tr>
+<tr><td>cutting-patterns-A4-1to1.pdf</td><td>A4・10ページの原寸型紙。用紙に合わせて縮小しないでください。</td></tr>
+<tr><td>cuts/svg、cuts/dxf、cuts/pdf</td><td>P001〜P114の個別型紙。番号と部品名はcomponents.csvで対応します。</td></tr>
+<tr><td>cuts/P076-center-back</td><td>中央部品P076の裏側の切断ガイド。同じ1部品の表裏であり、追加部品ではありません。</td></tr>
+<tr><td>components.csv / components.json</td><td>部品番号・材質・板厚・加工上の注意。JSONには原寸出力の照合記録もあります。</td></tr></table>
+<p>外板の幅は36 mm、車体部分の長さは243.75 mmです。窓枠は外板から約0.05 mm出るため、突起を含む最大幅は約36.10 mmになります。
+外板を36.10 mmへ広げたものではありません。</p>
+<h2>2. 材料と印刷</h2>
+<table><tr><th>材料</th><th>板厚</th><th>部品数</th><th>主な用途</th></tr>
+<tr><td>白プラ板</td><td>0.1 mm</td><td>27</td><td>主屋根、前面上部、窓枠、下部の細かな積層</td></tr>
+<tr><td>白プラ板</td><td>0.3 mm</td><td>30</td><td>前頭屋根の積層、扉、下部の一部</td></tr>
+<tr><td>白プラ板</td><td>0.5 mm</td><td>39</td><td>側板、前面下部、中央、補強など</td></tr>
+<tr><td>白プラ板</td><td>1.0 mm</td><td>4</td><td>底板と補強枠3個</td></tr>
+<tr><td>透明プラ板</td><td>0.2 mm</td><td>14</td><td>側窓など12個、回り込み窓2個</td></tr></table>
+<p>材料寸法・用途はタミヤの製品情報を参照しました。
+<a href="https://www.tamiya.com/japan/products/70208/index.html">0.1 mmプラペーパー</a>、
+<a href="https://www.tamiya.com/japan/products/70122/index.html">0.3 mmプラバン</a>、
+<a href="https://www.tamiya.com/japan/products/70123/index.html">0.5 mmプラバン</a>、
+<a href="https://www.tamiya.com/japan/products/70124/index.html">1.0 mmプラバン</a>、
+<a href="https://www.tamiya.com/japan/products/70126/index.html">0.2 mm透明プラバン</a>。
+透明板もスチロール樹脂です。材料資料には今回の小半径での冷間曲げ限界は示されていません。</p>
+<ol><li>まず紙へ「100%」「実際のサイズ」で印刷します。「用紙に合わせる」は解除します。</li>
+<li>各ページの確認尺の両端が50.00 mmか測ります。合わなければ、その紙で切り出しません。</li>
+<li>部品の番号と板厚を確認して板へ写します。左右の向きは用紙上の配置ではなく部品名とCADで確認します。</li>
+<li>黒線の中心が完成寸法です。刃の外側で切り、仮合わせ後に最小限の切断で追い込みます。</li></ol>
+<h2 id="assembly">3. 底板・側板・扉を仮組みする</h2>
+<p>「08_床板と補強」で、底板1 mm、長手桁0.5 mm、Y45・120・195の補強枠1 mmを確認します。
+先頭の補強枠は、前側Aと後側Bの0.5 mm板2枚です。前側Aの上部は前頭屋根に当たらない形です。</p>
+<p>側板は左右各1枚。サッシ24個は側板の開口周囲へ組み込んであり、別の24部品を重ねる工程はありません。
+上側20 mmを直線のまま残し、下側約7.00625 mmを中立半径29.75 mmの裾曲線へゆっくり合わせます。
+これは折り線で急に折る工程ではありません。左右・窓・扉の開口をCADと照合してから接着します。</p>
+<p>客用扉は右3枚、左3枚。乗務員扉は左右各1枚です。0.3 mmの扉も裾に沿って曲げます。
+客用扉は上側18 mmが直線、下側約5.266 mmが曲線。乗務員扉の曲線部分は約3.992 mmです。
+扉の向きと位置は「06_扉」で確認し、窓を塞がないようにします。</p>
+<h2>4. 前面と中央部品を取り付ける</h2>
+<figure><img src="front-perspective.png" alt="実CADの前頭部の拡大画面"><figcaption>曲げる前面上部と、水平に積み重ねる下部・前頭屋根を分けています。</figcaption></figure>
+<p>前面上部は左右それぞれ0.1 mm板5枚です。「02_前面上部」の1が外側、5が内側です。
+平らな部分を平らに保ち、角の回り込み部分だけ曲げて5枚を重ねます。
+上下や左右を反転して窓・ライトの穴を塞がないよう、毎層をCADへ照合します。</p>
+<p>中央部品P076は0.5 mm板1個です。表と裏の輪郭が異なるため、単純な垂直切断の平板に置き換えません。
+表の輪郭を残し、裏の輪郭へ向けて端面を斜めに切ります。扉の開口は切り抜いたまま残します。</p>
+<p>左右の前面裾後部P070・P071は、型紙から粗切りした0.5 mm板を曲げた後、乗務員扉に接する端面だけ斜めに切ります。
+扉そのものを削ったり、車体幅を変えたりしません。最終CADではその端面だけを隣の扉の形で差し引き、重なりを解消しています。</p>
+<figure><img src="front-cutting-page.png" alt="実際のCADから出力した前面部品の原寸型紙"><figcaption>中央の表裏ガイド、扉側端面の加工、透明窓の試作が必要な箇所を型紙にも記しています。</figcaption></figure>
+<h2>5. 前面下部と屋根を積層する</h2>
+<p>前面下部は左右19個ずつ、合計38個です。Lが左、Rが右です。
+01〜12は0.5 mm、13aは0.3 mm、13b・13cは0.1 mm、14は0.5 mmです。
+同じ段に「-1」「-2」がある場合は、穴の切り欠きで離れた別々の小片です。つなぐ帯を勝手に追加しません。
+CADの「03_前面下部」で高さを確認し、低い段から積みます。輪郭が用紙上で回転している部品は、CADの向きに戻して合わせます。</p>
+<figure><img src="corner-cutting-page.png" alt="実CADの輪郭を原寸のまま配置した38個の積層部品"><figcaption>尾灯の切り欠きを含む高さだけ0.3+0.1+0.1 mmへ細かくし、元形状との差を抑えました。</figcaption></figure>
+<p>前頭屋根は0.3 mm板18枚と0.1 mm板1枚をZ27〜32.5 mmへ積層します。
+主屋根は0.1 mm板5枚を曲げて重ねます。幅は外側から約41.07853、40.76437、40.45021、40.13605、39.82190 mm、長さは216.75 mmです。
+主屋根を先に補強枠へ仮合わせして、前頭屋根との境目が開かないことを確認します。接着剤の厚さをCAD寸法へ自動加算してはいません。</p>
+<h2>6. 窓枠と透明板を合わせる</h2>
+<p>前面窓枠は0.1 mm板です。中央と前面上部を先に仮組みし、窓枠が開口へ沿うことを確認してから接着します。
+「09_透明板」のチェックを外すと、CADでも実際に穴が開いている状態を確認できます。</p>
+<figure><img src="front-openings.png" alt="透明板のフォルダーを非表示にした実CADの開口確認画面"><figcaption>透明板を隠した開口確認。窓やライトの輪郭を塗りつぶす板は追加していません。</figcaption></figure>
+<p>回り込み透明窓の切り出し寸法は、右約14.8976×8 mm、左約14.8874×8 mmです。
+0.2 mm板の中立半径は右約2.3489 mm、左約2.3502 mm。
+この曲げが冷間で可能かは未確認なので、透明板の端材で先に試します。割れ・白化・大きな戻りが出る場合は、無理に接着で固定せず、透明部分の製法を決め直してください。</p>
+<h2 id="limits">確認できた範囲と残る確認</h2>
+<p>幾何診断で作った形状をCADへ注入せず、モデルの作成・加工・統合・整理・出力は実際のGUI経由で行いました。
+114部品はそれぞれ1つの有効な閉ソリッドです。最終修正では112部品の保存形状をそのまま保持し、2部品の端面だけを差し引きました。</p>
+<table><tr><th>照合対象</th><th>結果</th></tr>
+<tr><td>前面下部の38枚積層と理想形状</td><td>双方向の有限標本差は最大約0.12001 mm。全域の解析的な上界ではありません。</td></tr>
+<tr><td>前頭屋根の19枚積層</td><td>有限標本差は最大約0.14961 mm。段差を消す熱加工や研磨は工程へ仮定していません。</td></tr>
+<tr><td>前面上部の5枚積層</td><td>有限標本差は右最大約0.000054 mm、左約0.000013 mm。</td></tr>
+<tr><td>側板に統合したサッシ24個</td><td>0.5 mmの一様板厚で、厚み方向の形も照合しました。</td></tr>
+<tr><td>部品同士</td><td>6,441組の外接箱を照合し、455候補を独立に検査。検出した左右2か所の食い込みを端面の切断で解消しました。任意形状に対する万能の非干渉証明ではありません。</td></tr>
+<tr><td>型紙</td><td>個別SVG/DXF/PDFの輪郭と原寸を照合。まとめたPDFの配置は平行移動だけで、拡大・縮小はしていません。</td></tr>
+<tr><td>実物の工作</td><td>未実施。透明板の小半径曲げ、白板の曲げ戻り、接着剤、切りしろ、実印刷を確認する必要があります。</td></tr></table>
+<p>ソフトの全体・配布版検証結果は、同じ<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update7">リリース記録</a>を参照してください。
+「考えられる全形状」「常時60 fps」「あらゆる処理で従来の3倍」を証明したものではありません。</p>
+</html>

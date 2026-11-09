@@ -29,6 +29,7 @@
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
@@ -60,6 +61,7 @@
 #include <gp_Ax3.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Dir.hxx>
+#include "fixtures/inactive-c0-support.inc"
 #endif
 
 using kachakacha::v2::geometry::CurveSegment;
@@ -646,6 +648,74 @@ KACHA_V2_TEST(kernel_surface_edit, 面へ投影した線は面の上に乗る)
             }
         }
     }
+}
+
+KACHA_V2_TEST(kernel_surface_edit, cropped_support_refit_and_offset_preserve_active_geometry_and_holes)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    for(bool rational:{false,true})for(bool transformed:{false,true})for(bool nearKnot:{false,true}){
+        auto face=kachakacha_test_fixture::InactiveC0Support(false,rational,true,1,nearKnot);
+        if(transformed){
+            gp_Trsf pose;pose.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.61);
+            pose.SetTranslationPart(gp_Vec(11,-7,4));
+            face=TopoDS::Face(BRepBuilderAPI_Transform(face,pose,true).Shape());
+            face.Reverse();
+        }
+        const auto source=kernel::StoreShape(face);
+        const auto before=kernel::CaptureOutputShape(source).Value();
+        const auto refit=kernel::RefitSurface(source,.001,Tolerance());
+        Require(refit.HasValue(),"active smooth patch is simplified despite unused crease: "+Why(refit));
+        Require(refit.Value().polesAfter>0&&refit.Value().polesAfter<refit.Value().polesBefore,
+            "unused support data is removed");
+        Require(refit.Value().deviationMm<=.001,"complete active-domain error remains bounded");
+        GuideSurfaceRequest request;request.method=GuideSurfaceMethod::OffsetGuide;request.offsetDistanceMm=.05;
+        GuideChain chain;chain.role=ChainRole::SourceSurface;request.chains.push_back(chain);
+        const auto analysis=kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request,Tolerance());
+        Require(analysis.HasValue(),"offset request accepted");
+        for(const auto input:{source,refit.Value().surface.handle}){
+            const auto offset=kernel::BuildGuideSurface(request,analysis.Value(),Tolerance(),input);
+            Require(offset.HasValue(),"direct and refitted active patches offset: "+Why(offset));
+            TopoDS_Shape native;Require(kernel::LookupShape(offset.Value().handle,native),"offset shape retained");
+            const auto made=TopoDS::Face(TopExp_Explorer(native,TopAbs_FACE).Current());
+            Require(BRepCheck_Analyzer(made).IsValid()&&made.Orientation()==face.Orientation(),
+                "valid trim and orientation survive");
+            int loops=0;for(TopExp_Explorer at(made,TopAbs_WIRE);at.More();at.Next())++loops;
+            Require(loops==3,"both holes survive direct and post-refit offset");
+            for(const auto point:{gp_Pnt2d(1.34,.3),gp_Pnt2d(1.66,.7)})
+                Require(BRepClass_FaceClassifier(made,point,1e-7).State()==TopAbs_OUT,"hole is empty");
+            Require(BRepClass_FaceClassifier(made,gp_Pnt2d(1.5,.5),1e-7).State()==TopAbs_IN,
+                "material between holes remains");
+            BRepAdaptor_Surface original(face),shifted(made);
+            for(int i=0;i<=16;++i){
+                const double u=1.2+.6*i/16.,v=.5;
+                gp_Pnt p;gp_Vec du,dv;original.D1(u,v,p,du,dv);
+                auto normal=du.Crossed(dv).Normalized();
+                if(face.Orientation()==TopAbs_REVERSED)normal.Reverse();
+                Require(shifted.Value(u,v).Distance(p.Translated(normal*.05))<.001,
+                    "offset is from the original active support, with no reparameterization");
+            }
+            kernel::ReleaseShape(offset.Value().handle);
+        }
+        Require(kernel::CaptureOutputShape(source).Value()==before,
+            "source geometry, trims and allowances remain byte-identical");
+        kernel::ReleaseShape(refit.Value().surface.handle);kernel::ReleaseShape(source);
+    }
+}
+
+KACHA_V2_TEST(kernel_surface_edit, active_crease_is_not_removed_by_cropping_support)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto source=kernel::StoreShape(kachakacha_test_fixture::InactiveC0Support(true,false,false));
+    const auto before=kernel::CaptureOutputShape(source).Value();
+    Require(!kernel::RefitSurface(source,1e-6,Tolerance()).HasValue(),"genuine active crease cannot be silently simplified");
+    GuideSurfaceRequest request;request.method=GuideSurfaceMethod::OffsetGuide;request.offsetDistanceMm=.05;
+    GuideChain chain;chain.role=ChainRole::SourceSurface;request.chains.push_back(chain);
+    const auto analysis=kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request,Tolerance());
+    Require(analysis.HasValue(),"negative offset test input is valid");
+    Require(!kernel::BuildGuideSurface(request,analysis.Value(),Tolerance(),source).HasValue(),
+        "crease within active domain retains offset refusal");
+    Require(kernel::CaptureOutputShape(source).Value()==before,"refused operations preserve source bytes");
+    kernel::ReleaseShape(source);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

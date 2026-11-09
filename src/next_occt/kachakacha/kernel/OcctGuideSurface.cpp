@@ -25,6 +25,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctFiniteDistance.h"
 #include "kachakacha/kernel/OcctFoldedBandOffset.h"
+#include "kachakacha/kernel/OcctActiveSupport.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <TopoDS_Edge.hxx>
@@ -588,7 +589,9 @@ constexpr int kNetworkPointsPerChain = 9;
                 "元の形状ガイドに面がありません。", {}));
         }
         std::vector<TopoDS_Face> made;
-        for (const TopoDS_Face& face : faces) {
+        for (const TopoDS_Face& originalFace : faces) {
+            TopoDS_Face face=originalFace;
+            if (const auto restricted=detail::RestrictOffsetSupport(face,tolerance)) face=*restricted;
             if(const auto folded=detail::OffsetFoldedBand(face,request.offsetDistanceMm,tolerance)){
                 if(!folded->HasValue())return Out::Failure(folded->Diagnostics());
                 for(TopExp_Explorer e(folded->Value(),TopAbs_FACE);e.More();e.Next())

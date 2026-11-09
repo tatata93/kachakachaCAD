@@ -3,6 +3,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctLoftSurface.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctActiveSupport.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -68,6 +69,44 @@ using Out = base::Result<SurfaceEditResult>;
 [[nodiscard]] Spline Copy(const Spline& surface)
 {
     return Spline::DownCast(surface->Copy());
+}
+
+// Segment inserts knots and removes unused spans without reparameterizing or
+// approximating the active geometry. A crease elsewhere in the support must
+// not prevent editing a smooth trimmed patch. Periodic/wrapped domains retain
+// their existing handling; never infer a new seam or enlarge the active range.
+[[nodiscard]] bool RestrictActiveSupport(const TopoDS_Face& face, Spline& surface,
+    double& roundoff)
+{
+    roundoff = 0;
+    if (surface->IsUPeriodic() || surface->IsVPeriodic()) return false;
+    double a,b,c,d,u0,u1,v0,v1;
+    surface->Bounds(a,b,c,d);
+    BRepTools::UVBounds(face,u0,u1,v0,v1);
+    for (double value : {a,b,c,d,u0,u1,v0,v1}) if (!std::isfinite(value)) return false;
+    if (!(u0 < u1 && v0 < v1) || u0 < a || u1 > b || v0 < c || v1 > d) return false;
+    if (u0 == a && u1 == b && v0 == c && v1 == d) return false;
+    auto restricted = Copy(surface);
+    // No parameter snapping: the stored pcurve coordinates remain authoritative.
+    restricted->Segment(u0,u1,v0,v1,0,0);
+    double x0,x1,y0,y1;restricted->Bounds(x0,x1,y0,y1);
+    // Knot insertion may return an existing knot a few ulps outside the requested
+    // support box. Accept only a support that still contains the entire active
+    // trim and stays inside the original support; the actual pcurves never move.
+    if (x0 > u0 || x1 < u1 || y0 > v0 || y1 < v1
+        || x0 < a || x1 > b || y0 < c || y1 > d) return false;
+    double magnitude = 1;
+    for (int i=1;i<=surface->NbUPoles();++i) for (int j=1;j<=surface->NbVPoles();++j) {
+        const auto p=surface->Pole(i,j);
+        magnitude=std::max({magnitude,std::abs(p.X()),std::abs(p.Y()),std::abs(p.Z())});
+    }
+    // Account for floating-point knot insertion just as the coefficient bound
+    // accounts for degree elevation/refinement. This is not a new fit tolerance.
+    roundoff=64*std::numeric_limits<double>::epsilon()*magnitude
+        *(surface->NbUPoles()+surface->NbVPoles()+surface->NbUKnots()+surface->NbVKnots());
+    if (!std::isfinite(roundoff)) return false;
+    surface=std::move(restricted);
+    return true;
 }
 
 // Knot removal keeps the native parameterization, including narrow knot spans.
@@ -236,10 +275,10 @@ struct Knot {
 }
 
 [[nodiscard]] TopoDS_Face TrimLike(const TopoDS_Face& original, const Spline& surface,
-    double edgeTolerance, double maximumError, double modelTolerance)
+    double edgeTolerance, double maximumError, double modelTolerance, bool retainTrims=false)
 {
     TopoDS_Face made;
-    if (BRep_Tool::NaturalRestriction(original) && WireCount(original) == 1) {
+    if (!retainTrims && BRep_Tool::NaturalRestriction(original) && WireCount(original) == 1) {
         BRepBuilderAPI_MakeFace maker(surface, Precision::Confusion());
         if (maker.IsDone()) made = maker.Face();
     } else {
@@ -328,18 +367,22 @@ struct Knot {
         }
     }
     Spline original = Copy(GeomConvert::SurfaceToBSplineSurface(BRep_Tool::Surface(face)));
-    if (original->IsUPeriodic() || original->IsVPeriodic()) {
+    const bool periodic=original->IsUPeriodic() || original->IsVPeriodic();
+    if (periodic) {
         double u0, u1, v0, v1;
         original->Bounds(u0, u1, v0, v1);
         original->Segment(u0, u1, v0, v1);
     }
     const int before = Poles(original);
     if (before > 32768) return Failed("制御点が多く、一度に整えられません。", "面を分けて整えてください。");
+    double restrictionRoundoff=0;
+    const bool restricted=!periodic&&RestrictActiveSupport(face,original,restrictionRoundoff);
+    if (restrictionRoundoff > toleranceMm) return Failed("有効な面の範囲を許容内で取り出せませんでした。");
     Spline best = ReduceKnots(original, toleranceMm * .25);
-    double bound = DeviationBound(original, best);
+    double bound = DeviationBound(original, best)+restrictionRoundoff;
     if (!std::isfinite(bound) || bound > toleranceMm) {
         best = Copy(original);
-        bound = 0;
+        bound = restrictionRoundoff;
     }
     // The native approximator knows the original continuity intervals. A result that
     // merely HasResult() is NOT sufficient; it must also pass our independent bound.
@@ -349,7 +392,7 @@ struct Knot {
         if (approximation.IsDone() && !approximation.Surface().IsNull()
             && std::isfinite(approximation.MaxError()) && approximation.MaxError() <= toleranceMm
             && Poles(approximation.Surface()) < Poles(best)) {
-            const double measured = DeviationBound(original, approximation.Surface());
+            const double measured = DeviationBound(original, approximation.Surface())+restrictionRoundoff;
             if (std::isfinite(measured) && measured <= toleranceMm) {
                 best = approximation.Surface();
                 bound = measured;
@@ -365,7 +408,7 @@ struct Knot {
         return Failed("元の面からの偏差が許容内であることを確認できませんでした。");
     }
     const TopoDS_Face made = TrimLike(face, best, std::max(Precision::Confusion(),
-        bound + tolerance.modelLinearMm), toleranceMm, tolerance.modelLinearMm);
+        bound + tolerance.modelLinearMm), toleranceMm, tolerance.modelLinearMm, restricted);
     if (made.IsNull()) return Failed("整えた面の境界や穴を保てませんでした。", "元の形は変更していません。");
     auto finished = detail::FinishSurfaceResult(made, tolerance);
     if (!finished.HasValue()) return Out::Failure(finished.Diagnostics());
@@ -376,9 +419,31 @@ struct Knot {
     result.polesAfter = after;
     result.noteJa = "制御点 " + std::to_string(before) + " → " + std::to_string(after)
         + "、元の面からの偏差の上限 " + Mm(bound) + " mm(許容 " + Mm(toleranceMm) + " mm)。";
+    if (restricted) result.noteJa += " 使っている範囲だけに整理しました。";
     return Out::Success(std::move(result), finished.Diagnostics());
 }
 } // namespace
+
+std::optional<TopoDS_Face> detail::RestrictOffsetSupport(
+    const TopoDS_Face& face, const geometry::GeometryTolerance& tolerance)
+{
+    try {
+        if (BRepAdaptor_Surface(face).GetType()!=GeomAbs_BSplineSurface) return std::nullopt;
+        // RestrictActiveSupport copies before editing; avoid an extra copy for
+        // every smooth B-spline that already uses the existing offset path.
+        auto support=GeomConvert::SurfaceToBSplineSurface(BRep_Tool::Surface(face));
+        if (Poles(support)>32768 || support->Continuity()!=GeomAbs_C0) return std::nullopt;
+        double roundoff=0;
+        if (!RestrictActiveSupport(face,support,roundoff)
+            || support->Continuity()<GeomAbs_C1 || roundoff>tolerance.modelLinearMm) return std::nullopt;
+        auto made=TrimLike(face,support,tolerance.modelLinearMm,
+            tolerance.modelLinearMm,tolerance.modelLinearMm,true);
+        if (made.IsNull()) return std::nullopt;
+        return made;
+    } catch (const Standard_Failure&) {
+        return std::nullopt; // Keep the existing refusal rather than changing geometry.
+    }
+}
 
 base::Result<SurfaceEditResult> RefitSurface(const modeling::KernelShapeHandle& source,
     double toleranceMm, const geometry::GeometryTolerance& tolerance)

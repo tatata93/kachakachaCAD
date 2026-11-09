@@ -9,6 +9,7 @@
 #include "V2MainWindow.h"
 #include "V2SurfaceEditDock.h"
 #include "V2SurfaceEditTool.h"
+#include "V2SurfaceDock.h"
 #include "V2Viewport.h"
 #include "V2EntityTree.h"
 #include "kachakacha/document/Commands.h"
@@ -17,6 +18,8 @@
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/SurfaceEditInputState.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/io/DocumentFile.h"
+#include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
 
@@ -31,6 +34,14 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QVariant>
+#include <QComboBox>
+#include <QKeyEvent>
+#include <QTemporaryDir>
+
+#ifdef KACHACAD_V2_WITH_OCCT
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "../../../tests_v2/fixtures/inactive-c0-support.inc"
+#endif
 
 #include <string>
 #include <algorithm>
@@ -44,6 +55,29 @@ using kachakacha::v2::app::Shelf;
 using kachakacha::v2::app::SurfaceEditOperation;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::domain::EntityKind;
+
+bool UiClick(QWidget& widget,QPointF point)
+{
+    if(!widget.isVisible()||!widget.isEnabled())return false;
+    for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+        QMouseEvent event(type,point,QPointF(widget.mapToGlobal(point.toPoint())),Qt::LeftButton,
+            type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&widget,&event);
+    }
+    QApplication::processEvents();return true;
+}
+
+bool UiTreeSelect(V2MainWindow& window,EntityId id)
+{
+    auto* tree=window.EntityTree();auto* row=window.ItemOfEntity(id);
+    if(!tree||!row)return false;
+    tree->setFocus();
+    for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
+    tree->scrollToItem(row);QApplication::processEvents();
+    const auto point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+    return tree->itemAt(point)==row&&UiClick(*tree->viewport(),point)
+        &&app::IsSelected(window.Viewport().Selection(),id);
+}
 
 //! その線から平面の面を作る(線を拾う → 面を作る → Enter)。できた面の番号。
 [[nodiscard]] EntityId SurfaceFromRectangle(V2MainWindow& window, const EntityId& rectangle)
@@ -315,18 +349,7 @@ bool SurfaceTreeSelectionHandoff(V2MainWindow& w)
     const auto wire=DrawRectangleAtByHand(w,.25,.3,.55,.65);
     if(!Explain("tree fixture wire created",!wire.IsNil()))return false;
     const auto surface=SurfaceFromRectangle(w,wire);if(!Explain("tree fixture surface created",!surface.IsNil()))return false;
-    const auto clickTree=[&]{
-        auto* tree=w.EntityTree();auto* row=w.ItemOfEntity(surface);if(!tree||!row)return false;
-        for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
-        tree->scrollToItem(row);QApplication::processEvents();
-        const QPointF point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
-        for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}) {
-            QMouseEvent event(type,point,tree->viewport()->mapToGlobal(point.toPoint()),Qt::LeftButton,
-                type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
-            QApplication::sendEvent(tree->viewport(),&event);
-        }
-        QApplication::processEvents();return app::IsSelected(w.Viewport().Selection(),surface);
-    };
+    const auto clickTree=[&]{return UiTreeSelect(w,surface);};
     w.RunCommand("selection.activate");w.Viewport().SetSelection({});
     if(!Explain("mouse can select source row",clickTree()))return false;
     const auto& selected=w.Viewport().Selection();
@@ -360,6 +383,65 @@ bool SurfaceTreeSelectionHandoff(V2MainWindow& w)
         &&CountOfKind(w,EntityKind::Wire)==before&&w.Session().GetDocument().FindEntity(surface)!=nullptr&&w.RebuildProblems().isEmpty());
 }
 
+#ifdef KACHACAD_V2_WITH_OCCT
+bool CroppedSupportToolChain(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto native=kernel::StoreShape(kachakacha_test_fixture::InactiveC0Support(false,true,true,100));
+    const auto captured=kernel::CaptureOutputShape(native);kernel::ReleaseShape(native);
+    if(!captured.HasValue())return false;
+    io::DocumentFile file;file.snapshot=window.Session().GetDocument().Snapshot();
+    domain::Feature feature;feature.id=*base::FeatureId::Parse("f2000000-0000-4000-8000-000000000001");
+    feature.type=domain::FeatureType::FreezeDerived;feature.displayName="切り分けた曲面";
+    domain::FreezeDerivedDefinition definition;definition.frozenBrep=captured.Value();feature.definition=definition;
+    domain::Entity entity;entity.id=*base::EntityId::Parse("f2000000-0000-4000-8000-000000000002");
+    entity.kind=EntityKind::GuideSurface;entity.editPolicy=domain::EditPolicy::Frozen;
+    entity.createdBy=feature.id;entity.displayName=feature.displayName;
+    feature.outputs.push_back({"shape",entity.id,entity.kind});
+    file.snapshot.entities.push_back(entity);file.snapshot.features.push_back(feature);
+    const auto saved=io::SaveDocument(file);QTemporaryDir folder;
+    if(!saved.HasValue()||!folder.isValid())return false;
+    const auto input=folder.filePath("cropped-source.kcd2");
+    if(!io::WriteFileAtomically(input.toStdString(),saved.Value()).HasValue()||!window.OpenDocumentFile(input))return false;
+    const auto confirm=[&]{
+        auto* panel=window.findChild<QWidget*>("currentOperationPanel");if(!panel)return false;
+        for(auto* button:panel->findChildren<QPushButton*>("panelConfirm"))
+            if(button->isVisible())return UiClick(*button,button->rect().center());
+        return false;
+    };
+    window.RunCommand("surface.refit");
+    if(!UiTreeSelect(window,entity.id)||!Explain("cropped smooth source has a refit preview",window.SurfaceEdit().Outcome().available)
+        ||!confirm()||CountOfKind(window,EntityKind::GuideSurface)!=2)return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::GuideSurface)!=1)return false;
+    window.RunCommand("edit.redo");if(CountOfKind(window,EntityKind::GuideSurface)!=2)return false;
+    window.RunCommand("edit.undo");window.RunCommand("selection.activate");
+    if(!UiTreeSelect(window,entity.id))return false;
+    window.RunCommand("surface.create");
+    auto* method=window.findChild<QComboBox*>("surfaceOtherMethods");
+    if(!method||!method->isVisible())return false;
+    method->setFocus();
+    for(int guard=0;method->currentIndex()!=1&&guard<method->count();++guard){
+        QKeyEvent key(QEvent::KeyPress,method->currentIndex()<1?Qt::Key_Down:Qt::Key_Up,Qt::NoModifier);
+        QApplication::sendEvent(method,&key);QApplication::processEvents();
+    }
+    if(!Explain("original cropped source offsets directly after refit undo",method->currentIndex()==1
+        &&window.SurfacePreviewShown())||!confirm()||CountOfKind(window,EntityKind::GuideSurface)!=2)return false;
+    const auto surfaces=app::SelectAllOfKind(window.Session().GetDocument().Snapshot(),EntityKind::GuideSurface);
+    window.RunCommand("selection.activate");
+    if(!UiTreeSelect(window,surfaces.entityIds.back()))return false;
+    window.RunCommand("part.thicken");
+    if(!confirm()||CountOfKind(window,EntityKind::Part)!=1)return false;
+    window.RunCommand("edit.undo");if(CountOfKind(window,EntityKind::Part)!=0)return false;
+    window.RunCommand("edit.redo");if(CountOfKind(window,EntityKind::Part)!=1)return false;
+    if(!window.SaveAndReopen(folder.filePath("cropped-output.kcd2")))return false;
+    const auto* original=window.Session().GetDocument().FindFeature(feature.id);
+    const auto* frozen=original?std::get_if<domain::FreezeDerivedDefinition>(&original->definition):nullptr;
+    return Explain("cropped support tools, history and reopen preserve the original native source",
+        CountOfKind(window,EntityKind::GuideSurface)==2&&CountOfKind(window,EntityKind::Part)==1
+        &&frozen&&frozen->frozenBrep==captured.Value()&&window.RebuildProblems().isEmpty());
+}
+#endif
+
 std::vector<SelfTestCase> SurfaceEditCases()
 {
     std::vector<SelfTestCase> cases{
@@ -374,6 +456,9 @@ std::vector<SelfTestCase> SurfaceEditCases()
         {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
         {"HP-SE-07 folder metadata preserves preview but geometry invalidates it",SurfaceFolderPreview},
         {"HP-SE-08 tree selection enters surface edits and survives tool switches",SurfaceTreeSelectionHandoff},
+#ifdef KACHACAD_V2_WITH_OCCT
+        {"HP-SE-ACTIVE-UV cropped smooth support refit offset thickness and history",CroppedSupportToolChain},
+#endif
     };
     const auto general=GenericShapesCases();cases.insert(cases.end(),general.begin(),general.end());return cases;
 }

@@ -388,7 +388,7 @@ bool SurfaceTreeSelectionHandoff(V2MainWindow& w)
 bool CroppedSupportToolChain(V2MainWindow& window)
 {
     window.RunCommand("file.new");
-    const auto native=kernel::StoreShape(kachakacha_test_fixture::InactiveC0Support(false,true,true,100));
+    const auto native=kernel::StoreShape(kachakacha_test_fixture::InactiveC0Support(false,true,true,100,false,-3e-15));
     const auto captured=kernel::CaptureOutputShape(native);kernel::ReleaseShape(native);
     if(!captured.HasValue())return false;
     io::DocumentFile file;file.snapshot=window.Session().GetDocument().Snapshot();

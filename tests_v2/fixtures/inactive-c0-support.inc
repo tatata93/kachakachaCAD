@@ -9,6 +9,7 @@
 #include <NCollection_Array1.hxx>
 #include <NCollection_Array2.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Wire.hxx>
 #include <gp_Dir2d.hxx>
 #include <gp_Pnt2d.hxx>
 #include <cmath>
@@ -17,7 +18,7 @@
 
 namespace kachakacha_test_fixture {
 inline TopoDS_Face InactiveC0Support(bool creaseInside, bool rational, bool holes,
-    double scale=1, bool nearKnot=false)
+    double scale=1, bool nearKnot=false, double vMinimum=0)
 {
     NCollection_Array2<gp_Pnt> poles(1,5,1,2);
     NCollection_Array2<double> weights(1,5,1,2);
@@ -36,10 +37,7 @@ inline TopoDS_Face InactiveC0Support(bool creaseInside, bool rational, bool hole
         poles,weights,uk,vk,um,vm,2,1,false,false);
     if(nearKnot)support->InsertUKnot(1.2,1,0);
     const double u0=creaseInside?.5:(nearKnot?std::nextafter(1.2,2.):1.2),u1=creaseInside?1.5:1.8;
-    BRepBuilderAPI_MakeFace maker(support,u0,u1,0,1,1e-7);
-    if(holes)for(const auto& rectangle:std::vector<std::vector<gp_Pnt2d>>{
-        {{1.28,.15},{1.28,.4},{1.4,.4},{1.4,.15}},
-        {{1.6,.6},{1.6,.85},{1.73,.85},{1.73,.6}}}){
+    const auto loop=[&](const std::vector<gp_Pnt2d>& rectangle){
         BRepBuilderAPI_MakeWire wire;
         for(std::size_t i=0;i<rectangle.size();++i){
             const auto a=rectangle[i],b=rectangle[(i+1)%rectangle.size()];
@@ -49,8 +47,13 @@ inline TopoDS_Face InactiveC0Support(bool creaseInside, bool rational, bool hole
             wire.Add(edge.Edge());
         }
         if(!wire.IsDone())throw std::runtime_error("fixture trim loop failed");
-        maker.Add(wire.Wire());
-    }
+        return wire.Wire();
+    };
+    BRepBuilderAPI_MakeFace maker(support,
+        loop({{u0,vMinimum},{u1,vMinimum},{u1,1},{u0,1}}),true);
+    if(holes)for(const auto& rectangle:std::vector<std::vector<gp_Pnt2d>>{
+        {{1.28,.15},{1.28,.4},{1.4,.4},{1.4,.15}},
+        {{1.6,.6},{1.6,.85},{1.73,.85},{1.73,.6}}})maker.Add(loop(rectangle));
     auto face=maker.Face();BRepLib::BuildCurves3d(face);
     if(!BRepCheck_Analyzer(face).IsValid())throw std::runtime_error("invalid inactive-C0 fixture");
     return face;

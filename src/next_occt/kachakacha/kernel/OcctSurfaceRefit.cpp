@@ -36,6 +36,7 @@
 #include <gp_Vec.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <exception>
@@ -71,6 +72,41 @@ using Out = base::Result<SurfaceEditResult>;
     return Spline::DownCast(surface->Copy());
 }
 
+using UvBounds = std::array<double,4>;
+
+// A clamped end span is a Bernstein polynomial. At distance s beyond its
+// interval the sum of absolute basis values is (1+2s)^degree. Knot refinement
+// is a positive partition, so the same expression bounds the B-spline basis.
+// Only numerical endpoint overshoot is accepted, never a genuine extension.
+[[nodiscard]] double ExtrapolationFactor(const Spline& surface, const UvBounds& active)
+{
+    constexpr double infinity=std::numeric_limits<double>::infinity();
+    double a,b,c,d;surface->Bounds(a,b,c,d);
+    double factor=1;
+    for(bool u:{true,false}){
+        const double lo=u?a:c,hi=u?b:d,x=active[u?0:2],y=active[u?1:3];
+        if(!std::isfinite(x)||!std::isfinite(y)||!(x<y))return infinity;
+        const double below=std::max(0.,lo-x),above=std::max(0.,y-hi);
+        if(below==0&&above==0)continue;
+        const double allowance=64*std::numeric_limits<double>::epsilon()
+            *std::max({1.,std::abs(lo),std::abs(hi),hi-lo});
+        if(below>allowance||above>allowance)return infinity;
+        const int count=u?surface->NbUKnots():surface->NbVKnots();
+        const int degree=u?surface->UDegree():surface->VDegree();
+        const auto knot=[&](int i){return u?surface->UKnot(i):surface->VKnot(i);};
+        const auto multiplicity=[&](int i){return u?surface->UMultiplicity(i):surface->VMultiplicity(i);};
+        if(count<2||knot(1)!=lo||knot(count)!=hi
+            ||multiplicity(1)!=degree+1||multiplicity(count)!=degree+1)return infinity;
+        const double first=knot(2)-lo,last=hi-knot(count-1);
+        if(!(first>0&&last>0))return infinity;
+        const double s=std::max(below/first,above/last);
+        const double axis=std::nextafter(std::exp(degree*std::log1p(2*s)),infinity);
+        factor=std::nextafter(factor*axis,infinity);
+        if(!std::isfinite(factor))return infinity;
+    }
+    return factor;
+}
+
 // Segment inserts knots and removes unused spans without reparameterizing or
 // approximating the active geometry. A crease elsewhere in the support must
 // not prevent editing a smooth trimmed patch. Periodic/wrapped domains retain
@@ -84,7 +120,12 @@ using Out = base::Result<SurfaceEditResult>;
     surface->Bounds(a,b,c,d);
     BRepTools::UVBounds(face,u0,u1,v0,v1);
     for (double value : {a,b,c,d,u0,u1,v0,v1}) if (!std::isfinite(value)) return false;
-    if (!(u0 < u1 && v0 < v1) || u0 < a || u1 > b || v0 < c || v1 > d) return false;
+    const UvBounds active{u0,u1,v0,v1};
+    if(!std::isfinite(ExtrapolationFactor(surface,active)))return false;
+    // Bound only the support operation. The original pcurves, including their
+    // endpoint roundoff, are retained. An unchanged axis keeps its full basis.
+    u0=std::max(a,u0);u1=std::min(b,u1);v0=std::max(c,v0);v1=std::min(d,v1);
+    if(!(u0<u1&&v0<v1))return false;
     if (u0 == a && u1 == b && v0 == c && v1 == d) return false;
     auto restricted = Copy(surface);
     // No parameter snapping: the stored pcurve coordinates remain authoritative.
@@ -104,6 +145,7 @@ using Out = base::Result<SurfaceEditResult>;
     // accounts for degree elevation/refinement. This is not a new fit tolerance.
     roundoff=64*std::numeric_limits<double>::epsilon()*magnitude
         *(surface->NbUPoles()+surface->NbVPoles()+surface->NbUKnots()+surface->NbVKnots());
+    roundoff*=ExtrapolationFactor(restricted,active);
     if (!std::isfinite(roundoff)) return false;
     surface=std::move(restricted);
     return true;
@@ -165,7 +207,8 @@ struct Knot {
 // surfaces max |Pa-Pb| therefore bounds the distance at EVERY parameter. For rational
 // surfaces use homogeneous numerator/weight differences, with a positive denominator.
 // This is conservative, unlike sparse closest-point samples that can miss a whole ridge.
-[[nodiscard]] double DeviationBound(const Spline& source, const Spline& candidate)
+[[nodiscard]] double DeviationBound(const Spline& source, const Spline& candidate,
+    const UvBounds* active)
 {
     constexpr double infinity = std::numeric_limits<double>::infinity();
     Spline a = Copy(source), b = Copy(candidate);
@@ -199,7 +242,7 @@ struct Knot {
     }
     if (!(scaleA > 0) || !(scaleB > 0)) return infinity;
     const gp_Pnt anchor = a->Pole(1, 1);
-    double numerator = 0, weightDifference = 0, radius = 0, magnitude = 0, minWeight = 1;
+    double numerator = 0, weightDifference = 0, radius = 0, magnitude = 0, minWeight = 1, minCandidateWeight=1;
     for (int i = 1; i <= a->NbUPoles(); ++i) for (int j = 1; j <= a->NbVPoles(); ++j) {
         const double wa = a->Weight(i, j) / scaleA, wb = b->Weight(i, j) / scaleB;
         if (!std::isfinite(wa) || !std::isfinite(wb) || !(wa > 0) || !(wb > 0)) return infinity;
@@ -214,10 +257,22 @@ struct Knot {
                 std::abs(point.Z())});
         }
         minWeight = std::min(minWeight, wa);
+        minCandidateWeight=std::min(minCandidateWeight,wb);
     }
-    const double bound = (numerator + radius * weightDifference) / minWeight;
+    const double factor=active?ExtrapolationFactor(a,*active):1;
+    if(!std::isfinite(factor))return infinity;
+    double bound=(numerator+radius*weightDifference)/minWeight;
+    double amplification=1;
+    if(factor>1){
+        // Beyond a clamped endpoint basis values may be negative. Positive
+        // normalized weights are <=1, hence each denominator is >=minW-(F-1).
+        const double lowerA=minWeight-(factor-1),lowerB=minCandidateWeight-(factor-1);
+        if(!(lowerA>0&&lowerB>0))return infinity;
+        bound=factor*(numerator+factor*radius*weightDifference/lowerB)/lowerA;
+        amplification=factor/std::min({1.,lowerA,lowerB});
+    }
     // Numerical margin for the exact degree elevation / knot insertion above.
-    return bound + 64 * std::numeric_limits<double>::epsilon()
+    return bound + amplification*64 * std::numeric_limits<double>::epsilon()
         * std::max(1.0, magnitude) * (uSize + vSize);
 }
 
@@ -375,11 +430,16 @@ struct Knot {
     }
     const int before = Poles(original);
     if (before > 32768) return Failed("制御点が多く、一度に整えられません。", "面を分けて整えてください。");
+    UvBounds active;BRepTools::UVBounds(face,active[0],active[1],active[2],active[3]);
+    if(!periodic&&!std::isfinite(ExtrapolationFactor(original,active)))
+        return Failed("元の曲面の範囲外まで切断境界が延びています。",
+            "範囲外を切り捨てずに停止しました。元の形は変更していません。");
+    const auto* boundedDomain=periodic?nullptr:&active;
     double restrictionRoundoff=0;
     const bool restricted=!periodic&&RestrictActiveSupport(face,original,restrictionRoundoff);
     if (restrictionRoundoff > toleranceMm) return Failed("有効な面の範囲を許容内で取り出せませんでした。");
     Spline best = ReduceKnots(original, toleranceMm * .25);
-    double bound = DeviationBound(original, best)+restrictionRoundoff;
+    double bound = DeviationBound(original, best,boundedDomain)+restrictionRoundoff;
     if (!std::isfinite(bound) || bound > toleranceMm) {
         best = Copy(original);
         bound = restrictionRoundoff;
@@ -392,7 +452,7 @@ struct Knot {
         if (approximation.IsDone() && !approximation.Surface().IsNull()
             && std::isfinite(approximation.MaxError()) && approximation.MaxError() <= toleranceMm
             && Poles(approximation.Surface()) < Poles(best)) {
-            const double measured = DeviationBound(original, approximation.Surface())+restrictionRoundoff;
+            const double measured = DeviationBound(original, approximation.Surface(),boundedDomain)+restrictionRoundoff;
             if (std::isfinite(measured) && measured <= toleranceMm) {
                 best = approximation.Surface();
                 bound = measured;

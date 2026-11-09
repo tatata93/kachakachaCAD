@@ -653,8 +653,11 @@ KACHA_V2_TEST(kernel_surface_edit, 面へ投影した線は面の上に乗る)
 KACHA_V2_TEST(kernel_surface_edit, cropped_support_refit_and_offset_preserve_active_geometry_and_holes)
 {
     namespace kernel=kachakacha::v2::kernel;
-    for(bool rational:{false,true})for(bool transformed:{false,true})for(bool nearKnot:{false,true}){
-        auto face=kachakacha_test_fixture::InactiveC0Support(false,rational,true,1,nearKnot);
+    for(bool rational:{false,true})for(bool transformed:{false,true})for(bool nearKnot:{false,true})
+    for(double vMinimum:{0.,-3e-15}){
+        auto face=kachakacha_test_fixture::InactiveC0Support(false,rational,true,1,nearKnot,vMinimum);
+        double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
+        Require(vMinimum==0||v0<0,"fixture keeps the trim's roundoff beyond the basis domain");
         if(transformed){
             gp_Trsf pose;pose.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.61);
             pose.SetTranslationPart(gp_Vec(11,-7,4));
@@ -715,6 +718,18 @@ KACHA_V2_TEST(kernel_surface_edit, active_crease_is_not_removed_by_cropping_supp
     Require(!kernel::BuildGuideSurface(request,analysis.Value(),Tolerance(),source).HasValue(),
         "crease within active domain retains offset refusal");
     Require(kernel::CaptureOutputShape(source).Value()==before,"refused operations preserve source bytes");
+    kernel::ReleaseShape(source);
+}
+
+KACHA_V2_TEST(kernel_surface_edit, real_trim_extension_beyond_support_is_not_hidden_as_roundoff)
+{
+    namespace kernel=kachakacha::v2::kernel;
+    const auto source=kernel::StoreShape(
+        kachakacha_test_fixture::InactiveC0Support(false,true,true,1,false,-.001));
+    const auto before=kernel::CaptureOutputShape(source).Value();
+    Require(!kernel::RefitSurface(source,.001,Tolerance()).HasValue(),
+        "a real extension outside the original support cannot be silently clamped");
+    Require(kernel::CaptureOutputShape(source).Value()==before,"refusal leaves the actual trim unchanged");
     kernel::ReleaseShape(source);
 }
 

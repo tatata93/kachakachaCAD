@@ -45,10 +45,17 @@ using modeling::KernelShapeHandle;
 
 namespace {
 
-[[nodiscard]] double VolumeOf(const TopoDS_Shape& shape)
+gp_Pnt VolumeReference(const TopoDS_Shape& shape)
+{
+    for(TopExp_Explorer e(shape,TopAbs_VERTEX);e.More();e.Next())
+        return BRep_Tool::Pnt(TopoDS::Vertex(e.Current()));
+    return {};
+}
+
+[[nodiscard]] double VolumeOf(const TopoDS_Shape& shape,const gp_Pnt& reference)
 {
     GProp_GProps properties;
-    detail::VolumeProperties(shape, properties);
+    detail::VolumeProperties(shape, properties,false,&reference);
     return properties.Mass();
 }
 
@@ -213,8 +220,9 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
             "相手の部品が見つかりません。", "2つ目に選んだ部品です。"));
     }
     try {
-        const double before = VolumeOf(base);
-        const double added = VolumeOf(other);
+        const auto reference=VolumeReference(base);
+        const double before = VolumeOf(base,reference);
+        const double added = VolumeOf(other,reference);
         if (!std::isfinite(before) || !std::isfinite(added) || before <= 0 || added <= 0) {
             return Out::Failure(MakeError(kBooleanFailed,
                 "足し引きの入力が正しい向きの立体ではありません。",
@@ -226,7 +234,7 @@ Result<BooleanBuildResult> BuildBoolean(BooleanOperation operation,
             return Out::Failure(MakeError(kBooleanFailed, "足し引きを行えませんでした。",
                 stoppedAt.empty() ? std::string("形が出来ませんでした。") : stoppedAt));
         }
-        const double after = VolumeOf(made);
+        const double after = VolumeOf(made,reference);
         const double volumeTolerance = std::max(std::pow(std::max(toleranceMm, 1e-6), 3.0),
             std::max(before, added) * 1e-7);
         if (!std::isfinite(after) || after < -volumeTolerance
@@ -309,7 +317,8 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
     try {
         TopoDS_Shape base;
         if (!LookupShape(first, base)) return Out::Failure(MakeError(kBooleanTargetMissing, "土台の部品がありません。", {}));
-        const double before = VolumeOf(base);
+        const auto reference=VolumeReference(base);
+        const double before = VolumeOf(base,reference);
         double sum = before, largest = before;
         if (!std::isfinite(before) || before <= 0) return Out::Failure(MakeError(kBooleanFailed, "土台の体積が不正です。", {}));
         TopTools_ListOfShape arguments, others;
@@ -317,7 +326,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         for (const auto handle : tools) {
             TopoDS_Shape shape;
             if (!LookupShape(handle, shape)) return Out::Failure(MakeError(kBooleanTargetMissing, "相手の部品がありません。", {}));
-            const double volume = VolumeOf(shape);
+            const double volume = VolumeOf(shape,reference);
             if (!std::isfinite(volume) || volume <= 0) return Out::Failure(MakeError(kBooleanFailed, "相手の体積が不正です。", {}));
             sum += volume;
             largest = std::max(largest, volume);
@@ -331,7 +340,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         if (!fuse.IsDone()) return Out::Failure(MakeError(kBooleanFailed, "部品を足す処理に失敗しました。", {}));
         fuse.SimplifyResult(true, true);
         if(!ConnectedUnion(fuse.Shape()))return Out::Failure(DisconnectedAddition());
-        const double after = VolumeOf(fuse.Shape());
+        const double after = VolumeOf(fuse.Shape(),reference);
         const double epsilon = std::max(std::pow(std::max(toleranceMm, 1e-6), 3.0), largest * 1e-7);
         if (!std::isfinite(after) || after < largest - epsilon || after > sum + epsilon)
             return Out::Failure(MakeError(kBooleanFailed, "結合後の体積が入力と矛盾します。", {}));

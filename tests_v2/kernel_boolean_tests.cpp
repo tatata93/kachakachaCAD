@@ -9,6 +9,7 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctThicken.h"
 #include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <gp_Ax1.hxx>
@@ -34,6 +35,7 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::GeometryTolerance;
@@ -114,6 +116,62 @@ KACHA_V2_TEST(kernel_boolean_absent, カーネルが無い版は足し引きせ�
 }
 
 #else
+
+KACHA_V2_TEST(kernel_boolean, five_adjacent_trimmed_offset_plies_preserve_material)
+{
+    using namespace kachakacha::v2;
+    const auto path=std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"trimmed-curved-ply-source.kshape";
+    std::ifstream file(path,std::ios::binary);
+    Require(file.good(),"trimmed curved source fixture is available");
+    const std::string bytes(std::istreambuf_iterator<char>(file),{});
+    const auto source=kernel::RestoreOutputShape(bytes);Require(source.HasValue(),source.FirstSummaryJa());
+    const auto before=kernel::CaptureOutputShape(source.Value()).Value();
+    std::vector<KernelShapeHandle> plies;
+    std::vector<std::string> original;
+    for(int layer=0;layer<5;++layer) {
+        modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::OffsetGuide;
+        request.offsetDistanceMm=-.05-.1*layer;
+        modeling::GuideChain chain;chain.role=modeling::ChainRole::SourceSurface;request.chains.push_back(chain);
+        const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,Tolerance());
+        Require(analysis.HasValue(),analysis.FirstSummaryJa());
+        const auto neutral=kernel::BuildGuideSurface(request,analysis.Value(),Tolerance(),source.Value());
+        Require(neutral.HasValue(),neutral.FirstSummaryJa());
+        const auto stock=kernel::ThickenSurface(neutral.Value().handle,.1,fabrication::ThicknessPlacement::Centered,Tolerance());
+        Require(stock.HasValue(),stock.FirstSummaryJa());
+        kernel::ReleaseShape(neutral.Value().handle);
+        plies.push_back(stock.Value().handle);original.push_back(kernel::CaptureOutputShape(plies.back()).Value());
+    }
+    for(int placement=0;placement<4;++placement) {
+        const auto started=std::chrono::steady_clock::now();
+        std::vector<KernelShapeHandle> inputs;
+        gp_Trsf transform;
+        if(placement>=2)transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.53);
+        if(placement==3)transform.SetTranslationPart(gp_Vec(1000,-2000,3000));
+        for(const auto handle:plies) {
+            TopoDS_Shape native;Require(kernel::LookupShape(handle,native),"source ply exists");
+            inputs.push_back(kernel::StoreShape(BRepBuilderAPI_Transform(native,transform,true).Shape()));
+        }
+        if(placement%2)std::reverse(inputs.begin(),inputs.end());
+        const auto result=kernel::BuildBooleans(BooleanOperation::Union,inputs.front(),
+            std::vector(inputs.begin()+1,inputs.end()),Tolerance().modelLinearMm);
+        Require(result.HasValue(),"placed five-ply union: "+std::to_string(placement)+" "+result.FirstSummaryJa());
+        const auto components=kernel::BooleanSolidComponents(result.Value().handle);
+        Require(components.HasValue()&&components.Value().size()==1,"five touching thin plies form one solid");
+        for(const auto handle:components.Value())kernel::ReleaseShape(handle);
+        Require(result.Value().volumeMm3>220&&result.Value().volumeMm3<222,"no thin ply is lost after order or rigid motion changes");
+        if(placement==0)Require(kernel::OutputStep({result.Value().handle}).HasValue(),"thin curved union exports STEP");
+        kernel::ReleaseShape(result.Value().handle);
+        for(const auto handle:inputs)kernel::ReleaseShape(handle);
+        std::cout<<"trimmed ply placement "<<placement<<" verified in "
+            <<std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()<<" seconds\n"<<std::flush;
+    }
+    for(std::size_t i=0;i<plies.size();++i){
+        RequireEqual(kernel::CaptureOutputShape(plies[i]).Value(),original[i],"original ply geometry is unchanged");
+        kernel::ReleaseShape(plies[i]);
+    }
+    RequireEqual(kernel::CaptureOutputShape(source.Value()).Value(),before,"original trim and support are unchanged");
+    kernel::ReleaseShape(source.Value());
+}
 
 namespace {
 // Preserve the material orientation while representing its solid and shells

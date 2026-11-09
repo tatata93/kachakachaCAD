@@ -239,7 +239,7 @@ public:
 // the exact native surface per continuity interval, without replacing geometry
 // by a mesh or an approximated surface. Planar trims retain their exact area
 // and centroid; other trims integrate their native oriented UV wires.
-std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid) {
+std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid,const gp_Pnt* reference) {
     bool offset=false;
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
         BRepAdaptor_Surface s(TopoDS::Face(e.Current()));
@@ -247,7 +247,8 @@ std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid
     }
     if(!offset)return std::nullopt;
     gp_Pnt origin;
-    for(TopExp_Explorer e(shape,TopAbs_VERTEX);e.More();e.Next()) {origin=BRep_Tool::Pnt(TopoDS::Vertex(e.Current()));break;}
+    if(reference)origin=*reference;
+    else for(TopExp_Explorer e(shape,TopAbs_VERTEX);e.More();e.Next()) {origin=BRep_Tool::Pnt(TopoDS::Vertex(e.Current()));break;}
     // Validate every domain before accumulating anything.
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
         const auto face=TopoDS::Face(e.Current());
@@ -294,8 +295,8 @@ std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid
     return IntegratedProperties(sum,origin,centroid);
 }
 }
-void VolumeProperties(const TopoDS_Shape& shape,GProp_GProps& properties,bool centroid) {
-    if(const auto offset=OffsetVolume(shape,centroid)){properties=*offset;return;}
+void VolumeProperties(const TopoDS_Shape& shape,GProp_GProps& properties,bool centroid,const gp_Pnt* offsetReference) {
+    if(const auto offset=OffsetVolume(shape,centroid,offsetReference)){properties=*offset;return;}
     GProp_GProps measured;
     bool composite=false;
     for(TopExp_Explorer e(shape,TopAbs_FACE);e.More()&&!composite;e.Next()) {

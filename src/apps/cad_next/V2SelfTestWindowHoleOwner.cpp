@@ -17,6 +17,7 @@
 #include "V2EntityTree.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/kernel/OcctSurfaceRegion.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include <QFile>
 #include <QIODevice>
 #include <QPointF>
@@ -771,8 +772,52 @@ bool V2WindowHoleExercise::PreviewMeshReuse(V2MainWindow& w){
     return selftest::Explain("worker display transfers to dependent and independent parts; redo cache rejects changed settings",true);
 }
 namespace kachakacha::v2::selftest {
+bool NarrowPlanarMapping(V2MainWindow&)
+{
+    const std::vector<std::string> fixtures={
+#include "../../../tests_v2/fixtures/narrow-planar-b.inc"
+#include "../../../tests_v2/fixtures/narrow-planar-c.inc"
+    };
+    for(const auto& bytes:fixtures){
+        const auto shape=kernel::RestoreOutputShape(bytes);if(!shape.HasValue())return false;
+        const auto release=qScopeGuard([&]{kernel::ReleaseShape(shape.Value());});
+        const auto before=kernel::CaptureOutputShape(shape.Value());
+        const auto boundary=kernel::FaceBoundaryOf(shape.Value(),0,{});
+        if(!before.HasValue()||!boundary.HasValue()||boundary.Value().outerLoop.size()!=4)return false;
+        for(const bool moved:{false,true})for(const double sampling:{.01,.025}){
+            app::FabricationSource source;source.entityId=*base::EntityId::Parse("ac000000-0000-4000-8000-000000000001");
+            source.flatBoundary=boundary.Value().outerLoop;
+            if(moved)for(auto& curve:*source.flatBoundary){
+                const auto rotated=geometry::RotateCurve(curve,{},geometry::Normalized(geometry::Vector3{1,2,3}),.73);
+                if(!rotated.HasValue())return false;curve=geometry::TranslateCurve(rotated.Value(),{273,-194,87});
+            }
+            fabrication::PlanarPanelRequest request;request.panelId="narrow";request.boundary=*source.flatBoundary;
+            const auto panel=fabrication::BuildPlanarPanel(request,sampling);if(!panel.HasValue())return false;
+            const auto frame=V2PlanarCurves::SourceFrame(panel.Value(),source,sampling);if(!frame)return false;
+            const auto paths=V2PlanarCurves::Paths(panel.Value(),source,{},*frame,sampling);
+            if(!Explain("narrow planar boundaries retain four native curves instead of thousands of tiny lines",
+                paths.size()==1&&paths[0].curves.size()==4))return false;
+            for(const double progress:{0.,.37,1.}){
+                const auto posed=V2PlanarCurves::PoseCurves(paths[0].curves,*frame,progress);
+                if(posed.size()!=4)return false;
+                for(std::size_t i=0;i<posed.size();++i){
+                    if(posed[i].Kind()!=source.flatBoundary->at(i).Kind()
+                        ||std::abs(posed[i].TotalLength(1e-8)-source.flatBoundary->at(i).TotalLength(1e-8))>1e-7)return false;
+                    if(progress==0&&std::abs(posed[i].Evaluate(.37).z)>1e-7)return false;
+                }
+                const auto native=kernel::OutputCurveShape(posed);
+                if(!Explain("all preserved narrow boundary spans remain usable by the native kernel",native.HasValue()))return false;
+                kernel::ReleaseShape(native.Value());
+            }
+        }
+        const auto after=kernel::CaptureOutputShape(shape.Value());
+        if(!Explain("mapping and posing preserve the original native face",after.HasValue()&&after.Value()==before.Value()))return false;
+    }
+    return true;
+}
 std::vector<SelfTestCase> WindowHoleOwnerCases(){
     std::vector<SelfTestCase> cases={{"HP-FAB-REGION six curved windows one pattern and thick solid",[](auto& w){return V2WindowHoleExercise::RegionFixture(w,false);}},
+        {"HP-FAB-PLANAR narrow curve boundaries retain native spans",NarrowPlanarMapping},
         {"HP-FAB-REGION C notch two windows one pattern and thick solid",[](auto& w){return V2WindowHoleExercise::RegionFixture(w,true);}},
         {"PROJ planar generated curves preserve holes and rigid poses",V2WindowHoleExercise::PlanarGeneration},
         {"HP-TH-MESH worker preview mesh moves to confirmed part",V2WindowHoleExercise::PreviewMeshReuse},

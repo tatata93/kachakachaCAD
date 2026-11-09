@@ -12,10 +12,25 @@ std::optional<geometry::PlanarFrame> SourceFrame(const fabrication::PatternPanel
         for(const auto& sample:geometry::SampleCurve(curve,tolerance))points.push_back(sample.position);
     if(points.size()!=panel.outline.size()||points.size()<3)return {};
     const auto first=panel.outline.front();
-    for(std::size_t a=1;a<points.size();++a)for(std::size_t b=a+1;b<points.size();++b) {
+    // Dense samples on a narrow curved boundary begin with nearly collinear
+    // triples. The first nonzero determinant can amplify coordinate roundoff
+    // until the original curves no longer match their own pattern samples.
+    // Use a long baseline and its widest triangle, without changing tolerances
+    // or fitting/altering any source point or curve.
+    std::size_t a=1,b=1;double longest=0,widest=0;
+    for(std::size_t i=1;i<points.size();++i){
+        const double u=panel.outline[i].u-first.u,v=panel.outline[i].v-first.v;
+        const double squared=u*u+v*v;if(squared>longest){longest=squared;a=i;}
+    }
+    const double baselineU=panel.outline[a].u-first.u,baselineV=panel.outline[a].v-first.v;
+    for(std::size_t i=1;i<points.size();++i){
+        const double area=std::abs(baselineU*(panel.outline[i].v-first.v)-baselineV*(panel.outline[i].u-first.u));
+        if(area>widest){widest=area;b=i;}
+    }
+    {
         const double u=panel.outline[a].u-first.u,v=panel.outline[a].v-first.v;
         const double x=panel.outline[b].u-first.u,y=panel.outline[b].v-first.v;
-        const double det=u*y-v*x;if(std::abs(det)<1e-8)continue;
+        const double det=u*y-v*x;if(std::abs(det)<1e-8)return {};
         geometry::PlanarFrame frame;
         frame.uDirection=((points[a]-points[0])*y-(points[b]-points[0])*v)*(1/det);
         frame.vDirection=((points[b]-points[0])*u-(points[a]-points[0])*x)*(1/det);

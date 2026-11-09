@@ -17,12 +17,20 @@ CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動し�
 <table><tr><th>ファイル</th><th>用途</th></tr>
 <tr><td>body-ideal.kcd2 / .step</td><td>元の外形に沿う理想モデル。70部品。</td></tr>
 <tr><td>body-approximation.kcd2 / .step</td><td>組立状態の近似モデル。114個の独立部品、9フォルダー。部品を一つずつ選べます。</td></tr>
+<tr><td>body-flat-stock-layout.kcd2 / .step</td><td>切り出す前の平板114個。白0.1/0.3/0.5/1.0 mmと透明0.2 mmの5フォルダーへ分け、B4相当の範囲に配置しています。</td></tr>
+<tr><td>flat-stock/P001.kcd2〜P114.kcd2</td><td>一つずつ開ける独立した平板部品。厚みと開口を持つソリッドです。</td></tr>
 <tr><td>cutting-patterns-A4-1to1.pdf</td><td>A4・10ページの原寸型紙。用紙に合わせて縮小しないでください。</td></tr>
 <tr><td>cuts/svg、cuts/dxf、cuts/pdf</td><td>P001〜P114の個別型紙。番号と部品名はcomponents.csvで対応します。</td></tr>
 <tr><td>cuts/P076-center-back</td><td>中央部品P076の裏側の切断ガイド。同じ1部品の表裏であり、追加部品ではありません。</td></tr>
 <tr><td>components.csv / components.json</td><td>部品番号・材質・板厚・加工上の注意。JSONには原寸出力の照合記録もあります。</td></tr></table>
 <p>外板の幅は36 mm、車体部分の長さは243.75 mmです。窓枠は外板から約0.05 mm出るため、突起を含む最大幅は約36.10 mmになります。
 外板を36.10 mmへ広げたものではありません。</p>
+<h3>切り出し用CADの確認</h3><ol><li><code>body-flat-stock-layout.kcd2</code>を開きます。横方向に5つの材料区画があります。</li><li>左ペインで希望の材料フォルダーを開き、P番号を選びます。部品名の末尾にも板厚を表示しています。</li><li>「選択を局所表示」「選択にズーム」で形と開口を確認します。全体へ戻すときは「局所表示を解除」を使います。</li><li>一個だけ確認するなら<code>flat-stock/P番号.kcd2</code>を直接開きます。印刷・切断には対応する<code>cuts</code>の2D型紙を使います。</li></ol><p>材料区画は364×257 mm、外周の余白5 mm、部品間の余白2 mmを基準にしています。配置CADは剛体回転・移動だけで作り、拡大縮小していません。表裏と左右の判断はP番号の型紙・部品名を基準にしてください。配置図の向きだけで裏表を決めません。</p><figure><img src="flat-layout.png" alt="実際のCADで開いた114個の平板と5つの材料フォルダー"><figcaption>切り出し前の平板を確認する実CAD画面。印刷には原寸PDF/SVG/DXFを使います。</figcaption></figure>
+<details><summary>01 白0.1 mm・27部品の実画面</summary><img src="flat-board-01.png" alt="白0.1 mmの平板部品を実CADで表示"></details>
+<details><summary>02 白0.3 mm・30部品の実画面</summary><img src="flat-board-02.png" alt="白0.3 mmの平板部品を実CADで表示"></details>
+<details><summary>03 白0.5 mm・39部品の実画面</summary><img src="flat-board-03.png" alt="白0.5 mmの平板部品を実CADで表示"></details>
+<details><summary>04 白1.0 mm・4部品の実画面</summary><img src="flat-board-04.png" alt="白1.0 mmの平板部品を実CADで表示"></details>
+<details><summary>05 透明0.2 mm・14部品の実画面</summary><img src="flat-board-05.png" alt="透明0.2 mmの平板部品を実CADで表示"></details>
 <h2>2. 材料と印刷</h2>
 <table><tr><th>材料</th><th>板厚</th><th>部品数</th><th>主な用途</th></tr>
 <tr><td>白プラ板</td><td>0.1 mm</td><td>27</td><td>主屋根、前面上部、窓枠、下部の細かな積層</td></tr>
@@ -40,7 +48,7 @@ CAD用ZIPは別に展開し、<code>kachakacha_cad_next.exe</code>を起動し�
 <ol><li>まず紙へ「100%」「実際のサイズ」で印刷します。「用紙に合わせる」は解除します。</li>
 <li>各ページの確認尺の両端が50.00 mmか測ります。合わなければ、その紙で切り出しません。</li>
 <li>部品の番号と板厚を確認して板へ写します。左右の向きは用紙上の配置ではなく部品名とCADで確認します。</li>
-<li>黒線の中心が完成寸法です。刃の外側で切り、仮合わせ後に最小限の切断で追い込みます。</li></ol>
+<li>黒線の中心が完成寸法です。刃の外側で切り、仮合わせ後に最小限の切断で追い込みます。細い積層材は周囲の余白を残したまま重ね、接着後に刃で輪郭へ切りそろえる方法も使えます。</li></ol>
 <h2 id="assembly">3. 底板・側板・扉を仮組みする</h2>
 <p>「08_床板と補強」で、底板1 mm、長手桁0.5 mm、Y45・120・195の補強枠1 mmを確認します。
 先頭の補強枠は、前側Aと後側Bの0.5 mm板2枚です。前側Aの上部は前頭屋根に当たらない形です。</p>
@@ -85,8 +93,9 @@ CADの「03_前面下部」で高さを確認し、低い段から積みます�
 <tr><td>前面上部の5枚積層</td><td>有限標本差は右最大約0.000054 mm、左約0.000013 mm。</td></tr>
 <tr><td>側板に統合したサッシ24個</td><td>0.5 mmの一様板厚で、厚み方向の形も照合しました。</td></tr>
 <tr><td>部品同士</td><td>6,441組の外接箱を照合し、455候補を独立に検査。検出した左右2か所の食い込みを端面の切断で解消しました。任意形状に対する万能の非干渉証明ではありません。</td></tr>
-<tr><td>型紙</td><td>個別SVG/DXF/PDFの輪郭と原寸を照合。まとめたPDFの配置は平行移動だけで、拡大・縮小はしていません。</td></tr>
+<tr><td>型紙</td><td>個別SVG/DXF/PDFの輪郭と原寸を照合。まとめたPDFの配置は平行移動・90度単位の回転のみで、拡大・縮小はしていません。</td></tr>
 <tr><td>実物の工作</td><td>未実施。透明板の小半径曲げ、白板の曲げ戻り、接着剤、切りしろ、実印刷を確認する必要があります。</td></tr></table>
+<p>平板114部品の一括STEPは、読込・選択・再読込検査を含む実操作工程で約693秒、確定クリックから完了まで約493秒でした。個別平板を開けるようにもしていますが、この大きな一括出力の高速化は未達です。</p>
 <p>ソフトの全体・配布版検証結果は、同じ<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261109-update7">リリース記録</a>を参照してください。
 「考えられる全形状」「常時60 fps」「あらゆる処理で従来の3倍」を証明したものではありません。</p>
 </html>

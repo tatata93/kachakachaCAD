@@ -29,15 +29,20 @@
 namespace kachakacha::v2::kernel {
 #ifdef KACHACAD_V2_WITH_OCCT
 namespace {
+class BoundaryDepthLimit final:public std::runtime_error {
+public:
+    BoundaryDepthLimit():std::runtime_error("境界標本の上限で許容差を満たせません。"){}
+};
 std::vector<double> BoundaryIntervals(const occ::handle<Geom2d_Curve>& curve,
-    const occ::handle<Geom_Surface>& surface,double begin,double end)
+    const occ::handle<Geom_Surface>& surface,double begin,double end,bool allCurveSpans=false)
 {
     if(begin==end)return {begin,end};
     const double low=std::min(begin,end),high=std::max(begin,end);
     Geom2dAdaptor_Curve edge(curve,low,high);
-    const int count=edge.NbIntervals(GeomAbs_C1);
+    const auto continuity=allCurveSpans?GeomAbs_CN:GeomAbs_C1;
+    const int count=edge.NbIntervals(continuity);
     if(count<=0||count>20000)throw std::runtime_error("境界の折れ位置が多すぎます。");
-    NCollection_Array1<double> parameters(1,count+1);edge.Intervals(parameters,GeomAbs_C1);
+    NCollection_Array1<double> parameters(1,count+1);edge.Intervals(parameters,continuity);
     std::vector<double> cuts;
     for(int i=1;i<=count+1;++i)cuts.push_back(parameters(i));
     // A smooth UV line can still cross a C0 fold in its supporting surface.
@@ -105,11 +110,28 @@ base::Result<FabricationFaceRegion> FabricationRegionOf(modeling::KernelShapeHan
                         require(actual.IsFinite()&&chart.IsFinite(),"境界の評価が不正です。");
                         error=std::max({error,geometry::Distance(actual,chord),geometry::Distance(actual,chart)});}
                     require(std::isfinite(error),"境界の標本が不正です。");
-                    if(depth<3||error>tolerance){require(depth<20&&loop.size()<20000,"境界標本の上限で許容差を満たせません。");const double mid=(a+b)*.5;sample(a,mid,depth+1);sample(mid,b,depth+1);}
+                    if(depth<3||error>tolerance){
+                        require(loop.size()<20000,"境界標本の上限で許容差を満たせません。");
+                        if(depth>=20)throw BoundaryDepthLimit();
+                        const double mid=(a+b)*.5;sample(a,mid,depth+1);sample(mid,b,depth+1);}
                     else{require(totalPoints++<20000,"境界標本の上限に達しました。");result.boundarySamplingDeviationMm=std::max(result.boundarySamplingDeviationMm,error);loop.push_back(pa);}
                 };
                 const auto intervals=BoundaryIntervals(curve,surface,begin,end);
-                for(std::size_t i=1;i<intervals.size();++i)sample(intervals[i-1],intervals[i],0);
+                const auto edgeStart=loop.size(),pointsBefore=totalPoints;
+                const double deviationBefore=result.boundarySamplingDeviationMm;
+                try {
+                    for(std::size_t i=1;i<intervals.size();++i)sample(intervals[i-1],intervals[i],0);
+                } catch(const BoundaryDepthLimit&) {
+                    // A short smooth knot span can require more midpoint
+                    // bisections than the fixed depth budget. Retry this edge
+                    // once at its native spans; retain the normal C1 path for
+                    // successful inputs and densely knotted straight curves.
+                    const auto native=BoundaryIntervals(curve,surface,begin,end,true);
+                    if(native==intervals)throw;
+                    loop.resize(edgeStart);totalPoints=pointsBefore;
+                    result.boundarySamplingDeviationMm=deviationBefore;
+                    for(std::size_t i=1;i<native.size();++i)sample(native[i-1],native[i],0);
+                }
             }
             require(loop.size()>=3,"閉じた境界を取得できません。");result.loops.push_back(std::move(loop));
         }

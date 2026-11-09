@@ -17,6 +17,9 @@
 #include <BRepLib.hxx>
 #include <BRep_Tool.hxx>
 #include <Geom2d_Line.hxx>
+#include <Geom2d_BSplineCurve.hxx>
+#include <Geom2dAdaptor_Curve.hxx>
+#include <Geom_Plane.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <NCollection_Array1.hxx>
 #include <NCollection_Array2.hxx>
@@ -34,6 +37,9 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 using namespace kachakacha::v2;
 using test::Require;
 using test::RequireNear;
@@ -171,6 +177,62 @@ KACHA_V2_TEST(kernel_folded_offset, original_folded_material_boundary_does_not_e
     Require(region.Value().loops.size()==3,"outer and both holes sampled without changing the tolerance");
     Require(region.Value().boundarySamplingDeviationMm<=budget,"original boundary sampling budget retained");
     Require(before.Value()==kernel::CaptureOutputShape(source).Value(),"source untouched");
+    kernel::ReleaseShape(source);
+}
+
+KACHA_V2_TEST(kernel_folded_offset, short_smooth_native_spans_preserve_the_boundary_budget_and_source)
+{
+    std::ifstream file(std::filesystem::path(KACHACAD_TEST_FIXTURE_DIR)/"short-smooth-boundary-spans.kshape",std::ios::binary);
+    Require(file.good(),"short smooth boundary fixture exists");
+    const std::string bytes(std::istreambuf_iterator<char>(file),{});
+    const auto restored=kernel::RestoreOutputShape(bytes);Require(restored.HasValue(),restored.FirstSummaryJa());
+    const auto original=kernel::CaptureOutputShape(restored.Value()).Value();
+    for(const double scale:{1.,.1,10.})for(const bool moved:{false,true})for(const bool reverse:{false,true}) {
+        TopoDS_Shape native;Require(kernel::LookupShape(restored.Value(),native),"source exists");
+        gp_Trsf pose;pose.SetScale(gp_Pnt(),scale);
+        if(moved){gp_Trsf rotation;rotation.SetRotation(gp_Ax1(gp_Pnt(),gp_Dir(1,2,3)),.53);pose=rotation*pose;pose.SetTranslationPart(gp_Vec(17,-11,5));}
+        auto shape=BRepBuilderAPI_Transform(native,pose,true).Shape();if(reverse)shape.Reverse();
+        const auto source=kernel::StoreShape(shape);const auto before=kernel::CaptureOutputShape(source).Value();
+        const double budget=.0005*scale;
+        const auto region=kernel::FabricationRegionOf(source,0,budget);
+        Require(region.HasValue(),"short smooth span at scale "+std::to_string(scale)+": "+region.FirstSummaryJa());
+        Require(region.Value().loops.size()==1&&region.Value().loops.front().size()>=4,
+            "the complete single material boundary is retained");
+        Require(region.Value().loops.front().size()<=20000&&region.Value().boundarySamplingDeviationMm<=budget,
+            "original point limit and geometric budget are not widened");
+        Require(before==kernel::CaptureOutputShape(source).Value(),"placed source curves and trims remain unchanged");
+        kernel::ReleaseShape(source);
+    }
+    Require(original==kernel::CaptureOutputShape(restored.Value()).Value(),"original source remains unchanged");
+    kernel::ReleaseShape(restored.Value());
+}
+
+KACHA_V2_TEST(kernel_folded_offset, redundant_smooth_knots_do_not_multiply_straight_boundary_samples)
+{
+    constexpr int count=3000,degree=3,poleCount=count+2;
+    NCollection_Array1<double> knots(1,count);NCollection_Array1<int> multiplicities(1,count);
+    std::vector<double> expanded;
+    for(int i=1;i<=count;++i){knots(i)=double(i-1)/(count-1);multiplicities(i)=i==1||i==count?degree+1:1;
+        for(int j=0;j<multiplicities(i);++j)expanded.push_back(knots(i));}
+    NCollection_Array1<gp_Pnt2d> poles(1,poleCount);
+    for(int i=0;i<poleCount;++i)poles(i+1)=gp_Pnt2d(10*(expanded[i+1]+expanded[i+2]+expanded[i+3])/3,0);
+    const occ::handle<Geom2d_BSplineCurve> curve=new Geom2d_BSplineCurve(poles,knots,multiplicities,degree);
+    const occ::handle<Geom_Surface> surface=new Geom_Plane(gp_Pnt(),gp_Dir(0,0,1));
+    BRepBuilderAPI_MakeWire wire;wire.Add(BRepBuilderAPI_MakeEdge(curve,surface,0,1).Edge());
+    const std::vector<gp_Pnt2d> corners{{10,0},{10,3},{0,3},{0,0}};
+    for(std::size_t i=1;i<corners.size();++i){const gp_Vec2d delta(corners[i-1],corners[i]);
+        const occ::handle<Geom2d_Line> line=new Geom2d_Line(gp_Ax2d(corners[i-1],gp_Dir2d(delta)));
+        wire.Add(BRepBuilderAPI_MakeEdge(line,surface,0,delta.Magnitude()).Edge());}
+    auto face=BRepBuilderAPI_MakeFace(surface,wire.Wire(),true).Face();
+    Require(BRepLib::BuildCurves3d(face,1e-7)&&BRepCheck_Analyzer(face).IsValid(),"valid dense but geometrically straight boundary");
+    Require(Geom2dAdaptor_Curve(curve).NbIntervals(GeomAbs_CN)>2500,"control has many native smooth spans");
+    const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source).Value();
+    const auto region=kernel::FabricationRegionOf(source,0,1e-6);
+    Require(region.HasValue(),region.FirstSummaryJa());
+    Require(region.Value().loops.size()==1&&region.Value().loops.front().size()<=64,
+        "a straight boundary does not grow thousands of needless samples");
+    Require(region.Value().boundarySamplingDeviationMm<=1e-6,"straight boundary retains its accuracy");
+    Require(before==kernel::CaptureOutputShape(source).Value(),"redundant native knots are not rewritten");
     kernel::ReleaseShape(source);
 }
 #endif

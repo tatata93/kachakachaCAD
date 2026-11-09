@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>短い滑らかな区間を含む境界の製作モデル化 — 2026-11-09</title>
+<style>body{font:16px/1.8 sans-serif;max-width:1000px;margin:2em auto;padding:0 1em;color:#222}img{max-width:100%;height:auto}code{overflow-wrap:anywhere}</style>
+<h1>短い滑らかな境界で型紙を作れない問題</h1>
+<p>限定実装の関連回帰を確認済み。全体・配布版ゲートは待ちであり、公開更新6はこの変更を含まない。</p>
+<p>実UI382で有効な平面から分割・押し出し・独立平板とSTEPを作れたが、同じ面を製作モデルにすると「境界標本の上限」で停止した。独立診断385/386bでも、C1区間内の短い滑らかなノット区間をまたぐ細分化が、深さ20・157点・偏差約0.000599691 mmとなり、既存の0.0005 mmを満たさないことを確認した。</p>
+<p>同じ曲線のnativeの全区間を先に区切る診断は、偏差約0.000499497 mmで成功し元nativeも保持した。ただし全ての入力を常時この経路へ変えると、冗長ノットを持つ直線まで不要な標本を大量生成する。そのため通常のC1経路を維持し、深さ上限に達した辺だけ、未採用の標本・点数・偏差を戻してnative CN区間で一度だけ再試行する。</p>
+<p>許容差、深さ20、面全体20000点の上限は変えない。形、穴、切り欠き、元の曲線、公開APIと保存形式も変えない。二回目も満たせない場合や不正入力は引き続き拒否する。</p>
+<ul><li>修正前：短い区間の追加例だけ失敗。既存例と冗長な直線の計5件は成功。</li>
+<li>修正後：コア6件成功。拡縮・回転・反転の12条件、複数穴/切り欠きと既存拒否、3000ノットの直線でも64点以下の標本と元の境界精度・native保持を確認。</li>
+<li>関連CTestの2群、HP-FABのUI10件とHP-OUTのUI23件が成功。</li>
+<li>実UI388：同じ保存面から型紙3形式、Flat Wireと面、厚み、保存・履歴、独立KCD2/STEPと再読込が成功。</li>
+<li>実UI389：残り12工程が成功。裾の平板30枚と各型紙を作成した。</li></ul>
+<figure><img src="short-boundary-spans-20261109/after.png" alt="実CADで失敗していた保存面から平板を作成し、独立KCD2を再度開いた画面"><figcaption>試験用の図ではなく実CADの操作画面。元の保存面を使って再現した。</figcaption></figure>
+<p>平板の初回検査394では、押し出し側面の保守的な外接箱がキャップ平面を約0.000001984 mm越えるため停止した。394bは板厚を決める二平面と全体の包絡を区別し、正しい高さの二平面、0.0005 mmの既存境界予算内の包絡、30個の閉ソリッドと切り出し面積・板厚・SVG/DXF/PDFを照合した。最初の記録を削除せず、製品や許容差を変えたものではない。</p>
+<p>これらは部品単体の検査であり、組み立てた外形、継ぎ目や実工作の検証は別に進める。全車体の製作モデル・全型紙・実工作の完了とは扱わない。</p>
+<p>証拠は<code>out/series115-plaboard-20261105/</code>の385/386b、387（修正前）/388（修正後）、<code>actual-boundary-span-left-corner-flat-20261109/</code>、<code>actual-boundary-span-corner-stock-remainder-20261109/</code>、391、394/394b。回帰入力は<code>tests_v2/fixtures/short-smooth-boundary-spans.kshape</code>。診断形状をCADへ読み戻していない。</p>
+</html>

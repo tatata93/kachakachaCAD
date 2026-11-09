@@ -12,6 +12,7 @@
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/app/GroupTree.h"
+#include "kachakacha/geometry/WireChain.h"
 #include <QCoreApplication>
 #include <QEvent>
 #include "kachakacha/kernel/OcctTessellate.h"
@@ -237,7 +238,7 @@ bool CaseOutputManufacturing(V2MainWindow& window){
     auto* contents=window.findChild<QComboBox*>("fabricationGenerationOutput");if(!contents)return false;contents->setCurrentIndex(3);
     V2OutputTool::Generate(window,"fabrication.freeze_state");
     V2OutputTool* generated=nullptr;for(auto* d:window.findChildren<QDialog*>())if(d->isVisible()&&d->objectName()=="selectionOutput")generated=dynamic_cast<V2OutputTool*>(d);
-    if(!Explain("生成も共通プレビューで指定部材の閉じた輪郭と面",generated&&generated->AssetCount()==2))return false;
+    if(!Explain("帯近似の生成プレビューは指定部材の四辺と面",generated&&generated->AssetCount()==5))return false;
     generated->ChooseFormat(2);generated->SetPlacement({});
     if(!generated->SaveTo(folder.filePath("generated.kcd2")))return false;
     const auto load=[&](const char* name){
@@ -246,7 +247,7 @@ bool CaseOutputManufacturing(V2MainWindow& window){
     };
     const auto expected=load("panel.kcd2"),actual=load("generated.kcd2");
     if(!Explain("出力と固定の同じ部材を読み戻せる",expected.HasValue()&&actual.HasValue()
-        &&expected.Value().snapshot.entities.size()==1&&actual.Value().snapshot.entities.size()==2))return false;
+        &&expected.Value().snapshot.entities.size()==1&&actual.Value().snapshot.entities.size()==5))return false;
     const auto native=[](const auto& snapshot){
         for(const auto& entity:snapshot.entities)if(entity.kind==domain::EntityKind::GuideSurface)
             for(const auto& feature:snapshot.features)if(feature.id==entity.createdBy)
@@ -263,11 +264,11 @@ bool CaseOutputManufacturing(V2MainWindow& window){
         &&geometry::Distance(expectedMesh.Value().maximum,actualMesh.Value().maximum)<1e-5))return false;
     std::vector<geometry::CurveSegment> boundary;
     for(const auto& feature:actual.Value().snapshot.features)
-        if(const auto* wire=std::get_if<domain::CreateWireDefinition>(&feature.definition))boundary=wire->segments;
-    if(!Explain("四辺を含む閉輪郭を一つのワイヤとして保持",boundary.size()>=4
-        &&geometry::Distance(boundary.front().StartPoint(),boundary.back().EndPoint())<1e-6))return false;
+        if(const auto* wire=std::get_if<domain::CreateWireDefinition>(&feature.definition))
+            boundary.insert(boundary.end(),wire->segments.begin(),wire->segments.end());
+    if(!Explain("四辺を合わせると欠けや重複のない閉輪郭になる",boundary.size()>=4
+        &&geometry::SegmentsFormClosedLoop(boundary,window.Session().GetDocument().Snapshot().settings.tolerance)))return false;
     for(std::size_t i=0;i<boundary.size();++i){
-        if(geometry::Distance(boundary[i].EndPoint(),boundary[(i+1)%boundary.size()].StartPoint())>1e-6)return false;
         for(const double parameter:{0.,.5,1.}){
             const auto distance=kernel::DistanceToShapeSurface(actualShape.Value(),boundary[i].Evaluate(parameter));
             if(!Explain("輪郭は生成面の上にあり形状を省略しない",distance.HasValue()&&distance.Value()<1e-5))return false;

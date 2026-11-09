@@ -1,21 +1,26 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><title>穴のない曲面の展開・固定の修正</title>
 <style>body{font:16px/1.7 sans-serif;max-width:1080px;margin:32px auto;padding:0 24px;color:#222}img{width:100%;height:auto;border:1px solid #888}code{overflow-wrap:anywhere}table{border-collapse:collapse}th,td{border:1px solid #aaa;padding:8px;text-align:left}</style>
 <h1>穴のない曲面から型紙を作った後、輪郭を固定できない問題</h1>
-<p>2026-11-09。WP-09の既存native製作入力providerだけを限定修正。重点試験は成功。全体・配布版ゲートと公開はこれから行う。全車体の製作モデルと型紙、生成物の細分化の軽量化は未完了。</p>
+<p>2026-11-09。WP-09の既存native製作入力providerと方式分岐の非公開処理を限定修正。重点試験は成功。全体・配布版ゲートと公開はこれから行う。全車体の製作モデルと型紙、生成物の細分化の軽量化は未完了。</p>
 <h2>実際の操作で見つかった問題</h2>
 <p>公開更新4で、部品の曲面を選択して独立面を取り出し、面オフセット−0.15 mmで板厚中央の面を作った。その面から「面の形から展開」で型紙を作り、SVG・DXF・PDFへ出力できた。しかし右乗務員扉の裾でFlat Wireを生成すると、変更を取り消して失敗した。左側の同等面は生成できた。</p>
 <figure><img src="curved-rectangle-freeze-20261109/before.png" alt="実際のCADでFlat Wire生成が失敗した画面"><figcaption>修正前。同じ保存中立面を保全し、生成できなかった経路を記録した。</figcaption></figure>
 <h2>原因と変更</h2>
 <p>providerは境界を正常に取得していたが、正規化UVで完全な長方形になる曲面だけ材料境界を省略していた。その経路では面分類の型紙だけができ、固定処理に必要な組立対応とレールがなかった。左側はUVに微小差があり、境界を保持する別の経路へ進んでいた。</p>
-<p>取得した曲面の境界を、穴の有無とUV長方形判定にかかわらず渡す。平面は従来の曲線型付き境界を引き続き使う。許容差を広げず、公開API・保存形式・元形状/穴/寸法と不正入力の拒否を変更しない。鉄道模型専用の条件は追加しない。</p>
+<p>native入力では取得済みの境界を省略せず、面の分類後も組立対応を保持する。明示した帯近似では、妥当性検査済みの全UV矩形で穴・切り欠きがない場合だけ従来のレール生成を使い、不要な再トリムを行わない。平面は従来の曲線型付き境界を引き続き使う。許容差を広げず、公開API・保存形式・元形状/穴/寸法と不正入力の拒否を変更しない。鉄道模型専用の条件は追加しない。</p>
 <h2>確認した操作と測定</h2>
 <table><tr><th>確認</th><th>結果</th></tr>
 <tr><td>新しい回帰試験</td><td>修正前に材料境界の保持で失敗。修正後は回転・曲線方向反転を含む円筒面から、0/100%の境界と編集可能なワイヤを生成。材料面積と元native形状の保持も成功。</td></tr>
 <tr><td>関連UI試験</td><td>6穴、C形切り欠き、接線面を跨ぐ開口、曲げ・捩れ・短い折れを含むHP-FABの10件が成功。</td></tr>
 <tr><td>添付由来の保存中立面</td><td>実UI294で型紙3形式→Flat Wire→面→中央0.3 mmの厚み→保存→Undo/Redo→独立KCD2。再読込した実UI295でSTEPも成功。294末尾のSTEPだけ試験側の相対パス指定で期待先へ保存されず、295で絶対パスへ直して確認した。</td></tr>
+<tr><td>性能修正後の実UI303</td><td>失敗時と同じ保存中立面から型紙3形式・輪郭・面・中央0.3 mm厚み・Undo/Redo・独立KCD2/STEP・再読込まで成功。nativeの体積は前候補と一致した。証拠はactual-candidate16-final-rectangle-and-former-20261109と304-final-native-proof.json。</td></tr>
 <tr><td>実際の平板部品</td><td>有効な1ソリッド、6フェイス、体積7.7841808611806265 mm³。入力中立面と原本は保全。</td></tr>
 <tr><td>出力した型紙</td><td>6.5×3.9919 mm、閉じた輪郭1個。独立読み込みの有限標本差はSVG/DXF約0.000012 mm、SVG/PDF約0.00015 mm。物理印刷や工作の証明ではない。</td></tr>
 </table>
 <figure><img src="curved-rectangle-freeze-20261109/after.png" alt="実際のCADで再読込した0.3mm厚の平板部品"><figcaption>修正後に作成し、独立KCD2を再読込した平板部品。</figcaption></figure>
-<p>再現・証拠は作業出力の<code>curved-rectangle-before-20261109</code>、<code>curved-rectangle-after-20261109</code>、<code>curved-rectangle-related-fabrication-20261109</code>、<code>actual-candidate15-right-cab-neutral-20261109</code>、<code>actual-candidate15-right-cab-reopen-step-20261109</code>、<code>294-right-cab-cut-proof.json</code>に保存した。全体ゲートの結果は完了後に追記する。</p><p>最初の全体ゲートはHP-OUT-04の旧期待値（4本のワイヤと面の5資産）で失敗を確認して中断した。取得した境界を保持した結果は閉輪郭1本と面1枚である。既存試験を、独立出力を読み戻して同じ指定部材の範囲・全辺の接続・生成面上の輪郭・配置取消時の文書保持も検査する内容へ更新した。強化した試験は成功。試験追加中の最初の重点実行では生成先を同じ文書のまま保存したため失敗し、独立KCD2と元位置を明示して再試験した。製品の許容差や安全条件は変更していない。中断記録は旧runのinterruption.json。新しい全体ゲートを実施する。</p>
+<p>再現・証拠は作業出力の<code>curved-rectangle-before-20261109</code>、<code>curved-rectangle-final-related-fabrication-20261109</code>、<code>actual-candidate15-right-cab-neutral-20261109</code>、<code>actual-candidate15-right-cab-reopen-step-20261109</code>、<code>294-right-cab-cut-proof.json</code>に保存した。全体ゲートの結果は完了後に追記する。</p>
+<h2>途中で見つけた退行と最終候補</h2>
+<p>最初の全体ゲートでは、帯近似でも境界を一律に材料トリムへ渡したため、既存HP-OUT-04の4ワイヤと面の5資産が閉輪郭と面の2資産へ変わり失敗した。試験を独立出力の再読込・指定部材の範囲・閉輪郭・面上の全辺・取消時の文書保持まで確認するよう強化した。試験追加中の最初の重点実行では生成先を同じ文書のまま保存したため失敗し、独立KCD2と元位置を明示して再試験した。</p>
+<p>次の全体検証で、帯近似の2操作が約1.266→42.896秒、15.625→40.762秒へ悪化したため、公開せず中断した。方式分岐の上記最適化で帯近似の従来経路と4辺のワイヤを保ち、分類方式は閉輪郭と組立対応を保持する。新しいコア回帰は修正前に失敗し、修正後の15件が成功。明示矩形の有無によらず型紙・0/37/100%の姿勢・偏差が同じで、穴を残し不正な折り返し辺を拒否する。関連UI8件も成功し、2操作は今回の重点計測で1.612秒、17.929秒へ戻った。全体の高速化率や常時60fpsの証明ではない。</p>
+<p>中断した2回の全体検証は各runの<code>interruption.json</code>とログを保全。最終候補は新しい全体ゲートを実施する。</p>
 </html>

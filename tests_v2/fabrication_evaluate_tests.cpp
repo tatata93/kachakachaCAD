@@ -110,6 +110,58 @@ KACHA_V2_TEST(fabrication_evaluate, 展開できる面はどちらの方式で�
     Require(banded.Value().panels.back().folds.empty(), "最後の帯には無い");
 }
 
+KACHA_V2_TEST(fabrication_evaluate, complete_material_rectangle_keeps_the_original_band_path)
+{
+    auto source=Cylinder();
+    auto explicitRegion=source;
+    explicitRegion.materialRegionsUv.push_back({{{{0,0},{1,0},{1,1},{0,1}}}});
+    explicitRegion.boundarySamplingDeviationMm=.0003;
+    auto definition=Definition(1);definition.equalPartCount=3;definition.maximumPartCount=6;
+    definition.splitAtCorners=false;
+    const auto original=EvaluateFabrication(definition,{source},{},.01);
+    const auto rectangular=EvaluateFabrication(definition,{explicitRegion},{},.01);
+    Require(original.HasValue(),original.FirstMessageJa());
+    Require(rectangular.HasValue(),rectangular.FirstMessageJa());
+    Require(rectangular.Value().materialPanels.empty(),"a validated full rectangle needs no trim rebuild in explicit band mode");
+    Require(rectangular.Value().panels.size()==original.Value().panels.size(),"same panel count");
+    kachakacha::v2::test::RequireNear(rectangular.Value().maximumDeviationMm,
+        original.Value().maximumDeviationMm,1e-12,"same measured deviation");
+    for(std::size_t i=0;i<original.Value().panels.size();++i){
+        const auto& a=original.Value().panels[i];const auto& b=rectangular.Value().panels[i];
+        Require(a.outline.size()==b.outline.size(),"same exact cut point count");
+        Require(a.openings.size()==b.openings.size(),"same openings");
+        for(std::size_t j=0;j<a.outline.size();++j){
+            kachakacha::v2::test::RequireNear(a.outline[j].u,b.outline[j].u,1e-10,"same cut u");
+            kachakacha::v2::test::RequireNear(a.outline[j].v,b.outline[j].v,1e-10,"same cut v");
+        }
+    }
+    for(const double progress:{0.,37.,100.}){
+        definition.masterPercent=progress;
+        const auto a=FoldedRailsOf(definition,original.Value(),0),b=FoldedRailsOf(definition,rectangular.Value(),0);
+        Require(a.size()==b.size(),"same number of folded rails");
+        for(std::size_t i=0;i<a.size();++i){Require(a[i].size()==b[i].size(),"same rail stations");
+            for(std::size_t j=0;j<a[i].size();++j)kachakacha::v2::test::RequireNear(
+                kachakacha::v2::geometry::Distance(a[i][j],b[i][j]),0,1e-10,"same actual pose");}
+    }
+    Require(explicitRegion.materialRegionsUv.size()==1,"the caller's source boundary is unchanged");
+}
+
+KACHA_V2_TEST(fabrication_evaluate, rectangle_fast_path_never_discards_holes_or_invalid_edges)
+{
+    auto source=Cylinder();
+    source.materialRegionsUv.push_back({{{{0,0},{1,0},{1,1},{0,1}},{{.4,.4},{.6,.4},{.6,.6},{.4,.6}}}});
+    auto definition=Definition(1);definition.equalPartCount=definition.maximumPartCount=1;
+    definition.splitAtCorners=false;
+    const auto holed=EvaluateFabrication(definition,{source},{},.01);
+    Require(holed.HasValue(),holed.FirstMessageJa());
+    Require(!holed.Value().materialPanels.empty(),"actual holes still need material mapping");
+    Require(holed.Value().panels.size()==1,"one cut sheet");
+    Require(holed.Value().panels[0].openings.size()==1,"one hole is retained");
+    source.materialRegionsUv={{{{{0,0},{1,0},{.5,0},{1,0},{1,1},{0,1}}}}};
+    const auto invalid=EvaluateFabrication(definition,{source},{},.01);
+    Require(!invalid.HasValue(),"overlapping backtracking edges must be rejected before rectangular optimization");
+}
+
 KACHA_V2_TEST(fabrication_evaluate, 面の範囲を狭めると標本が範囲の中だけになり壊れた範囲は断る)
 {
     // V1 の板材の「範囲」。u 0.5〜1.0 だけを使うと、筒の半分だけが近似される。

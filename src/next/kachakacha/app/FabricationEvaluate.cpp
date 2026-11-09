@@ -21,6 +21,22 @@ using base::Result;
 using fabrication::BandMesh;
 using fabrication::PatternPanel;
 
+bool IsCompleteMaterialRectangle(const std::vector<fabrication::BandMaterialRegion>& regions)
+{
+    if(regions.size()!=1||regions[0].loops.size()!=1||regions[0].loops[0].size()<4)return false;
+    const auto& loop=regions[0].loops[0];
+    const double epsilon=geometry::GeometryTolerance{}.numericEpsilon;
+    double twiceArea=0;
+    for(std::size_t i=0;i<loop.size();++i){
+        const auto a=loop[i],b=loop[(i+1)%loop.size()];
+        const bool onU=std::abs(a.u-b.u)<=epsilon&&(std::abs(a.u)<=epsilon||std::abs(a.u-1)<=epsilon);
+        const bool onV=std::abs(a.v-b.v)<=epsilon&&(std::abs(a.v)<=epsilon||std::abs(a.v-1)<=epsilon);
+        if(!onU&&!onV)return false;
+        twiceArea+=a.u*b.v-a.v*b.u;
+    }
+    return std::abs(std::abs(twiceArea)*.5-1)<=epsilon*(loop.size()+1);
+}
+
 [[nodiscard]] std::string Rounded(double value)
 {
     if(value!=0&&std::abs(value)<.001){char buffer[64];
@@ -596,9 +612,16 @@ Result<FabricationEvaluation> EvaluateFabrication(
             source.materialRegionsUv=std::move(regions);
         }
     }
-    return FabricationMethodOf(definition) == FabricationMethod::BandApproximation
-        ? EvaluateByBands(definition, cropped, markings, toleranceMm)
-        : EvaluateByClassification(definition, cropped, markings, toleranceMm);
+    if(FabricationMethodOf(definition)==FabricationMethod::BandApproximation){
+        // Only after clipping has validated the material, use the original
+        // untrimmed strip path for a complete domain with no holes or notches.
+        // Classification keeps its boundary so a later freeze has its rails.
+        for(auto& source:cropped)if(IsCompleteMaterialRectangle(source.materialRegionsUv)){
+            source.materialRegionsUv.clear();source.boundarySamplingDeviationMm=0;
+        }
+        return EvaluateByBands(definition,cropped,markings,toleranceMm);
+    }
+    return EvaluateByClassification(definition,cropped,markings,toleranceMm);
 }
 
 std::vector<PatternPanel> PanelsFromBandMesh(const std::string& baseName,

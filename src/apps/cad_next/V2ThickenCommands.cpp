@@ -14,6 +14,7 @@
 #include "V2Calculation.h"
 #include "V2SolidOutputPreview.h"
 #include "V2GeneratedCurves.h"
+#include "V2GeneratedBoundaryOutput.h"
 
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
@@ -58,9 +59,7 @@ auto BoundaryWiresFor(const V2ThickenPreviewState& state,
     using Result=base::Result<std::vector<std::vector<geometry::CurveSegment>>>;
     const auto found=state.builtWires.find(handle.value);
     if(found==state.builtWires.end()) {
-        auto result=kernel::OutputBoundaryWires(handle,tolerance);
-        if(result.HasValue())return Result::Success(V2GeneratedBoundaryRuns(result.Value(),tolerance),result.Diagnostics());
-        return result;
+        return V2GeneratedShapeBoundaries(handle,tolerance);
     }
     if(found->second.empty())return Result::Failure(base::MakeWarning("EXP-W002",
         "厚みの境界ワイヤーを作れません。","ソリッドのみを選んでください。"));

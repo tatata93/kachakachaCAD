@@ -2,6 +2,7 @@
 //! 「シェル・分割」の道具。V2ShellSplitTool.h の頭の注記を見よ。
 
 #include "V2ShellSplitTool.h"
+#include "V2GeneratedBoundaryOutput.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -473,7 +474,7 @@ void V2ShellSplitTool::ConfirmShell()
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
     const auto mode=dock_->OutputMode();
     if(kachakacha::v2::app::IncludesWires(mode)) {
-        const auto edges=kachakacha::v2::kernel::OutputBoundaryWires(handle,document.Snapshot().settings.tolerance.modelLinearMm);
+        const auto edges=V2GeneratedShapeBoundaries(handle,document.Snapshot().settings.tolerance.modelLinearMm);
         if(!edges.HasValue()){window_.ReportDiagnostics(edges.Diagnostics());return;}
         if(!edges.Diagnostics().empty())window_.ReportDiagnostics(edges.Diagnostics());
         for(const auto& wire:edges.Value())if(window_.AddPlainWire(wire,"シェルの境界").IsNil())return;

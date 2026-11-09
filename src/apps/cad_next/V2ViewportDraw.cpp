@@ -410,8 +410,7 @@ kachakacha::v2::app::SemanticState V2Viewport::CurveStateOf(
     kachakacha::v2::base::SegmentId segmentId) const
 {
     if(V2RenderSelectionOf(*this).Curve(entityId,segmentId))return SemanticState::Selected;
-    return !hoveredEntityId_.IsNil()&&hoveredEntityId_==entityId
-        &&(hoveredSegmentId_.IsNil()||hoveredSegmentId_==segmentId)?SemanticState::Hover:SemanticState::Default;
+    return V2RenderSelectionOf(*this).HoverCurve(entityId,segmentId)?SemanticState::Hover:SemanticState::Default;
 }
 
 void V2Viewport::DrawPoints(QPainter& painter) const
@@ -517,8 +516,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     for(const auto& curve:scene.curves) {
         if(meshed.contains(curve.entityId)&&!selection.Entity(curve.entityId)&&curve.entityId!=hoveredEntityId_)continue;
         const auto state=selection.Curve(curve.entityId,curve.segmentId)?SemanticState::Selected:
-            !hoveredEntityId_.IsNil()&&hoveredEntityId_==curve.entityId
-                &&(hoveredSegmentId_.IsNil()||hoveredSegmentId_==curve.segmentId)?SemanticState::Hover:SemanticState::Default;
+            selection.HoverCurve(curve.entityId,curve.segmentId)?SemanticState::Hover:SemanticState::Default;
         if(state==SemanticState::Selected)selectedCurves.push_back(&curve);
         else if(state==SemanticState::Hover)hoveredCurves.push_back(&curve);
         else drawCurve(curve,state);

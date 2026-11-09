@@ -11,6 +11,7 @@
 //! 文書は「どう作ったか」だけを持ち、形は作り直す。
 
 #include "V2MainWindow.h"
+#include "V2GeneratedBoundaryOutput.h"
 #include "V2ParameterDock.h"
 #include "V2ExtrudeInputDistance.h"
 #include "V2ParameterDock.h"
@@ -1209,7 +1210,7 @@ bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
     const auto mode=output?static_cast<kachakacha::v2::app::SolidOutputMode>(output->currentIndex())
         : kachakacha::v2::app::SolidOutputMode::SolidOnly;
     if(kachakacha::v2::app::IncludesWires(mode)) {
-        const auto wires=kachakacha::v2::kernel::OutputBoundaryWires(solid.Value().handle,tolerance.modelLinearMm);
+        const auto wires=V2GeneratedShapeBoundaries(solid.Value().handle,tolerance.modelLinearMm);
         if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;}
         if(!wires.Diagnostics().empty())ReportDiagnostics(wires.Diagnostics());
         for(const auto& wire:wires.Value())if(AddPlainWire(wire,"治具の境界").IsNil()) {

@@ -50,13 +50,13 @@ void V2Viewport::IsolateSelection() {
     if(!button){button=new QPushButton(QStringLiteral("局所表示中 — 解除"),this);button->setObjectName(QStringLiteral("exitIsolation"));
         connect(button,&QPushButton::clicked,this,[this]{ClearIsolation();});}
     button->move(8,80);button->resize(180,30);button->show();button->raise();
-    ApplyVisibilityFilter();cycle_={};hoveredEntityId_={};hoveredSegmentId_={};update();
+    ApplyVisibilityFilter();ForgetPickCycle();update();
 }
 void V2Viewport::ClearIsolation() {
     if(isolationActive_)display_.selectionOnly=isolationPreviousSelectionOnly_;
     isolationActive_=false;isolationExcluded_.clear();
     if(auto* button=findChild<QPushButton*>(QStringLiteral("exitIsolation")))button->hide();
-    ApplyVisibilityFilter();cycle_={};update();
+    ApplyVisibilityFilter();ForgetPickCycle();update();
 }
 
 void V2Viewport::ApplyVisibilityFilter() {

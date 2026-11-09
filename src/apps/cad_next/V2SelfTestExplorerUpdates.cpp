@@ -3,6 +3,7 @@
 #include "V2EntityTree.h"
 #include "V2Viewport.h"
 #include "V2GeneratedCurves.h"
+#include "V2RenderSelection.h"
 #include "V2LoopFacesTool.h"
 #include "V2SurfaceDock.h"
 #include "V2FabricationDock.h"
@@ -134,6 +135,18 @@ bool SmoothBoundaryRuns(V2MainWindow& w) {
     const auto selected=view.Selection().ordered.front();
     if(!Explain("one actual 3D click selects the entire smooth curve only",selected.entityId==wire
         &&selected.kind==app::SelectionElementKind::Object&&!selected.segmentId&&view.Selection().entityIds.size()==1))return false;
+    const auto sourceCurves=w.Session().Scene().curves;
+    const auto first=std::find_if(sourceCurves.begin(),sourceCurves.end(),[&](const auto& c){return c.entityId==wire;});
+    if(first==sourceCurves.end())return false;
+    app::SelectionRef span;span.entityId=wire;span.kind=app::SelectionElementKind::Edge;span.segmentId=first->segmentId;
+    app::SelectionSet partial;partial.entityIds={wire};partial.ordered={span};view.SetSelection(partial);
+    const auto screen=view.Mapping().Project(first->segment.Evaluate(.5));if(!screen)return false;
+    view.SelectAt(QPointF(screen->x,screen->y),Qt::ControlModifier);
+    if(!Explain("whole-curve Ctrl replaces a preceding single-span reference",view.Selection().ordered.size()==1
+        &&view.Selection().ordered.front().kind==app::SelectionElementKind::Object))return false;
+    view.SelectAt(QPointF(screen->x,screen->y),Qt::ControlModifier);
+    if(!Explain("next Ctrl removes the complete curve without a stale partial selection",view.Selection().entityIds.empty()))return false;
+    if(!ClickOnCurveOf(w,wire))return false;
     QKeyEvent remove(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);
     QApplication::sendEvent(&view,&remove);QApplication::processEvents();
     if(!Explain("delete removes only that curve",!w.Session().GetDocument().FindEntity(wire)
@@ -143,6 +156,68 @@ bool SmoothBoundaryRuns(V2MainWindow& w) {
         &&w.SaveAndReopen("smooth-thickness-boundary.kcd2")))return false;
     return Explain("whole smooth curve is still pickable after reload",ClickOnCurveOf(w,wire)
         &&view.Selection().ordered.size()==1&&view.Selection().ordered.front().kind==app::SelectionElementKind::Object);
+}
+bool SmoothMixedWire(V2MainWindow& w) {
+    using namespace geometry;
+    w.resize(1600,1000);QApplication::processEvents();
+    w.RunCommand("file.new");
+    const auto line=CurveSegment::MakeLine({-3,0,0},{}).Value();
+    const auto a=CurveSegment::MakeCubicBezier({{0,0,0},{1,0,0},{2,1,1},{3,1,1}}).Value();
+    const auto b=CurveSegment::MakeCubicBezier({{3,1,1},{5,1,1},{6,3,0},{7,4,0}}).Value();
+    const auto tail=CurveSegment::MakeLine({7,4,0},{7,7,0}).Value();
+    const auto wire=w.AddPlainWire({line,a,b,tail},"直線と空間曲線",false);
+    if(wire.IsNil()||!w.SaveAndReopen("mixed-curve-input.kcd2"))return false;
+    const auto* f=w.Session().GetDocument().FindFeature(w.Session().GetDocument().FindEntity(wire)->createdBy);
+    const auto source=std::get<domain::CreateWireDefinition>(f->definition);
+    auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Isometric);v.FitToDocument();w.RunCommand("selection.activate");v.SetSelection({});
+    const auto clickWorld=[&](Vector3 target,Qt::KeyboardModifiers modifiers) {
+        const auto screen=v.Mapping().Project(target);if(!screen)return;
+        const QPointF point(screen->x,screen->y);
+        QMouseEvent move(QEvent::MouseMove,point,point,Qt::NoButton,Qt::NoButton,modifiers);
+        QMouseEvent press(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,modifiers);
+        QMouseEvent release(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,modifiers);
+        QApplication::sendEvent(&v,&move);QApplication::sendEvent(&v,&press);QApplication::sendEvent(&v,&release);QApplication::processEvents();
+    };
+    const auto click=[&](Qt::KeyboardModifiers modifiers){clickWorld(a.Evaluate(.4),modifiers);};
+    click(Qt::NoModifier);
+    const auto selected=[&](int i){return app::IsCurveSelected(v.Selection(),wire,source.segmentIds[i]);};
+    if(!Explain("one click selects both smooth curved spans without either straight segment",!selected(0)&&selected(1)&&selected(2)&&!selected(3)))return false;
+    const auto& ink=V2RenderSelectionOf(v);
+    if(!Explain("hover ink covers the same curved run only",!ink.HoverCurve(wire,source.segmentIds[0])
+        &&ink.HoverCurve(wire,source.segmentIds[1])&&ink.HoverCurve(wire,source.segmentIds[2])&&!ink.HoverCurve(wire,source.segmentIds[3])))return false;
+    click(Qt::ControlModifier);if(!Explain("Ctrl toggles the complete curve off",v.Selection().entityIds.empty()))return false;
+    v.SetSelection(app::SelectionSet{{wire}});click(Qt::ControlModifier);
+    if(!Explain("Ctrl removes only the curved run from a whole-wire selection",selected(0)&&!selected(1)&&!selected(2)&&selected(3)))return false;
+    std::optional<app::PickCandidate> exact;
+    v.BeginElementPick([](const auto& c){return c.kind==app::SelectionElementKind::Edge;},[&](auto p){exact=p;});
+    click(Qt::NoModifier);
+    if(!Explain("explicit individual-edge reference pick remains one exact span",exact&&exact->segmentId==source.segmentIds[1]))return false;
+    v.SetSelection({});click(Qt::NoModifier);
+    QKeyEvent remove(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);QApplication::sendEvent(&v,&remove);QApplication::processEvents();
+    const auto kept=[&](base::SegmentId id,const CurveSegment& original){
+        const auto& curves=w.Session().Scene().curves;const auto at=std::find_if(curves.begin(),curves.end(),[&](const auto& c){return c.segmentId==id;});
+        return at!=curves.end()&&Distance(at->segment.StartPoint(),original.StartPoint())<1e-12&&Distance(at->segment.EndPoint(),original.EndPoint())<1e-12;};
+    if(!Explain("curve deletion preserves the IDs and geometry of both straight segments",kept(source.segmentIds[0],line)&&kept(source.segmentIds[3],tail)))return false;
+    w.RunCommand("edit.undo");
+    if(!w.SaveAndReopen("mixed-curve-restored.kcd2"))return false;
+    w.RunCommand("selection.activate");v.SetViewDirection(ViewDirection::Isometric);v.FitToDocument();
+    v.SetSelection({});click(Qt::NoModifier);
+    if(!selected(1)||!selected(2)) {
+        Note(w.StatusText().toUtf8().constData());
+        const auto screen=v.Mapping().Project(a.Evaluate(.4));
+        if(screen)Note((std::string("reload curve covered by navigator=")+std::to_string(v.ViewButtonAt(QPointF(screen->x,screen->y)).has_value())).c_str());
+    }
+    if(!Explain("mixed curve grouping rebuilds after Undo and reload",!selected(0)&&selected(1)&&selected(2)&&!selected(3)))return false;
+    v.SetSelection(app::SelectionSet{{wire}});v.SetSnapSuppressed(true);w.SelectTool(modeling::DrawingTool::Copy);
+    clickWorld({-5,-5,0},Qt::NoModifier);clickWorld({15,-5,0},Qt::NoModifier);
+    if(!Explain("actual basepoint and destination copy the entire mixed wire",CountOfKind(w,domain::EntityKind::Wire)==2))return false;
+    base::EntityId copy;for(const auto& e:w.Session().GetDocument().Snapshot().entities)if(e.kind==domain::EntityKind::Wire&&e.id!=wire)copy=e.id;
+    w.RunCommand("selection.activate");v.FitToDocument();v.SetSelection({});
+    clickWorld(a.Evaluate(.4)+Vector3{20,0,0},Qt::NoModifier);
+    auto copied=app::SelectedCurves(v.Selection(),w.Session().Scene());
+    if(!Explain("copied geometry uses the same curved-only editing unit",v.Selection().entityIds==std::vector{copy}
+        &&copied.size()==2&&std::all_of(copied.begin(),copied.end(),[](const auto& c){return c.Kind()!=CurveKind::Line;})))return false;
+    return w.SaveAndReopen("mixed-curve-copy.kcd2");
 }
 bool Compact(V2MainWindow&) {
     using namespace geometry;
@@ -538,6 +613,7 @@ std::vector<SelfTestCase> ExplorerUpdateCases(){return {{"HP-PERF-04 mesh displa
     {"HP-UX-TREE selected checkbox and small pointer motion preserve selection",SelectedVisibilityClicks},
     {"HP-XP-07 sibling buttons and hidden descendant preservation",GroupButtons},{"HP-XP-08 generated curve compaction preserves geometry",Compact},
     {"HP-XP-BOUNDARY smooth thickness curves preserve geometry and whole UI picks",SmoothBoundaryRuns},
+    {"HP-XP-MIXED smooth curved spans keep neighboring straight segments editable",SmoothMixedWire},
     {"HP-XP-09 overlap preview and reference-picking roles",Overlap},
     {"HP-XP-10 grouped category visibility remains scoped",GroupCategoryScope},
     {"HP-FP-01 folder mouse keyboard naming and empty creation",FolderInputs},

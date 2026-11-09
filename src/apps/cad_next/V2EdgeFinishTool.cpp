@@ -3,6 +3,7 @@
 //! 「辺の丸め・面取り」の道具。V2EdgeFinishTool.h の頭の注記を見よ。
 
 #include "V2EdgeFinishTool.h"
+#include "V2GeneratedBoundaryOutput.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -367,10 +368,11 @@ void V2EdgeFinishTool::Confirm()
     auto& document = window_.session_->GetDocument();
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
     if (dock_->OutputMode() != 2) {
-        const auto edges = kachakacha::v2::kernel::OutputEdges(handle,
+        const auto edges = V2GeneratedShapeBoundaries(handle,
             document.Snapshot().settings.tolerance.modelLinearMm);
         if (!edges.HasValue()) { window_.ReportDiagnostics(edges.Diagnostics()); return; }
-        if (window_.AddPlainWire(edges.Value(), (label + " / 境界ワイヤー").c_str()).IsNil()) return;
+        for(const auto& wire:edges.Value())
+            if (window_.AddPlainWire(wire, (label + " / 境界ワイヤー").c_str()).IsNil()) return;
     }
     if (dock_->OutputMode() != 1) {
         const auto madeId = window_.AddPartFeature(kachakacha::v2::domain::FeatureType::EdgeFinish,

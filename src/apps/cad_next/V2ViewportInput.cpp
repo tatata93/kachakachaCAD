@@ -1,6 +1,7 @@
 #include "V2DrawingSelection.h"
 #include "V2ToolSelection.h"
 #include "V2GeneratedWirePicking.h"
+#include "V2RenderSelection.h"
 #include "V2TransformPreview.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
@@ -925,7 +926,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     }
     if(!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
         ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select))
-        V2PickWholeSmoothCurves(session_->GetDocument(),candidates);
+        V2PickWholeSmoothCurves(*this,*session_,candidates);
     return SortCandidatesForSlot(std::move(candidates));
 }
 
@@ -1158,6 +1159,11 @@ void V2Viewport::SyncHoverWithCandidate()
         if (previousFace || hoveredFaceIndex_) RefreshFaceRolePieces();
     }
     if (previous != hoveredEntityId_ || previousSegment != hoveredSegmentId_) {
+        std::vector<kachakacha::v2::base::SegmentId> hoverSegments;
+        if(current&&!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
+            ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select))
+            hoverSegments=V2SmoothCurvePickSegments(*this,*session_,*current);
+        V2RenderSelectionOf(*this).UpdateHover(hoveredEntityId_,hoveredSegmentId_,hoverSegments);
         RefreshCursorShape();
     }
 }

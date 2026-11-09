@@ -23,6 +23,14 @@ bool V2RenderSelection::Curve(base::EntityId id,base::SegmentId segment) const {
     if(wholeCurves_.contains(id))return true;
     const auto found=segments_.find(id);return found!=segments_.end()&&found->second.contains(segment);
 }
+void V2RenderSelection::UpdateHover(base::EntityId id,base::SegmentId segment,
+    const std::vector<base::SegmentId>& smoothSegments) {
+    hoverEntity_=id;hoverSegment_=segment;hoverSegments_={smoothSegments.begin(),smoothSegments.end()};
+}
+bool V2RenderSelection::HoverCurve(base::EntityId id,base::SegmentId segment) const {
+    return !hoverEntity_.IsNil()&&id==hoverEntity_
+        &&(hoverSegment_.IsNil()||hoverSegment_==segment||hoverSegments_.contains(segment));
+}
 V2RenderSelection& V2RenderSelectionOf(const QObject& owner) {
     auto* found=owner.findChild<QObject*>(QStringLiteral("renderSelectionIndex"),Qt::FindDirectChildrenOnly);
     return found?*static_cast<V2RenderSelection*>(found):*new V2RenderSelection(const_cast<QObject*>(&owner));

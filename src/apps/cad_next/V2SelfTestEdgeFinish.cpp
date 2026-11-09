@@ -5,6 +5,7 @@
 //! 状態に出る → Enter で部品になり(元は隠れる)、1 回の取り消しで戻り、開き直しても同じ辺を
 //! 丸め直す。選ぶのは実際に拾う道(`SelectAt`)だけ。
 #include "V2SelfTest.h"
+#include "V2SelfTestBoundaryChecks.h"
 #include "V2ExtrudeDock.h"
 
 #include "V2EdgeFinishDock.h"
@@ -233,6 +234,7 @@ bool CaseOutputKinds(V2MainWindow& window)
         const auto source = MakeBox(window, box);
         if (source.IsNil()) return false;
         const auto before = CountOfKind(window, EntityKind::Wire);
+        const auto beforeDocument=window.Session().GetDocument().Snapshot();
         window.ActivateCommand("part.fillet");
         auto& tool = window.EdgeFinishTool();
         auto& dock = *tool.Dock();
@@ -242,7 +244,8 @@ bool CaseOutputKinds(V2MainWindow& window)
         if (!Explain("edge output preview", tool.Outcome().available
             && (window.Viewport().ToolPreviewFaceCount() > 0) == (mode == 0))) return false;
         if (!dock.ClickConfirm()||!Explain("edge tool retained after apply",tool.Active())) return false;
-        if (!Explain("wire output added once", CountOfKind(window, EntityKind::Wire) == before + 1)) return false;
+        if(!NewBoundaryWiresAreConnected(window,beforeDocument))return false;
+        if (!Explain("connected boundary wires are generated", CountOfKind(window, EntityKind::Wire) > before)) return false;
         if (!Explain("wire only preserves source solid", CountOfKind(window, EntityKind::Part) == (mode == 1 ? 1 : 2)
             && window.Session().GetDocument().FindEntity(source)->visibility
                 == (mode == 1 ? kachakacha::v2::domain::Visibility::Visible : kachakacha::v2::domain::Visibility::Hidden))) return false;

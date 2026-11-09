@@ -1,4 +1,5 @@
 #include "V2SelfTest.h"
+#include "V2SelfTestBoundaryChecks.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2CurvedEmbossTool.h"
@@ -18,6 +19,7 @@ namespace kachakacha::v2::selftest {
 namespace {
 bool CaseCurvedEmboss(V2MainWindow& window)
 {
+    window.resize(1600,1000);QApplication::processEvents();
     window.RunCommand("file.new");
     const auto outer=DrawRectangleAtByHand(window,0.3,0.3,0.7,0.7);
     if(!Explain("outer rectangle",!outer.IsNil()&&ClickOnCurveOf(window,outer)))return false;
@@ -37,9 +39,12 @@ bool CaseCurvedEmboss(V2MainWindow& window)
         const auto& t=shape.mesh.triangles.front();const auto screen=window.Viewport().Mapping().Project((t.points[0]+t.points[1]+t.points[2])*(1.0/3.0));
         if(!screen)return false;const QPointF p(screen->x,screen->y);
         QMouseEvent click(QEvent::MouseButtonPress,p,p,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
-        QApplication::sendEvent(&window.Viewport(),&click);supportClicked=true;break;
+        QMouseEvent release(QEvent::MouseButtonRelease,p,p,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&window.Viewport(),&click);QApplication::sendEvent(&window.Viewport(),&release);supportClicked=true;break;
     }
     if(!Explain("support selected in viewport",supportClicked))return false;
+    Note((std::string("emboss after support reference pick=")+std::to_string(window.Viewport().ReferencePickPending())
+        +" drawing tool="+std::to_string(int(window.Session().CurrentTool()))).c_str());
     if(qEnvironmentVariableIsSet("KACHACAD_EXTRUDE_UI_SCREENSHOT")) window.grab().save(qEnvironmentVariable("KACHACAD_EXTRUDE_UI_SCREENSHOT")+QStringLiteral("-emboss.png"));
     bool clicked=false;
     for(const auto& curve:window.Session().Scene().curves)if(curve.entityId==inner){
@@ -47,9 +52,12 @@ bool CaseCurvedEmboss(V2MainWindow& window)
         // The compact test viewport has its navigator over the top edge. Pick an unobscured edge.
         if(screen->y<window.Viewport().height()*0.5)continue;
         const QPointF p(screen->x,screen->y);QMouseEvent click(QEvent::MouseButtonPress,p,p,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
-        QApplication::sendEvent(&window.Viewport(),&click);clicked=true;break;
+        QMouseEvent release(QEvent::MouseButtonRelease,p,p,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&window.Viewport(),&click);QApplication::sendEvent(&window.Viewport(),&release);clicked=true;break;
     }
     if(!Explain("viewport input keeps tool",clicked&&tool->isVisible()))return false;
+    Note((std::string("emboss after boundary reference pick=")+std::to_string(window.Viewport().ReferencePickPending())
+        +" drawing tool="+std::to_string(int(window.Session().CurrentTool()))).c_str());
     const auto revision=window.Session().GetDocument().Revision();
     if(!Explain("preview without document changes",tool->Preview()&&window.Viewport().ToolPreviewFaceCount()>0
         &&window.Session().GetDocument().Revision()==revision)) {
@@ -59,8 +67,10 @@ bool CaseCurvedEmboss(V2MainWindow& window)
     auto* output=tool->findChild<QComboBox*>(QStringLiteral("embossOutput"));output->setCurrentIndex(1);
     if(!tool->Preview()||window.Viewport().ToolPreviewFaceCount()!=0)return false;
     const auto before=CountOfKind(window,domain::EntityKind::Wire);
+    const auto beforeDocument=window.Session().GetDocument().Snapshot();
     if(!tool->Commit()||CountOfKind(window,domain::EntityKind::Part)!=0
-        ||CountOfKind(window,domain::EntityKind::Wire)!=before+1)return false;
+        ||CountOfKind(window,domain::EntityKind::Wire)<=before)return false;
+    if(!NewBoundaryWiresAreConnected(window,beforeDocument))return false;
     window.RunCommand("edit.undo");if(CountOfKind(window,domain::EntityKind::Wire)!=before)return false;
     tool=V2CurvedEmbossTool::Open(window);
     if(!tool->SetSupport(ref)||!tool->AddWire(inner))return false;

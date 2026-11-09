@@ -1,6 +1,7 @@
 #include "V2Calculation.h"
 #include "V2EndCapInput.h"
 #include "V2CurvedEmbossTool.h"
+#include "V2GeneratedBoundaryOutput.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -133,10 +134,11 @@ bool V2CurvedEmbossTool::Commit()
         next.output_->setCurrentIndex(output);next.operation_->setCurrentIndex(operation);
     };
     const auto brep=kernel::CaptureOutputShape(built_->handle);
-    const auto edges=kernel::OutputEdges(built_->handle,tolerance_->value());
+    const auto edges=V2GeneratedShapeBoundaries(built_->handle,tolerance_->value());
     if(!brep.HasValue()||(output_->currentIndex()!=2&&!edges.HasValue())){status_->setText(QStringLiteral("生成形状を保存できません。"));return false;}
     auto& doc=window_.session_->GetDocument();document::Document::Transaction transaction(doc,"曲面押し出し");
-    if(output_->currentIndex()!=2&&window_.AddPlainWire(edges.Value(),"曲面押し出し / 境界ワイヤー").IsNil())return false;
+    if(output_->currentIndex()!=2)for(const auto& wire:edges.Value())
+        if(window_.AddPlainWire(wire,"曲面押し出し / 境界ワイヤー").IsNil())return false;
     if(output_->currentIndex()!=1){
         domain::Feature f;f.id=window_.ids_->NextTyped<base::IdKind::Feature>();f.type=domain::FeatureType::FreezeDerived;
         domain::FreezeDerivedDefinition definition;definition.frozenBrep=brep.Value();f.definition=definition;f.displayName="曲面押し出し（近似）";

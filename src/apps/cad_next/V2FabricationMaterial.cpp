@@ -10,6 +10,48 @@
 
 using namespace kachakacha::v2;
 namespace {
+// Flattened rails may still have hundreds of stations. Their correspondence
+// remains authoritative for folding, but no interior station is a face boundary
+// when every cell and every material vertex is on the very same plane.
+std::optional<modeling::GuideSurfaceRequest> FlatMaterialSupport(
+    const std::vector<std::vector<geometry::Vector3>>& rails,
+    const std::vector<std::vector<geometry::Vector3>>& loops,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const auto cell=(rails[0].size()-1)/2;
+    const auto origin=rails[0][cell];
+    const auto cross=geometry::Cross(rails[1][cell]-origin,rails[0][cell+1]-origin);
+    if(cross.LengthSquared()<=tolerance.numericEpsilon*tolerance.numericEpsilon)return {};
+    const auto normal=geometry::Normalized(cross);
+    const double epsilon=tolerance.modelLinearMm*.001;
+    const auto inPlane=[&](const auto& points){return std::all_of(points.begin(),points.end(),[&](auto p){
+        return std::abs(geometry::Dot(p-origin,normal))<=epsilon;});};
+    for(const auto& rail:rails)if(!inPlane(rail))return {};
+    for(const auto& loop:loops)if(!inPlane(loop))return {};
+    for(std::size_t i=1;i<rails[0].size();++i){
+        const auto a=rails[0][i-1],b=rails[1][i-1],c=rails[0][i],d=rails[1][i];
+        // A folded-back or collapsed cell cannot be replaced by one plane.
+        for(const auto n:{geometry::Cross(b-a,c-a),geometry::Cross(d-b,c-b)})
+            if(geometry::Dot(n,normal)<=tolerance.numericEpsilon*tolerance.numericEpsilon
+                ||geometry::Cross(geometry::Normalized(n),normal).Length()>std::sin(tolerance.modelAngularRad))return {};
+    }
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::PlanarBoundary;
+    modeling::GuideChain outer;outer.role=modeling::ChainRole::OuterBoundary;outer.closed=true;outer.index=1;
+    // This is only the support. Keep the actual outline and holes on the
+    // existing TrimFabricationFace validation path below; do not resample a
+    // narrow material contour through the generic guide-boundary analyzer.
+    const auto u=geometry::Normalized(rails[0][cell+1]-origin),v=geometry::Cross(normal,u);
+    double x0=0,x1=0,y0=0,y1=0;
+    const auto include=[&](const auto& points){for(const auto p:points){
+        const double x=geometry::Dot(p-origin,u),y=geometry::Dot(p-origin,v);
+        x0=std::min(x0,x);x1=std::max(x1,x);y0=std::min(y0,y);y1=std::max(y1,y);}};
+    for(const auto& rail:rails)include(rail);for(const auto& loop:loops)include(loop);
+    const double margin=tolerance.modelLinearMm;
+    const auto point=[&](double x,double y){return origin+u*x+v*y;};
+    outer.segments=V2MaterialCurves({point(x0-margin,y0-margin),point(x1+margin,y0-margin),
+        point(x1+margin,y1+margin),point(x0-margin,y1+margin)},true,tolerance.modelLinearMm);
+    request.chains.push_back(std::move(outer));return request;
+}
 // Remove only redundant, planar runs in a newly generated support. Keep the
 // two rails paired; the material loops have already been mapped on the original
 // rails and must not be remapped with a different longitudinal parameterization.
@@ -92,6 +134,7 @@ base::Result<modeling::GuideSurfaceResult> V2BuildMaterialSurface(
         // or arc-length resampling here would shear the cutouts between the rails.
         for(std::size_t i=1;i<rails[row].size();++i){const auto line=geometry::CurveSegment::MakeLine(rails[row][i-1],rails[row][i]);if(line.HasValue())chain.segments.push_back(line.Value());}
         request.chains.push_back(std::move(chain));}
+    if(const auto flat=FlatMaterialSupport(originalRails,loops,tolerance))request=*flat;
     const auto analysis=modeling::AnalyzeGuideSurfaceRequest(request,tolerance);if(!analysis.HasValue())return Out::Failure(analysis.Diagnostics());
     auto support=kernel::BuildGuideSurface(request,analysis.Value(),tolerance);if(!support.HasValue())return support;
     if(expectedNormal.LengthSquared()>1e-18){

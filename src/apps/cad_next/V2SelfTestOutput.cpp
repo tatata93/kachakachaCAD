@@ -5,6 +5,7 @@
 #include "V2ExportDock.h"
 #include "V2OperationPanelHost.h"
 #include "V2OutputPreview.h"
+#include "V2FabricationMaterial.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -416,6 +417,52 @@ bool WireCopyKeepsExistingShapes(V2MainWindow& w) {
         &&geometry::Distance(restored.front().mesh.minimum,original.minimum)<1e-9
         &&geometry::Distance(restored.front().mesh.maximum,original.maximum)<1e-9);
 }
+bool CompactNativeBoundaryOutput(V2MainWindow& w)
+{
+    using geometry::Vector3;
+    const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;
+    std::vector<std::vector<Vector3>> rails(2);
+    for(int i=0;i<=64;++i)for(int row=0;row<2;++row)rails[row].push_back({i/6.4,row*8.+.3*std::sin(i/12.8),0});
+    auto outer=rails[0];outer.insert(outer.end(),rails[1].rbegin(),rails[1].rend());
+    const auto made=V2BuildMaterialSurface(rails,{outer},tolerance,.001,{0,0,1});if(!made.HasValue())return false;
+    const auto release=qScopeGuard([&]{kernel::ReleaseShape(made.Value().handle);});
+    const auto native=kernel::CaptureOutputShape(made.Value().handle);
+    const auto boundaries=kernel::OutputBoundaryWires(made.Value().handle,tolerance.modelLinearMm);
+    if(!native.HasValue()||!boundaries.HasValue()||boundaries.Value().size()!=1||boundaries.Value()[0].empty())return false;
+    // A test fixture only. Delivery models are created by the actual UI replay.
+    io::DocumentFile file;file.snapshot=w.Session().GetDocument().Snapshot();
+    domain::Feature feature;feature.id=*base::FeatureId::Parse("ab000000-0000-4000-8000-000000000001");
+    feature.type=domain::FeatureType::FreezeDerived;feature.displayName="複合境界試験";
+    domain::FreezeDerivedDefinition definition;definition.frozenBrep=native.Value();feature.definition=definition;
+    domain::Entity entity;entity.id=*base::EntityId::Parse("ab000000-0000-4000-8000-000000000002");
+    entity.kind=domain::EntityKind::GuideSurface;entity.editPolicy=domain::EditPolicy::Frozen;
+    entity.createdBy=feature.id;entity.displayName=feature.displayName;feature.outputs.push_back({"guide",entity.id,entity.kind});
+    file.snapshot.features.push_back(feature);file.snapshot.entities.push_back(entity);
+    const auto archive=io::SaveDocument(file);QTemporaryDir folder;if(!archive.HasValue()||!folder.isValid())return false;
+    const auto source=folder.filePath("compact-boundary-source.kcd2");
+    if(!io::WriteFileAtomically(source.toStdString(),archive.Value()).HasValue()||!w.OpenDocumentFile(source))return false;
+    const auto before=w.Session().GetDocument().Revision();
+    app::SelectionRef ref;ref.entityId=entity.id;ref.kind=app::SelectionElementKind::Edge;
+    ref.hitPoint=boundaries.Value()[0].front().Evaluate(.5);
+    w.Viewport().SetSelection(app::SelectionSet{{entity.id},{ref}});
+    auto* output=V2OutputTool::Open(w,2);auto* scope=output->findChild<QComboBox*>("outputScope");
+    if(!scope)return false;scope->setCurrentIndex(1);
+    if(!Explain("a selected exact piecewise boundary remains one reusable wire",output->AssetCount()==1))return false;
+    const auto target=folder.filePath("selected-compact-boundary.kcd2");
+    if(!Explain("partial output exports the selected complex edge",output->SaveTo(target)))return false;output->close();
+    const auto bytes=io::ReadWholeFile(target.toStdString());if(!bytes.HasValue())return false;
+    const auto exported=io::LoadDocument(bytes.Value());if(!exported.HasValue()||exported.Value().snapshot.features.size()!=1)return false;
+    const auto* wire=std::get_if<domain::CreateWireDefinition>(&exported.Value().snapshot.features.front().definition);
+    if(!Explain("only the selected boundary is exported, with every original interval",wire&&wire->segments.size()==boundaries.Value()[0].size()
+        &&geometry::SegmentsFormClosedLoop(wire->segments,tolerance)))return false;
+    for(std::size_t i=0;i<wire->segments.size();++i)for(const double t:{0.,.5,1.})
+        if(geometry::Distance(wire->segments[i].Evaluate(t),boundaries.Value()[0][i].Evaluate(t))>1e-12)return false;
+    const auto* retained=w.Session().GetDocument().FindFeature(feature.id);
+    const auto* unchanged=retained?std::get_if<domain::FreezeDerivedDefinition>(&retained->definition):nullptr;
+    return Explain("reading the boundary preserves the native source and document revision",unchanged&&unchanged->frozenBrep==native.Value()
+        &&w.Session().GetDocument().Revision()==before);
+}
+
 bool CaseOutputOwnership(V2MainWindow& w){
     if(!OutputBox(w))return false;
     w.Viewport().SetSelection(OutputSelection(w,false));const auto baseline=kernel::CachedShapeCount();
@@ -554,5 +601,5 @@ bool FormatCommandResolvesCompatibleSelection(V2MainWindow&)
         &&missing.State().target==app::ExportTarget::VisibleParts);
 }
 }
-std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-19 explicit export format survives count refresh",FormatSurvivesCountRefresh},{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
+std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-20 compact native boundary remains reusable as one wire",CompactNativeBoundaryOutput},{"HP-OUT-19 explicit export format survives count refresh",FormatSurvivesCountRefresh},{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
 }

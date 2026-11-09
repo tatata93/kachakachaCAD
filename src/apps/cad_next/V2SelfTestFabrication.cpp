@@ -639,6 +639,55 @@ bool CaseMaterialSupportStraightRuns(V2MainWindow& window)
     return true;
 }
 
+bool CaseFlatMaterialDenseContours(V2MainWindow& window)
+{
+    using namespace kachakacha::v2;using geometry::Vector3;
+    const auto tolerance=window.Session().GetDocument().Snapshot().settings.tolerance;
+    for(const bool tilted:{false,true})for(const bool reversed:{false,true}){
+        const auto u=tilted?geometry::Normalized(Vector3{1,2,0}):Vector3{1,0,0};
+        const auto v=tilted?geometry::Normalized(Vector3{-2,1,3}):Vector3{0,1,0};
+        const auto normal=geometry::Cross(u,v)*(reversed?-1.:1.);
+        const auto point=[&](double x,double y){return Vector3{tilted?23.:0,tilted?-41.:0,tilted?12.:0}+u*x+v*y;};
+        std::vector<std::vector<Vector3>> rails(2),loops(1);
+        for(int i=0;i<=160;++i)for(int row=0;row<2;++row)
+            rails[row].push_back(point(i/16.,row*8.+.3*std::sin(i/32.)));
+        loops[0]=rails[0];loops[0].insert(loops[0].end(),rails[1].rbegin(),rails[1].rend());
+        for(double x:{3.,7.}){std::vector<Vector3> hole;
+            for(int i=0;i<96;++i){const double a=6.283185307179586*i/96.;hole.push_back(point(x+std::cos(a),4+std::sin(a)));}
+            loops.push_back(hole);
+        }
+        const auto originalRails=rails,originalLoops=loops;
+        const auto made=V2BuildMaterialSurface(rails,loops,tolerance,.001,normal);
+        if(!Explain("dense flat contours create a single support without moving their vertices",made.HasValue()))return false;
+        std::vector<modeling::KernelShapeHandle> owned{made.Value().handle};
+        const auto release=qScopeGuard([&]{for(const auto h:owned)kernel::ReleaseShape(h);});
+        const auto solid=kernel::ThickenSurface(made.Value().handle,.1,fabrication::ThicknessPlacement::Inside,tolerance);
+        if(!Explain("the flat polygon and both openings thicken",solid.HasValue()))return false;
+        owned.push_back(solid.Value().handle);
+        const auto mesh=kernel::BuildShapeMesh(solid.Value().handle);
+        const auto checked=kernel::CheckSolidForExport(solid.Value().handle,tolerance.modelLinearMm);
+        double area=0;for(std::size_t l=0;l<loops.size();++l){Vector3 sum{};
+            for(std::size_t i=0;i<loops[l].size();++i)sum=sum+geometry::Cross(loops[l][i]-loops[l][0],loops[l][(i+1)%loops[l].size()]-loops[l][0]);
+            area+=(l?-1:1)*std::abs(geometry::Dot(sum,normal))*.5;
+        }
+        Note(QStringLiteral("flat dense material tilted=%1 reversed=%2 faces=%3 volume=%4 expected=%5")
+            .arg(tilted).arg(reversed).arg(mesh.HasValue()?mesh.Value().faceCount:0)
+            .arg(checked.HasValue()?checked.Value().volumeMm3:0,0,'g',16).arg(area*.1,0,'g',16).toUtf8().constData());
+        if(!Explain("flat contours stay compact with analytic polygon volume and unchanged inputs",mesh.HasValue()
+            &&mesh.Value().faceCount<=5&&checked.HasValue()&&checked.Value().Ok()
+            &&std::abs(checked.Value().volumeMm3-area*.1)<1e-8&&rails==originalRails&&loops==originalLoops))return false;
+        const auto hit=[&](double x,double y){for(const auto& triangle:mesh.Value().triangles)
+            if(modeling::RayHitsTriangle(point(x,y)+normal*10,-normal,triangle))return true;return false;};
+        if(!Explain("both holes remain open and the strip between them remains material",!hit(3,4)&&!hit(7,4)&&hit(5,4)))return false;
+        const auto bytes=kernel::CaptureOutputShape(solid.Value().handle);if(!bytes.HasValue())return false;
+        const auto restored=kernel::RestoreOutputShape(bytes.Value());if(!restored.HasValue())return false;owned.push_back(restored.Value());
+        const auto again=kernel::CheckSolidForExport(restored.Value(),tolerance.modelLinearMm);
+        if(!Explain("the compact exact polygon survives native and strict STEP output",again.HasValue()&&again.Value().Ok()
+            &&std::abs(again.Value().volumeMm3-area*.1)<1e-8&&kernel::BuildStepText(restored.Value(),tolerance.modelLinearMm).HasValue()))return false;
+    }
+    return true;
+}
+
 bool CaseMaterialSupportOrientationRetained(V2MainWindow& window)
 {
     using namespace kachakacha::v2;
@@ -825,6 +874,7 @@ std::vector<SelfTestCase> FabricationCases()
     return {
         {"HP-FAB-NATIVE-RECT hole-free curved faces retain flat and assembled contours",CaseNativeRectangularCurvedMaterial},
         {"HP-FAB-NATIVE-TRIM tangent faces preserve crossing cutouts in one-piece patterns",CaseNativeMaterialAcrossTangentFaces},
+        {"HP-FAB-COMPACT flat dense contours retain exact holes in compact solids",CaseFlatMaterialDenseContours},
         {"HP-FAB-COMPACT straight support runs preserve bends and multiple holes",CaseMaterialSupportStraightRuns},
         {"HP-FAB-COMPACT twisted cells retain their triangle geometry",CaseMaterialSupportWarpRetained},
         {"HP-FAB-COMPACT nonuniform knot density retains surface orientation",CaseMaterialSupportOrientationRetained},

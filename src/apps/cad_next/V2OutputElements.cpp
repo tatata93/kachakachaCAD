@@ -4,6 +4,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include <QString>
 #include <algorithm>
+#include <limits>
 using namespace kachakacha::v2;
 bool V2OutputTool::CaptureElements() {
     const auto& selection=window_.viewport_->Selection();if(selection.ordered.empty())return true;
@@ -32,7 +33,26 @@ bool V2OutputTool::CaptureElements() {
             if(asset.entity.kind==domain::EntityKind::Wire){
                 const auto curve=std::find_if(scene.curves.begin(),scene.curves.end(),[&](const auto& c){return c.entityId==ref.entityId && ref.segmentId && c.segmentId==*ref.segmentId;});
                 if(curve==scene.curves.end()){SetProblem(QStringLiteral("選択した線の区間を取り出せません。"));return false;}asset.curves={curve->segment};
-            }else {const auto edge=kernel::OutputEdge(asset.shape,ref.hitPoint);if(!edge.HasValue()){SetProblem(QStringLiteral("選択した辺を取り出せません。"));return false;}asset.curves={edge.Value()};}
+            }else {
+                const auto edge=kernel::OutputEdge(asset.shape,ref.hitPoint);
+                if(edge.HasValue())asset.curves={edge.Value()};
+                else {
+                    asset.curves.clear();
+                    // A native edge can contain several exact spans, including
+                    // degree-one polygon spans. Export that edge as ONE wire;
+                    // neither drop intervals nor include other native edges.
+                    const auto wires=kernel::OutputBoundaryWires(asset.shape,
+                        window_.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
+                    if(wires.HasValue()){
+                        double distance=std::numeric_limits<double>::infinity();
+                        for(const auto& wire:wires.Value())for(const auto& curve:wire){
+                            const double next=curve.ClosestPoint(ref.hitPoint).distance;
+                            if(next<distance){distance=next;asset.curves=wire;}
+                        }
+                    }
+                    if(asset.curves.empty()){SetProblem(QStringLiteral("選択した辺を取り出せません。"));return false;}
+                }
+            }
             asset.shape={};asset.entity.kind=domain::EntityKind::Wire;asset.entity.displayName+=" / 辺";
         }else if(ref.kind==app::SelectionElementKind::Face && asset.entity.kind!=domain::EntityKind::GuideSurface){SetProblem(QStringLiteral("面の参照がありません。選び直してください。"));return false;}
         selected.push_back(std::move(asset));

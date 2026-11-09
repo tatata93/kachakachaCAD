@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <optional>
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctLoftSurface.h"
@@ -15,12 +16,20 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepLib.hxx>
+#include <BRepTools.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <ShapeFix_Edge.hxx>
 #include <BRepTools_WireExplorer.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <NCollection_Array1.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
@@ -46,6 +55,60 @@ using Out=base::Result<modeling::KernelShapeHandle>;
 #ifdef KACHACAD_V2_WITH_OCCT
 namespace {
 void Require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+// Exact representation change for a generated planar polygon, never a fit.
+// Degree one retains every corner and every interval. Keeping many tiny edges
+// instead would create one extrusion wall per sampled interval. All original
+// hole/self-intersection checks run before this optional compaction.
+std::optional<TopoDS_Face> CompactPlanarPolygon(const TopoDS_Face& source,double tolerance)
+{
+    try {
+    BRepAdaptor_Surface surface(source);
+    if(surface.GetType()!=GeomAbs_Plane)return {};
+    auto forward=source;forward.Orientation(TopAbs_FORWARD);
+    const auto outer=BRepTools::OuterWire(forward);
+    std::vector<TopoDS_Wire> wires{outer};
+    for(TopExp_Explorer w(forward,TopAbs_WIRE);w.More();w.Next())
+        if(!w.Current().IsSame(outer))wires.push_back(TopoDS::Wire(w.Current()));
+    std::vector<std::vector<gp_Pnt>> loops;bool dense=false;
+    for(const auto& wire:wires){std::vector<gp_Pnt> points;gp_Pnt previous;
+        for(BRepTools_WireExplorer e(wire,forward);e.More();e.Next()){
+            BRepAdaptor_Curve curve(e.Current());if(curve.GetType()!=GeomAbs_Line)return {};
+            auto first=curve.Value(curve.FirstParameter()),last=curve.Value(curve.LastParameter());
+            if(e.Current().Orientation()==TopAbs_REVERSED)std::swap(first,last);
+            if(!points.empty()&&previous.Distance(first)>1e-12)return {};
+            if(surface.Plane().Distance(first)>tolerance*.001)return {};
+            points.push_back(first);previous=last;
+        }
+        if(points.size()<3||previous.Distance(points.front())>1e-12)return {};
+        dense=dense||points.size()>=32;loops.push_back(std::move(points));
+    }
+    if(!dense)return {};
+    std::vector<TopoDS_Wire> compact;
+    for(const auto& points:loops){
+        if(points.size()<32){BRepBuilderAPI_MakePolygon polygon;
+            for(const auto& p:points)polygon.Add(p);polygon.Close();
+            if(!polygon.IsDone())return {};compact.push_back(polygon.Wire());continue;}
+        const int n=static_cast<int>(points.size()+1);
+        NCollection_Array1<gp_Pnt> poles(1,n);NCollection_Array1<double> knots(1,n);NCollection_Array1<int> multiplicities(1,n);
+        for(int i=1;i<=n;++i){poles.SetValue(i,points[(i-1)%points.size()]);knots.SetValue(i,i-1);
+            multiplicities.SetValue(i,i==1||i==n?2:1);}
+        occ::handle<Geom_BSplineCurve> curve=new Geom_BSplineCurve(poles,knots,multiplicities,1,false);
+        BRepBuilderAPI_MakeEdge edge(curve);if(!edge.IsDone())return {};
+        BRepBuilderAPI_MakeWire wire(edge.Edge());if(!wire.IsDone())return {};compact.push_back(wire.Wire());
+    }
+    BRepBuilderAPI_MakeFace made(surface.Plane(),compact.front(),true);
+    for(std::size_t i=1;i<compact.size();++i)made.Add(compact[i]);if(!made.IsDone())return {};
+    auto result=made.Face();result.Orientation(source.Orientation());
+    if(!BRepCheck_Analyzer(result).IsValid())return {};
+    GProp_GProps before,after;
+    const auto a=BRepGProp::SurfaceProperties(source,before,1e-10,false);
+    const auto b=BRepGProp::SurfaceProperties(result,after,1e-10,false);
+    if(!std::isfinite(a)||!std::isfinite(b)||!std::isfinite(before.Mass())||!std::isfinite(after.Mass())
+        ||a>1e-8||b>1e-8||before.Mass()<=0
+        ||std::abs(before.Mass()-after.Mass())>std::max(1e-10,before.Mass()*1e-10))return {};
+    return result;
+    }catch(const Standard_Failure&){return {};}
+}
 std::vector<geometry::CurveSegment> OrderedLoop(const std::vector<geometry::CurveSegment>& curves,
     const geometry::GeometryTolerance& tolerance) {
     base::DeterministicIdGenerator ids;
@@ -226,6 +289,7 @@ Out TrimFabricationFace(modeling::KernelShapeHandle support,
         Require(made.IsDone(),"製作の穴を追加できません。");auto result=made.Face();result.Orientation(orientation);
         BRepLib::SameParameter(result,tolerance.modelLinearMm,true);
         Require(BRepCheck_Analyzer(result).IsValid(),"製作境界から作った面が不正です。自己交差や面から離れた辺を確認してください。");
+        if(const auto compact=CompactPlanarPolygon(result,tolerance.modelLinearMm))result=*compact;
         return Out::Success(StoreShape(result));
     }catch(const Standard_Failure& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.GetMessageString()));}
     catch(const std::exception& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.what()));}

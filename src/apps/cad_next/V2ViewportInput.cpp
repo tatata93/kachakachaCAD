@@ -433,7 +433,10 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     lastToolPickPoint_=toolPickToggle_&&picked?std::optional{picked->hitPoint}:std::nullopt;
     const auto mode = ModeForTogglePick(picked, ModeForToolPick(picked,
         kachakacha::v2::app::SelectionMode::Replace));
-    SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
+    const bool smooth=!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
+        ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select);
+    SetSelection(smooth?V2ApplySmoothCurvePick(*this,*session_,selection_,picked,mode)
+        :kachakacha::v2::app::ApplySelection(selection_,picked,mode));
     ReportSelectionCount();
     update();
     return true;

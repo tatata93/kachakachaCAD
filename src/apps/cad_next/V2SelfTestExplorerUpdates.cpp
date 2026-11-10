@@ -101,6 +101,7 @@ bool GroupCategoryScope(V2MainWindow& w) {
 }
 bool SmoothBoundaryRuns(V2MainWindow& w) {
     using namespace geometry;
+    w.resize(1600,1000);QApplication::processEvents();
     const auto a=CurveSegment::MakeCubicBezier({{0,0,0},{1,0,0},{2,1,1},{3,1,1}}).Value();
     const auto b=CurveSegment::MakeCubicBezier({{3,1,1},{5,1,1},{6,3,0},{7,4,0}}).Value();
     const auto line=CurveSegment::MakeLine({-2,0,0},{0,0,0}).Value();
@@ -130,8 +131,15 @@ bool SmoothBoundaryRuns(V2MainWindow& w) {
     if(wire.IsNil()||straight.IsNil())return false;
     if(!w.SaveAndReopen("smooth-boundary-input.kcd2"))return false;
     auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Isometric);view.FitToDocument();
+    const auto click=[&](Qt::KeyboardModifiers modifiers=Qt::NoModifier) {
+        const auto screen=view.Mapping().Project(a.Evaluate(.5));if(!screen)return false;
+        const QPointF point(screen->x,screen->y);if(view.ViewButtonAt(point))return false;
+        QMouseEvent press(QEvent::MouseButtonPress,point,view.mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::LeftButton,modifiers);
+        QMouseEvent release(QEvent::MouseButtonRelease,point,view.mapToGlobal(point.toPoint()),Qt::LeftButton,Qt::NoButton,modifiers);
+        QApplication::sendEvent(&view,&press);QApplication::sendEvent(&view,&release);QApplication::processEvents();return true;
+    };
     w.RunCommand("selection.activate");view.SetSelection({});
-    if(!Explain("generated smooth curve is pickable in the rebuilt scene",ClickOnCurveOf(w,wire)&&view.Selection().ordered.size()==1))return false;
+    if(!Explain("generated smooth curve is pickable in the rebuilt scene",click()&&view.Selection().ordered.size()==1))return false;
     const auto selected=view.Selection().ordered.front();
     if(!Explain("one actual 3D click selects the entire smooth curve only",selected.entityId==wire
         &&selected.kind==app::SelectionElementKind::Object&&!selected.segmentId&&view.Selection().entityIds.size()==1))return false;
@@ -141,12 +149,14 @@ bool SmoothBoundaryRuns(V2MainWindow& w) {
     app::SelectionRef span;span.entityId=wire;span.kind=app::SelectionElementKind::Edge;span.segmentId=first->segmentId;
     app::SelectionSet partial;partial.entityIds={wire};partial.ordered={span};view.SetSelection(partial);
     const auto screen=view.Mapping().Project(first->segment.Evaluate(.5));if(!screen)return false;
-    view.SelectAt(QPointF(screen->x,screen->y),Qt::ControlModifier);
+    if(!click(Qt::ControlModifier))return false;
     if(!Explain("whole-curve Ctrl replaces a preceding single-span reference",view.Selection().ordered.size()==1
         &&view.Selection().ordered.front().kind==app::SelectionElementKind::Object))return false;
-    view.SelectAt(QPointF(screen->x,screen->y),Qt::ControlModifier);
+    if(!click(Qt::ControlModifier))return false;
     if(!Explain("next Ctrl removes the complete curve without a stale partial selection",view.Selection().entityIds.empty()))return false;
-    if(!ClickOnCurveOf(w,wire))return false;
+    if(!click())return false;
+    // Qt shortcuts require the active viewport, as a real click/key sequence does.
+    w.activateWindow();view.setFocus();QApplication::processEvents();
     QKeyEvent remove(QEvent::KeyPress,Qt::Key_Delete,Qt::NoModifier);
     QApplication::sendEvent(&view,&remove);QApplication::processEvents();
     if(!Explain("delete removes only that curve",!w.Session().GetDocument().FindEntity(wire)
@@ -154,7 +164,8 @@ bool SmoothBoundaryRuns(V2MainWindow& w) {
     w.RunCommand("edit.undo");
     if(!Explain("undo and save restore the exact curved wire",w.Session().GetDocument().FindEntity(wire)
         &&w.SaveAndReopen("smooth-thickness-boundary.kcd2")))return false;
-    return Explain("whole smooth curve is still pickable after reload",ClickOnCurveOf(w,wire)
+    view.SetViewDirection(ViewDirection::Isometric);view.FitToDocument();w.RunCommand("selection.activate");
+    return Explain("whole smooth curve is still pickable after reload",click()
         &&view.Selection().ordered.size()==1&&view.Selection().ordered.front().kind==app::SelectionElementKind::Object);
 }
 bool SmoothMixedWire(V2MainWindow& w) {
@@ -185,6 +196,10 @@ bool SmoothMixedWire(V2MainWindow& w) {
     const auto& ink=V2RenderSelectionOf(v);
     if(!Explain("hover ink covers the same curved run only",!ink.HoverCurve(wire,source.segmentIds[0])
         &&ink.HoverCurve(wire,source.segmentIds[1])&&ink.HoverCurve(wire,source.segmentIds[2])&&!ink.HoverCurve(wire,source.segmentIds[3])))return false;
+    v.SetSelection({});const auto menuPoint=v.Mapping().Project(a.Evaluate(.4));if(!menuPoint)return false;
+    v.HoverAt({menuPoint->x,menuPoint->y});
+    if(!v.SelectCandidate(static_cast<std::size_t>(v.CandidateIndex())))return false;
+    if(!Explain("candidate-menu selection uses the same curved-only unit",!selected(0)&&selected(1)&&selected(2)&&!selected(3)))return false;
     click(Qt::ControlModifier);if(!Explain("Ctrl toggles the complete curve off",v.Selection().entityIds.empty()))return false;
     v.SetSelection(app::SelectionSet{{wire}});click(Qt::ControlModifier);
     if(!Explain("Ctrl removes only the curved run from a whole-wire selection",selected(0)&&!selected(1)&&!selected(2)&&selected(3)))return false;

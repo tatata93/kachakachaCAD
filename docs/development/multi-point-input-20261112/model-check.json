@@ -1,0 +1,47 @@
+{
+  "input_sha256": "35b2db2355b60b3a2f9c201843cf6c3ed3deb388cd291dc9a56a153e90a499b3",
+  "changed_source_features": [],
+  "new_features": [
+    {
+      "definition": {
+        "inputs": [],
+        "isOriginPlane": false,
+        "method": 6,
+        "normal": {
+          "x": 0,
+          "y": -1,
+          "z": 0
+        },
+        "offset": {
+          "expression": "",
+          "quantity": "scalar",
+          "value": 0
+        },
+        "origin": {
+          "x": -18,
+          "y": 0,
+          "z": 7
+        },
+        "uDirection": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "derivedGroupId": null,
+      "displayName": "作業面10",
+      "enabled": true,
+      "id": "00000000-0000-4000-8000-000000001bf5",
+      "inputEntityIds": [],
+      "outputs": [
+        {
+          "entityId": "00000000-0000-4000-8000-000000001bf6",
+          "key": "plane",
+          "kind": "work_plane"
+        }
+      ],
+      "revision": 0,
+      "type": "create_work_plane"
+    }
+  ]
+}

@@ -26,6 +26,7 @@
 #include <string>
 
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> PointPickingCases();
 namespace {
 
 using kachakacha::v2::modeling::StandardPlaneKind;
@@ -312,7 +313,7 @@ bool CaseRolePointsKeepOthers(V2MainWindow& window)
 
 std::vector<SelfTestCase> PlaneCases()
 {
-    return {
+    auto cases=std::vector<SelfTestCase>{
         {"HP-WP-ROLE point replacement keeps other points",&CaseRolePointsKeepOthers},
         {"一覧の原点に3面と3軸が出て、軸はチェックで消せる", &CaseOriginNodeShowsPlanesAndAxes},
         {"作業平面の棚で位置と向きを数で指定して作れる", &CaseDockMakesPlaneByPointAndNormal},
@@ -321,6 +322,7 @@ std::vector<SelfTestCase> PlaneCases()
         {"上の帯の作図面コンボで切り替わり、正対はその面を向く", &CaseTopBarPlaneComboSwitchesAndFaces},
         {"新しい文書にも原点の3面がある", &CaseOriginPlanesSurviveSaveAndOpen},
     };
+    const auto points=PointPickingCases();cases.insert(cases.end(),points.begin(),points.end());return cases;
 }
 
 } // namespace kachakacha::v2::selftest

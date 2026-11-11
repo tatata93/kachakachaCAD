@@ -180,6 +180,7 @@ void V2Viewport::OnToolChanged()
     V2ToolSelection::Reset(*this);
     V2DrawingSelection::Of(*this).CancelInputs();
     CancelReferencePick();
+    CancelPointPick();
     if (cursorPanel_.active) {
         CloseCursorInput();
     }

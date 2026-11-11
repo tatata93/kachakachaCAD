@@ -1308,9 +1308,7 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         RefreshCursorShape();
         return;
     }
-    // 画面を動かしている最中の左押しは受けない(§5.2「カメラ操作中に
-    // ツール入力や選択を誤確定しない」)。受けると、画面を送っている途中に
-    // 作図点が置かれたり、選択が入れ替わったりする。
+    // カメラ操作中は左押しでツール入力や選択を確定しない(§5.2)。
     if (panning_) {
         return;
     }
@@ -1324,6 +1322,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     // 順は PressViewNavigator が持っている。ここで書き写さない。
     if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
         return;
+    }
+    // A requested point owns the click, independently of the underlying tool.
+    if(event->button()==Qt::LeftButton&&PickPending()&&!V2ToolSelection::Active(*this)) {
+        ClickAt(event->position());return;
     }
     // Copy/Move targets are additive Ctrl picks, not temporary deletion inputs.
     if(v2ui::TransformTargetPick(*this,*session_,*event)){

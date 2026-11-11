@@ -145,7 +145,7 @@ public:
     //! 選択だけでは決まらないので、押す場所を1回だけ聞く。
     //! 聞いている間は帯にそう出す。黙って待つと、何も起きないように見える。
     struct PickedPoint {
-        //! 作業平面の上の点。
+        //! スナップした3D参照点。吸着先が無いときだけ作業平面上の点。
         kachakacha::v2::geometry::Vector3 point{};
         //! いちばん近い線。無ければ値を持たない。
         std::optional<kachakacha::v2::app::PickCandidate> curve;

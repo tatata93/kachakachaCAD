@@ -64,6 +64,7 @@ void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> 
     std::function<void(std::optional<kachakacha::v2::base::EntityId>)> handler)
 {
     if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
+    CancelPointPick();
     CancelReferencePick();
     referencePickIds_ = std::move(ids);
     referencePickHandler_ = std::move(handler);
@@ -94,6 +95,7 @@ void V2Viewport::BeginElementPick(
     std::function<void(std::optional<kachakacha::v2::app::PickCandidate>)> handler)
 {
     if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
+    CancelPointPick();
     CancelReferencePick();
     elementPickFilter_ = std::move(filter);
     elementPickHandler_ = std::move(handler);

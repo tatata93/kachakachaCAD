@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2PointPicking.h"
 #include "V2ToolSelection.h"
 #include "V2GeneratedWirePicking.h"
 #include "V2Viewport.h"
@@ -840,6 +841,15 @@ void V2Viewport::HoverAt(const QPointF& position)
     hoverShapeCandidates_.reset();hoverPickReuse_=true;
     QElapsedTimer hoverTimer;hoverTimer.start();
     cursorPosition_ = position;
+    if(PickPending()&&!V2ToolSelection::Active(*this)) {
+        hover_=v2ui::ReferencePointAt(*this,session_->Scene(),
+            session_->GetDocument().Snapshot().settings.tolerance,position,
+            snapSuppressedByKey_||snapSuppressedBySetting_);
+        status_=property("pointPickPrompt").toString().toStdString();
+        hover_.messageJa=status_;hoverOffPlane_=false;hoveredProfileRegion_.reset();
+        if(statusCallback_)statusCallback_(status_);
+        RefreshCursorShape();update();NotifyHoverChanged();return;
+    }
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     const auto snapTime=hoverTimer.nsecsElapsed();
     status_ = hover_.messageJa;
@@ -1133,32 +1143,6 @@ void V2Viewport::ReportSelectionCount()
     }
 }
 
-void V2Viewport::BeginPointPick(std::function<void(const PickedPoint&)> handler,
-    const std::string& promptJa)
-{
-    if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
-    pickHandler_ = std::move(handler);
-    // 聞いていることを言う。黙って待つと、何も起きないように見える。
-    status_ = promptJa;
-    if (statusCallback_) {
-        statusCallback_(status_);
-    }
-    update();
-}
-
-void V2Viewport::CancelPointPick()
-{
-    if (!pickHandler_) {
-        return;
-    }
-    pickHandler_ = nullptr;
-    status_ = "拾うのをやめました。";
-    if (statusCallback_) {
-        statusCallback_(status_);
-    }
-    update();
-}
-
 //! 測定は点を集めるだけ。形は作らない。吸着した位置と、吸着した線を覚える。
 void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
@@ -1196,25 +1180,22 @@ void V2Viewport::ClickAt(const QPointF& position)
     V2DrawingSelection::Of(*this).ResumeInput();
     if (ReferencePickPending()) { SelectAt(position, Qt::NoModifier); return; }
     if (pickHandler_) {
-        // 1回だけ拾う。拾ったら道具へ戻す。押しっぱなしにしない。
         PickedPoint picked;
-        const auto onPlane = mapping_.UnprojectOntoPlane(
-            ScreenPoint{position.x(), position.y()}, workPlane_.origin,
-            workPlane_.normal);
-        if (onPlane.has_value()) {
-            picked.point = *onPlane;
+        const auto hit=v2ui::ReferencePointAt(*this,session_->Scene(),
+            session_->GetDocument().Snapshot().settings.tolerance,position,
+            snapSuppressedByKey_||snapSuppressedBySetting_,&picked.curve);
+        if(!hit.position) {
+            status_="点を指定できません。端点・交点を選ぶか、作業面が見える向きに変えてください。";
+            if(statusCallback_)statusCallback_(status_);
+            update();return;
         }
-        // 絞りは Hover と同じものを使う。使わないと、カーソルが「掴めない」と
-        // 言っている薄い線を、押すと拾えてしまう。手と目が食い違う。
-        picked.curve = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
-            ScreenPoint{position.x(), position.y()},
-            session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
-        if (picked.curve && !EntityShown(picked.curve->entityId)) picked.curve.reset();
-        auto handler = pickHandler_;
-        pickHandler_ = nullptr;
+        picked.point=*hit.position;
+        auto handler=std::move(pickHandler_);
+        pickHandler_=nullptr;setProperty("pointPickPrompt",{});
+        status_="点を指定しました。";
+        if(statusCallback_)statusCallback_(status_);
         handler(picked);
-        update();
-        return;
+        update();return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
         ClickForMeasure(position);

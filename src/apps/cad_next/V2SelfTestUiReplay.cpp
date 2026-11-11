@@ -17,6 +17,7 @@
 #include <QChar>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDialog>
 #include <QElapsedTimer>
@@ -615,6 +616,15 @@ struct Replay {
 
     bool Inspect(const QString& path)
     {
+        QJsonArray shapes;
+        for(const auto& view:w.Viewport().ShapeViews()) {
+            QCryptographicHash hash(QCryptographicHash::Sha256);
+            for(const auto& triangle:view.mesh.triangles)for(const auto& point:triangle.points)
+                for(double value:{point.x,point.y,point.z})hash.addData(QByteArray::number(value,'g',17)+',');
+            shapes.append(QJsonObject{{"id",QString::fromStdString(view.entityId.ToString())},
+                {"surface",view.surface},{"triangles",int(view.mesh.triangles.size())},
+                {"meshSha256",QString::fromLatin1(hash.result().toHex())}});
+        }
         QJsonArray entities;
         for(const auto& e:w.Session().GetDocument().Snapshot().entities)
             entities.append(QJsonObject{{"id",QString::fromStdString(e.id.ToString())},{"name",QString::fromStdString(e.displayName)},
@@ -640,7 +650,7 @@ struct Replay {
         if(auto* dock=w.findChild<QWidget*>("diagnosticDock"))
             for(auto* list:dock->findChildren<QListWidget*>())
                 for(int i=0;i<list->count();++i)notices.append(list->item(i)->text());
-        return Write(path,{{"entities",entities},{"groups",groups},{"fields",fields},{"notices",notices},
+        return Write(path,{{"entities",entities},{"shapes",shapes},{"groups",groups},{"fields",fields},{"notices",notices},
             {"inputRuntime",InputRuntime()},
             {"aliases",aliases},{"status",w.StatusText()}});
     }

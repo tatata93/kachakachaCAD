@@ -163,7 +163,6 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     const auto before=session_->GetDocument().Snapshot();
     const auto oldGeometry=ShapeInputs(before);
     const bool hadErrors=!rebuildProblems_.isEmpty();
-    const bool hadPreview=!viewport_->ToolPreview().empty()||viewport_->ExtrudeHandleShown();
     // Keep the pre-history native edge identities until AdoptCurrentDocument
     // replaces overlays. The standalone session rebuilds only document geometry.
     const bool moved = undo ? session_->GetDocument().Undo() : session_->GetDocument().Redo();
@@ -173,6 +172,10 @@ void V2MainWindow::RunHistoryCommand(bool undo)
         return;
     }
     drawingSelection.HistoryMoved(*session_,undo,beforeRevision);
+    const bool geometryChanged=hadErrors||oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot());
+    // Dispose pending previews while their committed input handles are still
+    // alive. A queued surface preview must not run inside the history rebuild.
+    if(geometryChanged)EndArmedTools();
     if(!V2DrawingSelection::IsDrawing(session_->CurrentTool())&&!V2ToolSelection::Active(*viewport_))session_->CancelTool();
     // 文書だけ戻して場面を作り直さないと、消したはずの線が画面に残り、
     // 立体も古いままになる。文書が変わったあとの後始末を全部通す。
@@ -181,14 +184,17 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     // 取り消したはずの近似モデルが数のうえでは残り、
     // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
-    if(hadErrors || oldGeometry!=ShapeInputs(session_->GetDocument().Snapshot())) {
-        const auto plan=(hadErrors||hadPreview) ? std::optional<v2ui::PartHistoryPlan>{}
+    if(geometryChanged) {
+        const auto plan=hadErrors ? std::optional<v2ui::PartHistoryPlan>{}
             : v2ui::PlanPartHistory(before,session_->GetDocument().Snapshot(),partShapes_,guideShapes_);
         bool reused=plan.has_value();
         if (plan) {
             V2ShellSplitTool::RebuildBatch splitBatch(*shellSplitTool_);
             v2ui::RemoveHistoryParts(*plan,partShapes_,guideShapes_);
-            for (const auto& id:plan->removed) {partEdges_.erase(id);partFlatBoundary_.erase(id);}
+            for (const auto& id:plan->removed) {
+                partEdges_.erase(id);partFlatBoundary_.erase(id);
+                guideEdges_.erase(id);guideSamples_.erase(id);
+            }
             for (const auto& step:plan->added) {
                 const auto* feature=session_->GetDocument().FindFeature(step.featureId);
                 if (!feature||!RebuildOneShape(step,*feature)) {reused=false;break;}

@@ -88,32 +88,32 @@ std::optional<PartHistoryPlan> PlanPartHistory(const document::DocumentSnapshot&
     for (const auto& step:oldPlan) if (!oldSteps.emplace(step.outputEntityId,step).second) return {};
     for (const auto& step:newPlan) if (!newSteps.emplace(step.outputEntityId,step).second) return {};
     PartHistoryPlan result;
-    const auto isPart=[](const auto& snapshot,base::EntityId id) {
+    const auto independentOutput=[](const auto& snapshot,base::EntityId id) {
         return std::any_of(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& e){
-            return e.id==id && e.kind==domain::EntityKind::Part;});
+            return e.id==id && (e.kind==domain::EntityKind::Part||e.kind==domain::EntityKind::GuideSurface);});
     };
     for (const auto& step:oldPlan) {
         const auto next=newSteps.find(step.outputEntityId);
         if (next!=newSteps.end()) {
             if (!SameStep(step,next->second)) return {};
         } else {
-            if (!isPart(before,step.outputEntityId)) return {};
+            if (!independentOutput(before,step.outputEntityId)) return {};
             result.removed.push_back(step.outputEntityId.ToString());
         }
     }
     for (const auto& step:newPlan) if (!oldSteps.contains(step.outputEntityId)) {
-        if (!isPart(after,step.outputEntityId)) return {};
+        if (!independentOutput(after,step.outputEntityId)) return {};
         result.added.push_back(step);
     }
     return result;
 }
 
-void RemoveHistoryParts(const PartHistoryPlan& plan,NativeMap& parts,const NativeMap& guides)
+void RemoveHistoryParts(const PartHistoryPlan& plan,NativeMap& parts,NativeMap& guides)
 {
     std::set<std::uint64_t> removed,retained;
-    for (const auto& id:plan.removed) {
-        const auto found=parts.find(id);
-        if (found!=parts.end()) {removed.insert(found->second.value);parts.erase(found);}
+    for (const auto& id:plan.removed) for(auto* map:{&parts,&guides}) {
+        const auto found=map->find(id);
+        if (found!=map->end()) {removed.insert(found->second.value);map->erase(found);}
     }
     // Shared native handles can represent unchanged committed outputs. Release
     // each orphan once, never a handle still owned by either document map.

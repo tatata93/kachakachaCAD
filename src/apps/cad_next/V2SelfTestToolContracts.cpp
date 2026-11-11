@@ -41,6 +41,7 @@ bool AlternateSaveDuringInput(V2MainWindow&);
 bool AlternateSavePreservesHistory(V2MainWindow&);
 bool HistoryRetainsUnchangedParts(V2MainWindow&);
 bool HistoryRebuildsModifiedSource(V2MainWindow&);
+bool HistoryRetainsUnchangedSurfaces(V2MainWindow&);
 bool AlternateOwnerModel(V2MainWindow&);
 namespace {
 int Active(V2MainWindow& w) {
@@ -198,7 +199,8 @@ std::vector<SelfTestCase> ToolContractCases(){std::vector<SelfTestCase> cases={{
     {"HP-TOOLS first drawing point Undo without document history",AlternateFirstPointUndo},{"HP-TOOLS save and save-as preserve pending targets",AlternateSaveDuringInput},
     {"HP-TOOLS save and save-as preserve Undo Redo and saved bytes",AlternateSavePreservesHistory},
     {"HP-TOOLS history retains unchanged native parts",HistoryRetainsUnchangedParts},
-    {"HP-TOOLS history rebuilds modified source geometry",HistoryRebuildsModifiedSource}};
+    {"HP-TOOLS history rebuilds modified source geometry",HistoryRebuildsModifiedSource},
+    {"HP-TOOLS history retains surfaces across actual Ctrl Z and regeneration",HistoryRetainsUnchangedSurfaces}};
     const auto continuity=ToolContinuityCases();cases.insert(cases.end(),continuity.begin(),continuity.end());
     if(qEnvironmentVariableIsSet("KACHACAD_MODELING_OWNER_INPUT"))cases.push_back({"HP-TOOLS actual owner model thickness and history",AlternateOwnerModel});
     return cases;}

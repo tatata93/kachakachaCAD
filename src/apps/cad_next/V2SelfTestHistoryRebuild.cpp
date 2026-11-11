@@ -3,12 +3,16 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2EditDock.h"
+#include "V2LoopFacesTool.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <gp_Pnt.hxx>
 #include <QPointF>
+#include <QApplication>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -158,5 +162,100 @@ bool HistoryRebuildsModifiedSource(V2MainWindow& w)
                 &&w.RebuildProblems().isEmpty())) return false;
     }
     return true;
+}
+
+namespace {
+bool MousePoint(V2MainWindow& w,Vector3 point)
+{
+    auto& v=w.Viewport();const auto pixel=v.Mapping().Project(point);if(!pixel)return false;
+    const QPointF local(pixel->x,pixel->y);v.setFocus();
+    for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}) {
+        QMouseEvent event(type,local,QPointF(v.mapToGlobal(local.toPoint())),Qt::LeftButton,
+            type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&v,&event);
+    }
+    QApplication::processEvents();return true;
+}
+
+void HistoryKey(V2MainWindow& w,int key,Qt::KeyboardModifiers modifiers=Qt::ControlModifier)
+{
+    w.activateWindow();w.Viewport().setFocus();QApplication::processEvents();
+    for(const auto type:{QEvent::KeyPress,QEvent::KeyRelease}) {
+        QKeyEvent event(type,key,modifiers);QApplication::sendEvent(&w.Viewport(),&event);
+    }
+    QApplication::processEvents();
+}
+
+bool CircleByMouse(V2MainWindow& w,double radius)
+{
+    w.SelectTool(modeling::DrawingTool::Circle);
+    return MousePoint(w,{10,0,0})&&MousePoint(w,{10+radius,0,0});
+}
+
+std::vector<base::EntityId> SurfaceIds(V2MainWindow& w)
+{
+    std::vector<base::EntityId> result;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::GuideSurface)result.push_back(e.id);
+    return result;
+}
+}
+
+bool HistoryRetainsUnchangedSurfaces(V2MainWindow& w)
+{
+    w.RunCommand("file.new");w.resize(1500,900);w.show();QApplication::processEvents();
+    if(MakeBoxByHand(w,.18,.30,.32,.45).IsNil())return false;
+    w.RunCommand("view.top");
+    if(!CircleByMouse(w,15)||!CircleByMouse(w,10))return false;
+    std::vector<base::EntityId> wires;
+    for(const auto& e:w.Session().GetDocument().Snapshot().entities)
+        if(e.kind==domain::EntityKind::Wire&&e.displayName.find("円")!=std::string::npos)wires.push_back(e.id);
+    if(!Explain("two circles drawn by actual mouse events",wires.size()==2))return false;
+    const auto select=[&] {app::SelectionSet selection;selection.entityIds=wires;w.Viewport().SetSelection(selection);};
+    const auto make=[&] {
+        w.RunCommand("selection.activate");select();w.RunCommand("surface.from_lines");
+        HistoryKey(w,Qt::Key_Return,Qt::NoModifier);
+        return !SurfaceIds(w).empty()&&w.RebuildProblems().isEmpty();
+    };
+    if(!make())return false;
+    const auto first=SurfaceIds(w).front();
+    double area=0;
+    for(const auto& view:w.Viewport().ShapeViews())if(view.entityId==first)
+        for(const auto& t:view.mesh.triangles)area+=geometry::Cross(t.points[1]-t.points[0],t.points[2]-t.points[0]).Length()*.5;
+    if(!Explain("surface keeps the inner circular opening",std::abs(area-125*std::acos(-1.0))<4))return false;
+    // Add a second, overlapping surface so Undo must retain an existing guide
+    // and a solid, with their original native edges, not just an empty document.
+    if(!make()||SurfaceIds(w).size()!=2)return false;
+    std::vector<modeling::SnapCurve> retained;
+    for(const auto& c:w.Session().Scene().curves)if(c.entityId==first)retained.push_back(c);
+    const auto committedCount=kernel::CachedShapeCount();
+    for(int repeat=0;repeat<3;++repeat) {
+        const auto before=AllocationMark();HistoryKey(w,Qt::Key_Z);const auto after=AllocationMark();
+        if(!Explain("surface Undo allocates no replacement native shapes",after==before+1)
+            ||!Explain("only the latest surface is removed",SurfaceIds(w).size()==1
+                &&SurfaceIds(w).front()==first&&CountOfKind(w,domain::EntityKind::Part)==1
+                &&w.Viewport().ShapeViewCount()==2&&w.RebuildProblems().isEmpty()))return false;
+        for(const auto& old:retained)if(!Explain("unrelated surface keeps native edge identities",
+            std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),
+                [&](const auto& c){return c.entityId==old.entityId&&c.segmentId==old.segmentId;})))return false;
+        HistoryKey(w,Qt::Key_Y);
+        if(!Explain("Redo restores the annular surface without native leaks",SurfaceIds(w).size()==2
+            &&kernel::CachedShapeCount()==committedCount&&w.RebuildProblems().isEmpty()))return false;
+    }
+    HistoryKey(w,Qt::Key_Z);
+    if(!make()||SurfaceIds(w).size()!=2||w.Session().GetDocument().CanRedo())return false;
+    select();w.RunCommand("surface.from_lines");
+    QApplication::processEvents(); // Finish the preview before measuring Undo allocations.
+    if(!w.LoopFacesTool().Active())return false;
+    const auto before=AllocationMark();HistoryKey(w,Qt::Key_Z);const auto after=AllocationMark();
+    Note(("preview Undo: active="+std::to_string(w.LoopFacesTool().Active())
+        +" previews="+std::to_string(w.Viewport().ToolPreview().size())+" surfaces="+std::to_string(SurfaceIds(w).size())
+        +" native allocations="+std::to_string(after-before-1)).c_str());
+    if(!Explain("history cancels the active surface preview before changing native ownership",
+        !w.LoopFacesTool().Active()&&w.Viewport().ToolPreview().empty()&&SurfaceIds(w).size()==1
+        &&after==before+1&&w.RebuildProblems().isEmpty()))return false;
+    if(!make()||SurfaceIds(w).size()!=2)return false;
+    return w.SaveAndReopen("surface-history-ring.kcd2")&&SurfaceIds(w).size()==2
+        &&w.Viewport().ShapeViewCount()==3&&w.RebuildProblems().isEmpty();
 }
 }

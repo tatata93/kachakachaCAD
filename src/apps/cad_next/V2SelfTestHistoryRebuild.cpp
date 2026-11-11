@@ -11,6 +11,7 @@
 #include <gp_Pnt.hxx>
 #include <QPointF>
 #include <QApplication>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <algorithm>

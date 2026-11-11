@@ -14,6 +14,7 @@
 #include <QAbstractSpinBox>
 #include <QAction>
 #include <QApplication>
+#include <QByteArray>
 #include <QChar>
 #include <QCheckBox>
 #include <QComboBox>

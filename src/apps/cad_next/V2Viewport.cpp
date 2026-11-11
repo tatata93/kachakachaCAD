@@ -848,7 +848,8 @@ void V2Viewport::HoverAt(const QPointF& position)
         status_=property("pointPickPrompt").toString().toStdString();
         hover_.messageJa=status_;hoverOffPlane_=false;hoveredProfileRegion_.reset();
         if(statusCallback_)statusCallback_(status_);
-        RefreshCursorShape();update();NotifyHoverChanged();return;
+        RefreshCursorShape();update();NotifyHoverChanged();
+        hoverPickReuse_=false;hoverShapeCandidates_.reset();return;
     }
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     const auto snapTime=hoverTimer.nsecsElapsed();

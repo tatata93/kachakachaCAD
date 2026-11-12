@@ -481,6 +481,38 @@ KACHA_V2_TEST(selection, 同じ部品の複数面を別々に選べる)
     Require(SelectionItemCount(selection) == 1, "指定した面だけ外す");
 }
 
+KACHA_V2_TEST(selection, 現在画面の異なる面番号をCtrlで選び分ける)
+{
+    PickCandidate a;a.entityId=Ent(3);a.kind=SelectionElementKind::Face;a.pickedFaceIndex=0;
+    auto b=a;b.pickedFaceIndex=4;
+    auto selection=ApplySelection({},a,SelectionMode::Toggle);
+    selection=ApplySelection(selection,b,SelectionMode::Toggle);
+    Require(selection.ordered.size()==2,"意味的キーがなくても現在画面の2面を保持する");
+    Require(selection.entityIds.size()==1,"立体自体は1つ");
+    SelectionRef ref;ref.entityId=a.entityId;ref.kind=a.kind;ref.pickedFaceIndex=4;
+    Require(IsSelected(selection,ref),"指定面の選択を照合する");
+    selection=ApplySelection(selection,a,SelectionMode::Toggle);
+    Require(selection.ordered.size()==1&&selection.ordered.front().pickedFaceIndex==4,"0番面を外して4番面を残す");
+}
+
+KACHA_V2_TEST(selection, 面番号の未指定を特定の面へ読み替えない)
+{
+    PickCandidate a;a.entityId=Ent(3);a.kind=SelectionElementKind::Face;a.pickedFaceIndex=0;
+    auto selection=ApplySelection({},a,SelectionMode::Toggle);
+    SelectionRef unknown;unknown.entityId=a.entityId;unknown.kind=a.kind;
+    Require(!IsSelected(selection,unknown),"未指定は0番面ではない");
+}
+
+KACHA_V2_TEST(selection, 意味的な面キーは現在の表示番号より優先する)
+{
+    PickCandidate a;a.entityId=Ent(3);a.kind=SelectionElementKind::Face;a.pickedFaceIndex=0;
+    a.subshapeKey=kachakacha::v2::modeling::MakeExtrudeCapStart();
+    auto same=a;same.pickedFaceIndex=7;
+    auto selection=ApplySelection({},a,SelectionMode::Toggle);
+    selection=ApplySelection(selection,same,SelectionMode::Toggle);
+    Require(selection.ordered.empty(),"同じ意味的キーは表示番号が変わっても同じ面");
+}
+
 KACHA_V2_TEST(selection, 外すのは入っていなくても落ちない)
 {
     SelectionSet selection;

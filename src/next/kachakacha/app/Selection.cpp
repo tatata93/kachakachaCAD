@@ -29,6 +29,13 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
     if (first.subshapeKey.has_value() != second.subshapeKey.has_value()) {
         return false;
     }
+    // Native picks without a semantic key identify a face only in the current
+    // displayed shape. Keep those transient faces distinct without persisting
+    // their indices or overriding an available semantic identity.
+    if (!first.subshapeKey && first.kind == SelectionElementKind::Face
+        && first.pickedFaceIndex != second.pickedFaceIndex) {
+        return false;
+    }
     return !first.subshapeKey.has_value()
         || first.subshapeKey->ToString() == second.subshapeKey->ToString();
 }

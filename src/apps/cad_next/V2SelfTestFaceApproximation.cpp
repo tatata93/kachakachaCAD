@@ -226,6 +226,18 @@ bool WholeTree(V2MainWindow& w) {
     return Face(w,a)&&Explain("the real surface can still be picked after a whole tree row is refused",
         !w.Viewport().ReferencePickPending()&&CountOfKind(w,EntityKind::GuideSurface)==1);
 }
+bool SameSolidFaces(V2MainWindow& w) {
+    geometry::Vector3 a;if(!Setup(w,a)||!Face(w,a))return false;
+    w.Viewport().SetViewDirection(ViewDirection::Right);QApplication::processEvents();
+    if(!Face(w,a,Qt::ControlModifier))return false;
+    const auto refs=w.Viewport().Selection().ordered;
+    if(!Explain("Ctrl retains two actual native faces of the same solid",refs.size()==2
+        &&refs[0].entityId==refs[1].entityId&&refs[0].pickedFaceIndex!=refs[1].pickedFaceIndex))return false;
+    w.RunCommand("fabrication.create");
+    return Explain("both selected faces, rather than the whole solid, are approximation inputs",
+        CountOfKind(w,EntityKind::Part)==1&&CountOfKind(w,EntityKind::GuideSurface)==2
+        &&w.ApproxInput().sources.size()==2&&!w.Viewport().ToolPreview().empty());
+}
 }
 std::vector<SelfTestCase> SolidFaceApproximationCases() {
     return {{"HP-SFA multiple preselected solid faces",MultiplePreselection},
@@ -237,6 +249,7 @@ std::vector<SelfTestCase> SolidFaceApproximationCases() {
         {"HP-SFA Escape exits face input",[](auto& w){return EscapeOrSwitch(w,false);}},
         {"HP-SFA another tool exits face input",[](auto& w){return EscapeOrSwitch(w,true);}},
         {"HP-SFA whole tree row never guesses a face",WholeTree},
+        {"HP-SFA two native faces of one solid",SameSolidFaces},
         {"HP-SFA two-hole face before approximation",[](auto& w){return HoleAndCurve(w,false,false);}},
         {"HP-SFA two-hole face tool first Ctrl",[](auto& w){return HoleAndCurve(w,false,true);}},
         {"HP-SFA curved solid face before approximation",[](auto& w){return HoleAndCurve(w,true,false);}},

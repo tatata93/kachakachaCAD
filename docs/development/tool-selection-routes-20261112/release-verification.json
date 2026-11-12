@@ -1,0 +1,21 @@
+{
+  "tag": "v0.1.0-20261112-update3",
+  "release_url": "https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261112-update3",
+  "target_commit": "c3a276d5dd51c43829e45e66093e019419a6acc7",
+  "latest_tag_matches": true,
+  "asset_name": "kachakachaCAD-Windows-x64-20261112-update3.zip",
+  "asset_id": 738578962,
+  "asset_bytes": 76206497,
+  "sha256": "27c895900d2f069661a2ac91dbfb00379314e5a10bff99faf1309d692c879a0e",
+  "github_asset_digest_matches": true,
+  "ctest": 197,
+  "skip": 0,
+  "development_ui": 1005,
+  "package_ui": 1005,
+  "new_selection_cases": 270,
+  "published_owner_thickness_phases": 2,
+  "published_owner_selection_phases": 2,
+  "original_sha256": "84c716b3e6af1ae8f87da4ee4df92226ef326b03e1e44f8c6ce7f84152125ede",
+  "original_meshes_unchanged": 12,
+  "evidence": "out/verification/curved-thickness-selection-release-c-20261112/result.json"
+}

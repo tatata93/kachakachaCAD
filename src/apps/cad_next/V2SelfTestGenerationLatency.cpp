@@ -12,7 +12,12 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <gp_Pnt.hxx>
 #include <QApplication>
+#include <QByteArray>
 #include <QElapsedTimer>
+#include <QEvent>
+#include <QIODevice>
+#include <QPointF>
+#include <QString>
 #include <QThread>
 #include <QMouseEvent>
 #include <string>

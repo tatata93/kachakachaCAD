@@ -72,6 +72,54 @@ bool RemoveAffectedDimensions(document::DocumentSnapshot& after,const IsGone& go
     });
     return removed;
 }
+
+bool HasEntity(const document::DocumentSnapshot& snapshot,base::EntityId id)
+{
+    return std::any_of(snapshot.entities.begin(),snapshot.entities.end(),[&](const auto& e){return e.id==id;});
+}
+
+std::vector<base::Diagnostic> PlanBoundaryDeletion(const document::DocumentSnapshot& before,
+    const document::DocumentSnapshot& standard,std::optional<document::DocumentSnapshot>& alternative)
+{
+    std::set<base::EntityId> deletedParts;
+    for(const auto& entity:before.entities)if(entity.kind==domain::EntityKind::Part&&!HasEntity(standard,entity.id))
+        deletedParts.insert(entity.id);
+    if(deletedParts.empty())return {};
+    for(const auto& entity:standard.entities) {
+        if(entity.kind!=domain::EntityKind::Wire||!entity.generatedFrom||!deletedParts.contains(*entity.generatedFrom))continue;
+        if(!alternative)alternative=standard;
+        if(!HasEntity(*alternative,entity.id))continue;
+        auto diagnostics=document::RemoveFeatureCommand(entity.createdBy,document::RemovePolicy::Cascade,
+            "境界ワイヤーを削除").Apply(*alternative);
+        if(std::any_of(diagnostics.begin(),diagnostics.end(),[](const auto& d){return d.IsError();}))return diagnostics;
+    }
+    return {};
+}
+
+struct DeleteEffects {
+    QStringList names;
+    std::vector<base::EntityId> preview;
+    bool dependents;
+};
+DeleteEffects DescribeDeletion(const document::DocumentSnapshot& before,document::DocumentSnapshot& planned,
+    const std::set<base::GroupId>& folders,const std::set<base::FeatureId>& roots,
+    const std::set<base::SegmentId>& cuts,const app::SelectionSet& selection,QStringList partialNames,bool cascade)
+{
+    DeleteEffects result{std::move(partialNames),{},cascade||!folders.empty()};
+    std::set<base::EntityId> remaining;
+    for(const auto& entity:planned.entities)remaining.insert(entity.id);
+    const auto gone=[&](base::EntityId id){return !remaining.contains(id);};
+    for(const auto& group:before.groups)if(folders.contains(group.id))
+        result.names.push_back(QStringLiteral("グループ: ")+QString::fromStdString(group.displayName));
+    for(const auto& entity:before.entities)if(gone(entity.id)){
+        result.preview.push_back(entity.id);result.names.push_back(QString::fromStdString(entity.displayName));
+        if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())
+            result.dependents=true;
+    }
+    for(auto id:selection.entityIds)if(std::find(result.preview.begin(),result.preview.end(),id)==result.preview.end())result.preview.push_back(id);
+    result.dependents=RemoveAffectedDimensions(planned,gone,cuts,result.names)||result.dependents;
+    return result;
+}
 }
 
 void V2MainWindow::DeleteSelected()
@@ -141,38 +189,13 @@ void V2MainWindow::DeleteSelected()
             partialNames.push_back(QString::fromStdString(original->displayName)+QStringLiteral("（選択した線分）"));
         }
     }
-    const auto hasEntity=[](const auto& snapshot,base::EntityId id){return std::any_of(snapshot.entities.begin(),
-        snapshot.entities.end(),[&](const auto& e){return e.id==id;});};
-    std::set<base::EntityId> deletedParts;
-    for(const auto& entity:before.entities)if(entity.kind==domain::EntityKind::Part&&!hasEntity(after,entity.id))
-        deletedParts.insert(entity.id);
     std::optional<document::DocumentSnapshot> withBoundaries;
-    if(!deletedParts.empty())for(const auto& entity:after.entities) {
-        if(entity.kind!=domain::EntityKind::Wire||!entity.generatedFrom||!deletedParts.contains(*entity.generatedFrom))continue;
-        if(!withBoundaries)withBoundaries=after;
-        if(!hasEntity(*withBoundaries,entity.id))continue;
-        const auto diagnostics=document::RemoveFeatureCommand(entity.createdBy,document::RemovePolicy::Cascade,"境界ワイヤーを削除").Apply(*withBoundaries);
-        if(std::any_of(diagnostics.begin(),diagnostics.end(),[](const auto& d){return d.IsError();})){
-            ReportDiagnostics(diagnostics);return;
-        }
-    }
-    struct Effects { QStringList names; std::vector<base::EntityId> preview; bool dependents; };
-    const auto effects=[&](document::DocumentSnapshot& planned){
-        Effects result{partialNames,{},dependencyCascade||!folders.empty()};
-        const auto gone=[&](base::EntityId id){return !hasEntity(planned,id);};
-        for(const auto& group:before.groups)if(allFolders.contains(group.id))
-            result.names.push_back(QStringLiteral("グループ: ")+QString::fromStdString(group.displayName));
-        for(const auto& entity:before.entities)if(gone(entity.id)){
-            result.preview.push_back(entity.id);result.names.push_back(QString::fromStdString(entity.displayName));
-            if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())
-                result.dependents=true;
-        }
-        for(auto id:selection.entityIds)if(std::find(result.preview.begin(),result.preview.end(),id)==result.preview.end())result.preview.push_back(id);
-        result.dependents=RemoveAffectedDimensions(planned,gone,cutIds,result.names)||result.dependents;
-        return result;
-    };
+    const auto boundaryErrors=PlanBoundaryDeletion(before,after,withBoundaries);
+    if(!boundaryErrors.empty()){ReportDiagnostics(boundaryErrors);return;}
+    const auto effects=[&](auto& planned){return DescribeDeletion(before,planned,allFolders,roots,
+        cutIds,selection,partialNames,dependencyCascade);};
     auto base=effects(after);
-    std::optional<Effects> extra;
+    std::optional<DeleteEffects> extra;
     if(withBoundaries)extra=effects(*withBoundaries);
     bool keepContents=false;
     if(base.dependents||extra){

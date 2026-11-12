@@ -420,6 +420,25 @@ void V2MainWindow::EndThicken(bool keepTool)
     RefreshRightShelves();
 }
 
+namespace {
+kachakacha::v2::domain::ThickenSurfaceDefinition SavedThickness(
+    const kachakacha::v2::app::ThickenInputState& input,EntityId surface,double thickness)
+{
+    using namespace kachakacha::v2;
+    domain::ThickenSurfaceDefinition definition;
+    definition.surface=surface;
+    definition.correctOpposite=!input.toPlane&&input.correctOpposite;
+    definition.thickness.value=thickness;
+    definition.thickness.kind=geometry::QuantityKind::Length;
+    if(input.toPlane) {
+        definition.targetPlane=input.targetPlane;
+        definition.targetOffsetMm=input.targetOffsetMm;
+        definition.targetFaceBrep=input.targetFaceBrep;
+    } else definition.placement=static_cast<int>(input.placement);
+    return definition;
+}
+}
+
 //! 確定。**下見に使った形をそのまま**文書へ入れる。何枚でも 1 回の取り消しで戻る。
 void V2MainWindow::ConfirmThicken()
 {
@@ -455,18 +474,7 @@ void V2MainWindow::ConfirmThicken()
                 thicken_->builtMeshes.erase(mesh);
             }
         };
-        kachakacha::v2::domain::ThickenSurfaceDefinition definition;
-        definition.surface = surfaces[index];
-        definition.correctOpposite = !toPlane && thicken_->input.correctOpposite;
-        definition.thickness.value = thickness[index];
-        definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
-        if (toPlane) {
-            definition.targetPlane = thicken_->input.targetPlane;
-            definition.targetOffsetMm = thicken_->input.targetOffsetMm;
-            definition.targetFaceBrep = thicken_->input.targetFaceBrep;
-        } else {
-            definition.placement = static_cast<int>(thicken_->input.placement);
-        }
+        auto definition=SavedThickness(thicken_->input,surfaces[index],thickness[index]);
         if(kachakacha::v2::app::IncludesWires(outputMode)) {
             const auto wires=BoundaryWiresFor(*thicken_,built[index],
                 session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);

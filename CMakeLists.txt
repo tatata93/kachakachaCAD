@@ -1434,6 +1434,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2WireCommands.cpp
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp
+        src/apps/cad_next/V2ViewportSelection.cpp
         src/apps/cad_next/V2PointPicking.cpp
         src/apps/cad_next/V2ViewportInput.cpp
         src/apps/cad_next/V2ProfileRegionPicking.cpp

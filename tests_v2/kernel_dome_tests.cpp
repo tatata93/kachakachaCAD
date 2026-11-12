@@ -6,6 +6,9 @@
 #include "kachakacha/kernel/OcctFabricationRegion.h"
 #include "kachakacha/kernel/OcctSurfaceRegion.h"
 #include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/kernel/OcctThickenSource.h"
+#include "kachakacha/kernel/OcctCorrectedThicken.h"
+#include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <NCollection_Array2.hxx>
@@ -20,6 +23,7 @@
 #include <BRep_Tool.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Wire.hxx>
 #include <TopExp_Explorer.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -28,6 +32,18 @@
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepLib.hxx>
 #include <Geom2d_BezierCurve.hxx>
+#include <BRepGProp.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <BRepTools.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <IntCurvesFace_ShapeIntersector.hxx>
+#include <gp_Lin.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <GProp_GProps.hxx>
+#include <TopExp_Explorer.hxx>
 #include <TColgp_Array1OfPnt2d.hxx>
 #include <GCE2d_MakeSegment.hxx>
 #include <algorithm>
@@ -520,6 +536,114 @@ KACHA_V2_TEST(fabrication_surface, warped_faceted_sheet_retains_hole_and_normal_
         kernel::ReleaseShape(full.Value().handle);kernel::ReleaseShape(perforated.Value().handle);
     }
     kernel::ReleaseShape(cut.Value());kernel::ReleaseShape(source);
+}
+KACHA_V2_TEST(dome, canonical_rectangular_face_keeps_geometry_orientation_and_source_topology)
+{
+    auto surface=Patch(true);surface->InsertUKnot(.37,3,1e-12);surface->InsertVKnot(.63,3,1e-12);
+    Require(surface->Continuity()==GeomAbs_C0,"exact knot insertion creates a C0 representation");
+    const auto original=BRepBuilderAPI_MakeFace(surface,1e-7).Face();
+    const auto partial=BRepPrimAPI_MakeBox(gp_Pnt(0,0,-1),6,21,9).Shape();
+    Require(BRepCheck_Analyzer(partial).IsValid()
+        && !kernel::detail::ThickeningContainsSourceBounds(original,partial,1e-6),
+        "a valid closed partial result cannot masquerade as complete thickening");
+    for(int pose=0;pose<3;++pose) {
+        TopoDS_Shape face=original;
+        if(pose==1)face.Reverse();
+        if(pose==2) {
+            gp_Trsf rotation;rotation.SetRotation(gp_Ax1(gp_Pnt(13,7,-4),gp_Dir(1,2,3)),.61);
+            face=BRepBuilderAPI_Transform(face,rotation,true).Shape();
+        }
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        Require(before.HasValue(),"capture exact source");
+        const auto spans=kernel::detail::CanonicalRectangularThickenFace(face,1e-6);
+        Require(spans.has_value() && spans->ShapeType()==TopAbs_FACE && BRepCheck_Analyzer(*spans).IsValid(),
+            "one valid face is reconstructed from the same exact parameter region");
+        GProp_GProps a,b;BRepGProp::SurfaceProperties(face,a);BRepGProp::SurfaceProperties(*spans,b);
+        RequireNear(a.Mass(),b.Mass(),1e-8,"exact subdivision retains surface area");
+        int count=0;for(TopExp_Explorer f(*spans,TopAbs_FACE);f.More();f.Next()) {
+            Require(f.Current().Orientation()==face.Orientation(),"all source orientations retained");++count;
+        }
+        Require(count==1,"the entire source region stays one face");
+        Require(kernel::detail::ThickeningContainsSourceBounds(face,*spans,1e-6),"exact source bounds retained");
+        Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"source topology remains byte identical");
+        kernel::ReleaseShape(source);
+    }
+}
+
+KACHA_V2_TEST(dome, rectangular_span_preparation_never_fills_holes_or_concave_trims)
+{
+    auto surface=Patch(true);surface->InsertUKnot(.37,3,1e-12);surface->InsertVKnot(.63,3,1e-12);
+    const auto loop=[&](const std::vector<gp_Pnt2d>& points) {
+        BRepBuilderAPI_MakeWire wire;
+        for(std::size_t i=0;i<points.size();++i)wire.Add(BRepBuilderAPI_MakeEdge(
+            GCE2d_MakeSegment(points[i],points[(i+1)%points.size()]).Value(),surface).Edge());
+        return wire.Wire();
+    };
+    const std::vector<std::vector<gp_Pnt2d>> holes{{{.1,.1},{.1,.3},{.3,.3},{.3,.1}},
+        {{.65,.65},{.65,.85},{.85,.85},{.85,.65}}};
+    BRepBuilderAPI_MakeFace perforated(surface,loop({{0,0},{1,0},{1,1},{0,1}}),true);
+    for(const auto& points:holes)perforated.Add(loop(points));
+    const auto notch=BRepBuilderAPI_MakeFace(surface,
+        loop({{0,0},{1,0},{1,.4},{.6,.4},{.6,.6},{1,.6},{1,1},{0,1}}),true).Face();
+    const auto diagonal=BRepBuilderAPI_MakeFace(surface,loop({{0,0},{1,0},{.8,1},{.2,1}}),true).Face();
+    for(const auto& face:{perforated.Face(),notch,diagonal}) {
+        BRepLib::BuildCurves3d(face);
+        const auto source=kernel::StoreShape(face);const auto before=kernel::CaptureOutputShape(source);
+        Require(before.HasValue(),"capture source with genuine trim: "+before.FirstSummaryJa());
+        Require(!kernel::detail::CanonicalRectangularThickenFace(face,1e-6),"bounding rectangle cannot replace actual trim");
+        Require(kernel::CaptureOutputShape(source).Value()==before.Value(),"rejected preparation preserves source");
+        kernel::ReleaseShape(source);
+    }
+}
+namespace {
+#include "fixtures/owner-top-dome-20261112.inc"
+}
+KACHA_V2_TEST(dome, attached_top_trim_thickens_without_changing_source_or_relaxing_export_checks)
+{
+    const auto request=OwnerTopDomeRequest();const auto support=Build(request);
+    Require(support.HasValue(),"original attached curve ranges build: "+support.FirstSummaryJa());
+    std::vector<geometry::CurveSegment> outer;
+    for(const auto& chain:request.chains)for(const auto& curve:chain.segments)outer.push_back(curve);
+    geometry::GeometryTolerance tolerance;
+    const auto source=kernel::TrimSurfaceRegion({support.Value().handle},{outer},tolerance,1e-6);
+    Require(source.HasValue(),"same original perimeter is trimmed through the normal modeling route");
+    const auto before=kernel::CaptureOutputShape(source.Value());Require(before.HasValue(),"capture source trim");
+    const auto exact=kernel::ThickenSurface(source.Value(),.5,fabrication::ThicknessPlacement::Outside,tolerance);
+    Require(!exact.HasValue(),"strict mode never silently accepts a partial or invalid offset");
+    const auto wall=kernel::ThickenSurface(source.Value(),.5,fabrication::ThicknessPlacement::Outside,tolerance,true);
+    Require(wall.HasValue(),"explicit corrected .5mm passes unchanged solid safety: "+wall.FirstSummaryJa()+" / "+wall.FirstDetailsJa());
+    Require(wall.Value().corrected && wall.Value().normalThicknessMinMm>0
+        && wall.Value().normalThicknessMaxMm<=.500001 && wall.Value().maxOffsetDeviationMm>0,
+        "correction reports its actual sampled thickness and deviation instead of claiming exact .5mm");
+    Require(kernel::CaptureOutputShape(source.Value()).Value()==before.Value(),"thickening never mutates source trim");
+    TopoDS_Shape skin,solid;Require(kernel::LookupShape(source.Value(),skin)&&kernel::LookupShape(wall.Value().handle,solid),"native shapes retained");
+    const auto face=TopoDS::Face(TopExp_Explorer(skin,TopAbs_FACE).Current());BRepAdaptor_Surface surface(face);
+    double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
+    for(double a:{.2,.5,.8})for(double b:{.2,.5,.8}) {
+        gp_Pnt p;gp_Vec du,dv;surface.D1(u0+(u1-u0)*a,v0+(v1-v0)*b,p,du,dv);
+        auto normal=du.Crossed(dv);if(face.Orientation()==TopAbs_REVERSED)normal.Reverse();normal.Normalize();
+        IntCurvesFace_ShapeIntersector ray;ray.Load(solid,1e-7);ray.Perform(gp_Lin(p,gp_Dir(normal)),-1,1);
+        double distance=1e9;for(int i=1;i<=ray.NbPnt();++i)if(ray.WParameter(i)>.01)distance=std::min(distance,ray.WParameter(i));
+        Require(distance>0 && std::abs(distance-.5)<=wall.Value().maxOffsetDeviationMm+1e-6,
+            "normal rays independently find the corrected opposite skin within its reported deviation");
+        BRepExtrema_DistShapeShape retained(BRepBuilderAPI_MakeVertex(p).Vertex(),solid);
+        Require(retained.IsDone()&&retained.Value()<1e-6,"original skin remains on the solid");
+    }
+    const auto step=kernel::OutputStep({wall.Value().handle});
+    Require(step.HasValue(),"STEP retains strict readback validation: "+step.FirstSummaryJa());
+    const auto stl=kernel::OutputStl({wall.Value().handle},.01);
+    Require(stl.HasValue(),"STL exports checked solid");
+    gp_Trsf transform;transform.SetRotation(gp_Ax1(gp_Pnt(0,0,0),gp_Dir(1,2,3)),.53);
+    transform.SetTranslationPart(gp_Vec(100,-200,50));
+    const auto placed=kernel::StoreShape(BRepBuilderAPI_Transform(skin,transform,true).Shape());
+    const auto placedBefore=kernel::CaptureOutputShape(placed);
+    const auto placedWall=kernel::detail::CorrectedThicken(placed,.5,fabrication::ThicknessPlacement::Outside,tolerance);
+    Require(placedWall.HasValue(),"same boundary corner works after rigid placement: "+placedWall.FirstSummaryJa());
+    RequireNear(placedWall.Value().volumeMm3,wall.Value().volumeMm3,wall.Value().volumeMm3*1e-8,"rigid placement preserves corrected volume");
+    RequireNear(placedWall.Value().normalThicknessMinMm,wall.Value().normalThicknessMinMm,1e-6,"rigid placement preserves measured normal thickness");
+    Require(kernel::CaptureOutputShape(placed).Value()==placedBefore.Value(),"placed source remains unchanged");
+    kernel::ReleaseShape(placedWall.Value().handle);kernel::ReleaseShape(placed);
+    kernel::ReleaseShape(wall.Value().handle);kernel::ReleaseShape(source.Value());kernel::ReleaseShape(support.Value().handle);
 }
 #endif
 KACHA_V2_TEST_MAIN("kernel_dome_tests")

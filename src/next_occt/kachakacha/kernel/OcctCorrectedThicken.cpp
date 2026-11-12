@@ -1,4 +1,5 @@
 #include "kachakacha/kernel/OcctCorrectedThicken.h"
+#include "kachakacha/kernel/OcctThickenSource.h"
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
@@ -139,6 +140,30 @@ std::vector<AxisSpan> NormalSpans(double value,double lo,double hi,const NCollec
     }
     return {{lo,hi,knots.Lower(),knots.Upper()}};
 }
+// A corner can have a cone of one-sided normals rather than one normal.
+// Explicit correction checks every sampled direction; strict offset still
+// requires the unchanged exact construction and never uses this fallback.
+std::vector<gp_Vec> BoundaryDirections(const Surface& surface,const Domain& d,double u,double v,
+    double sign,double sineTolerance2,gp_Pnt& p) {
+    try {return {Normal(surface,d,u,v,sign,sineTolerance2,p)};}
+    catch(const Standard_Failure&) {
+        if(!((u==d.u0||u==d.u1)&&(v==d.v0||v==d.v1)))throw;
+        std::vector<gp_Vec> limits;
+        gp_Vec sum(0,0,0);std::set<std::pair<double,double>> visited;
+        for(double stepU:{1e-4,1e-5,1e-6,1e-7,1e-8})for(double stepV:{1e-4,1e-5,1e-6,1e-7,1e-8})
+        for(double a:{0.,.5,1.})for(double b:{0.,.5,1.}) {
+            const double x=u+(u==d.u0?1:-1)*(d.u1-d.u0)*stepU*a;
+            const double y=v+(v==d.v0?1:-1)*(d.v1-d.v0)*stepV*b;
+            if((x==u&&y==v)||!visited.emplace(x,y).second)continue;
+            gp_Pnt q;gp_Vec du,dv;surface->D1(x,y,q,du,dv);auto n=TangentNormal(du,dv);
+            if(n.SquareMagnitude()<1e-24||!ReliableTangents(du,dv,q,d))continue;
+            n.Normalize();n*=sign;sum+=n;limits.push_back(n);
+        }
+        if(sum.SquareMagnitude()<1e-24)throw Standard_Failure("境界の向きが折り返すため、反対面を補正できません。");
+        for(const auto& n:limits)if(n.Dot(sum)<=0)throw Standard_Failure("境界の向きが折り返すため、反対面を補正できません。");
+        if(limits.size()<3)throw;p=surface->Value(u,v);return limits;
+    }
+}
 class NormalField {
     Surface surface_;Domain domain_;double sign_,sineTolerance2_;
     std::map<std::array<int,4>,Surface> patches_;
@@ -149,7 +174,7 @@ public:
         const auto& d=domain_;
         const auto us=NormalSpans(u,d.u0,d.u1,surface_->UKnots(),surface_->UMultiplicities(),surface_->UDegree());
         const auto vs=NormalSpans(v,d.v0,d.v1,surface_->VKnots(),surface_->VMultiplicities(),surface_->VDegree());
-        if(us.size()==1&&vs.size()==1)return {Normal(surface_,d,u,v,sign_,sineTolerance2_,p)};
+        if(us.size()==1&&vs.size()==1)return BoundaryDirections(surface_,d,u,v,sign_,sineTolerance2_,p);
         // Exact private spline segments give unambiguous one-sided derivatives.
         // Cache them per evaluation, without adding faces or refitting the source.
         std::vector<gp_Vec> normals;gp_Vec sum(0,0,0);
@@ -157,7 +182,7 @@ public:
             const Domain patch{a.lo,a.hi,b.lo,b.hi};const std::array<int,4> key{a.first,a.last,b.first,b.last};
             auto& segment=patches_[key];
             if(segment.IsNull()){segment=Surface::DownCast(surface_->Copy());segment->Segment(a.lo,a.hi,b.lo,b.hi);}
-            const auto n=Normal(segment,patch,u,v,sign_,sineTolerance2_,p);normals.push_back(n);sum+=n;
+            for(const auto& n:BoundaryDirections(segment,patch,u,v,sign_,sineTolerance2_,p)) {normals.push_back(n);sum+=n;}
         }
         if(sum.SquareMagnitude()<1e-24)throw Standard_Failure("曲面の折返しで向きを決められません。");
         for(const auto& n:normals)if(n.Dot(sum)<=0)throw Standard_Failure("曲面の折返しで向きを決められません。");
@@ -266,11 +291,16 @@ Out CorrectedThicken(modeling::KernelShapeHandle source,double thickness,fabrica
         TopoDS_Shape original;if(!LookupShape(source,original))return Refused("元の面がありません。");
         const auto copy=BRepBuilderAPI_Copy(original,true,false).Shape();TopExp_Explorer faces(copy,TopAbs_FACE);
         if(!faces.More())return Refused("元の面がありません。");
-        const auto face=TopoDS::Face(faces.Current());faces.Next();
+        auto face=TopoDS::Face(faces.Current());faces.Next();
         if(faces.More())return Refused("補正は1枚の連続した曲面に対応しています。面を分けて指定してください。");
         Domain d;BRepTools::UVBounds(face,d.u0,d.u1,d.v0,d.v1);
         if(!std::isfinite(d.u0+d.u1+d.v0+d.v1)||d.u1<=d.u0||d.v1<=d.v0||!Rectangle(face,d))
             return Refused("穴や任意トリムのある面は補正で埋めません。一定厚みを使うか、面を分けてください。");
+        if(!Surface::DownCast(BRep_Tool::Surface(face)).IsNull()) {
+            const auto canonical=CanonicalRectangularThickenFace(face,tolerance.modelLinearMm);
+            if(!canonical)return Refused("元の面の輪郭を安全に再構成できません。穴や切欠きを埋めずに処理を中止しました。");
+            face=TopoDS::Face(*canonical);
+        }
         auto base=GeomConvert::SurfaceToBSplineSurface(BRep_Tool::Surface(face));
         if(base->IsUPeriodic()||base->IsVPeriodic())return Refused("周期面の補正には対応していません。一定厚みを使ってください。");
         base->Segment(d.u0,d.u1,d.v0,d.v1);
@@ -301,7 +331,8 @@ Out CorrectedThicken(modeling::KernelShapeHandle source,double thickness,fabrica
         auto solid=BRepBuilderAPI_MakeSolid(TopoDS::Shell(sew.SewedShape())).Solid();
         GProp_GProps mass;VolumeProperties(solid,mass);if(mass.Mass()<0)solid.Reverse();
         result.handle=StoreShape(solid);const auto check=CheckSolidForExport(result.handle,tolerance.modelLinearMm);
-        if(!check.HasValue()||!check.Value().Ok()) {
+        if(!check.HasValue()||!check.Value().Ok()
+            || !ThickeningContainsSourceBounds(face,solid,tolerance.modelLinearMm)) {
             ReleaseShape(result.handle);return Refused("補正した立体が閉鎖性・体積・自己交差の安全検査に通りませんでした。");
         }
         result.volumeMm3=check.Value().volumeMm3;const auto edges=OutputEdges(result.handle,tolerance.modelLinearMm);

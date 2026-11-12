@@ -15,6 +15,7 @@
 #include "kachakacha/kernel/OcctPlanarSheetThicken.h"
 #include "kachakacha/kernel/OcctRevolvedThicken.h"
 #include "kachakacha/kernel/OcctSpanThicken.h"
+#include "kachakacha/kernel/OcctThickenSource.h"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -302,7 +303,16 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
     ThickenedSolid made;
     TopoDS_Shape finalShape=built.Value();
     made.handle = StoreShape(finalShape);
-    auto checked = CheckSolidForExport(made.handle, tolerance.modelLinearMm);
+    const auto verify=[&](modeling::KernelShapeHandle handle,const TopoDS_Shape& solid) {
+        auto check=CheckSolidForExport(handle,tolerance.modelLinearMm);
+        if(check.HasValue() && check.Value().Ok()
+            && !detail::ThickeningContainsSourceBounds(face,solid,tolerance.modelLinearMm))
+            return decltype(check)::Failure(MakeError(kThickenFailed,
+                "厚みの計算で元の面の一部が失われたため、確定しませんでした。",
+                "元の面の範囲が結果に含まれません。元の面と文書は保持します。"));
+        return check;
+    };
+    auto checked = verify(made.handle,finalShape);
     // A shell can mix curved and planar faces. Simple offsetting does not
     // intersect their displaced boundaries; retain the fast path, but rebuild
     // failed results with native intersections and the SAME safety checks.
@@ -313,7 +323,7 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
             const auto joined=ThickSolid(joinedBase.Value(),signedThickness,tolerance,true);
             if(joined.HasValue()) {
                 const auto handle=StoreShape(joined.Value());
-                const auto check=CheckSolidForExport(handle,tolerance.modelLinearMm);
+                const auto check=verify(handle,joined.Value());
                 if(check.HasValue()&&check.Value().Ok()) {
                     ReleaseShape(made.handle);made.handle=handle;checked=check;finalShape=joined.Value();
                 } else ReleaseShape(handle);
@@ -348,7 +358,7 @@ Result<ThickenedSolid> ThickenSurface(modeling::KernelShapeHandle sourceShape,
         if(count>1&&solids==1) {
             for(TopExp_Explorer s(united,TopAbs_SOLID);s.More();s.Next()) {
                 auto solid=TopoDS::Solid(s.Current());if(!BRepLib::OrientClosedSolid(solid))break;
-                const auto handle=StoreShape(solid);const auto check=CheckSolidForExport(handle,tolerance.modelLinearMm);
+                const auto handle=StoreShape(solid);const auto check=verify(handle,solid);
                 if(check.HasValue()&&check.Value().Ok()) {
                     ReleaseShape(made.handle);made.handle=handle;checked=check;finalShape=solid;joinedIndividualFaces=true;
                 } else ReleaseShape(handle);

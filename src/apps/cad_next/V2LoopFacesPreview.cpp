@@ -11,9 +11,18 @@
 
 using namespace kachakacha::v2;
 
+namespace {
+void ReleasePreparedFaces(auto& faces)
+{
+    for(const auto& face:faces)if(face.built.handle.Valid())kernel::ReleaseShape(face.built.handle);
+    faces.clear();
+}
+}
+
 V2LoopFacesTool::~V2LoopFacesTool()
 {
     delete previewTimer_;
+    ReleasePreparedFaces(preparedFaces_);
 }
 
 std::vector<app::LoopFaceMethod> V2LoopFacesTool::MethodChoices(std::size_t face) const
@@ -39,6 +48,9 @@ modeling::GuideTable V2LoopFacesTool::NetworkTable(std::size_t face) const
 void V2LoopFacesTool::ResetSurfacePreview()
 {
     if (previewTimer_) previewTimer_->stop();
+    ++previewEpoch_;
+    ReleasePreparedFaces(preparedFaces_);
+    previewSources_.clear();
     if (previewPending_||previewReady_) window_.viewport_->SetToolPreviewFaces({});
     previewPending_=false;
     previewReady_=false;
@@ -73,6 +85,12 @@ void V2LoopFacesTool::BuildSurfacePreview()
     if (previewTimer_) previewTimer_->stop();
     if (!Active()||!plan_||!previewPending_) return;
     previewPending_=false;
+    const auto epoch=previewEpoch_;
+    const auto revision=window_.Session().GetDocument().Revision();
+    std::vector<PreparedFace> prepared(plan_->faces.size());
+    std::map<std::string,std::uint64_t> sources;
+    for(const auto* map:{&window_.guideShapes_,&window_.partShapes_})
+        for(const auto& [id,handle]:*map)sources[id]=handle.value;
     dock_->SetProgressText(QStringLiteral("面を計算中…"));
     auto handles=window_.guideShapes_;
     handles.insert(window_.partShapes_.begin(),window_.partShapes_.end());
@@ -107,16 +125,18 @@ void V2LoopFacesTool::BuildSurfacePreview()
                 if (analysis.HasValue()) {
                     const auto built=V2Calculation::Call(nullptr, "面を生成しています…",
         [](const auto&... values) { return kachakacha::v2::kernel::BuildGuideSurface(values...); }, filled,analysis.Value(),ToleranceNow());
+                    if (built.HasValue()) temporary.handles.push_back(built.Value().handle);
+                    if(epoch!=previewEpoch_||revision!=window_.Session().GetDocument().Revision()||!plan_)return;
                     error=built.FirstSummaryJa();
                     if(!built.HasValue()&&!built.Diagnostics().empty()&&!built.Diagnostics().front().detailsJa.empty())
                         error+=" "+built.Diagnostics().front().detailsJa;
                     if (built.HasValue()) {
-                        temporary.handles.push_back(built.Value().handle);
                         builtIds[at]=ids.NextTyped<base::IdKind::Entity>();
                         handles[builtIds[at].ToString()]=built.Value().handle;
                         const auto mesh=kernel::BuildShapeMesh(built.Value().handle,0,8);
                         error=mesh.FirstSummaryJa();
                         if (mesh.HasValue()) {
+                            prepared[at]={built.Value(),mesh.Value()};
                             combined.triangles.insert(combined.triangles.end(),mesh.Value().triangles.begin(),mesh.Value().triangles.end());
                             previewFaceStatus_[at]=QStringLiteral("下見OK / 境界の最大ずれ %1 mm").arg(built.Value().maximumDeviationMm,0,'g',3);
                             continue;
@@ -129,7 +149,12 @@ void V2LoopFacesTool::BuildSurfacePreview()
         previewFaceStatus_[at]=QStringLiteral("生成不可: ")+QString::fromStdString(error);
     }
     for (std::size_t at=0;at<make_.size();++at) if (!make_[at]) previewFaceStatus_[at]=QStringLiteral("作らない");
+    if(epoch!=previewEpoch_||revision!=window_.Session().GetDocument().Revision())return;
     previewReady_=!failed&&!combined.triangles.empty();
+    if(previewReady_) {
+        preparedFaces_=std::move(prepared);previewSources_=std::move(sources);previewRevision_=revision;
+        temporary.handles.clear(); // Preview owns these until adopted or cancelled.
+    }
     previewSummary_=previewReady_?QStringLiteral("面の下見を表示中。形を確認してEnterで確定します。")
         :QStringLiteral("面の下見を作れません。各候補の理由を確認し、入力・作り方を変更してください。");
     std::vector<std::vector<geometry::Vector3>> triangles;

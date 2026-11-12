@@ -19,12 +19,15 @@
 #include "kachakacha/app/LoopFaces.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/modeling/GuideSurfaceResult.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QString>
 
 #include <cstdint>
 #include <optional>
+#include <map>
 #include <vector>
 
 class V2MainWindow;
@@ -113,6 +116,14 @@ private:
     std::vector<kachakacha::v2::modeling::GuideTable> networkTables_;
     QString networkUnusedJa_;
     QTimer* previewTimer_ = nullptr;
+    struct PreparedFace {
+        kachakacha::v2::modeling::GuideSurfaceResult built;
+        kachakacha::v2::modeling::ShapeMesh mesh;
+    };
+    std::vector<PreparedFace> preparedFaces_;
+    std::map<std::string,std::uint64_t> previewSources_;
+    std::uint64_t previewRevision_=0;
+    std::uint64_t previewEpoch_=0;
     bool previewPending_ = false;
     bool previewReady_ = false;
     QString previewSummary_;

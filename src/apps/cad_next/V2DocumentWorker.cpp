@@ -2,6 +2,7 @@
 #include "V2DocumentCache.h"
 #include "V2DocumentTiming.h"
 #include "V2PreparedMeshes.h"
+#include "V2EvaluationCache.h"
 #include "V2MainWindow.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/app/GroupTree.h"
@@ -119,7 +120,8 @@ int V2DocumentOpen::Worker(const QString& directory) {
         timing.Mark("capture-native-and-meshes");
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");
-        (void)V2DocumentCache::StoreTransfer(bytes.Value(),dir.filePath("prepared.bin"),token);
+        if(V2DocumentCache::StoreTransfer(bytes.Value(),dir.filePath("prepared.bin"),token))
+            V2EvaluationCache::IndexPrepared(window,bytes.Value(),data);
         timing.Mark("write-cache");
         response["ok"]=true;
         }

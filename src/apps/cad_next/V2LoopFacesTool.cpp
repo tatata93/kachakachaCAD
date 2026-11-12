@@ -14,6 +14,7 @@
 #include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <QString>
 #include <QScopedValueRollback>
@@ -650,6 +651,7 @@ bool V2LoopFacesTool::Confirm()
         return true;
     }
     if (previewPending_) BuildSurfacePreview();
+    if (!plan_) return true;
     if (!plan_->faces.empty() && !previewReady_) {
         window_.SetStatus(previewSummary_);
         return true;
@@ -1060,6 +1062,13 @@ void V2LoopFacesTool::CloseOneGap(int index)
 int V2LoopFacesTool::BuildFaces()
 {
     const auto tolerance = ToleranceNow();
+    // Splits, gap repairs, methods and changed sources invalidate the preview.
+    std::map<std::string,std::uint64_t> sources;
+    for(const auto* map:{&window_.guideShapes_,&window_.partShapes_})
+        for(const auto& [id,handle]:*map)sources[id]=handle.value;
+    const bool reuse=previewReady_&&plan_->splits.empty()
+        &&previewRevision_==window_.Session().GetDocument().Revision()
+        &&previewSources_==sources&&preparedFaces_.size()==plan_->faces.size();
     int made = 0;
     std::vector<EntityId> builtIds(plan_->faces.size());
     for (const std::size_t at : BuildOrder()) {
@@ -1077,7 +1086,9 @@ int V2LoopFacesTool::BuildFaces()
         // 作る前に調べ、作れないものは理由を言って全部やめる(半分だけ作らない)。
         auto styled=table.Value();
         styled.fourEdgeStyle=styles_[at];
-        const auto built = window_.BuildSurfaceFromTable(styled, true);
+        const auto built = reuse&&preparedFaces_[at].built.handle.Valid()
+            ?std::optional<kachakacha::v2::modeling::GuideSurfaceResult>{preparedFaces_[at].built}
+            :window_.BuildSurfaceFromTable(styled, true);
         if (!built.has_value()) {
             return 0;
         }
@@ -1089,9 +1100,16 @@ int V2LoopFacesTool::BuildFaces()
             smooth = smooth || row.continuity != SurfaceContinuity::G0;
         }
         const std::string label = MethodLabel(face.method) + (smooth ? "(辺の連続あり)" : "");
+        const bool fromPreview=reuse&&preparedFaces_[at].built.handle.Valid();
+        if(fromPreview)window_.shapeMeshes_[built->handle.value]=std::move(preparedFaces_[at].mesh);
         const EntityId id = window_.AdoptGuideSurface(styled, *built, inputs, label);
         if (id.IsNil()) {
+            if(fromPreview)window_.shapeMeshes_.erase(built->handle.value);
+            else kachakacha::v2::kernel::ReleaseShape(built->handle);
             return 0;
+        }
+        if(fromPreview) {
+            preparedFaces_[at].built.handle={}; // Ownership passed to the document.
         }
         builtIds[at] = id;
         ++made;

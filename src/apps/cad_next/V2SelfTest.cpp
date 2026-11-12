@@ -190,6 +190,8 @@ QStringList caseMessages;
     cases.insert(cases.end(), accuracy.begin(), accuracy.end());
     const std::vector<SelfTestCase> boundaryFill = WithSuite(BoundaryFillCases(), "BoundaryFill");
     cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
+    const auto generationLatency=WithSuite(GenerationLatencyCases(), "GenerationLatency");
+    cases.insert(cases.end(),generationLatency.begin(),generationLatency.end());
     const std::vector<SelfTestCase> loopFaces = WithSuite(LoopFacesCases(), "LoopFaces");
     cases.insert(cases.end(), loopFaces.begin(), loopFaces.end());
     const auto skins=WithSuite(PanelSupportCases(), "PanelSupport");cases.insert(cases.end(),skins.begin(),skins.end());

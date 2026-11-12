@@ -16,6 +16,7 @@
 #include "V2ShapeLifetime.h"
 #include "V2DocumentOpen.h"
 #include "V2DocumentTiming.h"
+#include "V2EvaluationCache.h"
 #include "V2GeometryJob.h"
 #include "V2GuideBuildJobs.h"
 #include "V2ExtrudeBuildJobs.h"
@@ -426,10 +427,13 @@ void V2MainWindow::RebuildKernelShapes()
         return;
     }
     int made = 0, completed = 0;
-    V2ExtrudeBuildJobs independentParts(*this,steps,[&](const auto& definition) {
+    V2EvaluationCache evaluated(*this,steps);
+    std::vector<kachakacha::v2::app::ShapeRebuildStep> missing;
+    for(const auto& step:steps)if(!evaluated.Available(step))missing.push_back(step);
+    V2ExtrudeBuildJobs independentParts(*this,missing,[&](const auto& definition) {
         return SavedExtrudeRequest(definition,ExtrudeProfilesFor(definition.profiles,definition.profileSeeds));
     });
-    V2GuideBuildJobs independentGuides(*this,steps);
+    V2GuideBuildJobs independentGuides(*this,missing);
     V2ShellSplitTool::RebuildBatch splitBatch(*shellSplitTool_);
     V2DocumentTiming timing("rebuild");
     std::vector<std::string> failed;
@@ -439,8 +443,10 @@ void V2MainWindow::RebuildKernelShapes()
         if (feature == nullptr) {
             continue;
         }
-        const bool ok = RebuildOneShape(step, *feature);
-        timing.Mark(("step-"+std::to_string(completed)+"-kind-"+std::to_string(static_cast<int>(step.kind))).c_str());
+        const bool reused=failed.empty()&&evaluated.Restore(step);
+        const bool ok = reused||RebuildOneShape(step, *feature);
+        timing.Mark(("step-"+std::to_string(completed)+"-kind-"+std::to_string(static_cast<int>(step.kind))
+            +(reused?"-cache":"")).c_str());
         if (ok) {
             ++made;
         } else {

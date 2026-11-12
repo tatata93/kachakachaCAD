@@ -60,6 +60,7 @@ void Prune(const QDir& dir) {
         if(++count<=8&&bytes<=totalLimit)continue;
         QFile::remove(file.absoluteFilePath());
         QFile::remove(dir.filePath(file.completeBaseName()+".json"));
+        QFile::remove(dir.filePath(file.completeBaseName()+".features.json"));
     }
 }
 bool WriteManifest(const QDir& dir,const QString& key,const QString& path) {
@@ -78,10 +79,9 @@ QString Key(const std::string& source) {
     QCryptographicHash hash(QCryptographicHash::Sha256);hash.addData("prepared-cache-v1");hash.addData(binary);
     hash.addData(QByteArray::fromStdString(source));return QString::fromLatin1(hash.result().toHex());
 }
-bool HasMatchingPayload(const std::string& source) {
+static bool HasMatchingKey(const QString& key) {
+    if(!OwnedName(key+".bin"))return false;
     const QDir dir(Root());
-    if(!dir.exists()||dir.entryList({"*.json"},QDir::Files,QDir::NoSort).isEmpty())return false;
-    const auto key=Key(source);if(key.isEmpty())return false;
     const auto path=dir.filePath(key+".bin");
     QFile manifest(dir.filePath(key+".json"));
     if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return false;
@@ -91,12 +91,32 @@ bool HasMatchingPayload(const std::string& source) {
         ||info.value("sha256").toString().toLatin1()!=DigestFile(path))return false;
     return true;
 }
-std::optional<V2PreparedDocument> Read(const std::string& source) {
-    if(!HasMatchingPayload(source))return std::nullopt;
-    const auto key=Key(source);const auto path=QDir(Root()).filePath(key+".bin");
+bool HasMatchingPayload(const std::string& source) { return HasMatchingKey(Key(source)); }
+std::optional<V2PreparedDocument> ReadKey(const QString& key) {
+    if(!HasMatchingKey(key))return std::nullopt;
+    const auto path=QDir(Root()).filePath(key+".bin");
     auto restored=ReadPreparedDocument(path,key,[]{return true;});
     if(!restored.HasValue())return std::nullopt;
     return std::move(*restored.Value());
+}
+std::optional<V2PreparedDocument> Read(const std::string& source) { return ReadKey(Key(source)); }
+std::vector<FeatureIndex> FeatureIndexes() {
+    const QDir dir(Root());std::vector<FeatureIndex> indexes;
+    for(const auto& name:dir.entryList({"*.bin"},QDir::Files,QDir::Time)) {
+        if(!OwnedName(name))continue;
+        const auto key=name.left(64);
+        QFile file(dir.filePath(key+".features.json"));
+        if(file.open(QIODevice::ReadOnly)&&file.size()<=2*1024*1024)
+            indexes.push_back({key,file.readAll()});
+        if(indexes.size()==8)break;
+    }
+    return indexes;
+}
+void WriteFeatureIndex(const std::string& source,const QByteArray& contents) {
+    const auto key=Key(source);
+    if(key.isEmpty()||contents.isEmpty()||contents.size()>2*1024*1024)return;
+    QSaveFile file(QDir(Root()).filePath(key+".features.json"));
+    if(file.open(QIODevice::WriteOnly)&&file.write(contents)==contents.size())(void)file.commit();
 }
 bool Write(const std::string& source,V2PreparedDocument& data) {
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;

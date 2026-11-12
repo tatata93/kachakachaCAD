@@ -5,40 +5,44 @@
 #include "V2ToolSelection.h"
 #include "V2ShapeLifetime.h"
 #include "kachakacha/kernel/OcctOutput.h"
-#include "kachakacha/kernel/OcctFaceQuery.h"
-#include "kachakacha/modeling/MeshPick.h"
-#include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/document/Commands.h"
 #include <QApplication>
+#include <QCloseEvent>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QLabel>
-#include <QMouseEvent>
 #include <QObject>
-#include <QPointF>
+#include <QPointer>
 #include <QPushButton>
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <limits>
+#include <algorithm>
 using namespace kachakacha::v2;
 
 bool V2FaceActions::Run(V2MainWindow& window,std::string_view command)
 {
-    if(command=="fabrication.create"){
-        const auto& selected=window.viewport_->Selection().ordered;
-        if(selected.size()!=1||selected.front().kind!=app::SelectionElementKind::Face||
-            !selected.front().pickedFaceIndex||!window.partShapes_.contains(selected.front().entityId.ToString()))return false;
+    if(command!="fabrication.create" && command!="workplane.from_face" && command!="fabrication.from_face")return false;
+    const auto selection=window.viewport_->Selection();
+    std::vector<app::SelectionRef> faces;
+    for(const auto& ref:selection.ordered) {
+        if(ref.kind!=app::SelectionElementKind::Face || !ref.pickedFaceIndex
+            || !window.partShapes_.contains(ref.entityId.ToString()))continue;
+        if(std::none_of(faces.begin(),faces.end(),[&](const auto& old){
+            return old.entityId==ref.entityId && old.pickedFaceIndex==ref.pickedFaceIndex;}))faces.push_back(ref);
+    }
+    if(command=="fabrication.create") {
+        if(faces.empty())return false;
         command="fabrication.from_face";
     }
     if(command!="workplane.from_face" && command!="fabrication.from_face")return false;
-    const auto selection=window.viewport_->Selection();
     window.EndArmedTools();window.ClearPendingCommand();
     window.SelectTool(modeling::DrawingTool::Select);
-    auto* panel=new V2FaceActions(window,std::string(command));
-    window.operationHost_->ShowTemporaryPage(panel,command=="workplane.from_face" ? QStringLiteral("フェイスで作図") : QStringLiteral("フェイスを近似"));
-    if(selection.ordered.size()==1 && selection.ordered.front().kind==app::SelectionElementKind::Face
-        && selection.ordered.front().pickedFaceIndex)panel->Apply(selection.ordered.front());
+    auto* panel=new V2FaceActions(window,std::string(command));panel->sources_=selection;
+    window.operationHost_->ShowTemporaryPage(panel,command=="workplane.from_face"
+        ? QStringLiteral("フェイスで作図") : QStringLiteral("立体の面を近似"));
+    if(!faces.empty())panel->Apply(faces);
+    else panel->Pick();
     return true;
 }
 V2FaceActions::V2FaceActions(V2MainWindow& window,std::string command)
@@ -46,79 +50,62 @@ V2FaceActions::V2FaceActions(V2MainWindow& window,std::string command)
 {
     setObjectName(QStringLiteral("faceActionPanel"));auto* layout=new QVBoxLayout(this);
     status_=new QLabel(command_=="workplane.from_face"
-        ? QStringLiteral("ソリッドのフェイスをクリックしてください。作業面を自動生成します。曲面ではクリック位置の接平面になります。")
-        : QStringLiteral("近似するソリッドのフェイスをクリックしてください。独立した面を取り出し、その面で近似を始めます。元ソリッドは変更しません。"),this);
-    status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();
-    auto* cancel=new QPushButton(QStringLiteral("取消 Esc"),this);layout->addWidget(cancel);
-    QObject::connect(cancel,&QPushButton::clicked,this,[this]{status_->setText(QStringLiteral("フェイスを選んで続けられます。"));});
+        ? QStringLiteral("立体の面を選んでください。曲面では選んだ位置の接平面に作業面を作ります。")
+        : QStringLiteral("近似する立体の面を選んでください。選んだ面を独立して取り出し、近似を始めます。"),this);
+    status_->setObjectName(QStringLiteral("faceActionStatus"));status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();
+    auto* cancel=new QPushButton(QStringLiteral("取消 Esc"),this);cancel->setObjectName(QStringLiteral("faceActionCancel"));layout->addWidget(cancel);
+    QObject::connect(cancel,&QPushButton::clicked,this,[this]{window_.RunCommand("selection.activate");});
     qApp->installEventFilter(this);
+}
+void V2FaceActions::Pick()
+{
+    picking_=true;const QPointer<V2FaceActions> self(this);
+    window_.viewport_->BeginElementPick([self](const app::PickCandidate& candidate){
+        return self && self->isVisible() && candidate.kind==app::SelectionElementKind::Face
+            &&candidate.pickedFaceIndex && self->window_.partShapes_.contains(candidate.entityId.ToString());
+    },[self](std::optional<app::PickCandidate> candidate){
+        if(!self)return;self->picking_=false;
+        if(!candidate)return; // Tool switching owns the cancellation and its next page.
+        app::SelectionRef ref;ref.entityId=candidate->entityId;ref.kind=candidate->kind;
+        ref.pickedFaceIndex=candidate->pickedFaceIndex;ref.hitPoint=candidate->hitPoint;
+        self->Apply({ref});
+    });
+}
+void V2FaceActions::closeEvent(QCloseEvent* event)
+{
+    if(picking_)window_.viewport_->CancelReferencePick();
+    QWidget::closeEvent(event);
 }
 bool V2FaceActions::eventFilter(QObject* object,QEvent* event)
 {
     if(!isVisible() || V2ToolSelection::Active(*window_.viewport_))return false;
-    if(event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape) {
-        auto* widget=qobject_cast<QWidget*>(object);if(!widget || widget->window()!=window())return false;
-        status_->setText(QStringLiteral("フェイスを選んで続けられます。"));return true;
-    }
-    if(object!=window_.viewport_ || event->type()!=QEvent::MouseButtonPress)return false;
-    const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton || mouse->modifiers()!=Qt::NoModifier)return false;
-    if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
-    const auto ray=window_.viewport_->Mapping().RayThrough({mouse->position().x(),mouse->position().y()});if(!ray)return true;
-    double nearest=std::numeric_limits<double>::max();app::SelectionRef chosen;
-    for(const auto& shape:window_.viewport_->ShapeViews()) {
-        if(shape.surface||!window_.viewport_->EntityShown(shape.entityId))continue;
-        for(const auto& triangle:shape.mesh.triangles) {
-            const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle);
-            if(hit && *hit<nearest){nearest=*hit;chosen.entityId=shape.entityId;chosen.pickedFaceIndex=triangle.faceIndex;}
-        }
-    }
-    if(chosen.entityId.IsNil()){status_->setText(QStringLiteral("ソリッドのフェイスに当たりません。面の内側をクリックしてください。"));return true;}
-    chosen.kind=app::SelectionElementKind::Face;chosen.hitPoint=ray->origin+ray->direction*nearest;Apply(chosen);return true;
+    if(event->type()!=QEvent::KeyPress || static_cast<QKeyEvent*>(event)->key()!=Qt::Key_Escape)return false;
+    const auto* widget=qobject_cast<QWidget*>(object);if(!widget || widget->window()!=window())return false;
+    window_.RunCommand("selection.activate");return true;
 }
-void V2FaceActions::Apply(const app::SelectionRef& ref)
+void V2FaceActions::Apply(const std::vector<app::SelectionRef>& refs)
 {
-    auto& window=window_;const auto command=command_;
-    const auto found=window.partShapes_.find(ref.entityId.ToString());
-    if(found==window.partShapes_.end() || !ref.pickedFaceIndex){status_->setText(QStringLiteral("ソリッドのフェイスを選び直してください。"));return;}
-    if(command!="workplane.from_face") {if(!Extract(ref))return;window.RunCommand("fabrication.create");return;}
+    if(refs.empty())return;
+    if(command_!="workplane.from_face") {
+        auto& window=window_;
+        if(!Extract(refs)){Pick();return;}
+        window.RunCommand("fabrication.create");return;
+    }
+    if(refs.size()!=1){status_->setText(QStringLiteral("作業面は1つの面から作ります。基準にする面を選んでください。"));Pick();return;}
+    const auto& ref=refs.front();
+    const auto found=window_.partShapes_.find(ref.entityId.ToString());
+    if(found==window_.partShapes_.end() || !ref.pickedFaceIndex){Pick();return;}
     const auto face=kernel::OutputFace(found->second,*ref.pickedFaceIndex);
-    if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return;}
+    if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));Pick();return;}
     v2ui::ShapeListOwner owner({face.Value()});
     const auto frame=kernel::OutputSurfaceFrame(face.Value(),ref.hitPoint);
-    if(!frame.HasValue()){status_->setText(QString::fromStdString(frame.FirstSummaryJa()));return;}
+    if(!frame.HasValue()){status_->setText(QString::fromStdString(frame.FirstSummaryJa()));Pick();return;}
     app::WorkPlaneChoice choice;choice.method=modeling::WorkPlaneMethod::PointNormal;
     choice.origin=frame.Value().origin;choice.normal=frame.Value().normal;choice.uAxis=frame.Value().xDirection;
-    const auto revision=window.session_->GetDocument().Revision();
-    window.operationHost_->SetShelves({});window.CreateWorkPlaneFromChoice(choice,true);
-    if(window.session_->GetDocument().Revision()==revision)return;
+    auto& window=window_;const auto revision=window.session_->GetDocument().Revision();
+    window.CreateWorkPlaneFromChoice(choice,true);
+    if(window.session_->GetDocument().Revision()==revision){Pick();return;}
+    window.operationHost_->SetShelves({});
     window.SetMode(app::UiMode::Drawing);window.AlignViewToActiveWorkPlane();window.RunCommand("draw.line");
     window.SetStatus(QStringLiteral("フェイス上に作業面を作りました。曲面の場合は選択位置の接平面です。直線の始点を指定してください。"));
-}
-bool V2FaceActions::Extract(const app::SelectionRef& ref)
-{
-    auto& window=window_;
-    const auto face=kernel::OutputFace(window.partShapes_.at(ref.entityId.ToString()),*ref.pickedFaceIndex);
-    if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstSummaryJa()));return false;}
-    v2ui::ShapeListOwner owner({face.Value()});
-    const auto brep=kernel::CaptureOutputShape(face.Value());
-    if(!brep.HasValue()){status_->setText(QString::fromStdString(brep.FirstSummaryJa()));return false;}
-    const auto edges=kernel::OutputEdges(face.Value(),window.session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
-    if(!edges.HasValue()){status_->setText(QString::fromStdString(edges.FirstSummaryJa()));return false;}
-    const auto samples=kernel::FaceSamplesOf(face.Value(),0);
-    if(!samples.HasValue()){status_->setText(QString::fromStdString(samples.FirstSummaryJa()));return false;}
-    domain::Feature feature;feature.id=window.ids_->NextTyped<base::IdKind::Feature>();
-    feature.type=domain::FeatureType::FreezeDerived;feature.displayName="フェイス（近似用・独立）";
-    domain::FreezeDerivedDefinition definition;definition.frozenBrep=brep.Value();feature.definition=definition;
-    domain::Entity entity;entity.id=window.ids_->NextTyped<base::IdKind::Entity>();entity.createdBy=feature.id;
-    entity.displayName=feature.displayName;entity.kind=domain::EntityKind::GuideSurface;entity.editPolicy=domain::EditPolicy::Frozen;
-    feature.outputs.push_back({"face",entity.id,entity.kind});
-    const auto added=window.session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},"近似用フェイスを取り出す"));
-    if(!added.committed){window.ReportDiagnostics(added.diagnostics);return false;}
-    // The added frozen face has no dependency on its source. Retain existing
-    // native shapes and install only this new guide, as on reopening the file.
-    const auto key=entity.id.ToString();
-    window.guideShapes_[key]=owner.Take(0);window.guideEdges_[key]=edges.Value();
-    window.guideSamples_[key]=samples.Value().samples;
-    window.operationHost_->SetShelves({});window.AdoptCurrentDocument();window.RefreshShapeViews();window.RefreshExportCounts();
-    app::SelectionSet selection;selection.entityIds={entity.id};window.viewport_->SetSelection(selection);return true;
 }

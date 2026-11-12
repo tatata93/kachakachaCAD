@@ -620,6 +620,7 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
 //! 実際のマウスイベントでツールからフェイスを拾い、平面と近似入力へ進める。
 [[nodiscard]] bool CaseFaceToolFirst(V2MainWindow& window)
 {
+    window.resize(1600,1000);QApplication::processEvents();
     window.RunCommand("file.new");
     const auto part = MakeBoxByHand(window, 0.25, 0.35, 0.55, 0.65);
     if (part.IsNil()) return false;

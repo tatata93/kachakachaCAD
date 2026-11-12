@@ -6,6 +6,7 @@
 class V2MainWindow;
 class QLabel;
 class QEvent;
+class QCloseEvent;
 class QObject;
 class V2FaceActions final : public QWidget {
 public:
@@ -13,8 +14,12 @@ public:
 private:
     V2FaceActions(V2MainWindow& window, std::string command);
     bool eventFilter(QObject* object, QEvent* event) override;
-    void Apply(const kachakacha::v2::app::SelectionRef& face);
-    bool Extract(const kachakacha::v2::app::SelectionRef& face);
+    void Pick();
+    void closeEvent(QCloseEvent* event) override;
+    void Apply(const std::vector<kachakacha::v2::app::SelectionRef>& faces);
+    bool Extract(const std::vector<kachakacha::v2::app::SelectionRef>& faces);
+    kachakacha::v2::app::SelectionSet sources_;
+    bool picking_ = false;
     V2MainWindow& window_;
     std::string command_;
     QLabel* status_ = nullptr;

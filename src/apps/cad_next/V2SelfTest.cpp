@@ -180,6 +180,8 @@ QStringList caseMessages;
     cases.insert(cases.end(), guide.begin(), guide.end());
     const std::vector<SelfTestCase> fabrication = WithSuite(FabricationCases(), "Fabrication");
     cases.insert(cases.end(), fabrication.begin(), fabrication.end());
+    const auto solidFaces=WithSuite(SolidFaceApproximationCases(), "SolidFaceApproximation");
+    cases.insert(cases.end(),solidFaces.begin(),solidFaces.end());
     const std::vector<SelfTestCase> partEdit = WithSuite(PartEditCases(), "PartEdit");
     cases.insert(cases.end(), partEdit.begin(), partEdit.end());
     const std::vector<SelfTestCase> responsive = WithSuite(ResponsiveCases(), "Responsive");

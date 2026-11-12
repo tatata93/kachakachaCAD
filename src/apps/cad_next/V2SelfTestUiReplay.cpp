@@ -398,6 +398,30 @@ struct Replay {
         return sent;
     }
 
+    bool Face(const QJsonObject& step)
+    {
+        // Read the displayed geometry solely to locate a human-visible click.
+        // Do not inject a SelectionRef, native face or approximation input.
+        const auto id=EntityId::Parse(Resolve(step["id"].toString()).toStdString());if(!id)return false;
+        const auto faceIndex=step["face"].toInt(-1);if(faceIndex<0)return false;
+        std::vector<geometry::Vector3> centers;
+        for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==*id)
+            for(const auto& triangle:shape.mesh.triangles)if(triangle.faceIndex==std::size_t(faceIndex))
+                centers.push_back((triangle.points[0]+triangle.points[1]+triangle.points[2])*(1./3));
+        if(centers.empty())return false;
+        geometry::Vector3 middle;for(const auto& center:centers)middle=middle+center;
+        middle=middle*(1./centers.size());
+        const auto center=*std::min_element(centers.begin(),centers.end(),[&](const auto& a,const auto& b){
+            return geometry::Distance(a,middle)<geometry::Distance(b,middle);});
+        const auto projected=w.Viewport().Mapping().Project(center);if(!projected)return false;
+        const QPointF at(projected->x,projected->y);
+        if(w.Viewport().ViewButtonAt(at))return false;
+        QMouseEvent move(QEvent::MouseMove,at,QPointF(w.Viewport().mapToGlobal(at.toPoint())),Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&w.Viewport(),&move);QApplication::processEvents();
+        if(step["hoverOnly"].toBool())return true;
+        return Mouse(w.Viewport(),at,step["add"].toBool()?Qt::ControlModifier:Qt::NoModifier);
+    }
+
     bool Select(const QJsonObject& step)
     {
         const auto parsed=EntityId::Parse(Resolve(step["id"].toString()).toStdString());
@@ -544,6 +568,7 @@ struct Replay {
         if(op=="visibility")return Visibility(step);
         if(op=="ray")return Ray(step);
         if(op=="point")return Point(step);
+        if(op=="face")return Face(step);
         if(op=="navigator_home") {
             QApplication::processEvents();
             auto& viewport=w.Viewport();const auto revision=w.Session().GetDocument().Revision();

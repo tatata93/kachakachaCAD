@@ -65,6 +65,7 @@ void Note(const char* what);
 
 //! 近似(製作モデル)と曲げ状態のケース。
 [[nodiscard]] std::vector<SelfTestCase> FabricationCases();
+[[nodiscard]] std::vector<SelfTestCase> SolidFaceApproximationCases();
 
 //! 原点の3面・3軸と、作業平面の棚のケース。
 [[nodiscard]] std::vector<SelfTestCase> PlaneCases();

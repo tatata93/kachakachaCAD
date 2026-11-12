@@ -3,7 +3,10 @@
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <stdexcept>
 #include <optional>
 #ifdef KACHACAD_V2_WITH_OCCT
@@ -194,11 +197,22 @@ TopoDS_Shape BoundaryConnected(const TopoDS_Shape& shape,
 }
 }
 #endif
-Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
+static Out TrimSurfaceRegionWork(const std::vector<modeling::KernelShapeHandle>& supports,
     const std::vector<std::vector<geometry::CurveSegment>>& inputLoops,const geometry::GeometryTolerance& tolerance,
-    double boundaryApproximationMm,double* maximumDeviationMm,double* rmsDeviationMm) {
+    double boundaryApproximationMm,double* maximumDeviationMm,double* rmsDeviationMm,
+    bool accelerated,bool& usedAcceleration) {
 #ifdef KACHACAD_V2_WITH_OCCT
     try {
+        auto checkpoint=std::chrono::steady_clock::now();
+        const auto trace=[&](const char* stage) {
+            const auto now=std::chrono::steady_clock::now();
+            if(const auto* path=std::getenv("KACHACAD_SURFACE_PERF")) {
+                std::ofstream out(path,std::ios::app);
+                out<<static_cast<int>(modeling::GuideSurfaceMethod::BoundaryFill)<<","<<stage<<","
+                    <<std::chrono::duration<double,std::milli>(now-checkpoint).count()<<"\n";
+            }
+            checkpoint=now;
+        };
         Require(!supports.empty()&&!inputLoops.empty(),"閉輪郭と支持する面が必要です。");
         Require(std::isfinite(boundaryApproximationMm)&&boundaryApproximationMm>=0,"境界近似の許容差が不正です。");
         const double boundaryTolerance=std::max(boundaryApproximationMm,tolerance.modelLinearMm*5);
@@ -219,12 +233,20 @@ Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
             BRepAlgoAPI_Cut cut(cutter,Cutter(loops[i],fit,reach,tolerance));
             Require(cut.IsDone(),"窓の穴を切り抜けません。");cutter=cut.Shape();
         }
+        trace("trim-cutter");
         BRepBuilderAPI_Sewing sewing(tolerance.modelLinearMm);
         int count=0;
         for(const auto handle:supports) {
             TopoDS_Shape support;Require(LookupShape(handle,support),"支持面がありません。");
             for(TopExp_Explorer f(support,TopAbs_FACE);f.More();f.Next()) {
                 BRepAlgoAPI_Common common;common.SetNonDestructive(true);
+                if(accelerated) {
+                    // Same native operands and tolerances. Tight boxes reduce
+                    // disjoint intersection candidates before the exact solve.
+                    common.SetUseOBB(true);
+                    common.SetRunParallel(true);
+                    usedAcceleration=true;
+                }
                 TopTools_ListOfShape args,tools;args.Append(f.Current());tools.Append(cutter);
                 common.SetArguments(args);common.SetTools(tools);common.Build();
                 Require(common.IsDone()&&!common.HasErrors(),"支持面から輪郭の領域を切り出せません。");
@@ -232,10 +254,13 @@ Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
             }
         }
         Require(count>0,"閉輪郭の内側に支持面がありません。");sewing.Perform();
+        trace("trim-common-and-sew");
         const auto result=BoundaryConnected(sewing.SewedShape(),loops.front(),boundaryTolerance);
         Require(BRepCheck_Analyzer(result).IsValid(),"切り出した面が重複または不正です。");
+        trace("trim-component-and-validate");
         double rms=0;
         const double deviation=CheckBoundary(result,loops,boundaryTolerance,rms);
+        trace("trim-boundary-distance");
         if(maximumDeviationMm)*maximumDeviationMm=deviation;
         if(rmsDeviationMm)*rmsDeviationMm=rms;
         std::vector<base::Diagnostic> notes;
@@ -247,8 +272,21 @@ Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
     catch(const std::exception& e){return Out::Failure(base::MakeError("EXT-008","面上の輪郭を切り出せません。",e.what()));}
 #else
     (void)supports;(void)inputLoops;(void)tolerance;(void)boundaryApproximationMm;(void)maximumDeviationMm;(void)rmsDeviationMm;
+    (void)accelerated;(void)usedAcceleration;
     return Out::Failure(base::MakeError("KER-E005","幾何カーネルが必要です。",{}));
 #endif
+}
+Out TrimSurfaceRegion(const std::vector<modeling::KernelShapeHandle>& supports,
+    const std::vector<std::vector<geometry::CurveSegment>>& inputLoops,const geometry::GeometryTolerance& tolerance,
+    double boundaryApproximationMm,double* maximumDeviationMm,double* rmsDeviationMm) {
+    bool accelerated=false;
+    auto result=TrimSurfaceRegionWork(supports,inputLoops,tolerance,boundaryApproximationMm,
+        maximumDeviationMm,rmsDeviationMm,!std::getenv("KACHACAD_REGION_COMMON_SERIAL"),accelerated);
+    if(result.HasValue()||!accelerated)return result;
+    // Preserve the established result/diagnostic when a native parallel
+    // intersection or its subsequent full validation cannot be completed.
+    return TrimSurfaceRegionWork(supports,inputLoops,tolerance,boundaryApproximationMm,
+        maximumDeviationMm,rmsDeviationMm,false,accelerated);
 }
 Out TrimFabricationFace(modeling::KernelShapeHandle support,
     const std::vector<std::vector<geometry::CurveSegment>>& loops,const geometry::GeometryTolerance& tolerance) {

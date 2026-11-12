@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2DimensionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -32,7 +33,7 @@ V2DimensionTool::V2DimensionTool(V2MainWindow& window):QWidget(&window),window_(
 {
     setObjectName(QStringLiteral("dimensionTool"));BuildUi();Reset();RefreshList();qApp->installEventFilter(this);
     connect(window_.EntityTree(),&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){
-        if(!isVisible()||activeInput_<0||!item)return;
+        if(!isVisible()||activeInput_<0||!item||V2ToolSelection::Active(*window_.viewport_))return;
         const auto key=V2EntityTree::KeyOf(item);
         if(!key.startsWith("entity:"))return;
         const auto id=base::EntityId::Parse(key.mid(7).toStdString());if(!id)return;

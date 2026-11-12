@@ -1,3 +1,4 @@
+#include "V2ToolSelection.h"
 #include "V2SelfTest.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -539,6 +540,17 @@ template<std::size_t... I> std::vector<SelfTestCase> DrawingCases(std::index_seq
     static const std::array<std::string,sizeof...(I)> names{("HP-SELECT-DRAW all enabled modes "+std::to_string(I))...};
     return {{names[I].c_str(),DrawingCase<I>}...};
 }
+bool DimensionPausedTree(V2MainWindow& w) {
+    if(!Fixture(w)||!Ribbon(w,"dimension.open"))return false;
+    if(!Press(w.findChild<QPushButton*>("dimensionPickRole0")))return false;
+    auto* role=Role(w,QString::fromUtf8("対象 A"));if(!role)return false;
+    const auto before=role->value->text();
+    if(!Press(w.findChild<QToolButton*>("toolEditSelection"))||!V2ToolSelection::Active(w.Viewport()))return false;
+    if(!Tree(w,Id("lineA")))return false;
+    if(!Explain("paused dimension ignores ordinary tree selection",role->value->text()==before))return false;
+    if(!Press(w.findChild<QPushButton*>("toolSelectionResume"))||V2ToolSelection::Active(w.Viewport()))return false;
+    return Explain("resuming keeps the pending dimension role usable",Tree(w,Id("lineA"))&&role->value->text()!=before);
+}
 bool DimensionRoute(V2MainWindow& w,int mode,bool tree) {
     if(!Fixture(w)||!Ribbon(w,"dimension.open"))return false;
     auto* combo=w.findChild<QComboBox*>("dimensionKind");
@@ -692,6 +704,7 @@ std::vector<SelfTestCase> SelectionRouteCases() {
     cases.insert(cases.end(),{{"HP-SELECT corner Ctrl tree role preserves first line",CornerCtrl},
         {"HP-SELECT tree point retake and same row reuse",PointRetake},
         {"HP-SELECT active tool tree modifiers preserve Ctrl and Shift intent",TreeModifiers},
+        {"HP-SELECT paused dimension retains its input during tree selection",DimensionPausedTree},
         {"HP-SELECT point invalid input stale click and tool transition",PointRejectAndStale},
         {"HP-SELECT grid origin accepts explicit tree point",GridPoint},
         {"HP-SELECT output surface reference picks release temporary faces",OutputFaceOwnership}});

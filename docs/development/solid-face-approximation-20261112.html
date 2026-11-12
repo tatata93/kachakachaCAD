@@ -2,7 +2,7 @@
 <html lang="ja"><meta charset="utf-8"><title>立体の面を選んで近似する</title>
 <style>body{font-family:system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 20px;line-height:1.8;color:#182333}img{max-width:100%;border:1px solid #8b98aa}table{border-collapse:collapse}td,th{border:1px solid #aab3c0;padding:8px}code{overflow-wrap:anywhere}</style>
 <h1>立体の面を選んで近似する</h1>
-<p>2026-11-12。検証中。全体・配布版の結果は確定後に追記します。</p>
+<p>2026-11-12。Windows全体・配布版の検証と公開が完了しました。</p>
 <ol><li>「製作」→「近似」を開き、「立体の面を選ぶ」を押します。</li>
 <li>3Dビューで目的の面の内側を押します。ホバーで対象の面を確認できます。</li>
 <li>枚数・許すずれ・切る向きを確認し、「製作モデルを作る」で確定します。</li></ol>
@@ -12,8 +12,8 @@
 独立した面は元ソリッドの後の編集には追従しません。輪郭や穴は元のネイティブ形状を使います。</p>
 <h2>実操作画面</h2><figure><img src="solid-face-approximation-20261112/hover.png" alt="面を指定する際のホバー"><figcaption>添付由来の屋根ソリッドで面を指定。</figcaption></figure>
 <figure><img src="solid-face-approximation-20261112/preview.png" alt="選択した屋根表面だけの近似下見"><figcaption>24枚・間隔自動調整の操作例。表示上の最大偏差0.032 mm。部材数や工作性を全ての形状に保証する値ではありません。</figcaption></figure>
-<h2>確認範囲</h2><p>平面・円筒曲面・穴2つの面、事前選択とツール先行、Ctrl追加、同一立体の複数面、独立面との混在、同じ面の再指定、取消・Esc・ツール切替、左一覧の全体指定の拒否を実マウス・キーで確認します。</p>
+<h2>確認範囲</h2><p>平面・円筒曲面・穴2つの面、事前選択とツール先行、Ctrl追加、同一立体の複数面、独立面との混在、同じ面の再指定、取消・Esc・ツール切替、左一覧の全体指定の拒否をUIのクリック・キー入力を再現して確認しました。</p>
 <p>新規UI14件と意味的キー／一時面番号のコア回帰を追加。元のソリッド、未選択面、輪郭・穴、UUID、保存形式を維持します。</p>
 <h2>添付由来モデルの通し確認</h2><p id="owner-evidence">添付由来の屋根の閉ソリッドから、3DビューのCtrl指定で見えている表面を取り出し、その独立面1つだけを近似しました。24枚・間隔自動調整で下見の最大偏差0.032 mm。確定・保存・実Ctrl+Z/Y・再読込とA4 1ページの型紙作成まで成功しました。元416定義は完全一致。生成直後の元13メッシュSHA256は全て一致。Redo後は1面の三角形順序と浮動小数点の差があり、対応する全三角形の最大頂点差は4.41836×10⁻¹² mmでした。デスクトップ原本のSHA256も維持しています。保存モデルを読み直して型紙を作り、UIから「いまの型紙」を選んでSVG・DXF・PDFへ出力しました。書き出しの別再試験は全工程成功です。途中の試験指定の失敗記録は保全しています。</p>
-<h2>配布版</h2><p id="release-evidence">Windowsの全体ゲートと配布ZIPの検証・通常起動の完了後に公開します。</p>
+<h2>配布版</h2><p id="release-evidence">検証実装は<code>b3e0e17f37a00165282c481fb31374019c10f61f</code>。Windows全体ゲートでCTest 197件（skip 0）、開発版と配布版のUI各1019件、従来版自己試験が成功しました。検証したZIPのpublish照合と通常起動2経路も成功。配布EXEでも添付由来の屋根ソリッドをCtrl指定して近似24枚を確定・保存し、元416定義・元13形状のメッシュSHA256と原本SHA256を維持しました。<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261112-update4">公開更新4</a>のコミット・latestタグ・ZIP 76,223,798バイトとSHA256 <code>7c6ea0a74187206099ed36576ab39d57c9db74bea48752d81bff649d7b2f32c6</code>が一致しています。<a href="solid-face-approximation-20261112/release-verification.json">公開照合記録</a>。起動ファイルは<code>out/releases/solid-face-approx-release-20261112/package/kachakacha_cad_next.exe</code>です。今回の面選択と近似入力に限定した完了であり、WP全体や車体モデル全体の完成を意味しません。</p>
 </html>

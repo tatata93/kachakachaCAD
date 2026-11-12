@@ -1,0 +1,10 @@
+{
+  "publishedExe": "out/releases/solid-face-approx-release-20261112/package/kachakacha_cad_next.exe",
+  "originalFeaturesUnchanged": 416,
+  "originalMeshHashesUnchanged": 13,
+  "entityCount": 418,
+  "independentFabricationSources": [
+    "00000000-0000-4000-8000-00000000253e"
+  ],
+  "originalFileSha256": "84c716b3e6af1ae8f87da4ee4df92226ef326b03e1e44f8c6ce7f84152125ede"
+}

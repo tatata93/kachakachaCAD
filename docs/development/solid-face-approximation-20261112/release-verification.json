@@ -1,0 +1,58 @@
+{
+  "status": "passed",
+  "tag": "v0.1.0-20261112-update4",
+  "targetCommit": "b3e0e17f37a00165282c481fb31374019c10f61f",
+  "latestTag": "v0.1.0-20261112-update4",
+  "releaseUrl": "https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261112-update4",
+  "asset": {
+    "browser_download_url": "https://github.com/tatata93/kachakachaCAD/releases/download/v0.1.0-20261112-update4/kachakachaCAD-Windows-x64-20261112-update4.zip",
+    "digest": "sha256:7c6ea0a74187206099ed36576ab39d57c9db74bea48752d81bff649d7b2f32c6",
+    "name": "kachakachaCAD-Windows-x64-20261112-update4.zip",
+    "size": 76223798,
+    "state": "uploaded"
+  },
+  "zipSha256": "7c6ea0a74187206099ed36576ab39d57c9db74bea48752d81bff649d7b2f32c6",
+  "ctestTotal": 197,
+  "skipped": 0,
+  "developmentUi": 1019,
+  "packageUi": 1019,
+  "startup": {
+    "offscreen": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 760,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — 無題",
+      "visible": true,
+      "width": 1180
+    },
+    "windows": {
+      "event_loop": true,
+      "exposed": true,
+      "height": 760,
+      "on_screen": true,
+      "platform": "windows",
+      "ready": true,
+      "rendered": true,
+      "schema": 1,
+      "title": "kachakachaCAD 0.1.0 — 無題",
+      "visible": true,
+      "width": 1180
+    }
+  },
+  "publishedOwner": {
+    "publishedExe": "out/releases/solid-face-approx-release-20261112/package/kachakacha_cad_next.exe",
+    "originalFeaturesUnchanged": 416,
+    "originalMeshHashesUnchanged": 13,
+    "entityCount": 418,
+    "independentFabricationSources": [
+      "00000000-0000-4000-8000-00000000253e"
+    ],
+    "originalFileSha256": "84c716b3e6af1ae8f87da4ee4df92226ef326b03e1e44f8c6ce7f84152125ede"
+  },
+  "evidence": "out/verification/solid-face-approx-release-20261112/result.json"
+}

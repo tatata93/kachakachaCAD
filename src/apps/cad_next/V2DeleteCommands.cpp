@@ -11,6 +11,7 @@
 #include <QTreeWidgetItem>
 #include "kachakacha/document/Commands.h"
 #include <algorithm>
+#include <optional>
 #include <set>
 
 namespace {
@@ -140,22 +141,48 @@ void V2MainWindow::DeleteSelected()
             partialNames.push_back(QString::fromStdString(original->displayName)+QStringLiteral("（選択した線分）"));
         }
     }
-    const auto gone=[&](base::EntityId id){return std::none_of(after.entities.begin(),after.entities.end(),[&](const auto& e){return e.id==id;});};
-    QStringList names=partialNames;std::vector<base::EntityId> preview;
-    bool dependents=dependencyCascade||!folders.empty();bool keepContents=false;
-    for(const auto& group:before.groups)if(allFolders.contains(group.id))names.push_back(QStringLiteral("グループ: ")+QString::fromStdString(group.displayName));
-    for(const auto& entity:before.entities)if(gone(entity.id)){
-        preview.push_back(entity.id);names.push_back(QString::fromStdString(entity.displayName));
-        if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())dependents=true;
+    const auto hasEntity=[](const auto& snapshot,base::EntityId id){return std::any_of(snapshot.entities.begin(),
+        snapshot.entities.end(),[&](const auto& e){return e.id==id;});};
+    std::set<base::EntityId> deletedParts;
+    for(const auto& entity:before.entities)if(entity.kind==domain::EntityKind::Part&&!hasEntity(after,entity.id))
+        deletedParts.insert(entity.id);
+    std::optional<document::DocumentSnapshot> withBoundaries;
+    if(!deletedParts.empty())for(const auto& entity:after.entities) {
+        if(entity.kind!=domain::EntityKind::Wire||!entity.generatedFrom||!deletedParts.contains(*entity.generatedFrom))continue;
+        if(!withBoundaries)withBoundaries=after;
+        if(!hasEntity(*withBoundaries,entity.id))continue;
+        const auto diagnostics=document::RemoveFeatureCommand(entity.createdBy,document::RemovePolicy::Cascade,"境界ワイヤーを削除").Apply(*withBoundaries);
+        if(std::any_of(diagnostics.begin(),diagnostics.end(),[](const auto& d){return d.IsError();})){
+            ReportDiagnostics(diagnostics);return;
+        }
     }
-    for(auto id:selection.entityIds)if(std::find(preview.begin(),preview.end(),id)==preview.end())preview.push_back(id);
-    dependents=RemoveAffectedDimensions(after,gone,cutIds,names)||dependents;
-    if(dependents){
-        viewport_->SetDeletionPreview(preview);RefreshShapeViews();
-        const int choice=v2ui::ConfirmDeletion(this,names,!folders.empty());
+    struct Effects { QStringList names; std::vector<base::EntityId> preview; bool dependents; };
+    const auto effects=[&](document::DocumentSnapshot& planned){
+        Effects result{partialNames,{},dependencyCascade||!folders.empty()};
+        const auto gone=[&](base::EntityId id){return !hasEntity(planned,id);};
+        for(const auto& group:before.groups)if(allFolders.contains(group.id))
+            result.names.push_back(QStringLiteral("グループ: ")+QString::fromStdString(group.displayName));
+        for(const auto& entity:before.entities)if(gone(entity.id)){
+            result.preview.push_back(entity.id);result.names.push_back(QString::fromStdString(entity.displayName));
+            if(!roots.contains(entity.createdBy)||std::find(selection.entityIds.begin(),selection.entityIds.end(),entity.id)==selection.entityIds.end())
+                result.dependents=true;
+        }
+        for(auto id:selection.entityIds)if(std::find(result.preview.begin(),result.preview.end(),id)==result.preview.end())result.preview.push_back(id);
+        result.dependents=RemoveAffectedDimensions(planned,gone,cutIds,result.names)||result.dependents;
+        return result;
+    };
+    auto base=effects(after);
+    std::optional<Effects> extra;
+    if(withBoundaries)extra=effects(*withBoundaries);
+    bool keepContents=false;
+    if(base.dependents||extra){
+        const auto show=[&](bool with){viewport_->SetDeletionPreview(with?extra->preview:base.preview);RefreshShapeViews();};
+        show(false);
+        const int choice=v2ui::ConfirmDeletion(this,base.names,!folders.empty(),extra?&extra->names:nullptr,show);
         const bool accepted=choice>=0;keepContents=choice==1;
         viewport_->SetDeletionPreview({});RefreshShapeViews();
         if(!accepted){fail(QStringLiteral("使っているものを含む削除を取り消しました。"));return;}
+        if(choice==2&&withBoundaries){after=std::move(*withBoundaries);base=std::move(*extra);}
     }
     if(keepContents){after=before;for(const auto id:folders){const auto diagnostics=document::RemoveGroupCommand(id).Apply(after);
         for(const auto& d:diagnostics)if(d.IsError()){ReportDiagnostics(diagnostics);return;}}}
@@ -169,5 +196,5 @@ void V2MainWindow::DeleteSelected()
         partEdges_,partFlatBoundary_,guideEdges_,guideSamples_,fabricationModels_);
     RefreshShapeViews();RefreshEntityList();
     SetStatus(keepContents?QStringLiteral("グループを解除しました。中身は残っています。Ctrl+Zで戻せます。"):
-        QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(names.size()));
+        QStringLiteral("削除しました（%1項目）。Ctrl+Zでまとめて戻せます。").arg(base.names.size()));
 }

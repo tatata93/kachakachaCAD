@@ -2,6 +2,7 @@
 #include "V2EndCapInput.h"
 #include "V2CurvedEmbossTool.h"
 #include "V2GeneratedBoundaryOutput.h"
+#include "V2GeneratedBoundaryLinks.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -137,8 +138,9 @@ bool V2CurvedEmbossTool::Commit()
     const auto edges=V2GeneratedShapeBoundaries(built_->handle,tolerance_->value());
     if(!brep.HasValue()||(output_->currentIndex()!=2&&!edges.HasValue())){status_->setText(QStringLiteral("生成形状を保存できません。"));return false;}
     auto& doc=window_.session_->GetDocument();document::Document::Transaction transaction(doc,"曲面押し出し");
+    v2ui::BoundaryLinks boundaries;
     if(output_->currentIndex()!=2)for(const auto& wire:edges.Value())
-        if(window_.AddPlainWire(wire,"曲面押し出し / 境界ワイヤー").IsNil())return false;
+        if(!boundaries.Add(window_.AddPlainWire(wire,"曲面押し出し / 境界ワイヤー")))return false;
     if(output_->currentIndex()!=1){
         domain::Feature f;f.id=window_.ids_->NextTyped<base::IdKind::Feature>();f.type=domain::FeatureType::FreezeDerived;
         domain::FreezeDerivedDefinition definition;definition.frozenBrep=brep.Value();f.definition=definition;f.displayName="曲面押し出し（近似）";
@@ -146,6 +148,7 @@ bool V2CurvedEmbossTool::Commit()
         e.editPolicy=domain::EditPolicy::Frozen;e.groupId=doc.Snapshot().settings.activeGroupId;
         e.displayName=app::UniqueDisplayName(doc.Snapshot(),e.kind,f.displayName);f.outputs.push_back({"part",e.id,e.kind});
         if(!doc.Run(document::AddFeatureCommand(f,{e},"曲面押し出し")).committed)return false;
+        if(!boundaries.Attach(doc,e.id))return false;
         if(operation_->currentIndex()==1&&!doc.Run(document::SetVisibilityCommand({support_},domain::Visibility::Hidden)).committed)return false;
     }
     if(!transaction.Commit())return false;

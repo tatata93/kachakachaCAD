@@ -3,6 +3,7 @@
 
 #include "V2ShellSplitTool.h"
 #include "V2GeneratedBoundaryOutput.h"
+#include "V2GeneratedBoundaryLinks.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -473,15 +474,17 @@ void V2ShellSplitTool::ConfirmShell()
     auto& document = window_.session_->GetDocument();
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
     const auto mode=dock_->OutputMode();
+    v2ui::BoundaryLinks boundaries;
     if(kachakacha::v2::app::IncludesWires(mode)) {
         const auto edges=V2GeneratedShapeBoundaries(handle,document.Snapshot().settings.tolerance.modelLinearMm);
         if(!edges.HasValue()){window_.ReportDiagnostics(edges.Diagnostics());return;}
         if(!edges.Diagnostics().empty())window_.ReportDiagnostics(edges.Diagnostics());
-        for(const auto& wire:edges.Value())if(window_.AddPlainWire(wire,"シェルの境界").IsNil())return;
+        for(const auto& wire:edges.Value())if(!boundaries.Add(window_.AddPlainWire(wire,"シェルの境界")))return;
     }
     if(kachakacha::v2::app::IncludesSolid(mode)) {
-        if(window_.AddPartFeature(kachakacha::v2::domain::FeatureType::ShellSplit,
-            definition,handle,{},label.c_str(),{source}).IsNil())return;
+        const auto part=window_.AddPartFeature(kachakacha::v2::domain::FeatureType::ShellSplit,
+            definition,handle,{},label.c_str(),{source});
+        if(part.IsNil()||!boundaries.Attach(document,part))return;
         const auto hidden=document.Run(kachakacha::v2::document::SetVisibilityCommand(
             {source},kachakacha::v2::domain::Visibility::Hidden));
         if(!hidden.committed){window_.ReportDiagnostics(hidden.diagnostics);return;}

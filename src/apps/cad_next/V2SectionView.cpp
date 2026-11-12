@@ -78,10 +78,11 @@ void V2Viewport::SetDeletionPreview(std::vector<kachakacha::v2::base::EntityId> 
     if(deletionPreview_.empty()){
         if(beforeDeletionPreview_){session_->SetScene(std::move(*beforeDeletionPreview_));beforeDeletionPreview_.reset();}
     }else{
-        beforeDeletionPreview_=session_->Scene();auto snapshot=session_->GetDocument().Snapshot();
+        if(!beforeDeletionPreview_)beforeDeletionPreview_=session_->Scene();
+        auto snapshot=session_->GetDocument().Snapshot();
         for(auto& entity:snapshot.entities)if(DeletionPreviewContains(entity.id)){entity.visibility=domain::Visibility::Visible;entity.groupId.reset();}
         base::RandomIdGenerator previewIds;
-        auto scene=app::RebuildSceneKeepingView(session_->Scene(),snapshot,previewIds);
+        auto scene=app::RebuildSceneKeepingView(*beforeDeletionPreview_,snapshot,previewIds);
         // Retain native edges and the scene's other transient overlays during the modal preview.
         for(const auto& curve:beforeDeletionPreview_->curves)if(std::none_of(scene.curves.begin(),scene.curves.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;}))scene.curves.push_back(curve);
         session_->SetScene(std::move(scene));

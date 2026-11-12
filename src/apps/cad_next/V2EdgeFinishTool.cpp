@@ -4,6 +4,7 @@
 
 #include "V2EdgeFinishTool.h"
 #include "V2GeneratedBoundaryOutput.h"
+#include "V2GeneratedBoundaryLinks.h"
 
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -367,17 +368,18 @@ void V2EdgeFinishTool::Confirm()
     const EntityId source = input_.part;
     auto& document = window_.session_->GetDocument();
     kachakacha::v2::document::Document::Transaction transaction(document, label.c_str());
+    v2ui::BoundaryLinks boundaries;
     if (dock_->OutputMode() != 2) {
         const auto edges = V2GeneratedShapeBoundaries(handle,
             document.Snapshot().settings.tolerance.modelLinearMm);
         if (!edges.HasValue()) { window_.ReportDiagnostics(edges.Diagnostics()); return; }
         for(const auto& wire:edges.Value())
-            if (window_.AddPlainWire(wire, (label + " / 境界ワイヤー").c_str()).IsNil()) return;
+            if (!boundaries.Add(window_.AddPlainWire(wire, (label + " / 境界ワイヤー").c_str()))) return;
     }
     if (dock_->OutputMode() != 1) {
         const auto madeId = window_.AddPartFeature(kachakacha::v2::domain::FeatureType::EdgeFinish,
             definition, handle, {}, label.c_str(), {source});
-        if (madeId.IsNil()) return;
+        if (madeId.IsNil()||!boundaries.Attach(document,madeId)) return;
         const auto hidden = document.Run(kachakacha::v2::document::SetVisibilityCommand(
             {source}, kachakacha::v2::domain::Visibility::Hidden));
         if (!hidden.committed) { window_.ReportDiagnostics(hidden.diagnostics); return; }

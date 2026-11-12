@@ -8,6 +8,8 @@
 //! 添付文書の任意試験 HP-TH-OWNER は、対象の形状ガイドIDで選択を指定する。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestDeleteDialog.h"
+#include "V2EntityTree.h"
 
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
@@ -20,6 +22,7 @@
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -42,6 +45,8 @@
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QListWidget>
 #include <QEvent>
 #include <QChar>
 #include <QComboBox>
@@ -84,6 +89,70 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
                window.ThickenShelfShown() && window.ShelfShown(Shelf::Thicken))
         && Explain("構えただけでは部品は増えない",
             CountOfKind(window, EntityKind::Part) == 0);
+}
+
+bool CaseDeleteWithGeneratedBoundaries(V2MainWindow& w)
+{
+    w.resize(1600,1000);
+    if(!ArmThickenOnFreshSurface(w)||!ClickOnAnyGuideSurface(w))return false;
+    std::vector<base::EntityId> original;
+    auto& document=w.Session().GetDocument();
+    for(const auto& e:document.Snapshot().entities)
+        if(e.kind==EntityKind::GuideSurface||e.kind==EntityKind::Wire)original.push_back(e.id);
+    auto* mode=w.findChild<QComboBox*>("thickenOutput");
+    if(!mode||!mode->isVisible())return false;
+    mode->setCurrentIndex(2);
+    if(!w.ThickenDock().ClickConfirm())return false;
+    base::EntityId solid;
+    for(const auto& e:document.Snapshot().entities)if(e.kind==EntityKind::Part)solid=e.id;
+    std::vector<base::EntityId> boundaries;
+    for(const auto& e:document.Snapshot().entities)if(e.kind==EntityKind::Wire&&e.generatedFrom==solid)boundaries.push_back(e.id);
+    if(!Explain("both output creates an independent wire set linked to this solid",!solid.IsNil()&&!boundaries.empty()))return false;
+    if(!document.Run(document::RenameEntityCommand(boundaries.front(),"別名の輪郭")).committed
+        ||!w.SaveAndReopen("solid-boundary-provenance.kcd2"))return false;
+    const auto exists=[&](base::EntityId id){return w.Session().GetDocument().FindEntity(id)!=nullptr;};
+    const auto keepOriginal=[&]{return std::all_of(original.begin(),original.end(),exists);};
+    const auto hasAll=[&](bool present){return std::all_of(boundaries.begin(),boundaries.end(),
+        [&](auto id){return exists(id)==present;});};
+    const auto pickSolid=[&]{
+        w.RunCommand("selection.activate");auto* tree=w.EntityTree();auto* item=w.ItemOfEntity(solid);
+        if(!tree||!item)return false;
+        tree->scrollToItem(item);QApplication::processEvents();
+        const auto point=QPointF(tree->visualItemRect(item).center());
+        QMouseEvent down(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
+        QMouseEvent up(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(tree->viewport(),&down);QApplication::sendEvent(tree->viewport(),&up);
+        return w.Viewport().Selection().entityIds==std::vector<base::EntityId>{solid};
+    };
+    const auto erase=[&](bool accept,bool include){
+        if(!pickSolid())return false;
+        bool inspected=false;
+        const bool modal=DeleteWithConfirmation(w,accept,[&](QDialog* dialog){
+            auto* option=dialog->findChild<QCheckBox*>("deleteGeneratedBoundaries");
+            auto* list=dialog->findChild<QListWidget*>();
+            if(!option||!list||option->isChecked()||list->count()!=1)return;
+            const auto highlights=[&](bool wires){return w.Viewport().DeletionPreviewContains(solid)
+                &&std::all_of(boundaries.begin(),boundaries.end(),[&](auto id){return w.Viewport().DeletionPreviewContains(id)==wires;})
+                &&std::none_of(original.begin(),original.end(),[&](auto id){return w.Viewport().DeletionPreviewContains(id);});};
+            if(!highlights(false))return;
+            option->click();if(!highlights(true)||list->count()!=1+int(boundaries.size()))return;
+            option->click();if(!highlights(false)||list->count()!=1)return;
+            if(include)option->click();
+            inspected=highlights(include);
+        });
+        return modal&&inspected&&!w.Viewport().DeletionPreviewContains(solid);
+    };
+    const auto revision=w.Session().GetDocument().Revision();
+    if(!Explain("cancel preserves the solid, generated wires, and original inputs",erase(false,true)
+        &&w.Session().GetDocument().Revision()==revision&&exists(solid)&&hasAll(true)&&keepOriginal()))return false;
+    if(!Explain("the unchecked default only deletes the solid",erase(true,false)&&!exists(solid)&&hasAll(true)&&keepOriginal()))return false;
+    w.RunCommand("edit.undo");if(!exists(solid)||!hasAll(true))return false;
+    if(!Explain("the checked option deletes exactly the selected solid and its generated wires",erase(true,true)
+        &&!exists(solid)&&hasAll(false)&&keepOriginal()))return false;
+    w.RunCommand("edit.undo");if(!exists(solid)||!hasAll(true)||!keepOriginal())return false;
+    w.RunCommand("edit.redo");
+    return Explain("one Undo/Redo and reopen preserve the chosen deletion",!exists(solid)&&hasAll(false)&&keepOriginal()
+        &&w.SaveAndReopen("solid-and-boundaries-deleted.kcd2")&&!exists(solid)&&hasAll(false)&&keepOriginal());
 }
 
 //! HP-TH-01。面が3Dで拾えて欄に入り、作り方を選んで Enter すると部品になり、
@@ -730,6 +799,7 @@ bool CaseIndependentThicken(V2MainWindow& w) {
 std::vector<SelfTestCase> ThickenCases()
 {
     std::vector<SelfTestCase> cases{
+        {"HP-DEL-15 generated boundaries optional with solid delete, preview, history and reopen",CaseDeleteWithGeneratedBoundaries},
         {"HP-TH-GUIDANCE selected surface and missing target have accurate instructions",CaseThickenGuidanceMatchesInputs},
         {"HP-TH-INDEPENDENT frozen solid and boundary survive source deletion and save",CaseIndependentThicken},
         {"HP-TH-JIG-OUTPUT all jig outputs themes undo and saved results",CaseJigOutputMatrix},

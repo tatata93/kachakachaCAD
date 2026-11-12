@@ -12,6 +12,7 @@
 
 #include "V2MainWindow.h"
 #include "V2GeneratedBoundaryOutput.h"
+#include "V2GeneratedBoundaryLinks.h"
 #include "V2ParameterDock.h"
 #include "V2ExtrudeInputDistance.h"
 #include "V2ParameterDock.h"
@@ -835,11 +836,12 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     // 頼まれたワイヤーは、画面に出すだけの辺ではなく **文書のワイヤー** にする。
     // 辺のままだと、選ぶことも、次の押し出しの輪郭にすることもできない。
     int wires = 0;
+    v2ui::BoundaryLinks boundaries;
     // 開始側の輪郭。**押す前の輪郭を写した、新しいワイヤーである。**
     // 元のワイヤーを作り変えて代用しない(オーナー指示)。
     if (choice.makeStartProfileWire) {
         for (const auto& loop : built.startProfileWires.empty() ? extrudeStartLoops_ : built.startProfileWires) {
-            if (AddPlainWire(loop, "押し出し元の輪郭").IsNil()) {
+            if (!boundaries.Add(AddPlainWire(loop, "押し出し元の輪郭"))) {
                 return false;
             }
             ++wires;
@@ -847,7 +849,7 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     }
     if (choice.makeEndProfileWire) {
         for (const auto& wire : built.endProfileWires) {
-            if (AddPlainWire(wire, "押し出し先の輪郭").IsNil()) {
+            if (!boundaries.Add(AddPlainWire(wire, "押し出し先の輪郭"))) {
                 return false;
             }
             ++wires;
@@ -855,12 +857,15 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     }
     if (choice.makeSideBoundaryWires) {
         for (const auto& wire : built.sideBoundaryWires) {
-            if (AddPlainWire(wire, "側面の境界").IsNil()) {
+            if (!boundaries.Add(AddPlainWire(wire, "側面の境界"))) {
                 return false;
             }
             ++wires;
         }
     }
+    // A split result can have shared input loops, and the flat wire arrays do
+    // not identify their individual owners. Never associate those by order.
+    if(partCount==1&&!boundaries.Attach(session_->GetDocument(),partId))return false;
     // 作り終えたら下見と矢印を片付ける。残すと、もう作られない形が画面に残る。
     EndExtrudePreview();
     if (partCount == 0) {
@@ -1209,16 +1214,20 @@ bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
     const auto* output=findChild<QComboBox*>("jigOutput");
     const auto mode=output?static_cast<kachakacha::v2::app::SolidOutputMode>(output->currentIndex())
         : kachakacha::v2::app::SolidOutputMode::SolidOnly;
+    v2ui::BoundaryLinks boundaries;
     if(kachakacha::v2::app::IncludesWires(mode)) {
         const auto wires=V2GeneratedShapeBoundaries(solid.Value().handle,tolerance.modelLinearMm);
         if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;}
         if(!wires.Diagnostics().empty())ReportDiagnostics(wires.Diagnostics());
-        for(const auto& wire:wires.Value())if(AddPlainWire(wire,"治具の境界").IsNil()) {
+        for(const auto& wire:wires.Value())if(!boundaries.Add(AddPlainWire(wire,"治具の境界"))) {
             kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return false;
         }
     }
-    if(kachakacha::v2::app::IncludesSolid(mode))return !AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-        std::move(definition),solid.Value().handle,solid.Value().edges,"治具").IsNil();
+    if(kachakacha::v2::app::IncludesSolid(mode)) {
+        const auto part=AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+            std::move(definition),solid.Value().handle,solid.Value().edges,"治具");
+        return !part.IsNil()&&boundaries.Attach(session_->GetDocument(),part);
+    }
     kachakacha::v2::kernel::ReleaseShape(solid.Value().handle);return true;
 }
 

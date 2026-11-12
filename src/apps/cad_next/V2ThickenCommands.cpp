@@ -15,6 +15,7 @@
 #include "V2SolidOutputPreview.h"
 #include "V2GeneratedCurves.h"
 #include "V2GeneratedBoundaryOutput.h"
+#include "V2GeneratedBoundaryLinks.h"
 
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
@@ -445,6 +446,8 @@ void V2MainWindow::ConfirmThicken()
         for(const auto handle:transferredMeshes)shapeMeshes_.erase(handle);});
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
+        v2ui::BoundaryLinks boundaries;
+        EntityId part;
         const auto reuseMesh=[&]{
             const auto mesh=thicken_->builtMeshes.find(built[index].value);
             if(mesh!=thicken_->builtMeshes.end()&&!mesh->second.Empty()){
@@ -468,7 +471,7 @@ void V2MainWindow::ConfirmThicken()
             const auto wires=BoundaryWiresFor(*thicken_,built[index],
                 session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
             if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());return;}
-            for(const auto& wire:wires.Value())if(AddPlainWire(wire,"厚みの境界").IsNil())return;
+            for(const auto& wire:wires.Value())if(!boundaries.Add(AddPlainWire(wire,"厚みの境界")))return;
         }
         if(kachakacha::v2::app::IncludesSolid(outputMode)&&independent) {
             using namespace kachakacha::v2;
@@ -483,16 +486,18 @@ void V2MainWindow::ConfirmThicken()
             feature.outputs.push_back({"part",entity.id,entity.kind});
             const auto added=session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},label));
             if(!added.committed){ReportDiagnostics(added.diagnostics);return;}
+            part=entity.id;
             reuseMesh();
             const auto key=entity.id.ToString();partShapes_[key]=built[index];partEdges_[key]=edges[index];independentParts.push_back(key);
         } else if(kachakacha::v2::app::IncludesSolid(outputMode)) {
             std::vector<EntityId> inputs{surfaces[index]};
             if(toPlane)inputs.push_back(thicken_->input.targetPlane);
             reuseMesh();
-            const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+            part = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
                 std::move(definition), built[index], edges[index], label, inputs);
-            if (madeId.IsNil()) return;
+            if (part.IsNil()) return;
         }
+        if(!boundaries.Attach(session_->GetDocument(),part))return;
     }
     if (!transaction.Commit()) {
         SetStatus(QStringLiteral("厚み: 途中で失敗したので、何も作っていません。"));

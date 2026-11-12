@@ -66,7 +66,7 @@ bool V2CurvedEmbossTool::AddWire(base::EntityId id)
     if(!entity||entity->kind!=domain::EntityKind::Wire){status_->setText(QStringLiteral("輪郭にはワイヤーを選んでください。"));return false;}
     const auto found=std::find(wires_.begin(),wires_.end(),id);
     if(found==wires_.end())wires_.push_back(id);else wires_.erase(found);
-    Invalidate();RefreshRoles();wireLabel_->setText(QStringLiteral("輪郭: %1本").arg(wires_.size()));return true;
+    Invalidate();RefreshRoles();return true;
 }
 bool V2CurvedEmbossTool::CollectBoundary(std::vector<geometry::CurveSegment>& boundary)
 {

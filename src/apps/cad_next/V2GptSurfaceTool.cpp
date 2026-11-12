@@ -3,6 +3,7 @@
 #include "V2GptSurfaceTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
 #include "V2PanelFrame.h"
 #include "kachakacha/app/GptSurface.h"
 #include "kachakacha/app/ExplorerModel.h"
@@ -219,7 +220,12 @@ void V2GptSurfaceTool::Add(const std::vector<base::EntityId>& ids, bool grouped)
 void V2GptSurfaceTool::HandleSelectionChanged()
 {
     if (!active_) { return; }
-    if (const auto picked = window_.viewport_->TakeLastToolPick(); picked.has_value()) {
+    auto picked=window_.viewport_->TakeLastToolPick();
+    if(!picked) {
+        const auto key=window_.EntityTree()->property("explicitPickKey").toString();
+        if(key.startsWith("entity:"))picked=base::EntityId::Parse(key.mid(7).toStdString());
+    }
+    if (picked.has_value()) {
         const int row = PickedRow(*picked);
         if (row >= 0) {
             list_->setCurrentItem(list_->topLevelItem(row));

@@ -33,6 +33,7 @@
 #include <QString>
 #include <array>
 namespace kachakacha::v2::selftest {
+std::vector<SelfTestCase> SelectionRouteCases();
 std::vector<SelfTestCase> ToolContinuityCases();
 bool AlternateShortcutRoutes(V2MainWindow&);
 bool AlternateViewDuringInput(V2MainWindow&);
@@ -202,6 +203,7 @@ std::vector<SelfTestCase> ToolContractCases(){std::vector<SelfTestCase> cases={{
     {"HP-TOOLS history rebuilds modified source geometry",HistoryRebuildsModifiedSource},
     {"HP-TOOLS history retains surfaces across actual Ctrl Z and regeneration",HistoryRetainsUnchangedSurfaces}};
     const auto continuity=ToolContinuityCases();cases.insert(cases.end(),continuity.begin(),continuity.end());
+    const auto selectionRoutes=SelectionRouteCases();cases.insert(cases.end(),selectionRoutes.begin(),selectionRoutes.end());
     if(qEnvironmentVariableIsSet("KACHACAD_MODELING_OWNER_INPUT"))cases.push_back({"HP-TOOLS actual owner model thickness and history",AlternateOwnerModel});
     return cases;}
 }

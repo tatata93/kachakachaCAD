@@ -5,6 +5,7 @@
 #include "V2OutputTool.h"
 #include "V2MainWindow.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QComboBox>
 #include <QDialog>
@@ -106,10 +107,10 @@ void V2OutputTool::CancelViewportPick(V2MainWindow& window) {
         tool->status_->setText(QStringLiteral("別の道具へ切り替えたため、3Dでの指定を終了しました。配置の値は保持しています。"));
     }
 }
-bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
+bool V2OutputTool::eventFilter(QObject* object,QEvent* event) {
     if(V2ToolSelection::Active(*window_.viewport_))return false;
     if(pickRole_>0 && event->type()==QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape){if(pickRole_==1)window_.viewport_->CancelPointPick();pickRole_=0;RefreshPreview();show();raise();return true;}
-    if(pickRole_<1 || event->type()!=QEvent::MouseButtonPress)return false;
+    if(pickRole_<1 || object!=window_.viewport_ || event->type()!=QEvent::MouseButtonPress)return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
     const auto ray=window_.viewport_->Mapping().RayThrough({mouse->position().x(),mouse->position().y()});if(!ray.has_value())return true;
     double nearest=std::numeric_limits<double>::max();const V2Viewport::ShapeView* chosen=nullptr;std::size_t faceIndex=0;
@@ -118,6 +119,7 @@ bool V2OutputTool::eventFilter(QObject*,QEvent* event) {
     const auto& shapes=chosen->surface?window_.guideShapes_:window_.partShapes_;const auto found=shapes.find(chosen->entityId.ToString());if(found==shapes.end())return true;
     const auto face=kernel::OutputFace(found->second,faceIndex);if(!face.HasValue()){status_->setText(QStringLiteral("指定した面を評価できません。"));return true;}
     const auto frame=kernel::OutputSurfaceFrame(face.Value(),ray->origin+ray->direction*nearest);
+    kernel::ReleaseShape(face.Value());
     if(!frame.HasValue()){status_->setText(QString::fromStdString(frame.FirstSummaryJa()));return true;}
     if(pickRole_==1)window_.viewport_->CancelPointPick();
     SetPickedFrame(pickRole_,frame.Value());return true;

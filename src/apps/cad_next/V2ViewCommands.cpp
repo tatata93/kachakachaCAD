@@ -41,6 +41,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QPoint>
+#include <QSignalBlocker>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -215,6 +216,11 @@ void V2MainWindow::AdoptTreeSelection()
     if (entityTree_ == nullptr || viewport_ == nullptr || syncingSelection_) {
         return;
     }
+    const bool picking=!V2ToolSelection::Active(*viewport_)
+        && (viewport_->PickPending() || viewport_->ReferencePickPending());
+    const bool toolInput=!V2ToolSelection::Active(*viewport_) && viewport_->ToolPickActive();
+    const auto clickedKey=entityTree_->property("explicitPickKey").toString();
+    if((picking||toolInput) && clickedKey.isEmpty())return; // Wait for the actual clicked row.
     const auto idOf = [this](QTreeWidgetItem* item) {
         for (const auto& [row, id] : entityItems_) {
             if (row == item) {
@@ -238,6 +244,24 @@ void V2MainWindow::AdoptTreeSelection()
         ref.entityId=id; // A tree row selects the whole object, never a guessed subshape.
         next.ordered.push_back(ref);
     };
+    if(picking||toolInput) {
+        const auto previousIds=viewport_->Selection().entityIds;
+        // Existing role inputs may still be highlighted during Ctrl-add. They
+        // must not be replayed into this role before the newly clicked object.
+        auto* row=entityTree_->FindKey(clickedKey);
+        const auto id=row?idOf(row):kachakacha::v2::base::EntityId{};
+        if(id.IsNil()) {
+            SetStatus(QStringLiteral("対象の項目を選んでください。見出しやグループから1つを推測することはありません。"));
+            return;
+        }
+        add(id);
+        syncingSelection_=true;
+        viewport_->setProperty("treeToolInput",toolInput&&!picking);
+        viewport_->setProperty("treePickInput",picking);viewport_->SetSelection(std::move(next));
+        syncingSelection_=false;
+        if((toolInput&&!picking)||viewport_->Selection().entityIds!=previousIds)HighlightTreeForSelection();
+        return;
+    }
     // 近似モデルの下の「部材 n」の行: その近似モデルを選び、「対象部材」を n にする。
     // 行だけ選んでも何も起きず、曲げ状態が最後のモデルにしか当たらなかった(オーナー報告 2026-09-28)。
     QString partNumbers;
@@ -891,11 +915,14 @@ bool V2MainWindow::SelectTreeRowForEntity(const kachakacha::v2::base::EntityId& 
         if (entry.second != entityId) {
             continue;
         }
-        entityTree_->clearSelection();
-        entry.first->setSelected(true);
+        {
+            const QSignalBlocker block(entityTree_);
+            entityTree_->clearSelection();entry.first->setSelected(true);
+        }
         // 人が押したときと同じ道を通す。別の入口を作ると、試験が通っても
         // 人が押したときには動かない、ということが起こる。
-        AdoptTreeSelection();
+        entityTree_->setProperty("explicitPickKey",V2EntityTree::KeyOf(entry.first));
+        AdoptTreeSelection();entityTree_->setProperty("explicitPickKey",{});
         return true;
     }
     return false;

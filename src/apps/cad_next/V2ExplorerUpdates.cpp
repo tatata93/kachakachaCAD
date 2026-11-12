@@ -1,6 +1,7 @@
 #include "V2MainWindow.h"
 #include "V2EntityTree.h"
 #include "V2Viewport.h"
+#include "V2ToolSelection.h"
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/document/Commands.h"
 #include <QSignalBlocker>
@@ -9,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QVariant>
 #include <QString>
 #include <QObject>
@@ -95,6 +97,29 @@ void V2MainWindow::CreateSiblingGroup(){
     SetStatus(QStringLiteral("同じ階層にグループを作りました。F2で名前を変更できます。"));
 }
 void V2MainWindow::BuildExplorerGroupButtons(QVBoxLayout* layout){
+    const auto pickItem=[this](QTreeWidgetItem* item,int){
+        if(!item || V2ToolSelection::Active(*viewport_)
+            || (!viewport_->PickPending() && !viewport_->ReferencePickPending()
+                &&!viewport_->ToolPickActive()))return;
+        const auto key=V2EntityTree::KeyOf(item);
+        const int modifiers=entityTree_->property("treeClickModifiers").toInt();
+        const auto generation=viewport_->property("inputPickGeneration").toULongLong();
+        const auto document=session_->GetDocument().Snapshot().id;
+        const auto revision=session_->GetDocument().Revision();
+        // Some point inputs immediately edit the document. Let Qt finish the
+        // item event before a callback is allowed to rebuild its tree rows.
+        QTimer::singleShot(0,this,[this,key,modifiers,generation,document,revision]{
+            if(generation!=viewport_->property("inputPickGeneration").toULongLong()
+                || document!=session_->GetDocument().Snapshot().id || revision!=session_->GetDocument().Revision()
+                || V2ToolSelection::Active(*viewport_) || (!viewport_->PickPending() && !viewport_->ReferencePickPending()
+                    &&!viewport_->ToolPickActive()))return;
+            entityTree_->setProperty("explicitPickKey",key);
+            viewport_->setProperty("treeInputModifiers",modifiers);
+            AdoptTreeSelection();entityTree_->setProperty("explicitPickKey",{});
+        });
+    };
+    QObject::connect(entityTree_,&QTreeWidget::itemClicked,this,pickItem);
+    QObject::connect(entityTree_,&QTreeWidget::itemActivated,this,pickItem);
     auto* row=new QHBoxLayout;auto* sibling=new QPushButton(QStringLiteral("新規グループ"),entityTree_);
     sibling->setObjectName("explorerSiblingGroup");sibling->setToolTip(QStringLiteral("同じ階層に空のグループを作成します。既存の項目は移動しません。"));
     auto* child=new QPushButton(QStringLiteral("子グループ"),entityTree_);child->setObjectName("explorerChildGroup");

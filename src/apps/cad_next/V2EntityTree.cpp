@@ -169,7 +169,9 @@ void V2EntityTree::mouseReleaseEvent(QMouseEvent* event){
             row->setCheckState(0,checkAtPress_==Qt::Checked?Qt::Unchecked:Qt::Checked);
         event->accept();return;
     }
+    setProperty("treeClickModifiers",int(event->modifiers()));
     QTreeWidget::mouseReleaseEvent(event);
+    setProperty("treeClickModifiers",{});
 }
 void V2EntityTree::mouseDoubleClickEvent(QMouseEvent* event){
     if(event->button()==Qt::LeftButton&&CheckHit(itemAt(event->position().toPoint()),event->position().toPoint())){

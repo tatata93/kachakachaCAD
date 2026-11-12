@@ -193,6 +193,7 @@ V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow
     widgets.number = new QLabel(CircledNumber(face.number), widgets.row);
     line->addWidget(widgets.number);
     widgets.method = new QComboBox(widgets.row);
+    widgets.method->setObjectName(QStringLiteral("loopFaceMethod%1").arg(face.number));
     for (const QString& choice : face.methodChoicesJa) {
         widgets.method->addItem(choice);
     }

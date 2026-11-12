@@ -3,11 +3,14 @@
 #include "V2EndCapInput.h"
 #include "V2RoleInput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <algorithm>
 #include <QStringList>
 #include "V2CurvedEmbossTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
 #include "V2OperationPanelHost.h"
 #include "V2PanelFrame.h"
 #include <QApplication>
@@ -40,6 +43,13 @@ V2CurvedEmbossTool::V2CurvedEmbossTool(V2MainWindow& window):QWidget(&window),wi
     documentId_(window.Session().GetDocument().Snapshot().id)
 {
     setObjectName(QStringLiteral("curvedEmbossPanel")); BuildUi(); qApp->installEventFilter(this);
+    connect(window_.EntityTree(),&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){
+        if(!isVisible()||!item||V2ToolSelection::Active(*window_.viewport_)||window_.viewport_->ReferencePickPending())return;
+        const auto key=V2EntityTree::KeyOf(item);if(!key.startsWith("entity:"))return;
+        const auto id=base::EntityId::Parse(key.mid(7).toStdString());if(!id)return;
+        if(role_==1)AddWire(*id);
+        else {app::SelectionRef ref;ref.entityId=*id;SetSupport(ref);}
+    });
 }
 void V2CurvedEmbossTool::BuildUi()
 {
@@ -163,5 +173,5 @@ void V2CurvedEmbossTool::RefreshRoles()
     supportRole_->SetItems(support_.IsNil()?QStringList{}:QStringList{name(support_)});
     QStringList wires;for(const auto& id:wires_)wires.push_back(name(id));wireRole_->SetItems(wires);
     sourceLabel_->setText(support_.IsNil()?QStringLiteral("未選択"):name(support_));
-    wireLabel_->setText(QStringLiteral("%1本").arg(wires_.size()));
+    wireLabel_->setText(wires.empty()?QStringLiteral("未選択"):QStringLiteral("%1本: %2").arg(wires_.size()).arg(wires.join(QStringLiteral("、"))));
 }

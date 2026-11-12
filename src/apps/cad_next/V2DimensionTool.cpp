@@ -1,8 +1,11 @@
 #include "V2DimensionTool.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2EntityTree.h"
 #include "V2OperationPanelHost.h"
 #include "kachakacha/document/Commands.h"
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -28,6 +31,20 @@ V2DimensionTool::V2DimensionTool(V2MainWindow& window):QWidget(&window),window_(
     documentId_(window.Session().GetDocument().Snapshot().id)
 {
     setObjectName(QStringLiteral("dimensionTool"));BuildUi();Reset();RefreshList();qApp->installEventFilter(this);
+    connect(window_.EntityTree(),&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){
+        if(!isVisible()||activeInput_<0||!item)return;
+        const auto key=V2EntityTree::KeyOf(item);
+        if(!key.startsWith("entity:"))return;
+        const auto id=base::EntityId::Parse(key.mid(7).toStdString());if(!id)return;
+        if(kind_->currentIndex()>=6) {
+            status_->setText(QStringLiteral("端点は3Dビューで指定してください。一覧の線全体から端点を推測しません。"));return;
+        }
+        const auto& curves=window_.Session().Scene().curves;
+        if(std::count_if(curves.begin(),curves.end(),[&](const auto& c){return c.entityId==*id;})!=1) {
+            status_->setText(QStringLiteral("複数の辺がある対象は3Dビューで必要な辺を選んでください。"));return;
+        }
+        for(const auto& c:curves)if(c.entityId==*id){app::SelectionRef ref;ref.entityId=*id;ref.segmentId=c.segmentId;AddTarget(ref);break;}
+    });
 }
 void V2DimensionTool::Reset()
 {

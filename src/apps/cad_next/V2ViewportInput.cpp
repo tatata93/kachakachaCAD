@@ -19,6 +19,7 @@
 //! ここはそれを Qt へつなぐだけである。
 
 #include "V2Viewport.h"
+#include "V2ReferencePlanePicking.h"
 #include <QBrush>
 #include <QColor>
 #include <QCursor>
@@ -919,7 +920,10 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     std::erase_if(candidates,[this](const auto& c){return !EntityShown(c.entityId);});
     v2ui::FilterTransformCandidates(*session_,candidates,!V2ToolSelection::Active(*this)&&!ReferencePickPending());
     if (ReferencePickPending()&&!V2ToolSelection::Active(*this)) {
+        v2ui::AppendReferencePlaneCandidates(workPlaneViews_,mapping_,visibleWidthMm_,
+            session_->GetDocument().Snapshot().settings.tolerance.edgePickPx,position,candidates);
         std::erase_if(candidates, [this](const auto& c) {
+            if(!EntityShown(c.entityId))return true;
             if (elementPickFilter_) return !elementPickFilter_(c);
             return c.kind != kachakacha::v2::app::SelectionElementKind::Edge
                 || std::find(referencePickIds_.begin(), referencePickIds_.end(), c.entityId) == referencePickIds_.end();

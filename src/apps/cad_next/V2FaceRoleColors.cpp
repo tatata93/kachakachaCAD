@@ -68,6 +68,7 @@ void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> 
     CancelReferencePick();
     referencePickIds_ = std::move(ids);
     referencePickHandler_ = std::move(handler);
+    setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     hoveredProfileRegion_.reset();
     ForgetPickCycle();
     update();
@@ -75,6 +76,7 @@ void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> 
 
 void V2Viewport::CancelReferencePick()
 {
+    if(ReferencePickPending())setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     if (elementPickHandler_) {
         auto handler = std::move(elementPickHandler_);
         elementPickFilter_ = {};
@@ -99,6 +101,7 @@ void V2Viewport::BeginElementPick(
     CancelReferencePick();
     elementPickFilter_ = std::move(filter);
     elementPickHandler_ = std::move(handler);
+    setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     hoveredProfileRegion_.reset();
     ForgetPickCycle();
     RefreshFaceRolePieces();

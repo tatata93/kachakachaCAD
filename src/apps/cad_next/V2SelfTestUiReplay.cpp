@@ -300,7 +300,9 @@ struct Replay {
             {"canUndo",w.Session().GetDocument().CanUndo()},
             {"canRedo",w.Session().GetDocument().CanRedo()},
             {"undoAction",action("edit.undo")},{"redoAction",action("edit.redo")},
-            {"calculationActive",V2GeometryJob::Active()}};
+            {"calculationActive",V2GeometryJob::Active()},
+            {"pointPickPending",w.Viewport().PickPending()},
+            {"referencePickPending",w.Viewport().ReferencePickPending()}};
     }
 
     QWidget* Field(const QJsonObject& step) const
@@ -420,7 +422,12 @@ struct Replay {
         if(tree->itemAt(point)!=row)return false;
         std::cout<<"UI tree "<<Resolve(step["id"].toString()).toStdString()<<" row="<<row->text(0).toStdString()
             <<" pixel="<<point.x()<<","<<point.y()<<" viewport="<<tree->viewport()->width()<<","<<tree->viewport()->height()<<std::endl;
+        const bool roleInput=w.Viewport().PickPending()||w.Viewport().ReferencePickPending();
         if(!Mouse(*tree->viewport(),point,step["add"].toBool()?Qt::ControlModifier:Qt::NoModifier))return false;
+        if(roleInput) {
+            const bool pending=w.Viewport().PickPending()||w.Viewport().ReferencePickPending();
+            return step["expect_rejected"].toBool()?pending:!pending;
+        }
         if(step.contains("rename")){
             tree->setFocus();if(!Key(*tree,"F2"))return false;
             auto* editor=tree->findChild<QLineEdit*>();

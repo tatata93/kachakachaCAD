@@ -35,6 +35,7 @@ void V2Viewport::BeginPointPick(std::function<void(const PickedPoint&)> handler,
     if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
     CancelReferencePick();
     pickHandler_=std::move(handler);
+    setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     setProperty("pointPickPrompt",QString::fromStdString(promptJa));
     ForgetPickCycle();hoveredProfileRegion_.reset();
     status_=promptJa;
@@ -46,6 +47,7 @@ void V2Viewport::CancelPointPick()
 {
     if(!pickHandler_)return;
     pickHandler_=nullptr;
+    setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     setProperty("pointPickPrompt",{});
     status_="点の指定を取り消しました。";
     if(statusCallback_)statusCallback_(status_);

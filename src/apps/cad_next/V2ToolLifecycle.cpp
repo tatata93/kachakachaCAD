@@ -12,9 +12,11 @@
 #include "V2LoopFacesTool.h"
 #include "V2OutputTool.h"
 #include <QString>
+#include <QVariant>
 
 void V2MainWindow::EndArmedTools()
 {
+    viewport_->setProperty("inputPickGeneration",viewport_->property("inputPickGeneration").toULongLong()+1);
     V2OutputTool::CancelViewportPick(*this);
     ForgetPendingPartition();
     ClearPendingCommand();
@@ -53,6 +55,7 @@ void V2MainWindow::EndArmedTools()
 
 void V2MainWindow::EndOwnedToolsBut(const void* keep)
 {
+    viewport_->setProperty("inputPickGeneration",viewport_->property("inputPickGeneration").toULongLong()+1);
     V2OutputTool::CancelViewportPick(*this);
     ForgetPendingPartition();
     ClearPendingCommand();

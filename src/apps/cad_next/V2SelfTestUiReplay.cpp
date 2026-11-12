@@ -644,6 +644,16 @@ struct Replay {
         }
         if(op=="count")return CountOfKind(w,static_cast<domain::EntityKind>(step["kind"].toInt()))==step["value"].toInt();
         if(op=="inspect")return Inspect(Path(step));
+        if(op=="mesh_points") {
+            QJsonArray shapes;
+            for(const auto& shape:w.Viewport().ShapeViews()) {
+                QJsonArray coordinates;
+                for(const auto& triangle:shape.mesh.triangles)for(const auto& point:triangle.points)
+                    for(double value:{point.x,point.y,point.z})coordinates.append(value);
+                shapes.append(QJsonObject{{"id",QString::fromStdString(shape.entityId.ToString())},{"coordinates",coordinates}});
+            }
+            return Write(Path(step),{{"shapes",shapes}});
+        }
         return false;
     }
 

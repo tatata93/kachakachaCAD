@@ -1,0 +1,271 @@
+case,status,duration_ms
+HP-SELECT-WP 0 viewport role inputs,passed,1296.193
+HP-SELECT-WP 0 tree role inputs,passed,915.4457
+HP-SELECT-WP 1 viewport role inputs,passed,927.5226
+HP-SELECT-WP 1 tree role inputs,passed,921.8481
+HP-SELECT-WP 2 viewport role inputs,passed,1051.2266
+HP-SELECT-WP 2 tree role inputs,passed,1056.8062
+HP-SELECT-WP 3 viewport role inputs,passed,1054.2662
+HP-SELECT-WP 3 tree role inputs,passed,1004.4336
+HP-SELECT-WP 4 viewport role inputs,passed,1026.1692
+HP-SELECT-WP 4 tree role inputs,passed,1058.3003
+HP-SELECT-WP 5 viewport role inputs,passed,1031.5074
+HP-SELECT-WP 5 tree role inputs,passed,1116.8985
+HP-SELECT-WP 6 viewport role inputs,passed,1060.7117
+HP-SELECT-WP 6 tree role inputs,passed,1049.0091
+HP-SELECT-WP 7 viewport role inputs,passed,1041.5016
+HP-SELECT-WP 7 tree role inputs,passed,1116.0899
+HP-SELECT-WP 8 viewport role inputs,passed,1025.089
+HP-SELECT-WP 8 tree role inputs,passed,1012.8877
+HP-SELECT-WP 9 viewport role inputs,passed,898.8013
+HP-SELECT-WP 9 tree role inputs,passed,910.5766
+HP-SELECT-WP 10 viewport role inputs,passed,919.9517
+HP-SELECT-WP 10 tree role inputs,passed,899.5901
+HP-SELECT-WP 11 viewport role inputs,passed,906.9765
+HP-SELECT-WP 11 tree role inputs,passed,910.5632
+HP-SELECT-MATRIX projection 0 viewport,passed,966.7779
+HP-SELECT-MATRIX projection 0 tree,passed,977.4661
+HP-SELECT-MATRIX projection 1 viewport,passed,1014.0927
+HP-SELECT-MATRIX projection 1 tree,passed,970.391
+HP-SELECT-MATRIX projection 2 viewport,passed,985.0191
+HP-SELECT-MATRIX projection 2 tree,passed,998.6177
+HP-SELECT-MATRIX boolean 3 viewport,passed,1112.0405
+HP-SELECT-MATRIX boolean 3 tree,passed,1133.6031
+HP-SELECT-MATRIX boolean 4 viewport,passed,1105.9894
+HP-SELECT-MATRIX boolean 4 tree,passed,1115.7682
+HP-SELECT-MATRIX boolean 5 viewport,passed,1094.8868
+HP-SELECT-MATRIX boolean 5 tree,passed,1248.9066
+HP-SELECT-MATRIX boolean 6 viewport,passed,1059.0117
+HP-SELECT-MATRIX boolean 6 tree,passed,1085.5292
+HP-SELECT-MATRIX boolean 7 viewport,passed,1031.8868
+HP-SELECT-MATRIX boolean 7 tree,passed,1062.2355
+HP-SELECT-MATRIX boolean 8 viewport,passed,1010.4704
+HP-SELECT-MATRIX boolean 8 tree,passed,1076.6584
+HP-SELECT-MATRIX thicken 9 viewport,passed,1122.4572
+HP-SELECT-MATRIX thicken 9 tree,passed,1003.0393
+HP-SELECT-MATRIX thicken 10 viewport,passed,1087.8826
+HP-SELECT-MATRIX thicken 10 tree,passed,1000.5858
+HP-SELECT-MATRIX thicken 11 viewport,passed,1072.0389
+HP-SELECT-MATRIX thicken 11 tree,passed,1035.1469
+HP-SELECT-MATRIX thicken 12 viewport,passed,1110.1632
+HP-SELECT-MATRIX thicken 12 tree,passed,1083.6824
+HP-SELECT-MATRIX thicken 13 viewport,passed,1089.4071
+HP-SELECT-MATRIX thicken 13 tree,passed,1026.4468
+HP-SELECT-MATRIX thicken 14 viewport,passed,998.5805
+HP-SELECT-MATRIX thicken 14 tree,passed,972.4844
+HP-SELECT-MATRIX thicken 15 viewport,passed,1019.093
+HP-SELECT-MATRIX thicken 15 tree,passed,977.5376
+HP-SELECT-MATRIX thicken 16 viewport,passed,978.001
+HP-SELECT-MATRIX thicken 16 tree,passed,973.1793
+HP-SELECT-MATRIX thicken 17 viewport,passed,995.9575
+HP-SELECT-MATRIX thicken 17 tree,passed,986.5337
+HP-SELECT-MATRIX solid 18 viewport,passed,1042.1844
+HP-SELECT-MATRIX solid 18 tree,passed,1039.3771
+HP-SELECT-MATRIX solid 19 viewport,passed,1042.7482
+HP-SELECT-MATRIX solid 19 tree,passed,1064.3955
+HP-SELECT-MATRIX solid 20 viewport,passed,1104.236
+HP-SELECT-MATRIX solid 20 tree,passed,1057.6699
+HP-SELECT-MATRIX solid 21 viewport,passed,1034.1965
+HP-SELECT-MATRIX solid 21 tree,passed,1047.5048
+HP-SELECT-MATRIX solid 22 viewport,passed,860.1398
+HP-SELECT-MATRIX solid 22 tree,passed,862.3844
+HP-SELECT-MATRIX solid 23 viewport,passed,863.407
+HP-SELECT-MATRIX solid 23 tree,passed,864.8427
+HP-SELECT-MATRIX solid 24 viewport,passed,1002.5603
+HP-SELECT-MATRIX solid 24 tree,passed,1021.2431
+HP-SELECT-MATRIX solid 25 viewport,passed,969.0544
+HP-SELECT-MATRIX solid 25 tree,passed,871.3687
+HP-SELECT-MATRIX solid 26 viewport,passed,857.6627
+HP-SELECT-MATRIX solid 26 tree,passed,865.5948
+HP-SELECT-MATRIX corner 27 viewport,passed,1015.8638
+HP-SELECT-MATRIX corner 27 tree,passed,970.3303
+HP-SELECT-MATRIX corner 28 viewport,passed,963.8596
+HP-SELECT-MATRIX corner 28 tree,passed,963.9177
+HP-SELECT-MATRIX corner 29 viewport,passed,929.5419
+HP-SELECT-MATRIX corner 29 tree,passed,927.2443
+HP-SELECT-MATRIX corner 30 viewport,passed,937.9549
+HP-SELECT-MATRIX corner 30 tree,passed,977.9635
+HP-SELECT-AXES extrude 0 viewport,passed,1013.9298
+HP-SELECT-AXES extrude 0 tree,passed,1010.078
+HP-SELECT-AXES extrude 1 viewport,passed,976.1911
+HP-SELECT-AXES extrude 1 tree,passed,976.1911
+HP-SELECT-AXES extrude 2 viewport,passed,1005.9085
+HP-SELECT-AXES extrude 2 tree,passed,1022.2935
+HP-SELECT-AXES extrude 3 viewport,passed,1029.6207
+HP-SELECT-AXES extrude 3 tree,passed,1034.0764
+HP-SELECT-AXES extrude 4 viewport,passed,1039.3171
+HP-SELECT-AXES extrude 4 tree,passed,1101.0387
+HP-SELECT-AXES extrude 5 viewport,passed,1114.1046
+HP-SELECT-AXES extrude 5 tree,passed,1128.1106
+HP-SELECT-AXES extrude 6 viewport,passed,1085.0064
+HP-SELECT-AXES extrude 6 tree,passed,1099.2352
+HP-SELECT-AXES extrude 7 viewport,passed,976.6694
+HP-SELECT-AXES extrude 7 tree,passed,977.0773
+HP-SELECT-AXES extrude 8 viewport,passed,1064.662
+HP-SELECT-AXES extrude 8 tree,passed,1083.1959
+HP-SELECT-AXES extrude 9 viewport,passed,1078.6637
+HP-SELECT-AXES extrude 9 tree,passed,1061.5997
+HP-SELECT-AXES extrude 10 viewport,passed,1166.9391
+HP-SELECT-AXES extrude 10 tree,passed,1208.4479
+HP-SELECT-AXES extrude 11 viewport,passed,1102.9138
+HP-SELECT-AXES extrude 11 tree,passed,1121.5803
+HP-SELECT-AXES extrude 12 viewport,passed,1152.5191
+HP-SELECT-AXES extrude 12 tree,passed,1114.039
+HP-SELECT-AXES extrude 13 viewport,passed,1117.9421
+HP-SELECT-AXES extrude 13 tree,passed,1123.4629
+HP-SELECT-AXES extrude 14 viewport,passed,1070.8916
+HP-SELECT-AXES extrude 14 tree,passed,1061.1248
+HP-SELECT-AXES surface 15 viewport,passed,1081.0168
+HP-SELECT-AXES surface 15 tree,passed,1100.1151
+HP-SELECT-AXES surface 16 viewport,passed,1167.6992
+HP-SELECT-AXES surface 16 tree,passed,1182.4036
+HP-SELECT-AXES surface 17 viewport,passed,1194.3658
+HP-SELECT-AXES surface 17 tree,passed,1203.006
+HP-SELECT-AXES surface 18 viewport,passed,1096.7701
+HP-SELECT-AXES surface 18 tree,passed,1152.8664
+HP-SELECT-AXES surface 19 viewport,passed,1096.7477
+HP-SELECT-AXES surface 19 tree,passed,1177.7179
+HP-SELECT-AXES surface 20 viewport,passed,1103.9456
+HP-SELECT-AXES surface 20 tree,passed,1117.6714
+HP-SELECT-AXES surface 21 viewport,passed,1135.4762
+HP-SELECT-AXES surface 21 tree,passed,1115.66
+HP-SELECT-AXES surface 22 viewport,passed,1187.792
+HP-SELECT-AXES surface 22 tree,passed,1178.4764
+HP-SELECT-AXES surface 23 viewport,passed,1155.8826
+HP-SELECT-AXES surface 23 tree,passed,1119.0464
+HP-SELECT-AXES surface 24 viewport,passed,1144.6206
+HP-SELECT-AXES surface 24 tree,passed,1139.5961
+HP-SELECT-AXES surface-edit 25 viewport,passed,936.2134
+HP-SELECT-AXES surface-edit 25 tree,passed,947.5521
+HP-SELECT-AXES surface-edit 26 viewport,passed,938.3398
+HP-SELECT-AXES surface-edit 26 tree,passed,966.6665
+HP-SELECT-AXES surface-edit 27 viewport,passed,1054.8744
+HP-SELECT-AXES surface-edit 27 tree,passed,1038.5089
+HP-SELECT-AXES surface-edit 28 viewport,passed,1155.3204
+HP-SELECT-AXES surface-edit 28 tree,passed,1074.4393
+HP-SELECT-AXES surface-edit 29 viewport,passed,1295.2526
+HP-SELECT-AXES surface-edit 29 tree,passed,1267.148
+HP-SELECT-AXES part-detail 30 viewport,passed,1014.3789
+HP-SELECT-AXES part-detail 30 tree,passed,957.4849
+HP-SELECT-AXES part-detail 31 viewport,passed,979.1269
+HP-SELECT-AXES part-detail 31 tree,passed,951.9081
+HP-SELECT-AXES part-detail 32 viewport,passed,1010.5926
+HP-SELECT-AXES part-detail 32 tree,passed,963.8929
+HP-SELECT-AXES part-detail 33 viewport,passed,1010.2379
+HP-SELECT-AXES part-detail 33 tree,passed,941.5039
+HP-SELECT-MORE transform-array 0 viewport,passed,913.3
+HP-SELECT-MORE transform-array 0 tree,passed,923.1738
+HP-SELECT-MORE transform-array 1 viewport,passed,914.5283
+HP-SELECT-MORE transform-array 1 tree,passed,923.5465
+HP-SELECT-MORE transform-array 2 viewport,passed,932.486
+HP-SELECT-MORE transform-array 2 tree,passed,923.8336
+HP-SELECT-MORE transform-array 3 viewport,passed,920.9632
+HP-SELECT-MORE transform-array 3 tree,passed,933.8375
+HP-SELECT-MORE transform-array 4 viewport,passed,941.4542
+HP-SELECT-MORE transform-array 4 tree,passed,976.9162
+HP-SELECT-MORE transform-array 5 viewport,passed,965.4483
+HP-SELECT-MORE transform-array 5 tree,passed,948.9747
+HP-SELECT-MORE transform-array 6 viewport,passed,947.801
+HP-SELECT-MORE transform-array 6 tree,passed,939.8342
+HP-SELECT-MORE transform-array 7 viewport,passed,931.2139
+HP-SELECT-MORE transform-array 7 tree,passed,943.451
+HP-SELECT-MORE transform-array 8 viewport,passed,959.4359
+HP-SELECT-MORE transform-array 8 tree,passed,943.5314
+HP-SELECT-MORE transform-array 9 viewport,passed,924.9187
+HP-SELECT-MORE transform-array 9 tree,passed,938.4979
+HP-SELECT-MORE transform-array 10 viewport,passed,961.9508
+HP-SELECT-MORE transform-array 10 tree,passed,923.5952
+HP-SELECT-MORE transform-array 11 viewport,passed,940.8707
+HP-SELECT-MORE transform-array 11 tree,passed,982.7483
+HP-SELECT-MORE transform-array 12 viewport,passed,997.0197
+HP-SELECT-MORE transform-array 12 tree,passed,973.5435
+HP-SELECT-MORE approximation 13 viewport,passed,1092.9469
+HP-SELECT-MORE approximation 13 tree,passed,1065.3581
+HP-SELECT-MORE approximation 14 viewport,passed,1090.6462
+HP-SELECT-MORE approximation 14 tree,passed,1079.1589
+HP-SELECT-MORE approximation 15 viewport,passed,1130.1303
+HP-SELECT-MORE approximation 15 tree,passed,1083.8465
+HP-SELECT-MORE approximation 16 viewport,passed,1076.299
+HP-SELECT-MORE approximation 16 tree,passed,1077.0445
+HP-SELECT-MORE measure 17 viewport,passed,881.3672
+HP-SELECT-MORE measure 17 tree,passed,887.8178
+HP-SELECT-MORE measure 18 viewport,passed,970.4163
+HP-SELECT-MORE measure 18 tree,passed,883.8376
+HP-SELECT-MORE measure 19 viewport,passed,905.8693
+HP-SELECT-MORE measure 19 tree,passed,888.2709
+HP-SELECT-MORE measure 20 viewport,passed,891.5892
+HP-SELECT-MORE measure 20 tree,passed,942.8234
+HP-SELECT-MORE measure 21 viewport,passed,920.2119
+HP-SELECT-MORE measure 21 tree,passed,911.8247
+HP-SELECT-DRAW all enabled modes 0,passed,873.0515
+HP-SELECT-DRAW all enabled modes 1,passed,1562.7986
+HP-SELECT-DRAW all enabled modes 2,passed,891.6648
+HP-SELECT-DRAW all enabled modes 3,passed,2246.9754
+HP-SELECT-DRAW all enabled modes 4,passed,3024.3029
+HP-SELECT-DRAW all enabled modes 5,passed,901.7958
+HP-SELECT-DRAW all enabled modes 6,passed,2267.1481
+HP-SELECT-DRAW all enabled modes 7,passed,929.3075
+HP-SELECT-OTHER dimension 0 viewport,passed,870.8499
+HP-SELECT-OTHER dimension 0 tree,passed,881.5105
+HP-SELECT-OTHER dimension 1 viewport,passed,885.2876
+HP-SELECT-OTHER dimension 1 tree,passed,908.3453
+HP-SELECT-OTHER dimension 2 viewport,passed,891.3565
+HP-SELECT-OTHER dimension 2 tree,passed,936.0156
+HP-SELECT-OTHER dimension 3 viewport,passed,911.5196
+HP-SELECT-OTHER dimension 3 tree,passed,912.447
+HP-SELECT-OTHER dimension 4 viewport,passed,923.4859
+HP-SELECT-OTHER dimension 4 tree,passed,940.8953
+HP-SELECT-OTHER dimension 5 viewport,passed,958.2419
+HP-SELECT-OTHER dimension 5 tree,passed,971.7454
+HP-SELECT-OTHER dimension 6 viewport,passed,990.7588
+HP-SELECT-OTHER dimension 6 tree,passed,1021.7509
+HP-SELECT-OTHER dimension 7 viewport,passed,1001.7356
+HP-SELECT-OTHER dimension 7 tree,passed,1084.0039
+HP-SELECT-OTHER dimension 8 viewport,passed,1012.7099
+HP-SELECT-OTHER dimension 8 tree,passed,1058.1414
+HP-SELECT-OTHER surface-emboss 9 viewport,passed,894.036
+HP-SELECT-OTHER surface-emboss 9 tree,passed,916.9374
+HP-SELECT-OTHER surface-emboss 10 viewport,passed,906.2524
+HP-SELECT-OTHER surface-emboss 10 tree,passed,928.8545
+HP-SELECT-OTHER surface-emboss 11 viewport,passed,1029.3335
+HP-SELECT-OTHER surface-emboss 11 tree,passed,950.6607
+HP-SELECT-OTHER surface-emboss 12 viewport,passed,914.401
+HP-SELECT-OTHER surface-emboss 12 tree,passed,939.1599
+HP-SELECT-OTHER surface-emboss 13 viewport,passed,950.4285
+HP-SELECT-OTHER surface-emboss 13 tree,passed,948.6716
+HP-SELECT-OTHER surface-emboss 14 viewport,passed,1015.614
+HP-SELECT-OTHER surface-emboss 14 tree,passed,951.434
+HP-SELECT-OTHER surface-emboss 15 viewport,passed,913.5345
+HP-SELECT-OTHER surface-emboss 15 tree,passed,942.5398
+HP-SELECT-OTHER surface-emboss 16 viewport,passed,912.0804
+HP-SELECT-OTHER surface-emboss 16 tree,passed,950.5851
+HP-SELECT-REFERENCE end-cap 0 viewport,passed,971.0636
+HP-SELECT-REFERENCE end-cap 0 tree,passed,986.8528
+HP-SELECT-REFERENCE end-cap 1 viewport,passed,1045.8318
+HP-SELECT-REFERENCE end-cap 1 tree,passed,1014.3876
+HP-SELECT-REFERENCE end-cap 2 viewport,passed,1160.4497
+HP-SELECT-REFERENCE end-cap 2 tree,passed,1180.0526
+HP-SELECT-REFERENCE end-cap 3 viewport,passed,1150.2614
+HP-SELECT-REFERENCE end-cap 3 tree,passed,1189.9596
+HP-SELECT-REFERENCE end-cap 4 viewport,passed,981.7231
+HP-SELECT-REFERENCE end-cap 4 tree,passed,1075.1155
+HP-SELECT-REFERENCE end-cap 5 viewport,passed,1024.8718
+HP-SELECT-REFERENCE end-cap 5 tree,passed,1010.0014
+HP-SELECT-REFERENCE end-cap 6 viewport,passed,1154.633
+HP-SELECT-REFERENCE end-cap 6 tree,passed,1101.1192
+HP-SELECT-REFERENCE end-cap 7 viewport,passed,1063.4096
+HP-SELECT-REFERENCE end-cap 7 tree,passed,1007.3559
+HP-SELECT-REFERENCE output-point 8 viewport,passed,983.4348
+HP-SELECT-REFERENCE output-point 8 tree,passed,1012.3722
+HP-SELECT corner Ctrl tree role preserves first line,passed,950.7486
+HP-SELECT tree point retake and same row reuse,passed,970.5028
+HP-SELECT active tool tree modifiers preserve Ctrl and Shift intent,passed,1222.6136
+HP-SELECT paused dimension retains its input during tree selection,passed,937.3367
+HP-SELECT group bundles accept tool input without guessing single roles,passed,1185.8886
+HP-SELECT spaced points pitch viewport,passed,1352.517
+HP-SELECT spaced points pitch tree,passed,1391.3974
+HP-SELECT spaced points divisions viewport,passed,1351.6876
+HP-SELECT spaced points divisions tree,passed,1384.9524
+HP-SELECT point invalid input stale click and tool transition,passed,976.0859
+HP-SELECT grid origin accepts explicit tree point,passed,833.1458
+HP-SELECT output surface reference picks release temporary faces,passed,1091.8295

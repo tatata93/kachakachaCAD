@@ -1,0 +1,23 @@
+{
+  "created": {
+    "entityCount": 418,
+    "originalFeaturesUnchanged": 416,
+    "originalMeshCount": 13,
+    "exactMeshHashes": 13,
+    "maximumCoordinateDifferenceMm": 0.0,
+    "fabricationSources": [
+      "00000000-0000-4000-8000-00000000253e"
+    ]
+  },
+  "redone": {
+    "entityCount": 418,
+    "originalFeaturesUnchanged": 416,
+    "originalMeshCount": 13,
+    "exactMeshHashes": 12,
+    "maximumCoordinateDifferenceMm": 4.418359490761047e-12,
+    "fabricationSources": [
+      "00000000-0000-4000-8000-00000000253e"
+    ]
+  },
+  "originalSha256": "84c716b3e6af1ae8f87da4ee4df92226ef326b03e1e44f8c6ce7f84152125ede"
+}

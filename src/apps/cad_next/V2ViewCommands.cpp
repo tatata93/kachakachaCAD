@@ -244,6 +244,11 @@ void V2MainWindow::AdoptTreeSelection()
         ref.entityId=id; // A tree row selects the whole object, never a guessed subshape.
         next.ordered.push_back(ref);
     };
+    const auto addDescendants=[&](QTreeWidgetItem* item) {
+        for(const auto& [row,id]:entityItems_)
+            for(auto* parent=row->parent();parent;parent=parent->parent())
+                if(parent==item){add(id);break;}
+    };
     if(picking||toolInput) {
         const auto previousIds=viewport_->Selection().entityIds;
         // Existing role inputs may still be highlighted during Ctrl-add. They
@@ -251,10 +256,13 @@ void V2MainWindow::AdoptTreeSelection()
         auto* row=entityTree_->FindKey(clickedKey);
         const auto id=row?idOf(row):kachakacha::v2::base::EntityId{};
         if(id.IsNil()) {
-            SetStatus(QStringLiteral("対象の項目を選んでください。見出しやグループから1つを推測することはありません。"));
-            return;
-        }
-        add(id);
+            if(picking) {
+                SetStatus(QStringLiteral("対象の項目を選んでください。見出しやグループから1つを推測することはありません。"));
+                return;
+            }
+            addDescendants(row); // Ordinary tool input accepts the complete group bundle.
+            if(next.entityIds.empty()){SetStatus(QStringLiteral("このグループには入力する対象がありません。"));return;}
+        } else add(id);
         syncingSelection_=true;
         viewport_->setProperty("treeToolInput",toolInput&&!picking);
         viewport_->setProperty("treePickInput",picking);viewport_->SetSelection(std::move(next));
@@ -282,11 +290,7 @@ void V2MainWindow::AdoptTreeSelection()
             continue;
         }
         // グループや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
-        for (const auto& [row, descendantId] : entityItems_) {
-            for (auto* parent = row->parent(); parent != nullptr; parent = parent->parent()) {
-                if (parent == item) { add(descendantId); break; }
-            }
-        }
+        addDescendants(item);
     }
     syncingSelection_ = true;
     if (!partNumbers.isEmpty() && fabricationDock_ != nullptr) {

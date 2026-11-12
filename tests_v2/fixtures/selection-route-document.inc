@@ -234,7 +234,8 @@ static const std::string documentJson=std::string(R"SelectionFixture({
     },
     {
       "construction": false,
-      "createdBy": "00000000-0000-4000-8000-00000005003)SelectionFixture")+R"SelectionFixture(0",
+      "createdBy": "00000000-0000-4000-8000-00000005003)SelectionFixture")+
+R"SelectionFixture(0",
       "datum": false,
       "displayName": "輪郭C",
       "editPolicy": "source",
@@ -535,7 +536,8 @@ static const std::string documentJson=std::string(R"SelectionFixture({
     {
       "definition": {
         "construction": false,
-        "sourcePlaneI)SelectionFixture"+R"SelectionFixture(d": null,
+        "sourcePlaneI)SelectionFixture"+
+R"SelectionFixture(d": null,
         "wire": {
           "closed": false,
           "segments": [
@@ -828,7 +830,8 @@ static const std::string documentJson=std::string(R"SelectionFixture({
                 "wireEntityId": "00000000-0000-4000-8000-00000005001d"
               },
               {
-                "range": {)SelectionFixture"+R"SelectionFixture(
+                "range": {)SelectionFixture"+
+R"SelectionFixture(
                   "first": 0,
                   "last": 1
                 },
@@ -1101,7 +1104,8 @@ static const std::string documentJson=std::string(R"SelectionFixture({
       "derivedGroupId": null,
       "displayName": "部品B",
       "enabled": true,
-      "id": "000)SelectionFixture"+R"SelectionFixture(00000-0000-4000-8000-00000005002a",
+      "id": "000)SelectionFixture"+
+R"SelectionFixture(00000-0000-4000-8000-00000005002a",
       "inputEntityIds": [
         "00000000-0000-4000-8000-000000050029"
       ],
@@ -1281,7 +1285,7 @@ static const std::string documentJson=std::string(R"SelectionFixture({
     {
       "definition": {
         "inputs": [],
-        "isOriginPlane": true,
+        "isOriginPlane": false,
         "method": 0,
         "normal": {
           "x": 0,
@@ -1322,7 +1326,7 @@ static const std::string documentJson=std::string(R"SelectionFixture({
     {
       "definition": {
         "inputs": [],
-        "isOriginPlane": true,
+        "isOriginPlane": false,
         "method": 0,
         "normal": {
           "x": 0,
@@ -1379,8 +1383,11 @@ static const std::string documentJson=std::string(R"SelectionFixture({
         "00000000-0000-4000-8000-000000050027",
         "00000000-0000-4000-8000-000000050029",
         "00000000-0000-4000-8000-00000005002b",
-        "00000000-0000-4)SelectionFixture"+R"SelectionFixture(000-8000-000000050031",
-        "00000000-0000-4000-8000-000000050033"
+        "00000000-0000)SelectionFixture"+
+R"SelectionFixture(-4000-8000-000000050031",
+        "00000000-0000-4000-8000-000000050033",
+        "00000000-0000-4000-8000-000000060001",
+        "00000000-0000-4000-8000-000000060003"
       ],
       "displayName": "選択試験",
       "id": "00000000-0000-4000-8000-000000050001",

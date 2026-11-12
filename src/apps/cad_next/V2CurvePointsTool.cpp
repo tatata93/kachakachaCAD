@@ -114,15 +114,22 @@ V2CurvePointsTool::V2CurvePointsTool(V2MainWindow& window):QWidget(&window),wind
     connect(confirm_,&QPushButton::clicked,this,[this]{Confirm();});
     timer_=new QTimer(this);timer_->setSingleShot(true);timer_->setInterval(100);connect(timer_,&QTimer::timeout,this,[this]{Refresh();});
     connect(window.EntityTree(),&QTreeWidget::itemSelectionChanged,this,[this]{if(isVisible())timer_->start(0);});
+    connect(window.EntityTree(),&QTreeWidget::itemClicked,this,[this](auto*,int){
+        // The explorer adopts an explicit tool input after Qt finishes the row
+        // event. Refresh after that adoption, including a re-clicked same row.
+        QTimer::singleShot(0,this,[this]{
+            if(isVisible()&&!V2ToolSelection::Active(window_.Viewport()))timer_->start(0);
+        });
+    });
     connect(mode_,&QComboBox::currentIndexChanged,this,[this]{Refresh();});
     connect(pitch_,&QDoubleSpinBox::valueChanged,this,[this]{QueueRefresh();});
     connect(divisions_,&QSpinBox::valueChanged,this,[this]{QueueRefresh();});
     connect(endpoints_,&QCheckBox::toggled,this,[this]{Refresh();});connect(reverse_,&QCheckBox::toggled,this,[this]{Refresh();});
     qApp->installEventFilter(this);
 }
-void V2CurvePointsTool::QueueRefresh(){if(!isVisible())return;points_.clear();confirm_->setEnabled(false);timer_->start();}
+void V2CurvePointsTool::QueueRefresh(){if(!isVisible()||V2ToolSelection::Active(window_.Viewport()))return;points_.clear();confirm_->setEnabled(false);timer_->start();}
 void V2CurvePointsTool::Refresh() {
-    if(!isVisible())return;
+    if(!isVisible()||V2ToolSelection::Active(window_.Viewport()))return;
     timer_->stop();points_.clear();confirm_->setEnabled(false);auto& view=window_.Viewport();view.HideToolPreview();
     pitch_->setVisible(mode_->currentIndex()==0);divisions_->setVisible(mode_->currentIndex()==1);
     const auto curves=app::SelectedCurves(view.Selection(),window_.Session().Scene());

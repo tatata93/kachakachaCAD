@@ -93,11 +93,20 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
         return;
     }
 
-    if(treeToolInput&&!V2ToolSelection::Active(*this)&&toolPickActive_&&selection.entityIds.size()==1) {
-        kachakacha::v2::app::PickCandidate pick;pick.entityId=selection.entityIds.front();
+    if(treeToolInput&&!V2ToolSelection::Active(*this)&&toolPickActive_) {
         const auto requested=SelectionModeFor(treeModifiers);
-        const auto mode=ModeForTogglePick(pick,ModeForToolPick(pick,requested));
-        selection=kachakacha::v2::app::ApplySelection(selection_,pick,mode);
+        if(selection.entityIds.size()==1) {
+            kachakacha::v2::app::PickCandidate pick;pick.entityId=selection.entityIds.front();
+            const auto mode=ModeForTogglePick(pick,ModeForToolPick(pick,requested));
+            selection=kachakacha::v2::app::ApplySelection(selection_,pick,mode);
+        } else if(requested==kachakacha::v2::app::SelectionMode::Toggle) {
+            auto combined=selection_;
+            for(const auto& id:selection.entityIds) {
+                kachakacha::v2::app::PickCandidate pick;pick.entityId=id;
+                combined=kachakacha::v2::app::ApplySelection(combined,pick,requested);
+            }
+            selection=std::move(combined);
+        }
     }
     selection_ = std::move(selection);
     if(selection_.entityIds.empty())V2DrawingSelection::Of(*this).ResumeInput();

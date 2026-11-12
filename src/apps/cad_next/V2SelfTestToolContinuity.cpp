@@ -335,7 +335,18 @@ bool PointTreeRename(V2MainWindow& w) {
     const auto added=w.Session().AddWire({line},false,"手摺");
     if(!added.committed||!w.SaveAndReopen("point-tree-label.kcd2")||!Ribbon(w,"wire.spaced_points"))return false;
     const auto id=added.createdEntityIds.front();auto* tree=w.EntityTree();auto* row=w.ItemOfEntity(id);
-    tree->setCurrentItem(row);tree->scrollToItem(row);Settle();
+    // Select through the same visible row click as a person. setCurrentItem
+    // changes Qt state but supplies no clicked object to an active tool role.
+    for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
+    tree->scrollToItem(row);QApplication::processEvents();
+    const QPointF at=tree->visualItemRect(row).center();
+    if(tree->itemAt(at.toPoint())!=row||!tree->viewport()->rect().contains(at.toPoint()))return false;
+    for(auto kind:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}){
+        QMouseEvent event(kind,at,QPointF(tree->viewport()->mapToGlobal(at.toPoint())),Qt::LeftButton,
+            kind==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(tree->viewport(),&event);
+    }
+    Settle();
     if(!Explain("rename fixture has selected curve preview",w.findChild<QPushButton*>("curvePointsConfirm")->isEnabled()))return false;
     const auto visibleEditor=[tree]{for(auto* edit:tree->findChildren<QLineEdit*>())if(edit->isVisible())return edit;return static_cast<QLineEdit*>(nullptr);};
     Key(*tree,Qt::Key_F2);auto* editor=visibleEditor();if(!editor)return false;

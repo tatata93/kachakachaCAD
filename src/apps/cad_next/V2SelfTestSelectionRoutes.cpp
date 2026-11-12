@@ -35,6 +35,8 @@
 #include <QByteArray>
 #include <QDialog>
 #include <QEvent>
+#include <QEventLoop>
+#include <QTimer>
 #include <QIODevice>
 #include <QObject>
 #include <QPoint>
@@ -231,6 +233,35 @@ bool TreeModifiers(V2MainWindow& w) {
     if(!Explain("Ctrl re-click removes only the clicked object",!selected("part0")&&selected("part1")))return false;
     if(!Tree(w,Id("part0"),Qt::ControlModifier|Qt::ShiftModifier))return false;
     return Explain("Ctrl remains additive when Shift is also held",selected("part0")&&selected("part1"));
+}
+bool GroupToolInput(V2MainWindow& w) {
+    if(!Fixture(w)||!Ribbon(w,"wire.spaced_points"))return false;
+    const auto& snapshot=w.Session().GetDocument().Snapshot();
+    base::EntityId origin;std::vector<base::EntityId> members;
+    const auto group=snapshot.groups.back().id;
+    for(const auto& entity:snapshot.entities) {
+        if(entity.groupId==group)members.push_back(entity.id);
+        else if(entity.kind==domain::EntityKind::WorkPlane)origin=entity.id;
+    }
+    if(origin.IsNil()||members.size()<2||!Tree(w,origin))return false;
+    const auto groupClick=[&](Qt::KeyboardModifiers modifiers){
+        auto* tree=w.EntityTree();auto* row=tree->FindKey("group:"+QString::fromStdString(group.ToString()));if(!row)return false;
+        tree->scrollToItem(row);QApplication::processEvents();const auto at=tree->visualItemRect(row).center();
+        return tree->itemAt(at)==row&&Mouse(*tree->viewport(),at,modifiers);
+    };
+    if(!groupClick(Qt::ControlModifier))return false;
+    Note(("group members="+std::to_string(members.size())+" selected="+std::to_string(w.Viewport().Selection().entityIds.size())+" status="+w.StatusText().toStdString()).c_str());
+    for(const auto& id:members)if(std::find(w.Viewport().Selection().entityIds.begin(),w.Viewport().Selection().entityIds.end(),id)==w.Viewport().Selection().entityIds.end())Note(("missing group member="+id.ToString()).c_str());
+    const auto contains=[&](base::EntityId id){const auto& ids=w.Viewport().Selection().entityIds;
+        return std::find(ids.begin(),ids.end(),id)!=ids.end();};
+    if(!Explain("Ctrl group input adds every member while preserving a previously selected object",
+        contains(origin)&&std::all_of(members.begin(),members.end(),contains)))return false;
+    if(!groupClick(Qt::NoModifier)||!Explain("plain group input selects the complete bundle",
+        !contains(origin)&&w.Viewport().Selection().entityIds.size()==members.size()))return false;
+    if(!groupClick(Qt::ControlModifier)||!Explain("Ctrl group re-click removes the bundle",w.Viewport().Selection().entityIds.empty()))return false;
+    if(!Ribbon(w,"workplane.create")||!Choose(w.findChild<QComboBox*>("workPlaneMethod"),QString::fromUtf8("3点を通る"))
+        ||!Press(w.findChild<QPushButton*>("workPlanePickRole0"))||!groupClick(Qt::NoModifier))return false;
+    return Explain("a single point role never guesses a child from a group",w.Viewport().PickPending());
 }
 bool PointRetake(V2MainWindow& w) {
     if(!Fixture(w) || !Ribbon(w,"workplane.create") || !Choose(w.findChild<QComboBox*>("workPlaneMethod"),QStringLiteral("3点を通る")))return false;
@@ -540,6 +571,25 @@ template<std::size_t... I> std::vector<SelfTestCase> DrawingCases(std::index_seq
     static const std::array<std::string,sizeof...(I)> names{("HP-SELECT-DRAW all enabled modes "+std::to_string(I))...};
     return {{names[I].c_str(),DrawingCase<I>}...};
 }
+template<std::size_t I> bool CurvePointsRoute(V2MainWindow& w) {
+    constexpr bool tree=I%2!=0;constexpr int mode=I/2;
+    if(!Fixture(w)||!Ribbon(w,"wire.spaced_points"))return false;
+    auto* combo=w.findChild<QComboBox*>("curvePointsMode");
+    if(!combo||combo->count()!=2||!Choose(combo,combo->itemText(mode)))return false;
+    if(!Pick(w,"lineA",tree)||!Pick(w,"lineB",tree))return false;
+    // The point preview is intentionally debounced; use the same event loop
+    // rather than invoking the tool or inserting points directly.
+    QEventLoop loop;QTimer::singleShot(150,&loop,&QEventLoop::quit);loop.exec();
+    auto* confirm=w.findChild<QPushButton*>("curvePointsConfirm");
+    if(!Explain("both curve-point modes show a usable preview from each selection source",confirm&&confirm->isEnabled()))return false;
+    auto* role=Role(w,QString::fromUtf8("点を並べる辺"));if(!role)return false;
+    const auto before=role->value->text();
+    if(!Press(w.findChild<QToolButton*>("toolEditSelection"))||!Tree(w,Id("circle")))return false;
+    QEventLoop paused;QTimer::singleShot(150,&paused,&QEventLoop::quit);paused.exec();
+    if(!Explain("edit selection never replaces the curve-point tool input",role->value->text()==before))return false;
+    if(!Press(w.findChild<QPushButton*>("toolSelectionResume"))||!Press(w.findChild<QPushButton*>("curvePointsClear")))return false;
+    return Explain("clearing curve-point input clears its preview",!confirm->isEnabled());
+}
 bool DimensionPausedTree(V2MainWindow& w) {
     if(!Fixture(w)||!Ribbon(w,"dimension.open"))return false;
     if(!Press(w.findChild<QPushButton*>("dimensionPickRole0")))return false;
@@ -705,6 +755,11 @@ std::vector<SelfTestCase> SelectionRouteCases() {
         {"HP-SELECT tree point retake and same row reuse",PointRetake},
         {"HP-SELECT active tool tree modifiers preserve Ctrl and Shift intent",TreeModifiers},
         {"HP-SELECT paused dimension retains its input during tree selection",DimensionPausedTree},
+        {"HP-SELECT group bundles accept tool input without guessing single roles",GroupToolInput},
+        {"HP-SELECT spaced points pitch viewport",CurvePointsRoute<0>},
+        {"HP-SELECT spaced points pitch tree",CurvePointsRoute<1>},
+        {"HP-SELECT spaced points divisions viewport",CurvePointsRoute<2>},
+        {"HP-SELECT spaced points divisions tree",CurvePointsRoute<3>},
         {"HP-SELECT point invalid input stale click and tool transition",PointRejectAndStale},
         {"HP-SELECT grid origin accepts explicit tree point",GridPoint},
         {"HP-SELECT output surface reference picks release temporary faces",OutputFaceOwnership}});

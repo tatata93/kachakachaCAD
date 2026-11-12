@@ -115,40 +115,48 @@ bool CaseDeleteWithGeneratedBoundaries(V2MainWindow& w)
     const auto hasAll=[&](bool present){return std::all_of(boundaries.begin(),boundaries.end(),
         [&](auto id){return exists(id)==present;});};
     const auto pickSolid=[&]{
-        w.RunCommand("selection.activate");auto* tree=w.EntityTree();auto* item=w.ItemOfEntity(solid);
-        if(!tree||!item)return false;
-        tree->scrollToItem(item);QApplication::processEvents();
-        const auto point=QPointF(tree->visualItemRect(item).center());
+        w.RunCommand("selection.activate");auto* tree=w.EntityTree();if(!tree)return false;
+        tree->setFocus(Qt::MouseFocusReason);QApplication::processEvents();
+        auto* item=w.ItemOfEntity(solid);if(!item)return false;
+        for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
+        tree->doItemsLayout();tree->scrollToItem(item);QApplication::processEvents();
+        item=w.ItemOfEntity(solid);if(!item)return false;
+        const auto visible=tree->visualItemRect(item).intersected(tree->viewport()->rect());
+        if(visible.isEmpty()||tree->itemAt(visible.center())!=item)return false;
+        const auto point=QPointF(visible.center());
         QMouseEvent down(QEvent::MouseButtonPress,point,point,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
         QMouseEvent up(QEvent::MouseButtonRelease,point,point,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
         QApplication::sendEvent(tree->viewport(),&down);QApplication::sendEvent(tree->viewport(),&up);
         return w.Viewport().Selection().entityIds==std::vector<base::EntityId>{solid};
     };
     const auto erase=[&](bool accept,bool include){
-        if(!pickSolid())return false;
+        if(!Explain("click the visible solid row after restoring document history",pickSolid()))return false;
         bool inspected=false;
         const bool modal=DeleteWithConfirmation(w,accept,[&](QDialog* dialog){
             auto* option=dialog->findChild<QCheckBox*>("deleteGeneratedBoundaries");
             auto* list=dialog->findChild<QListWidget*>();
-            if(!option||!list||option->isChecked()||list->count()!=1)return;
+            if(!Explain("dialog opens with unchecked boundary option and one solid",option&&list&&!option->isChecked()&&list->count()==1))return;
             const auto highlights=[&](bool wires){return w.Viewport().DeletionPreviewContains(solid)
                 &&std::all_of(boundaries.begin(),boundaries.end(),[&](auto id){return w.Viewport().DeletionPreviewContains(id)==wires;})
                 &&std::none_of(original.begin(),original.end(),[&](auto id){return w.Viewport().DeletionPreviewContains(id);});};
-            if(!highlights(false))return;
-            option->click();if(!highlights(true)||list->count()!=1+int(boundaries.size()))return;
-            option->click();if(!highlights(false)||list->count()!=1)return;
+            if(!Explain("initial preview highlights only the solid",highlights(false)))return;
+            option->click();if(!Explain("check adds only the generated wire highlights and names",highlights(true)&&list->count()==1+int(boundaries.size())))return;
+            option->click();if(!Explain("uncheck restores the solid-only preview",highlights(false)&&list->count()==1))return;
             if(include)option->click();
             inspected=highlights(include);
         });
-        return modal&&inspected&&!w.Viewport().DeletionPreviewContains(solid);
+        return Explain("deletion confirmation was displayed",modal)
+            &&Explain("chosen preview remained active until confirmation",inspected)
+            &&Explain("confirmation closes and clears the preview",!w.Viewport().DeletionPreviewContains(solid));
     };
     const auto revision=w.Session().GetDocument().Revision();
     if(!Explain("cancel preserves the solid, generated wires, and original inputs",erase(false,true)
         &&w.Session().GetDocument().Revision()==revision&&exists(solid)&&hasAll(true)&&keepOriginal()))return false;
     if(!Explain("the unchecked default only deletes the solid",erase(true,false)&&!exists(solid)&&hasAll(true)&&keepOriginal()))return false;
     w.RunCommand("edit.undo");if(!exists(solid)||!hasAll(true))return false;
-    if(!Explain("the checked option deletes exactly the selected solid and its generated wires",erase(true,true)
-        &&!exists(solid)&&hasAll(false)&&keepOriginal()))return false;
+    if(!erase(true,true)||!Explain("checked deletion removes the selected solid",!exists(solid))
+        ||!Explain("checked deletion removes its generated wires",hasAll(false))
+        ||!Explain("checked deletion keeps the original guide and source wires",keepOriginal()))return false;
     w.RunCommand("edit.undo");if(!exists(solid)||!hasAll(true)||!keepOriginal())return false;
     w.RunCommand("edit.redo");
     return Explain("one Undo/Redo and reopen preserve the chosen deletion",!exists(solid)&&hasAll(false)&&keepOriginal()

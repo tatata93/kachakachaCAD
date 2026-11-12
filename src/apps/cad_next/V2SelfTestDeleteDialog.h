@@ -11,7 +11,9 @@ inline bool DeleteWithConfirmation(V2MainWindow& window,bool accept,
     QObject::connect(&timer,&QTimer::timeout,&window,[&]{
         auto* dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());
         if(!dialog||dialog->objectName()!=QStringLiteral("confirmDependentDelete"))return;
-        seen=true;if(inspect)inspect(dialog);if(accept)dialog->accept();else dialog->reject();
+        // Preview changes can deliver nested GUI events. Inspect this modal
+        // once, before a second timeout can alter its chosen checkbox state.
+        timer.stop();seen=true;if(inspect)inspect(dialog);if(accept)dialog->accept();else dialog->reject();
     });timer.start();window.RunCommand("edit.delete");timer.stop();return seen;
 }
 }

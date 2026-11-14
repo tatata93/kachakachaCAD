@@ -1,5 +1,6 @@
 #include "V2ToolSelection.h"
 #include "V2SelfTest.h"
+#include "V2SelfTestToolbar.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2EntityTree.h"
@@ -130,15 +131,9 @@ bool Ribbon(V2MainWindow& w,std::string_view command) {
     for(const auto mode:app::AllUiModes())for(const auto& category:app::RibbonCategoriesFor(mode))
         for(const auto& tool:category.tools)if(tool.commandId==command && !tool.Blocked()) {
             w.SetMode(mode);QApplication::processEvents();
-            bool categoryPressed=false;
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))
-                if(b->isVisible() && b->text()==QString::fromUtf8(category.labelJa.data(),int(category.labelJa.size()))) {
-                    categoryPressed=Press(b);break;
-                }
-            if(!categoryPressed)return false;
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))
-                if(b->isVisible() && b->text()==QString::fromUtf8(tool.labelJa.data(),int(tool.labelJa.size())))return Press(b);
-            return false;
+            const auto press=[](QWidget* button){return Press(button);};
+            return ClickRibbonItem(w.Ribbon(),"ribbonCategory",QString::fromUtf8(category.labelJa),press)
+                && ClickRibbonItem(w.Ribbon(),"ribbonTool",QString::fromUtf8(tool.labelJa),press);
         }
     return false;
 }

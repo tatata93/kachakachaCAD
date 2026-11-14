@@ -1,4 +1,5 @@
 #include "V2SelfTest.h"
+#include "V2SelfTestToolbar.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2Ribbon.h"
@@ -59,13 +60,8 @@ bool Ribbon(V2MainWindow& w,std::string_view command) {
     for(const auto mode:app::AllUiModes())for(const auto& category:app::RibbonCategoriesFor(mode))
         for(const auto& tool:category.tools)if(tool.commandId==command){
             if(w.Mode()!=mode)w.SetMode(mode);QApplication::processEvents();
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))
-                if(b->isVisible()&&b->text()==QString::fromUtf8(category.labelJa.data(),int(category.labelJa.size()))) {
-                    if(!Press(b))return false;break;
-                }
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))
-                if(b->isVisible()&&b->text()==QString::fromUtf8(tool.labelJa.data(),int(tool.labelJa.size())))return Press(b);
-            return false;
+            return ClickRibbonItem(w.Ribbon(),"ribbonCategory",QString::fromUtf8(category.labelJa),Press)
+                && ClickRibbonItem(w.Ribbon(),"ribbonTool",QString::fromUtf8(tool.labelJa),Press);
         }
     return false;
 }
@@ -224,7 +220,11 @@ bool SpacedPoints(V2MainWindow& w) {
 bool CheckSpacedSpline(V2MainWindow& w,const geometry::CurveSegment& curve) {
     if(!w.Session().AddWire({curve},false,"3D曲線").committed||!w.SaveAndReopen(QStringLiteral("spaced-spline.kcd2")))return false;
     w.Viewport().SetVisibleWidthMm(120);
-    if(!Ribbon(w,"wire.spaced_points"))return false;Click(w.Viewport(),curve.Evaluate(0.3));Settle();
+    if(!Ribbon(w,"wire.spaced_points"))return false;
+    const auto point=curve.Evaluate(0.3);
+    w.Viewport().SetViewCenter(point);
+    Click(w.Viewport(),point);Settle();
+    if(!Explain("picked the displayed 3D curve",w.Viewport().Selection().ordered.size()==1))return false;
     auto* mode=w.findChild<QComboBox*>("curvePointsMode");if(!mode)return false;mode->setCurrentIndex(1);Settle();
     if(!Number(w.findChild<QSpinBox*>("curvePointsDivisions"),"8")||!Press(w.findChild<QPushButton*>("curvePointsConfirm")))return false;
     const double length=curve.TotalLength(1e-8);std::vector<double> distances;
@@ -316,7 +316,9 @@ bool PointBoundaries(V2MainWindow& w) {
 bool PointNumericEnter(V2MainWindow& w) {
     const auto line=geometry::CurveSegment::MakeLine({-10,0,0},{0,0,0}).Value();
     if(!w.Session().AddWire({line},false,"Enter試験").committed||!w.SaveAndReopen("point-enter.kcd2")||!Ribbon(w,"wire.spaced_points"))return false;
+    w.Viewport().SetViewCenter(line.Evaluate(.5));
     Click(w.Viewport(),line.Evaluate(.5));Settle();
+    if(!Explain("picked the displayed straight edge",w.Viewport().Selection().ordered.size()==1))return false;
     if(!Press(w.findChild<QCheckBox*>("curvePointsReverse")))return false;
     auto* spin=w.findChild<QDoubleSpinBox*>("curvePointsPitch");if(!spin||!Press(spin))return false;
     auto* input=spin->findChild<QLineEdit*>();input->selectAll();QInputMethodEvent text;text.setCommitString("3.000");QApplication::sendEvent(input,&text);
@@ -405,11 +407,9 @@ bool RibbonToolExits(V2MainWindow& w) {
         const auto* command=app::FindCommand(tool.commandId);
         if(tool.Blocked()||!command||(command->mode!=app::CommandMode::Tool&&command->mode!=app::CommandMode::Modeless))continue;
         w.Viewport().SetSelection({});w.SetMode(mode);QApplication::processEvents();
-        bool categoryPressed=false;
-        for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))if(b->isVisible()&&b->text()==QString::fromUtf8(category.labelJa.data(),int(category.labelJa.size()))){categoryPressed=Press(b);break;}
+        const bool categoryPressed=ClickRibbonItem(w.Ribbon(),"ribbonCategory",QString::fromUtf8(category.labelJa),Press);
         if(!Explain("ribbon category is reachable",categoryPressed))return false;
-        bool pressed=false;
-        for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))if(b->isVisible()&&b->text()==QString::fromUtf8(tool.labelJa.data(),int(tool.labelJa.size()))){pressed=Press(b);break;}
+        const bool pressed=ClickRibbonItem(w.Ribbon(),"ribbonTool",QString::fromUtf8(tool.labelJa),Press);
         if(!Explain(("actual ribbon tool: "+std::string(tool.commandId)).c_str(),pressed))return false;
         const auto status=w.StatusText();
         if(!Explain(("usable line after "+std::string(tool.commandId)).c_str(),DrawAfter(w)))return false;

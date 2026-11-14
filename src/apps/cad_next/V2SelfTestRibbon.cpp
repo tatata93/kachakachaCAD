@@ -6,6 +6,7 @@
 //! 見えているボタンを実際に押す。押せない道具は押せず、理由が状態行に出る。
 
 #include "V2SelfTest.h"
+#include "V2SelfTestToolbar.h"
 
 #include "V2MainWindow.h"
 #include "V2Ribbon.h"
@@ -161,6 +162,7 @@ bool ChooseOverflow(QToolButton& button, const QString& label, const QString& su
         }
         if (target && target->isVisible()) {
             if (auto* action = findAction(*target, label)) {
+                target->setActiveAction(action);
                 const auto rect = target->actionGeometry(action);
                 if (target->rect().contains(rect) && !rect.isEmpty()) {
                     ClickAt(*target, rect.center());
@@ -300,6 +302,25 @@ void SettleLayout()
 }
 
 } // namespace
+
+bool ClickRibbonItem(V2Ribbon& ribbon, const char* objectName, const QString& label,
+    const std::function<bool(QWidget*)>& press)
+{
+    for (auto* button : ribbon.findChildren<QToolButton*>(QString::fromLatin1(objectName))) {
+        if (button->text() != label || !button->isEnabled()) continue;
+        if (button->isVisible() && button->visibleRegion().boundingRect() == button->rect())
+            return press(button);
+        if (button->isHidden()) {
+            auto* more = button->parentWidget()->findChild<QToolButton*>(QStringLiteral("toolbarOverflowButton"));
+            if (more && more->isVisible()) {
+                more->window()->activateWindow();
+                more->setFocus(Qt::MouseFocusReason);
+                if (ChooseOverflow(*more, label)) return true;
+            }
+        }
+    }
+    return false;
+}
 
 std::vector<SelfTestCase> RibbonCases()
 {

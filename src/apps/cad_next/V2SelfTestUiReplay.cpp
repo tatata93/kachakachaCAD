@@ -1,6 +1,7 @@
 // Optional, reproducible UI scenarios. Geometry is made by visible controls,
 // never by constructing features or passing shapes into the document.
 #include "V2SelfTest.h"
+#include "V2SelfTestToolbar.h"
 #include "V2MainWindow.h"
 #include "V2GeometryJob.h"
 #include "V2EntityTree.h"
@@ -220,17 +221,11 @@ bool Tool(V2MainWindow& w,const QJsonObject& step)
             &&(label.isEmpty()||Utf8(tool.labelJa)==label)){
             if(!Mode(w,mode))return false;
             timing.Mark("mode");
-            QToolButton* categoryButton=nullptr;
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))
-                if(b->text()==Utf8(category.labelJa))categoryButton=b;
-            if(!categoryButton||!Mouse(*categoryButton,categoryButton->rect().center()))return false;
+            const auto press=[](QWidget* button){return Mouse(*button,button->rect().center());};
+            if(!ClickRibbonItem(w.Ribbon(),"ribbonCategory",Utf8(category.labelJa),press))return false;
             timing.Mark("category");
-            for(auto* b:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))
-                if(b->text()==Utf8(tool.labelJa)){
-                    const bool result=Mouse(*b,b->rect().center());
-                    timing.Mark("tool");return result;
-                }
-            return false;
+            const bool result=ClickRibbonItem(w.Ribbon(),"ribbonTool",Utf8(tool.labelJa),press);
+            timing.Mark("tool");return result;
         }
     return !command.isEmpty()&&MenuCommand(w,command);
 }

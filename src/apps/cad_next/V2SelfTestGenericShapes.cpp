@@ -1,4 +1,5 @@
 #include "V2SelfTest.h"
+#include "V2SelfTestToolbar.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2DrawingDock.h"
@@ -387,14 +388,10 @@ bool ToolButton(V2MainWindow& w,std::string_view command)
     for(const auto mode:app::AllUiModes())for(const auto& category:app::RibbonCategoriesFor(mode))
         for(const auto& tool:category.tools)if(tool.commandId==command){
             if(w.Mode()!=mode)w.SetMode(mode);QApplication::processEvents();
-            for(auto* button:w.Ribbon().findChildren<QToolButton*>("ribbonCategory"))
-                if(button->isVisible()&&button->text()==QString::fromUtf8(category.labelJa.data(),int(category.labelJa.size()))){
-                    if(!Mouse(*button,button->rect().center()))return false;break;
-                }
-            for(auto* button:w.Ribbon().findChildren<QToolButton*>("ribbonTool"))
-                if(button->isVisible()&&button->text()==QString::fromUtf8(tool.labelJa.data(),int(tool.labelJa.size())))
-                    return Mouse(*button,button->rect().center());
-            return Explain("requested ribbon tool is reachable",false);
+            const auto press=[](QWidget* button){return Mouse(*button,button->rect().center());};
+            return ClickRibbonItem(w.Ribbon(),"ribbonCategory",QString::fromUtf8(category.labelJa),press)
+                && Explain("requested ribbon tool is reachable",
+                    ClickRibbonItem(w.Ribbon(),"ribbonTool",QString::fromUtf8(tool.labelJa),press));
         }
     return Explain("requested command has a visible ribbon route",false);
 }

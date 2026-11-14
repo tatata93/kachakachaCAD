@@ -304,15 +304,20 @@ using kachakacha::v2::modeling::ToolSettings;
 }
 
 //! 上から見て 2本の線を引く。1本目は横、2本目は縦(十字)。
-[[nodiscard]] bool DrawCross(V2MainWindow& window, double pxPerMm)
+void ClickOnPlane(V2Viewport& viewport, double x, double y)
+{
+    const auto at = viewport.Mapping().Project(viewport.WorkPlane().PointAt(x, y));
+    if (at) viewport.ClickAt(QPointF(at->x, at->y));
+}
+
+[[nodiscard]] bool DrawCross(V2MainWindow& window)
 {
     auto& viewport = window.Viewport();
-    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
     window.SelectTool(DrawingTool::Line);
-    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x(), center.y() - 30.0 * pxPerMm));
-    viewport.ClickAt(QPointF(center.x(), center.y() + 30.0 * pxPerMm));
+    ClickOnPlane(viewport, -30, 0);
+    ClickOnPlane(viewport, 30, 0);
+    ClickOnPlane(viewport, 0, 30);
+    ClickOnPlane(viewport, 0, -30);
     window.SelectTool(DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
@@ -384,8 +389,8 @@ using kachakacha::v2::modeling::ToolSettings;
 [[nodiscard]] bool CaseOffsetKeepsOriginalAndMeetLinesJoins(V2MainWindow& window)
 {
     // オフセットは元の線を残して平行に写す。2線を交点まで は2本を交点で合わせる。
-    const double pxPerMm = PrepareTopView(window);
-    if (!Explain("十字を引ける", DrawCross(window, pxPerMm))) {
+    (void)PrepareTopView(window);
+    if (!Explain("十字を引ける", DrawCross(window))) {
         return false;
     }
     // 横線だけを選んでオフセット。数の棚の「オフセット距離」を 5 にする。
@@ -412,12 +417,12 @@ using kachakacha::v2::modeling::ToolSettings;
     }
     // 2線を交点まで: 離れた2本の直線を引いて合わせる。
     window.RunCommand("file.new");
-    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    (void)PrepareTopView(window);
     window.SelectTool(DrawingTool::Line);
-    viewport.ClickAt(QPointF(center.x() - 40.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() - 10.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() + 10.0 * pxPerMm, center.y() - 10.0 * pxPerMm));
-    viewport.ClickAt(QPointF(center.x() + 10.0 * pxPerMm, center.y() - 40.0 * pxPerMm));
+    ClickOnPlane(viewport, -40, 0);
+    ClickOnPlane(viewport, -10, 0);
+    ClickOnPlane(viewport, 10, 10);
+    ClickOnPlane(viewport, 10, 40);
     window.SelectTool(DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
@@ -502,15 +507,14 @@ using kachakacha::v2::modeling::ToolSettings;
 {
     // 車輪の中心も窓の中心も、それまでは座標を目で読んで手で打ち直すしかなかった。
     // core(app/PointSources)は書けていたのに、画面から呼ぶ道が無かった。
-    const double pxPerMm = PrepareTopView(window);
     auto& viewport = window.Viewport();
     window.RunCommand("file.new");
-    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    (void)PrepareTopView(window);
 
     // 円を1つ引く。中心と、円周上の1点。
     window.SelectTool(DrawingTool::Circle);
-    viewport.ClickAt(center);
-    viewport.ClickAt(QPointF(center.x() + 20.0 * pxPerMm, center.y()));
+    ClickOnPlane(viewport, 0, 0);
+    ClickOnPlane(viewport, 20, 0);
     window.SelectTool(DrawingTool::Select);
     if (!Explain("円を1つ引ける", CountOfKind(window, EntityKind::Wire) == 1)) {
         return false;
@@ -539,9 +543,10 @@ using kachakacha::v2::modeling::ToolSettings;
 
     // 直線には中心が無い。断って、何も作らない。
     window.RunCommand("file.new");
+    (void)PrepareTopView(window);
     window.SelectTool(DrawingTool::Line);
-    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    ClickOnPlane(viewport, -30, 0);
+    ClickOnPlane(viewport, 30, 0);
     window.SelectTool(DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
@@ -567,8 +572,8 @@ using kachakacha::v2::modeling::ToolSettings;
 [[nodiscard]] bool CaseIntersectionPointsAndDatum(V2MainWindow& window)
 {
     // 交点に点: 十字の交点に作図点が1つ。線は変わらない。基準線: 印だけ付く。
-    const double pxPerMm = PrepareTopView(window);
-    if (!Explain("十字を引ける", DrawCross(window, pxPerMm))) {
+    (void)PrepareTopView(window);
+    if (!Explain("十字を引ける", DrawCross(window))) {
         return false;
     }
     window.RunCommand("wire.intersection_points");
@@ -589,12 +594,12 @@ using kachakacha::v2::modeling::ToolSettings;
     // 平行な2本では断る。
     window.RunCommand("file.new");
     auto& viewport = window.Viewport();
-    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    (void)PrepareTopView(window);
     window.SelectTool(DrawingTool::Line);
-    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
-    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y() + 20.0 * pxPerMm));
-    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() + 20.0 * pxPerMm));
+    ClickOnPlane(viewport, -30, 0);
+    ClickOnPlane(viewport, 30, 0);
+    ClickOnPlane(viewport, -30, -20);
+    ClickOnPlane(viewport, 30, -20);
     window.SelectTool(DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));

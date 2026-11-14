@@ -239,14 +239,19 @@ bool InstructionLayoutUsability(V2MainWindow& w) {
         w.RunCommand("edit.undo");if(!Explain("handle drag is exactly one Undo step",mode->Snapshot()==before))return false;
     }
     paper->SetSelected(0);
+    if(!Press(w,"instructionPaperFit"))return false;
     const auto handles=Rect(Items(*mode)[0].toObject());const auto selectedImage=paper->Render(paper->size(),true);
     for(const auto mm:{handles.topLeft(),QPointF(handles.center().x(),handles.top()),handles.topRight(),QPointF(handles.right(),handles.center().y()),
         handles.bottomRight(),QPointF(handles.center().x(),handles.bottom()),handles.bottomLeft(),QPointF(handles.left(),handles.center().y())}) {
         const auto px=paper->ToScreen(mm).toPoint();bool blue=false;
         for(int y=-5;y<=5;++y)for(int x=-5;x<=5;++x)if(selectedImage.rect().contains(px+QPoint(x,y))) {
-            const auto c=selectedImage.pixelColor(px+QPoint(x,y));blue|=c.red()<60&&c.green()>60&&c.green()<160&&c.blue()>170;
+            const auto c=selectedImage.pixelColor(px+QPoint(x,y));
+            // The 1px outline may be split between pixels by antialiasing.
+            blue |= c.blue() - c.red() > 90 && c.blue() - c.green() > 40;
         }
-        if(!Explain("all selected handles remain visible above overlapping figures",blue))return false;
+        if(!Explain(QStringLiteral("selected handle at %1,%2 mm (%3,%4 in %5×%6, zoom %7)")
+                .arg(mm.x()).arg(mm.y()).arg(px.x()).arg(px.y()).arg(selectedImage.width())
+                .arg(selectedImage.height()).arg(paper->Zoom()).toStdString().c_str(),blue))return false;
     }
     Capture(w,"instruction-layout-arrange");
     const auto contextStart=mode->Snapshot();const auto contextPoint=paper->ToScreen(Rect(Items(*mode)[0].toObject()).center());

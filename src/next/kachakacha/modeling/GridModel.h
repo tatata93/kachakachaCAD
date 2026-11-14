@@ -14,6 +14,7 @@
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/geometry/Vector3.h"
+#include "kachakacha/geometry/Units.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
 #include <optional>
@@ -35,6 +36,7 @@ struct GridDefinition {
     double majorSpacingMm = 10.0;
     //! 0 = 副点なし、2 = 1/2、3 = 1/3、4 = 1/4。
     int subdivision = 0;
+    geometry::Radians rotation{};
 };
 
 //! 画面に見えている範囲(作業平面の UV、グリッド原点からの mm)に対して、
@@ -102,6 +104,10 @@ inline constexpr double kMinimumGridSpacingPx = 6.0;
 //! 間隔と細かさを決める。
 [[nodiscard]] base::Result<GridDefinition> SetGridSpacing(const GridDefinition& definition,
     double majorSpacingMm, int subdivision);
+
+//! Direction from first to second projected into the working plane.
+[[nodiscard]] base::Result<geometry::Radians> GridAngleFromPoints(const WorkPlaneFrame& plane,
+    const Vector3& first, const Vector3& second, double minimumLengthMm);
 
 //! Perpendicular screen distance between adjacent parallel grid lines.
 [[nodiscard]] double GridLineSpacingPx(const geometry::ScreenMapping& mapping,

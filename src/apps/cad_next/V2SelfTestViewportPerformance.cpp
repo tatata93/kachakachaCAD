@@ -133,6 +133,7 @@ bool PersistentGridControls(V2MainWindow&) {
     auto* close=dock->findChild<QAbstractButton*>("qt_dockwidget_closebutton");
     if(!Explain("grid settings start hidden and can be closed",dock->isHidden()&&close
         &&dock->features().testFlag(QDockWidget::DockWidgetClosable)))return false;
+    auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
     window.resize(1000,700);QApplication::processEvents();
     if(!Explain("grid and tool panel fit a 700px-high window",window.height()<=700))return false;
     for(const auto mode:app::AllUiModes()) {
@@ -143,7 +144,6 @@ bool PersistentGridControls(V2MainWindow&) {
         const bool gridVisible=window.Viewport().DisplaySettingsNow().gridVisible;
         window.RunCommand("grid.edit");QApplication::processEvents();
         if(!Explain("grid settings open explicitly in every mode",!dock->isHidden()&&spacing->hasFocus()))return false;
-        auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
         if(scroll)std::cout<<"grid common dock="<<dock->height()<<" available="<<scroll->viewport()->height()
             <<" details bottom="<<details->mapTo(scroll->viewport(),details->rect().bottomRight()).y()<<std::endl;
         if(!Explain("frequent grid fields and details toggle are visible without scrolling",scroll
@@ -173,14 +173,21 @@ bool PersistentGridControls(V2MainWindow&) {
     if(!Explain("new spacing replaces scene once and updates snapping grid",changes==1&&window.Session().Scene().grid.majorSpacingMm==2.5))return false;
     details->setChecked(true);if(!Explain("advanced settings expand",!body->isHidden()))return false;
     details->setChecked(false);if(!Explain("common settings remain after collapsing details",body->isHidden()&&!spacing->isHidden()))return false;
+    auto* angle=window.findChild<QLineEdit*>("gridAngleDegrees");
+    if(!Explain("angle is accessible without scrolling",angle&&scroll&&scroll->viewport()->rect().contains(
+        angle->mapTo(scroll->viewport(),angle->rect().bottomRight()))))return false;
     spacing->clearFocus();view.setFocus();window.SelectTool(modeling::DrawingTool::Select);
-    choice=window.CurrentGridChoice();choice.grid.originUmm=10.123456;window.ApplyGridChoice(choice);
+    choice=window.CurrentGridChoice();choice.grid.originUmm=10.123456;
+    choice.grid.rotation=geometry::Radians(geometry::kPi/6);window.ApplyGridChoice(choice);
     const auto front=app::OriginPlaneId(window.Session().GetDocument().Snapshot(),modeling::StandardPlaneKind::ZX);
     if(!front)return false;view.SetSelection(app::SelectionSet{{*front}});window.RunCommand("workplane.set_active");
     const auto origin=window.Session().Scene().grid.origin;
     auto* check=window.findChild<QCheckBox*>("gridVisibility");if(!check)return false;check->click();
     if(!Explain("grid settings follow plane changes without applying stale origin",window.CurrentGridChoice().grid.originUmm==0
         &&window.Session().Scene().grid.origin==origin&&dock->Choice().grid.originUmm==0))return false;
+    if(!Explain("grid rotation stays relative to the newly active work plane",
+        std::abs(window.CurrentGridChoice().grid.rotation.Value()-geometry::kPi/6)<1e-12
+        &&std::abs(geometry::Dot(window.Session().Scene().grid.uDirection,view.WorkPlane().normal))<1e-12))return false;
     Shot(window,"grid-optional-settings-open");close->click();QApplication::processEvents();
     Shot(window,"grid-optional-settings-closed");return PendingActionsFit(window);
 }

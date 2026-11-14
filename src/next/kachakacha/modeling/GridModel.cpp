@@ -15,6 +15,7 @@ constexpr const char* kBrokenPlane = "UI-G001";
 constexpr const char* kBadSpacing = "UI-G002";
 constexpr const char* kBadSubdivision = "UI-G003";
 constexpr const char* kBadOrigin = "UI-G004";
+constexpr const char* kBadAngle = "UI-G005";
 
 } // namespace
 
@@ -56,6 +57,10 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
             "副点の細かさは 1/2、1/3、1/4 のどれかです。",
             std::to_string(definition.subdivision)));
     }
+    if (!geometry::IsFinite(definition.rotation.Value())) {
+        return Result<GridEvaluation>::Failure(MakeError(kBadAngle,
+            "グリッドの角度には有限の数を指定してください。", {}));
+    }
 
     const WorkPlaneFrame frame =
         plane.has_value() ? *plane : StandardPlane(StandardPlaneKind::XY);
@@ -64,8 +69,11 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
     evaluation.visible = definition.visible;
     // 原点は UV で持っているので、平面が動けば自然に付いていく。
     evaluation.originXyz = frame.PointAt(definition.originUmm, definition.originVmm);
-    evaluation.uDirection = frame.uAxis;
-    evaluation.vDirection = frame.vAxis;
+    const double angle = std::remainder(definition.rotation.Value(), 2.0 * geometry::kPi);
+    const double c = std::cos(angle);
+    const double s = std::sin(angle);
+    evaluation.uDirection = frame.uAxis * c + frame.vAxis * s;
+    evaluation.vDirection = frame.vAxis * c - frame.uAxis * s;
     evaluation.majorSpacingMm = definition.majorSpacingMm;
     evaluation.subdivision = definition.subdivision;
     evaluation.minorPointsPerEdge = MinorPointsPerEdge(definition.subdivision);
@@ -77,6 +85,20 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
     evaluation.minorVisible = definition.subdivision >= 2
         && evaluation.minorSpacingMm * pixelsPerMillimeter >= kMinimumGridSpacingPx;
     return Result<GridEvaluation>::Success(evaluation);
+}
+
+Result<geometry::Radians> GridAngleFromPoints(const WorkPlaneFrame& plane,
+    const Vector3& first, const Vector3& second, double minimumLengthMm)
+{
+    const auto delta = second - first;
+    const double u = Dot(delta, plane.uAxis);
+    const double v = Dot(delta, plane.vAxis);
+    const double distance = std::hypot(u, v);
+    if (!std::isfinite(distance) || !(distance > minimumLengthMm) || distance == 0.0) {
+        return Result<geometry::Radians>::Failure(MakeError(kBadAngle,
+            "作業面に投影した2点が重なっています。", "離れた2点を選んでください。"));
+    }
+    return Result<geometry::Radians>::Success(geometry::Radians(std::atan2(v, u)));
 }
 
 Result<GridDefinition> MoveGridOrigin(const GridDefinition& definition,

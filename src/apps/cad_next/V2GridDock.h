@@ -49,11 +49,12 @@ public:
     [[nodiscard]] V2GridChoice Choice() const;
     //! いまの欄をそのまま当てる(試験と、開いたときの同期に使う)。
     void Apply();
-    void SetChoice(const V2GridChoice& choice);
+    void SetChoice(const V2GridChoice& choice, bool replaceAngleEntry = false);
     //! 欄が変わったときに呼ぶもの。間隔の式が読めなければ呼ばず、理由を出す。
     void SetApplyHandler(std::function<void(const V2GridChoice&)> handler);
     //! 「原点を画面で指す」を押したときに呼ぶもの(grid.move_origin と同じ)。
     void SetPickOriginHandler(std::function<void()> handler);
+    void SetPickAngleHandler(std::function<void()> handler);
     //! 色を選ばせる。差し替えると窓を出さない(試験用)。
     void SetColorChooser(std::function<QColor(const QColor& initial, const QString& title)> chooser);
     //! 主点間隔の欄に式を入れて当てる(試験用)。読めなければ false。
@@ -63,6 +64,7 @@ public:
 private:
     void BuildDisplayFields(QFormLayout* form, QWidget* body);
     void ConnectSignals();
+    void ApplyAngle();
     void Emit();
     void ChooseColor(QPushButton* button, QColor& color, const QString& title);
     static void PaintButton(QPushButton* button, const QColor& color);
@@ -75,6 +77,8 @@ private:
     QDoubleSpinBox* originV_ = nullptr;
     QPushButton* resetOrigin_ = nullptr;
     QPushButton* pickOrigin_ = nullptr;
+    QLineEdit* angle_ = nullptr;
+    QPushButton* pickAngle_ = nullptr;
     QCheckBox* allModes_ = nullptr;
     QCheckBox* dimOffPlane_ = nullptr;
     QCheckBox* workPlaneVisible_ = nullptr;
@@ -88,8 +92,10 @@ private:
     QColor minor_;
     QColor background_;
     double spacingMm_ = 10.0;
+    kachakacha::v2::geometry::Radians angleRad_{};
     std::function<void(const V2GridChoice&)> applyHandler_;
     std::function<void()> pickOriginHandler_;
+    std::function<void()> pickAngleHandler_;
     std::function<QColor(const QColor&, const QString&)> colorChooser_;
     bool loading_ = false;
 };

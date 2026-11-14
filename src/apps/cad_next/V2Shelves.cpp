@@ -189,6 +189,7 @@ void V2MainWindow::BuildRightShelves()
     gridDock_ = new V2GridDock(this);
     gridDock_->SetApplyHandler([this](const V2GridChoice& choice) { ApplyGridChoice(choice); });
     gridDock_->SetPickOriginHandler([this] { RunCommand("grid.move_origin"); });
+    gridDock_->SetPickAngleHandler([this] { PickGridAngle(); });
     displayDock_ = new V2DisplayDock(this);
     displayDock_->SetApplyHandler(
         [this](const V2DisplayChoice& choice) { ApplyDisplayChoice(choice); });

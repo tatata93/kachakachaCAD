@@ -1105,8 +1105,8 @@ private:
     QComboBox* planeCombo_ = nullptr;
     std::vector<kachakacha::v2::base::EntityId> planeComboIds_;
     bool refreshingPlaneCombo_ = false;
-    //! 押した場所へグリッドの原点を動かす。
     void MoveGridOriginByClick();
+    void PickGridAngle();
     //! 選んでいる作業平面を作業中にする。
     void ActivateSelectedWorkPlane();
     //! 作業平面を画面と場面へ反映する。

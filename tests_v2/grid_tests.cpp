@@ -11,6 +11,7 @@ using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::EvaluateGrid;
 using kachakacha::v2::modeling::GridLineRangeFor;
 using kachakacha::v2::modeling::GridDefinition;
+using kachakacha::v2::modeling::GridAngleFromPoints;
 using kachakacha::v2::modeling::MinorPointsPerCell;
 using kachakacha::v2::modeling::MinorPointsPerEdge;
 using kachakacha::v2::modeling::MoveGridOrigin;
@@ -220,6 +221,33 @@ KACHA_V2_TEST(grid, 知らない細かさは断る)
             "1/" + std::to_string(subdivision) + " は断る");
         RequireEqual(FirstCode(changed.Diagnostics()), "UI-G003", "診断コード");
     }
+}
+
+KACHA_V2_TEST(grid, 傾いた作業面で原点を保ってグリッドを回す)
+{
+    using namespace kachakacha::v2::geometry;
+    auto plane = StandardPlane(StandardPlaneKind::ZX);
+    plane.origin = {4, 5, 6};
+    const auto start = plane.PointAt(-7, 3);
+    const auto end = plane.PointAt(-4, 7) + plane.normal * 15;
+    const auto angle = GridAngleFromPoints(plane, start, end, 1.0e-6);
+    Require(angle.HasValue(), "面外の高さを含んでいても平面内の向きを使う");
+    GridDefinition definition;
+    definition.originUmm = 10;
+    definition.originVmm = 20;
+    definition.rotation = angle.Value();
+    definition.majorSpacingMm = 4;
+    definition.subdivision = 4;
+    const auto grid = EvaluateGrid(definition, plane, 8);
+    Require(grid.HasValue(), "回転したグリッドを評価できる");
+    RequireNear(Distance(grid.Value().originXyz, plane.PointAt(10, 20)), 0, 1.0e-12, "原点");
+    RequireNear(Distance(grid.Value().uDirection, {0.8, 0, 0.6}), 0, 1.0e-12, "横軸");
+    RequireNear(Distance(grid.Value().vDirection, {0.6, 0, -0.8}), 0, 1.0e-12, "縦軸");
+    RequireNear(grid.Value().minorSpacingMm, 1, 1.0e-12, "副点間隔");
+    Require(!GridAngleFromPoints(plane, start, start + plane.normal, 1.0e-6).HasValue(),
+        "投影した2点が同じなら断る");
+    definition.rotation = Radians(std::nan(""));
+    Require(!EvaluateGrid(definition, plane, 8).HasValue(), "非有限角度は断る");
 }
 
 KACHA_V2_TEST(grid, 同じ入力からは毎回同じ評価になる)

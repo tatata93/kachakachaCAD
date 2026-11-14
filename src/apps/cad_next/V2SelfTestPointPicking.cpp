@@ -3,11 +3,15 @@
 #include "V2Viewport.h"
 #include "V2WorkPlaneDock.h"
 #include "V2MeasureDock.h"
+#include "V2GridDock.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include <QApplication>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QPixmap>
 #include <QKeyEvent>
+#include <QLineEdit>
+#include <QString>
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -176,6 +180,96 @@ bool SelectedWireExtension(V2MainWindow& w) {
     }
     return Explain("actual end click extends only the target and preserves the boundary",!v.PickPending()&&extended&&retained);
 }
+bool GridAngleInputs(V2MainWindow& w) {
+    if (!Setup(w)) return false;
+    auto& view = w.Viewport();
+    const auto frame = view.WorkPlane();
+    const auto revision = w.Session().GetDocument().Revision();
+    const auto original = w.Session().Scene().grid;
+    w.RunCommand("grid.edit");
+    QApplication::processEvents();
+    auto* angle = w.GridDock().findChild<QLineEdit*>("gridAngleDegrees");
+    auto* pick = w.GridDock().findChild<QPushButton*>("gridPickAngle");
+    if (!Explain("grid angle controls are visible", angle && angle->isVisible()
+            && pick && pick->isVisible())) return false;
+    const auto enterAngle = [&](const QString& text) {
+        angle->setFocus();
+        angle->selectAll();
+        QKeyEvent input(QEvent::KeyPress, 0, Qt::NoModifier, text);
+        QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+        QApplication::sendEvent(angle, &input);
+        QApplication::sendEvent(angle, &enter);
+        QApplication::processEvents();
+    };
+    enterAngle("-30");
+    const auto numeric = w.Session().Scene().grid;
+    if (!Explain("numeric entry rotates around the existing origin",
+            geometry::Distance(numeric.uDirection, {std::sqrt(3.0)/2, -0.5, 0}) < 1e-10
+            && numeric.origin == original.origin)) return false;
+    enterAngle("10 mm");
+    if (!Explain("invalid angle leaves the previous orientation in place",
+            w.Session().Scene().grid.uDirection == numeric.uDirection
+            && !w.GridDock().MessageText().isEmpty())) return false;
+    enterAngle("0");
+    if (!Explain("zero degrees restores the work plane direction",
+            geometry::Distance(w.Session().Scene().grid.uDirection, frame.uAxis) < 1e-10)) return false;
+    Click(*pick, pick->rect().center());
+    if (!view.PickPending() || !ClickWorld(view, points[0])) return false;
+    QKeyEvent cancel(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(&view, &cancel);
+    if (!Explain("Escape after the first click keeps the old grid",
+            !view.PickPending() && w.Session().Scene().grid.uDirection == frame.uAxis)) return false;
+    Click(*pick, pick->rect().center());
+    if (!ClickWorld(view, points[0]) || !ClickWorld(view, points[0])) return false;
+    if (!Explain("the same point twice cannot change the grid",
+            !view.PickPending() && w.Session().Scene().grid.uDirection == frame.uAxis)) return false;
+    Click(*pick, pick->rect().center());
+    if (!ClickWorld(view, points[0]) || !ClickWorld(view, points[1])) return false;
+    const auto fitted = w.Session().Scene().grid;
+    const auto direction = geometry::Normalized(Vector3{41,4,0});
+    if (!Explain("two real endpoint clicks align to the projected direction without moving the origin",
+            !view.PickPending() && geometry::Distance(fitted.uDirection, direction) < 1e-10
+            && fitted.origin == original.origin && fitted.majorSpacingMm == original.majorSpacingMm
+            && view.WorkPlane().uAxis == frame.uAxis
+            && w.Session().GetDocument().Revision() == revision)) return false;
+    view.SetViewDirection(ViewDirection::Top);
+    const auto shot = qEnvironmentVariable("KACHACAD_GRID_ANGLE_SCREENSHOT");
+    if (!shot.isEmpty()) {
+        QApplication::processEvents();
+        if (!Explain("grid angle screenshot saved", w.grab().save(shot))) return false;
+    }
+    const auto target = fitted.origin + fitted.uDirection * fitted.majorSpacingMm;
+    const auto screen = view.Mapping().Project(target);
+    if (!screen) return false;
+    view.HoverAt({screen->x,screen->y});
+    if (!Explain("normal drawing snaps to the rotated grid",
+        view.Hover().snap && view.Hover().snap->kind == modeling::SnapKind::GridMajor
+        && geometry::Distance(view.Hover().snap->position, target) < 1e-10)) return false;
+
+    // A free direction near the old lattice must not be rounded to it.
+    const Vector3 freeStart{0.3,0.6,0};
+    const Vector3 freeEnd{10.2,10.6,0};
+    Click(*pick, pick->rect().center());
+    if (!ClickWorld(view, freeStart) || !ClickWorld(view, freeEnd)) return false;
+    const auto freeDirection = geometry::Normalized(freeEnd - freeStart);
+    if (!Explain("two free points are not pulled onto the old grid",
+            geometry::Distance(w.Session().Scene().grid.uDirection, freeDirection) < 1e-10)) return false;
+
+    w.SelectTool(modeling::DrawingTool::Rectangle);
+    const auto first = w.Session().PlacePoint({0,0,0});
+    const auto second = w.Session().PlacePoint({10,6,0});
+    if (!Explain("rectangle still uses the work plane axes", first.placedPoint && second.committed
+            && !second.createdEntityIds.empty())) return false;
+    int edges = 0;
+    for (const auto& curve : w.Session().Scene().curves) {
+        if (curve.entityId != second.createdEntityIds.front()) continue;
+        const auto delta = curve.segment.EndPoint() - curve.segment.StartPoint();
+        if (!Explain("new rectangle edges remain parallel to the work plane axes",
+                std::abs(delta.x) < 1e-10 || std::abs(delta.y) < 1e-10)) return false;
+        ++edges;
+    }
+    return Explain("all four rectangle edges were checked", edges == 4);
+}
 }
 std::vector<SelfTestCase> PointPickingCases(){return {
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",WorkPlaneRoles},
@@ -183,5 +277,6 @@ std::vector<SelfTestCase> PointPickingCases(){return {
     {"HP-POINT-SNAP 3D intersection midpoint hover and request transitions",SnapAndTransitions},
     {"HP-POINT-TOOLS grid origin measurement and output origin actual clicks",OtherPointTools},
     {"HP-POINT-VISIBLE hidden geometry is ignored and standalone points are picked",PointVisibility},
-    {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension}};}
+    {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension},
+    {"HP-GRID-ANGLE numeric and two-point rotation share the drawing snap grid",GridAngleInputs}};}
 }

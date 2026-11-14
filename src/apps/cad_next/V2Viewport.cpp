@@ -226,6 +226,7 @@ void V2Viewport::SetWorkPlane(const WorkPlaneFrame& plane)
     scene.workPlane.active = true;
     scene.workPlane.origin = plane.origin;
     scene.workPlane.normal = plane.normal;
+    scene.workPlane.uDirection = plane.uAxis;
     session_->SetScene(std::move(scene));
     update();
 }
@@ -844,7 +845,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     if(PickPending()&&!V2ToolSelection::Active(*this)) {
         hover_=v2ui::ReferencePointAt(*this,session_->Scene(),
             session_->GetDocument().Snapshot().settings.tolerance,position,
-            snapSuppressedByKey_||snapSuppressedBySetting_);
+            snapSuppressedByKey_||snapSuppressedBySetting_,pointPickSnapToGrid_);
         status_=property("pointPickPrompt").toString().toStdString();
         hover_.messageJa=status_;hoverOffPlane_=false;hoveredProfileRegion_.reset();
         if(statusCallback_)statusCallback_(status_);
@@ -1151,7 +1152,7 @@ void V2Viewport::ClickAt(const QPointF& position)
         PickedPoint picked;
         const auto hit=v2ui::ReferencePointAt(*this,session_->Scene(),
             session_->GetDocument().Snapshot().settings.tolerance,position,
-            snapSuppressedByKey_||snapSuppressedBySetting_,&picked.curve);
+            snapSuppressedByKey_||snapSuppressedBySetting_,pointPickSnapToGrid_,&picked.curve);
         if(!hit.position) {
             status_="点を指定できません。端点・交点を選ぶか、作業面が見える向きに変えてください。";
             if(statusCallback_)statusCallback_(status_);

@@ -10,11 +10,12 @@ namespace v2ui {
 kachakacha::v2::app::HoverResult ReferencePointAt(const V2Viewport& view,
     const kachakacha::v2::modeling::SnapScene& scene,
     const kachakacha::v2::geometry::GeometryTolerance& tolerance,
-    const QPointF& position, bool suppressed,
+    const QPointF& position, bool suppressed, bool snapToGrid,
     std::optional<kachakacha::v2::app::PickCandidate>* curve)
 {
     using namespace kachakacha::v2;
     modeling::SnapScene visible=scene;
+    if (!snapToGrid) visible.grid.visible = false;
     std::erase_if(visible.curves,[&](const auto& item){return !view.EntityShown(item.entityId);});
     std::erase_if(visible.points,[&](const auto& item){return !view.EntityShown(item.entityId);});
     modeling::SnapSettings settings;settings.suppressed=suppressed;
@@ -30,11 +31,12 @@ kachakacha::v2::app::HoverResult ReferencePointAt(const V2Viewport& view,
 }
 
 void V2Viewport::BeginPointPick(std::function<void(const PickedPoint&)> handler,
-    const std::string& promptJa)
+    const std::string& promptJa, bool snapToGrid)
 {
     if(V2ToolSelection::Active(*this))V2ToolSelection::End(*this);
     CancelReferencePick();
     pickHandler_=std::move(handler);
+    pointPickSnapToGrid_ = snapToGrid;
     setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     setProperty("pointPickPrompt",QString::fromStdString(promptJa));
     ForgetPickCycle();hoveredProfileRegion_.reset();

@@ -151,7 +151,7 @@ public:
         std::optional<kachakacha::v2::app::PickCandidate> curve;
     };
     void BeginPointPick(std::function<void(const PickedPoint&)> handler,
-        const std::string& promptJa);
+        const std::string& promptJa, bool snapToGrid = true);
     [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_); }
     //! 拾うのをやめる。Esc で呼ぶ。
     void CancelPointPick();
@@ -1086,6 +1086,7 @@ private:
     kachakacha::v2::app::PointerGestureTracker rightGesture_;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
+    bool pointPickSnapToGrid_ = true;
     std::vector<kachakacha::v2::base::EntityId> referencePickIds_;
     std::function<void(std::optional<kachakacha::v2::base::EntityId>)> referencePickHandler_;
     std::function<bool(const kachakacha::v2::app::PickCandidate&)> elementPickFilter_;

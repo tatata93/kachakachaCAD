@@ -17,12 +17,14 @@
 #include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QString>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QVariant>
 
+#include <cmath>
 #include <string>
 
 namespace {
@@ -34,6 +36,28 @@ QWidget* PairRow(QWidget* parent, QWidget* first, QWidget* second)
     auto* row=new QWidget(parent);auto* layout=new QHBoxLayout(row);
     layout->setContentsMargins(0,0,0,0);layout->setSpacing(4);
     layout->addWidget(first);layout->addWidget(second);return row;
+}
+
+QLineEdit* GridAngleEntry(QWidget* parent)
+{
+    auto* angle = new QLineEdit(QStringLiteral("0"), parent);
+    angle->setObjectName(QStringLiteral("gridAngleDegrees"));
+    angle->setAccessibleName(QStringLiteral("グリッド角度（度）"));
+    angle->setToolTip(QStringLiteral("作業面の横軸からの角度（度）。0 で元の方向に戻します。"));
+    angle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    angle->setMinimumWidth(55);
+    return angle;
+}
+
+void ConfigureOriginField(QDoubleSpinBox& field, const QString& name, const QString& hint)
+{
+    field.setObjectName(name);
+    field.setRange(-100000.0, 100000.0);
+    field.setDecimals(3);
+    field.setSuffix(QStringLiteral(" mm"));
+    field.setToolTip(hint);
+    field.setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    field.setMinimumWidth(70);
 }
 
 } // namespace
@@ -59,11 +83,20 @@ V2GridDock::V2GridDock(QWidget* parent)
     visible_->setObjectName(QStringLiteral("gridVisibility"));
     visible_->setToolTip(QStringLiteral("表示だけを切り替えます。グリッドへのスナップはスナップボタンで切り替えます。"));
     visible_->setChecked(true);
-    form->addRow(visible_);
+    auto* detailsButton = new QToolButton(body);
+    detailsButton->setObjectName(QStringLiteral("gridDetails"));
+    detailsButton->setText(QStringLiteral("表示・色"));
+    detailsButton->setToolTip(QStringLiteral("表示条件と色の詳細設定"));
+    detailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    detailsButton->setArrowType(Qt::RightArrow);
+    detailsButton->setCheckable(true);
+    form->addRow(PairRow(body, visible_, detailsButton));
 
     spacing_ = new QLineEdit(QStringLiteral("10"), body);
     spacing_->setObjectName(QStringLiteral("gridSpacing"));
     spacing_->setToolTip(QStringLiteral("数値または式(例: 25.4/8)。mm。"));
+    spacing_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    spacing_->setMinimumWidth(55);
     spacingValue_ = new QLabel(QStringLiteral("= 10 mm"), body);
     form->addRow(QStringLiteral("主点間隔"), PairRow(body,spacing_,spacingValue_));
 
@@ -76,36 +109,28 @@ V2GridDock::V2GridDock(QWidget* parent)
     form->addRow(QStringLiteral("副点"), subdivision_);
 
     originU_ = new V2NumericSpinBox(body);
-    originU_->setObjectName(QStringLiteral("gridOriginU"));
-    originU_->setRange(-100000.0, 100000.0);
-    originU_->setDecimals(3);
-    originU_->setSuffix(QStringLiteral(" mm"));
-    originU_->setToolTip(QStringLiteral("グリッド基準 X(u)"));
+    ConfigureOriginField(*originU_, QStringLiteral("gridOriginU"), QStringLiteral("グリッド基準 X(u)"));
     originV_ = new V2NumericSpinBox(body);
-    originV_->setObjectName(QStringLiteral("gridOriginV"));
-    originV_->setRange(-100000.0, 100000.0);
-    originV_->setDecimals(3);
-    originV_->setSuffix(QStringLiteral(" mm"));
-    originV_->setToolTip(QStringLiteral("グリッド基準 Y(v)"));
+    ConfigureOriginField(*originV_, QStringLiteral("gridOriginV"), QStringLiteral("グリッド基準 Y(v)"));
     form->addRow(QStringLiteral("基準 X / Y"), PairRow(body,originU_,originV_));
 
     auto* originButtons = new QWidget(body);
     auto* originLayout = new QHBoxLayout(originButtons);
     originLayout->setContentsMargins(0, 0, 0, 0);
-    resetOrigin_ = new QPushButton(QStringLiteral("基準を 0,0 に戻す"), originButtons);
-    pickOrigin_ = new QPushButton(QStringLiteral("原点を画面で指す"), originButtons);
+    resetOrigin_ = new QPushButton(QStringLiteral("原点を0に戻す"), originButtons);
+    pickOrigin_ = new QPushButton(QStringLiteral("原点を指定"), originButtons);
     originLayout->addWidget(resetOrigin_);
     originLayout->addWidget(pickOrigin_);
     form->addRow(originButtons);
 
+    angle_ = GridAngleEntry(body);
+    pickAngle_ = new QPushButton(QStringLiteral("画面で2点"), body);
+    pickAngle_->setObjectName(QStringLiteral("gridPickAngle"));
+    pickAngle_->setAccessibleName(QStringLiteral("画面の2点でグリッド角度を合わせる"));
+    pickAngle_->setToolTip(QStringLiteral("2点を順に指定して、グリッドの横線をその方向に合わせます。"));
+    form->addRow(QStringLiteral("角度 (°)"), PairRow(body, angle_, pickAngle_));
+
     layout->addLayout(form);
-    auto* detailsButton = new QToolButton(body);
-    detailsButton->setObjectName(QStringLiteral("gridDetails"));
-    detailsButton->setText(QStringLiteral("詳細設定（表示・色）"));
-    detailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    detailsButton->setArrowType(Qt::RightArrow);
-    detailsButton->setCheckable(true);
-    layout->addWidget(detailsButton);
     auto* details = new QWidget(body);
     details->setObjectName(QStringLiteral("gridDetailsBody"));
     details->hide();
@@ -193,6 +218,10 @@ void V2GridDock::ConnectSignals()
             pickOriginHandler_();
         }
     });
+    QObject::connect(angle_, &QLineEdit::editingFinished, this, [this] { ApplyAngle(); });
+    QObject::connect(pickAngle_, &QPushButton::clicked, this, [this] {
+        if (pickAngleHandler_) pickAngleHandler_();
+    });
     QObject::connect(allModes_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(dimOffPlane_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(workPlaneVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
@@ -204,6 +233,21 @@ void V2GridDock::ConnectSignals()
         [this] { ChooseColor(minorColor_, minor_, QStringLiteral("副点色")); });
     QObject::connect(backgroundColor_, &QPushButton::clicked, this,
         [this] { ChooseColor(backgroundColor_, background_, QStringLiteral("背景色")); });
+}
+
+void V2GridDock::ApplyAngle()
+{
+    if (loading_ || !angle_->isModified()) return;
+    const auto evaluated = kachakacha::v2::geometry::EvaluateExpression(
+        angle_->text().toStdString(), kachakacha::v2::geometry::QuantityKind::Angle);
+    if (!evaluated.HasValue() || !std::isfinite(evaluated.Value().value)) {
+        message_->setText(QStringLiteral("角度: 度で数値を入力してください（例: -22.5）。"));
+        return;
+    }
+    angleRad_ = kachakacha::v2::geometry::Radians(evaluated.Value().value);
+    angle_->setModified(false);
+    message_->clear();
+    Emit();
 }
 
 bool V2GridDock::ApplySpacingExpression(const QString& expression)
@@ -251,6 +295,7 @@ V2GridChoice V2GridDock::Choice() const
     choice.grid.subdivision = index >= 0 && index < 4 ? kSubdivisions[index] : 0;
     choice.grid.originUmm = originU_->property("exactGridOrigin").toDouble();
     choice.grid.originVmm = originV_->property("exactGridOrigin").toDouble();
+    choice.grid.rotation = angleRad_;
     choice.spacingExpression = spacing_->text();
     choice.showInAllModes = allModes_->isChecked();
     choice.dimOffPlaneLines = dimOffPlane_->isChecked();
@@ -263,7 +308,7 @@ V2GridChoice V2GridDock::Choice() const
     return choice;
 }
 
-void V2GridDock::SetChoice(const V2GridChoice& choice)
+void V2GridDock::SetChoice(const V2GridChoice& choice, bool replaceAngleEntry)
 {
     loading_ = true;
     visible_->setChecked(choice.grid.visible);
@@ -283,6 +328,13 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
     originV_->setValue(choice.grid.originVmm);
     originU_->setProperty("exactGridOrigin",choice.grid.originUmm);
     originV_->setProperty("exactGridOrigin",choice.grid.originVmm);
+    if (replaceAngleEntry
+        || std::abs(angleRad_.Value() - choice.grid.rotation.Value()) > 1.0e-12) {
+        angle_->setText(QString::number(kachakacha::v2::geometry::ToDegrees(choice.grid.rotation).Value(),
+            'g', 12));
+        message_->clear();
+    }
+    angleRad_ = choice.grid.rotation;
     allModes_->setChecked(choice.showInAllModes);
     dimOffPlane_->setChecked(choice.dimOffPlaneLines);
     workPlaneVisible_->setChecked(choice.workPlaneVisible);
@@ -305,6 +357,11 @@ void V2GridDock::SetApplyHandler(std::function<void(const V2GridChoice&)> handle
 void V2GridDock::SetPickOriginHandler(std::function<void()> handler)
 {
     pickOriginHandler_ = std::move(handler);
+}
+
+void V2GridDock::SetPickAngleHandler(std::function<void()> handler)
+{
+    pickAngleHandler_ = std::move(handler);
 }
 
 void V2GridDock::SetColorChooser(

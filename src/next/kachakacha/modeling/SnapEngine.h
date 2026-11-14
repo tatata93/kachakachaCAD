@@ -155,6 +155,8 @@ struct SnapWorkPlane {
     bool active = false;
     Vector3 origin{};
     Vector3 normal{0.0, 0.0, 1.0};
+    // The drawing frame can have a different orientation from the snap grid.
+    std::optional<Vector3> uDirection = std::nullopt;
 };
 
 struct SnapScene {

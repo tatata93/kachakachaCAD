@@ -208,7 +208,8 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
     }
     if (result.position.has_value()) {
         if (scene_.workPlane.active) {
-            session_->SetPlane(scene_.workPlane.normal, scene_.grid.uDirection);
+            session_->SetPlane(scene_.workPlane.normal,
+                scene_.workPlane.uDirection.value_or(scene_.grid.uDirection));
         }
         result.preview = session_->Preview(*result.position);
     }
@@ -253,7 +254,8 @@ ClickResult DrawingSession::PlacePoint(const geometry::Vector3& world)
     }
     // 置く前に、いまの作業平面の向きを道具へ渡す。矩形の辺・円の面はこれで決まる。
     if (scene_.workPlane.active) {
-        session_->SetPlane(scene_.workPlane.normal, scene_.grid.uDirection);
+        session_->SetPlane(scene_.workPlane.normal,
+            scene_.workPlane.uDirection.value_or(scene_.grid.uDirection));
     }
     auto placed = session_->AddPoint(world);
     if (!placed.HasValue()) {

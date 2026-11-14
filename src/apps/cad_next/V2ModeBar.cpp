@@ -1,14 +1,19 @@
 #include "V2MainWindow.h"
 #include "V2QuickDisplayControls.h"
+#include "V2ToolbarRow.h"
 
 #include <QAction>
 #include <QComboBox>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QObject>
 #include <QSizePolicy>
 #include "V2Viewport.h"
 #include <QString>
 #include <QToolBar>
+#include <QToolButton>
+#include <QWidget>
 
 #include "kachakacha/app/UiMode.h"
 
@@ -20,6 +25,43 @@ using kachakacha::v2::app::AllUiModes;
 using kachakacha::v2::app::UiMode;
 using kachakacha::v2::app::UiModeNameJa;
 
+void AddModeButton(V2ToolbarRow& row, QAction* action)
+{
+    auto* button = new QToolButton(&row);
+    button->setDefaultAction(action);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setMinimumHeight(28);
+    button->setFocusPolicy(Qt::StrongFocus);
+    row.Add(button, action);
+    button->show();
+}
+
+void AddModeChoice(V2ToolbarRow& row, QComboBox* combo, const QString& name)
+{
+    auto* field = new QWidget(&row);
+    auto* layout = new QHBoxLayout(field);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* label = new QLabel(name, field);
+    label->setBuddy(combo);
+    combo->setAccessibleName(name);
+    layout->addWidget(label);
+    layout->addWidget(combo);
+    auto* menu = new QMenu(name, field);
+    menu->setObjectName(QStringLiteral("toolbarOverflowMenu"));
+    menu->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
+    QObject::connect(menu, &QMenu::aboutToShow, menu, [menu, combo] {
+        menu->clear();
+        for (int i = 0; i < combo->count(); ++i) {
+            auto* item = menu->addAction(combo->itemText(i));
+            item->setCheckable(true);
+            item->setChecked(i == combo->currentIndex());
+            QObject::connect(item, &QAction::triggered, combo, [combo, i] { combo->setCurrentIndex(i); });
+        }
+    });
+    row.Add(field, menu->menuAction());
+    field->show();
+}
+
 } // namespace
 
 void V2MainWindow::BuildModeBar()
@@ -27,34 +69,34 @@ void V2MainWindow::BuildModeBar()
     modeBar_ = addToolBar(QStringLiteral("モード"));
     modeBar_->setObjectName(QStringLiteral("modeBar"));
     modeBar_->setMovable(false);
-    modeBar_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    auto* row = new V2ToolbarRow(QStringLiteral("切替"), modeBar_);
+    row->setObjectName(QStringLiteral("modeBarRow"));
     for (const UiMode mode : AllUiModes()) {
-        QAction* action = modeBar_->addAction(
-            QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str()));
+        auto* action = new QAction(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str()), modeBar_);
         action->setCheckable(true);
         action->setChecked(mode == mode_);
         modeActions_.emplace_back(mode, action);
         QObject::connect(action, &QAction::triggered, this,
             [this, mode] { SetMode(mode); });
+        AddModeButton(*row, action);
     }
     // モード → 正対 → 選択 → 測定 → 作図面 → まとまり → 吸着。
-    modeBar_->addSeparator();
     for (const std::string_view id : {"view.align_workplane", "selection.activate",
              "measure.open"}) {
         if (QAction* action = ActionFor(id); action != nullptr) {
-            modeBar_->addAction(action);
+            AddModeButton(*row, action);
         }
     }
-    modeBar_->addSeparator();
-    modeBar_->addWidget(new QLabel(QStringLiteral(" 作図面 "), modeBar_));
-    planeCombo_ = new QComboBox(modeBar_);
+    planeCombo_ = new QComboBox(row);
     planeCombo_->setToolTip(QStringLiteral("作業中の作図面。選ぶと切り替わります。"));
     planeCombo_->setMinimumContentsLength(10);
     planeCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     planeCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     planeCombo_->setMaximumWidth(170);
-    modeBar_->addWidget(planeCombo_);
+    AddModeChoice(*row, planeCombo_, QStringLiteral("作図面"));
     BuildDrawingScopeSwitch();
+    AddModeChoice(*row, modeBar_->findChild<QComboBox*>(QStringLiteral("drawingScope")),
+        QStringLiteral("作図範囲"));
     QObject::connect(planeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         if (refreshingPlaneCombo_ || index < 0
             || index >= static_cast<int>(planeComboIds_.size())) {
@@ -62,17 +104,17 @@ void V2MainWindow::BuildModeBar()
         }
         ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
     });
-    modeBar_->addWidget(new QLabel(QStringLiteral(" グループ "), modeBar_));
-    groupCombo_ = new QComboBox(modeBar_);
+    groupCombo_ = new QComboBox(row);
     groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のグループ。"));
     groupCombo_->setMinimumContentsLength(10);
     groupCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     groupCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     groupCombo_->setMaximumWidth(170);
-    modeBar_->addWidget(groupCombo_);
+    AddModeChoice(*row, groupCombo_, QStringLiteral("グループ"));
     QObject::connect(groupCombo_, &QComboBox::currentIndexChanged, this,
         [this](int index) { ActivateGroupByComboIndex(index); });
-    // Keep these controls out of the mode bar overflow menu, including wide fonts.
+    modeBar_->addWidget(row);
+    // Display toggles are used repeatedly while drawing.
     addToolBarBreak();
     auto* displayBar=addToolBar(QStringLiteral("表示切替"));
     displayBar->setObjectName(QStringLiteral("quickDisplayBar"));
@@ -155,7 +197,6 @@ void V2MainWindow::BuildDrawingScopeSwitch()
     scope->setToolTip(QStringLiteral("平面内: 作図面上だけに作図。3D作図: 奥行きのある点にも吸着。"
                                     "切替時は入力途中の点を取り消します。"));
     session_->SetDrawingPlaneOnly(true);
-    modeBar_->addWidget(scope);
     QObject::connect(scope, &QComboBox::currentIndexChanged, this, [this](int index) {
         const bool hadInput = session_->HasPlacedPoints();
         session_->SetDrawingPlaneOnly(index == 0);

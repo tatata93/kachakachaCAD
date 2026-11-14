@@ -232,7 +232,8 @@ bool KeepsOwnStyleSheet(const QWidget* widget)
 {
     // 表示色ボタンは「色そのもの」が入力値なので、テーマ色で塗りつぶさない。
     return widget != nullptr && (widget->property("displayColor").isValid()
-        || widget->objectName() == QStringLiteral("ribbonCategories"));
+        || widget->objectName() == QStringLiteral("ribbonCategories")
+        || widget->objectName() == QStringLiteral("toolbarOverflowMenu"));
 }
 
 QPixmap ClassicStandardPixmap(QStyle::StandardPixmap standardPixmap)

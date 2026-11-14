@@ -1,13 +1,10 @@
 #include "V2Ribbon.h"
-#include "V2FlowLayout.h"
+#include "V2ToolbarRow.h"
 #include "V2ToolIcons.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include <QSize>
-#include <QResizeEvent>
-#include <QToolBar>
 
 #include <QAction>
-#include <QHBoxLayout>
 #include <QObject>
 #include <QSizePolicy>
 #include <QString>
@@ -52,20 +49,11 @@ V2Ribbon::V2Ribbon(QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    categoryRow_ = new QWidget(this);
+    categoryRow_ = new V2ToolbarRow(QStringLiteral("カテゴリ"), this);
     categoryRow_->setObjectName(QStringLiteral("ribbonCategories"));
-    categoryLayout_ = new QHBoxLayout(categoryRow_);
-    categoryLayout_->setContentsMargins(4, 2, 4, 0);
-    categoryLayout_->setSpacing(0);
-    // 右の余白は最初に 1 つだけ置く。並べ直すたびに足すと余白が溜まり、
-    // 帯が右へ寄っていった(PC 画面 2026-09-19)。ボタンは余白の前へ差し込む。
-    categoryLayout_->addStretch(1);
     layout->addWidget(categoryRow_);
-    toolRow_ = new QWidget(this);
+    toolRow_ = new V2ToolbarRow(QStringLiteral("その他"), this);
     toolRow_->setObjectName(QStringLiteral("ribbonTools"));
-    toolLayout_ = new V2FlowLayout(toolRow_);
-    toolLayout_->setContentsMargins(6, 3, 6, 3);
-    toolLayout_->setSpacing(4);
     layout->addWidget(toolRow_);
     categoryRow_->setStyleSheet(QStringLiteral(
         "QToolButton#ribbonCategory { border: 1px solid palette(mid); border-bottom: 3px solid palette(mid);"
@@ -73,7 +61,7 @@ V2Ribbon::V2Ribbon(QWidget* parent)
         "QToolButton#ribbonCategory:checked { border-bottom: 3px solid palette(highlight); font-weight: bold;"
         " background: palette(base); color: palette(text); }"
         "QToolButton#ribbonCategory:hover { background: palette(light); }"));
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 
 void V2Ribbon::SetActionLookup(std::function<QAction*(std::string_view)> lookup)
@@ -96,24 +84,21 @@ void V2Ribbon::ShowMode(UiMode mode)
     if(mode==mode_&&!categoryButtons_.empty())return;
     remembered_[mode_] = current_;
     mode_ = mode;
-    for (QToolButton* button : categoryButtons_) {
-        categoryLayout_->removeWidget(button);
-        button->hide();
-        button->deleteLater();
-    }
+    categoryRow_->Clear();
     categoryButtons_.clear();
     const auto& categories = RibbonCategoriesFor(mode);
     for (std::size_t index = 0; index < categories.size(); ++index) {
         auto* button = new QToolButton(categoryRow_);
-        button->setText(Text(categories[index].labelJa));
-        button->setCheckable(true);
+        auto* action = new QAction(Text(categories[index].labelJa), button);
+        action->setCheckable(true);
+        button->setDefaultAction(action);
         button->setAutoRaise(false);
         button->setMinimumHeight(32);
         button->setFocusPolicy(Qt::StrongFocus);
         button->setObjectName(QStringLiteral("ribbonCategory"));
         const int at = static_cast<int>(index);
-        QObject::connect(button, &QToolButton::clicked, this, [this, at] { ShowCategory(at); });
-        categoryLayout_->insertWidget(static_cast<int>(categoryButtons_.size()), button);
+        QObject::connect(action, &QAction::triggered, this, [this, at] { ShowCategory(at); });
+        categoryRow_->Add(button, action);
         // 親が見えたあとに作った子は、show() を呼ぶまで(イベントループが回るまで)見えない。
         // 試験は押した直後に isVisible を見るので、ここで出す(PC 自己試験 HP-RB 2026-09-19)。
         button->show();
@@ -140,17 +125,15 @@ void V2Ribbon::ShowCategory(int index)
     const bool reuse=index==current_&&!toolButtons_.empty();
     current_ = index;
     for (std::size_t at = 0; at < categoryButtons_.size(); ++at) {
-        categoryButtons_[at]->setChecked(static_cast<int>(at) == index);
+        categoryButtons_[at]->defaultAction()->setChecked(static_cast<int>(at) == index);
     }
     if(!reuse)RebuildTools();
 }
 
 void V2Ribbon::RebuildTools()
 {
+    toolRow_->Clear();
     for (ToolEntry& entry : toolButtons_) {
-        toolLayout_->removeWidget(entry.button);
-        entry.button->hide();
-        entry.button->deleteLater();
         if (entry.ownAction != nullptr) entry.ownAction->deleteLater();
     }
     toolButtons_.clear();
@@ -168,9 +151,7 @@ void V2Ribbon::RebuildTools()
             auto* button = new QToolButton(toolRow_);
             button->setObjectName(QStringLiteral("ribbonTool"));
             button->setAutoRaise(false);
-            button->setMinimumHeight(54);
-        button->setFocusPolicy(Qt::StrongFocus);
-            button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+            button->setFocusPolicy(Qt::StrongFocus);
             ToolEntry entry;
             entry.button = button;
             entry.tool = tool;
@@ -207,18 +188,17 @@ void V2Ribbon::RebuildTools()
             }
             action->setIcon(V2ToolIcon(tool.commandId,tool.labelJa,tool.surfaceMethod.value_or(tool.measureMode.value_or(-1))));
             button->setDefaultAction(action);
-            button->setIconSize(QSize(32,32));
             button->setAccessibleName(Text(tool.labelJa));
             button->setText(Text(tool.labelJa));   // 台帳の名前ではなく正本の言葉を出す
             if (tool.Blocked()) {
                 button->setToolTip(Text(tool.blockedReasonJa));
             }
-            toolLayout_->insertWidget(static_cast<int>(toolButtons_.size()), button);
+            toolRow_->Add(button, action);
             button->show();   // 上と同じ理由
             toolButtons_.push_back(entry);
         }
     }
-    UpdateRowsHeight();
+    UpdateToolPresentation();
     SetCurrentSurfaceMethod(currentSurfaceMethod_, currentSurfaceMethod_ >= 0);
     SetCurrentMeasureMode(currentMeasureMode_, currentMeasureMode_ >= 0);
 }
@@ -347,24 +327,34 @@ bool V2Ribbon::CommandAvailable(std::string_view commandId) const
 bool V2Ribbon::ToolsFitInWidth() const
 {
     for (const ToolEntry& entry : toolButtons_) {
-        if (entry.button->geometry().right() > toolRow_->width()) {
+        if (entry.button->isVisible()
+            && !toolRow_->rect().contains(entry.button->geometry())) {
             return false;
         }
     }
     return true;
 }
 
-void V2Ribbon::UpdateRowsHeight()
+void V2Ribbon::SetCompact(bool enabled)
 {
-    // QToolBar does not propagate height-for-width to its widget actions.
-    const int height=categoryRow_->sizeHint().height()+toolLayout_->heightForWidth(width());
-    if(minimumHeight()!=height)setFixedHeight(height);
-    if(auto* bar=qobject_cast<QToolBar*>(parentWidget())){
-        // The toolbar also caches its own one-row height; reserve space for all rows.
-        if(bar->minimumHeight()!=height+6)bar->setFixedHeight(height+6);
-    }
+    if (compact_ == enabled) return;
+    compact_ = enabled;
+    UpdateToolPresentation();
 }
-void V2Ribbon::resizeEvent(QResizeEvent* event)
+
+void V2Ribbon::UpdateToolPresentation()
 {
-    QWidget::resizeEvent(event);UpdateRowsHeight();
+    const auto style = compact_ ? Qt::ToolButtonTextBesideIcon : Qt::ToolButtonTextUnderIcon;
+    const auto iconSize = compact_ ? QSize(20, 20) : QSize(32, 32);
+    for (const auto& entry : toolButtons_) {
+        entry.button->setToolButtonStyle(style);
+        entry.button->setIconSize(iconSize);
+        entry.button->setMinimumHeight(compact_ ? 32 : 54);
+    }
+    categoryRow_->Relayout();
+    toolRow_->Relayout();
+    layout()->activate();
+    const int height = layout()->sizeHint().height();
+    if (minimumHeight() != height) setFixedHeight(height);
+    updateGeometry();
 }

@@ -180,8 +180,11 @@ V2MainWindow::V2MainWindow()
     toolFooterLabel_ = new QLabel(footer);
     keyHintLabel_ = new QLabel(
         QString::fromUtf8(kachakacha::v2::app::ToolKeyHintJa().c_str()), footer);
+    for (auto* label : {toolFooterLabel_, keyHintLabel_})
+        label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    keyHintLabel_->setToolTip(keyHintLabel_->text());
     footerRow->addWidget(toolFooterLabel_, 1);
-    footerRow->addWidget(keyHintLabel_, 0);
+    footerRow->addWidget(keyHintLabel_, 1, Qt::AlignRight);
     column->addWidget(footer, 0);
     setCentralWidget(central);
 
@@ -610,6 +613,7 @@ void V2MainWindow::ShowToolFooter(const QString& line)
         return;
     }
     toolFooterLabel_->setText(line);
+    toolFooterLabel_->setToolTip(line);
 }
 
 QString V2MainWindow::ToolFooterTextJa() const

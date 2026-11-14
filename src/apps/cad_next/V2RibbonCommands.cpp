@@ -10,6 +10,7 @@
 
 #include "V2MeasureDock.h"
 #include "V2Ribbon.h"
+#include "V2ScreenLayout.h"
 #include "V2ToolBindings.h"
 #include "V2SolidTool.h"
 #include "V2EdgeFinishTool.h"
@@ -51,6 +52,7 @@ void V2MainWindow::BuildRibbon(const std::map<std::string, QAction*>& byCommand)
     });
     toolPalette_->addWidget(ribbon_);
     ribbon_->ShowMode(mode_);
+    InstallScreenLayout(*this, *ribbon_);
 }
 
 void V2MainWindow::ActivateCommand(std::string_view id)

@@ -307,7 +307,7 @@ bool Ergonomics(V2MainWindow& w) {
                 for(int category=0;category<ribbon.CategoryCount();++category){
                     ribbon.ShowCategory(category);QApplication::processEvents();
                     if(width==1000&&mode==app::UiMode::Drawing&&category==2)w.grab().save(QDir::tempPath()+QStringLiteral("/kachakacha-ergonomics-wrap-%1.png").arg(theme==UiTheme::Normal?"normal":"win95"));
-                    ok=Explain("ribbon tools wrap inside width",ribbon.ToolsFitInWidth())&&ok;
+                    ok=Explain("visible ribbon tools fit in one row",ribbon.ToolsFitInWidth())&&ok;
                     for(auto* button:ribbon.findChildren<QToolButton*>(QStringLiteral("ribbonTool")))if(button->isVisible())
                         ok=Explain("illustration and label with usable target",!button->icon().isNull()&&!button->text().isEmpty()&&button->height()>=32&&button->visibleRegion().boundingRect()==button->rect())&&ok;
                 }

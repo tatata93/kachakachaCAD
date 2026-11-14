@@ -20,10 +20,8 @@
 #include <vector>
 
 class QAction;
-class QHBoxLayout;
-class V2FlowLayout;
+class V2ToolbarRow;
 class QToolButton;
-class QResizeEvent;
 
 class V2Ribbon final : public QWidget {
 public:
@@ -61,22 +59,21 @@ public:
     [[nodiscard]] QString ToolTip(const QString& labelJa) const;
     //! その命令がいまのモードの帯のどこかにあり、押せる形か。
     [[nodiscard]] bool CommandAvailable(std::string_view commandId) const;
-    //! 下段のボタンが1つも右端で切れていないか(幅の検査)。
+    //! 表示したボタンが右端で切れていないか。
     [[nodiscard]] bool ToolsFitInWidth() const;
+    void SetCompact(bool enabled);
 
 private:
     void RebuildTools();
-    void resizeEvent(QResizeEvent* event) override;
-    void UpdateRowsHeight();
+    void UpdateToolPresentation();
     [[nodiscard]] QToolButton* ToolButton(const QString& labelJa) const;
 
     kachakacha::v2::app::UiMode mode_ = kachakacha::v2::app::UiMode::Drawing;
     int current_ = 0;
     std::map<kachakacha::v2::app::UiMode, int> remembered_;
-    QWidget* categoryRow_ = nullptr;
-    QHBoxLayout* categoryLayout_ = nullptr;
-    QWidget* toolRow_ = nullptr;
-    V2FlowLayout* toolLayout_ = nullptr;
+    V2ToolbarRow* categoryRow_ = nullptr;
+    V2ToolbarRow* toolRow_ = nullptr;
+    bool compact_ = false;
     std::vector<QToolButton*> categoryButtons_;
     struct ToolEntry {
         QToolButton* button = nullptr;

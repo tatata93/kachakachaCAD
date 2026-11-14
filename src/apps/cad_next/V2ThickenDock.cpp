@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QString>
 #include <QSizePolicy>
 #include <QVBoxLayout>
@@ -19,6 +20,23 @@
 namespace {
 
 using kachakacha::v2::fabrication::ThicknessPlacement;
+
+void FitStatusText(QLabel& label)
+{
+    label.setMinimumHeight(label.heightForWidth(label.width()));
+}
+
+class ThickenStatusLabel final : public QLabel {
+public:
+    using QLabel::QLabel;
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QLabel::resizeEvent(event);
+        if (event->size().width() != event->oldSize().width()) FitStatusText(*this);
+    }
+};
 
 [[nodiscard]] bool ClickIfVisible(QPushButton* button)
 {
@@ -106,7 +124,7 @@ V2ThickenDock::V2ThickenDock(QWidget* parent)
     independent->setToolTip(QStringLiteral("作成時点の形状を固定します。元の面を変更・削除しても追従しません。境界ワイヤーは常に独立です。"));
     layout->addWidget(independent);
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("状態")));
-    status_ = new QLabel(body);
+    status_ = new ThickenStatusLabel(body);
     status_->setObjectName(QStringLiteral("thickenStatus"));
     status_->setWordWrap(true);
     status_->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Minimum);
@@ -238,6 +256,7 @@ void V2ThickenDock::ShowInput(const kachakacha::v2::app::ThickenInputState& stat
         status += line;
     }
     status_->setText(status);
+    FitStatusText(*status_);
     confirm_->setEnabled(canConfirm);
     loading_ = false;
 }

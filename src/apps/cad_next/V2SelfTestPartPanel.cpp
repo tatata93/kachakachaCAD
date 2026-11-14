@@ -354,12 +354,17 @@ bool CaseSolidFaceTerminalOffset(V2MainWindow& window)
     auto* offset=window.findChild<QDoubleSpinBox*>("extrudeStopOffset");if(!offset)return false;
     offset->setValue(-0.5);
     if(!Explain("終端オフセットを調整しても面選択を維持",window.Viewport().ReferencePickPending()))return false;
-    const auto point=window.Viewport().Mapping().Project({15,0,20});if(!point)return false;
+    const geometry::Vector3 facePoint{15, 0, 20};
+    window.Viewport().SetViewCenter(facePoint);
+    const auto point=window.Viewport().Mapping().Project(facePoint);if(!point)return false;
     const QPointF screen(point->x,point->y);
     QMouseEvent move(QEvent::MouseMove,screen,screen,Qt::NoButton,Qt::NoButton,Qt::NoModifier);
     QMouseEvent press(QEvent::MouseButtonPress,screen,screen,Qt::LeftButton,Qt::LeftButton,Qt::NoModifier);
     QMouseEvent release(QEvent::MouseButtonRelease,screen,screen,Qt::LeftButton,Qt::NoButton,Qt::NoModifier);
     QApplication::sendEvent(&window.Viewport(),&move);
+    const auto hit = window.Viewport().CurrentCandidate();
+    if (!Explain("クリック位置に立体の上面が見えている", hit && hit->pickedFaceIndex
+        && std::abs(hit->hitPoint.z - facePoint.z) < 1e-5)) return false;
     QApplication::sendEvent(&window.Viewport(),&press);
     QApplication::sendEvent(&window.Viewport(),&release);
     if(!Explain("3Dクリックで立体のフェイスを終端に保持",!dock.TargetFaceBrep().empty()

@@ -485,7 +485,11 @@ bool CaseCorrectionButtons(V2MainWindow& window)
     if(!window.ThickenDock().ClickCorrection(true))return false;
     QApplication::processEvents();
     const auto* status=window.findChild<QLabel*>("thickenStatus");
-    if(!Explain("result lines have enough visible height",status&&status->height()>=status->heightForWidth(status->width())))return false;
+    if (!status) return false;
+    const int requiredHeight = status->heightForWidth(status->width());
+    if (!Explain(QStringLiteral("result lines fit (%1 × %2, needs %3 px high)")
+            .arg(status->width()).arg(status->height()).arg(requiredHeight).toStdString().c_str(),
+            status->height() >= requiredHeight)) return false;
     if(!window.ThickenDock().ClickConfirm())return false;
     bool recorded=false;
     for(const auto& feature:window.Session().GetDocument().Snapshot().features)

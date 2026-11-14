@@ -1191,9 +1191,8 @@ void V2Viewport::ClickAt(const QPointF& position)
             static_cast<int>(session_->PlacedPointCount()))) {
         // ここも Hover と同じ絞りで拾う。動かす相手も、
         // 画面で掴めると見えているものだけにする。
-        const auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
-            ScreenPoint{position.x(), position.y()},
-            session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+        RefreshPickCycle(position);
+        const auto picked = CurrentCandidate();
         if (!picked.has_value()) {
             status_ = "動かすものを押してください。";
             if (statusCallback_) {

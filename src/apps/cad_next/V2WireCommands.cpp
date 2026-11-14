@@ -1,6 +1,7 @@
 #include "V2SelectionRoleInputs.h"
 #include "kachakacha/app/PlaneFocus.h"
 #include "V2OffsetTool.h"
+#include "V2PointTransform.h"
 #include "kachakacha/document/Dimension.h"
 //! 線の編集コマンド(V2MainWindow の一部)。
 //!
@@ -30,6 +31,7 @@
 #include "kachakacha/geometry/Measurement.h"
 
 #include <QString>
+#include <QStringList>
 
 #include <algorithm>
 #include <optional>
@@ -1033,10 +1035,11 @@ bool V2MainWindow::TransformOneWire(
 void V2MainWindow::ApplyTransformPlan(
     const kachakacha::v2::modeling::TransformPlan& plan)
 {
+    using kachakacha::v2::domain::EntityKind;
     const auto selected = viewport_->Selection().entityIds;
     const QString label = QString::fromStdString(plan.summaryJa);
     if (selected.empty()) {
-        SetStatus(QStringLiteral("%1: 先に動かす線か部品を選んでください。").arg(label));
+        SetStatus(QStringLiteral("%1: 先に作図点・線・部品を選んでください。").arg(label));
         return;
     }
     // ここは線の編集(トリムなど)とは分ける。あちらは複数の線から1本を作るが、
@@ -1049,7 +1052,7 @@ void V2MainWindow::ApplyTransformPlan(
         for (const auto& entityId : selected) {
             const auto* entity = session_->GetDocument().FindEntity(entityId);
             if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
-                SetStatus(QStringLiteral("%1: 部品のスケールはまだできません。線だけを選んでください。")
+                SetStatus(QStringLiteral("%1: 作図点か線を選んでください。部品はスケールできません。")
                         .arg(label));
                 return;
             }
@@ -1058,6 +1061,7 @@ void V2MainWindow::ApplyTransformPlan(
     const auto definition = DefinitionFor(plan);
     int wires = 0;
     int parts = 0;
+    int points = 0;
     std::vector<kachakacha::v2::base::EntityId> consumed;
     std::vector<kachakacha::v2::base::EntityId> consumedParts;
     // 何本動かしても 1 回の取り消しで戻る(足す + 元の線を消す をひとまとまりに)。
@@ -1065,6 +1069,18 @@ void V2MainWindow::ApplyTransformPlan(
         plan.summaryJa);
     for (const auto& entityId : selected) {
         const auto* entity = session_->GetDocument().FindEntity(entityId);
+        if (!entity || entity->kind != EntityKind::Point) continue;
+        const auto changed = v2ui::TransformDrawingPoint(session_->GetDocument(), *ids_,
+            entityId, definition, plan.keepsSource, plan.summaryJa);
+        if (!changed.committed) {
+            ReportDiagnostics(changed.diagnostics);
+            return;
+        }
+        ++points;
+    }
+    for (const auto& entityId : selected) {
+        const auto* entity = session_->GetDocument().FindEntity(entityId);
+        if (!entity || entity->kind == EntityKind::Point) continue;
         if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
             if (TransformOnePart(definition, entityId, label, !plan.keepsSource)) {
                 ++parts;
@@ -1082,8 +1098,8 @@ void V2MainWindow::ApplyTransformPlan(
             consumed.push_back(entityId);
         }
     }
-    if (wires + parts == 0) {
-        SetStatus(QStringLiteral("%1: 動かせる線や部品がありませんでした。").arg(label));
+    if (points + wires + parts == 0) {
+        SetStatus(QStringLiteral("%1: 動かせる作図点・線・部品がありませんでした。").arg(label));
         return;
     }
     RemoveConsumedWires(consumed);
@@ -1093,9 +1109,11 @@ void V2MainWindow::ApplyTransformPlan(
         return;
     }
     AdoptCurrentDocument();
-    const QString what = parts == 0 ? QStringLiteral("%1本").arg(wires)
-        : wires == 0               ? QStringLiteral("部品 %1 個").arg(parts)
-                                   : QStringLiteral("線 %1 本と部品 %2 個").arg(wires).arg(parts);
+    QStringList counts;
+    if (points) counts.push_back(QStringLiteral("作図点 %1 個").arg(points));
+    if (wires) counts.push_back(QStringLiteral("線 %1 本").arg(wires));
+    if (parts) counts.push_back(QStringLiteral("部品 %1 個").arg(parts));
+    const QString what = counts.join(QStringLiteral("、"));
     if (plan.keepsSource) {
         SetStatus(QStringLiteral("%1: %2を写しました。元は残っています。").arg(label, what));
         return;

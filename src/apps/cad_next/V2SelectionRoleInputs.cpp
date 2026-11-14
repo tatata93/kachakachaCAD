@@ -3,6 +3,7 @@
 #include "V2Viewport.h"
 #include "V2RoleInput.h"
 #include "V2ToolSelection.h"
+#include "V2PointTransform.h"
 #include <QDockWidget>
 #include <QLabel>
 #include <QObject>
@@ -47,7 +48,7 @@ public:
             done_=new QPushButton(QStringLiteral("選択終了 → 基準点を指定"),this);
             done_->setObjectName("transformTargetsDone");layout->addWidget(done_);done_->hide();
             connect(done_,&QPushButton::clicked,this,[this]{Cancel();});
-            roles_[0]->arm->setToolTip(QStringLiteral("複数の線・部品をクリックや範囲で追加します。Ctrlでも追加・解除できます。"));
+            roles_[0]->arm->setToolTip(QStringLiteral("作図点・線・部品をクリックや範囲で追加できます。Ctrlで追加・解除できます。"));
             base_=new QLabel(this);base_->setObjectName("transformBasePoint");base_->setWordWrap(true);layout->addWidget(base_);
             destination_=new QLabel(this);destination_->setObjectName("transformDestination");destination_->setWordWrap(true);layout->addWidget(destination_);
             resetBase_=new QPushButton(QStringLiteral("基準点を取り直す"),this);resetBase_->setObjectName("transformResetBase");layout->addWidget(resetBase_);
@@ -87,6 +88,7 @@ private:
     }
     bool Accept(base::EntityId id) const {
         const auto* entity=window_.Session().GetDocument().FindEntity(id);
+        if(kind_==2||kind_==4)return entity&&v2ui::IsTransformTarget(entity->kind);
         return entity&&((kind_==3?entity->kind==domain::EntityKind::GuideSurface:entity->kind==domain::EntityKind::Wire)||(!corner_&&entity->kind==domain::EntityKind::Part));
     }
     void Cancel() {

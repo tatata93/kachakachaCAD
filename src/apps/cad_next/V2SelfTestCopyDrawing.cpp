@@ -4,6 +4,9 @@
 #include "V2ToolSelection.h"
 #include "V2EntityTree.h"
 #include "V2QuickDisplayControls.h"
+#include "V2ArrayDock.h"
+#include "V2DrawingDock.h"
+#include "V2SelfTestToolbar.h"
 #include <QApplication>
 #include <QEventLoop>
 #include <QTimer>
@@ -23,6 +26,7 @@
 #include <QMouseEvent>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QDockWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -108,6 +112,121 @@ bool CopyNumeric(V2MainWindow& w){
     if(!Explain("Enter creates the same geometry shown by the ghost",found&&w.Session().Scene().curves.size()==4))return false;
     w.SelectTool(modeling::DrawingTool::Line);return Explain("tool change discards the Copy ghost",!v.HasPreview()&&!v.CursorPanel().active);
 }
+
+bool PointAt(V2MainWindow& w, base::EntityId id, geometry::Vector3 location)
+{
+    for (const auto& point : w.Session().Scene().points)
+        if (point.entityId == id && geometry::Distance(point.position, location) < 1e-7) return true;
+    return false;
+}
+
+bool PointMoveAndCopy(V2MainWindow& w)
+{
+    const auto wires = Prepare(w, 1);
+    if (wires.empty()) return false;
+    auto& v = w.Viewport();
+    w.SelectTool(modeling::DrawingTool::Point);
+    Click(v, {-25, 15, 0});
+    if (!Explain("create an independent point through the viewport", w.Session().Scene().points.size() == 1))
+        return false;
+    const auto original = w.Session().Scene().points.front();
+    const geometry::Vector3 delta{20, 0, 0};
+    w.SelectTool(modeling::DrawingTool::Move);
+    v.SetSelection({});
+    Click(v, original.position);
+    if (!Explain("tool-first click selects the point", app::IsSelected(v.Selection(), original.entityId)))
+        return false;
+    Click(v, {-20, -10, 0}, Qt::ControlModifier);
+    if (!Explain("Ctrl adds the wire to the point", v.Selection().entityIds.size() == 2)) return false;
+    Click(v, {0, -30, 0});
+    Click(v, {20, -30, 0});
+    if (!Explain("mixed move updates the same point and moves the wire",
+            PointAt(w, original.entityId, original.position + delta) && w.Session().Scene().points.size() == 1
+            && w.Session().Scene().curves.size() == 1
+            && geometry::Distance(w.Session().Scene().curves.front().segment.StartPoint(), {-10,-10,0}) < 1e-7))
+        return false;
+    w.RunCommand("edit.undo");
+    if (!Explain("one Undo puts the point and wire back",
+            PointAt(w, original.entityId, original.position) && w.Session().GetDocument().FindEntity(wires.front())))
+        return false;
+    w.RunCommand("edit.redo");
+    if (!PointAt(w, original.entityId, original.position + delta)) return false;
+
+    w.SelectTool(modeling::DrawingTool::Copy);
+    v.SetSelection({});
+    auto* item = w.ItemOfEntity(original.entityId);
+    auto* tree = w.EntityTree();
+    if (!item || !tree) return false;
+    for (auto* parent = item->parent(); parent; parent = parent->parent()) parent->setExpanded(true);
+    tree->scrollToItem(item);
+    QApplication::processEvents();
+    const auto at = tree->visualItemRect(item).center();
+    if (tree->itemAt(at) != item) return false;
+    Mouse(*tree->viewport(), QEvent::MouseButtonPress, at, Qt::LeftButton, Qt::LeftButton);
+    Mouse(*tree->viewport(), QEvent::MouseButtonRelease, at, Qt::LeftButton, Qt::NoButton);
+    if (!Explain("point is a copy target in the tree", app::IsSelected(v.Selection(), original.entityId)))
+        return false;
+    Click(v, {0, -30, 0});
+    Click(v, {-20, -30, 0});
+    const bool sameOriginal = PointAt(w, original.entityId, original.position + delta);
+    const bool copied = std::any_of(w.Session().Scene().points.begin(), w.Session().Scene().points.end(),
+        [&](const auto& point) {return point.entityId != original.entityId
+            && geometry::Distance(point.position, original.position) < 1e-7;});
+    return Explain("copy makes a second point and saves both",
+        sameOriginal && copied && w.SaveAndReopen(QStringLiteral("point-transform.kcd2"))
+        && PointAt(w, original.entityId, original.position + delta) && w.Session().Scene().points.size() == 2);
+}
+
+bool PointRotateMirrorScaleAndArray(V2MainWindow& w)
+{
+    Prepare(w, 0);
+    auto& v = w.Viewport();
+    w.SelectTool(modeling::DrawingTool::Point);
+    Click(v, {15,-20,0});
+    if (w.Session().Scene().points.size() != 1) return false;
+    const auto point = w.Session().Scene().points.front();
+    const auto press = [](QWidget* button) {
+        const auto center = button->rect().center();
+        Mouse(*button, QEvent::MouseButtonPress, center, Qt::LeftButton, Qt::LeftButton);
+        Mouse(*button, QEvent::MouseButtonRelease, center, Qt::LeftButton, Qt::NoButton);
+        QApplication::processEvents();
+        return true;
+    };
+    const auto tool = [&](const QString& label) {
+        v.SetSelection(app::SelectionSet{{point.entityId}});
+        return ClickRibbonItem(w.Ribbon(), "ribbonTool", label, press);
+    };
+    if (!ClickRibbonItem(w.Ribbon(), "ribbonCategory", QStringLiteral("変形"), press)
+        || !tool(QStringLiteral("回転"))) return false;
+    Click(v, {0,-20,0});
+    Click(v, {20,-20,0});
+    Click(v, {0,0,0});
+    if (!Explain("rotating a point retains its ID", PointAt(w, point.entityId, {0,-5,0}))) return false;
+    if (!tool(QStringLiteral("ミラー"))) return false;
+    Click(v, {-20,-20,0});
+    Click(v, {20,-20,0});
+    const auto& points = w.Session().Scene().points;
+    if (!Explain("reflection preserves the source and creates a mirrored point", points.size() == 2
+            && PointAt(w, point.entityId, {0,-5,0})
+            && std::any_of(points.begin(), points.end(), [](const auto& copy) {
+                return geometry::Distance(copy.position, {0,-35,0}) < 1e-7;
+            }))) return false;
+    if (!tool(QStringLiteral("スケール")) || !w.DrawingDock().TypeScaleFactor(2)) return false;
+    Click(v, {0,-20,0});
+    if (!Explain("scale changes a point's position about the center", PointAt(w, point.entityId, {0,10,0})))
+        return false;
+    if (!tool(QStringLiteral("直線に並べる"))) return false;
+    auto* dock = dynamic_cast<V2ArrayDock*>(w.findChild<QDockWidget*>(QStringLiteral("arrayDock")));
+    if (!dock) return false;
+    dock->SetCountTyped(3);
+    if (!Explain("linear array creates two independent points",
+            dock->ClickConfirm() && w.Session().Scene().points.size() == 4 && PointAt(w, point.entityId, {0,10,0})))
+        return false;
+    if (!tool(QStringLiteral("円に並べる"))) return false;
+    dock->SetCountTyped(4);
+    return Explain("circular array creates three more points",
+        dock->ClickConfirm() && w.Session().Scene().points.size() == 7 && PointAt(w, point.entityId, {0,10,0}));
+}
 bool DrawingAppendRows(V2MainWindow& w){
     auto ids=Prepare(w);auto& v=w.Viewport();auto* tree=w.EntityTree();auto* original=w.ItemOfEntity(ids.front());auto* category=original->parent();
     category->setExpanded(false);const auto builds=w.property("explorerBuilds").toInt();
@@ -176,6 +295,8 @@ std::vector<SelfTestCase> CopyDrawingCases(){
         {"HP-COPY-02 basepoint cursor ghost and atomic Undo Redo",CopyGhost},
         {"HP-COPY-03 role rectangle Escape and tool switch",CopyRoleBox},
         {"HP-COPY-04 numeric ghost matches Enter",CopyNumeric},
+        {"HP-COPY-05 move and copy a drawing point through viewport and tree",PointMoveAndCopy},
+        {"HP-COPY-06 rotate mirror scale and array drawing points",PointRotateMirrorScaleAndArray},
         {"HP-DRAW-01 appended rows visibility rename and fold state",DrawingAppendRows},
         {"HP-DRAW-02 closed measurement defers work and reopens current selection",HiddenMeasurement}};
     if(qEnvironmentVariableIsSet("KACHACAD_DRAWING_PERF_OUTPUT"))cases.push_back({"HP-DRAW-PERF line hover and commit latency",DrawingBenchmark});

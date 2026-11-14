@@ -73,11 +73,11 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.trim` | トリム | 何も選ばず道具を持ち線上をホバー→消える区間(画面の全線との最近交点間、無ければ線ごと)がプレビューされ、押すと確定。先に2本選ぶ旧手順(対象線+境界+残す側)も可 | TransformWire(区間を除いた残り。円は円弧化、真ん中なら2本の open wire) | AT-WIR-006 |
 | `wire.extend` | 延長 | 何も選ばず道具を持ち端点近くをホバー→伸びる先(画面の全線のうち最近傍)がプレビューされ、押すと確定。先に2本選ぶ旧手順(対象端+境界)も可 | TransformWire | AT-WIR-006 |
 | `wire.split` | 分割 | 何も選ばず道具を持ち線上をホバー→最近傍交点に×がプレビューされ、押すと確定。先に2本以上選ぶ旧手順(segment、parameter/交点)も可 | TransformWire(2本のwireに分割) | AT-WIR-001,006 |
-| `wire.move` | 移動 | ワイヤー、2点 | TransformWire | AT-WIR-006 |
-| `wire.copy` | コピー | ワイヤー、2点 | TransformWire | AT-WIR-006 |
-| `wire.mirror` | ミラー複製 | ワイヤー、鏡の線2点 | TransformWire | AT-WIR-006 |
-| `wire.rotate` | 回転 | ワイヤー、中心と向き2点 | TransformWire | AT-WIR-006 |
-| `wire.scale` | スケール | ワイヤー 1 以上、中心 1 点 + 倍率(棚)か、中心・基準・行き先の 3 点 | TransformWire(scale。直線・円弧・曲線は種類を保つ)。倍率が 0 以下・1 は UI-X005。部品は断る | AT-WIR-006 |
+| `wire.move` | 移動 | 作図点・ワイヤー・部品、2点 | 作図点の座標更新、ワイヤー・部品の変換 | AT-WIR-006 |
+| `wire.copy` | コピー | 作図点・ワイヤー・部品、2点 | 元を保持し位置を変えて複製 | AT-WIR-006 |
+| `wire.mirror` | ミラー複製 | 作図点・ワイヤー・部品、鏡の線2点 | 元を保持し鏡映した複製を作成 | AT-WIR-006 |
+| `wire.rotate` | 回転 | 作図点・ワイヤー・部品、中心と向き2点 | 作図点の座標更新、ワイヤー・部品の変換 | AT-WIR-006 |
+| `wire.scale` | スケール | 作図点・ワイヤー、中心と倍率か、中心・基準・行き先の3点 | 作図点の座標更新、ワイヤーの変換。倍率が 0 以下・1 は UI-X005 | AT-WIR-006 |
 | `wire.join` | 結合 | 線 2 本以上(何本でも。端でつながっていること) | TransformWire(1 本の並び。端が離れていれば断る) | AT-WIR-004,006 |
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |

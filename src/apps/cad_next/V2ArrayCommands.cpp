@@ -14,6 +14,8 @@
 //!      「確定」(ConfirmArray)で初めて並べる。Esc/「キャンセル」(EndArray)でやめる。
 
 #include "V2MainWindow.h"
+#include "V2PointTransform.h"
+#include "V2Viewport.h"
 
 #include "kachakacha/app/ArrayPlan.h"
 #include "kachakacha/app/ShelfLayout.h"
@@ -50,7 +52,7 @@ void V2MainWindow::RunLinearArray()
 {
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty() && arrayChooser_) {
-        SetStatus(QStringLiteral("直線に並べる: 先に並べる線か部品を選んでください。"));
+        SetStatus(QStringLiteral("直線に並べる: 先に並べる作図点・線・部品を選んでください。"));
         return;
     }
     if (arrayChooser_) {
@@ -76,7 +78,7 @@ void V2MainWindow::RunCircularArray()
 {
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty() && arrayChooser_) {
-        SetStatus(QStringLiteral("円に並べる: 先に並べる線か部品を選んでください。"));
+        SetStatus(QStringLiteral("円に並べる: 先に並べる作図点・線・部品を選んでください。"));
         return;
     }
     if (arrayChooser_) {
@@ -104,6 +106,12 @@ bool V2MainWindow::TransformOneEntity(
     kachakacha::v2::base::EntityId entityId, const QString& labelJa)
 {
     const auto* entity = session_->GetDocument().FindEntity(entityId);
+    if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Point) {
+        const auto result = v2ui::TransformDrawingPoint(session_->GetDocument(), *ids_,
+            entityId, definition, true, labelJa.toStdString());
+        if (!result.committed) ReportDiagnostics(result.diagnostics);
+        return result.committed;
+    }
     if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
         return TransformOnePart(definition, entityId, labelJa, false);
     }
@@ -118,7 +126,7 @@ bool V2MainWindow::CommitLinearArray()
 
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("直線に並べる: 先に並べる線か部品を選んでください。"));
+        SetStatus(QStringLiteral("直線に並べる: 先に並べる作図点・線・部品を選んでください。"));
         return false;
     }
     const auto plan = kachakacha::v2::app::PlanLinearArray(arrayChoice_.step,
@@ -142,7 +150,7 @@ bool V2MainWindow::CommitLinearArray()
     }
     session_->GetDocument().EndCompound();
     if (made == 0) {
-        SetStatus(QStringLiteral("直線に並べる: 並べられる線や部品がありませんでした。"));
+        SetStatus(QStringLiteral("直線に並べる: 並べられる対象がありませんでした。"));
         return false;
     }
     AdoptCurrentDocument();
@@ -160,7 +168,7 @@ bool V2MainWindow::CommitCircularArray()
 
     const auto selected = viewport_->Selection().entityIds;
     if (selected.empty()) {
-        SetStatus(QStringLiteral("円に並べる: 先に並べる線か部品を選んでください。"));
+        SetStatus(QStringLiteral("円に並べる: 先に並べる作図点・線・部品を選んでください。"));
         return false;
     }
     // 軸は作業平面の法線。別に聞かない ── 作図面の上で並べるのが普通で、
@@ -188,7 +196,7 @@ bool V2MainWindow::CommitCircularArray()
     }
     session_->GetDocument().EndCompound();
     if (made == 0) {
-        SetStatus(QStringLiteral("円に並べる: 並べられる線や部品がありませんでした。"));
+        SetStatus(QStringLiteral("円に並べる: 並べられる対象がありませんでした。"));
         return false;
     }
     AdoptCurrentDocument();

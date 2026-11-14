@@ -1298,6 +1298,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2Ribbon.cpp
         src/apps/cad_next/V2ToolbarRow.cpp
         src/apps/cad_next/V2ScreenLayout.cpp
+        src/apps/cad_next/V2PointTransform.cpp
         src/apps/cad_next/V2ExplorerBuild.cpp
     src/apps/cad_next/V2ExplorerUpdates.cpp
     src/apps/cad_next/V2GeneratedCurves.cpp

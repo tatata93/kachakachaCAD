@@ -4,6 +4,8 @@
 
 #include "V2Viewport.h"
 #include "V2RenderSelection.h"
+#include "V2TransformPreview.h"
+#include "V2ToolSelection.h"
 
 #include "kachakacha/modeling/GridModel.h"
 
@@ -665,8 +667,19 @@ void V2Viewport::DrawControlPoints(QPainter& painter) const
 
 void V2Viewport::DrawPreview(QPainter& painter) const
 {
-    if (hover_.preview.empty()) {
-        return;
+    using Tool = kachakacha::v2::modeling::DrawingTool;
+    const auto tool = session_->CurrentTool();
+    if ((tool == Tool::Move || tool == Tool::Copy) && !V2ToolSelection::Active(*this)) {
+        if (const auto delta = v2ui::TransformDragDelta(*this, *session_, hover_, cursorPanel_, cursorDelta_)) {
+            const auto& selection = V2RenderSelectionOf(*this);
+            painter.setPen(QPen(SemanticColor(SemanticState::Preview), 1.5));
+            painter.setBrush(Qt::NoBrush);
+            for (const auto& point : session_->Scene().points) {
+                if (!selection.Entity(point.entityId)) continue;
+                if (const auto screen = ToScreen(point.position + *delta))
+                    painter.drawRect(QRectF(screen->x() - 3.5, screen->y() - 3.5, 7.0, 7.0));
+            }
+        }
     }
     QPainterPath path;
     bool started = false;

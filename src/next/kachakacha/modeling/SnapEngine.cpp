@@ -534,6 +534,7 @@ std::optional<SnapCandidate> ChooseSnap(const std::vector<SnapCandidate>& candid
     // 候補はすでに順位 → 画面距離で並んでいるので、最初の1つが順位どおりの答えである。
     const SnapCandidate* best = nullptr;
     const SnapCandidate* held = nullptr;
+    const SnapCandidate* directIntersection = nullptr;
     for (const SnapCandidate& candidate : candidates) {
         if (candidate.kind == SnapKind::ScreenIntersection) {
             continue;
@@ -544,10 +545,19 @@ std::optional<SnapCandidate> ChooseSnap(const std::vector<SnapCandidate>& candid
         if (held == nullptr && candidate.held) {
             held = &candidate;
         }
+        if (directIntersection == nullptr && candidate.kind == SnapKind::Intersection
+            && candidate.screenDistancePx <= 1.0) {
+            directIntersection = &candidate;
+        }
     }
     if (best == nullptr) {
         return std::nullopt;
     }
+    // A point clearly under the pointer should remain reachable beside an
+    // endpoint. Coincident points still use the ordinary endpoint priority.
+    if (directIntersection && SnapPriorityRank(best->kind) == SnapPriorityRank(SnapKind::Endpoint)
+        && best->screenDistancePx > directIntersection->screenDistancePx + std::max(1.0, settings.holdMarginPx))
+        return *directIntersection;
     if (held == nullptr || held == best) {
         return *best;
     }

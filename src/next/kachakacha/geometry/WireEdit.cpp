@@ -1,6 +1,7 @@
 #include "kachakacha/geometry/WireEdit.h"
 
 #include "kachakacha/geometry/CornerCurves.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -53,27 +54,14 @@ std::vector<EditIntersection> IntersectCurvesForEditing(const CurveSegment& a,
 {
     std::vector<EditIntersection> found;
 
-    // 直線どうしは解析的に。
-    if (IsLine(a) && IsLine(b)) {
-        const Vector3 p0 = a.StartPoint();
-        const Vector3 d0 = a.EndPoint() - p0;
-        const Vector3 p1 = b.StartPoint();
-        const Vector3 d1 = b.EndPoint() - p1;
-        double t0 = 0.0;
-        double t1 = 0.0;
-        if (!ClosestPointsOnLines(p0, d0, p1, d1, t0, t1)) {
-            return found;
-        }
-        const Vector3 pointA = p0 + d0 * t0;
-        const Vector3 pointB = p1 + d1 * t1;
-        if (Distance(pointA, pointB) > toleranceMm) {
-            return found; // ねじれの位置。3Dでは交わらない。
-        }
-        if (t0 < -1.0e-9 || t0 > 1.0 + 1.0e-9 || t1 < -1.0e-9 || t1 > 1.0 + 1.0e-9) {
-            return found; // 無限直線では交わるが、線分の外。
-        }
-        found.push_back({std::clamp(t0, 0.0, 1.0), std::clamp(t1, 0.0, 1.0),
-            (pointA + pointB) * 0.5});
+    const auto basic = [](const CurveSegment& curve) {
+        return IsLine(curve) || curve.Kind() == CurveKind::Circle || curve.Kind() == CurveKind::CircularArc;
+    };
+    if (basic(a) || basic(b)) {
+        auto tolerance = GeometryTolerance::Default();
+        tolerance.modelLinearMm = toleranceMm;
+        for (const auto& hit : IntersectCurves(a, b, tolerance))
+            found.push_back({hit.firstParameter, hit.secondParameter, hit.position});
         return found;
     }
 

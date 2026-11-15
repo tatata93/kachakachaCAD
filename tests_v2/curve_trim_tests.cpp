@@ -236,6 +236,32 @@ KACHA_V2_TEST(curve_trim, いちばん近い区切りで分ける)
     RequireNear(pieces.Value().second->StartPoint().x, -10.0, 1.0e-6, "2本目は区切りから始まる");
 }
 
+KACHA_V2_TEST(curve_trim, shallow_crossings_are_used_for_both_trim_and_split)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto target = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1},
+        {1, 0, 0}, 20, 0.1, 2.9).Value();
+    const auto boundary = CurveSegment::MakeLine({-200, 19.99, 0}, {400, 19.99, 0}).Value();
+    const auto offset = CurveSegment::MakeLine({3, 10, 0.005}, {3, 30, 0.005}).Value();
+    const auto tolerance = GeometryTolerance::Default();
+    const auto cuts = CutPointsOn(target, {boundary, offset}, tolerance);
+    Require(cuts.size() == 2, "both intersections bracket the small arc, ignoring the offset boundary");
+    const double middle = target.ClosestPoint({0, 20, 0}).parameter;
+    const auto span = TrimSpanAround(target, cuts, middle, tolerance);
+    Require(span.HasValue() && !span.Value().whole, "trim previews just the bracketed arc");
+    const auto remainder = RemoveSpan(target, span.Value());
+    Require(remainder.HasValue() && remainder.Value().before.size() == 1
+        && remainder.Value().after.size() == 1, "both surrounding arcs remain");
+    RequireNear(Distance(remainder.Value().before.front().EndPoint(), cuts.front().point),
+        0, 1e-8, "trim start at previewed cut");
+    RequireNear(Distance(remainder.Value().after.front().StartPoint(), cuts.back().point),
+        0, 1e-8, "trim end at previewed cut");
+    const auto split = SplitAtCut(target, cuts.front());
+    Require(split.HasValue() && split.Value().second.has_value(), "split creates two native arcs");
+    RequireNear(Distance(split.Value().first.EndPoint(), split.Value().second->StartPoint()),
+        0, 1e-8, "split shares exact intersection");
+}
+
 KACHA_V2_TEST(curve_trim, 円を分けると継ぎ目入りの一周円弧になる)
 {
     const CurveSegment target = Circle(10.0);

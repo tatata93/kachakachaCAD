@@ -497,7 +497,7 @@ void V2MainWindow::MakeIntersectionPoints()
     const auto& selection = viewport_->Selection();
     const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     const auto points = kachakacha::v2::app::IntersectionPointsOf(inputs,
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+        session_->GetDocument().Snapshot().settings.tolerance.modelLinearMm);
     if (!points.HasValue()) {
         ReportDiagnostics(points.Diagnostics());
         return;

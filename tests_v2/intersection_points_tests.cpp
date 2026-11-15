@@ -2,6 +2,8 @@
 #include "kachakacha/app/IntersectionPoints.h"
 #include "kachakacha/base/TestHarness.h"
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 
 using kachakacha::v2::app::IntersectionPointsOf;
@@ -58,6 +60,47 @@ KACHA_V2_TEST(intersection_points, 交わらないときと1本のときは断�
     const auto one = IntersectionPointsOf({Line({0, 0, 0}, {10, 0, 0})}, 0.01);
     Require(!one.HasValue(), "1本は断る");
     RequireEqual(one.Diagnostics().front().code, std::string("UI-X101"), "理由の番号");
+}
+
+KACHA_V2_TEST(intersection_points, arc_and_two_wires_find_all_crossings_in_either_order)
+{
+    const auto arc = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1},
+        {1, 0, 0}, 20, 3.0, -2.9).Value();
+    const auto shallow = Line({-200, 19.99, 0}, {400, 19.99, 0});
+    const auto vertical = Line({3, -30, 0}, {3, 30, 0});
+    const double x = std::sqrt((20.0 - 19.99) * (20.0 + 19.99));
+    for (const auto& curves : {std::vector{shallow, vertical, arc}, std::vector{arc, vertical, shallow}}) {
+        const auto points = IntersectionPointsOf(curves, 1e-6);
+        Require(points.HasValue() && points.Value().size() == 4, "all four distinct intersections");
+        for (const Vector3 expected : {Vector3{-x, 19.99, 0}, Vector3{x, 19.99, 0},
+                Vector3{3, std::sqrt(391.0), 0}, Vector3{3, 19.99, 0}}) {
+            Require(std::any_of(points.Value().begin(), points.Value().end(), [&](const auto& point) {
+                return (point - expected).Length() < 1e-8;
+            }), "exact intersection in the finite arc and lines");
+        }
+    }
+}
+
+KACHA_V2_TEST(intersection_points, arc_and_cubic_wires_agree_at_model_tolerance)
+{
+    const auto arc = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1},
+        {1, 0, 0}, 20, 0.1, 2.9).Value();
+    const auto bezier = CurveSegment::MakeCubicBezier(
+        {{-20, 20.03, 0}, {-8, 19.98, 0}, {8, 19.98, 0}, {20, 20.03, 0}}).Value();
+    const auto spline = CurveSegment::MakeCubicBSpline(
+        {{-60, 20.03, 0}, {-20, 19.99, 0}, {0, 19.98, 0},
+            {20, 19.99, 0}, {60, 20.03, 0}}).Value();
+    for (const auto& curve : {bezier, spline}) {
+        const auto points = IntersectionPointsOf({curve, arc}, 1e-6);
+        Require(points.HasValue() && points.Value().size() == 2, "two near-tangent intersections");
+        for (const auto& hit : points.Value()) {
+            RequireNear(arc.ClosestPoint(hit).distance, 0, 1e-8, "point on original arc");
+            RequireNear(curve.ClosestPoint(hit).distance, 0, 1e-8, "point on original cubic");
+        }
+        const auto separated = CurveSegment::MakeCircularArc({0, 0, 0.005}, {0, 0, 1},
+            {1, 0, 0}, 20, 0.1, 2.9).Value();
+        Require(!IntersectionPointsOf({separated, curve}, 1e-6).HasValue(), "ignore apparent intersections");
+    }
 }
 
 KACHA_V2_TEST_MAIN("intersection_points")

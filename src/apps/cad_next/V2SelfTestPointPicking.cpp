@@ -118,6 +118,108 @@ bool SnapAndTransitions(V2MainWindow& w) {
     QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(&v,&escape);
     return Explain("Escape releases point input without modifying the document",!v.PickPending()&&w.Session().Scene().curves.size()==source.size());
 }
+
+bool ArcCrossingDrawing(V2MainWindow& w)
+{
+    using geometry::CurveSegment;
+    using modeling::SnapKind;
+    constexpr double radius = 20.06081081081081;
+    const Vector3 crossing{-12, radius - std::sqrt(radius * radius - 144), 16.5};
+    const Vector3 nearby{-11.99604993837049, 3.9819141986901467, 16.5};
+    const Vector3 chordStart{-0.5000000161227988, 0.006232022702284679, 16.5};
+    w.resize(1600, 1000);
+    QApplication::processEvents();
+    auto& view = w.Viewport();
+    const auto fixture = qEnvironmentVariable("KACHACAD_ARC_CROSSING_FIXTURE");
+    base::EntityId arcId, verticalId, chordId;
+    if (!fixture.isEmpty()) {
+        if (!w.OpenDocumentFile(fixture)) return false;
+        for (int i = 0; i < w.PlaneComboCount(); ++i)
+            if (w.PlaneComboText(i) == QStringLiteral("作業面4")) w.SelectPlaneCombo(i);
+        for (const auto& curve : w.Session().Scene().curves) {
+            const auto& segment = curve.segment;
+            if (segment.Kind() == geometry::CurveKind::CircularArc
+                && geometry::Distance(segment.Center(), {0, radius, 16.5}) < 1e-8) arcId = curve.entityId;
+            if (segment.StartPoint() == Vector3{-12, 2, 16.5}
+                && segment.EndPoint() == Vector3{-12, 5, 16.5}) verticalId = curve.entityId;
+            if (segment.StartPoint() == chordStart && segment.EndPoint() == nearby) chordId = curve.entityId;
+        }
+    } else {
+        const auto arc = CurveSegment::MakeCircularArc({0, radius, 16.5}, {0, 0, 1},
+            {-0.996968676321994, -0.0778039744021556, 0}, radius, 0, 2.985827281201636).Value();
+        arcId = w.AddPlainWire({arc}, "境界の円弧", false);
+        verticalId = w.AddPlainWire({CurveSegment::MakeLine({-12, 2, 16.5}, {-12, 5, 16.5}).Value()}, "交差する線", false);
+        chordId = w.AddPlainWire({CurveSegment::MakeLine(chordStart, nearby).Value()}, "近くに端点のある線", false);
+        app::SelectionSet plane;
+        plane.entityIds = {w.ActiveWorkPlaneId()};
+        view.SetSelection(plane);
+        w.SetWorkPlaneChooser([&](const WorkPlaneChoice&, const app::WorkPlaneFacts&) {
+            WorkPlaneChoice choice;
+            choice.method = modeling::WorkPlaneMethod::OffsetFromPlane;
+            choice.offsetMm = crossing.z;
+            return std::optional{choice};
+        });
+        w.RunCommand("workplane.create");
+    }
+    if (!Explain("the three source wires and the offset work plane are loaded",
+            !arcId.IsNil() && !verticalId.IsNil() && !chordId.IsNil()
+            && std::abs(view.WorkPlane().origin.z - crossing.z) < 1e-8)) return false;
+
+    w.RunCommand("draw.line");
+    view.SetViewDirection(ViewDirection::Top);
+    view.SetViewCenter(crossing);
+    view.SetVisibleWidthMm(view.width() / 1300.0);
+    view.SetSnapSuppressed(false);
+    const auto hover = [&](const Vector3& world) {
+        const auto pixel = view.Mapping().Project(world);
+        if (pixel) view.HoverAt(QPointF(pixel->x, pixel->y).toPoint());
+        return pixel.has_value();
+    };
+    if (!hover(nearby)
+        || !Explain(("the adjacent endpoint or drawing point is still reachable: " + view.Hover().messageJa).c_str(), view.Hover().snap
+            && (view.Hover().snap->kind == SnapKind::Endpoint || view.Hover().snap->kind == SnapKind::DrawingPoint)
+            && geometry::Distance(view.Hover().snap->position, nearby) < 1e-8)) return false;
+    if (!hover(crossing)
+        || !Explain("the cursor changes to the real arc intersection", view.Hover().snap
+            && view.Hover().snap->kind == SnapKind::Intersection
+            && geometry::Distance(view.Hover().snap->position, crossing) < 1e-8)) return false;
+    const auto screenshot = qEnvironmentVariable("KACHACAD_ARC_CROSSING_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+        QApplication::processEvents();
+        w.grab().save(screenshot);
+    }
+    const auto sourceCount = CountOfKind(w, domain::EntityKind::Wire);
+    const auto pointCount = CountOfKind(w, domain::EntityKind::Point);
+    const auto pixel = view.Mapping().Project(crossing);
+    if (!pixel) return false;
+    Click(view, QPointF(pixel->x, pixel->y).toPoint());
+    view.SetSnapSuppressed(true);
+    const bool endClicked = ClickWorld(view, crossing + Vector3{0.12, 0.08, 0});
+    view.SetSnapSuppressed(false);
+    if (!endClicked || !Explain("the clicked intersection becomes the exact start of the new wire",
+            CountOfKind(w, domain::EntityKind::Wire) == sourceCount + 1
+            && geometry::Distance(w.Session().Scene().curves.back().segment.StartPoint(), crossing) < 1e-8)) return false;
+    w.RunCommand("edit.undo");
+    w.RunCommand("selection.activate");
+    app::SelectionSet selected;
+    selected.entityIds = {chordId, verticalId, arcId};
+    view.SetSelection(selected);
+    w.RunCommand("wire.intersection_points");
+    const auto hasPoint = [&](const Vector3& point) {
+        return std::any_of(w.Session().Scene().points.begin(), w.Session().Scene().points.end(), [&](const auto& item) {
+            return geometry::Distance(item.position, point) < 1e-8;
+        });
+    };
+    if (!Explain("intersection points are generated for all selected pairs",
+            CountOfKind(w, domain::EntityKind::Wire) == sourceCount
+            && CountOfKind(w, domain::EntityKind::Point) == pointCount + 3
+            && hasPoint(crossing) && hasPoint(nearby) && hasPoint(chordStart))) return false;
+    w.RunCommand("edit.undo");
+    return Explain("one undo removes the points and preserves the source wires",
+        CountOfKind(w, domain::EntityKind::Point) == pointCount
+        && CountOfKind(w, domain::EntityKind::Wire) == sourceCount);
+}
+
 bool OtherPointTools(V2MainWindow& w) {
     if(!Setup(w))return false;auto& v=w.Viewport();
     w.RunCommand("grid.move_origin");
@@ -181,6 +283,7 @@ std::vector<SelfTestCase> PointPickingCases(){return {
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",WorkPlaneRoles},
     {"HP-POINT-INPUT point requests override tools and reject undefined plane hits",GenericPointInputs},
     {"HP-POINT-SNAP 3D intersection midpoint hover and request transitions",SnapAndTransitions},
+    {"HP-POINT-ARC draw from a nearby arc crossing on an offset work plane",ArcCrossingDrawing},
     {"HP-POINT-TOOLS grid origin measurement and output origin actual clicks",OtherPointTools},
     {"HP-POINT-VISIBLE hidden geometry is ignored and standalone points are picked",PointVisibility},
     {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension}};}

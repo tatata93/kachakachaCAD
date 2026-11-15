@@ -1,11 +1,13 @@
 #include "kachakacha/geometry/CurveIntersection.h"
 
+#include "kachakacha/geometry/CurveFit.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -13,6 +15,249 @@ namespace kachakacha::v2::geometry {
 
 namespace {
 
+[[nodiscard]] bool IsCircular(const CurveSegment& curve)
+{
+    return curve.Kind() == CurveKind::Circle || curve.Kind() == CurveKind::CircularArc;
+}
+
+// Solve on the supporting sphere, then check both the circle plane and the
+// finite sweep. This works even when the line crosses the circle's plane.
+[[nodiscard]] std::vector<double> LineSphereRoots(const Vector3& offset,
+    const Vector3& unit, double radius, double toleranceMm)
+{
+    const double distance = Cross(offset, unit).Length();
+    const double projection = -Dot(offset, unit);
+    if (distance > radius + toleranceMm) return {};
+    if (distance >= radius) return {projection};
+    const double delta = std::sqrt((radius - distance) * (radius + distance));
+    return {projection - delta, projection + delta};
+}
+
+void AddIntersection(std::vector<CurveIntersection>& hits, const ClosestPointResult& first,
+    const ClosestPointResult& second, double toleranceMm)
+{
+    const double gap = Distance(first.point, second.point);
+    if (!(gap <= toleranceMm)) return;
+    const Vector3 position = first.point + (second.point - first.point) * 0.5;
+    if (std::none_of(hits.begin(), hits.end(), [&](const auto& other) {
+            return Distance(other.position, position) <= toleranceMm;
+        })) hits.push_back({position, first.parameter, second.parameter, gap, true});
+}
+
+using BernsteinCoefficients = std::array<double, 7>;
+
+double BernsteinValue(std::span<const double> coefficients, double t)
+{
+    BernsteinCoefficients work{};
+    std::copy(coefficients.begin(), coefficients.end(), work.begin());
+    for (std::size_t n = coefficients.size(); n > 1; --n)
+        for (std::size_t i = 0; i + 1 < n; ++i)
+            work[i] = std::lerp(work[i], work[i + 1], t);
+    return work[0];
+}
+
+// Critical points split the polynomial into monotone intervals, including
+// tangencies and crossings that are closer together than display samples.
+std::vector<double> BernsteinRoots(std::span<const double> coefficients)
+{
+    if (coefficients.size() < 2) return {};
+    const auto [minimum, maximum] = std::minmax_element(coefficients.begin(), coefficients.end());
+    const double scale = std::max(std::abs(*minimum), std::abs(*maximum));
+    const double roundoff = scale * (16.0 * std::numeric_limits<double>::epsilon());
+    if (*minimum > roundoff || *maximum < -roundoff || *maximum - *minimum <= roundoff)
+        return {};
+    BernsteinCoefficients derivative{};
+    const std::size_t degree = coefficients.size() - 1;
+    for (std::size_t i = 0; i < degree; ++i)
+        derivative[i] = coefficients[i + 1] - coefficients[i];
+    auto breaks = BernsteinRoots(std::span(derivative).first(degree));
+    breaks.insert(breaks.begin(), 0.0);
+    breaks.push_back(1.0);
+    std::vector<double> roots;
+    double low = breaks.front();
+    double lowValue = coefficients.front();
+    if (std::abs(lowValue) <= roundoff) roots.push_back(low);
+    for (std::size_t i = 1; i < breaks.size(); ++i) {
+        const double high = breaks[i];
+        const double highValue = BernsteinValue(coefficients, high);
+        if ((lowValue < -roundoff && highValue > roundoff)
+            || (lowValue > roundoff && highValue < -roundoff)) {
+            double a = low;
+            double b = high;
+            for (int step = 0; step < std::numeric_limits<double>::digits; ++step) {
+                const double mid = (a + b) * 0.5;
+                if ((BernsteinValue(coefficients, mid) < 0.0) == (lowValue < 0.0)) a = mid;
+                else b = mid;
+            }
+            roots.push_back((a + b) * 0.5);
+        }
+        if (std::abs(highValue) <= roundoff) roots.push_back(high);
+        low = high;
+        lowValue = highValue;
+    }
+    return roots;
+}
+
+std::vector<double> CurvePrimitiveRoots(const std::array<Vector3, 4>& poles,
+    const CurveSegment& primitive, double toleranceMm)
+{
+    BernsteinCoefficients coefficients{};
+    if (primitive.Kind() == CurveKind::Line) {
+        const auto start = primitive.StartPoint();
+        const auto direction = Normalized(primitive.EndPoint() - start, 0.0);
+        std::array<Vector3, 4> perpendicular{};
+        double largest = 0.0;
+        Vector3 normal{};
+        for (std::size_t i = 0; i < poles.size(); ++i) {
+            perpendicular[i] = Cross(poles[i] - start, direction);
+            const double length = perpendicular[i].Length();
+            if (length > largest) {
+                largest = length;
+                normal = perpendicular[i] * (1.0 / length);
+            }
+        }
+        if (largest <= toleranceMm) return {}; // Overlap has no isolated roots.
+        for (std::size_t i = 0; i < poles.size(); ++i)
+            coefficients[i] = Dot(perpendicular[i], normal);
+        return BernsteinRoots(std::span(coefficients).first(4));
+    }
+    std::array<Vector3, 4> radial{};
+    double height = 0.0;
+    for (std::size_t i = 0; i < poles.size(); ++i) {
+        radial[i] = poles[i] - primitive.Center();
+        coefficients[i] = Dot(radial[i], primitive.Normal());
+        height = std::max(height, std::abs(coefficients[i]));
+    }
+    auto roots = height > toleranceMm
+        ? BernsteinRoots(std::span(coefficients).first(4)) : std::vector<double>{};
+    // The squared radius of a cubic Bezier is a degree-six Bernstein polynomial.
+    constexpr std::array choose3{1., 3., 3., 1.};
+    constexpr std::array choose6{1., 6., 15., 20., 15., 6., 1.};
+    const double radiusSquared = primitive.Radius() * primitive.Radius();
+    coefficients.fill(0.0);
+    for (std::size_t i = 0; i < radial.size(); ++i)
+        for (std::size_t j = 0; j < radial.size(); ++j)
+            coefficients[i + j] += (Dot(radial[i], radial[j]) - radiusSquared)
+                * choose3[i] * choose3[j] / choose6[i + j];
+    auto radialRoots = BernsteinRoots(coefficients);
+    roots.insert(roots.end(), radialRoots.begin(), radialRoots.end());
+    return roots;
+}
+
+[[nodiscard]] bool IsFreeCurve(const CurveSegment& curve)
+{
+    return curve.Kind() == CurveKind::CubicBezier || curve.Kind() == CurveKind::CubicBSpline;
+}
+
+[[nodiscard]] std::optional<std::vector<CurveIntersection>> AnalyticIntersections(
+    const CurveSegment& first, const CurveSegment& second, const GeometryTolerance& tolerance)
+{
+    const double mm = tolerance.modelLinearMm;
+    std::vector<CurveIntersection> hits;
+    const bool lineFirst = first.Kind() == CurveKind::Line;
+    const bool lineSecond = second.Kind() == CurveKind::Line;
+    const bool freeFirst = IsFreeCurve(first);
+    if (freeFirst != IsFreeCurve(second)) {
+        const auto& free = freeFirst ? first : second;
+        const auto& primitive = freeFirst ? second : first;
+        std::vector<std::array<Vector3, 4>> spans;
+        if (free.Kind() == CurveKind::CubicBezier) {
+            spans.resize(1);
+            std::copy(free.ControlPoints().begin(), free.ControlPoints().end(), spans.front().begin());
+        } else {
+            spans = UniformBSplineBezierSpans(free.ControlPoints());
+        }
+        for (std::size_t i = 0; i < spans.size(); ++i) {
+            for (const double local : CurvePrimitiveRoots(spans[i], primitive, mm)) {
+                const double t = (static_cast<double>(i) + local) / static_cast<double>(spans.size());
+                const ClosestPointResult onFree{t, free.Evaluate(t), 0.0};
+                const auto onPrimitive = primitive.ClosestPoint(onFree.point);
+                AddIntersection(hits, freeFirst ? onFree : onPrimitive, freeFirst ? onPrimitive : onFree, mm);
+            }
+        }
+        return hits;
+    }
+    if (lineFirst && lineSecond) {
+        const auto firstSpan = first.EndPoint() - first.StartPoint();
+        const auto secondSpan = second.EndPoint() - second.StartPoint();
+        const double firstLength = firstSpan.Length();
+        const double secondLength = secondSpan.Length();
+        const auto u = firstSpan * (1.0 / firstLength);
+        const auto v = secondSpan * (1.0 / secondLength);
+        const auto axis = Cross(u, v);
+        const double sinAngle = axis.Length();
+        if (sinAngle <= tolerance.numericEpsilon) return hits;
+        const auto separation = second.StartPoint() - first.StartPoint();
+        const auto normal = axis * (1.0 / sinAngle);
+        const double s = Dot(Cross(separation, v), normal) / sinAngle;
+        const double t = Dot(Cross(separation, u), normal) / sinAngle;
+        if (s < -mm || s > firstLength + mm || t < -mm || t > secondLength + mm) return hits;
+        const double firstT = std::clamp(s / firstLength, 0.0, 1.0);
+        const double secondT = std::clamp(t / secondLength, 0.0, 1.0);
+        AddIntersection(hits, {firstT, first.Evaluate(firstT), 0.0},
+            {secondT, second.Evaluate(secondT), 0.0}, mm);
+        return hits;
+    }
+    if ((lineFirst && IsCircular(second)) || (lineSecond && IsCircular(first))) {
+        const auto& line = lineFirst ? first : second;
+        const auto& circle = lineFirst ? second : first;
+        const auto start = line.StartPoint();
+        const auto span = line.EndPoint() - start;
+        const double length = span.Length();
+        const auto direction = span * (1.0 / length);
+        for (const double along : LineSphereRoots(start - circle.Center(), direction,
+                circle.Radius(), mm)) {
+            if (along < -mm || along > length + mm) continue;
+            const double t = std::clamp(along / length, 0.0, 1.0);
+            const ClosestPointResult onLine{t, line.Evaluate(t), 0.0};
+            const auto onCircle = circle.ClosestPoint(onLine.point);
+            AddIntersection(hits, lineFirst ? onLine : onCircle, lineFirst ? onCircle : onLine, mm);
+        }
+        return hits;
+    }
+    if (!IsCircular(first) || !IsCircular(second)) return std::nullopt;
+    const auto separation = second.Center() - first.Center();
+    const auto axis = Cross(first.Normal(), second.Normal());
+    const double sinAngle = axis.Length();
+    const auto add = [&](const Vector3& point) {
+        const auto onFirst = first.ClosestPoint(point);
+        const auto onSecond = second.ClosestPoint(point);
+        if (onFirst.distance <= mm && onSecond.distance <= mm)
+            AddIntersection(hits, onFirst, onSecond, mm);
+    };
+    if (sinAngle > tolerance.numericEpsilon) {
+        const auto direction = axis * (1.0 / sinAngle);
+        // The intersection of the supporting planes, relative to the first centre.
+        const auto offset = Cross(direction, first.Normal())
+            * (Dot(separation, second.Normal()) / sinAngle);
+        for (const double along : LineSphereRoots(offset, direction, first.Radius(), mm)) {
+            add(first.Center() + offset + direction * along);
+        }
+        return hits;
+    }
+    const double normalGap = Dot(separation, first.Normal());
+    if (std::abs(normalGap) > mm) return hits;
+    const auto planar = separation - first.Normal() * normalGap;
+    const double distance = planar.Length();
+    const double difference = first.Radius() - second.Radius();
+    const double sum = first.Radius() + second.Radius();
+    if (distance <= tolerance.numericEpsilon) {
+        // Coincident supports may have overlapping sweeps. Preserve the existing
+        // handling of that case, which has no isolated analytic circle-circle roots.
+        if (std::abs(difference) <= mm) return std::nullopt;
+        return hits;
+    }
+    if (distance > sum + mm || distance < std::abs(difference) - mm) return hits;
+    const auto direction = planar * (1.0 / distance);
+    const double along = (distance + difference * sum / distance) * 0.5;
+    const auto middle = first.Center() + direction * along;
+    const auto side = Cross(first.Normal(), direction);
+    const double height = std::sqrt(std::max(0.0, (first.Radius() - std::abs(along))
+        * (first.Radius() + std::abs(along))));
+    add(middle + side * height);
+    if (height > 0) add(middle - side * height);
+    return hits;
+}
 
 //! 粗い点列で近い場所を見つけ、そこから細かく詰める。
 //! 解析解を種類ごとに書き分けると、種類が増えるたびに組合せが増えて必ず抜けが出る。
@@ -34,20 +279,6 @@ struct Bracket {
 void Refine(const CurveSegment& first, const CurveSegment& second, Bracket& bracket,
     double initialStep)
 {
-    if (first.Kind()==CurveKind::Line && second.Kind()==CurveKind::Line) {
-        const auto u=first.EndPoint()-first.StartPoint(),v=second.EndPoint()-second.StartPoint();
-        const auto w=first.StartPoint()-second.StartPoint();
-        const double a=Dot(u,u),b=Dot(u,v),c=Dot(v,v),d=Dot(u,w),e=Dot(v,w);
-        const double determinant=a*c-b*b;
-        // Near-parallel lines retain the robust iterative path below.
-        if(a>0 && c>0 && determinant>1e-12*a*c) {
-            double s=std::clamp((b*e-c*d)/determinant,0.0,1.0);
-            const double t=std::clamp((b*s+e)/c,0.0,1.0);
-            s=std::clamp((b*t-d)/a,0.0,1.0);
-            bracket={s,t,DistanceAt(first,second,s,t)};
-            return;
-        }
-    }
     double step = initialStep;
     for (int iteration = 0; iteration < 60 && step > 1.0e-12; ++iteration) {
         bool improved = false;
@@ -137,6 +368,7 @@ void Refine(const CurveSegment& first, const CurveSegment& second, Bracket& brac
 std::vector<CurveIntersection> IntersectCurves(const CurveSegment& first,
     const CurveSegment& second, const GeometryTolerance& tolerance)
 {
+    if (auto analytic = AnalyticIntersections(first, second, tolerance)) return std::move(*analytic);
     const double sampling = SamplingToleranceMm(first, second, tolerance);
     std::vector<CurveIntersection> results;
     for (const Bracket& bracket :
@@ -191,7 +423,7 @@ std::optional<std::array<double,4>> ScreenBounds(const CurveSegment& curve,const
 }
 
 std::vector<CurveIntersection> IntersectLinesOnScreen(const CurveSegment& first,
-    const CurveSegment& second,const ScreenMapping& mapping,const GeometryTolerance& tolerance)
+    const CurveSegment& second,const ScreenMapping& mapping)
 {
     const auto a=mapping.Project(first.StartPoint()),b=mapping.Project(first.EndPoint());
     const auto c=mapping.Project(second.StartPoint()),d=mapping.Project(second.EndPoint());
@@ -209,14 +441,7 @@ std::vector<CurveIntersection> IntersectLinesOnScreen(const CurveSegment& first,
         return fraction*wa/((1-fraction)*wb+fraction*wa);
     };
     const double sa=parameter(first,s),tb=parameter(second,t);
-    Bracket bracket{sa,tb,DistanceAt(first,second,sa,tb)};
-    Refine(first,second,bracket,0.02);
-    CurveIntersection crossing;
-    crossing.firstParameter=bracket.firstParameter;crossing.secondParameter=bracket.secondParameter;
-    crossing.gapMm=bracket.distance;crossing.real=bracket.distance<=tolerance.modelLinearMm;
-    crossing.position=crossing.real?(first.Evaluate(bracket.firstParameter)
-        +second.Evaluate(bracket.secondParameter))*0.5:first.Evaluate(sa);
-    return {crossing};
+    return {{first.Evaluate(sa), sa, tb, DistanceAt(first, second, sa, tb), false}};
 }
 }
 
@@ -224,18 +449,26 @@ std::vector<CurveIntersection> IntersectCurvesOnScreen(const CurveSegment& first
     const CurveSegment& second, const ScreenMapping& mapping, double screenTolerancePx,
     const GeometryTolerance& tolerance)
 {
-    if(first.Kind()==CurveKind::Line && second.Kind()==CurveKind::Line)
-        return IntersectLinesOnScreen(first,second,mapping,tolerance);
+    auto analytic = AnalyticIntersections(first, second, tolerance);
+    std::vector<CurveIntersection> results = analytic ? std::move(*analytic) : std::vector<CurveIntersection>{};
+    std::erase_if(results, [&](const auto& hit) { return !mapping.Project(hit.position); });
+    if (first.Kind() == CurveKind::Line && second.Kind() == CurveKind::Line)
+        return results.empty() ? IntersectLinesOnScreen(first, second, mapping) : results;
+    if (analytic && (IsCircular(first) || IsCircular(second))) {
+        const auto& circle = IsCircular(first) ? first : second;
+        const auto& other = IsCircular(first) ? second : first;
+        if (CurveLiesInPlane(other, circle.Center(), circle.Normal(), tolerance.modelLinearMm))
+            return results;
+    }
     const auto firstBounds=ScreenBounds(first,mapping),secondBounds=ScreenBounds(second,mapping);
     if(firstBounds&&secondBounds) {
         const auto& a=*firstBounds;const auto& b=*secondBounds;
-        if(a[2]+1e-7<b[0]||b[2]+1e-7<a[0]||a[3]+1e-7<b[1]||b[3]+1e-7<a[1])return {};
+        if(a[2]+1e-7<b[0]||b[2]+1e-7<a[0]||a[3]+1e-7<b[1]||b[3]+1e-7<a[1])return results;
     }
     // 画面上での交差は、投影した点列どうしで見る。
     const double sampling = SamplingToleranceMm(first, second, tolerance);
     const std::vector<CurvePoint> firstPoints = SampleCurve(first, sampling);
     const std::vector<CurvePoint> secondPoints = SampleCurve(second, sampling);
-    std::vector<CurveIntersection> results;
     for (std::size_t a = 0; a + 1 < firstPoints.size(); ++a) {
         const auto a0 = mapping.Project(firstPoints[a].position);
         const auto a1 = mapping.Project(firstPoints[a + 1].position);
@@ -270,13 +503,13 @@ std::vector<CurveIntersection> IntersectCurvesOnScreen(const CurveSegment& first
                 + (secondPoints[b + 1].parameter - secondPoints[b].parameter) * t;
             Bracket bracket{firstParameter, secondParameter,
                 DistanceAt(first, second, firstParameter, secondParameter)};
-            Refine(first, second, bracket, 0.02);
+            if (!analytic) Refine(first, second, bracket, 0.02);
 
             CurveIntersection intersection;
             intersection.firstParameter = bracket.firstParameter;
             intersection.secondParameter = bracket.secondParameter;
             intersection.gapMm = bracket.distance;
-            intersection.real = bracket.distance <= tolerance.modelLinearMm;
+            intersection.real = !analytic && bracket.distance <= tolerance.modelLinearMm;
             intersection.position = intersection.real
                 ? (first.Evaluate(bracket.firstParameter)
                       + second.Evaluate(bracket.secondParameter))

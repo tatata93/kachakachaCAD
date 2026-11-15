@@ -228,33 +228,6 @@ KACHA_V2_TEST(intersection, 接している円と直線は1点)
     RequireNear(crossings[0].position.x, 50.0, 1e-3, "接点x");
 }
 
-KACHA_V2_TEST(intersection, arc_intersections_respect_finite_sweeps_plane_and_view)
-{
-    using namespace kachakacha::v2::geometry;
-    const auto arc = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1},
-        {1, 0, 0}, 10, 0.1, 2.9).Value();
-    const auto line = Line({6, 8, -4}, {6, 8, 12});
-    const auto real = IntersectCurves(arc, line, Tolerance());
-    RequireCount(real.size(), 1, "the line passes through the arc plane");
-    RequireNear(Distance(real[0].position, {6, 8, 0}), 0, 1e-9, "exact plane intersection");
-    Require(IntersectCurves(arc, Line({6, -8, -4}, {6, -8, 12}), Tolerance()).empty(),
-        "the other side is beyond the arc sweep");
-    const auto map = MakePerspectiveMapping({0, 0, 100}, {0, 0, 0}, {0, 1, 0}, 1, 1000, 800, 0.1, 1000);
-    const auto projected = IntersectCurvesOnScreen(line, arc, map, 12, Tolerance());
-    Require(std::any_of(projected.begin(), projected.end(), [](const auto& hit) {
-        return hit.real && Distance(hit.position, {6, 8, 0}) < 1e-9;
-    }), "perspective retains the actual intersection");
-    const auto separate = IntersectCurvesOnScreen(Line({-20, 8, 0.02}, {20, 8, 0.02}),
-        arc, TopView(), 12, Tolerance());
-    RequireCount(separate.size(), 2, "two projected intersections");
-    Require(std::none_of(separate.begin(), separate.end(), [](const auto& hit) { return hit.real; }),
-        "different depths are never true intersections");
-    const auto upright = CurveSegment::MakeCircle({6, 0, 0}, {1, 0, 0}, {0, 1, 0}, 8).Value();
-    const auto round = IntersectCurves(upright, arc, Tolerance());
-    RequireCount(round.size(), 1, "nonparallel circles respect trimmed sweep");
-    RequireNear(Distance(round[0].position, {6, 8, 0}), 0, 1e-9, "two supporting planes");
-}
-
 KACHA_V2_TEST(intersection, 画面では交わるが3Dでは離れている場合を見分ける)
 {
     const ScreenMapping mapping = TopView();
@@ -733,20 +706,6 @@ KACHA_V2_TEST(snap, shallow_arc_crossings_are_individually_pickable)
             RequireNear((chosen->position - point).Length(), 0.0, 1e-8, "exact crossing");
         }
     }
-}
-
-KACHA_V2_TEST(snap, directly_pointing_at_intersection_can_pick_it_beside_a_drawn_point)
-{
-    SceneBuilder builder;
-    builder.AddLine({0, 50, 0}, {100, 50, 0});
-    builder.AddLine({50, 0, 0}, {50, 100, 0});
-    builder.AddPoint({50.5, 50, 0});
-    const auto mapping = TopView();
-    SnapHysteresis hysteresis;
-    const auto point = hysteresis.Resolve(builder.scene, mapping, At(mapping, {50.5, 50, 0}), {}, Tolerance());
-    Require(point && point->kind == SnapKind::DrawingPoint, "point still has its ordinary priority");
-    const auto crossing = hysteresis.Resolve(builder.scene, mapping, At(mapping, {50, 50, 0}), {}, Tolerance());
-    Require(crossing && crossing->kind == SnapKind::Intersection, "cursor on crossing overrides nearby held point");
 }
 
 KACHA_V2_TEST(snap, 四半点に吸着する)

@@ -458,4 +458,18 @@ KACHA_V2_TEST(snap, S中と取消では持ち越しを捨てる)
         "Reset のあとは 12px の外で拾わない");
 }
 
+KACHA_V2_TEST(snap, directly_pointing_at_intersection_can_pick_it_beside_a_drawn_point)
+{
+    SceneBuilder builder;
+    builder.AddLine({0, 50, 0}, {100, 50, 0});
+    builder.AddLine({50, 0, 0}, {50, 100, 0});
+    builder.AddPoint({50.5, 50, 0});
+    const auto mapping = TopView();
+    SnapHysteresis hysteresis;
+    const auto point = hysteresis.Resolve(builder.scene, mapping, At(mapping, {50.5, 50, 0}), {}, Tolerance());
+    Require(point && point->kind == SnapKind::DrawingPoint, "point still has its ordinary priority");
+    const auto crossing = hysteresis.Resolve(builder.scene, mapping, At(mapping, {50, 50, 0}), {}, Tolerance());
+    Require(crossing && crossing->kind == SnapKind::Intersection, "cursor on crossing overrides nearby held point");
+}
+
 KACHA_V2_TEST_MAIN("snap_hysteresis_tests")

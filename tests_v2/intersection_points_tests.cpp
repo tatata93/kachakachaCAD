@@ -1,6 +1,7 @@
 // 交点に作図点(app/IntersectionPoints.h)。V1 の「交点に点」。
 #include "kachakacha/app/IntersectionPoints.h"
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -101,6 +102,34 @@ KACHA_V2_TEST(intersection_points, arc_and_cubic_wires_agree_at_model_tolerance)
             {1, 0, 0}, 20, 0.1, 2.9).Value();
         Require(!IntersectionPointsOf({separated, curve}, 1e-6).HasValue(), "ignore apparent intersections");
     }
+}
+
+KACHA_V2_TEST(intersection_points, arc_intersections_respect_finite_sweeps_plane_and_view)
+{
+    using namespace kachakacha::v2::geometry;
+    const auto arc = CurveSegment::MakeCircularArc({0, 0, 0}, {0, 0, 1},
+        {1, 0, 0}, 10, 0.1, 2.9).Value();
+    const auto line = Line({6, 8, -4}, {6, 8, 12});
+    const auto real = IntersectCurves(arc, line, GeometryTolerance::Default());
+    Require(real.size() == 1, "the line passes through the arc plane");
+    RequireNear(Distance(real[0].position, {6, 8, 0}), 0, 1e-9, "exact plane intersection");
+    Require(IntersectCurves(arc, Line({6, -8, -4}, {6, -8, 12}), GeometryTolerance::Default()).empty(),
+        "the other side is beyond the arc sweep");
+    const auto map = MakePerspectiveMapping({0, 0, 100}, {0, 0, 0}, {0, 1, 0}, 1, 1000, 800, 0.1, 1000);
+    const auto projected = IntersectCurvesOnScreen(line, arc, map, 12, GeometryTolerance::Default());
+    Require(std::any_of(projected.begin(), projected.end(), [](const auto& hit) {
+        return hit.real && Distance(hit.position, {6, 8, 0}) < 1e-9;
+    }), "perspective retains the actual intersection");
+    const auto separate = IntersectCurvesOnScreen(Line({-20, 8, 0.02}, {20, 8, 0.02}),
+        arc, MakeOrthographicMapping({0, 0, 0}, {0, 0, -1}, {0, 1, 0}, 100, 1000, 1000),
+        12, GeometryTolerance::Default());
+    Require(separate.size() == 2, "two projected intersections");
+    Require(std::none_of(separate.begin(), separate.end(), [](const auto& hit) { return hit.real; }),
+        "different depths are never true intersections");
+    const auto upright = CurveSegment::MakeCircle({6, 0, 0}, {1, 0, 0}, {0, 1, 0}, 8).Value();
+    const auto round = IntersectCurves(upright, arc, GeometryTolerance::Default());
+    Require(round.size() == 1, "nonparallel circles respect trimmed sweep");
+    RequireNear(Distance(round[0].position, {6, 8, 0}), 0, 1e-9, "two supporting planes");
 }
 
 KACHA_V2_TEST_MAIN("intersection_points")

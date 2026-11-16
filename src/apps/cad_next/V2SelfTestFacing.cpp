@@ -17,12 +17,16 @@
 #include <QApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QPoint>
 #include <QPointF>
 #include <QPushButton>
+#include <QRectF>
 #include <QString>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -459,9 +463,9 @@ bool GridAngle(V2MainWindow& window)
     viewport.SetSnapSuppressed(false);
     window.SelectTool(modeling::DrawingTool::Line);
     const Vector3 lattice = grid.origin - grid.uDirection * grid.majorSpacingMm * 3.0 + grid.vDirection * grid.majorSpacingMm * 2.0;
-    const auto near = viewport.Mapping().Project(lattice);
-    if (!near) return false;
-    const auto hover = window.Session().Hover({near->x + 1, near->y + 1});
+    const auto latticeScreen = viewport.Mapping().Project(lattice);
+    if (!latticeScreen) return false;
+    const auto hover = window.Session().Hover({latticeScreen->x + 1, latticeScreen->y + 1});
     if (!Explain("回転後の主グリッド点に吸着する", hover.snap && hover.snap->kind == modeling::SnapKind::GridMajor
         && hover.position && (*hover.position - lattice).Length() < 1.0e-8)) return false;
     if (!Explain("文書・カメラ・作業面の維持", window.ActiveWorkPlaneId() == planeId

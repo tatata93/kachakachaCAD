@@ -42,6 +42,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `view.fit_all` | 全体表示 | 可視幾何あり | cameraだけ変更 | AT-UIX-008 |
 | `view.align_selection` | 選択に正対 | 作業平面/立体の面/面/線のどれか。複数可 | camera(向き・注視点・倍率)だけ変更。**向きは、向きを持つ相手のうち最初の1つが決める。収まりは選んだもの全部が決める。** 向きの違うものが混じっていたら帯でそう言う | AT-UIX-008 |
 | `view.align_selection_back` | 反対側から正対 | 同上 | camera だけ変更(裏側から) | AT-UIX-008 |
+| `view.align_horizontal` | 画面の水平線を指定 | 3Dビュー上の始点・終点 | camera の画面内回転 | AT-UIX-008 |
 | `view.align_workplane` | 正対 | 常時(作業中の作図面) | cameraだけ変更 | AT-UIX-008 |
 | `view.display_settings` | 表示設定 | 常時 | 表示属性だけ変更 | AT-UIX-010 |
 | `view.number_settings` | 数の設定 | 常時 | 数の棚を前に出すだけ | AT-UIX-010 |
@@ -105,7 +106,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `group.create` | グループを作る | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
 | `group.dissolve` | グループを解く | グループの行 | Groupを消し中身は親へ | AT-UIX-006 |
 | `group.rename` | グループの名前を変える | グループの行 | Group displayName | AT-UIX-006 |
-| `grid.edit` | グリッド | 間隔、副点、原点 | Document settings | AT-UIX-005 |
+| `grid.edit` | グリッド | 間隔、副点、原点、角度（数値・3Dビューの2点） | 表示とスナップの設定 | AT-UIX-005 |
 | `grid.move_origin` | グリッド原点を移動 | 原点handle、snap先 | Document settings | AT-UIX-005 |
 
 `draw.arc` の方式は `3点 / 両端と半径 / 始点と接線 / 始点と法線`。別コマンドIDへ分裂させず、

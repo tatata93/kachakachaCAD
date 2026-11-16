@@ -88,6 +88,21 @@ bool HandleFabricationKey(V2MainWindow& window,V2FabricationDock* dock,int key)
     return dock->HandleKey(key);
 }
 
+bool HandleDirectionPickKey(V2Viewport* viewport, int key)
+{
+    if (!viewport || !viewport->DirectionPickPending()) return false;
+    if (key == Qt::Key_Escape) {
+        viewport->CancelPointPick();
+        return true;
+    }
+    return key == Qt::Key_Return || key == Qt::Key_Enter;
+}
+
+bool ContainsWidget(const QWidget* panel, const QWidget* widget)
+{
+    return panel && widget && (panel == widget || panel->isAncestorOf(widget));
+}
+
 } // namespace
 
 //! いま Enter と Esc を引き受ける道具が動いているか。
@@ -129,15 +144,9 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
-    if (viewport_ && viewport_->DirectionPickPending()) {
-        if (key == Qt::Key_Escape) { viewport_->CancelPointPick(); return true; }
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) return true;
-    }
+    if (HandleDirectionPickKey(viewport_, key)) return true;
     if(viewport_&&V2ToolSelection::Active(*viewport_))return V2ToolSelection::Key(*viewport_,key,IsTypingField(target));
-    const auto inGrid = [this](QWidget* widget) {
-        return gridDock_ && widget && (widget == gridDock_ || gridDock_->isAncestorOf(widget));
-    };
-    if (inGrid(qobject_cast<QWidget*>(target)) || inGrid(QApplication::focusWidget())) return false;
+    if (ContainsWidget(gridDock_, qobject_cast<QWidget*>(target)) || ContainsWidget(gridDock_, QApplication::focusWidget())) return false;
     if (viewport_ && viewport_->ReferencePickPending()) {
         if (key == Qt::Key_Escape) { viewport_->CancelReferencePick(); return true; }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {

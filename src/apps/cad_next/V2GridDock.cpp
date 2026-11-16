@@ -36,6 +36,20 @@ QWidget* PairRow(QWidget* parent, QWidget* first, QWidget* second)
     layout->addWidget(first);layout->addWidget(second);return row;
 }
 
+void AddAngleControls(QFormLayout& form, QWidget* body, QDoubleSpinBox*& angle, QPushButton*& pickAngle)
+{
+    angle = new V2NumericSpinBox(body);
+    angle->setObjectName(QStringLiteral("gridAngle"));
+    angle->setRange(-180.0, 180.0);
+    angle->setDecimals(6);
+    angle->setSuffix(QStringLiteral(" °"));
+    angle->setToolTip(QStringLiteral("作業平面の X 方向を 0° とします。正の角度で Y 方向へ回ります。"));
+    pickAngle = new QPushButton(QStringLiteral("2点で合わせる"), body);
+    pickAngle->setObjectName(QStringLiteral("gridPickAngle"));
+    pickAngle->setToolTip(QStringLiteral("3Dビューで始点と終点をクリックして、グリッドの向きを合わせます。"));
+    form.addRow(QStringLiteral("角度"), PairRow(body, angle, pickAngle));
+}
+
 } // namespace
 
 V2GridDock::V2GridDock(QWidget* parent)
@@ -98,16 +112,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     originLayout->addWidget(pickOrigin_);
     form->addRow(originButtons);
 
-    angle_ = new V2NumericSpinBox(body);
-    angle_->setObjectName(QStringLiteral("gridAngle"));
-    angle_->setRange(-180.0, 180.0);
-    angle_->setDecimals(6);
-    angle_->setSuffix(QStringLiteral(" °"));
-    angle_->setToolTip(QStringLiteral("作業平面の X 方向を 0° とします。正の角度で Y 方向へ回ります。"));
-    pickAngle_ = new QPushButton(QStringLiteral("2点で合わせる"), body);
-    pickAngle_->setObjectName(QStringLiteral("gridPickAngle"));
-    pickAngle_->setToolTip(QStringLiteral("3Dビューで始点と終点をクリックして、グリッドの向きを合わせます。"));
-    form->addRow(QStringLiteral("角度"), PairRow(body, angle_, pickAngle_));
+    AddAngleControls(*form, body, angle_, pickAngle_);
 
     layout->addLayout(form);
     auto* detailsButton = new QToolButton(body);

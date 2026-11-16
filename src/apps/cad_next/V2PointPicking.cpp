@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <QPainter>
+#include <QPen>
 #include <QString>
 #include <QPointF>
 #include <utility>

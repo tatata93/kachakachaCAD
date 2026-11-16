@@ -1376,8 +1376,8 @@ namespace {
             return false;
         }
     }
-    return Explain((std::string("ボタンが8つある(実際は ") + std::to_string(buttons)
-                       + ")").c_str(), buttons == 8);
+    return Explain((std::string("ボタンが10個ある(実際は ") + std::to_string(buttons)
+                       + ")").c_str(), buttons == 10);
 }
 
 [[nodiscard]] bool CaseRingIsGrabbableWithSlack(V2MainWindow& window)

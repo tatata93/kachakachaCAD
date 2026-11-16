@@ -32,8 +32,10 @@
 #include <QComboBox>
 #include <QObject>
 #include <QDockWidget>
+#include <QDoubleSpinBox>
 #include <QScrollArea>
 #include <QPushButton>
+#include <QRect>
 #include <QChar>
 #include <QString>
 #include <algorithm>
@@ -127,9 +129,11 @@ bool PersistentGridControls(V2MainWindow&) {
     window.RunCommand("file.new");
     auto* dock=dynamic_cast<V2GridDock*>(window.findChild<QDockWidget*>("gridDock"));
     auto* spacing=window.findChild<QLineEdit*>("gridSpacing");
+    auto* angle=window.findChild<QDoubleSpinBox*>("gridAngle");
+    auto* fitAngle=window.findChild<QPushButton*>("gridPickAngle");
     auto* details=window.findChild<QToolButton*>("gridDetails");
     auto* body=window.findChild<QWidget*>("gridDetailsBody");
-    if(!dock||!spacing||!details||!body)return false;
+    if(!dock||!spacing||!angle||!fitAngle||!details||!body)return false;
     auto* close=dock->findChild<QAbstractButton*>("qt_dockwidget_closebutton");
     if(!Explain("grid settings start hidden and can be closed",dock->isHidden()&&close
         &&dock->features().testFlag(QDockWidget::DockWidgetClosable)))return false;
@@ -146,8 +150,16 @@ bool PersistentGridControls(V2MainWindow&) {
         auto* scroll=qobject_cast<QScrollArea*>(dock->widget());
         if(scroll)std::cout<<"grid common dock="<<dock->height()<<" available="<<scroll->viewport()->height()
             <<" details bottom="<<details->mapTo(scroll->viewport(),details->rect().bottomRight()).y()<<std::endl;
-        if(!Explain("frequent grid fields and details toggle are visible without scrolling",scroll
-            &&scroll->viewport()->rect().contains(details->mapTo(scroll->viewport(),details->rect().bottomRight()))))return false;
+        const auto visibleInScroll = [scroll](const QWidget* item) {
+            return scroll && scroll->viewport()->rect().contains(
+                QRect(item->mapTo(scroll->viewport(), item->rect().topLeft()), item->size()));
+        };
+        std::cout<<"grid window height="<<window.height()<<" angle="<<visibleInScroll(angle)
+            <<" fit="<<visibleInScroll(fitAngle)<<" details="<<visibleInScroll(details)<<std::endl;
+        if(!Explain("grid angle, fit and details are visible without scrolling",
+            visibleInScroll(angle)&&visibleInScroll(fitAngle)&&visibleInScroll(details)))return false;
+        if(mode!=app::UiMode::Instructions
+            && !Explain("opening grid settings keeps modeling modes within 700px",window.height()<=700))return false;
         close->click();QApplication::processEvents();
         if(!Explain("closing settings keeps grid, mode, tool and document",dock->isHidden()&&window.Mode()==mode
             &&window.Session().CurrentTool()==tool&&window.Session().GetDocument().Revision()==revision

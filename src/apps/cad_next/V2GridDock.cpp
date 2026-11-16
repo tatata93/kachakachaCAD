@@ -17,6 +17,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QString>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -43,6 +44,7 @@ void AddAngleControls(QFormLayout& form, QWidget* body, QDoubleSpinBox*& angle, 
     angle->setRange(-180.0, 180.0);
     angle->setDecimals(6);
     angle->setSuffix(QStringLiteral(" °"));
+    angle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     angle->setToolTip(QStringLiteral("作業平面の X 方向を 0° とします。正の角度で Y 方向へ回ります。"));
     pickAngle = new QPushButton(QStringLiteral("2点で合わせる"), body);
     pickAngle->setObjectName(QStringLiteral("gridPickAngle"));
@@ -59,7 +61,7 @@ V2GridDock::V2GridDock(QWidget* parent)
     setFeatures(QDockWidget::DockWidgetClosable);
     setAllowedAreas(Qt::RightDockWidgetArea);
     setMinimumWidth(280);
-    setMinimumHeight(235);
+    setMinimumHeight(250);
     setMaximumHeight(285);
     auto* body = new QWidget(this);
     auto* layout = new QVBoxLayout(body);
@@ -94,12 +96,14 @@ V2GridDock::V2GridDock(QWidget* parent)
     originU_->setRange(-100000.0, 100000.0);
     originU_->setDecimals(3);
     originU_->setSuffix(QStringLiteral(" mm"));
+    originU_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     originU_->setToolTip(QStringLiteral("グリッド基準 X(u)"));
     originV_ = new V2NumericSpinBox(body);
     originV_->setObjectName(QStringLiteral("gridOriginV"));
     originV_->setRange(-100000.0, 100000.0);
     originV_->setDecimals(3);
     originV_->setSuffix(QStringLiteral(" mm"));
+    originV_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     originV_->setToolTip(QStringLiteral("グリッド基準 Y(v)"));
     form->addRow(QStringLiteral("基準 X / Y"), PairRow(body,originU_,originV_));
 

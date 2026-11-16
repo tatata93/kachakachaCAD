@@ -70,7 +70,7 @@ bool CameraKeepsSelectionIndex(V2MainWindow& window) {
 }
 bool CompactTargets(V2MainWindow& window) {
     auto& view=window.Viewport();view.setFixedSize(320,240);QApplication::processEvents();const auto layout=view.ViewGadgets();
-    if(!Explain("full navigator fits a 320 by 240 viewport with an 88px cube",layout.gadgets.size()==14
+    if(!Explain("full navigator fits a 320 by 240 viewport with an 88px cube",layout.gadgets.size()==16
         &&layout.widthPx<=210&&layout.heightPx<=240&&view.ViewCubeRect().width()==88))return false;
     for(std::size_t i=0;i<layout.gadgets.size();++i) {
         const auto& g=layout.gadgets[i];
@@ -88,8 +88,8 @@ bool CompactTargets(V2MainWindow& window) {
     Capture(window,"compact-navigator");return true;
 }
 bool SafeNavigatorButtons(V2MainWindow& window) {
-    auto& viewport=window.Viewport();int aligned=0;viewport.SetAlignSelectionCallback([&]{++aligned;});
-    for(const auto kind:{view::ViewGadgetKind::Home,view::ViewGadgetKind::AlignSelection}) {
+    auto& viewport=window.Viewport();int aligned=0;viewport.SetViewAlignmentCallback([&](std::string_view){++aligned;});
+    for(const auto kind:{view::ViewGadgetKind::Home,view::ViewGadgetKind::AlignSelection,view::ViewGadgetKind::AlignHorizontal}) {
         viewport.SetViewDirection(ViewDirection::Top);const auto before=viewport.Orientation();
         for(const auto& g:viewport.ViewGadgets().gadgets)if(g.kind==kind) {
             const QPointF at(g.CenterXPx(),g.CenterYPx()),outside=at+QPointF(-160,50);

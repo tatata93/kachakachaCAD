@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>画面の水平線を指定 — kachakachaCAD</title>
+<style>
+body { font-family: system-ui, sans-serif; margin: 2rem auto; padding: 0 1rem; max-width: 64rem; line-height: 1.65; }
+figure { margin: 1rem 0; }
+figure img { display: block; max-width: 100%; border: 1px solid #777; }
+figcaption { font-size: .9rem; }
+</style>
+</head>
+<body>
+<nav><a href="../../manual.html#cmd-view.align_horizontal">説明書へ戻る</a></nav>
+<main data-procedure="view.align_horizontal">
+<h1>画面の水平線を指定</h1>
+<h2>準備</h2>
+<p>必要な面を選んで、ビューキューブ下の「選択に正対」または「逆対」で見たい側を表示します。</p>
+<h2>操作手順</h2>
+<ol>
+  <li>ビューキューブ下の「水平線」を押します。「表示」メニューの「画面の水平線を指定」からも開始できます。</li>
+  <li>3Dビューで、水平にしたい方向の始点をクリックします。カーソルを動かすと始点からガイド線が伸びます。</li>
+  <li>終点をクリックします。既存の線がない場所も指定できます。</li>
+</ol>
+<figure>
+<a href="../tool-screens/view.align_horizontal.png"><img src="../tool-screens/view.align_horizontal.png" alt="始点からカーソルへガイド線を表示して終点を待つ3Dビュー"></a>
+<figcaption>終点を指定する途中の実操作画面です。説明書の操作画面は完成画像とは限りません。</figcaption>
+</figure>
+<h2>結果を確認</h2>
+<p>指定した2点を結ぶ方向が画面上の水平になります。カメラの注視点と倍率はそのままで、作図中の入力も続けられます。</p>
+<h2>取消・やり直し</h2>
+<p>終点を決める前は Esc で取り消せます。角度を変えるときは再び「水平線」を押して指定します。</p>
+<h2>進めない場合</h2>
+<p>始点と終点が近過ぎる場合は、終点を離れた位置でクリックしてください。</p>
+</main>
+</body>
+</html>

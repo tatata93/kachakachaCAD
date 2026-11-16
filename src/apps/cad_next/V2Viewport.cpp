@@ -226,6 +226,7 @@ void V2Viewport::SetWorkPlane(const WorkPlaneFrame& plane)
     scene.workPlane.active = true;
     scene.workPlane.origin = plane.origin;
     scene.workPlane.normal = plane.normal;
+    scene.workPlane.uDirection = plane.uAxis;
     session_->SetScene(std::move(scene));
     update();
 }
@@ -803,6 +804,7 @@ void V2Viewport::PaintScene(QPainter& painter)
     DrawSnap(painter);
     // 道具の下見(面を作る)は、文書の線の上・矢印の下に出す。
     DrawToolPreview(painter);
+    DrawDirectionGuide(painter);
     // 線の上に置いて押す編集(トリム)の下見。文書の線の上に重ねる。
     DrawEditPreview(painter);
     // 押し出しの矢印は選択の印より上に出す。掴む相手だからである。
@@ -842,7 +844,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     QElapsedTimer hoverTimer;hoverTimer.start();
     cursorPosition_ = position;
     if(PickPending()&&!V2ToolSelection::Active(*this)) {
-        hover_=v2ui::ReferencePointAt(*this,session_->Scene(),
+        hover_=directionPick_ ? DirectionPointAt(position) : v2ui::ReferencePointAt(*this,session_->Scene(),
             session_->GetDocument().Snapshot().settings.tolerance,position,
             snapSuppressedByKey_||snapSuppressedBySetting_);
         status_=property("pointPickPrompt").toString().toStdString();
@@ -1147,6 +1149,7 @@ void V2Viewport::ClickAt(const QPointF& position)
 {
     V2DrawingSelection::Of(*this).ResumeInput();
     if (ReferencePickPending()) { SelectAt(position, Qt::NoModifier); return; }
+    if (directionPick_) { ClickDirectionPoint(position); return; }
     if (pickHandler_) {
         PickedPoint picked;
         const auto hit=v2ui::ReferencePointAt(*this,session_->Scene(),
@@ -1254,7 +1257,7 @@ void V2Viewport::FinishTool()
 void V2Viewport::CancelTool()
 {
     if (ReferencePickPending()) { CancelReferencePick(); return; }
-    if (pickHandler_) {
+    if (PickPending()) {
         CancelPointPick();
         return;
     }

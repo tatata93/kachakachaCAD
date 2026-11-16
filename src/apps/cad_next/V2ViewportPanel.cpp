@@ -46,7 +46,11 @@ void CompactNavigator(kachakacha::v2::view::ViewGadgetLayout& layout,QPointF cen
         double dx=0,dy=0,w=30,h=28;
         if(button.kind==ViewGadgetKind::Home){dx=-78;dy=-110;w=32;}
         if(button.kind==ViewGadgetKind::Roll){dx=button.direction==ViewGadgetDirection::Positive?-38:8;dy=-110;}
-        if(button.kind==ViewGadgetKind::AlignSelection){dx=-68;dy=102;w=136;}
+        if (button.kind == ViewGadgetKind::AlignSelection || button.kind == ViewGadgetKind::AlignHorizontal) {
+            dx = button.xPx - x;
+            dy = 102;
+            w = button.widthPx;
+        }
         if(button.kind==ViewGadgetKind::Orbit) {
             const bool vertical=button.direction==ViewGadgetDirection::Up||button.direction==ViewGadgetDirection::Down;
             dx=vertical?90:(button.direction==ViewGadgetDirection::Left?-58:8);
@@ -99,9 +103,9 @@ std::optional<std::size_t> V2Viewport::ViewRingAt(const QPointF& position) const
         position.y());
 }
 
-void V2Viewport::SetAlignSelectionCallback(std::function<void()> callback)
+void V2Viewport::SetViewAlignmentCallback(std::function<void(std::string_view)> callback)
 {
-    alignSelectionCallback_ = std::move(callback);
+    viewAlignmentCallback_ = std::move(callback);
 }
 
 bool V2Viewport::PressViewGadgetIndex(const QPointF& position,
@@ -228,9 +232,15 @@ void V2Viewport::ReleaseViewGadget(const QPointF& position)
         SetViewDirection(ViewDirection::Isometric);
         viewMessage_ = "既定の視点へ戻しました。";
         break;
+    case kachakacha::v2::view::ViewGadgetKind::AlignHorizontal:
     case kachakacha::v2::view::ViewGadgetKind::AlignSelection:
-        if (alignSelectionCallback_) {
-            alignSelectionCallback_();
+        if (viewAlignmentCallback_) {
+            viewMessage_.clear();
+            if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AlignHorizontal)
+                viewAlignmentCallback_("view.align_horizontal");
+            else
+                viewAlignmentCallback_(gadget.direction == kachakacha::v2::view::ViewGadgetDirection::Negative
+                    ? "view.align_selection_back" : "view.align_selection");
         }
         break;
     default:
@@ -381,7 +391,7 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
         }
         const QRectF cell(gadget.xPx, gadget.yPx, gadget.widthPx, gadget.heightPx);
         const bool usable = gadget.kind != ViewGadgetKind::AlignSelection
-            || selectionFrame_.has_value();
+            || !selection_.entityIds.empty();
         const bool hot = (gadgetDrag_.has_value() && gadgetDrag_->index == index)
             || (gadgetHoverIndex_.has_value() && *gadgetHoverIndex_ == index);
         QColor face = palette_.background;
@@ -410,17 +420,22 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
             default:                         text = QStringLiteral("▶"); break;
             }
             break;
+        case ViewGadgetKind::AlignHorizontal:
+            painter.setFont(previous);
+            text = QStringLiteral("水平線");
+            break;
         case ViewGadgetKind::AlignSelection: {
             // この文字だけは長いので、元の大きさに戻す。
             painter.setFont(previous);
-            text = QStringLiteral("選択に正対");
+            text = gadget.direction == ViewGadgetDirection::Negative
+                ? QStringLiteral("逆対") : QStringLiteral("選択に正対");
             break;
         }
         default:
             break;
         }
         painter.drawText(cell, Qt::AlignCenter, text);
-        if (gadget.kind == ViewGadgetKind::AlignSelection) {
+        if (gadget.kind == ViewGadgetKind::AlignSelection || gadget.kind == ViewGadgetKind::AlignHorizontal) {
             painter.setFont(label);
         }
     }

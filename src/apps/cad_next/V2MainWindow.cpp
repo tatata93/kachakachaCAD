@@ -269,8 +269,9 @@ void V2MainWindow::WireViewportCallbacks()
     viewport_->SetPendingCommandCallbacks([this] { ConfirmPendingCommand(); },
         [this] { ClearPendingCommand(); });
     viewport_->SetSelectionChangedCallback([this] { HandleSelectionChanged(); });
-    // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
-    viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
+    viewport_->SetViewAlignmentCallback([this](std::string_view command) {
+        RunCommand(command);
+    });
 }
 
 V2MainWindow::~V2MainWindow()

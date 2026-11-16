@@ -317,15 +317,16 @@ void V2MainWindow::AlignViewToActiveWorkPlane()
 void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame& frame,
     const kachakacha::v2::base::EntityId& entityId)
 {
+    if (viewport_->DirectionPickPending()) viewport_->CancelPointPick();
     activeWorkPlaneId_ = entityId;
     viewport_->SetWorkPlane(frame);
     auto scene = session_->Scene();
-    scene.workPlane.active = true;
-    scene.workPlane.origin = frame.origin;
-    scene.workPlane.normal = frame.normal;
+    kachakacha::v2::modeling::GridDefinition definition;
+    definition.angleDegrees = scene.grid.angleDegrees;
+    const auto evaluated = kachakacha::v2::modeling::EvaluateGrid(definition, frame, 1.0);
     scene.grid.origin = frame.origin;
-    scene.grid.uDirection = frame.uAxis;
-    scene.grid.vDirection = frame.vAxis;
+    scene.grid.uDirection = evaluated.Value().uDirection;
+    scene.grid.vDirection = evaluated.Value().vDirection;
     session_->SetScene(std::move(scene));
     if(gridDock_)gridDock_->SetChoice(CurrentGridChoice());
     viewport_->update();
@@ -354,6 +355,7 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
     choice.grid.visible = viewport_->DisplaySettingsNow().gridVisible;
     choice.grid.majorSpacingMm = scene.grid.majorSpacingMm;
     choice.grid.subdivision = scene.grid.subdivision;
+    choice.grid.angleDegrees = scene.grid.angleDegrees;
     choice.grid.originUmm = plane.CoordinateU(scene.grid.origin);
     choice.grid.originVmm = plane.CoordinateV(scene.grid.origin);
     choice.spacingExpression = QString::number(scene.grid.majorSpacingMm);
@@ -370,27 +372,22 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
 
 void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
 {
-    using kachakacha::v2::modeling::SetGridSpacing;
-    // 検査は core にある。ここで刻みが正かどうかは見ない。
-    const auto checked = SetGridSpacing(choice.grid, choice.grid.majorSpacingMm,
-        choice.grid.subdivision);
+    const auto checked = kachakacha::v2::modeling::EvaluateGrid(choice.grid,
+        viewport_->WorkPlane(), 1.0);
     if (!checked.HasValue()) {
         ReportDiagnostics(checked.Diagnostics());
         return;
     }
     const auto& current = session_->Scene().grid;
-    const auto origin = viewport_->WorkPlane().PointAt(choice.grid.originUmm, choice.grid.originVmm);
-    if (!current.visible || current.majorSpacingMm != checked.Value().majorSpacingMm
-        || current.subdivision != checked.Value().subdivision
-        || (current.origin-origin).Length() > 1e-9) {
-    auto scene = session_->Scene();
-    // Visibility belongs to display settings; hiding a grid must not disable snapping.
-    scene.grid.visible = true;
-    scene.grid.majorSpacingMm = checked.Value().majorSpacingMm;
-    scene.grid.subdivision = checked.Value().subdivision;
-    // 基準は作業平面の上の (u, v)。平面が動けば付いていく(GridModel の決まり 1)。
-    scene.grid.origin = origin;
-    session_->SetScene(std::move(scene));
+    const auto& grid = checked.Value();
+    if (!current.visible || current.majorSpacingMm != grid.majorSpacingMm
+        || current.subdivision != grid.subdivision || current.angleDegrees != choice.grid.angleDegrees
+        || (current.origin - grid.originXyz).Length() > 1e-9) {
+        auto scene = session_->Scene();
+        // グリッドの表示を消しても吸着には使う。
+        scene.grid = {true, grid.originXyz, grid.uDirection, grid.vDirection,
+            grid.majorSpacingMm, grid.subdivision, choice.grid.angleDegrees};
+        session_->SetScene(std::move(scene));
     }
     // 色は画面の持ち物。無効な色(まだ決めていない)は触らない。
     ViewportPalette palette = viewport_->Colors();
@@ -457,6 +454,21 @@ void V2MainWindow::MoveGridOriginByClick()
                     .arg(moved.Value().originVmm, 0, 'f', 3));
         },
         "グリッド原点: 動かす先を1回押してください(Esc でやめます)。");
+}
+
+void V2MainWindow::AlignGridByClick()
+{
+    using kachakacha::v2::modeling::GridAngleForDirection;
+    viewport_->BeginDirectionPick(V2Viewport::DirectionPickPlane::WorkPlane, "グリッドの角度: ",
+        [this](const auto& direction) {
+            auto choice = CurrentGridChoice();
+            const auto angle = GridAngleForDirection(viewport_->WorkPlane(), direction,
+                choice.grid.angleDegrees);
+            if (!angle) return;
+            choice.grid.angleDegrees = *angle;
+            ApplyGridChoice(choice);
+            SetStatus(QStringLiteral("グリッドの角度を %1° に合わせました。").arg(*angle, 0, 'f', 3));
+        });
 }
 
 void V2MainWindow::SetWorkPlaneChooser(

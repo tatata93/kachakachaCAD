@@ -152,7 +152,11 @@ public:
     };
     void BeginPointPick(std::function<void(const PickedPoint&)> handler,
         const std::string& promptJa);
-    [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_); }
+    enum class DirectionPickPlane { Screen, WorkPlane };
+    void BeginDirectionPick(DirectionPickPlane plane, std::string label,
+        std::function<void(const kachakacha::v2::geometry::Vector3&)> handler);
+    [[nodiscard]] bool DirectionPickPending() const { return directionPick_.has_value(); }
+    [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_) || DirectionPickPending(); }
     //! 拾うのをやめる。Esc で呼ぶ。
     void CancelPointPick();
     // Pick a reference without changing the source selection of the active tool.
@@ -812,8 +816,7 @@ public:
     void DragViewGadget(const QPointF& position);
     void ReleaseViewGadget(const QPointF& position);
     [[nodiscard]] bool ViewGadgetDragging() const { return gadgetDrag_.has_value(); }
-    //! 「選択に正対」を押したときに呼ぶ。本体窓が繋ぐ。
-    void SetAlignSelectionCallback(std::function<void()> callback);
+    void SetViewAlignmentCallback(std::function<void(std::string_view)> callback);
 
     //! XYZ回転矢印。感度は core が決める。
     bool RotateByArrow(kachakacha::v2::view::RotationAxis axis,
@@ -1086,6 +1089,17 @@ private:
     kachakacha::v2::app::PointerGestureTracker rightGesture_;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
+    struct DirectionPick {
+        DirectionPickPlane plane;
+        std::string label;
+        std::function<void(const kachakacha::v2::geometry::Vector3&)> handler;
+        std::optional<kachakacha::v2::geometry::Vector3> first;
+    };
+    std::optional<DirectionPick> directionPick_;
+    [[nodiscard]] kachakacha::v2::app::HoverResult DirectionPointAt(const QPointF& position) const;
+    void ClickDirectionPoint(const QPointF& position);
+    void DrawDirectionGuide(QPainter& painter) const;
+    void UpdateDirectionPrompt();
     std::vector<kachakacha::v2::base::EntityId> referencePickIds_;
     std::function<void(std::optional<kachakacha::v2::base::EntityId>)> referencePickHandler_;
     std::function<bool(const kachakacha::v2::app::PickCandidate&)> elementPickFilter_;
@@ -1109,7 +1123,7 @@ private:
     };
     std::optional<ViewGadgetDrag> gadgetDrag_;
     std::optional<std::size_t> gadgetHoverIndex_;
-    std::function<void()> alignSelectionCallback_;
+    std::function<void(std::string_view)> viewAlignmentCallback_;
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
     //! 作り方カードが名指しした欄の id。入力列を出すときにここへ焦点を移す。

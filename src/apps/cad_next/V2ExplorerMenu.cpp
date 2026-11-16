@@ -66,6 +66,7 @@ void V2MainWindow::BuildExplorerMenu(QMenu& menu)
     auto* show=menu.addAction(QStringLiteral("選択を表示"));
     QObject::connect(show,&QAction::triggered,this,[this]{const auto rows=entityTree_->selectedItems();ApplyExplorerVisibility(std::vector<QTreeWidgetItem*>(rows.begin(),rows.end()),true);});
     AddCatalogAction(*this, menu, "view.align_selection");
+    AddCatalogAction(*this, menu, "view.align_selection_back");
     menu.addSeparator();
     BuildMoveToGroupMenu(menu);
     auto* sibling=menu.addAction(QStringLiteral("同じ階層にグループを作る"));

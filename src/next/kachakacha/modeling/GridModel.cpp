@@ -1,6 +1,7 @@
 #include "kachakacha/modeling/GridModel.h"
 
 #include <cmath>
+#include <numbers>
 #include <string>
 
 namespace kachakacha::v2::modeling {
@@ -56,6 +57,10 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
             "副点の細かさは 1/2、1/3、1/4 のどれかです。",
             std::to_string(definition.subdivision)));
     }
+    if (!geometry::IsFinite(definition.angleDegrees)) {
+        return Result<GridEvaluation>::Failure(MakeError("UI-G005",
+            "グリッド角度には有限の数を指定してください。", {}));
+    }
 
     const WorkPlaneFrame frame =
         plane.has_value() ? *plane : StandardPlane(StandardPlaneKind::XY);
@@ -64,8 +69,11 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
     evaluation.visible = definition.visible;
     // 原点は UV で持っているので、平面が動けば自然に付いていく。
     evaluation.originXyz = frame.PointAt(definition.originUmm, definition.originVmm);
-    evaluation.uDirection = frame.uAxis;
-    evaluation.vDirection = frame.vAxis;
+    const double angle = std::remainder(definition.angleDegrees, 360.0) * std::numbers::pi / 180.0;
+    const double c = std::cos(angle);
+    const double s = std::sin(angle);
+    evaluation.uDirection = frame.uAxis * c + frame.vAxis * s;
+    evaluation.vDirection = frame.vAxis * c - frame.uAxis * s;
     evaluation.majorSpacingMm = definition.majorSpacingMm;
     evaluation.subdivision = definition.subdivision;
     evaluation.minorPointsPerEdge = MinorPointsPerEdge(definition.subdivision);
@@ -77,6 +85,17 @@ Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
     evaluation.minorVisible = definition.subdivision >= 2
         && evaluation.minorSpacingMm * pixelsPerMillimeter >= kMinimumGridSpacingPx;
     return Result<GridEvaluation>::Success(evaluation);
+}
+
+std::optional<double> GridAngleForDirection(const WorkPlaneFrame& plane,
+    const Vector3& direction, double currentDegrees)
+{
+    const double u = Dot(direction, plane.uAxis);
+    const double v = Dot(direction, plane.vAxis);
+    if (!direction.IsFinite() || !std::isfinite(currentDegrees)
+        || std::hypot(u, v) <= 1.0e-9 * direction.Length()) return std::nullopt;
+    const double degrees = std::atan2(v, u) * 180.0 / std::numbers::pi;
+    return std::remainder(currentDegrees + std::remainder(degrees - currentDegrees, 180.0), 360.0);
 }
 
 Result<GridDefinition> MoveGridOrigin(const GridDefinition& definition,

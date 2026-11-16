@@ -764,7 +764,8 @@ public:
     std::map<std::string, kachakacha::v2::fabrication::SurfacePatchSamples> guideSamples_;
 
     //! 選んだ作業平面へ正対する。形は変わらない。
-    void AlignViewToSelection();
+    void AlignViewToSelection(bool reverse);
+    void AlignScreenHorizontalByClick();
     //! 選んだものが入っているまとまりを作業中にする。選んでいなければ外す。
     void ActivateSelectedGroup();
     //! いまの見え方の段。文書には入らない。
@@ -1107,6 +1108,7 @@ private:
     bool refreshingPlaneCombo_ = false;
     //! 押した場所へグリッドの原点を動かす。
     void MoveGridOriginByClick();
+    void AlignGridByClick();
     //! 選んでいる作業平面を作業中にする。
     void ActivateSelectedWorkPlane();
     //! 作業平面を画面と場面へ反映する。
@@ -1201,8 +1203,6 @@ private:
     void WireViewportCallbacks();
     void HandleSelectionChanged();
     using FacingTarget = V2FacingTarget;   // 形と説明は V2MainWindowTypes.h
-    //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
-    bool facingFromBehind_ = false;
     //! 直前の作り直しで作れなかったものの名前。作れていれば空。
     QString rebuildProblems_;
     void CollectFacingTarget(FacingTarget& target) const;

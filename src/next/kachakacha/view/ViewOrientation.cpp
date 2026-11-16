@@ -633,8 +633,12 @@ std::string ViewGadgetTooltipJa(const ViewGadget& gadget)
         return std::string("モデルの ") + std::string(RotationAxisName(gadget.axis))
             + "軸まわりに" + std::string(ViewGadgetDirectionNameJa(gadget.direction))
             + "(輪の線のどこを押しても効きます。押すと15度、引きずると連続)";
+    case ViewGadgetKind::AlignHorizontal:
+        return "水平線: 3Dビューで始点と終点を指し、結んだ方向が水平になるように画面を回す";
     case ViewGadgetKind::AlignSelection:
-        return "選んだものに正対する";
+        return gadget.direction == ViewGadgetDirection::Negative
+            ? "逆対：選んだものを今と反対側から見る"
+            : "選択に正対：選んだものを今見ている側から見る";
     }
     return {};
 }
@@ -697,7 +701,11 @@ ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx, double sca
     AddGadget(layout.gadgets, ViewGadgetKind::Home, ViewGadgetDirection::Positive,
         RotationAxis::X, centerXPx - 128.0, centerYPx - 124.0, 36.0, 32.0);
     AddGadget(layout.gadgets, ViewGadgetKind::AlignSelection, ViewGadgetDirection::Positive,
-        RotationAxis::X, centerXPx - 68.0, centerYPx + 139.0, 136.0, 32.0);
+        RotationAxis::X, centerXPx - 88.0, centerYPx + 139.0, 92.0, 32.0);
+    AddGadget(layout.gadgets, ViewGadgetKind::AlignSelection, ViewGadgetDirection::Negative,
+        RotationAxis::X, centerXPx + 8.0, centerYPx + 139.0, 42.0, 32.0);
+    AddGadget(layout.gadgets, ViewGadgetKind::AlignHorizontal, ViewGadgetDirection::Positive,
+        RotationAxis::X, centerXPx + 54.0, centerYPx + 139.0, 60.0, 32.0);
 
     // キューブも同じ入れ物へ入れる。別に持つと、寄せたときにずれる。
     layout.cubeSizePx = scalePx * 2.0;

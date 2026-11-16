@@ -76,6 +76,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Extra("円に並べる", "wire.array_circular")}},
         {"plane", "作業面",
             {Tool("作業面", "workplane.create"), Tool("選択に正対", "view.align_selection"),
+                Tool("逆対", "view.align_selection_back"),
                 Tool("作業面に正対", "view.align_workplane"),
                 Tool("作業中にする", "workplane.set_active"), Extra("グリッド", "grid.edit"),
                 Extra("グリッド原点", "grid.move_origin")}},

@@ -54,6 +54,7 @@ public:
     void SetApplyHandler(std::function<void(const V2GridChoice&)> handler);
     //! 「原点を画面で指す」を押したときに呼ぶもの(grid.move_origin と同じ)。
     void SetPickOriginHandler(std::function<void()> handler);
+    void SetPickAngleHandler(std::function<void()> handler);
     //! 色を選ばせる。差し替えると窓を出さない(試験用)。
     void SetColorChooser(std::function<QColor(const QColor& initial, const QString& title)> chooser);
     //! 主点間隔の欄に式を入れて当てる(試験用)。読めなければ false。
@@ -75,6 +76,8 @@ private:
     QDoubleSpinBox* originV_ = nullptr;
     QPushButton* resetOrigin_ = nullptr;
     QPushButton* pickOrigin_ = nullptr;
+    QDoubleSpinBox* angle_ = nullptr;
+    QPushButton* pickAngle_ = nullptr;
     QCheckBox* allModes_ = nullptr;
     QCheckBox* dimOffPlane_ = nullptr;
     QCheckBox* workPlaneVisible_ = nullptr;
@@ -90,6 +93,7 @@ private:
     double spacingMm_ = 10.0;
     std::function<void(const V2GridChoice&)> applyHandler_;
     std::function<void()> pickOriginHandler_;
+    std::function<void()> pickAngleHandler_;
     std::function<QColor(const QColor&, const QString&)> colorChooser_;
     bool loading_ = false;
 };

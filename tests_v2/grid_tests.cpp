@@ -273,4 +273,34 @@ KACHA_V2_TEST(grid, projected_spacing_uses_perpendicular_screen_distance)
         "along-line displacement is not line separation");
 }
 
+KACHA_V2_TEST(grid, AngleUsesWorkPlaneAxesAndKeepsOrigin)
+{
+    const auto plane = kachakacha::v2::modeling::StandardPlane(
+        kachakacha::v2::modeling::StandardPlaneKind::ZX);
+    auto definition = kachakacha::v2::modeling::GridDefinition{};
+    definition.originUmm = 3.0;
+    definition.originVmm = -2.0;
+    definition.angleDegrees = 90.0;
+    const auto result = kachakacha::v2::modeling::EvaluateGrid(definition, plane, 20.0);
+    Require(result.HasValue(), "rotate grid within the work plane");
+    Require((result.Value().originXyz - plane.PointAt(3, -2)).Length() < 1.0e-10, "keep individual grid origin");
+    Require((result.Value().uDirection - plane.vAxis).Length() < 1.0e-10, "positive angle turns from U to V");
+    Require((result.Value().vDirection + plane.uAxis).Length() < 1.0e-10, "keep perpendicular grid axes");
+    definition.angleDegrees = std::nan("");
+    Require(!kachakacha::v2::modeling::EvaluateGrid(definition, plane, 20.0).HasValue(), "reject nonfinite angle");
+}
+
+KACHA_V2_TEST(grid, FitIgnoresNormalComponentAndEndpointOrder)
+{
+    using namespace kachakacha::v2::modeling;
+    const auto plane = StandardPlane(StandardPlaneKind::ZX);
+    Require(!GridAngleForDirection(plane, plane.normal * 2, 12), "normal has no direction in plane");
+    Require(!GridAngleForDirection(plane, {}, 12), "coincident points have no direction");
+    const auto direction = plane.uAxis + plane.vAxis + plane.normal * 10;
+    const auto angle = GridAngleForDirection(plane, direction, 0.0);
+    const auto reverse = GridAngleForDirection(plane, direction * -1, 0.0);
+    Require(angle && reverse && std::abs(*angle - 45.0) < 1e-10 && std::abs(*reverse - *angle) < 1e-10,
+        "project both directions onto the plane and choose the same axis");
+}
+
 KACHA_V2_TEST_MAIN("grid_tests")

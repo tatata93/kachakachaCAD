@@ -35,6 +35,8 @@ struct GridDefinition {
     double majorSpacingMm = 10.0;
     //! 0 = 副点なし、2 = 1/2、3 = 1/3、4 = 1/4。
     int subdivision = 0;
+    //! 作業平面の U 軸から V 軸へ向かう角度(度)。
+    double angleDegrees = 0.0;
 };
 
 //! 画面に見えている範囲(作業平面の UV、グリッド原点からの mm)に対して、
@@ -88,6 +90,10 @@ inline constexpr double kMinimumGridSpacingPx = 6.0;
 //! そのとき、別の平面へ勝手に付け替えず、壊れた参照として断る。
 [[nodiscard]] base::Result<GridEvaluation> EvaluateGrid(const GridDefinition& definition,
     const std::optional<WorkPlaneFrame>& plane, double pixelsPerMillimeter);
+
+//! 直線を作業平面に投影し、現在の U 軸に近い方の向きを返す。
+[[nodiscard]] std::optional<double> GridAngleForDirection(const WorkPlaneFrame& plane,
+    const Vector3& direction, double currentDegrees);
 
 //! 画面で指した位置へ原点を動かす。UV へ直して保存する。
 [[nodiscard]] base::Result<GridDefinition> MoveGridOrigin(const GridDefinition& definition,

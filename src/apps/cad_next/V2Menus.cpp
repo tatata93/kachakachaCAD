@@ -107,7 +107,7 @@ void V2MainWindow::BuildMenus()
 
     QMenu* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
     viewMenu_ = view;
-    addCommands(view, {"view.fit_selection", "view.isolate", "view.restore_isolation", "view.fit_all", "view.align_selection", "view.align_selection_back",
+    addCommands(view, {"view.fit_selection", "view.isolate", "view.restore_isolation", "view.fit_all", "view.align_selection", "view.align_selection_back", "view.align_horizontal",
         "view.align_workplane", "view.hide_selected", "view.show_all", "view.stage_all",
         "view.stage_no_grid", "view.stage_no_construction", "view.stage_selection_only",
         "view.display_settings", "view.number_settings", "view.surface_analysis",

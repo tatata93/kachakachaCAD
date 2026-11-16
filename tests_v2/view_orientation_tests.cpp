@@ -610,7 +610,9 @@ KACHA_V2_TEST(view_orientation, 操作板にV1と同じ部品がそろってい�
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::Home)),
         std::string("1"), "家");
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::AlignSelection)),
-        std::string("1"), "選択に正対");
+        std::string("2"), "選択に正対と逆対");
+    RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::AlignHorizontal)),
+        std::string("1"), "画面の水平線");
     RequireEqual(std::to_string(layout.rings.size()), std::string("3"), "輪は3本");
 }
 
@@ -914,7 +916,7 @@ KACHA_V2_TEST(view_orientation, どのボタンも指で狙える大きさがあ
         Require(gadget.heightPx >= kachakacha::v2::view::kViewButtonMinimumPx,
             "ボタンの高さが足りている");
     }
-    Require(buttons == 8, "ボタンは8つ(家・ロール2・上下左右4・正対)");
+    Require(buttons == 10, "ボタンは10個(家・ロール2・上下左右4・正対・逆対・水平線)");
     Require(kachakacha::v2::view::kViewRingGrabPx >= 10.0,
         "輪は線から10px以上で掴める");
     Require(kachakacha::v2::view::kNavigatorScalePx * 2.0 >= 56.0,

@@ -98,6 +98,17 @@ V2GridDock::V2GridDock(QWidget* parent)
     originLayout->addWidget(pickOrigin_);
     form->addRow(originButtons);
 
+    angle_ = new V2NumericSpinBox(body);
+    angle_->setObjectName(QStringLiteral("gridAngle"));
+    angle_->setRange(-180.0, 180.0);
+    angle_->setDecimals(6);
+    angle_->setSuffix(QStringLiteral(" °"));
+    angle_->setToolTip(QStringLiteral("作業平面の X 方向を 0° とします。正の角度で Y 方向へ回ります。"));
+    pickAngle_ = new QPushButton(QStringLiteral("2点で合わせる"), body);
+    pickAngle_->setObjectName(QStringLiteral("gridPickAngle"));
+    pickAngle_->setToolTip(QStringLiteral("3Dビューで始点と終点をクリックして、グリッドの向きを合わせます。"));
+    form->addRow(QStringLiteral("角度"), PairRow(body, angle_, pickAngle_));
+
     layout->addLayout(form);
     auto* detailsButton = new QToolButton(body);
     detailsButton->setObjectName(QStringLiteral("gridDetails"));
@@ -193,6 +204,13 @@ void V2GridDock::ConnectSignals()
             pickOriginHandler_();
         }
     });
+    QObject::connect(angle_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (!loading_) angle_->setProperty("exactGridAngle", value);
+        Emit();
+    });
+    QObject::connect(pickAngle_, &QPushButton::clicked, this, [this] {
+        if (pickAngleHandler_) pickAngleHandler_();
+    });
     QObject::connect(allModes_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(dimOffPlane_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(workPlaneVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
@@ -251,6 +269,7 @@ V2GridChoice V2GridDock::Choice() const
     choice.grid.subdivision = index >= 0 && index < 4 ? kSubdivisions[index] : 0;
     choice.grid.originUmm = originU_->property("exactGridOrigin").toDouble();
     choice.grid.originVmm = originV_->property("exactGridOrigin").toDouble();
+    choice.grid.angleDegrees = angle_->property("exactGridAngle").toDouble();
     choice.spacingExpression = spacing_->text();
     choice.showInAllModes = allModes_->isChecked();
     choice.dimOffPlaneLines = dimOffPlane_->isChecked();
@@ -283,6 +302,10 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
     originV_->setValue(choice.grid.originVmm);
     originU_->setProperty("exactGridOrigin",choice.grid.originUmm);
     originV_->setProperty("exactGridOrigin",choice.grid.originVmm);
+    if (angle_->property("exactGridAngle").toDouble() != choice.grid.angleDegrees) {
+        angle_->setValue(choice.grid.angleDegrees);
+        angle_->setProperty("exactGridAngle", choice.grid.angleDegrees);
+    }
     allModes_->setChecked(choice.showInAllModes);
     dimOffPlane_->setChecked(choice.dimOffPlaneLines);
     workPlaneVisible_->setChecked(choice.workPlaneVisible);
@@ -305,6 +328,11 @@ void V2GridDock::SetApplyHandler(std::function<void(const V2GridChoice&)> handle
 void V2GridDock::SetPickOriginHandler(std::function<void()> handler)
 {
     pickOriginHandler_ = std::move(handler);
+}
+
+void V2GridDock::SetPickAngleHandler(std::function<void()> handler)
+{
+    pickAngleHandler_ = std::move(handler);
 }
 
 void V2GridDock::SetColorChooser(

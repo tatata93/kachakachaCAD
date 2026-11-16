@@ -10,5 +10,5 @@ kachakacha::v2::app::HoverResult ReferencePointAt(const V2Viewport& view,
     const kachakacha::v2::modeling::SnapScene& scene,
     const kachakacha::v2::geometry::GeometryTolerance& tolerance,
     const QPointF& position, bool suppressed,
-    std::optional<kachakacha::v2::app::PickCandidate>* curve = nullptr);
+    std::optional<kachakacha::v2::app::PickCandidate>* curve = nullptr, bool useGrid = true);
 }

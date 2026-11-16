@@ -142,6 +142,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "選んだものの裏側から正対します。板の裏を見たいときに使います。"
             "形は変わりません。", false,
             {"AT-UIX-008"}},
+        {"view.align_horizontal", "画面の水平線を指定", CommandMode::Instant, "align_horizontal", "",
+            SelectionPredicate::Always, "",
+            "3Dビューで指定した2点を結ぶ方向が水平に見えるよう画面を回します。Escで取り消せます。", false,
+            {"AT-UIX-008"}},
         {"view.align_workplane", "正対", CommandMode::Instant, "align_workplane", "",
             SelectionPredicate::Always, "",
             "作業中の作図面に正対します(上の帯の「正対」)。形は変わりません。", false,

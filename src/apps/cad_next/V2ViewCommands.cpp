@@ -30,6 +30,7 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 
 #include "kachakacha/document/Commands.h"
@@ -59,10 +60,29 @@
 #include <utility>
 #include <vector>
 
+void V2MainWindow::AlignScreenHorizontalByClick()
+{
+    namespace view = kachakacha::v2::view;
+    viewport_->BeginDirectionPick(V2Viewport::DirectionPickPlane::Screen, "水平線: ",
+        [this](const auto& direction) {
+            const auto current = viewport_->Orientation();
+            const auto forward = view::ForwardOf(current);
+            auto right = direction;
+            if (Dot(right, view::RightOf(current)) < 0.0) right = right * -1.0;
+            const auto orientation = view::OrientationFacing(forward * -1.0, Cross(right, forward));
+            if (!orientation.HasValue()) {
+                ReportDiagnostics(orientation.Diagnostics());
+                return;
+            }
+            viewport_->SetOrientation(orientation.Value());
+            SetStatus(QStringLiteral("指定した2点を結ぶ方向が水平になるように画面を回しました。"));
+        });
+}
+
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
     return id == "tools.search" || id == "view.fit_selection" || id == "view.isolate" || id == "view.restore_isolation" || id == "view.align_selection" || id == "view.align_selection_back"
-        || id == "view.display_settings" || id == "view.number_settings"
+        || id == "view.align_horizontal" || id == "view.display_settings" || id == "view.number_settings"
         || id == "group.set_active" || id == "view.hide_selected"
         || id == "view.show_all" || id == "edit.delete"
         || id == "view.stage_all" || id == "view.stage_no_grid"
@@ -139,11 +159,12 @@ void V2MainWindow::RunViewCommand(std::string_view id)
         return;
     }
     if (id == "view.align_selection" || id == "view.align_selection_back") {
-        // 「反対側から正対」は、同じ道を裏側から通るだけである。
-        // 別の道にすると、真ん中・大きさ・選択の残し方が食い違う。
-        facingFromBehind_ = id == "view.align_selection_back";
-        AlignViewToSelection();
-        facingFromBehind_ = false;
+        if (viewport_->DirectionPickPending()) viewport_->CancelPointPick();
+        AlignViewToSelection(id == "view.align_selection_back");
+        return;
+    }
+    if (id == "view.align_horizontal") {
+        AlignScreenHorizontalByClick();
         return;
     }
     if (id == "group.set_active") {
@@ -370,9 +391,11 @@ void V2MainWindow::NoteFacingDirection(FacingTarget& target,
 
 void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
 {
+    using kachakacha::v2::app::SelectionElementKind;
     using kachakacha::v2::domain::EntityKind;
     const auto& document = session_->GetDocument();
-    for (const auto& id : viewport_->Selection().entityIds) {
+    const auto& selection = viewport_->Selection();
+    for (const auto& id : selection.entityIds) {
         const auto* entity = document.FindEntity(id);
         if (entity == nullptr) {
             continue;
@@ -397,6 +420,14 @@ void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
             if (AppendSurfaceFacing(id, target)) {
                 ++target.count;
             }
+            continue;
+        }
+        // ソリッドのエッジも場面に出るため、フェイス選択を線より先に扱う。
+        if (entity->kind == EntityKind::Part && std::any_of(selection.ordered.begin(),
+                selection.ordered.end(), [&id](const auto& ref) {
+                    return ref.entityId == id && ref.kind == SelectionElementKind::Face && ref.pickedFaceIndex;
+                }) && AppendSolidFacing(id, target)) {
+            ++target.count;
             continue;
         }
         const std::size_t before = target.points.size();
@@ -515,10 +546,13 @@ bool V2MainWindow::AppendSurfaceFacing(const kachakacha::v2::base::EntityId& id,
     return true;
 }
 
-void V2MainWindow::AlignViewToSelection()
+void V2MainWindow::AlignViewToSelection(bool reverse)
 {
     using kachakacha::v2::view::BestFitNormal;
+    using kachakacha::v2::view::ForwardOf;
+    using kachakacha::v2::view::OrientationFacing;
     using kachakacha::v2::view::PlanFacingSelection;
+    using kachakacha::v2::view::UpOf;
 
     // V1 の「選択に正対」は3つを同時にやる ── 向き・真ん中・大きさ。
     // 向きだけ変えて中身が画面の外にあると「きいていない」ようにしか見えない。
@@ -528,22 +562,16 @@ void V2MainWindow::AlignViewToSelection()
         SetStatus(QStringLiteral("正対: 作業平面・線・点のどれかを選んでください。"));
         return;
     }
-    // `PlanFacingSelection` は「いま見ている側に留まる」。正対のたびに裏へ回り込むと、
-    // 押すたびに模型が裏返って見えるためである。
-    // 「反対側から正対」は、**渡す視線を裏返して** その決まりに乗る。
-    // ここで法線を裏返すと、向こう側で元へ戻されてしまう。
-    const auto realDirection = kachakacha::v2::view::ForwardOf(viewport_->Orientation());
-    const auto viewDirection = facingFromBehind_ ? realDirection * -1.0 : realDirection;
+    const auto current = viewport_->Orientation();
+    const auto viewDirection = ForwardOf(current);
     kachakacha::v2::geometry::Vector3 normal;
     kachakacha::v2::geometry::Vector3 uAxis;
     if (target.normal.has_value()) {
         normal = *target.normal;
         uAxis = target.uAxis.value_or(kachakacha::v2::geometry::Vector3{1.0, 0.0, 0.0});
     } else if (target.keepOrientation) {
-        // 立体そのものには「正面」が無い。向きは変えず、中央と大きさだけ合わせる。
-        // 立体そのものには「正面」が無い。いまの向きのままにする。
-        normal = realDirection * -1.0;
-        uAxis = kachakacha::v2::view::RightOf(viewport_->Orientation());
+        normal = viewDirection * -1.0;
+        uAxis = kachakacha::v2::view::RightOf(current);
     } else {
         // 面が分かっていないものは、点の並びから推す(V1 と同じ)。
         const auto guessed = BestFitNormal(target.points, viewDirection);
@@ -554,14 +582,29 @@ void V2MainWindow::AlignViewToSelection()
         normal = guessed.Value();
         uAxis = FacingUAxisHint(target.points, normal);
     }
+    if (reverse && std::abs(Dot(normal, viewDirection)) >= normal.Length() * (1.0 - 1e-10))
+        uAxis = kachakacha::v2::view::RightOf(current);
     const auto plan = PlanFacingSelection(target.points, normal, uAxis, viewDirection);
     if (!plan.HasValue()) {
         ReportDiagnostics(plan.Diagnostics());
         return;
     }
+    auto orientation = plan.Value().orientation;
+    if (reverse) {
+        // Reverse the planned direction even when the initial view is grazing
+        // the face. Keep the screen's vertical sense while crossing sides.
+        auto up = UpOf(orientation);
+        if (Dot(up, UpOf(current)) < 0.0) up = up * -1.0;
+        const auto otherSide = OrientationFacing(ForwardOf(orientation), up);
+        if (!otherSide.HasValue()) {
+            ReportDiagnostics(otherSide.Diagnostics());
+            return;
+        }
+        orientation = otherSide.Value();
+    }
     // 選択は変えない。正対したら選び直し、では作図へ進めない(オーナー指示 §1-8)。
     const auto keptSelection = viewport_->Selection();
-    viewport_->SetOrientation(plan.Value().orientation);
+    viewport_->SetOrientation(orientation);
     viewport_->SetViewCenter(plan.Value().center);
     // 少し余白をつけて収める。ぴったりだと端が画面の縁に貼りつく。
     viewport_->SetVisibleWidthMm(plan.Value().spanMm * 1.4);
@@ -570,7 +613,7 @@ void V2MainWindow::AlignViewToSelection()
     SetStatus(QStringLiteral("%1個に%2正対しました。真ん中に寄せて、大きさも合わせました。"
                              "形は変わっていません。%3")
             .arg(target.count)
-            .arg(facingFromBehind_ ? QStringLiteral("反対側から") : QString())
+            .arg(reverse ? QStringLiteral("反対側から") : QString())
             .arg(target.mixedDirections
                     ? QStringLiteral("向きの違うものが混じっていたので、"
                                      "最初の1つの向きに合わせ、全部が入る大きさにしました。")

@@ -252,6 +252,7 @@ enum class ViewGadgetKind {
     Orbit,          //!< 画面基準の上下・左右(右と下の矢印)
     AxisRing,       //!< モデル軸まわり(輪の矢じり)
     AlignSelection, //!< 選んだものに正対
+    AlignHorizontal, //!< 選んだ直線を画面で水平にする
 };
 
 //! 向き。種類ごとに意味が変わる。

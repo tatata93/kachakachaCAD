@@ -149,12 +149,14 @@ struct SnapGrid {
     double majorSpacingMm = 10.0;
     //! 0 = 副点なし、2 = 1/2、3 = 1/3、4 = 1/4。
     int subdivision = 0;
+    double angleDegrees = 0.0;
 };
 
 struct SnapWorkPlane {
     bool active = false;
     Vector3 origin{};
     Vector3 normal{0.0, 0.0, 1.0};
+    std::optional<Vector3> uDirection;
 };
 
 struct SnapScene {

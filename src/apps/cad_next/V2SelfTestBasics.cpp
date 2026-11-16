@@ -1016,7 +1016,7 @@ namespace {
     const auto layout = viewport.ViewGadgets();
     if (!Explain((std::string("部品が14個(実際は ")
                      + std::to_string(layout.gadgets.size()) + ")").c_str(),
-            layout.gadgets.size() == 14)) {
+            layout.gadgets.size() == 16)) {
         return false;
     }
     if (!Explain("輪が3本ある", layout.rings.size() == 3)) {

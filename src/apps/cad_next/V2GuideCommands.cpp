@@ -21,6 +21,7 @@
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/RevolveSurface.h"
+#include "V2RevolveAxisInput.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
@@ -83,7 +84,7 @@ void V2MainWindow::CreateRevolvedSurface()
     // 断面・軸・角度の検査は core(REV-E001〜E005)。断面の数は回転面では使わない。
     const auto request = kachakacha::v2::app::MakeRevolveRequest(
         wires.empty() ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[0]),
-        wires.size() < 2 ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[1]),
+        wires.size() < 2 ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : v2ui::RevolveAxisCurves(curvesOf(wires[1])),
         kachakacha::v2::app::ParameterValueOf(values,
             kachakacha::v2::app::ParameterId::RevolveAngleDeg));
     if (!request.HasValue()) {
@@ -161,8 +162,8 @@ void V2MainWindow::RunRevolveTool()
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
-    SetStatus(QStringLiteral("回転体\n3D で断面の線を押し、次に軸の直線を押してください。"
-                             "角度は数の棚の「回転体の角度」。Enter で確定、Esc でやめます。\n%1")
+    SetStatus(QStringLiteral("回転体\n回す形状線と軸を選んでください。軸は直線、または円・円弧の中心と向きから指定できます。"
+                             "「回す角度」で角度を指定し、「一周」で360°にします。Enter で確定、Esc でやめます。\n%1")
             .arg(QString::fromUtf8(
                 kachakacha::v2::app::SurfaceActiveSlotHintJa(surfaceInput_).c_str())));
 }
@@ -178,7 +179,7 @@ V2MainWindow::RevolveAxisFromInput() const
     const auto empty = std::vector<kachakacha::v2::geometry::CurveSegment>{};
     return kachakacha::v2::app::MakeRevolveRequest(
         surfaceInput_.sections.empty() ? empty : curvesOf(surfaceInput_.sections.front()),
-        surfaceInput_.guides.empty() ? empty : curvesOf(surfaceInput_.guides.front()),
+        surfaceInput_.guides.empty() ? empty : v2ui::RevolveAxisCurves(curvesOf(surfaceInput_.guides.front())),
         kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
             kachakacha::v2::app::ParameterId::RevolveAngleDeg));
 }

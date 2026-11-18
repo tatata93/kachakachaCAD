@@ -71,6 +71,17 @@ bool V2FaceActions::IsDrawingSupport(const V2MainWindow& window, base::EntityId 
         && std::any_of(state->faces.begin(), state->faces.end(), [&](const auto& face) { return face.face.entityId == id; });
 }
 
+std::optional<app::SelectionRef> V2FaceActions::ActiveDrawingFace(const V2MainWindow& window)
+{
+    const auto* state = State(window);
+    if (!state || state->document != window.session_->GetDocument().Snapshot().id) return std::nullopt;
+    for (const auto& face : state->faces) if (IsDrawingSupport(window, face.face.entityId)) {
+        const auto shape = DrawingShape(window, face.face.entityId);
+        if (shape && shape->value == face.shape.value) return face.face;
+    }
+    return std::nullopt;
+}
+
 bool V2FaceActions::ActivateDrawingSupport(V2MainWindow& window, base::EntityId id)
 {
     const auto* state = State(window);

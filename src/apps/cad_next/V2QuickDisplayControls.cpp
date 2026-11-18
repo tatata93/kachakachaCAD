@@ -53,6 +53,14 @@ void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSess
     QObject::connect(plane,&QToolButton::toggled,&view,[&view,state](bool on){
         state->enabled=on;RefreshPlaneWireDisplay(view);view.ApplyVisibilityFilter();view.PruneSelection();view.update();
     });
+    auto* outline = new QToolButton(&bar);
+    outline->setObjectName(QStringLiteral("drawingFaceOutline"));
+    outline->setText(QStringLiteral("輪郭を作図面へ"));
+    outline->setToolTip(QStringLiteral("作図に使う面の輪郭を、編集できる線として写します。投影距離を下見し、元の面を残して確定します。"));
+    bar.addWidget(outline);
+    QObject::connect(outline, &QToolButton::clicked, &view, [&view] {
+        V2FaceActions::OpenDrawingOutline(static_cast<V2MainWindow&>(*view.window()), true);
+    });
 }
 void RefreshQuickGridVisibility(V2Viewport& view) {
     const bool on=view.DisplaySettingsNow().gridVisible;

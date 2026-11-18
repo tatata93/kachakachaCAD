@@ -133,6 +133,7 @@ void V2FaceActions::PickWorkPlane(V2MainWindow& window, PlaneHandler handler)
 
 bool V2FaceActions::Run(V2MainWindow& window,std::string_view command)
 {
+    if (command == "wire.project") return OpenDrawingOutline(window);
     if(command!="fabrication.create" && command!="workplane.from_face" && command!="fabrication.from_face")return false;
     const auto selection=window.viewport_->Selection();
     std::vector<app::SelectionRef> faces = command == "workplane.from_face"

@@ -1,4 +1,5 @@
 #include "V2SurfaceDock.h"
+#include "V2RevolveAxisInput.h"
 #include "V2PanelFrame.h"
 
 #include "kachakacha/app/GuideTableBuild.h"
@@ -338,6 +339,7 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     state_ = new QLabel(body);
     state_->setWordWrap(true);
     layout->addWidget(state_);
+    v2ui::InstallRevolveControls(*this, *layout);
 
     BuildRoleAssist(layout);
     BuildSlotRows(layout);
@@ -390,9 +392,12 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
 //! 欄の見出し。作り方で言葉が変わる(回転体の「軸」、境界面の「通る線」、曲線網の U/V)。
 void V2SurfaceDock::RefreshSlotTitles(GuideSurfaceMethod method)
 {
+    v2ui::RefreshRevolveControls(*this, method == GuideSurfaceMethod::Revolve);
     for (SlotRow& row : slots_) {
         if (row.title != nullptr) {
             row.title->setText(Text(kachakacha::v2::app::SurfaceSlotNameJa(method, row.key)));
+            row.title->setToolTip(method == GuideSurfaceMethod::Revolve && row.key == ChainRole::GuideU
+                ? QStringLiteral("直線、または円・円弧の中心と向きから軸を指定します。") : QString());
         }
     }
 }

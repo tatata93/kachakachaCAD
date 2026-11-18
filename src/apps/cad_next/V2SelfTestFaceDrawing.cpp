@@ -6,6 +6,7 @@
 #include "V2WorkPlaneDock.h"
 #include "V2ExtrudeDock.h"
 #include "V2ProjectionTool.h"
+#include "V2ParameterDock.h"
 #include "V2SelfTestPrimitiveUi.h"
 #include "V2SelfTestDeleteDialog.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -28,6 +29,7 @@
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QCheckBox>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <algorithm>
@@ -680,6 +682,221 @@ bool ProjectToWorkPlane(V2MainWindow& w, int mode, bool tree, bool tilted, bool 
     return w.SaveAndReopen("workplane-projection.kcd2") && w.RebuildProblems().isEmpty();
 }
 
+bool PickDrawingFace(V2MainWindow& w, EntityId id)
+{
+    w.RunCommand("selection.activate"); w.Viewport().SetSelection({});
+    if (!StartFaceTool(w)) return false;
+    for (const auto& shape : w.Viewport().ShapeViews()) if (shape.entityId == id)
+        for (const auto& triangle : shape.mesh.triangles) {
+            const auto screen = w.Viewport().Mapping().Project(triangle.Center()); if (!screen) continue;
+            const QPointF at(screen->x, screen->y);
+            if (!w.Viewport().rect().contains(at.toPoint()) || w.Viewport().ViewButtonAt(at)) continue;
+            w.Viewport().HoverAt(at);
+            for (int i = 0; i < w.Viewport().CandidateCount(); ++i) {
+                const auto candidate = w.Viewport().CurrentCandidate();
+                if (candidate && candidate->entityId == id && candidate->pickedFaceIndex == triangle.faceIndex)
+                    return ClickWorld(w, triangle.Center()) && !w.Viewport().ReferencePickPending();
+                QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier); QApplication::sendEvent(&w.Viewport(), &tab);
+            }
+        }
+    return Explain("面を3Dビューから指定できる", false);
+}
+
+bool ClickNamed(V2MainWindow& w, const char* name)
+{
+    auto* button = w.findChild<QWidget*>(QString::fromUtf8(name));
+    if (!Explain((std::string("表示されたボタン: ") + name).c_str(), button && button->isVisible() && button->isEnabled())) return false;
+    const auto point = button->mapToGlobal(button->rect().center());
+    for (auto* parent = button->parentWidget(); parent; parent = parent->parentWidget())
+        if (!Explain((std::string("画面内で押せるボタン: ") + name).c_str(), parent->rect().contains(parent->mapFromGlobal(point)))) return false;
+    Click(*button, button->rect().center()); return true;
+}
+
+EntityId WarpedGuide(V2MainWindow& w)
+{
+    const Vector3 corners[] = {{-20,-12,12.15},{20,-12,11.85},{20,12,12.15},{-20,12,11.85}};
+    app::SelectionSet selected;
+    for (int i = 0; i < 4; ++i) selected.entityIds.push_back(w.AddPlainWire(
+        {geometry::CurveSegment::MakeLine(corners[i], corners[(i+1)%4]).Value()}, "形状の辺", false));
+    if (!w.SaveAndReopen("outline-warp-source.kcd2")) return {};
+    w.Viewport().SetSelection(selected); w.RunCommand("surface.create");
+    w.ChooseSurfaceMethod(modeling::GuideSurfaceMethod::FourEdgePatch);
+    if (!w.SurfaceDock().ChooseFourEdgeStyle(modeling::FourEdgeStyle::Curved)) return {};
+    if (!Explain(("ねじれた四辺面の下見: " + w.StatusText().toStdString()).c_str(), w.SurfaceDock().CanConfirm())) return {};
+    w.SurfaceDock().PressConfirm();
+    for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
+        if (entity.kind == EntityKind::GuideSurface) return entity.id;
+    return {};
+}
+
+bool CopiedOutline(V2MainWindow& w, EntityId source, bool holes, bool project, bool offset)
+{
+    if (!PickDrawingFace(w, source)) return false;
+    const auto sourceCurves = w.Session().Scene().curves;
+    const int wires = CountOfKind(w, EntityKind::Wire), surfaces = CountOfKind(w, EntityKind::GuideSurface);
+    const auto revision = w.Session().GetDocument().Revision();
+    if (!ClickNamed(w, "drawingFaceOutline")) return false;
+    auto* check = w.findChild<QCheckBox*>("faceOutlineProject");
+    if (!check || !check->isChecked()) return false;
+    if (!project) Click(*check, QPointF(10, check->height() * .5));
+    if (!Explain("投影チェックが指定通り切り替わる", check->isChecked() == project)) return false;
+    if (!Explain("下見で文書を変更しない", w.Session().GetDocument().Revision() == revision)) return false;
+    Shot(w, project ? "outline-projected-preview" : "outline-original-3d-preview");
+    if (!ClickNamed(w, offset ? "faceOutlineOffset" : "faceOutlineConfirm")) return false;
+    const auto selection = w.Viewport().Selection();
+    if (!Explain("輪郭ごとに1本、元の面を保持", selection.entityIds.size() == (holes ? 3 : 1)
+            && CountOfKind(w, EntityKind::Wire) == wires + (holes ? 3 : 1)
+            && CountOfKind(w, EntityKind::GuideSurface) == surfaces && w.Session().GetDocument().FindEntity(source))) return false;
+    const auto curves = app::SelectedCurves(selection, w.Session().Scene());
+    if (!Explain("閉じた輪郭を写す", curves.size() == (holes ? 6 : 4))) return false;
+    if (project) for (const auto& curve : curves) for (const double t : {0., .25, .5, .75, 1.})
+        if (!Explain("投影した輪郭が作図面上", std::abs(w.Viewport().WorkPlane().SignedDistance(curve.Evaluate(t))) < 1e-7)) return false;
+    if (!project && offset == false && !holes) {
+        double maximum = 0;
+        for (const auto& curve : curves) for (const double t : {0., .5, 1.})
+            maximum = std::max(maximum, std::abs(w.Viewport().WorkPlane().SignedDistance(curve.Evaluate(t))));
+        if (!Explain("投影しない選択では元の非平面の輪郭を保持", maximum > .001)) return false;
+    }
+    for (const auto& old : sourceCurves) {
+        const auto* entity = w.Session().GetDocument().FindEntity(old.entityId);
+        if (!entity || entity->kind != EntityKind::Wire) continue;
+        const auto found = std::find_if(w.Session().Scene().curves.begin(), w.Session().Scene().curves.end(), [&](const auto& current) {
+            return current.entityId == old.entityId && current.segmentId == old.segmentId;
+        });
+        if (!Explain("元ワイヤーのUUIDを保持", found != w.Session().Scene().curves.end())) return false;
+        for (const double t : {0., .25, .5, .75, 1.}) if (!Explain("元ワイヤーの形を変更しない", (old.segment.Evaluate(t)-found->segment.Evaluate(t)).Length() < 1e-9)) return false;
+    }
+    if (offset) {
+        auto* distance = w.findChild<QDoubleSpinBox*>("offsetDistance");
+        auto* plane = w.findChild<QComboBox*>("offsetPlaneChoice");
+        if (!distance || !plane) return false;
+        distance->setValue(.2); plane->setCurrentIndex(1);
+        Shot(w, "outline-offset-preview");
+        const auto before = w.Session().GetDocument().Revision();
+        if (!ClickNamed(w, "offsetConfirm") || !Explain(("写した線をオフセット: " + w.StatusText().toStdString()).c_str(),
+                w.Session().GetDocument().Revision() == before + 1)) return false;
+        w.RunCommand("edit.undo");
+        if (!Explain("オフセットのUndoで輪郭の写しを保持", CountOfKind(w, EntityKind::Wire) == wires + 1)) return false;
+        w.RunCommand("edit.undo");
+        if (!Explain("次のUndoで写した輪郭だけ戻る", CountOfKind(w, EntityKind::Wire) == wires && w.Session().GetDocument().FindEntity(source))) return false;
+        w.RunCommand("edit.redo");
+        if (!Explain("輪郭の写しを一度で戻せる", CountOfKind(w, EntityKind::Wire) == wires + 1)) return false;
+        w.RunCommand("edit.redo");
+        w.RunCommand("draw.line");
+        const auto frame = w.Viewport().WorkPlane();
+        const auto crossing = curves.front().Evaluate(.37);
+        const auto perpendicular = geometry::Normalized(geometry::Cross(frame.normal, curves.front().EndPoint()-curves.front().StartPoint()));
+        w.Viewport().SetSnapSuppressed(true);
+        const bool drawn = ClickWorld(w, crossing-perpendicular*2) && ClickWorld(w, crossing+perpendicular*2);
+        w.Viewport().SetSnapSuppressed(false);
+        if (!drawn || !CheckIntersectionAndDraw(w, crossing)) return false;
+        Shot(w, "outline-real-intersection-drawing");
+    }
+    w.RunCommand("selection.activate");
+    return w.SaveAndReopen("outline-result.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool OutlineFixture(V2MainWindow& w, int mode)
+{
+    Setup(w);
+    const auto source = mode == 1 ? MakeGuide(w, 12, false, true) : WarpedGuide(w);
+    if (source.IsNil()) return false;
+    return CopiedOutline(w, source, mode == 1, mode != 2, mode == 0);
+}
+
+bool OutlineCancel(V2MainWindow& w)
+{
+    Setup(w); const auto source = MakeGuide(w);
+    if (source.IsNil() || !PickDrawingFace(w, source)) return false;
+    const auto revision = w.Session().GetDocument().Revision();
+    if (!ClickNamed(w, "drawingFaceOutline")) return false;
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier); QApplication::sendEvent(&w.Viewport(), &escape);
+    if (!Explain("取消でコピーも元の変更もない", w.Session().GetDocument().Revision() == revision
+            && !w.findChild<QWidget*>("faceOutlinePanel")->isVisible())) return false;
+    w.RunCommand("draw.line");
+    w.Viewport().SetSnapSuppressed(true);
+    const auto frame = w.Viewport().WorkPlane();
+    if (!ClickWorld(w, frame.PointAt(-3, 1)) || !ClickWorld(w, frame.PointAt(3, 1))) return false;
+    w.Viewport().SetSnapSuppressed(false);
+    return Explain("取消後も線を作図できる", w.Session().GetDocument().Revision() == revision + 1);
+}
+
+bool OutlineUnsupportedProjection(V2MainWindow& w)
+{
+    Setup(w); const auto source = MakeGuide(w, 12, false, true);
+    if (source.IsNil() || !PickDrawingFace(w, source) || !ClickNamed(w, "drawingFaceOutline")) return false;
+    const auto revision = w.Session().GetDocument().Revision();
+    if (!SelectDrawingPlane(w, QStringLiteral("front_XZ"))) return false;
+    auto* confirm = w.findChild<QPushButton*>("faceOutlineConfirm");
+    auto* offset = w.findChild<QPushButton*>("faceOutlineOffset");
+    auto* status = w.findChild<QLabel*>("faceOutlineStatus");
+    if (!Explain("変換できない曲線で部分的な写しを確定しない", confirm && offset && status
+            && confirm->isVisible() && !confirm->isEnabled() && !offset->isEnabled() && !status->text().isEmpty()
+            && w.Session().GetDocument().Revision() == revision)) return false;
+    QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier); QApplication::sendEvent(&w.Viewport(), &enter);
+    return Explain("Enterでも部分生成しない", w.Session().GetDocument().Revision() == revision);
+}
+
+bool CircleAxisRevolve(V2MainWindow& w, bool arc, bool tilted, bool pointed = false)
+{
+    Setup(w);
+    const auto p = [tilted](Vector3 a) { return tilted ? Vector3{a.x + 10, -a.z + 5, a.y + 12} : a; };
+    const auto normal = tilted ? Vector3{0,-1,0} : Vector3{0,0,1};
+    const auto axisCurve = arc ? geometry::CurveSegment::MakeCircularArc(p({0,0,0}), normal, {1,0,0}, 3, 0, 1.5)
+        : geometry::CurveSegment::MakeCircle(p({0,0,0}), normal, {1,0,0}, 3);
+    if (!axisCurve.HasValue()) return false;
+    const auto axis = w.AddPlainWire({axisCurve.Value()}, "中心と向き", false);
+    const double endRadius = pointed ? 0 : 2;
+    const auto profileCurve = geometry::CurveSegment::MakeCubicBezier({p({3,0,0}),p({4,0,2}),p({pointed ? 2. : 4.,0,pointed ? 6. : 4.}),p({endRadius,0,6})}).Value();
+    const auto profile = w.AddPlainWire({profileCurve}, "回す形状線", false);
+    if (!w.SaveAndReopen("circle-axis-source.kcd2")) return false;
+    w.Viewport().SetViewDirection(ViewDirection::Isometric); w.Viewport().FitToDocument();
+    w.Viewport().SetSelection({}); w.RunCommand("guide.revolve");
+    if (!w.SurfaceDock().ClickActivate(modeling::ChainRole::Section) || !SelectTree(w, profile)) return false;
+    if (!w.SurfaceDock().ClickActivate(modeling::ChainRole::GuideU) || !ClickWorld(w, axisCurve.Value().Evaluate(.4))) return false;
+    auto* angle = w.findChild<QDoubleSpinBox*>("surfaceRevolveAngle");
+    if (!Explain("円の軸入力と角度欄を表示", angle && angle->isVisible())) return false;
+    angle->setValue(180);
+    if (!Explain("表示中の角度欄が入力値へ反映", std::abs(app::ParameterValueOf(w.ParameterDock().Values(), app::ParameterId::RevolveAngleDeg)-180) < 1e-8)) return false;
+    if (!ClickNamed(w, "surfaceRevolveFullTurn")) return false;
+    Shot(w, "circle-axis-revolve-preview");
+    if (!Explain(("円から軸を決めた下見: " + w.StatusText().toStdString()).c_str(), w.SurfaceDock().CanConfirm() && w.SurfacePreviewShown())) return false;
+    w.SurfaceDock().PressConfirm();
+    const auto& table = w.GuideRoleTable();
+    if (!Explain("一周する面を生成、軸ワイヤーは増やさない", CountOfKind(w, EntityKind::GuideSurface) == 1
+            && CountOfKind(w, EntityKind::Wire) == 2 && (table.revolveAxisPoint-p({0,0,0})).Length() < 1e-7
+            && (table.revolveAxisDirection-normal).Length() < 1e-7 && std::abs(table.revolveAngleRad-2*3.141592653589793) < 1e-8)) return false;
+    bool opposite = false, rear = false;
+    for (const auto& shape : w.Viewport().ShapeViews()) for (const auto& triangle : shape.mesh.triangles)
+        for (const auto& point : triangle.points) {
+            if ((point-p({-3,0,0})).Length() < .1) opposite = true;
+            if ((point-p({-endRadius,0,6})).Length() < .1) rear = true;
+        }
+    if (!Explain("反対側と奥側の輪郭まで曲面がある", opposite && rear)) return false;
+    w.RunCommand("selection.activate"); w.Viewport().SetSelection({});
+    w.Viewport().SetViewCenter(p({0,0,3})); w.Viewport().SetVisibleWidthMm(18);
+    Shot(w, pointed ? "circle-axis-pointed-result" : "circle-axis-revolve-result");
+    w.RunCommand("edit.undo");
+    if (!Explain("一度のUndoで面だけ戻る", CountOfKind(w, EntityKind::GuideSurface) == 0 && CountOfKind(w, EntityKind::Wire) == 2)) return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("circle-axis-result.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool OwnerOutline(V2MainWindow& w)
+{
+    Setup(w); const auto file = qEnvironmentVariable("KACHACAD_FACE_SKETCH_OWNER_FILE");
+    if (file.isEmpty() || !w.OpenDocumentFile(file)) return false;
+    EntityId source;
+    for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
+        if (entity.kind == EntityKind::GuideSurface && entity.displayName == "非運転席側中心窓") source = entity.id;
+    if (source.IsNil()) return false;
+    if (!w.Session().GetDocument().Run(document::SetVisibilityCommand({source}, domain::Visibility::Visible)).committed
+        || !w.SaveAndReopen("owner-outline-source.kcd2")) return false;
+    w.Viewport().SetViewDirection(ViewDirection::Isometric); w.Viewport().SetViewCenter({-6,3.5,21});
+    w.Viewport().SetVisibleWidthMm(35);
+    return CopiedOutline(w, source, false, true, true);
+}
+
 bool OwnerFaceDrawing(V2MainWindow& w)
 {
     Setup(w);
@@ -760,6 +977,16 @@ std::vector<SelfTestCase> FaceDrawingCases()
         {"FACE-PROJ wrap to workplane", [](auto& w) { return ProjectToWorkPlane(w, 1, true, false, false); }},
         {"FACE-PROJ closed region onto workplane", [](auto& w) { return ProjectToWorkPlane(w, 0, true, false, true); }},
         {"FACE-PROJ mixed surface and workplane all hits", [](auto& w) { return ProjectToWorkPlane(w, 0, true, false, false, true); }}};
+    cases.push_back({"FACE-OUTLINE warped face project then offset", [](auto& w) { return OutlineFixture(w, 0); }});
+    cases.push_back({"FACE-OUTLINE multiple closed contours preserve holes", [](auto& w) { return OutlineFixture(w, 1); }});
+    cases.push_back({"FACE-OUTLINE exact copy without projection", [](auto& w) { return OutlineFixture(w, 2); }});
+    cases.push_back({"FACE-OUTLINE cancel then draw", OutlineCancel});
+    cases.push_back({"FACE-OUTLINE unsupported projection never commits partial contours", OutlineUnsupportedProjection});
+    cases.push_back({"FACE-REVOLVE circle axis profile full turn undo reopen", [](auto& w) { return CircleAxisRevolve(w, false, false); }});
+    cases.push_back({"FACE-REVOLVE arc axis tilted profile full turn", [](auto& w) { return CircleAxisRevolve(w, true, true); }});
+    cases.push_back({"FACE-REVOLVE circle axis rounded nose closes on axis", [](auto& w) { return CircleAxisRevolve(w, false, false, true); }});
+    if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
+        cases.push_back({"FACE-OUTLINE supplied ER1 skew face project offset", OwnerOutline});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_GRID_OWNER_FILE"))
         cases.push_back({"FACE-OWNER supplied model face grid drawing undo save", OwnerFaceDrawing});
     return cases;

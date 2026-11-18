@@ -4,6 +4,7 @@
 #include "V2ShapeLifetime.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/app/OriginPlanes.h"
+#include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/WorkPlaneOptions.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include <QObject>
@@ -104,6 +105,10 @@ void V2FaceActions::AppendDrawingSupportEdges(V2MainWindow& window, modeling::Sn
             && a.StartAngleRad() == b.StartAngleRad() && a.SweepAngleRad() == b.SweepAngleRad();
     };
     for (const auto& support : state->faces) {
+        const auto& document = window.session_->GetDocument();
+        const auto* entity = document.FindEntity(support.face.entityId);
+        const auto* feature = entity ? document.FindFeature(entity->createdBy) : nullptr;
+        if (!entity || !feature || !feature->enabled || !app::EntityEffectivelyVisible(document.Snapshot(), *entity)) continue;
         const auto shape = DrawingShape(window, support.face.entityId);
         if (!shape || shape->value != support.shape.value) continue;
         // The guide's manufacturing outline is deliberately outer-only. Keep it

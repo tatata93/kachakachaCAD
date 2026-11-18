@@ -28,6 +28,8 @@
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QStyle>
+#include <QStyleOptionViewItem>
 #include <algorithm>
 #include <cmath>
 
@@ -365,6 +367,34 @@ bool DeletedSupport(V2MainWindow& w)
     w.RunCommand("file.new");
     return Explain("新規文書に古い作図基準を持ち越さない", CountOfKind(w, EntityKind::GuideSurface) == 0
         && w.ActiveWorkPlaneId() != guide && std::abs(w.Viewport().WorkPlane().origin.z) < 1e-9);
+}
+
+bool HiddenSupportBoundaries(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, false, true);
+    if (guide.IsNil() || !SelectTree(w, guide) || !StartFaceTool(w)) return false;
+    auto* tree = w.EntityTree();
+    auto* row = w.ItemOfEntity(guide);
+    if (!tree || !row) return false;
+    for (const auto hidden : {true, false}) {
+        tree->scrollToItem(row); QApplication::processEvents();
+        QStyleOptionViewItem option; option.initFrom(tree);
+        option.rect = tree->visualItemRect(row);
+        option.features |= QStyleOptionViewItem::HasCheckIndicator;
+        option.checkState = row->checkState(0);
+        const auto checkbox = tree->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &option, tree).center();
+        Click(*tree->viewport(), checkbox);
+        const auto* entity = w.Session().GetDocument().FindEntity(guide);
+        if (!Explain("左一覧のチェックで面の表示を変更", entity && entity->visibility
+                == (hidden ? domain::Visibility::Hidden : domain::Visibility::Visible))) return false;
+        const auto& curves = w.Session().Scene().curves;
+        const bool edges = std::any_of(curves.begin(), curves.end(), [&](const auto& c) { return c.entityId == guide; });
+        if (!Explain("非表示の面の補助境界を復活させず、再表示で戻す", edges != hidden)) return false;
+        if (!Explain("表示切替で作図基準や元の面を変更しない", w.ActiveWorkPlaneId() == guide
+                && CountOfKind(w, EntityKind::GuideSurface) == 1)) return false;
+    }
+    return true;
 }
 
 bool TreeBeforeAndAfter(V2MainWindow& w)
@@ -715,6 +745,7 @@ std::vector<SelfTestCase> FaceDrawingCases()
         {"FACE-SUPPORT combo switch cancel and reopen", SupportSwitchAndCancel},
         {"FACE-SUPPORT native solid face boundary intersection", SolidBoundaryCrossing},
         {"FACE-SUPPORT delete undo new document", DeletedSupport},
+        {"FACE-SUPPORT hidden native boundaries stay hidden", HiddenSupportBoundaries},
         {"FACE-GRID inclined surface and repeated drawing reuse", TiltedGuideAndReuse},
         {"FACE-GRID explorer before and after tool", TreeBeforeAndAfter},
         {"FACE-GRID overlapping faces cancel and tool switch", OverlapAndCancel},

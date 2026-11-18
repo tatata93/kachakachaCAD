@@ -76,6 +76,7 @@ void V2Viewport::BeginReferencePick(std::vector<kachakacha::v2::base::EntityId> 
 
 void V2Viewport::CancelReferencePick()
 {
+    setProperty("referencePickPrompt", {});
     if(ReferencePickPending())setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     if (elementPickHandler_) {
         auto handler = std::move(elementPickHandler_);
@@ -112,6 +113,7 @@ bool V2Viewport::AcceptElementPick(const kachakacha::v2::app::PickCandidate& can
     if (!elementPickHandler_ || !elementPickFilter_(candidate)) return false;
     auto handler = std::move(elementPickHandler_);
     elementPickFilter_ = {};
+    setProperty("referencePickPrompt", {});
     ForgetPickCycle();
     handler(candidate);
     RefreshFaceRolePieces();

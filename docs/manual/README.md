@@ -939,3 +939,8 @@ WindowsのHP-GRID操作試験で取得した実Qt画面です。OSからの入�
 `115-hrubber-whole-1103`: ![ボタンで同じ4本の32区間を使用](images/v2-115-hrubber-whole-1103.png)
 
 `115-hrubber-solid-1103`: ![窓を空けた0.1mm厚のHゴム部品](images/v2-115-hrubber-solid-1103.png)
+
+## 2026-11-18 面・フェイス・作業面を指定する
+
+[面でグリッド作図](tools/workplane.from_face.html)、[面から作業面を作る](tools/workplane.create.html)、[面・作業面へ投影](tools/wire.project_surface.html)に、Windows版のQt入力試験で撮影した実画面を掲載しています。
+グリッド作図・接平面・作業面の下見・1000×700画面・投影する閉領域をそれぞれ確認できます。

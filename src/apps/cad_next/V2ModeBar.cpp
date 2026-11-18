@@ -81,7 +81,7 @@ void V2MainWindow::BuildModeBar()
         AddModeButton(*row, action);
     }
     // モード → 正対 → 選択 → 測定 → 作図面 → まとまり → 吸着。
-    for (const std::string_view id : {"view.align_workplane", "selection.activate",
+    for (const std::string_view id : {"view.align_workplane", "workplane.from_face", "selection.activate",
              "measure.open"}) {
         if (QAction* action = ActionFor(id); action != nullptr) {
             AddModeButton(*row, action);

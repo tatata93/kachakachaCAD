@@ -97,7 +97,7 @@ QComboBox* MakeMethodCombo(QWidget* body)
             ||method==WorkPlaneMethod::TangentThroughEdge) {
             auto* item=static_cast<QStandardItemModel*>(combo->model())->item(combo->count()-1);
             item->setEnabled(false);
-            item->setToolTip(QStringLiteral("支持面を指定する入力が未対応です。フェイスで作図、または位置と向きの数値指定を使ってください。"));
+            item->setToolTip(QStringLiteral("この条件の支持面入力は未対応です。「面から位置・向きを指定」で面上の接平面を指定できます。"));
         }
     }
     return combo;
@@ -399,6 +399,15 @@ WorkPlaneChoice V2WorkPlaneDock::Choice() const
     choice.referencePlaneId = PlaneOf(referencePlane_);
     choice.secondPlaneId = PlaneOf(secondPlane_);
     choice.curveParameter = curveParameter_->value();
+    if (suppliedChoice_ && choice.method == WorkPlaneMethod::PointNormal) {
+        const auto preserve = [](Vector3 value, Vector3 shown, Vector3 exact) {
+            return Vector3{value.x == shown.x ? exact.x : value.x,
+                value.y == shown.y ? exact.y : value.y, value.z == shown.z ? exact.z : value.z};
+        };
+        choice.origin = preserve(choice.origin, displayedChoice_.origin, suppliedChoice_->origin);
+        choice.normal = preserve(choice.normal, displayedChoice_.normal, suppliedChoice_->normal);
+        choice.uAxis = preserve(choice.uAxis, displayedChoice_.uAxis, suppliedChoice_->uAxis);
+    }
     return choice;
 }
 
@@ -406,6 +415,7 @@ void V2WorkPlaneDock::SetChoice(const WorkPlaneChoice& choice)
 {
     // 欄を1つずつ書き換える間は、そのたびに下見を作り直させない。
     loading_ = true;
+    suppliedChoice_.reset();
     const auto& methods = WorkPlaneMethods();
     for (std::size_t index = 0; index < methods.size(); ++index) {
         if (methods[index] == choice.method) {
@@ -428,6 +438,8 @@ void V2WorkPlaneDock::SetChoice(const WorkPlaneChoice& choice)
     SelectPlane(referencePlane_, choice.referencePlaneId);
     SelectPlane(secondPlane_, choice.secondPlaneId);
     curveParameter_->setValue(choice.curveParameter);
+    displayedChoice_ = Choice();
+    suppliedChoice_ = choice;
     loading_ = false;
     ApplyVisibility();
     RefreshNeeds();

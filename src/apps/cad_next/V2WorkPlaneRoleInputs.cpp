@@ -2,6 +2,7 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2WorkPlaneDock.h"
+#include "V2FaceActions.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -10,6 +11,7 @@
 #include <QVariant>
 #include <QObject>
 #include <QPushButton>
+#include <QPointer>
 #include <array>
 #include <algorithm>
 #include <optional>
@@ -23,6 +25,11 @@ public:
           document_(window.Session().GetDocument().Snapshot().id) {
         setObjectName(QStringLiteral("workPlaneRoleInputs"));
         auto* layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);
+        auto* face = new QPushButton(QStringLiteral("面から位置・向きを指定"), this);
+        face->setObjectName(QStringLiteral("workPlanePickFace"));
+        face->setToolTip(QStringLiteral("サーフェスやソリッドの面を指定します。曲面は選択位置の接平面になります。"));
+        layout->addWidget(face);
+        connect(face, &QPushButton::clicked, this, [this] { PickFace(); });
         for(int i=0;i<7;++i) {
             rows_[i]=new QWidget(this);auto* row=new QHBoxLayout(rows_[i]);row->setContentsMargins(0,0,0,0);
             pick_[i]=new QPushButton(rows_[i]);pick_[i]->setCheckable(true);
@@ -75,6 +82,17 @@ public:
         if(explicitPlanes_)result.selectedPlanes.clear();
     }
 private:
+    void PickFace() {
+        CancelPick(); active_ = -1; Sync();
+        const QPointer<RoleInputs> self(this);
+        V2FaceActions::PickWorkPlane(window_, [self](std::optional<app::WorkPlaneChoice> picked, bool) {
+            if (!self || !self->isVisible() || !picked) return;
+            auto choice = self->dock_.Choice();
+            choice.method = modeling::WorkPlaneMethod::PointNormal;
+            choice.origin = picked->origin; choice.normal = picked->normal; choice.uAxis = picked->uAxis;
+            self->dock_.SetChoice(choice); self->Sync();
+        });
+    }
     void Changed() {active_=-1;Sync();if(changed_)changed_();}
     void CancelPick() {window_.Viewport().CancelPointPick();window_.Viewport().CancelReferencePick();}
     void Seed() {

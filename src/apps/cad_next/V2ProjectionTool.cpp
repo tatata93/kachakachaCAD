@@ -4,6 +4,7 @@
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
 #include "V2Calculation.h"
+#include "V2ShapeLifetime.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/geometry/WireChain.h"
@@ -71,17 +72,10 @@ bool V2ProjectionTool::SyncInputRevision() {
         if(curves.size()!=source.input.curves.size()||!std::equal(curves.begin(),curves.end(),source.input.curves.begin(),same))return false;
     }
     for(const auto& target:targets_){
-        const auto key=target.ref.entityId.ToString();
-        const auto part=window_.partShapes_.find(key),guide=window_.guideShapes_.find(key);
-        auto current=guide!=window_.guideShapes_.end()?guide->second:modeling::KernelShapeHandle{};
-        bool owned=false;
-        if(part!=window_.partShapes_.end()&&target.ref.pickedFaceIndex){
-            const auto face=kernel::OutputFace(part->second,*target.ref.pickedFaceIndex);
-            if(!face.HasValue())return false;current=face.Value();owned=true;
-        }
-        if(!document.FindEntity(target.ref.entityId)||current.value==0)return false;
-        const auto before=kernel::CaptureOutputShape(target.shape),after=kernel::CaptureOutputShape(current);
-        if(owned)kernel::ReleaseShape(current);
+        const auto current = TargetShape(target.ref);
+        if (!current.HasValue()) return false;
+        const auto before=kernel::CaptureOutputShape(target.shape),after=kernel::CaptureOutputShape(current.Value());
+        kernel::ReleaseShape(current.Value());
         if(!before.HasValue()||!after.HasValue()||before.Value()!=after.Value())return false;
     }
     revision_=document.Revision();ClearResult();confirm_->setEnabled(false);return true;
@@ -117,17 +111,13 @@ bool V2ProjectionTool::AddTarget(const app::SelectionRef& ref,bool toggle) {
         if(!toggle)return true;
         kernel::ReleaseShape(found->shape);targets_.erase(found);RefreshRows();Invalidate();return true;
     }
-    modeling::KernelShapeHandle shape;
-    if(e->kind==domain::EntityKind::Part) {
-        const auto part=window_.partShapes_.find(ref.entityId.ToString());
-        if(part==window_.partShapes_.end()||!ref.pickedFaceIndex){status_->setText(QStringLiteral("立体の投影先フェイスを3Dビューで選んでください。"));return false;}
-        const auto face=kernel::OutputFace(part->second,*ref.pickedFaceIndex);if(!face.HasValue()){status_->setText(QString::fromStdString(face.FirstMessageJa()));return false;}shape=face.Value();
-    } else if(e->kind==domain::EntityKind::GuideSurface) {
-        const auto guide=window_.guideShapes_.find(ref.entityId.ToString());if(guide==window_.guideShapes_.end()){status_->setText(QStringLiteral("選んだ面の形状がありません。面の生成状態を確認してください。"));return false;}
-        const auto bytes=kernel::CaptureOutputShape(guide->second);if(!bytes.HasValue()){status_->setText(QString::fromStdString(bytes.FirstMessageJa()));return false;}
-        const auto copy=kernel::RestoreOutputShape(bytes.Value());if(!copy.HasValue()){status_->setText(QString::fromStdString(copy.FirstMessageJa()));return false;}shape=copy.Value();
-    } else {status_->setText(QStringLiteral("投影先には形状ガイドの面か、ソリッドのフェイスを選んでください。"));return false;}
-    auto placed=ref;const auto frame=kernel::OutputSurfaceFrame(shape,ref.hitPoint);
+    const auto built = TargetShape(ref);
+    if (!built.HasValue()) { status_->setText(QString::fromStdString(built.FirstMessageJa())); return false; }
+    const auto shape = built.Value();
+    auto placed=ref;
+    if (const auto plane = window_.WorkPlaneFrameOf(ref.entityId); plane && ref.kind != app::SelectionElementKind::WorkPlane)
+        placed.hitPoint = plane->origin;
+    const auto frame=kernel::OutputSurfaceFrame(shape,placed.hitPoint);
     if(frame.HasValue())placed.hitPoint=frame.Value().origin;
     if(targets_.empty()) {
         targetPoint_=frame.HasValue()?frame.Value().origin:ref.hitPoint;
@@ -162,7 +152,9 @@ bool V2ProjectionTool::Preview() {
     options.sourceOrigin=sourceOrigin_;options.sourceU=sourceU_;options.sourceV=sourceV_;options.targetPoint=targetPoint_;
     options.wrapRotationRad=rotation_->value()*3.141592653589793/180;
     std::vector<kernel::WireProjectionInput> inputs;std::vector<modeling::KernelShapeHandle> faces;
-    for(const auto& source:sources_)inputs.push_back(source.input);for(const auto& target:targets_)faces.push_back(target.shape);
+    for(const auto& source:sources_)inputs.push_back(source.input);
+    v2ui::ShapeListOwner planes({});
+    if (!GatherProjectionTargets(options, faces, planes.values)) return false;
     status_->setText(QStringLiteral("投影を計算中…"));
     if(output_->currentIndex()==1) return PreviewRegions(faces,inputs,options);
     const auto made=V2Calculation::Call(this,"ワイヤーの投影を計算しています…",

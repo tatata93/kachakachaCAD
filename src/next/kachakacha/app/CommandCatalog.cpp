@@ -370,8 +370,8 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "基準線をやめて普通の線に戻します。形は変わりません。", true,
             {"AT-DOC-005"}},
-        {"workplane.from_face", "フェイスで作図", CommandMode::Dialog, "plane", "",
-            SelectionPredicate::Always, "", "フェイス上に作業面を自動生成して作図します。曲面では選択位置の接平面です。", true, {"AT-WPL-001"}},
+        {"workplane.from_face", "面で作図", CommandMode::Dialog, "plane", "",
+            SelectionPredicate::Always, "", "面をクリックしてグリッドとスナップで作図します。重なる面はTabで切り替えます。曲面では選択位置の接平面です。", true, {"AT-WPL-001", "AT-UIX-005"}},
         {"fabrication.from_face", "フェイスを近似", CommandMode::Dialog, "fab_new", "",
             SelectionPredicate::Always, "", "選んだフェイスを独立面として取り出し、従来の近似を始めます。", true, {"AT-FAB-011"}},
         {"workplane.create", "作業平面を作る", CommandMode::Dialog, "workplane_new", "",
@@ -487,10 +487,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "投影ツールの等長巻き付けを開始します。平面・円柱・円錐の1面に対応。"
             "複数面には方向投影／最近点投影を選び、接続する端点を確認してください。", true,
             {"AT-FAB-006"}},
-        {"wire.project_surface", "曲面へ投影", CommandMode::Dialog, "project_surface", "",
+        {"wire.project_surface", "面へ投影", CommandMode::Dialog, "project_surface", "",
             SelectionPredicate::Always,
             "元ワイヤーと投影先の面を、道具を開始してから指定できます。",
-            "図面からの方向投影・等長巻き付け・最近点投影を切り替えます。ソリッドのフェイスと複数面に対応。"
+            "図面からの方向投影・等長巻き付け・最近点投影を切り替えます。サーフェス・ソリッドのフェイス・作業面と複数の面に対応。"
             "ワイヤーごとの方向・基準点・最大距離・偏差を設定し、3Dプレビューを確認してEnterで確定。元の線は残します。",
             true, {"AT-FAB-013", "AT-SRF-010"}},
         {"part.extrude", "押し出し", CommandMode::Dialog, "extrude", "Shift+E",

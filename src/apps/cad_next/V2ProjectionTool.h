@@ -38,6 +38,12 @@ private:
     void SetDirection(kachakacha::v2::geometry::Vector3 direction);
     void PickViewport(const QPointF& position);
     void SetPickRole(int role);
+    void BeginTargetPick();
+    kachakacha::v2::base::Result<kachakacha::v2::modeling::KernelShapeHandle> TargetShape(
+        const kachakacha::v2::app::SelectionRef&) const;
+    bool GatherProjectionTargets(const kachakacha::v2::kernel::WireProjectionOptions&,
+        std::vector<kachakacha::v2::modeling::KernelShapeHandle>& faces,
+        std::vector<kachakacha::v2::modeling::KernelShapeHandle>& owned);
     void RefreshMarks();
     void ClearMarks();
     void TakeActiveSelection();
@@ -59,7 +65,7 @@ private:
     kachakacha::v2::geometry::Vector3 sourceOrigin_{},targetPoint_{};
     kachakacha::v2::geometry::Vector3 sourceU_{1,0,0},sourceV_{0,1,0};
     int role_=0;
-    QComboBox *mode_,*hits_,*output_,*wireForm_;
+    QComboBox *mode_,*hits_,*output_,*wireForm_,*targetKind_;
     QDoubleSpinBox *tolerance_,*distance_,*rotation_;
     QLabel *status_, *pickPrompt_;
     QListWidget *wireRows_,*targetRows_;

@@ -27,6 +27,7 @@
 
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> PointPickingCases();
+std::vector<SelfTestCase> FaceDrawingCases();
 namespace {
 
 using kachakacha::v2::modeling::StandardPlaneKind;
@@ -322,7 +323,8 @@ std::vector<SelfTestCase> PlaneCases()
         {"上の帯の作図面コンボで切り替わり、正対はその面を向く", &CaseTopBarPlaneComboSwitchesAndFaces},
         {"新しい文書にも原点の3面がある", &CaseOriginPlanesSurviveSaveAndOpen},
     };
-    const auto points=PointPickingCases();cases.insert(cases.end(),points.begin(),points.end());return cases;
+    const auto points=PointPickingCases();cases.insert(cases.end(),points.begin(),points.end());
+    const auto faces=FaceDrawingCases();cases.insert(cases.end(),faces.begin(),faces.end());return cases;
 }
 
 } // namespace kachakacha::v2::selftest

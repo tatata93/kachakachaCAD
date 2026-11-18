@@ -6,7 +6,6 @@
 #include "V2PanelFrame.h"
 #include "V2NumericSpinBox.h"
 #include "V2EntityTree.h"
-#include "kachakacha/modeling/MeshPick.h"
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QApplication>
@@ -32,7 +31,6 @@
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
-#include <limits>
 #include <algorithm>
 using namespace kachakacha::v2;
 V2ProjectionTool* V2ProjectionTool::Open(V2MainWindow& window,bool wrap) {
@@ -42,7 +40,7 @@ V2ProjectionTool* V2ProjectionTool::Open(V2MainWindow& window,bool wrap) {
     const auto selection=window.viewport_->Selection();window.EndArmedTools();window.ClearPendingCommand();
     window.SelectTool(modeling::DrawingTool::Select);window.operationHost_->SetShelves({});
     window.viewport_->SetSelection(selection);auto* tool=new V2ProjectionTool(window);
-    window.operationHost_->ShowTemporaryPage(tool,QStringLiteral("曲面へ投影"));
+    window.operationHost_->ShowTemporaryPage(tool,QStringLiteral("面へ投影"));
     tool->mode_->setCurrentIndex(wrap?1:0);tool->TakeSelection();return tool;
 }
 V2ProjectionTool::V2ProjectionTool(V2MainWindow& window):QWidget(&window),window_(window),
@@ -52,7 +50,7 @@ V2ProjectionTool::V2ProjectionTool(V2MainWindow& window):QWidget(&window),window
     update_=new QTimer(this);update_->setSingleShot(true);update_->setInterval(250);
     connect(update_,&QTimer::timeout,this,[this]{Preview();});BuildUi();qApp->installEventFilter(this);
     connect(window_.entityTree_,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem*,int){
-        if(isVisible()&&!V2ToolSelection::Active(*window_.viewport_)&&(role_==0||role_==1))TakeActiveSelection();});
+        if(isVisible()&&!window_.viewport_->ReferencePickPending()&&!V2ToolSelection::Active(*window_.viewport_)&&(role_==0||role_==1))TakeActiveSelection();});
     auto* marks=new QTimer(this);marks->setSingleShot(true);marks->setInterval(0);
     connect(window_.entityTree_->model(),&QAbstractItemModel::rowsInserted,this,[marks]{marks->start();});
     connect(marks,&QTimer::timeout,this,[this]{if(isVisible())RefreshMarks();});
@@ -71,9 +69,13 @@ void V2ProjectionTool::BuildUi() {
     pickWire_->setObjectName(QStringLiteral("projectionPickWire"));pickWire_->setCheckable(true);
     wireRows_=new QListWidget(body);wireRows_->setObjectName(QStringLiteral("projectionWireRows"));wireRows_->setMaximumHeight(110);layout->addWidget(wireRows_);
     button(QStringLiteral("選択行のワイヤーを解除"),[this]{const int i=wireRows_->currentRow();if(i>=0){sources_.erase(sources_.begin()+i);RefreshRows();Invalidate();}});
+    targetKind_ = new QComboBox(body); targetKind_->setObjectName(QStringLiteral("projectionTargetKind"));
+    targetKind_->addItems({QStringLiteral("投影先: 面（サーフェス・ソリッド）"), QStringLiteral("投影先: 作業面")});
+    layout->addWidget(targetKind_);
     pickTarget_=button(QStringLiteral("② 投影先を選ぶ"),[this]{SetPickRole(1);});
     pickTarget_->setObjectName(QStringLiteral("projectionPickTarget"));pickTarget_->setCheckable(true);
     targetRows_=new QListWidget(body);targetRows_->setObjectName(QStringLiteral("projectionTargetRows"));targetRows_->setMaximumHeight(100);layout->addWidget(targetRows_);
+    connect(targetKind_, &QComboBox::currentIndexChanged, this, [this] { SetPickRole(1); });
     button(QStringLiteral("選択行の面を解除"),[this]{const int i=targetRows_->currentRow();if(i>=0){kernel::ReleaseShape(targets_[i].shape);targets_.erase(targets_.begin()+i);RefreshRows();Invalidate();}});
     button(QStringLiteral("左ペインの選択を現在の役割へ追加"),[this]{TakeActiveSelection();});
     layout->addWidget(MakePanelSectionTitle(body,QStringLiteral("結果")));
@@ -148,24 +150,8 @@ void V2ProjectionTool::TakeSelection() {
 }
 void V2ProjectionTool::PickViewport(const QPointF& position) {
     if(role_==1||role_==3) {
-        const auto ray=window_.viewport_->Mapping().RayThrough({position.x(),position.y()});if(!ray)return;
-        double closest=std::numeric_limits<double>::max();app::SelectionRef picked;
-        for(const auto& shape:window_.viewport_->ShapeViews()) {
-            if(!window_.viewport_->EntityShown(shape.entityId))continue;
-            for(const auto& triangle:shape.mesh.triangles) {
-                const auto hit=modeling::RayHitsTriangle(ray->origin,ray->direction,triangle);
-                if(hit&&*hit<closest){closest=*hit;picked.entityId=shape.entityId;picked.pickedFaceIndex=shape.surface?std::nullopt:std::optional<std::size_t>{triangle.faceIndex};}
-            }
-        }
-        if(picked.entityId.IsNil()){status_->setText(QStringLiteral("面の内側をクリックしてください。"));return;}
-        picked.kind=app::SelectionElementKind::Face;picked.hitPoint=ray->origin+ray->direction*closest;
-        if(role_==1)AddTarget(picked);
-        else {
-            if(!targets_.empty()&&std::none_of(targets_.begin(),targets_.end(),[&](const auto& t){return t.ref.entityId==picked.entityId&&t.ref.pickedFaceIndex==picked.pickedFaceIndex;})) {
-                status_->setText(QStringLiteral("選択済みの投影先の面をクリックしてください。"));return;
-            }
-            if(AddTarget(picked,false)){targetPoint_=picked.hitPoint;Invalidate();}
-        }
+        BeginTargetPick();
+        window_.viewport_->SelectAt(position, Qt::NoModifier);
         return;
     }
     window_.viewport_->SelectAt(position,Qt::NoModifier);const auto candidate=window_.viewport_->CurrentCandidate();if(!candidate)return;
@@ -193,11 +179,12 @@ bool V2ProjectionTool::eventFilter(QObject* object,QEvent* event) {
         }
     }
     if(object!=window_.viewport_||event->type()!=QEvent::MouseButtonPress)return false;
+    if ((role_ == 1 || role_ == 3) && window_.viewport_->ReferencePickPending()) return false;
     const auto* mouse=static_cast<QMouseEvent*>(event);if(mouse->button()!=Qt::LeftButton)return false;
     if(mouse->modifiers()&Qt::ControlModifier)return false;
     if(window_.viewport_->PressViewNavigator(mouse->position(),view::AxisArrowModifier::None)!=V2Viewport::ViewPress::None)return true;
     PickViewport(mouse->position());return true;
 }
 void V2ProjectionTool::closeEvent(QCloseEvent* event) {
-    update_->stop();qApp->removeEventFilter(this);ClearMarks();window_.viewport_->HideToolPreview();setObjectName({});QWidget::closeEvent(event);
+    update_->stop();qApp->removeEventFilter(this);window_.viewport_->CancelReferencePick();ClearMarks();window_.viewport_->HideToolPreview();setObjectName({});QWidget::closeEvent(event);
 }

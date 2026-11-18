@@ -107,4 +107,7 @@ private:
     bool canCreate_ = false;
     //! SetChoice / SetPlanes で欄を作り直している最中は EmitChanged を黙らせる。
     bool loading_ = false;
+    // Preserve picked/imported vectors until the user actually edits their numeric fields.
+    std::optional<WorkPlaneChoice> suppliedChoice_;
+    WorkPlaneChoice displayedChoice_;
 };

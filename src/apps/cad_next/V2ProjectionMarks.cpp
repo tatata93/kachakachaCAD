@@ -8,6 +8,7 @@
 #include <QColor>
 #include <QFont>
 #include <QLabel>
+#include <QComboBox>
 #include <QListWidget>
 #include <QPalette>
 #include <QPushButton>
@@ -43,14 +44,18 @@ void MarkRow(QTreeWidgetItem* row,const QString& role,QColor color) {
 }
 }
 void V2ProjectionTool::SetPickRole(int role) {
+    window_.viewport_->CancelReferencePick();
     if(V2ToolSelection::Active(*window_.viewport_))V2ToolSelection::End(*window_.viewport_);
     role_=role;pickWire_->setChecked(role==0);pickTarget_->setChecked(role==1);
     const QStringList prompts={QStringLiteral("① 元ワイヤー: 3Dビューまたは左ペインで追加します。"),
-        QStringLiteral("② 投影先: 面の内側をクリック。立体はフェイスを選びます。"),
+        targetKind_->currentIndex() == 1
+            ? QStringLiteral("② 投影先: 作業面を3Dビューまたは左一覧で指定。重なりはTabで切替。")
+            : QStringLiteral("② 投影先: 面の内側をクリック。面だけを強調し、重なりはTabで切替。"),
         QStringLiteral("巻き付け元の基準点をクリックしてください。"),
         QStringLiteral("投影先の配置基準点をクリックしてください。"),
         QStringLiteral("投影方向にする直線をクリックしてください。")};
     pickPrompt_->setText(prompts[role]);window_.SetStatus(prompts[role]);
+    if (role == 1 || role == 3) BeginTargetPick();
 }
 void V2ProjectionTool::ClearMarks() {
     window_.viewport_->SetRoleColors({});window_.viewport_->SetFaceRoleColors({});
@@ -77,7 +82,8 @@ void V2ProjectionTool::RefreshMarks() {
     for(std::size_t i=0;i<targets_.size();++i) {
         const auto& t=targets_[i];const auto color=RoleColor(false);
         const auto role=QStringLiteral("先 %1").arg(i+1);
-        faces.push_back({t.ref.entityId,t.ref.pickedFaceIndex,color});
+        if (window_.WorkPlaneFrameOf(t.ref.entityId)) wires.emplace_back(t.ref.entityId, color);
+        else faces.push_back({t.ref.entityId,t.ref.pickedFaceIndex,color});
         labels.push_back({t.ref.hitPoint,role,color});
         auto* row=window_.ItemOfEntity(t.ref.entityId);
         const auto face=t.ref.pickedFaceIndex?QStringLiteral(" / F%1").arg(*t.ref.pickedFaceIndex+1):QString();
@@ -99,6 +105,7 @@ void V2ProjectionTool::TakeActiveSelection() {
         app::SelectionRef ref;ref.entityId=id;
         for(const auto& candidate:selection.ordered)if(candidate.entityId==id){ref=candidate;break;}
         if(role_==0&&e->kind==domain::EntityKind::Wire)AddWire(ref,false);
-        if(role_==1&&(e->kind==domain::EntityKind::GuideSurface||e->kind==domain::EntityKind::Part))AddTarget(ref,false);
+        if(role_==1&&(e->kind==domain::EntityKind::GuideSurface||e->kind==domain::EntityKind::Part
+            ||e->kind==domain::EntityKind::WorkPlane))AddTarget(ref,false);
     }
 }

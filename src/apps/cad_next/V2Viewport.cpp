@@ -858,6 +858,8 @@ void V2Viewport::HoverAt(const QPointF& position)
     status_ = hover_.messageJa;
     hoveredProfileRegion_ = ProfileRegionAt(position);
     if (ReferencePickPending()) hoveredProfileRegion_.reset();
+    if (ReferencePickPending() && property("referencePickPrompt").isValid())
+        status_ = property("referencePickPrompt").toString().toStdString();
     if (hoveredProfileRegion_.has_value()) {
         status_ = ProfileRegionSelected(*hoveredProfileRegion_)
             ? "選択済みの輪郭領域です。クリックすると入力から外します。"

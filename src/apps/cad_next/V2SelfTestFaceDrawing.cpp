@@ -1,0 +1,575 @@
+#include "V2SelfTest.h"
+#include "V2MainWindow.h"
+#include "V2Viewport.h"
+#include "V2EntityTree.h"
+#include "V2SurfaceDock.h"
+#include "V2WorkPlaneDock.h"
+#include "V2ExtrudeDock.h"
+#include "V2ProjectionTool.h"
+#include "V2SelfTestPrimitiveUi.h"
+#include "kachakacha/kernel/OcctOutput.h"
+#include <QAction>
+#include <QApplication>
+#include <QDir>
+#include <QEvent>
+#include <QKeyEvent>
+#include <QMenu>
+#include <QMouseEvent>
+#include <QPoint>
+#include <QPointF>
+#include <QString>
+#include <QTimer>
+#include <QToolButton>
+#include <QTreeWidgetItem>
+#include <QWidget>
+#include <QPushButton>
+#include <QDoubleSpinBox>
+#include <QComboBox>
+#include <QLabel>
+#include <algorithm>
+#include <cmath>
+
+namespace kachakacha::v2::selftest {
+namespace {
+using geometry::Vector3;
+using base::EntityId;
+using domain::EntityKind;
+
+void Click(QWidget& widget, QPointF at)
+{
+    QMouseEvent move(QEvent::MouseMove, at, widget.mapToGlobal(at.toPoint()), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&widget, &move);
+    for (const auto type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+        QMouseEvent event(type, at, widget.mapToGlobal(at.toPoint()), Qt::LeftButton,
+            type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&widget, &event);
+    }
+    QApplication::processEvents();
+}
+
+bool ClickWorld(V2MainWindow& w, Vector3 point)
+{
+    QApplication::processEvents();
+    auto& viewport = w.Viewport();
+    const auto screen = viewport.Mapping().Project(point);
+    if (!screen) return false;
+    const QPointF at(screen->x, screen->y);
+    if (!viewport.rect().contains(at.toPoint()) || viewport.ViewButtonAt(at)) return false;
+    Click(viewport, at);
+    return true;
+}
+
+bool StartFaceTool(V2MainWindow& w)
+{
+    for (auto* button : w.findChildren<QToolButton*>()) {
+        if (button->defaultAction() == w.ActionFor("workplane.from_face") && button->isVisible()) {
+            Click(*button, button->rect().center());
+            return true;
+        }
+    }
+    return Explain("面で作図の入口が画面にある", false);
+}
+
+void Shot(V2MainWindow& w, const char* name)
+{
+    const auto path = qEnvironmentVariable("KACHACAD_FACE_DRAWING_PROOF_DIR");
+    if (path.isEmpty()) return;
+    QDir dir(path);
+    dir.mkpath(".");
+    w.grab().save(dir.filePath(QString::fromUtf8(name) + ".png"));
+}
+
+EntityId MakeGuide(V2MainWindow& w, double height = 12, bool tilted = false, bool holes = false)
+{
+    const auto initialPlane = w.ActiveWorkPlaneId();
+    w.SetWorkPlaneChooser([height, tilted](app::WorkPlaneChoice choice, const app::WorkPlaneFacts&) {
+        choice.method = modeling::WorkPlaneMethod::PointNormal;
+        choice.origin = {0, 0, height};
+        choice.normal = tilted ? Vector3{-.2, -.3, 1} : Vector3{0, 0, 1};
+        choice.uAxis = tilted ? Vector3{1, 0, .2} : Vector3{1, 0, 0};
+        return std::optional(choice);
+    });
+    w.RunCommand("workplane.create");
+    const auto point = [height, tilted](double x, double y) {
+        return Vector3{x, y, height + (tilted ? 0.2 * x + 0.3 * y : 0.0)};
+    };
+    const Vector3 corners[] = {point(-25, -20), point(25, -20), point(25, 20), point(-25, 20)};
+    std::vector<geometry::CurveSegment> edges;
+    for (int i = 0; i < 4; ++i) edges.push_back(geometry::CurveSegment::MakeLine(corners[i], corners[(i + 1) % 4]).Value());
+    const auto wire = w.AddPlainWire(edges, "作図元の輪郭", false);
+    if (wire.IsNil()) return {};
+    app::SelectionSet boundary{{wire}};
+    if (holes) for (const auto x : {-12.0, 12.0}) {
+        const auto hole = w.AddPlainWire({geometry::CurveSegment::MakeCircle(point(x, 0),
+            {0, 0, 1}, {1, 0, 0}, 4).Value()}, "内側の輪郭", false);
+        if (hole.IsNil()) return {};
+        boundary.entityIds.push_back(hole);
+    }
+    if (!w.SaveAndReopen("face-grid-source.kcd2")) return {};
+    w.SelectTool(modeling::DrawingTool::Select);
+    w.Viewport().SetSelection(boundary);
+    w.RunCommand("surface.create");
+    w.ChooseSurfaceMethod(modeling::GuideSurfaceMethod::PlanarBoundary);
+    if (!Explain(("元の面の下見: " + w.StatusText().toStdString()).c_str(),
+            w.SurfacePreviewShown() && w.SurfaceDock().CanConfirm())) return {};
+    w.SurfaceDock().PressConfirm();
+    EntityId newest;
+    for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
+        if (entity.kind == EntityKind::GuideSurface) newest = entity.id;
+    w.RunCommand("selection.activate");
+    w.Viewport().SetSelection(app::SelectionSet{{initialPlane}});
+    w.RunCommand("workplane.set_active");
+    w.Viewport().SetSelection({});
+    return newest;
+}
+
+void Setup(V2MainWindow& w)
+{
+    w.resize(1500, 950);
+    QApplication::processEvents();
+    w.RunCommand("file.new");
+    w.Viewport().SetViewDirection(ViewDirection::Top);
+    w.Viewport().SetViewCenter({0, 0, 12});
+    w.Viewport().SetVisibleWidthMm(90);
+}
+
+bool DrawOnGrid(V2MainWindow& w)
+{
+    auto& v = w.Viewport();
+    if (!Explain("面のグリッド作図が開始する", w.Session().CurrentTool() == modeling::DrawingTool::Line
+            && w.Session().DrawingPlaneOnly() && v.DisplaySettingsNow().gridVisible
+            && !v.ReferencePickPending())) return false;
+    const auto grid = w.Session().Scene().grid;
+    const auto a = grid.origin + grid.vDirection * grid.majorSpacingMm;
+    const auto b = a + grid.uDirection * grid.majorSpacingMm;
+    const auto before = w.Session().GetDocument().Revision();
+    if (!ClickWorld(w, a) || !ClickWorld(w, b)) return false;
+    if (!Explain("グリッドの交点2つから線ができる", w.Session().GetDocument().Revision() == before + 1)) return false;
+    const auto segment = w.Session().Scene().curves.back().segment;
+    const bool exact = (segment.StartPoint() - a).Length() < 1e-6 && (segment.EndPoint() - b).Length() < 1e-6;
+    w.RunCommand("selection.activate");
+    const auto detail = QStringLiteral("線の端点が表示した格子と一致: actual (%1,%2,%3)-(%4,%5,%6), expected (%7,%8,%9)-(%10,%11,%12)")
+        .arg(segment.StartPoint().x).arg(segment.StartPoint().y).arg(segment.StartPoint().z)
+        .arg(segment.EndPoint().x).arg(segment.EndPoint().y).arg(segment.EndPoint().z)
+        .arg(a.x).arg(a.y).arg(a.z).arg(b.x).arg(b.y).arg(b.z);
+    return Explain(detail.toUtf8().constData(), exact);
+}
+
+bool GuideToolFirst(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w);
+    if (!Explain("普通の面を作成", !guide.IsNil())) return false;
+    auto grid = w.CurrentGridChoice();
+    grid.grid.visible = false;
+    w.ApplyGridChoice(grid);
+    w.RunCommand("snap.toggle");
+    if (w.AddPlainWire({geometry::CurveSegment::MakeLine({-20, 0, 12}, {20, 0, 12}).Value()}, "面上の線", false).IsNil()) return false;
+    if (!w.SaveAndReopen("face-grid-overlaid-wire.kcd2")) return false;
+    w.Viewport().SetSelection({});
+    if (!StartFaceTool(w) || !w.Viewport().ReferencePickPending()) return false;
+    const auto screen = w.Viewport().Mapping().Project({3, 0, 12});
+    if (!screen) return false;
+    w.Viewport().HoverAt({screen->x, screen->y});
+    const auto candidate = w.Viewport().CurrentCandidate();
+    Shot(w, "face-only-hover");
+    if (!Explain("重なる線を避けて面だけを拾う", candidate && candidate->entityId == guide
+            && candidate->kind == app::SelectionElementKind::Face)) return false;
+    if (!ClickWorld(w, {3, 0, 12})) return false;
+    if (!Explain("面に一致する作図基準", std::abs(w.Viewport().WorkPlane().origin.z - 12.0) < 1e-7)) return false;
+    Shot(w, "guide-grid-drawing");
+    return DrawOnGrid(w);
+}
+
+bool TiltedGuideAndReuse(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, true);
+    if (guide.IsNil()) return false;
+    if (!ClickWorld(w, {3, 2, 13.2}) || !StartFaceTool(w) || !DrawOnGrid(w)) return false;
+    const auto plane = w.ActiveWorkPlaneId();
+    const int count = CountOfKind(w, EntityKind::WorkPlane);
+    const auto revision = w.Session().GetDocument().Revision();
+    w.Viewport().SetSelection(app::SelectionSet{{guide}});
+    if (!StartFaceTool(w)) return false;
+    return Explain("同じ平面への再作図では基準面が増えない", !w.Viewport().ReferencePickPending()
+        && w.ActiveWorkPlaneId() == plane && CountOfKind(w, EntityKind::WorkPlane) == count
+        && w.Session().GetDocument().Revision() == revision);
+}
+
+bool SelectTree(V2MainWindow& w, EntityId id)
+{
+    auto* tree = w.EntityTree();
+    auto* row = w.ItemOfEntity(id);
+    if (!tree || !row) return false;
+    for (auto* parent = row->parent(); parent; parent = parent->parent()) parent->setExpanded(true);
+    tree->scrollToItem(row);
+    tree->setFocus();
+    QApplication::processEvents();
+    const auto at = tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+    if (tree->itemAt(at) != row) return false;
+    Click(*tree->viewport(), at);
+    return true;
+}
+
+bool TreeBeforeAndAfter(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w);
+    if (guide.IsNil() || !SelectTree(w, guide) || !StartFaceTool(w) || !DrawOnGrid(w)) return false;
+    w.Viewport().SetSelection({});
+    if (!StartFaceTool(w) || !w.Viewport().ReferencePickPending() || !SelectTree(w, guide)) return false;
+    return DrawOnGrid(w);
+}
+
+bool OverlapAndCancel(V2MainWindow& w)
+{
+    Setup(w);
+    const auto bottom = MakeGuide(w, 12), top = MakeGuide(w, 16);
+    if (bottom.IsNil() || top.IsNil() || !StartFaceTool(w)) return false;
+    const auto before = w.Session().GetDocument().Revision();
+    const auto screen = w.Viewport().Mapping().Project({3, 2, 16});
+    if (!screen) return false;
+    w.Viewport().HoverAt({screen->x, screen->y});
+    if (!Explain("表裏の面だけが重なり候補になる", w.Viewport().CandidateCount() == 2)) return false;
+    const auto first = w.Viewport().CurrentCandidate();
+    QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+    QApplication::sendEvent(&w.Viewport(), &tab);
+    const auto second = w.Viewport().CurrentCandidate();
+    if (!Explain("Tabで重なる面を切り替える", first && second && first->entityId == top && second->entityId == bottom)) return false;
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(&w.Viewport(), &escape);
+    if (!Explain("取消で面も基準も作成しない", !w.Viewport().ReferencePickPending()
+            && w.Session().GetDocument().Revision() == before)) return false;
+    if (!StartFaceTool(w)) return false;
+    w.RunCommand("draw.circle");
+    return Explain("別の道具へ切り替えて参照選択を終了", !w.Viewport().ReferencePickPending()
+        && w.Session().CurrentTool() == modeling::DrawingTool::Circle);
+}
+
+bool SolidAndContextMenu(V2MainWindow& w)
+{
+    Setup(w);
+    const auto part = MakeBoxByHand(w, .3, .35, .65, .65);
+    if (part.IsNil()) return false;
+    w.RunCommand("selection.activate");
+    Vector3 center;
+    for (const auto& shape : w.Viewport().ShapeViews()) if (shape.entityId == part)
+        center = {(shape.mesh.minimum.x + shape.mesh.maximum.x) * .5,
+            (shape.mesh.minimum.y + shape.mesh.maximum.y) * .5, shape.mesh.maximum.z};
+    if (!ClickWorld(w, center)) return false;
+    bool activated = false;
+    QTimer::singleShot(0, &w, [&] {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!menu) return;
+        auto* action = w.ActionFor("workplane.from_face");
+        if (menu->actions().contains(action)) { activated = true; action->trigger(); }
+        menu->close();
+    });
+    w.ShowSelectMenu(w.Viewport().mapToGlobal(QPoint(30, 30)));
+    if (!Explain("右クリックの面で作図から開始", activated)) return false;
+    return DrawOnGrid(w) && w.SaveAndReopen("face-grid-solid.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool WorkPlaneFromGuide(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, true);
+    if (guide.IsNil()) return false;
+    w.SetWorkPlaneChooser({});
+    w.RunCommand("workplane.create");
+    auto* pick = w.findChild<QPushButton*>("workPlanePickFace");
+    if (!Explain("作業面作成の棚に面指定ボタンがある", pick && pick->isVisible())) return false;
+    const auto before = w.Session().GetDocument().Revision();
+    Click(*pick, pick->rect().center());
+    if (!ClickWorld(w, {3, 2, 13.2})) return false;
+    Shot(w, "workplane-face-preview");
+    if (!Explain("面指定だけでは文書を変更せず下見する", w.Session().GetDocument().Revision() == before
+            && !w.Viewport().ReferencePickPending() && !w.Viewport().ToolPreview().empty()
+            && w.WorkPlaneDock()->CanCreate())) return false;
+    const auto choice = w.WorkPlaneDock()->Choice();
+    const auto expected = Vector3{-.2, -.3, 1} * (1.0 / Vector3{-.2, -.3, 1}.Length());
+    if (!Explain("欄の表示桁に丸めず面の向きを保持", (choice.normal - expected).Length() < 1e-10)) return false;
+    auto* field = w.findChild<QDoubleSpinBox*>("workPlaneOrigin_0");
+    if (!field) return false;
+    field->setValue(field->value() + 1);
+    if (!Explain("座標欄を編集すれば指定値を使用", std::abs(w.WorkPlaneDock()->Choice().origin.x - field->value()) < 1e-12)) return false;
+    const auto exact = w.WorkPlaneDock()->Choice();
+    w.WorkPlaneDock()->PressCreate();
+    if (!Explain("確定で斜めの面に一致する作業面を作成", w.Session().GetDocument().Revision() == before + 1
+            && (w.Viewport().WorkPlane().normal - expected).Length() < 1e-10
+            && (w.Viewport().WorkPlane().origin - exact.origin).Length() < 1e-10)) return false;
+    w.RunCommand("edit.undo");
+    if (!Explain("作業面作成のUndoで元のサーフェスを維持", CountOfKind(w, EntityKind::GuideSurface) == 1)) return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("workplane-from-face.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool CurvedFace(V2MainWindow& w)
+{
+    Setup(w);
+    w.RunCommand("draw.circle");
+    if (!ClickWorld(w, {0, 0, 0}) || !ClickWorld(w, {10, 0, 0})) return false;
+    const auto wire = w.Session().Scene().curves.back().entityId;
+    w.RunCommand("selection.activate");
+    if (!ClickOnCurveOf(w, wire)) return false;
+    w.RunCommand("part.extrude");
+    w.ExtrudeDock().TypeDistanceMm(10);
+    if (!w.HandleToolKey(Qt::Key_Return, nullptr)) return false;
+    w.RunCommand("selection.activate");
+    w.Viewport().SetSelection({});
+    w.Viewport().SetViewDirection(ViewDirection::Right);
+    w.Viewport().SetViewCenter({0, 0, 5});
+    w.Viewport().SetVisibleWidthMm(40);
+    if (!StartFaceTool(w) || !ClickWorld(w, {10 * std::cos(.4), 10 * std::sin(.4), 5})) return false;
+    const auto& frame = w.Viewport().WorkPlane();
+    if (!Explain("曲面上の選択位置に接する作図面", w.StatusText().contains(QStringLiteral("接平面"))
+            && std::abs(frame.origin.x * frame.origin.x + frame.origin.y * frame.origin.y - 100) < 1e-6
+            && std::abs(geometry::Dot(frame.normal, {frame.origin.x / 10, frame.origin.y / 10, 0})) > 1 - 1e-10)) return false;
+    Shot(w, "curved-face-tangent-grid");
+    if (!DrawOnGrid(w)) return false;
+    w.SetWorkPlaneChooser({});
+    w.Viewport().SetViewDirection(ViewDirection::Right);
+    w.Viewport().SetSelection({});
+    w.RunCommand("workplane.create");
+    auto* pick = w.findChild<QPushButton*>("workPlanePickFace");
+    if (!pick || !pick->isVisible()) return false;
+    Click(*pick, pick->rect().center());
+    if (!ClickWorld(w, {10 * std::cos(.7), 10 * std::sin(.7), 5})) return false;
+    const auto choice = w.WorkPlaneDock()->Choice();
+    return Explain("作業面の棚でも曲面の接平面を下見", w.StatusText().contains(QStringLiteral("接平面"))
+        && !w.Viewport().ReferencePickPending() && w.WorkPlaneDock()->CanCreate()
+        && std::abs(geometry::Dot(choice.normal, {choice.origin.x / 10, choice.origin.y / 10, 0})) > 1 - 1e-10);
+}
+
+bool HolesCircleAndRectangle(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, false, true);
+    if (guide.IsNil()) return false;
+    const auto source = w.Session().GetDocument().Snapshot();
+    if (!StartFaceTool(w) || !ClickWorld(w, {3, 9, 12}) || !DrawOnGrid(w)) return false;
+    const auto plane = w.Viewport().WorkPlane();
+    const auto origin = w.Session().Scene().grid.origin;
+    const auto pitch = w.Session().Scene().grid.majorSpacingMm;
+    const auto center = origin - plane.uAxis * pitch - plane.vAxis * pitch;
+    w.RunCommand("draw.circle");
+    if (!ClickWorld(w, center) || !ClickWorld(w, center + plane.uAxis * (pitch * .5))) return false;
+    const auto circle = w.Session().Scene().curves.back().segment;
+    if (!Explain("面の格子上に円を作図", circle.Kind() == geometry::CurveKind::Circle
+            && (circle.Center() - center).Length() < 1e-6 && std::abs(circle.Radius() - pitch * .5) < 1e-6)) return false;
+    w.RunCommand("draw.rectangle");
+    const auto before = w.Session().GetDocument().Revision();
+    if (!ClickWorld(w, center + plane.uAxis * (pitch * 2)) || !ClickWorld(w, center + plane.uAxis * (pitch * 3) + plane.vAxis * pitch)) return false;
+    if (!Explain("同じ面に矩形を作図", w.Session().GetDocument().Revision() == before + 1)) return false;
+    for (const auto& entity : source.entities) {
+        const auto* current = w.Session().GetDocument().FindEntity(entity.id);
+        if (!Explain("元の面と輪郭のID・表示・参照を保全", current && current->kind == entity.kind
+                && current->visibility == entity.visibility && current->createdBy == entity.createdBy)) return false;
+    }
+    w.RunCommand("selection.activate");
+    Shot(w, "holed-guide-drawing");
+    return CountOfKind(w, EntityKind::GuideSurface) == 1 && w.SaveAndReopen("face-grid-holes.kcd2")
+        && w.RebuildProblems().isEmpty();
+}
+
+bool WorkPlaneTreeCancelAndSmallScreen(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w);
+    if (guide.IsNil() || !SelectTree(w, guide)) return false;
+    w.SetWorkPlaneChooser({});
+    w.resize(1000, 700); QApplication::processEvents();
+    w.RunCommand("workplane.create");
+    auto* pick = w.findChild<QPushButton*>("workPlanePickFace");
+    if (!Explain("小画面でも面指定ボタンを直接押せる", pick && pick->isVisible()
+            && pick->visibleRegion().contains(pick->rect().center()))) return false;
+    const auto before = w.Session().GetDocument().Revision();
+    Click(*pick, pick->rect().center());
+    if (!Explain("事前に左一覧で選んだ面を下見に使う", !w.Viewport().ReferencePickPending()
+            && w.WorkPlaneDock()->Choice().method == modeling::WorkPlaneMethod::PointNormal
+            && std::abs(w.WorkPlaneDock()->Choice().origin.z - 12) < 1e-10
+            && w.Session().GetDocument().Revision() == before)) return false;
+    Shot(w, "small-screen-workplane-face");
+    w.Viewport().SetSelection({});
+    Click(*pick, pick->rect().center());
+    if (!w.Viewport().ReferencePickPending()) return false;
+    w.RunCommand("draw.line");
+    return Explain("作業面の面指定を別ツールへの切替で解除", !w.Viewport().ReferencePickPending()
+        && w.Session().CurrentTool() == modeling::DrawingTool::Line
+        && w.Session().GetDocument().Revision() == before);
+}
+
+bool ProjectToWorkPlane(V2MainWindow& w, int mode, bool tree, bool tilted, bool faceOutput, bool mixed = false)
+{
+    Setup(w);
+    const auto originalPlane = w.ActiveWorkPlaneId();
+    const auto guide = mixed ? MakeGuide(w, 4) : EntityId{};
+    if (mixed && guide.IsNil()) return false;
+    w.Viewport().SetViewDirection(ViewDirection::Top);
+    if (auto* scope = w.findChild<QComboBox*>("drawingScope")) scope->setCurrentIndex(0);
+    w.RunCommand("draw.circle");
+    w.Viewport().SetSnapSuppressed(true);
+    if (!ClickWorld(w, {0, 0, 0}) || !ClickWorld(w, {3, 0, 0})) return false;
+    w.Viewport().SetSnapSuppressed(false);
+    const auto source = w.Session().Scene().curves.back();
+    if (!Explain("投影試験の元の円はXY平面上", source.segment.Kind() == geometry::CurveKind::Circle
+            && std::abs(source.segment.Normal().z) > 1 - 1e-10 && std::abs(source.segment.Center().z) < 1e-10)) return false;
+    w.SetWorkPlaneChooser([tree, tilted](app::WorkPlaneChoice choice, const app::WorkPlaneFacts&) {
+        choice.method = modeling::WorkPlaneMethod::PointNormal;
+        choice.name = "投影する作業面";
+        choice.origin = tree ? Vector3{300, -200, 10} : Vector3{0, 0, 10};
+        choice.normal = tilted ? Vector3{-.2, -.3, 1} : Vector3{0, 0, 1};
+        choice.uAxis = {1, 0, tilted ? .2 : 0};
+        return std::optional(choice);
+    });
+    w.RunCommand("workplane.create");
+    const auto target = w.ActiveWorkPlaneId();
+    const auto plane = w.Viewport().WorkPlane();
+    w.SetWorkPlaneChooser({});
+    w.Viewport().SetSelection(app::SelectionSet{{originalPlane}});
+    w.RunCommand("workplane.set_active");
+    w.Viewport().SetSelection({});
+    const int wireCount = CountOfKind(w, EntityKind::Wire), planeCount = CountOfKind(w, EntityKind::WorkPlane);
+    std::vector<EntityId> originalWires;
+    for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
+        if (entity.kind == EntityKind::Wire) originalWires.push_back(entity.id);
+    w.RunCommand("wire.project_surface");
+    auto* tool = dynamic_cast<V2ProjectionTool*>(w.findChild<QWidget*>("projectionPanel"));
+    if (!tool) return false;
+    auto* method = tool->findChild<QComboBox*>("projectionMode");
+    method->setCurrentIndex(mode);
+    if (!ClickWorld(w, source.segment.Evaluate(.4)) || tool->WireCount() != 1) return false;
+    auto* kind = tool->findChild<QComboBox*>("projectionTargetKind");
+    kind->setCurrentIndex(1);
+    if (tree) { if (!SelectTree(w, target)) return false; }
+    else {
+        const auto at = w.Viewport().Mapping().Project(plane.origin); if (!at) return false;
+        w.Viewport().HoverAt({at->x, at->y});
+        bool found = false;
+        for (int i = 0; i < w.Viewport().CandidateCount(); ++i) {
+            if (const auto candidate = w.Viewport().CurrentCandidate(); candidate && candidate->entityId == target) { found = true; break; }
+            QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier); QApplication::sendEvent(&w.Viewport(), &tab);
+        }
+        if (!Explain("作業面だけの候補をTabで選べる", found) || !ClickWorld(w, plane.origin)) return false;
+    }
+    if (!Explain("作業面を投影先へ追加", tool->TargetCount() == 1)) return false;
+    if (mixed) {
+        kind->setCurrentIndex(0);
+        if (!SelectTree(w, guide) || tool->TargetCount() != 2) return false;
+        tool->findChild<QComboBox*>("projectionHits")->setCurrentIndex(2);
+    }
+    if (faceOutput) tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(1);
+    const auto before = w.Session().GetDocument().Revision();
+    const bool preview = tool->Preview();
+    if (!Explain(tool->findChild<QLabel*>("projectionStatus")->text().toUtf8().constData(), preview)) return false;
+    Shot(w, faceOutput ? "workplane-projection-face-preview" : "workplane-projection-wire-preview");
+    auto* confirm = tool->findChild<QPushButton*>("panelConfirm");
+    if (!Explain("投影の確定ボタンを押せる", confirm && confirm->isEnabled())) return false;
+    Click(*confirm, confirm->rect().center());
+    const auto committed = QStringLiteral("投影を1回で確定し元ワイヤーを残す: revision %1->%2, wires %3->%4, guides %5 / %6")
+        .arg(before).arg(w.Session().GetDocument().Revision()).arg(wireCount).arg(CountOfKind(w, EntityKind::Wire))
+        .arg(CountOfKind(w, EntityKind::GuideSurface)).arg(tool->findChild<QLabel*>("projectionStatus")->text());
+    if (!Explain(committed.toUtf8().constData(), w.Session().GetDocument().Revision() == before + (mixed ? 2 : 1) + (faceOutput ? 1 : 0)
+            && CountOfKind(w, EntityKind::Wire) == wireCount + (mixed ? 2 : 1)
+            && CountOfKind(w, EntityKind::GuideSurface) == (faceOutput ? 1 : mixed ? 1 : 0))) return false;
+    bool checked = false;
+    for (const auto& curve : w.Session().Scene().curves) {
+        const auto* entity = w.Session().GetDocument().FindEntity(curve.entityId);
+        if (!entity || entity->kind != EntityKind::Wire || std::find(originalWires.begin(), originalWires.end(), curve.entityId) != originalWires.end()) continue;
+        checked = true;
+        for (const auto t : {0., .2, .5, .8, 1.}) if (!Explain("投影結果が指定した面上にある",
+            std::abs(plane.SignedDistance(curve.segment.Evaluate(t))) < 1e-6
+            || (mixed && std::abs(curve.segment.Evaluate(t).z - 4) < 1e-6))) return false;
+        if (mixed) for (const auto t : {0., .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.}) {
+            const auto point = curve.segment.Evaluate(t) - source.segment.Center();
+            if (!Explain("複数面でも曲線の形と半径を保持", std::abs(std::hypot(point.x, point.y) - source.segment.Radius()) < .001)) return false;
+        }
+        if (mode != 1 && !tilted && !Explain("円を分割せず円として投影", curve.segment.Kind() == geometry::CurveKind::Circle)) return false;
+    }
+    if (!checked) return false;
+    w.RunCommand("edit.undo");
+    if (!Explain("Undoでは元ワイヤーと作業面を残す", CountOfKind(w, EntityKind::Wire) == wireCount
+            && CountOfKind(w, EntityKind::WorkPlane) == planeCount)) return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("workplane-projection.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool OwnerFaceDrawing(V2MainWindow& w)
+{
+    Setup(w);
+    const auto file = qEnvironmentVariable("KACHACAD_FACE_GRID_OWNER_FILE");
+    if (file.isEmpty() || !w.OpenDocumentFile(file)) return false;
+    w.Viewport().SetViewDirection(ViewDirection::Isometric);
+    w.Viewport().FitToDocument();
+    w.RunCommand("selection.activate");
+    w.Viewport().SetSelection({});
+    const int surfaces = CountOfKind(w, EntityKind::GuideSurface), parts = CountOfKind(w, EntityKind::Part);
+    const int wires = CountOfKind(w, EntityKind::Wire);
+    if (!StartFaceTool(w)) return false;
+    bool picked = false;
+    Vector3 selectedPoint;
+    for (const auto& shape : w.Viewport().ShapeViews()) {
+        if (!w.Viewport().EntityShown(shape.entityId)) continue;
+        for (const auto& triangle : shape.mesh.triangles) {
+            const auto point = triangle.Center();
+            const auto screen = w.Viewport().Mapping().Project(point); if (!screen) continue;
+            const QPointF at(screen->x, screen->y);
+            if (!w.Viewport().rect().contains(at.toPoint()) || w.Viewport().ViewButtonAt(at)) continue;
+            w.Viewport().HoverAt(at);
+            for (int i = 0; i < w.Viewport().CandidateCount(); ++i) {
+                const auto candidate = w.Viewport().CurrentCandidate();
+                if (candidate && candidate->entityId == shape.entityId && candidate->pickedFaceIndex == triangle.faceIndex) {
+                    selectedPoint = candidate->hitPoint;
+                    picked = ClickWorld(w, point); break;
+                }
+                QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier); QApplication::sendEvent(&w.Viewport(), &tab);
+            }
+            if (picked) break;
+        }
+        if (picked) break;
+    }
+    if (!Explain("実モデルの面を3Dビューで選んでグリッド作図へ進む", picked
+            && !w.Viewport().ReferencePickPending() && w.Viewport().DisplaySettingsNow().gridVisible
+            && w.Session().CurrentTool() == modeling::DrawingTool::Line)) return false;
+    const auto plane = w.Viewport().WorkPlane();
+    const auto focus = w.Viewport().Mapping().Project(w.Viewport().ViewCenter());
+    if (!Explain("作図する位置を画面の中央に表示", focus && (w.Viewport().ViewCenter() - selectedPoint).Length() < .1
+            && std::abs(focus->x - w.Viewport().width() * .5) < 1e-6
+            && std::abs(focus->y - w.Viewport().height() * .5) < 1e-6)) return false;
+    w.Viewport().SetSnapSuppressed(true);
+    if (!ClickWorld(w, plane.PointAt(2, 2)) || !ClickWorld(w, plane.PointAt(3, 2))) return false;
+    w.Viewport().SetSnapSuppressed(false);
+    if (!Explain("元の面・ソリッドを保ち1本だけ作図", CountOfKind(w, EntityKind::GuideSurface) == surfaces
+            && CountOfKind(w, EntityKind::Part) == parts && CountOfKind(w, EntityKind::Wire) == wires + 1)) return false;
+    Shot(w, "owner-model-face-grid");
+    w.RunCommand("edit.undo");
+    if (!Explain("実モデルでもUndoで作図した線だけを除去", CountOfKind(w, EntityKind::Wire) == wires
+            && CountOfKind(w, EntityKind::GuideSurface) == surfaces && CountOfKind(w, EntityKind::Part) == parts)) return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("owner-face-grid-copy.kcd2") && w.RebuildProblems().isEmpty();
+}
+}
+
+std::vector<SelfTestCase> FaceDrawingCases()
+{
+    auto cases = std::vector<SelfTestCase>{{"FACE-GRID tool first ignores overlapping wires", GuideToolFirst},
+        {"FACE-GRID inclined surface and repeated drawing reuse", TiltedGuideAndReuse},
+        {"FACE-GRID explorer before and after tool", TreeBeforeAndAfter},
+        {"FACE-GRID overlapping faces cancel and tool switch", OverlapAndCancel},
+        {"FACE-GRID solid surface context menu and save", SolidAndContextMenu},
+        {"FACE-GRID workplane shelf face preview confirm undo", WorkPlaneFromGuide},
+        {"FACE-GRID curved face tangent drawing and workplane", CurvedFace},
+        {"FACE-GRID holed surface circle rectangle preserve", HolesCircleAndRectangle},
+        {"FACE-GRID workplane explorer cancel small screen", WorkPlaneTreeCancelAndSmallScreen},
+        {"FACE-PROJ direction to workplane through explorer", [](auto& w) { return ProjectToWorkPlane(w, 0, true, false, false); }},
+        {"FACE-PROJ direction to tilted workplane through viewport", [](auto& w) { return ProjectToWorkPlane(w, 0, false, true, false); }},
+        {"FACE-PROJ nearest point to workplane", [](auto& w) { return ProjectToWorkPlane(w, 2, true, false, false); }},
+        {"FACE-PROJ wrap to workplane", [](auto& w) { return ProjectToWorkPlane(w, 1, true, false, false); }},
+        {"FACE-PROJ closed region onto workplane", [](auto& w) { return ProjectToWorkPlane(w, 0, true, false, true); }},
+        {"FACE-PROJ mixed surface and workplane all hits", [](auto& w) { return ProjectToWorkPlane(w, 0, true, false, false, true); }}};
+    if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_GRID_OWNER_FILE"))
+        cases.push_back({"FACE-OWNER supplied model face grid drawing undo save", OwnerFaceDrawing});
+    return cases;
+}
+}

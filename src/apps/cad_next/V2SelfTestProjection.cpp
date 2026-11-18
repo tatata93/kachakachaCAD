@@ -23,6 +23,7 @@
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QPixmap>
 #include <QPointF>
 #include <QTemporaryDir>
@@ -176,14 +177,40 @@ bool RoleMarks(V2MainWindow& window) {
         &&!window.Viewport().FaceRoleColorOf(TargetId(),0)&&window.Viewport().ToolRoleLabels().empty()
         &&window.Session().GetDocument().Snapshot().revision==snapshot.revision);
 }
+void ClickInput(QWidget& widget, QPointF point) {
+    QMouseEvent move(QEvent::MouseMove,point,widget.mapToGlobal(point.toPoint()),Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+    QApplication::sendEvent(&widget,&move);
+    for(const auto type:{QEvent::MouseButtonPress,QEvent::MouseButtonRelease}) {
+        QMouseEvent event(type,point,widget.mapToGlobal(point.toPoint()),Qt::LeftButton,
+            type==QEvent::MouseButtonPress?Qt::LeftButton:Qt::NoButton,Qt::NoModifier);
+        QApplication::sendEvent(&widget,&event);
+    }
+    // The tree deliberately defers its input callback until the item event ends.
+    // Do not inject a second itemClicked signal on top of a synchronous test helper.
+    QApplication::processEvents(); QApplication::processEvents();
+}
+bool ClickTreeInput(V2MainWindow& window,base::EntityId id) {
+    auto* tree=window.EntityTree();auto* row=window.ItemOfEntity(id);if(!tree||!row)return false;
+    for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
+    tree->scrollToItem(row);tree->setFocus();QApplication::processEvents();
+    const auto point=tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+    if(tree->itemAt(point)!=row)return false;ClickInput(*tree->viewport(),point);return true;
+}
 bool TreeInput(V2MainWindow& window) {
     if(!Fixture(window))return false;auto* tool=V2ProjectionTool::Open(window);
     auto* source=tool->findChild<QPushButton*>("projectionPickWire");auto* target=tool->findChild<QPushButton*>("projectionPickTarget");
     if(!source->isChecked()||target->isChecked())return false;
-    window.SelectTreeRowForEntity(WireId());window.EntityTree()->itemClicked(window.ItemOfEntity(WireId()),0);
+    if(!ClickTreeInput(window,WireId()))return false;
     if(!Explain("PROJ tree click directly adds source",tool->WireCount()==1))return false;
-    target->click();window.SelectTreeRowForEntity(TargetId());window.EntityTree()->itemClicked(window.ItemOfEntity(TargetId()),0);
-    if(!Explain("PROJ active slot and tree target",target->isChecked()&&!source->isChecked()&&tool->TargetCount()==1&&tool->Preview()))return false;
+    for(auto* parent=target->parentWidget();parent;parent=parent->parentWidget())
+        if(auto* scroll=qobject_cast<QScrollArea*>(parent)){scroll->ensureWidgetVisible(target);break;}
+    QApplication::processEvents();ClickInput(*target,target->rect().center());
+    if(!ClickTreeInput(window,TargetId()))return false;
+    if(!Explain("PROJ active target slot",target->isChecked()&&!source->isChecked()))return false;
+    if(!Explain("PROJ one tree click selects exactly one target",tool->TargetCount()==1))return false;
+    if(!Explain("PROJ tree target preview",tool->Preview()))return false;
+    QApplication::processEvents();
+    if(!Explain("PROJ deferred input does not remove the target",tool->TargetCount()==1&&tool->Preview()))return false;
     window.RunCommand("selection.activate");
     return Explain("PROJ tool switch removes all input marks",window.Viewport().ToolRoleLabels().empty()
         &&!window.Viewport().RoleColorOf(WireId())&&!window.Viewport().FaceRoleColorOf(TargetId(),0)

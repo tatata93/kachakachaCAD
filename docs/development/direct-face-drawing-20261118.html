@@ -9,4 +9,7 @@
 <h2>発見と再確認</h2><p>最初の試験で、形状ガイドの製作用外形だけでは円形の穴の縁が入力候補に入らないことを再現した。外形の用途は変えず、ネイティブフェイスの全境界を私有UI入力へ接続して再試験した。グリッド試験の座標が実境界のスナップ半径へ入る例は、境界優先の製品規則を維持し、境界から離れた格子点で検証するように修正した。</p>
 <p>最初の全体検証は配布UI661件まで失敗0の段階で中断。レビューで、一度作図に使った面を非表示にすると補完境界だけが残る経路を発見し、左一覧のチェックを実際に押す試験で不合格を再現した。元Featureの有効状態と、面・親グループの表示に従うよう補完入力を修正。中断ログは <code>out/verification/direct-face-windows-20261118/interruption.json</code> に保持する。</p>
 <p>重点試験の証拠は <code>out/direct-face-20261118/</code>。最初のWindows24件と画面なし23件は成功。表示回帰を加えて再確認し、新しい実行IDで完成候補の全体・配布版検証を行う。公開結果は、この欄へ追記する。</p>
+<h2>公開結果</h2><p>通常Windowsの重点25件（添付モデルを含む）、画面なし24件が成功。事前9件、CTest197件（skip 0）、開発版と配布ZIPのUI各1057件、従来自己試験がすべて成功。配布先の通常起動は、環境設定がwindows・offscreenの両方から、実際のWindows画面が表示・描画されたことを確認した。</p>
+<p>証拠: <code>out/verification/direct-face-windows-20261118b/result.json</code>。対象コミット <code>93259071f17a03cff1623c8e17e078992feb414c</code>。<a href="https://github.com/tatata93/kachakachaCAD/releases/tag/v0.1.0-20261118-update2">GitHub公開ページ</a>。起動ファイルは <code>out/releases/direct-face-windows-20261118b/package/kachakacha_cad_next.exe</code>。</p>
+<p>公開ZIPは76,828,040 bytes。SHA-256: <code>4a6c1c3095ad7edc76d7d3e98629e7d0c8b613b4b9c621cb19471233ccde52a9</code>。GitHubの対象コミット・最新タグ・ZIPサイズ・digestを検証済みのバイト列と照合した。検証記録の保管と今回の限定所有を完了し、WP全体の残件は変更しない。</p>
 </body></html>

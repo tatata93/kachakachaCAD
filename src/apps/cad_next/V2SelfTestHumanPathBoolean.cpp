@@ -642,8 +642,8 @@ bool CaseSingleFaceTrim(V2MainWindow& window)
     const auto nativeBefore=kernel::CachedShapeCount();
     viewport.SetSelection({}); window.RunCommand("workplane.from_face"); click();
     const auto* plane = window.Session().GetDocument().FindEntity(window.ActiveWorkPlaneId());
-    if (!Explain((std::string("HP-FA フェイスから作業面1を作る: ")+window.StatusText().toStdString()+" planes="+std::to_string(CountOfKind(window,EntityKind::WorkPlane))).c_str(), plane && plane->displayName == "作業面1"
-            && CountOfKind(window,EntityKind::WorkPlane) == 4)) return false;
+    if (!Explain((std::string("HP-FA フェイスを直接作図面にする: ")+window.StatusText().toStdString()+" planes="+std::to_string(CountOfKind(window,EntityKind::WorkPlane))).c_str(), plane && plane->id == part
+            && CountOfKind(window,EntityKind::WorkPlane) == 3)) return false;
     if(!Explain("face workplane releases its temporary native face",kernel::CachedShapeCount()==nativeBefore))return false;
     window.SelectTool(modeling::DrawingTool::Select);
     for (const auto command : {"fabrication.from_face"}) {

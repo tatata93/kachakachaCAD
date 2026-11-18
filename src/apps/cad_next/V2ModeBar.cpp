@@ -88,7 +88,8 @@ void V2MainWindow::BuildModeBar()
         }
     }
     planeCombo_ = new QComboBox(row);
-    planeCombo_->setToolTip(QStringLiteral("作業中の作図面。選ぶと切り替わります。"));
+    planeCombo_->setObjectName(QStringLiteral("drawingPlane"));
+    planeCombo_->setToolTip(QStringLiteral("作図に使う作業平面または面。3Dビューから面を指定することもできます。"));
     planeCombo_->setMinimumContentsLength(10);
     planeCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     planeCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);

@@ -1261,6 +1261,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ImageToolPick.cpp
         src/apps/cad_next/V2ImageViews.cpp
         src/apps/cad_next/V2FaceActions.cpp
+        src/apps/cad_next/V2FaceDrawingSupport.cpp
         src/apps/cad_next/V2FaceExtraction.cpp
         src/apps/cad_next/V2ContactCommands.cpp
         src/apps/cad_next/V2MixedTrim.cpp

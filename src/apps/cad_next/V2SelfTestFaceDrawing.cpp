@@ -7,7 +7,9 @@
 #include "V2ExtrudeDock.h"
 #include "V2ProjectionTool.h"
 #include "V2SelfTestPrimitiveUi.h"
+#include "V2SelfTestDeleteDialog.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/document/Commands.h"
 #include <QAction>
 #include <QApplication>
 #include <QDir>
@@ -140,7 +142,9 @@ bool DrawOnGrid(V2MainWindow& w)
             && w.Session().DrawingPlaneOnly() && v.DisplaySettingsNow().gridVisible
             && !v.ReferencePickPending())) return false;
     const auto grid = w.Session().Scene().grid;
-    const auto a = grid.origin + grid.vDirection * grid.majorSpacingMm;
+    // Keep the grid exercise away from the guide's upper boundary: native edge
+    // snaps intentionally outrank a grid point within the same pick radius.
+    const auto a = grid.origin - grid.vDirection * grid.majorSpacingMm;
     const auto b = a + grid.uDirection * grid.majorSpacingMm;
     const auto before = w.Session().GetDocument().Revision();
     if (!ClickWorld(w, a) || !ClickWorld(w, b)) return false;
@@ -168,6 +172,8 @@ bool GuideToolFirst(V2MainWindow& w)
     if (!w.SaveAndReopen("face-grid-overlaid-wire.kcd2")) return false;
     w.Viewport().SetSelection({});
     if (!StartFaceTool(w) || !w.Viewport().ReferencePickPending()) return false;
+    const auto before = w.Session().GetDocument().Revision();
+    const int planes = CountOfKind(w, EntityKind::WorkPlane);
     const auto screen = w.Viewport().Mapping().Project({3, 0, 12});
     if (!screen) return false;
     w.Viewport().HoverAt({screen->x, screen->y});
@@ -176,6 +182,8 @@ bool GuideToolFirst(V2MainWindow& w)
     if (!Explain("重なる線を避けて面だけを拾う", candidate && candidate->entityId == guide
             && candidate->kind == app::SelectionElementKind::Face)) return false;
     if (!ClickWorld(w, {3, 0, 12})) return false;
+    if (!Explain("面を直接作図面にし、別の作業平面や履歴を増やさない", w.ActiveWorkPlaneId() == guide
+            && w.Session().GetDocument().Revision() == before && CountOfKind(w, EntityKind::WorkPlane) == planes)) return false;
     if (!Explain("面に一致する作図基準", std::abs(w.Viewport().WorkPlane().origin.z - 12.0) < 1e-7)) return false;
     Shot(w, "guide-grid-drawing");
     return DrawOnGrid(w);
@@ -210,6 +218,153 @@ bool SelectTree(V2MainWindow& w, EntityId id)
     if (tree->itemAt(at) != row) return false;
     Click(*tree->viewport(), at);
     return true;
+}
+
+bool SelectDrawingPlane(V2MainWindow& w, const QString& text)
+{
+    auto* combo = w.findChild<QComboBox*>("drawingPlane");
+    if (!combo) return false;
+    const int index = combo->findText(text);
+    if (index < 0) return false;
+    combo->setFocus();
+    combo->showPopup();
+    QKeyEvent home(QEvent::KeyPress, Qt::Key_Home, Qt::NoModifier);
+    QApplication::sendEvent(combo, &home);
+    for (int i = 0; i < index; ++i) {
+        QKeyEvent down(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+        QApplication::sendEvent(combo, &down);
+    }
+    QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(combo, &enter);
+    QApplication::processEvents();
+    return true;
+}
+
+bool CheckIntersectionAndDraw(V2MainWindow& w, Vector3 target)
+{
+    const auto at = w.Viewport().Mapping().Project(target);
+    if (!at) return false;
+    w.Viewport().HoverAt({at->x, at->y});
+    const auto hover = w.Viewport().Hover();
+    const auto detail = hover.snap ? QStringLiteral("面の実境界との3D交点へ吸着: kind=%1 delta=%2 actual=(%3,%4,%5)")
+        .arg(int(hover.snap->kind)).arg((hover.snap->position - target).Length(), 0, 'g', 12)
+        .arg(hover.snap->position.x).arg(hover.snap->position.y).arg(hover.snap->position.z) : QStringLiteral("面の実境界との3D交点へ吸着: 候補なし");
+    if (!Explain(detail.toUtf8().constData(), hover.snap && hover.snap->kind == modeling::SnapKind::Intersection
+            && (hover.snap->position - target).Length() < 1e-6)) return false;
+    const auto revision = w.Session().GetDocument().Revision();
+    const auto end = target + w.Viewport().WorkPlane().vAxis * -3.0 + w.Viewport().WorkPlane().uAxis * -2.0;
+    if (!ClickWorld(w, target) || !ClickWorld(w, end)) return false;
+    if (!Explain("交点から線を確定", w.Session().GetDocument().Revision() == revision + 1)) return false;
+    const auto& snapshot = w.Session().GetDocument().Snapshot();
+    for (auto it = snapshot.features.rbegin(); it != snapshot.features.rend(); ++it)
+        if (const auto* wire = std::get_if<domain::CreateWireDefinition>(&it->definition))
+            return Explain("確定線の始点が実交点の座標に一致", !wire->segments.empty()
+                && (wire->segments.front().StartPoint() - target).Length() < 1e-6);
+    return false;
+}
+
+bool SupportBoundaryCrossing(V2MainWindow& w, bool hole, bool tilted)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, tilted, hole);
+    if (guide.IsNil()) return false;
+    std::vector<EntityId> sources;
+    for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
+        if (entity.kind == EntityKind::Wire) sources.push_back(entity.id);
+    const auto point = [tilted](double x, double y) { return Vector3{x, y, 12 + (tilted ? .2 * x + .3 * y : 0)}; };
+    const double y = hole ? 1.3 : 7.3;
+    const double x = hole ? 12 + std::sqrt(16 - y * y) : 25;
+    const auto crossing = point(x, y);
+    const auto ends = hole ? std::pair{point(6, y), point(19, y)} : std::pair{point(20, y), point(30, y)};
+    const auto line = w.AddPlainWire({geometry::CurveSegment::MakeLine(ends.first, ends.second).Value()}, "境界を横切る線", false);
+    // Hide the generating wires so only the actual native face boundary can supply the snap.
+    if (!w.Session().GetDocument().Run(document::SetVisibilityCommand(sources, domain::Visibility::Hidden)).committed
+        || !w.SaveAndReopen("direct-face-native-boundary.kcd2")) return false;
+    if (!SelectTree(w, guide) || !StartFaceTool(w)) return false;
+    auto* only = w.findChild<QToolButton*>("quickPlaneWiresOnly");
+    if (!only) return false;
+    if (!only->isChecked()) Click(*only, only->rect().center());
+    if (!Explain("平面ワイヤのみでも作図する面と交差ワイヤを表示", w.Viewport().EntityShown(guide) && w.Viewport().EntityShown(line))) return false;
+    Shot(w, hole ? "direct-face-hole-boundary" : "direct-face-outer-boundary");
+    if (!CheckIntersectionAndDraw(w, crossing)) return false;
+    w.RunCommand("edit.undo");
+    if (!Explain("線のUndoで面を消さず基準を維持", w.Session().GetDocument().FindEntity(guide) && w.ActiveWorkPlaneId() == guide)) return false;
+    for (const auto id : sources) if (w.Session().GetDocument().FindEntity(id)->visibility != domain::Visibility::Hidden) return false;
+    return w.SaveAndReopen("direct-face-native-result.kcd2") && w.RebuildProblems().isEmpty();
+}
+
+bool SupportSwitchAndCancel(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w, 12, true);
+    if (guide.IsNil() || !SelectTree(w, guide) || !StartFaceTool(w)) return false;
+    auto* combo = w.findChild<QComboBox*>("drawingPlane");
+    if (!combo || !combo->currentText().startsWith(QStringLiteral("面: "))) return false;
+    const auto label = combo->currentText();
+    const auto before = w.Session().GetDocument().Revision();
+    const auto frame = w.Viewport().WorkPlane();
+    if (!ClickWorld(w, frame.PointAt(2, 3)) || !w.Session().HasPlacedPoints()) return false;
+    if (!SelectDrawingPlane(w, QStringLiteral("top_XY"))) return false;
+    if (!Explain("作図面の変更で未確定の点だけ取り消す", !w.Session().HasPlacedPoints()
+            && w.Session().GetDocument().Revision() == before && std::abs(w.Viewport().WorkPlane().origin.z) < 1e-9)) return false;
+    if (!SelectDrawingPlane(w, label) || !Explain("作図面の欄から面へ戻れる", w.ActiveWorkPlaneId() == guide
+            && (w.Viewport().WorkPlane().normal - frame.normal).Length() < 1e-10)) return false;
+    if (!SelectDrawingPlane(w, QStringLiteral("3Dビューで面を指定…")) || !w.Viewport().ReferencePickPending()) return false;
+    w.activateWindow(); w.Viewport().setFocus(); QApplication::processEvents();
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(&w.Viewport(), &escape);
+    if (!Explain("面指定の取消で基準と文書を保持", !w.Viewport().ReferencePickPending() && w.ActiveWorkPlaneId() == guide
+            && combo->currentText() == label && w.Session().GetDocument().Revision() == before)) return false;
+    if (!w.SaveAndReopen("direct-face-switch.kcd2")) return false;
+    return Explain("再読込で一時的なフェイス番号を使い回さず標準面に戻す", w.ActiveWorkPlaneId() != guide
+        && CountOfKind(w, EntityKind::GuideSurface) == 1 && w.RebuildProblems().isEmpty());
+}
+
+bool SolidBoundaryCrossing(V2MainWindow& w)
+{
+    Setup(w);
+    const auto part = MakeBoxByHand(w, .3, .35, .65, .65);
+    if (part.IsNil()) return false;
+    Vector3 lower, upper;
+    for (const auto& shape : w.Viewport().ShapeViews()) if (shape.entityId == part) {
+        lower = shape.mesh.minimum; upper = shape.mesh.maximum;
+    }
+    const Vector3 center{(lower.x + upper.x) * .5, (lower.y + upper.y) * .5, upper.z};
+    const Vector3 crossing{upper.x, lower.y + (upper.y - lower.y) * .213, upper.z};
+    if (w.AddPlainWire({geometry::CurveSegment::MakeLine(crossing + Vector3{-4, 0, 0},
+            crossing + Vector3{5, 0, 0}).Value()}, "表面の境界を横切る線", false).IsNil()
+        || !w.SaveAndReopen("direct-solid-face-boundary.kcd2")) return false;
+    w.Viewport().SetSelection({});
+    if (!StartFaceTool(w) || !ClickWorld(w, center)) return false;
+    if (!Explain("立体のフェイスを直接作図面にする", w.ActiveWorkPlaneId() == part)) return false;
+    auto* only = w.findChild<QToolButton*>("quickPlaneWiresOnly");
+    if (!only) return false;
+    if (!only->isChecked()) Click(*only, only->rect().center());
+    if (!CheckIntersectionAndDraw(w, crossing)) return false;
+    Shot(w, "direct-solid-face-intersection");
+    w.RunCommand("edit.undo"); w.RunCommand("edit.redo");
+    return Explain("フェイス上の線のUndo/Redoでも立体を保持", CountOfKind(w, EntityKind::Part) == 1
+        && w.Session().GetDocument().FindEntity(part));
+}
+
+bool DeletedSupport(V2MainWindow& w)
+{
+    Setup(w);
+    const auto guide = MakeGuide(w);
+    if (guide.IsNil() || !SelectTree(w, guide) || !StartFaceTool(w)) return false;
+    w.RunCommand("selection.activate");
+    if (!SelectTree(w, guide)) return false;
+    const int wires = CountOfKind(w, EntityKind::Wire);
+    DeleteWithConfirmation(w, true);
+    if (!Explain("作図基準の面を削除すると標準面へ戻る", !w.Session().GetDocument().FindEntity(guide)
+            && w.ActiveWorkPlaneId() != guide && CountOfKind(w, EntityKind::Wire) == wires)) return false;
+    w.RunCommand("edit.undo");
+    if (!Explain("削除のUndoで面を戻し、一時的なフェイス番号は復活させない", w.Session().GetDocument().FindEntity(guide)
+            && w.ActiveWorkPlaneId() != guide)) return false;
+    if (!SelectTree(w, guide) || !StartFaceTool(w) || !DrawOnGrid(w)) return false;
+    w.RunCommand("file.new");
+    return Explain("新規文書に古い作図基準を持ち越さない", CountOfKind(w, EntityKind::GuideSurface) == 0
+        && w.ActiveWorkPlaneId() != guide && std::abs(w.Viewport().WorkPlane().origin.z) < 1e-9);
 }
 
 bool TreeBeforeAndAfter(V2MainWindow& w)
@@ -352,7 +507,7 @@ bool HolesCircleAndRectangle(V2MainWindow& w)
     const auto plane = w.Viewport().WorkPlane();
     const auto origin = w.Session().Scene().grid.origin;
     const auto pitch = w.Session().Scene().grid.majorSpacingMm;
-    const auto center = origin - plane.uAxis * pitch - plane.vAxis * pitch;
+    const auto center = origin - plane.uAxis * pitch - plane.vAxis * (pitch * 2);
     w.RunCommand("draw.circle");
     if (!ClickWorld(w, center) || !ClickWorld(w, center + plane.uAxis * (pitch * .5))) return false;
     const auto circle = w.Session().Scene().curves.back().segment;
@@ -554,6 +709,12 @@ bool OwnerFaceDrawing(V2MainWindow& w)
 std::vector<SelfTestCase> FaceDrawingCases()
 {
     auto cases = std::vector<SelfTestCase>{{"FACE-GRID tool first ignores overlapping wires", GuideToolFirst},
+        {"FACE-SUPPORT native outer boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, false, false); }},
+        {"FACE-SUPPORT native inclined boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, false, true); }},
+        {"FACE-SUPPORT native inner curved boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, true, false); }},
+        {"FACE-SUPPORT combo switch cancel and reopen", SupportSwitchAndCancel},
+        {"FACE-SUPPORT native solid face boundary intersection", SolidBoundaryCrossing},
+        {"FACE-SUPPORT delete undo new document", DeletedSupport},
         {"FACE-GRID inclined surface and repeated drawing reuse", TiltedGuideAndReuse},
         {"FACE-GRID explorer before and after tool", TreeBeforeAndAfter},
         {"FACE-GRID overlapping faces cancel and tool switch", OverlapAndCancel},

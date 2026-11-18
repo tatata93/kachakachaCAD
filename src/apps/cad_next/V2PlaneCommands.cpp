@@ -1,8 +1,7 @@
 //! 基準のコマンド(V2MainWindow の一部)。作業平面とグリッド。
 //!
-//! 思想。**線は必ずどこかの平面の上にある。**
-//! 平面を決めずに引くと、あとで「この線はどの面の上か」が誰にも分からなくなる。
-//! だから平面は文書に入れる。画面の飾りではない。
+//! 平面作図は正規直交の基準枠を使う。独立した作業平面は文書に持つが、
+//! 既存の面を直接使う作図基準は一時的なUI状態。線はどちらにも所有させない。
 //!
 //! グリッドは逆で、**見え方の都合なので文書に入れない。**
 //! 保存して開き直したときに、相手の画面のグリッドまで変わってしまうのは行きすぎである。
@@ -11,6 +10,7 @@
 #include "V2MainWindow.h"
 #include "V2WorkPlaneRoleInputs.h"
 #include "V2QuickDisplayControls.h"
+#include "V2FaceActions.h"
 
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/WorkPlaneOptions.h"
@@ -218,6 +218,7 @@ void V2MainWindow::RefreshWorkPlaneDock()
     }
     workPlaneDock_->SetPlanes(planes);
     workPlaneDock_->Refresh(BuildWorkPlaneFacts());
+    V2FaceActions::AppendDrawingSupports(*this, planes);
     // 上の帯の「作図面」コンボも同じ一覧。作業中のものを選んだ状態にする。
     if (planeCombo_ == nullptr) {
         return;
@@ -277,6 +278,13 @@ void V2MainWindow::ActivateSelectedWorkPlane()
 
 bool V2MainWindow::ActivateWorkPlaneById(const kachakacha::v2::base::EntityId& id)
 {
+    if (id.IsNil()) {
+        RefreshWorkPlaneDock();
+        EndArmedTools(); SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        viewport_->SetSelection({});
+        RunCommand("workplane.from_face"); return true;
+    }
+    if (V2FaceActions::ActivateDrawingSupport(*this, id)) return true;
     // 作り方ではなく、出来上がった枠(原点・法線・u)を使う。v は法線と u から出す。
     const auto frame = WorkPlaneFrameOf(id);
     const auto* entity = session_->GetDocument().FindEntity(id);
@@ -329,6 +337,8 @@ void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame
     scene.grid.vDirection = evaluated.Value().vDirection;
     session_->SetScene(std::move(scene));
     if(gridDock_)gridDock_->SetChoice(CurrentGridChoice());
+    RefreshPlaneWireDisplay(*viewport_);
+    viewport_->ApplyVisibilityFilter();
     viewport_->update();
 }
 

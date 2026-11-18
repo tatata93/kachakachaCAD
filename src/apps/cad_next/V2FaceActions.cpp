@@ -217,26 +217,6 @@ void V2FaceActions::Apply(const std::vector<app::SelectionRef>& refs)
     DrawOnFace(refs.front());
 }
 
-bool V2FaceActions::ActivateDrawingPlane(const app::WorkPlaneChoice& choice)
-{
-    const auto& document = window_.session_->GetDocument();
-    const auto tolerance = document.Snapshot().settings.tolerance.modelLinearMm;
-    for (const auto& entity : document.Snapshot().entities) {
-        if (entity.kind != domain::EntityKind::WorkPlane) continue;
-        const auto frame = window_.WorkPlaneFrameOf(entity.id);
-        if (frame && geometry::Dot(frame->normal, choice.normal) > 1.0 - 1e-10
-            && geometry::Dot(frame->uAxis, choice.uAxis) > 1.0 - 1e-10
-            && std::abs(geometry::Dot(frame->normal, choice.origin - frame->origin)) <= tolerance) {
-            window_.ApplyWorkPlane(*frame, entity.id);
-            window_.RefreshWorkPlaneDock();
-            return true;
-        }
-    }
-    const auto revision = document.Revision();
-    window_.CreateWorkPlaneFromChoice(choice, true);
-    return document.Revision() != revision;
-}
-
 void V2FaceActions::FrameDrawingFace(V2MainWindow& window, const app::SelectionRef& ref, const app::WorkPlaneChoice& choice)
 {
     auto& viewport = *window.viewport_;
@@ -261,7 +241,7 @@ void V2FaceActions::FrameDrawingFace(V2MainWindow& window, const app::SelectionR
 void V2FaceActions::DrawOnFace(const app::SelectionRef& ref)
 {
     ResolvePlane(window_, ref, [this, ref](std::optional<app::WorkPlaneChoice> choice, bool planar) {
-        if (!choice || !ActivateDrawingPlane(*choice)) { Pick(); return; }
+        if (!choice || !RememberDrawingSupport(window_, ref, *choice, planar)) { Pick(); return; }
         auto& window = window_;
         window.operationHost_->SetShelves({});
         window.SetMode(app::UiMode::Drawing);window.AlignViewToActiveWorkPlane();window.RunCommand("draw.line");
@@ -272,7 +252,7 @@ void V2FaceActions::DrawOnFace(const app::SelectionRef& ref)
         window.ApplyGridChoice(grid);
         if (!window.snapEnabled_) window.ToggleSnap();
         window.SetStatus(planar
-            ? QStringLiteral("選んだ面で作図できます。グリッドの交点や任意の位置をクリックしてください。")
+            ? QStringLiteral("選んだ面で作図できます。境界線との交点・端点やグリッドを指定できます。")
             : QStringLiteral("選択位置の接平面で作図します。グリッドの交点や任意の位置をクリックしてください。"));
     });
 }

@@ -212,9 +212,9 @@ void UseDock(V2MainWindow& window)
 {
     // 上の帯の「作図面」コンボ(V1 と同じ)。選ぶと作業中の平面が切り替わり、
     // 「正対」はその平面の正面から見る。形は変わらない。
-    if (!Explain((std::string("コンボに3面(実際は ") + std::to_string(window.PlaneComboCount())
+    if (!Explain((std::string("コンボに3面と面指定入口(実際は ") + std::to_string(window.PlaneComboCount())
                      + ")").c_str(),
-            window.PlaneComboCount() == 3)) {
+            window.PlaneComboCount() == 4)) {
         return false;
     }
     if (!Explain((std::string("はじめは top_XY(")
@@ -263,9 +263,9 @@ void UseDock(V2MainWindow& window)
     choice.name = "駅の断面";
     window.WorkPlaneDock()->SetChoice(choice);
     window.WorkPlaneDock()->PressCreate();
-    if (!Explain((std::string("コンボに4面(実際は ") + std::to_string(window.PlaneComboCount())
+    if (!Explain((std::string("コンボに4面と面指定入口(実際は ") + std::to_string(window.PlaneComboCount())
                      + ")").c_str(),
-            window.PlaneComboCount() == 4)) {
+            window.PlaneComboCount() == 5)) {
         return false;
     }
     return Explain((std::string("作ったものが作業中(")

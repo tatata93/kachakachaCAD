@@ -1,5 +1,6 @@
 #include "V2ExtrudeReferenceState.h"
 #include "V2Calculation.h"
+#include "V2FaceActions.h"
 //! 形をつくるコマンド(V2MainWindow の一部)。押し出し・かご・足す引く・固定。
 //!
 //! 思想。**面が張れるかどうかを、面を張る前に判定する。**
@@ -1054,6 +1055,7 @@ void V2MainWindow::RefreshPartEdges()
     append(partEdges_);
     // 形状ガイドの境界も同じように出す。出さないと、作ったのに何も見えない。
     append(guideEdges_);
+    V2FaceActions::AppendDrawingSupportEdges(*this, scene);
     session_->SetScene(std::move(scene));
     viewport_->update();
 }

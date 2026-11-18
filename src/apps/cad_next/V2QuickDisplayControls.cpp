@@ -2,6 +2,7 @@
 #include "V2ToolSelection.h"
 #include "V2Viewport.h"
 #include "V2MainWindow.h"
+#include "V2FaceActions.h"
 #include "kachakacha/app/PlaneFocus.h"
 #include <QCheckBox>
 #include <QObject>
@@ -48,7 +49,7 @@ void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSess
     grid->setChecked(true);
     QObject::connect(grid,&QToolButton::toggled,&view,[&view](bool on){view.SetGridOnTop(on);});
     auto* plane=Button(bar,"quickPlaneWiresOnly",QStringLiteral("平面ワイヤのみ"),
-        QStringLiteral("現在の作図面内に全体が載るワイヤー・補助線・点のみ表示。作図面の変更に追従し、オフで元の表示に戻ります。"));
+        QStringLiteral("現在の作図面内のワイヤー・補助線・点を表示。作図に使う面とその境界は残します。オフで元の表示に戻ります。"));
     QObject::connect(plane,&QToolButton::toggled,&view,[&view,state](bool on){
         state->enabled=on;RefreshPlaneWireDisplay(view);view.ApplyVisibilityFilter();view.PruneSelection();view.update();
     });
@@ -80,6 +81,9 @@ bool PlaneWireDisplayAllows(const V2Viewport& view,base::EntityId id) {
 void RefreshPlaneWireDisplay(V2Viewport& view) {
     auto* state=State(view);if(!state||!state->enabled)return;
     state->visible.clear();std::set<base::EntityId> rejected;
+    const auto& window = static_cast<const V2MainWindow&>(*view.window());
+    if (V2FaceActions::IsDrawingSupport(window, window.ActiveWorkPlaneId()))
+        state->visible.insert(window.ActiveWorkPlaneId());
     const auto& scene=state->session.Scene();
     std::map<base::EntityId,domain::EntityKind> kinds;
     for(const auto& entity:state->session.GetDocument().Snapshot().entities)kinds.emplace(entity.id,entity.kind);

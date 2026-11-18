@@ -1,0 +1,11 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>面を直接作図面にする — 検証記録</title><style>body{font:16px/1.7 system-ui;margin:2em auto;max-width:1100px;padding:0 1em}img{max-width:100%;border:1px solid #bbb}code{overflow-wrap:anywhere}</style></head><body>
+<h1>面を直接作図面にする</h1>
+<p>サーフェスとソリッドのフェイスを「面で作図」から直接作図面に設定する。文書に別の作業平面を追加しない。上部の「作図面」に対象名を表示し、既存の平面との切替と、3Dビューから別の面を指定する入口を設けた。曲面はユーザー指定どおり、指した位置の接平面を使う。</p>
+<h2>境界と交点</h2><p>「平面ワイヤのみ」でも作図基準の面を残す。選択したネイティブフェイスから内側の境界も取り出し、入力シーンへ補う。三角形の辺から線を復元せず、独立した編集ワイヤーも追加しない。製作近似用の外形データと元の形状は変更しない。</p>
+<figure><img src="../manual/tool-screens/workplane.from_face-boundary.png" alt="元線を非表示にして、穴付きの面と交差ワイヤーを表示した実画面"><figcaption>生成元の線を非表示にしても、内側の曲線境界と別のワイヤーとの実3D交点から作図できる。Windows版へのQtマウス・キー入力で撮影。</figcaption></figure>
+<h2>確認した経路</h2><ul><li>ツール先行、3Dビューの事前選択、左一覧、右クリック。</li><li>通常の面・斜めの面・内側の円形境界・ソリッドのフェイスと別ワイヤーとの交点。</li><li>面指定中のTab、Esc、ツール切替、作図面欄からの切替。</li><li>面を直接使っても文書のrevisionと作業平面数が増えないこと。</li><li>入力途中の点の取消、確定済みの線の保持、面の削除・Undo、新規文書・再読込で一時的なフェイス番号を失効させること。</li><li>グリッド作図、円・矩形、曲面の接平面、作業面の作成と投影の既存経路。</li></ul>
+<h2>実モデルと原本保全</h2><p>115投影.kcd2の複製操作で面指定、作図、Undo/Redo、保存・再読込を確認。元の面・部品数を維持する。原本のSHA-256は前後とも <code>84c716b3e6af1ae8f87da4ee4df92226ef326b03e1e44f8c6ce7f84152125ede</code>。</p>
+<figure><img src="direct-face-drawing-20261118-owner.png" alt="添付115投影から面を直接指定して作図した実画面"><figcaption>添付モデルの通常Windows UI入力試験。原本は上書きしない。</figcaption></figure>
+<h2>発見と再確認</h2><p>最初の試験で、形状ガイドの製作用外形だけでは円形の穴の縁が入力候補に入らないことを再現した。外形の用途は変えず、ネイティブフェイスの全境界を私有UI入力へ接続して再試験した。グリッド試験の座標が実境界のスナップ半径へ入る例は、境界優先の製品規則を維持し、境界から離れた格子点で検証するように修正した。</p>
+<p>重点試験の証拠は <code>out/direct-face-20261118/</code>。Windowsの24件は成功。完成候補の全体・配布版検証と公開結果は、この欄へ追記する。</p>
+</body></html>

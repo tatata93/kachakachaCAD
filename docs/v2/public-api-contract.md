@@ -1215,5 +1215,5 @@ ADR 0033に従い、既存OffsetCurveInPlane/OffsetCurvesInPlaneのsignatureを�
 
 ### 曲線を動かさない部分補正（2026-11-20、WP-04）
 
-`geometry/CurveRange.h` の `ExtractCurveRange(const CurveSegment&, double first, double last)` は元曲線の0<=first<last<=1を厳密抽出し、順序付きCurveSegment列を返す。一様3次Bスプラインは端のde Casteljau区間と元の一様な内部区間を用い、最大3区間に留める。元の全区間なら元値1本を返す。折れ線近似や制御点の再フィットを使わない。保存形式は既存の曲線列のままとする。
+`geometry/CurveRange.h` の `ExtractCurveRange(const CurveSegment&, double first, double last)` は元曲線の0<=first<last<=1を厳密抽出し、順序付きCurveSegment列を返す。一様3次Bスプラインは端のde Casteljau区間と元の一様な内部区間を用い、最大3区間に留める。元の全区間なら元値1本を返す。折れ線近似や制御点の再フィットを使わない。保存形式は既存の曲線列のままとする。 浮動小数点精度で区間がつぶれる場合はGEO-C012で拒否し、空の成功値で元の曲線を消さない。
 `CornerResult` は従来のfirst/corner/secondに加え、firstより前の`firstPrefix`とsecondより後の`secondSuffix`を保持できる。`Segments()`は全区間を正しい順で返す。従来の線・円弧の結果は変えず、first/secondは角に接する区間を表す。BスプラインのC/R、トリム、切戻しはこの厳密範囲抽出を使い、元形状と未編集区間を動かさない。

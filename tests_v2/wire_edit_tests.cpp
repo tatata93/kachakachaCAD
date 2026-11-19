@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 using kachakacha::v2::geometry::ChamferLines;
 using kachakacha::v2::geometry::CurveKind;
@@ -864,5 +865,17 @@ KACHA_V2_TEST(edit, corner_uses_model_tolerance_without_silently_flattening_skew
     Require(!ChamferLines(a,L({0,3,.1},{0,11,.1}),.8,.01).HasValue(),"another plane is never silently projected");
     Require(!FilletLines(a,L({2,3,0},{12,3,0}),.8,.01).HasValue(),"parallel lines have no extension corner");
     RequireNear(a.StartPoint().x,2.,0.,"the input is never mutated");
+}
+KACHA_V2_TEST(edit, spline_ranges_below_numeric_resolution_never_succeed_with_missing_geometry) {
+    using namespace kachakacha::v2::geometry;
+    std::vector<Vector3> points;for(int i=0;i<80;++i)points.push_back({double(i),std::sin(i*.2),0});
+    const auto curve=CurveSegment::MakeCubicBSpline(points).Value();const double knot=10./77.;
+    for(const auto interval:std::vector<std::pair<double,double>>{{std::nextafter(knot,0.),std::nextafter(knot,1.)},
+        {0.,std::numeric_limits<double>::denorm_min()},{std::nextafter(1.,0.),1.}}){
+        const auto made=ExtractCurveRange(curve,interval.first,interval.second);
+        Require(!made.HasValue(),"an unresolvable interval cannot erase a curve as an empty success");
+        RequireEqual(made.FirstCode(),std::string("GEO-C012"),"the numerical parameter refusal is explicit");
+    }
+    Require(curve.ControlPoints()==points,"the source remains unchanged after refusal");
 }
 KACHA_V2_TEST_MAIN("wire_edit_tests")

@@ -29,6 +29,8 @@ Out ExtractCurveRange(const CurveSegment& curve,double first,double last)
         return std::abs(value-integer)<=16*std::numeric_limits<double>::epsilon()*std::max(1.,std::abs(value))?integer:value;
     };
     const double a=knotPosition(first),b=knotPosition(last);
+    if(!(a<b))return Out::Failure(base::MakeError("GEO-C012","区間が数値精度より短いため、曲線を取り出せません。",
+        "少し離れた2点を指定してください。空の曲線へ置き換えることはしません。"));
     const auto start=std::min(static_cast<std::size_t>(std::floor(a)),spans.size()-1);
     const auto finish=std::min(static_cast<std::size_t>(std::ceil(b))-1,spans.size()-1);
     const double localStart=a-start,localEnd=b-finish;

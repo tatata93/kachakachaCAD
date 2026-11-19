@@ -391,7 +391,7 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
         }
         const QRectF cell(gadget.xPx, gadget.yPx, gadget.widthPx, gadget.heightPx);
         const bool usable = gadget.kind != ViewGadgetKind::AlignSelection
-            || !selection_.entityIds.empty();
+            || !selection_.entityIds.empty() || property("drawingFaceActive").toBool();
         const bool hot = (gadgetDrag_.has_value() && gadgetDrag_->index == index)
             || (gadgetHoverIndex_.has_value() && *gadgetHoverIndex_ == index);
         QColor face = palette_.background;
@@ -428,7 +428,8 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
             // この文字だけは長いので、元の大きさに戻す。
             painter.setFont(previous);
             text = gadget.direction == ViewGadgetDirection::Negative
-                ? QStringLiteral("逆対") : QStringLiteral("選択に正対");
+                ? QStringLiteral("逆対") : (selection_.entityIds.empty() && property("drawingFaceActive").toBool()
+                    ? QStringLiteral("作図面に正対") : QStringLiteral("選択に正対"));
             break;
         }
         default:

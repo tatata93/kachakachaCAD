@@ -24,6 +24,9 @@
 #include "kachakacha/document/Dimension.h"
 
 #include <QWidget>
+#include <QApplication>
+#include <QKeyEvent>
+#include <QEvent>
 #include <QImage>
 #include <QTemporaryDir>
 #include <QPointF>
@@ -482,11 +485,13 @@ bool CaseAutomaticOffset(V2MainWindow& w) {
     auto& view=w.Viewport();kachakacha::v2::app::SelectionSet selected;selected.entityIds={wire};view.SetSelection(selected);
     view.SetWorkPlane(StandardPlane(StandardPlaneKind::ZX));
     w.ActivateCommand("wire.offset");
-    if(!Explain("offset automatically previews in target plane",!view.ToolPreview().empty()))return false;
     auto* choice=w.findChild<QComboBox*>(QStringLiteral("offsetPlaneChoice"));if(!choice)return false;
-    choice->setCurrentIndex(1);
-    if(!Explain("incompatible manual plane has no misleading preview",view.ToolPreview().empty()))return false;
+    if(!Explain("current drawing plane is the default and a collapsed projection has no preview",choice->currentIndex()==1&&view.ToolPreview().empty()))return false;
     choice->setCurrentIndex(0);
+    if(!Explain("explicit automatic plane still previews in the original wire plane",!view.ToolPreview().empty()))return false;
+    const auto revision=w.Session().GetDocument().Revision();choice->setFocus();
+    QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QApplication::sendEvent(choice,&enter);QApplication::processEvents();
+    if(!Explain("Enter in the plane selector does not commit the offset",w.Session().GetDocument().Revision()==revision))return false;
     if(!w.HandleToolKey(Qt::Key_Return,nullptr))return false;
     if(!Explain("offset creates output without changing drawing plane",w.Session().Scene().curves.size()>4&&std::abs(view.WorkPlane().normal.y)>0.99))return false;
     w.HandleToolKey(Qt::Key_Escape,nullptr);

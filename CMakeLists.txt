@@ -1265,6 +1265,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ImageViews.cpp
         src/apps/cad_next/V2FaceActions.cpp
         src/apps/cad_next/V2FaceDrawingSupport.cpp
+        src/apps/cad_next/V2DrawingPlaneProjection.cpp
         src/apps/cad_next/V2FaceOutlineTool.cpp
         src/apps/cad_next/V2RevolveAxisInput.cpp
         src/apps/cad_next/V2RevolveOutput.cpp

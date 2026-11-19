@@ -37,6 +37,7 @@
 #include "kachakacha/app/ToolKeys.h"
 
 #include <QAbstractSpinBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QPointer>
 #include <QPoint>
@@ -51,6 +52,20 @@
 #include <QWidget>
 
 namespace {
+
+bool ComboField(QObject* target)
+{
+    for(auto* widget=qobject_cast<QWidget*>(target);widget;widget=widget->parentWidget())
+        if(qobject_cast<QComboBox*>(widget))return true;
+    return false;
+}
+bool ComboOwnsKey(QObject* target,int key)
+{
+    if(!target||(key!=Qt::Key_Return&&key!=Qt::Key_Enter&&key!=Qt::Key_Escape))return false;
+    auto* widget=qobject_cast<QWidget*>(target);auto* focus=QApplication::focusWidget();
+    return QApplication::activePopupWidget()||ComboField(target)
+        ||(widget&&ComboField(focus)&&widget->isAncestorOf(focus));
+}
 
 //! その相手が、道具の棚の中の「打ち込む欄」か。
 [[nodiscard]] bool IsTypingField(QObject* target)
@@ -144,6 +159,7 @@ bool V2MainWindow::HandleWorkPlaneToolKey(int key, QObject* target)
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
+    if(ComboOwnsKey(target,key))return false;
     if (HandleDirectionPickKey(viewport_, key)) return true;
     if(viewport_&&V2ToolSelection::Active(*viewport_))return V2ToolSelection::Key(*viewport_,key,IsTypingField(target));
     if (ContainsWidget(gridDock_, qobject_cast<QWidget*>(target)) || ContainsWidget(gridDock_, QApplication::focusWidget())) return false;

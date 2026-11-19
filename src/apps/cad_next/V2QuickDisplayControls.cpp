@@ -55,8 +55,8 @@ void InstallQuickDisplayControls(V2Viewport& view,QToolBar& bar,app::DrawingSess
     });
     auto* outline = new QToolButton(&bar);
     outline->setObjectName(QStringLiteral("drawingFaceOutline"));
-    outline->setText(QStringLiteral("輪郭を作図面へ"));
-    outline->setToolTip(QStringLiteral("作図に使う面の輪郭を、編集できる線として写します。投影距離を下見し、元の面を残して確定します。"));
+    outline->setText(QStringLiteral("面の輪郭を写す"));
+    outline->setToolTip(QStringLiteral("面の輪郭を元の位置・形のまま編集できる線として写します。作図面への投影は選択でき、元の面は残します。"));
     bar.addWidget(outline);
     QObject::connect(outline, &QToolButton::clicked, &view, [&view] {
         V2FaceActions::OpenDrawingOutline(static_cast<V2MainWindow&>(*view.window()), true);

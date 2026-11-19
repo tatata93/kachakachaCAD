@@ -6,11 +6,14 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QCloseEvent;
+struct V2DrawingProjectionStats;
 class V2OffsetTool final:public QWidget {
 public:
     static void Open(V2MainWindow&);
     static void Refresh(V2MainWindow&);
     static bool Key(V2MainWindow&,int);
+    static kachakacha::v2::base::Result<std::vector<kachakacha::v2::geometry::CurveSegment>> PrepareCurves(
+        V2MainWindow&,const std::vector<kachakacha::v2::geometry::CurveSegment>&,V2DrawingProjectionStats* stats=nullptr);
     static kachakacha::v2::base::Result<kachakacha::v2::modeling::WorkPlaneFrame> PlaneFor(
         V2MainWindow&,const std::vector<kachakacha::v2::geometry::CurveSegment>&);
 protected:

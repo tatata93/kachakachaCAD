@@ -80,7 +80,7 @@ public:
         auto* source = new QLabel(QStringLiteral("元の面：%1\n元の面と線を残し、輪郭ごとに編集できる線を写します。").arg(name), this);
         source->setWordWrap(true); layout->addWidget(source);
         project_ = new QCheckBox(QStringLiteral("現在の作図面へ投影する"), this);
-        project_->setObjectName(QStringLiteral("faceOutlineProject")); project_->setChecked(true); layout->addWidget(project_);
+        project_->setObjectName(QStringLiteral("faceOutlineProject")); project_->setChecked(false); layout->addWidget(project_);
         status_ = new QLabel(this); status_->setObjectName(QStringLiteral("faceOutlineStatus"));
         status_->setWordWrap(true); layout->addWidget(status_); layout->addStretch();
         confirm_ = new QPushButton(QStringLiteral("輪郭を写す Enter"), this);
@@ -138,9 +138,13 @@ private:
     {
         const auto* widget = qobject_cast<QWidget*>(object);
         if (!isVisible() || !widget || widget->window() != window() || event->type() != QEvent::KeyPress) return false;
+        if(qobject_cast<const QComboBox*>(widget)||qApp->activePopupWidget())return false;
         const int key = static_cast<QKeyEvent*>(event)->key();
         if (key == Qt::Key_Escape) { window_.RunCommand("selection.activate"); return true; }
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) { Confirm(false); return true; }
+        if ((key == Qt::Key_Return || key == Qt::Key_Enter)
+            &&(widget==&window_.Viewport()||window_.Viewport().isAncestorOf(widget)||isAncestorOf(widget))) {
+            Confirm(false); return true;
+        }
         return false;
     }
     void closeEvent(QCloseEvent* event) override { window_.Viewport().HideToolPreview(); QWidget::closeEvent(event); }
@@ -204,6 +208,6 @@ bool V2FaceActions::OpenDrawingOutline(V2MainWindow& window, bool explicitReques
             if (offset) V2OffsetTool::Open(window);
             return true;
         });
-    window.operationHost_->ShowTemporaryPage(panel, QStringLiteral("輪郭を作図面へ写す")); panel->Preview();
+    window.operationHost_->ShowTemporaryPage(panel, QStringLiteral("面の輪郭を写す")); panel->Preview();
     return true;
 }

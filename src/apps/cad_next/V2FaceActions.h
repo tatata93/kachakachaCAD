@@ -23,6 +23,7 @@ public:
     static bool ActivateDrawingSupport(V2MainWindow&, kachakacha::v2::base::EntityId);
     static bool IsDrawingSupport(const V2MainWindow&, kachakacha::v2::base::EntityId);
     static std::optional<kachakacha::v2::app::SelectionRef> ActiveDrawingFace(const V2MainWindow&);
+    static bool AlignDrawingView(V2MainWindow&,bool reverse);
     static bool OpenDrawingOutline(V2MainWindow&, bool explicitRequest = false);
     static void AppendDrawingSupportEdges(V2MainWindow&, kachakacha::v2::modeling::SnapScene&);
 private:

@@ -102,6 +102,20 @@ bool V2FaceActions::ActivateDrawingSupport(V2MainWindow& window, base::EntityId 
     return false;
 }
 
+bool V2FaceActions::AlignDrawingView(V2MainWindow& window,bool reverse)
+{
+    if(!ActiveDrawingFace(window))return false;
+    auto& viewport=window.Viewport();const auto frame=viewport.WorkPlane();
+    const auto forward=view::ForwardOf(viewport.Orientation());
+    const auto normal=reverse?(std::abs(geometry::Dot(forward,frame.normal))>1-1e-8?forward:frame.normal*-1):frame.normal;
+    const auto orientation=view::OrientationFacing(normal,frame.vAxis);
+    if(!orientation.HasValue()){window.ReportDiagnostics(orientation.Diagnostics());return true;}
+    viewport.SetOrientation(orientation.Value());viewport.SetViewCenter(frame.origin);
+    window.SetStatus(reverse?QStringLiteral("現在の作図面へ逆対しました。作図中の入力と形状は保持しています。")
+        :QStringLiteral("現在の作図面へ正対しました。作図中の入力と形状は保持しています。"));
+    return true;
+}
+
 void V2FaceActions::AppendDrawingSupportEdges(V2MainWindow& window, modeling::SnapScene& scene)
 {
     const auto* state = State(window);

@@ -2,6 +2,7 @@
 #include "kachakacha/app/PlaneFocus.h"
 #include "V2OffsetTool.h"
 #include "V2WireEditEvaluation.h"
+#include "V2GeneratedWirePicking.h"
 #include "V2PointTransform.h"
 #include "kachakacha/document/Dimension.h"
 //! 線の編集コマンド(V2MainWindow の一部)。
@@ -134,6 +135,14 @@ void KeepUneditedSegments(std::vector<kachakacha::v2::geometry::CurveSegment>& r
     }
 }
 
+auto EvaluateWireInputs(V2MainWindow& window,const kachakacha::v2::domain::TransformWireDefinition& definition,
+    const std::vector<kachakacha::v2::geometry::CurveSegment>& curves,const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+{
+    using Out=kachakacha::v2::base::Result<std::vector<kachakacha::v2::geometry::CurveSegment>>;
+    const auto prepared=definition.method==WireTransformMethod::Offset
+        ?V2OffsetTool::PrepareCurves(window,curves):Out::Success(curves);
+    return prepared.HasValue()?v2ui::EvaluateWireEdit(definition,prepared.Value(),tolerance):Out::Failure(prepared.Diagnostics());
+}
 } // namespace
 
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
@@ -464,9 +473,7 @@ void V2MainWindow::RefreshCornerDock()
     QString names[2];
     int found = 0;
     const auto& selection = viewport_->Selection();
-    std::vector<kachakacha::v2::base::EntityId> pairIds;
-    for (const auto& ref : selection.ordered) pairIds.push_back(ref.entityId);
-    if (pairIds.empty()) pairIds = selection.entityIds;
+    const auto pairIds=V2LogicalCurveSelectionOwners(*viewport_,*session_,selection);
     for (const auto& id : pairIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
@@ -477,7 +484,7 @@ void V2MainWindow::RefreshCornerDock()
         }
         ++found;
     }
-    const auto count=kachakacha::v2::app::SelectedCurves(selection,session_->Scene()).size();
+    const auto count=pairIds.size();
     if(count>2)names[1]=QStringLiteral("合計 %1 辺を一括加工").arg(count);
     cornerDock_->SetPairText(names[0], names[1]);
     // 相手がそろっていれば下見。道具を持っていなければ片づける。
@@ -667,8 +674,7 @@ void V2MainWindow::RunWireTransform(
         SetStatus(QStringLiteral("%1: 先に線を選んでください。").arg(labelJa));
         return;
     }
-    const auto computed =
-        v2ui::EvaluateWireEdit(definition,inputs,session_->GetDocument().Snapshot().settings.tolerance);
+    const auto computed=EvaluateWireInputs(*this,definition,inputs,session_->GetDocument().Snapshot().settings.tolerance);
     if (!computed.HasValue()) {
         ReportDiagnostics(computed.Diagnostics());
         return;
@@ -766,7 +772,7 @@ void V2MainWindow::RunWireTransformEach(
             if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
                 continue;   // 線でないもの(点など)は直す相手にしない
             }
-            const auto computed = v2ui::EvaluateWireEdit(definition,curves,document.Snapshot().settings.tolerance);
+            const auto computed=EvaluateWireInputs(*this,definition,curves,document.Snapshot().settings.tolerance);
             if (!computed.HasValue()) {
                 ReportDiagnostics(computed.Diagnostics());
                 SetStatus(labelJa + QStringLiteral(": 「%1」を直せなかったので、どの線も変えていません。")

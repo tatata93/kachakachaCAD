@@ -1,4 +1,5 @@
 #include "kachakacha/app/HoverEditPlan.h"
+#include "kachakacha/geometry/CurveRange.h"
 
 #include <algorithm>
 #include <cmath>
@@ -254,17 +255,20 @@ Result<HoverEditOutcome> PlanSplit(const modeling::SnapScene& scene, const Hover
         return Out::Failure(MakeError(geometry::kSplitNoCut, "この線と交わる線が無いので、分ける点がありません。",
             "交わる線を引くか、別の線を押してください。"));
     }
-    const auto pieces = geometry::SplitAtCut(target, *nearest);
-    if (!pieces.HasValue()) {
-        return Out::Failure(pieces.Diagnostics());
-    }
     HoverEditOutcome outcome;
     outcome.source = located.Value().wire;
     outcome.segmentIndex = located.Value().index;
-    std::vector<CurveSegment> before{pieces.Value().first};
-    std::vector<CurveSegment> after;
-    if (pieces.Value().second.has_value()) {
-        after.push_back(*pieces.Value().second);
+    std::vector<CurveSegment> before,after;
+    if(target.Kind()==geometry::CurveKind::Circle){
+        const auto pieces=geometry::SplitAtCut(target,*nearest);
+        if(!pieces.HasValue())return Out::Failure(pieces.Diagnostics());
+        before={pieces.Value().first};
+    }else{
+        const auto head=geometry::ExtractCurveRange(target,0,nearest->parameter);
+        const auto tail=geometry::ExtractCurveRange(target,nearest->parameter,1);
+        if(!head.HasValue())return Out::Failure(head.Diagnostics());
+        if(!tail.HasValue())return Out::Failure(tail.Diagnostics());
+        before=head.Value();after=tail.Value();
     }
     if (target.Kind() == geometry::CurveKind::Circle) {
         // 円は継ぎ目を入れた 1 本の円弧になる(2 本には分かれない)。
@@ -278,7 +282,7 @@ Result<HoverEditOutcome> PlanSplit(const modeling::SnapScene& scene, const Hover
         tail.insert(tail.end(),
             outcome.source.segments.begin() + static_cast<std::ptrdiff_t>(outcome.segmentIndex) + 1,
             outcome.source.segments.end());
-        if (outcome.source.closedLoop && outcome.source.segments.size() > 1) {
+        if (outcome.source.closedLoop) {
             tail.insert(tail.end(), head.begin(), head.end());
             outcome.chains.push_back(std::move(tail));
         } else {

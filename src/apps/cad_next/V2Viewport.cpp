@@ -1045,8 +1045,7 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // 道具が入力を待っている間は、役割が違うものを足す(§5)。
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     const auto selectedMode=ModeForTogglePick(picked, ModeForToolPick(picked, mode));
-    const bool smooth=!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
-        ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select);
+    const bool smooth=V2UseLogicalCurvePicks(*this,*session_);
     SetSelection(smooth?V2ApplySmoothCurvePick(*this,*session_,selection_,picked,selectedMode)
         :kachakacha::v2::app::ApplySelection(selection_,picked,selectedMode));
     if(!toolPickActive_)ReportSelectionCount();

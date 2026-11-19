@@ -12,6 +12,8 @@
 
 #include "V2CornerDock.h"
 #include "V2CornerSelection.h"
+#include "V2WireEditEvaluation.h"
+#include "V2GeneratedWirePicking.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
@@ -50,11 +52,14 @@ kachakacha::v2::domain::TransformWireDefinition V2MainWindow::CornerDefinitionFr
     // 押した位置(Inventor と同じ): 押した点に近い交点を角にし、押した側を残す。
     // 選んだ順の 1 本目が A、2 本目が B。命中位置は選択の正本(ordered)が持っている。
     int found = 0;
+    std::optional<kachakacha::v2::app::SelectionRef> previous;
     for (const auto& ref : viewport_->Selection().ordered) {
         const auto* entity = session_->GetDocument().FindEntity(ref.entityId);
         if (entity == nullptr || entity->kind != EntityKind::Wire) {
             continue;
         }
+        if(previous && previous->entityId==ref.entityId && previous->hitPoint==ref.hitPoint)continue;
+        previous=ref;
         if (found == 0) {
             definition.firstHint = ref.hitPoint;
         } else if (found == 1) {
@@ -79,7 +84,8 @@ bool V2MainWindow::CornerPairSelected(std::vector<EntityId>* wires) const
             if (entity && entity->kind == EntityKind::Wire) wires->push_back(id);
         }
     }
-    return !selection.entityIds.empty() && curves.size() >= 2;
+    return !selection.entityIds.empty() && (cornerDock_->Choice().polyline?curves.size()
+        :V2LogicalCurveSelectionOwners(*viewport_,*session_,selection).size())>=2;
 }
 
 //! 下見を出し直す。道具を持っていなければ、自分が出したものだけ片づける。
@@ -106,8 +112,9 @@ void V2MainWindow::RefreshCornerPreview()
         ? kachakacha::v2::app::SelectedWholeCurves(selection, session_->Scene())
         : kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     const auto definition = CornerDefinitionFromDock();
+    const auto logicalCount=V2LogicalCurveSelectionOwners(*viewport_,*session_,selection).size();
     const auto computed = [&] {
-        if (!polyline) return kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+        if (!polyline) return v2ui::EvaluateWireEdit(definition,inputs,session_->GetDocument().Snapshot().settings.tolerance);
         auto oneWire = [&](EntityId id) {
             kachakacha::v2::app::SelectionSet one;
             one.entityIds.push_back(id);
@@ -128,13 +135,13 @@ void V2MainWindow::RefreshCornerPreview()
         ? QStringLiteral("R丸め")
         : QStringLiteral("C面取り");
     cornerPreviewShown_ = true;
-    if(!polyline && inputs.size()<=2) ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
+    if(!polyline && logicalCount<=2) ShowRoleLabels({kachakacha::v2::app::ToolRoleLabel{wires[0], "A"},
         kachakacha::v2::app::ToolRoleLabel{wires.back(), "B"}});
     else viewport_->HideToolRoleLabels();
     QString footer = QStringLiteral("%1: A=%2 / B=%3 / SIZE=%4 mm")
                          .arg(label, cornerDock_->FirstText(), cornerDock_->SecondText())
                          .arg(CornerSizeMm(), 0, 'f', 3);
-    if(inputs.size()>2)footer=QStringLiteral("%1: %2辺の角を一括加工 / SIZE=%3 mm").arg(label).arg(inputs.size()).arg(CornerSizeMm());
+    if(logicalCount>2)footer=QStringLiteral("%1: %2辺の角を一括加工 / SIZE=%3 mm").arg(label).arg(logicalCount).arg(CornerSizeMm());
     if (!computed.HasValue()) {
         viewport_->HideToolPreview();
         ShowToolFooter(footer + QStringLiteral(" / no preview"));

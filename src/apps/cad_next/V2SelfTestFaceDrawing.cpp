@@ -8,6 +8,10 @@
 #include "V2ProjectionTool.h"
 #include "V2ParameterDock.h"
 #include "V2OffsetTool.h"
+#include "V2CornerDock.h"
+#include "V2HoverEditTool.h"
+#include "kachakacha/geometry/CurveRange.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "V2SelfTestPrimitiveUi.h"
 #include "V2SelfTestDeleteDialog.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -713,7 +717,7 @@ bool ClickNamed(V2MainWindow& w, const char* name)
     const auto point = button->mapToGlobal(button->rect().center());
     for (auto* parent = button->parentWidget(); parent; parent = parent->parentWidget())
         if (!Explain((std::string("画面内で押せるボタン: ") + name).c_str(), parent->rect().contains(parent->mapFromGlobal(point)))) return false;
-    Click(*button, button->rect().center()); return true;
+    Click(*button, qobject_cast<QCheckBox*>(button)?QPointF(10,button->height()*.5):button->rect().center()); return true;
 }
 
 EntityId WarpedGuide(V2MainWindow& w)
@@ -741,8 +745,8 @@ bool CopiedOutline(V2MainWindow& w, EntityId source, bool holes, bool project, b
     const auto revision = w.Session().GetDocument().Revision();
     if (!ClickNamed(w, "drawingFaceOutline")) return false;
     auto* check = w.findChild<QCheckBox*>("faceOutlineProject");
-    if (!check || !check->isChecked()) return false;
-    if (!project) Click(*check, QPointF(10, check->height() * .5));
+    if (!check || !Explain("輪郭の写しは元位置を既定にする",!check->isChecked())) return false;
+    if (project) Click(*check, QPointF(10, check->height() * .5));
     if (!Explain("投影チェックが指定通り切り替わる", check->isChecked() == project)) return false;
     if (!Explain("下見で文書を変更しない", w.Session().GetDocument().Revision() == revision)) return false;
     Shot(w, project ? "outline-projected-preview" : "outline-original-3d-preview");
@@ -825,12 +829,22 @@ bool OutlineCancel(V2MainWindow& w)
     return Explain("取消後も線を作図できる", w.Session().GetDocument().Revision() == revision + 1);
 }
 
+bool OutlineComboDoesNotConfirm(V2MainWindow& w)
+{
+    Setup(w);const auto face=MakeGuide(w);
+    if(face.IsNil()||!PickDrawingFace(w,face)||!ClickNamed(w,"drawingFaceOutline"))return false;
+    const auto revision=w.Session().GetDocument().Revision();
+    if(!SelectDrawingPlane(w,QStringLiteral("top_XY")))return false;
+    auto* page=w.findChild<QWidget*>("faceOutlinePanel");
+    return Explain("作図面のコンボをEnterで選んでも輪郭を確定しない",page&&page->isVisible()&&w.Session().GetDocument().Revision()==revision);
+}
+
 bool OutlineUnsupportedProjection(V2MainWindow& w)
 {
     Setup(w); const auto source = MakeGuide(w, 12, false, true);
     if (source.IsNil() || !PickDrawingFace(w, source) || !ClickNamed(w, "drawingFaceOutline")) return false;
     const auto revision = w.Session().GetDocument().Revision();
-    if (!SelectDrawingPlane(w, QStringLiteral("front_XZ"))) return false;
+    if (!ClickNamed(w,"faceOutlineProject") || !SelectDrawingPlane(w, QStringLiteral("front_XZ"))) return false;
     auto* confirm = w.findChild<QPushButton*>("faceOutlineConfirm");
     auto* offset = w.findChild<QPushButton*>("faceOutlineOffset");
     auto* status = w.findChild<QLabel*>("faceOutlineStatus");
@@ -1018,7 +1032,7 @@ bool OffsetMultipleFree(V2MainWindow& w)
     auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");auto* status=w.findChild<QLabel*>("offsetStatus");
     if(!distance||!status)return false;distance->setValue(-.2);V2OffsetTool::Refresh(w);
     if(!Explain("2本を3Dで続けて選べ、両方の誤差を表示",w.Viewport().Selection().entityIds.size()==2
-            &&status->text().count("RMS")==2&&!w.Viewport().ToolPreview().empty())||!ClickNamed(w,"offsetConfirm"))return false;
+            &&status->text().count(QStringLiteral("偏差上限"))==2&&!w.Viewport().ToolPreview().empty())||!ClickNamed(w,"offsetConfirm"))return false;
     if(CountOfKind(w,EntityKind::Wire)!=4)return false;
     w.RunCommand("selection.activate");w.RunCommand("edit.undo");
     if(!Explain("2本のオフセットも1回のUndoで戻る",CountOfKind(w,EntityKind::Wire)==2
@@ -1051,6 +1065,7 @@ bool OffsetFreeInput(V2MainWindow& w,EntityId source,bool tree,bool invalid=fals
     const auto original=w.Session().Scene().curves;
     const int wires=CountOfKind(w,EntityKind::Wire),surfaces=CountOfKind(w,EntityKind::GuideSurface);
     w.Viewport().SetSelection({});V2OffsetTool::Open(w);
+    if(!ChooseCombo(w,"offsetPlaneChoice",0))return false;
     auto at=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==source;});
     if(at==original.end()||!(tree?SelectTree(w,source):ClickWorld(w,at->segment.Evaluate(.4))))return false;
     auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");auto* status=w.findChild<QLabel*>("offsetStatus");
@@ -1113,11 +1128,156 @@ bool OwnerCurvedOffset(V2MainWindow& w)
     if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({source},domain::Visibility::Visible)).committed
             ||!w.SaveAndReopen("owner-free-source.kcd2"))return false;
     w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
-    if(!PickDrawingFace(w,source)||!ClickNamed(w,"drawingFaceOutline")||!ClickNamed(w,"faceOutlineConfirm"))return false;
+    if(!PickDrawingFace(w,source)||!ClickNamed(w,"drawingFaceOutline")||!ClickNamed(w,"faceOutlineProject")||!ClickNamed(w,"faceOutlineConfirm"))return false;
     const auto copied=w.Viewport().Selection().entityIds;
     if(copied.size()!=1)return false;
     w.RunCommand("selection.activate");
     return OffsetFreeInput(w,copied.front(),true);
+}
+
+bool DrawingFaceCamera(V2MainWindow& w,bool tangent)
+{
+    Setup(w);const auto face=tangent?WarpedGuide(w):MakeGuide(w,12,true);
+    if(face.IsNil()||!PickDrawingFace(w,face))return false;
+    auto& viewport=w.Viewport();const auto frame=viewport.WorkPlane();
+    const auto revision=w.Session().GetDocument().Revision();
+    viewport.SetSnapSuppressed(true);
+    if(!ClickWorld(w,frame.PointAt(1,2))||!w.Session().HasPlacedPoints())return false;
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    const auto press=[&](view::ViewGadgetDirection direction){
+        for(const auto& gadget:viewport.ViewGadgets().gadgets)
+            if(gadget.kind==view::ViewGadgetKind::AlignSelection&&gadget.direction==direction){
+                Click(viewport,{gadget.CenterXPx(),gadget.CenterYPx()});return true;
+            }
+        return false;
+    };
+    if(!press(view::ViewGadgetDirection::Positive)||!Explain("選択なしで作図面に正対",geometry::Dot(view::ForwardOf(viewport.Orientation()),frame.normal)<-1+1e-8))return false;
+    if(!press(view::ViewGadgetDirection::Negative)||!Explain("作図面を選び直さず逆対",geometry::Dot(view::ForwardOf(viewport.Orientation()),frame.normal)>1-1e-8))return false;
+    Shot(w,tangent?"tangent-plane-camera":"face-plane-camera");
+    return Explain("視点操作で作図中の点・面・基準を変更しない",w.Session().HasPlacedPoints()&&w.ActiveWorkPlaneId()==face
+        &&w.Session().GetDocument().Revision()==revision&&geometry::Distance(viewport.WorkPlane().origin,frame.origin)<1e-10);
+}
+
+bool DirectOriginalOffset(V2MainWindow& w,bool tangent,bool tree,bool owner=false)
+{
+    Setup(w);EntityId face;
+    if(owner){
+        if(!w.OpenDocumentFile(qEnvironmentVariable("KACHACAD_FACE_SKETCH_OWNER_FILE")))return false;
+        for(const auto& item:w.Session().GetDocument().Snapshot().entities)
+            if(item.kind==EntityKind::GuideSurface&&item.displayName=="非運転席側側窓")face=item.id;
+        if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({face},domain::Visibility::Visible)).committed)return false;
+        w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
+    }else face=tangent?WarpedGuide(w):MakeGuide(w,12,true);
+    if(face.IsNil())return false;
+    const auto* entity=w.Session().GetDocument().FindEntity(face);
+    const auto* feature=entity?w.Session().GetDocument().FindFeature(entity->createdBy):nullptr;
+    if(!feature||feature->inputEntityIds.empty())return false;
+    const auto source=feature->inputEntityIds.front();
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({source},domain::Visibility::Visible)).committed
+        ||!w.SaveAndReopen("direct-edit-source.kcd2")||!PickDrawingFace(w,face))return false;
+    const auto original=w.Session().Scene().curves;const auto frame=w.Viewport().WorkPlane();
+    const auto beforeEntities=w.Session().GetDocument().Snapshot().entities;
+    const auto at=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==source;});
+    if(at==original.end())return false;
+    const int wires=CountOfKind(w,EntityKind::Wire),surfaces=CountOfKind(w,EntityKind::GuideSurface);
+    if(!w.Ribbon().ClickCategory(QStringLiteral("編集"))||!w.Ribbon().ClickTool(QStringLiteral("オフセット")))return false;
+    if(!(tree?SelectTree(w,source):ClickWorld(w,at->segment.Evaluate(.4))))return false;
+    auto* plane=w.findChild<QComboBox*>("offsetPlaneChoice");auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");
+    if(!Explain("面の作図も通常作図と同じ加工平面を既定にする",plane&&distance&&plane->currentIndex()==1))return false;
+    distance->setValue(-.3);V2OffsetTool::Refresh(w);
+    if(owner)Shot(w,"owner-direct-offset-diagnostic");
+    const auto* status=w.findChild<QLabel*>("offsetStatus");
+    if(!Explain(("元ワイヤを直接選んで下見できる: "+(status?status->text().toStdString():std::string("no panel"))).c_str(),!w.Viewport().ToolPreview().empty()&&w.Viewport().Selection().entityIds.size()==1))return false;
+    Shot(w,tangent?"direct-tangent-source-offset-preview":"direct-planar-source-offset-preview");
+    if(!ClickNamed(w,"offsetConfirm")||!Explain("輪郭コピーを要求せずオフセットだけ追加",CountOfKind(w,EntityKind::Wire)==wires+1
+        &&CountOfKind(w,EntityKind::GuideSurface)==surfaces&&w.ActiveWorkPlaneId()==face))return false;
+    for(const auto& curve:w.Session().Scene().curves){
+        const auto* current=w.Session().GetDocument().FindEntity(curve.entityId);
+        if(!current||current->kind!=EntityKind::Wire)continue;
+        const auto old=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;});
+        for(double t:{0.,.2,.5,.8,1.}){
+            if(old==original.end()){
+                if(std::any_of(beforeEntities.begin(),beforeEntities.end(),[&](const auto& e){return e.id==curve.entityId;}))continue;
+                const double delta=std::abs(frame.SignedDistance(curve.segment.Evaluate(t)));
+                if(!Explain(("結果は現在の作図面上: "+curve.entityId.ToString()+" delta="+std::to_string(delta)).c_str(),delta<1e-7))return false;
+            }else if(!Explain("元の面と輪郭を移動しない",geometry::Distance(old->segment.Evaluate(t),curve.segment.Evaluate(t))<1e-10))return false;
+        }
+    }
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    if(!Explain("Undo一回で面を保ちオフセットだけ戻す",CountOfKind(w,EntityKind::Wire)==wires&&w.Session().GetDocument().FindEntity(face)))return false;
+    w.RunCommand("edit.redo");return w.SaveAndReopen("direct-edit-result.kcd2")&&w.RebuildProblems().isEmpty();
+}
+
+bool LogicalSplineCorner(V2MainWindow& w,bool fillet)
+{
+    Setup(w);
+    const auto spline=geometry::CurveSegment::MakeCubicBSpline({{-15,0,12},{-10,0,12},{-5,1,12},{0,3,12},{5,5,12},{10,6,12},{15,6,12}}).Value();
+    const auto parts=geometry::ExtractCurveRange(spline,.137,.854);if(!parts.HasValue()||parts.Value().size()!=3)return false;
+    auto source=parts.Value();const auto untouched=geometry::CurveSegment::MakeLine({-20,-10,12},{20,-10,12}).Value();source.push_back(untouched);
+    const auto curve=w.AddPlainWire(source,"オフセット",false);
+    const auto end=parts.Value().back().EndPoint();const auto line=geometry::CurveSegment::MakeLine(end,end+Vector3{9,-7,0}).Value();
+    const auto other=w.AddPlainWire({line},"オフセット",false);
+    if(curve.IsNil()||other.IsNil()||!w.SaveAndReopen("logical-curve-source.kcd2"))return false;
+    w.RunCommand(fillet?"wire.fillet":"wire.chamfer");
+    if(!ClickWorld(w,parts.Value()[1].Evaluate(.5)))return false;
+    const auto picked=app::SelectedCurves(w.Viewport().Selection(),w.Session().Scene());
+    if(!Explain("面取り中も滑らかな曲線3区間だけを一括選択",picked.size()==3
+        &&std::none_of(picked.begin(),picked.end(),[](const auto& c){return c.Kind()==geometry::CurveKind::Line;})))return false;
+    if(!Explain("曲線1本をAとBに数えず、次の線を待つ",!w.CornerPreviewShown()&&w.CornerDock().SecondText()==QStringLiteral("(未選択)")))return false;
+    if(!ClickWorld(w,line.Evaluate(.5))||!Explain(("曲線の面取り下見: "+w.StatusText().toStdString()).c_str(),!w.Viewport().ToolPreview().empty()))return false;
+    Shot(w,fillet?"logical-spline-R-preview":"logical-spline-C-preview");
+    const auto revision=w.Session().GetDocument().Revision();
+    QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QApplication::sendEvent(&w.Viewport(),&enter);QApplication::processEvents();
+    if(!Explain("下見から確定できる",w.Session().GetDocument().Revision()>revision))return false;
+    bool retained=false;for(const auto& c:w.Session().Scene().curves)
+        retained=retained||(geometry::Distance(c.segment.StartPoint(),untouched.StartPoint())<1e-9&&geometry::Distance(c.segment.EndPoint(),untouched.EndPoint())<1e-9);
+    if(!Explain("同じワイヤの未選択直線は保持",retained))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    if(!w.Session().GetDocument().FindEntity(curve)||!w.Session().GetDocument().FindEntity(other))return false;
+    w.RunCommand("edit.redo");return w.SaveAndReopen("logical-curve-result.kcd2")&&w.RebuildProblems().isEmpty();
+}
+
+bool DisconnectedCorner(V2MainWindow& w,bool fillet)
+{
+    Setup(w);const auto a=geometry::CurveSegment::MakeLine({2,0,12},{15,0,12}).Value(),b=geometry::CurveSegment::MakeLine({0,3,12},{0,15,12}).Value();
+    const auto first=w.AddPlainWire({a},"離れた線",false),second=w.AddPlainWire({b},"離れた線",false);
+    if(first.IsNil()||second.IsNil()||!w.SaveAndReopen("gap-corner-source.kcd2"))return false;
+    w.RunCommand(fillet?"wire.fillet":"wire.chamfer");
+    if(!ClickWorld(w,a.Evaluate(.5))||!ClickWorld(w,b.Evaluate(.5))||!Explain("届いていない2線も延長して下見",!w.Viewport().ToolPreview().empty()))return false;
+    Shot(w,fillet?"auto-extend-R-preview":"auto-extend-C-preview");
+    if(!ClickPanelConfirm(w)||!Explain("延長部分を含め3辺だけ確定",w.Session().Scene().curves.size()==3))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    return Explain("延長面取りも1回で元の2線へ戻す",w.Session().GetDocument().FindEntity(first)&&w.Session().GetDocument().FindEntity(second));
+}
+
+bool ObliqueProjectionCollapse(V2MainWindow& w)
+{
+    Setup(w);
+    const auto arc=geometry::CurveSegment::MakeCircularArc({0,0,12},{0,1,1},{1,0,0},5,0,1.5).Value();
+    const auto line=geometry::CurveSegment::MakeLine({8,0,10},{8,0,15}).Value();
+    const auto wire=w.AddPlainWire({arc,line},"投影する曲線",false);
+    if(wire.IsNil()||!w.SaveAndReopen("projection-collapse-source.kcd2"))return false;
+    V2OffsetTool::Open(w);if(!SelectTree(w,wire))return false;
+    const auto revision=w.Session().GetDocument().Revision();
+    if(!Explain("投影で点になる部分を捨てて下見しない",w.Viewport().ToolPreview().empty())||!ClickNamed(w,"offsetConfirm"))return false;
+    return Explain("混在曲線の投影も部分生成しない",w.Session().GetDocument().Revision()==revision&&CountOfKind(w,EntityKind::Wire)==1);
+}
+
+bool HoverSplineSplit(V2MainWindow& w,bool trim=false)
+{
+    Setup(w);
+    const auto spline=geometry::CurveSegment::MakeCubicBSpline({{-12,0,12},{-8,1,12},{-4,-1,12},{0,1,12},{4,-1,12},{8,1,12},{12,0,12}}).Value();
+    const auto source=w.AddPlainWire({spline},"曲線",false);
+    const auto blade=w.AddPlainWire({geometry::CurveSegment::MakeLine({0,-8,12},{0,8,12}).Value()},"区切り",false);
+    if(source.IsNil()||blade.IsNil()||!w.SaveAndReopen("hover-spline-source.kcd2"))return false;
+    w.RunCommand(trim?"wire.trim":"wire.split");const auto position=spline.Evaluate(.35);const auto at=w.Viewport().Mapping().Project(position);
+    if(!at)return false;w.Viewport().HoverAt({at->x,at->y});w.HoverEditTool().RefreshPreview();
+    if(!Explain("何も選ばずに曲線の編集を下見",w.HoverEditTool().Outcome().has_value()))return false;
+    if(!ClickWorld(w,position)||!Explain("ポインターから曲線を編集し、刃を残す",CountOfKind(w,EntityKind::Wire)==(trim?2:3)
+        &&w.Session().GetDocument().FindEntity(blade)))return false;
+    Shot(w,trim?"hover-spline-trim-result":"hover-spline-split-result");w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    if(!w.Session().GetDocument().FindEntity(source)||CountOfKind(w,EntityKind::Wire)!=2)return false;
+    w.RunCommand("edit.redo");return w.SaveAndReopen("hover-spline-result.kcd2")&&w.RebuildProblems().isEmpty();
 }
 
 bool OwnerFaceDrawing(V2MainWindow& w)
@@ -1222,6 +1382,20 @@ std::vector<SelfTestCase> FaceDrawingCases()
     cases.push_back({"CURVE-OFFSET one closed spline stays one curve",[](auto& w){return CurvedOffsetFixture(w,3);}});
     cases.push_back({"CURVE-OFFSET nonplanar refusal never partially commits",[](auto& w){return CurvedOffsetFixture(w,4);}});
     cases.push_back({"CURVE-OFFSET multiple viewport inputs preserve two diagnostics",OffsetMultipleFree});
+    cases.push_back({"DIRECT-EDIT planar face camera keeps pending input",[](auto& w){return DrawingFaceCamera(w,false);}});
+    cases.push_back({"DIRECT-EDIT tangent plane camera keeps pending input",[](auto& w){return DrawingFaceCamera(w,true);}});
+    cases.push_back({"DIRECT-EDIT original face wire viewport offset on drawing plane",[](auto& w){return DirectOriginalOffset(w,false,false);}});
+    cases.push_back({"DIRECT-EDIT original face wire explorer offset on tangent plane",[](auto& w){return DirectOriginalOffset(w,true,true);}});
+    cases.push_back({"DIRECT-EDIT smooth spline C preserves unselected straight section",[](auto& w){return LogicalSplineCorner(w,false);}});
+    cases.push_back({"DIRECT-EDIT smooth spline R preserves unselected straight section",[](auto& w){return LogicalSplineCorner(w,true);}});
+    cases.push_back({"DIRECT-EDIT disconnected lines extend for C",[](auto& w){return DisconnectedCorner(w,false);}});
+    cases.push_back({"DIRECT-EDIT disconnected lines extend for R",[](auto& w){return DisconnectedCorner(w,true);}});
+    cases.push_back({"DIRECT-EDIT oblique arc and collapsed line never partially offset",ObliqueProjectionCollapse});
+    cases.push_back({"FACE-OUTLINE changing drawing plane with Enter never confirms copy",OutlineComboDoesNotConfirm});
+    cases.push_back({"DIRECT-EDIT hover spline split preview confirm undo reopen",[](auto& w){return HoverSplineSplit(w);}});
+    cases.push_back({"DIRECT-EDIT hover spline trim preview confirm undo reopen",[](auto& w){return HoverSplineSplit(w,true);}});
+    if(!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
+        cases.push_back({"DIRECT-EDIT supplied ER1 original wire offset without outline copy",[](auto& w){return DirectOriginalOffset(w,true,true,true);}});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
         cases.push_back({"FACE-OUTLINE supplied ER1 skew face project offset", OwnerOutline});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))

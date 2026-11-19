@@ -434,8 +434,7 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     lastToolPickPoint_=toolPickToggle_&&picked?std::optional{picked->hitPoint}:std::nullopt;
     const auto mode = ModeForTogglePick(picked, ModeForToolPick(picked,
         kachakacha::v2::app::SelectionMode::Replace));
-    const bool smooth=!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
-        ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select);
+    const bool smooth=V2UseLogicalCurvePicks(*this,*session_);
     SetSelection(smooth?V2ApplySmoothCurvePick(*this,*session_,selection_,picked,mode)
         :kachakacha::v2::app::ApplySelection(selection_,picked,mode));
     ReportSelectionCount();
@@ -931,8 +930,7 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     } else if (toolCandidateFilter_&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) { return !toolCandidateFilter_(c); });
     }
-    if(!ReferencePickPending()&&(V2ToolSelection::Active(*this)||toolPickActive_
-        ||session_->CurrentTool()==kachakacha::v2::modeling::DrawingTool::Select))
+    if(V2UseLogicalCurvePicks(*this,*session_))
         V2PickWholeSmoothCurves(*this,*session_,candidates);
     return SortCandidatesForSlot(std::move(candidates));
 }

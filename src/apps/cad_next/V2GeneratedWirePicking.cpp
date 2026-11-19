@@ -1,8 +1,16 @@
 #include "V2GeneratedWirePicking.h"
+#include "V2Viewport.h"
+#include "V2ToolSelection.h"
 #include <QObject>
 #include <algorithm>
 #include <map>
 #include <set>
+
+bool V2UseLogicalCurvePicks(const V2Viewport& view,const kachakacha::v2::app::DrawingSession& session) {
+    using kachakacha::v2::modeling::DrawingTool;
+    return !view.ReferencePickPending() && (V2ToolSelection::Active(view)||view.ToolPickActive()
+        ||session.CurrentTool()==DrawingTool::Select||session.CurrentTool()==DrawingTool::ChamferOrFilletPair);
+}
 
 namespace {
 using namespace kachakacha::v2;
@@ -93,6 +101,24 @@ void V2PickWholeSmoothCurves(const QObject& owner,app::DrawingSession& session,
         candidate.kind=app::SelectionElementKind::Object;
         candidate.segmentId={};candidate.subshapeKey.reset();candidate.curveParameter.reset();
     }
+}
+std::vector<base::EntityId> V2LogicalCurveSelectionOwners(const QObject& owner,app::DrawingSession& session,const app::SelectionSet& selection)
+{
+    auto refs=selection.ordered;
+    if(refs.empty())for(const auto id:selection.entityIds){app::SelectionRef ref;ref.entityId=id;refs.push_back(ref);}
+    std::set<std::pair<base::EntityId,std::size_t>> seen;std::vector<base::EntityId> result;
+    for(const auto& ref:refs){
+        const auto* entity=session.GetDocument().FindEntity(ref.entityId);
+        if(!entity||entity->kind!=domain::EntityKind::Wire)continue;
+        const auto& wire=Of(owner,session).Get(ref.entityId);
+        for(std::size_t i=0;i<wire.runs.size();++i){
+            const auto& ids=wire.runs[i].ids;
+            if(ref.segmentId&&std::find(ids.begin(),ids.end(),*ref.segmentId)==ids.end())continue;
+            if(std::none_of(ids.begin(),ids.end(),[&](auto id){return app::IsCurveSelected(selection,ref.entityId,id);}))continue;
+            if(seen.insert({ref.entityId,i}).second)result.push_back(ref.entityId);
+        }
+    }
+    return result;
 }
 std::vector<base::SegmentId> V2SmoothCurvePickSegments(const QObject& owner,app::DrawingSession& session,
     const app::PickCandidate& candidate) {

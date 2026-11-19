@@ -327,6 +327,7 @@ void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame
 {
     if (viewport_->DirectionPickPending()) viewport_->CancelPointPick();
     activeWorkPlaneId_ = entityId;
+    viewport_->setProperty("drawingFaceActive",V2FaceActions::IsDrawingSupport(*this,entityId));
     viewport_->SetWorkPlane(frame);
     auto scene = session_->Scene();
     kachakacha::v2::modeling::GridDefinition definition;

@@ -1,5 +1,6 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2FaceActions.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/SelectionFactsCounts.h"
 #include "kachakacha/app/ProfileRegion.h"
@@ -25,7 +26,9 @@ void V2MainWindow::RefreshCommandVisibility(const SelectionFacts* sharedFacts)
         const bool profileInput=command&&facts.wires>0
             &&(command->predicate==SelectionPredicate::OneClosedProfile
                 ||command->predicate==SelectionPredicate::ClosedProfilesOrSolidFace);
-        const bool ready=command&&(profileInput||(entry.first=="edit.delete"&&SelectedGroupId().has_value())||
+        const bool drawingView=(entry.first=="view.align_selection"||entry.first=="view.align_selection_back")
+            &&viewport_->Selection().entityIds.empty()&&V2FaceActions::ActiveDrawingFace(*this).has_value();
+        const bool ready=command&&(drawingView||profileInput||(entry.first=="edit.delete"&&SelectedGroupId().has_value())||
             kachakacha::v2::app::SelectionSatisfies(command->predicate,facts));
         if(!ready&&command)reason=QString::fromUtf8(std::string(command->predicateFailureJa).c_str());
         const bool canSelectTarget = command != nullptr
@@ -72,6 +75,8 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
 
 bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
 {
+    if((id=="view.align_selection"||id=="view.align_selection_back")&&viewport_->Selection().entityIds.empty()
+        &&V2FaceActions::ActiveDrawingFace(*this))return true;
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         if (reasonOut != nullptr) {

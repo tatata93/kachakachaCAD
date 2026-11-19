@@ -259,4 +259,21 @@ KACHA_V2_TEST(hover_edit_plan, 交わる線が無いと分けられない)
         "GEO-E024で断る");
 }
 
+KACHA_V2_TEST(hover_edit_plan, spline_split_preserves_exact_geometry_in_two_logical_chains) {
+    const auto spline=CurveSegment::MakeCubicBSpline({{-12,0,0},{-8,1,0},{-4,-1,0},{0,1,0},{4,-1,0},{8,1,0},{12,0,0}}).Value();
+    SnapScene scene;scene.curves={{Ent(1),Seg(1),spline,false},{Ent(2),Seg(2),Line({0,-8,0},{0,8,0}),false}};
+    HoverEditPick pick;pick.entityId=Ent(1);pick.segmentId=Seg(1);pick.parameter=.35;pick.point=spline.Evaluate(.35);
+    const auto made=PlanSplit(scene,pick,Tolerance());Require(made.HasValue(),made.FirstSummaryJa());
+    Require(made.Value().chains.size()==2,"a spline is split into two logical wires");
+    for(const auto& chain:made.Value().chains){Require(!chain.empty()&&chain.size()<=3,"exact compact pieces");
+        for(const auto& curve:chain)for(double t:{0.,.25,.5,.75,1.})RequireNear(spline.ClosestPoint(curve.Evaluate(t)).distance,0.,1e-7,"the original locus is unchanged");}
+}
+KACHA_V2_TEST(hover_edit_plan, closed_spline_split_retains_one_loop_with_a_new_seam) {
+    const auto spline=CurveSegment::MakeCubicBSpline({{-10,0,0},{0,10,0},{10,0,0},{0,-10,0},{-10,0,0},{0,10,0},{10,0,0}}).Value();
+    SnapScene scene;scene.curves={{Ent(1),Seg(1),spline,false},{Ent(2),Seg(2),Line({0,-20,0},{0,20,0}),false}};
+    HoverEditPick pick;pick.entityId=Ent(1);pick.segmentId=Seg(1);pick.parameter=.4;pick.point=spline.Evaluate(.4);
+    const auto made=PlanSplit(scene,pick,Tolerance());Require(made.HasValue(),made.FirstSummaryJa());
+    Require(made.Value().chains.size()==1,"the closed spline stays one logical contour");
+    const auto& chain=made.Value().chains.front();RequireNear((chain.front().StartPoint()-chain.back().EndPoint()).Length(),0.,1e-7,"both ends meet at the seam");
+}
 KACHA_V2_TEST_MAIN("hover_edit_plan_tests")

@@ -1,4 +1,5 @@
 #include "V2DrawingSelection.h"
+#include "V2FaceActions.h"
 #include "V2ToolSelection.h"
 //! 見え方と作業中グループのコマンド(V2MainWindow の一部)。
 //!
@@ -548,6 +549,7 @@ bool V2MainWindow::AppendSurfaceFacing(const kachakacha::v2::base::EntityId& id,
 
 void V2MainWindow::AlignViewToSelection(bool reverse)
 {
+    if(viewport_->Selection().entityIds.empty()&&V2FaceActions::AlignDrawingView(*this,reverse))return;
     using kachakacha::v2::view::BestFitNormal;
     using kachakacha::v2::view::ForwardOf;
     using kachakacha::v2::view::OrientationFacing;

@@ -1546,11 +1546,11 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
                 RESOURCE_LOCK cad_gui_package TIMEOUT 90)
         endif()
         # 全件は同じ1プロセス・同じ順序。各ケースの進捗停止はwrapperが180秒で失敗にする。
-        # 657件で900秒を超えるため、全件の総上限と個々の停止判定を分ける。
+        # 1091件の配布試験が旧総上限1800秒へ到達したため、総上限と個々の停止判定を分ける。
         set_tests_properties(v2_cad_next_smoke PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
             RESOURCE_LOCK cad_gui_package
-            TIMEOUT 1800
+            TIMEOUT 3600
         )
 
         # 配る形そのものを試す(WP-12)。
@@ -1573,7 +1573,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
                 SKIP_RETURN_CODE 77
                 RESOURCE_LOCK cad_gui_package
                 RUN_SERIAL TRUE
-                TIMEOUT 1800
+                TIMEOUT 3600
             )
         endif()
     endif()

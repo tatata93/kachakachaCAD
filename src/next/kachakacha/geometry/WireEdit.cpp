@@ -2,6 +2,7 @@
 
 #include "kachakacha/geometry/CornerCurves.h"
 #include "kachakacha/geometry/CurveIntersection.h"
+#include "kachakacha/geometry/PlanarOffsetInternal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -537,12 +538,13 @@ Result<CurveSegment> OffsetCurveInPlane(const CurveSegment& curve, Vector3 plane
             curve.ReferenceDirection(), radius);
     }
     case CurveKind::CubicBezier:
-    case CurveKind::CubicBSpline:
-        // 自由曲線の厳密オフセットは同じ次数では表せない。近似で誤魔化さない。
-        return Result<CurveSegment>::Failure(MakeError(kNotSupported,
-            "自由曲線のオフセットはまだ入っていません。",
-            "厳密なオフセットは同じ次数の曲線では表せないため、"
-            "近似で代用することはしません。"));
+    case CurveKind::CubicBSpline: {
+        const auto made=detail::OffsetCurvedContour({curve},unitNormal,distanceMm,GeometryTolerance::Default());
+        if(!made.HasValue())return Result<CurveSegment>::Failure(made.Diagnostics());
+        if(made.Value().size()!=1)return Result<CurveSegment>::Failure(MakeError(kNotSupported,
+            "この閉曲線は角の接続を含む輪郭としてオフセットしてください。",{}));
+        return Result<CurveSegment>::Success(made.Value().front(),made.Diagnostics());
+    }
     }
     return Result<CurveSegment>::Failure(MakeError(kNotSupported,
         "この種類はオフセットできません。", {}));

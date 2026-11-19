@@ -3,6 +3,7 @@
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/PlanarWireOffset.h"
 #include "kachakacha/geometry/CurveIntersection.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <cmath>
 #include <algorithm>
@@ -21,6 +22,7 @@ using kachakacha::v2::geometry::MeetLines;
 using kachakacha::v2::geometry::MirrorCurve;
 using kachakacha::v2::geometry::Normalized;
 using kachakacha::v2::geometry::OffsetCurveInPlane;
+using kachakacha::v2::geometry::OffsetCurvesInPlane;
 using kachakacha::v2::geometry::RotateCurve;
 using kachakacha::v2::geometry::ScaleCurve;
 using kachakacha::v2::geometry::TranslateCurve;
@@ -351,14 +353,19 @@ KACHA_V2_TEST(edit, offsetting_an_arc_inside_out_is_refused)
         "offsetting inward past the centre is refused");
 }
 
-KACHA_V2_TEST(edit, offsetting_a_free_curve_is_refused_not_approximated)
+KACHA_V2_TEST(edit, free_curve_offset_keeps_one_curve_and_reports_bounded_approximation)
 {
     const auto bezier = CurveSegment::MakeCubicBezier(
         {{0, 0, 0}, {0, 10, 0}, {10, 10, 0}, {10, 0, 0}}).Value();
     const auto offset = OffsetCurveInPlane(bezier, {0, 0, 1}, 2.0);
-    Require(!offset.HasValue(), "a free curve offset is refused");
-    RequireEqual(offset.Diagnostics().front().code, "GEO-E003",
-        "the refusal says the capability is missing, rather than degrading the curve");
+    Require(offset.HasValue(),offset.FirstMessageJa());
+    Require(offset.Value().Kind()==CurveKind::CubicBSpline,"the offset stays one smooth curve");
+    RequireEqual(offset.Diagnostics().front().code,"GEO-I001","the approximation is explicitly reported");
+    for(int i=0;i<=2000;++i){
+        const double t=double(i)/2000;
+        const auto ideal=bezier.Evaluate(t)+Normalized(Cross(Vector3{0,0,1},bezier.FirstDerivative(t)))*2.;
+        Require((offset.Value().Evaluate(t)-ideal).Length()<=1e-6,"the entire offset follows the requested side and distance");
+    }
 }
 
 // ---- 変換 ----
@@ -665,4 +672,96 @@ KACHA_V2_TEST(edit, open_offset_rejects_collapse_crossings_and_wrong_processing_
     Require(!OffsetCurvesInPlane(narrow,{1,0,0},.1).HasValue(),"a connected chain is not moved out of its processing plane");
 }
 
+// ADR 0033 / AT-WIR: geometry is checked against the normal-offset definition,
+// not against the fitting implementation or a screen polyline.
+namespace {
+void RequireCurveOffset(const CurveSegment& source,const CurveSegment& shifted,Vector3 normal,double distance) {
+    for(int i=0;i<=2000;++i){
+        const double t=double(i)/2000;
+        // The public spline derivative uses a one-sided 1e-6 step at its ends;
+        // use a finer independent difference for this model-tolerance check.
+        const double a=std::max(0.,t-1e-8),b=std::min(1.,t+1e-8);
+        const auto tangent=source.Kind()==CurveKind::CubicBSpline
+            ?(source.Evaluate(b)-source.Evaluate(a))*(1/(b-a)):source.FirstDerivative(t);
+        const auto expected=source.Evaluate(t)+Normalized(Cross(normal,tangent))*distance;
+        RequireNear(Distance(shifted.Evaluate(t),expected),0.,1e-6,"the requested signed normal distance is retained");
+    }
+}
+void RequireOffsetChain(const std::vector<CurveSegment>& made,bool closed) {
+    using namespace kachakacha::v2::geometry;
+    Require(!made.empty(),"the result is not empty");
+    for(std::size_t i=1;i<made.size();++i)
+        RequireNear(Distance(made[i-1].EndPoint(),made[i].StartPoint()),0.,1e-6,"the result stays connected");
+    if(closed)RequireNear(Distance(made.back().EndPoint(),made.front().StartPoint()),0.,1e-6,"the loop stays closed");
+    Require(FindSelfIntersections(made,closed,{}).HasValue(),"the result does not cross itself");
+}
+}
+KACHA_V2_TEST(edit, curved_offset_accepts_bspline_as_one_curve) {
+    const auto source=CurveSegment::MakeCubicBSpline({{-3,-1,0},{-2,0,0},{0,1,0},{2,-1,0},{4,0,0},{5,1,0}}).Value();
+    for(double distance:{-.2,.2}){
+        const auto made=OffsetCurvesInPlane({source},{0,0,1},distance);
+        Require(made.HasValue(),made.FirstMessageJa());Require(made.Value().size()==1,"one spline stays one selectable curve");
+        RequireCurveOffset(source,made.Value().front(),{0,0,1},distance);
+        RequireOffsetChain(made.Value(),false);
+    }
+}
+KACHA_V2_TEST(edit, curved_offset_is_independent_of_plane_orientation_position_and_direction) {
+    using namespace kachakacha::v2::geometry;
+    const auto n=Normalized(Vector3{.3,-.4,1}),u=Normalized(Vector3{1,0,-.3}),v=Cross(n,u);
+    const auto point=[&](double x,double y){return Vector3{1000,-2000,3000}+u*x+v*y;};
+    const auto source=CurveSegment::MakeCubicBezier({point(0,0),point(0,10),point(10,10),point(10,0)}).Value();
+    const auto poles=source.ControlPoints();
+    for(double distance:{-.4,.4}){
+        const auto made=OffsetCurvesInPlane({source},n,distance);Require(made.HasValue(),made.FirstMessageJa());
+        RequireCurveOffset(source,made.Value().front(),n,distance);
+        const auto reverse=OffsetCurvesInPlane({ReverseCurve(source).Value()},n,-distance);
+        Require(reverse.HasValue(),reverse.FirstMessageJa());
+        for(double t:{0.,.17,.37,.6,.83,1.})RequireNear(Distance(made.Value().front().Evaluate(t),reverse.Value().front().Evaluate(1-t)),
+            0.,2e-6,"reversing traversal and distance preserves the locus");
+    }
+    Require(source.ControlPoints()==poles,"the original control points remain untouched");
+}
+KACHA_V2_TEST(edit, curved_offset_keeps_a_mixed_rounded_loop_closed) {
+    using namespace kachakacha::v2::geometry;
+    const std::vector<CurveSegment> source{L({-10,10,0},{10,10,0}),L({10,10,0},{10,-4,0}),
+        CurveSegment::MakeCubicBezier({{10,-4,0},{10,-7.3137085,0},{7.3137085,-10,0},{4,-10,0}}).Value(),
+        L({4,-10,0},{-4,-10,0}),
+        CurveSegment::MakeCubicBezier({{-4,-10,0},{-7.3137085,-10,0},{-10,-7.3137085,0},{-10,-4,0}}).Value(),
+        L({-10,-4,0},{-10,10,0})};
+    for(double distance:{-.35,.35}){
+        auto shuffled=source;std::swap(shuffled[1],shuffled[4]);
+        const auto made=OffsetCurvesInPlane(shuffled,{0,0,1},distance);
+        Require(made.HasValue(),made.FirstMessageJa());RequireOffsetChain(made.Value(),true);
+        Require(made.Value().size()==source.size(),"smooth curved corners do not become fragments");
+        Require(std::count_if(made.Value().begin(),made.Value().end(),[](const auto& c){return c.Kind()==CurveKind::CubicBSpline;})==2,
+            "each curved side remains one spline");
+    }
+}
+KACHA_V2_TEST(edit, curved_offset_connects_outer_and_inner_sharp_corners) {
+    const auto source=CurveSegment::MakeCubicBezier({{0,0,0},{3,0,0},{7,4,0},{10,4,0}}).Value();
+    for(double distance:{-.5,.5}){
+        const auto made=OffsetCurvesInPlane({source,L({10,4,0},{10,12,0})},{0,0,1},distance);
+        Require(made.HasValue(),made.FirstMessageJa());RequireOffsetChain(made.Value(),false);
+        Require(std::count_if(made.Value().begin(),made.Value().end(),[](const auto& c){return c.Kind()==CurveKind::CubicBSpline;})==1,
+            "the sharp connection does not split the curved edge");
+        RequireNear(Distance(made.Value().front().StartPoint(),Vector3{0,distance,0}),0.,1e-6,"the free start is the shifted original start");
+        RequireNear(Distance(made.Value().back().EndPoint(),Vector3{10-distance,12,0}),0.,1e-6,"the free end is preserved");
+    }
+}
+KACHA_V2_TEST(edit, curved_offset_preserves_one_closed_spline) {
+    const auto source=CurveSegment::MakeCubicBSpline({{-10,0,0},{0,10,0},{10,0,0},{0,-10,0},{-10,0,0},{0,10,0},{10,0,0}}).Value();
+    for(double distance:{-.3,.3}){
+        const auto made=OffsetCurvesInPlane({source},{0,0,1},distance);
+        Require(made.HasValue(),made.FirstMessageJa());Require(made.Value().size()==1,"a smooth closed spline remains one curve");
+        RequireOffsetChain(made.Value(),true);RequireCurveOffset(source,made.Value().front(),{0,0,1},distance);
+    }
+}
+KACHA_V2_TEST(edit, curved_offset_refuses_collapse_nonplanar_input_and_partial_results) {
+    const auto source=CurveSegment::MakeCubicBezier({{0,0,0},{0,10,0},{10,10,0},{10,0,0}}).Value();
+    Require(!OffsetCurvesInPlane({source},{0,0,1},-5).HasValue(),"an offset beyond the curvature radius is refused");
+    Require(!OffsetCurvesInPlane({source},{1,0,0},.3).HasValue(),"the input is not silently flattened");
+    Require(!OffsetCurvesInPlane({L({40,0,0},{45,0,0}),source},{0,0,1},-5).HasValue(),"a failure does not return an earlier successful edge");
+    const auto unchanged=OffsetCurvesInPlane({source},{0,0,1},0);
+    Require(unchanged.HasValue()&&unchanged.Value().front().ControlPoints()==source.ControlPoints(),"zero distance preserves the original curve exactly");
+}
 KACHA_V2_TEST_MAIN("wire_edit_tests")

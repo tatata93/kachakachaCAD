@@ -1,4 +1,5 @@
 #include "kachakacha/geometry/PlanarWireOffset.h"
+#include "kachakacha/geometry/PlanarOffsetInternal.h"
 #include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireConnect.h"
@@ -79,36 +80,59 @@ base::Result<CurveSegment> TrimToJoints(const CurveSegment& curve,Vector3 start,
     return One::Failure(base::MakeError("GEO-E004","オフセットで辺がつぶれるか、向きが反転します。",
         "距離を小さくしてください。元の線は変更していません。"));
 }
-Out Independently(const std::vector<CurveSegment>& curves,Vector3 normal,double distance) {
+Out Independently(const std::vector<CurveSegment>& curves,Vector3 normal,double distance,
+    const GeometryTolerance& tolerance) {
     std::vector<CurveSegment> result;result.reserve(curves.size());
+    std::vector<base::Diagnostic> diagnostics;
     for(const auto& curve:curves){
-        const auto moved=OffsetCurveInPlane(curve,normal,distance);
-        if(!moved.HasValue())return Out::Failure(moved.Diagnostics());
-        result.push_back(moved.Value());
+        const bool free=curve.Kind()==CurveKind::CubicBezier||curve.Kind()==CurveKind::CubicBSpline;
+        if(free){
+            const auto moved=detail::OffsetCurvedContour({curve},Normalized(normal),distance,tolerance);
+            if(!moved.HasValue())return Out::Failure(moved.Diagnostics());
+            result.insert(result.end(),moved.Value().begin(),moved.Value().end());
+            diagnostics.insert(diagnostics.end(),moved.Diagnostics().begin(),moved.Diagnostics().end());
+        }else{
+            const auto moved=OffsetCurveInPlane(curve,normal,distance);
+            if(!moved.HasValue())return Out::Failure(moved.Diagnostics());
+            result.push_back(moved.Value());
+        }
     }
-    return Out::Success(std::move(result));
+    return Out::Success(std::move(result),std::move(diagnostics));
 }
 }
 
+std::optional<Vector3> detail::PrimitiveOffsetJoint(const CurveSegment& a,const CurveSegment& b,
+    Vector3 reference,Vector3 normal,const GeometryTolerance& tolerance) {
+    return Joint(a,b,reference,normal,tolerance);
+}
+base::Result<CurveSegment> detail::TrimOffsetPrimitive(const CurveSegment& curve,Vector3 start,
+    Vector3 end,const GeometryTolerance& tolerance) {return TrimToJoints(curve,start,end,tolerance);}
+
 Out OffsetCurvesInPlane(const std::vector<CurveSegment>& curves,Vector3 planeNormal,
     double distanceMm,const GeometryTolerance& tolerance) {
-    if(curves.size()<2)return Independently(curves,planeNormal,distanceMm);
+    if(curves.size()<2) {
+        if(curves.size()==1&&(curves.front().Kind()==CurveKind::CubicBezier||curves.front().Kind()==CurveKind::CubicBSpline))
+            return detail::OffsetCurvedContour(curves,Normalized(planeNormal),distanceMm,tolerance);
+        return Independently(curves,planeNormal,distanceMm,tolerance);
+    }
     const auto joined=JoinCurves(curves,tolerance.interactiveJoinMm);
-    if(!joined.HasValue())return Independently(curves,planeNormal,distanceMm);
+    if(!joined.HasValue())return Independently(curves,planeNormal,distanceMm,tolerance);
     const auto& ordered=joined.Value();const auto normal=Normalized(planeNormal);
     // Ordering nearby inputs must not silently repair an existing source gap.
     for(std::size_t i=1;i<ordered.size();++i)
         if(Distance(ordered[i-1].EndPoint(),ordered[i].StartPoint())>tolerance.modelLinearMm)
-            return Independently(curves,planeNormal,distanceMm);
+            return Independently(curves,planeNormal,distanceMm,tolerance);
     const bool closed=Distance(ordered.front().StartPoint(),ordered.back().EndPoint())<=tolerance.modelLinearMm;
     if(!std::isfinite(distanceMm)||normal==Vector3{})return Invalid("距離と加工平面を確認してください。");
+    bool free=false;
     for(const auto& curve:ordered){
         if(!CurveLiesInPlane(curve,ordered.front().StartPoint(),normal,tolerance.modelLinearMm))
             return Out::Failure(base::MakeError("GEO-E005","選んだ輪郭が加工平面上にありません。",
                 "加工平面を確認してください。"));
-        if(curve.Kind()!=CurveKind::Line&&curve.Kind()!=CurveKind::CircularArc)
-            return Independently(curves,planeNormal,distanceMm);
+        if(curve.Kind()==CurveKind::Circle)return Independently(curves,planeNormal,distanceMm,tolerance);
+        free=free||curve.Kind()==CurveKind::CubicBezier||curve.Kind()==CurveKind::CubicBSpline;
     }
+    if(free)return detail::OffsetCurvedContour(ordered,normal,distanceMm,tolerance);
     const auto originalCrossings=FindSelfIntersections(ordered,closed,tolerance);
     if(!originalCrossings.HasValue())return Out::Failure(originalCrossings.Diagnostics());
     if(!originalCrossings.Value().empty())return Invalid("元の輪郭が自身と交わっています。");

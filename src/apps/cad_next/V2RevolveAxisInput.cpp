@@ -14,12 +14,14 @@
 #include <QString>
 #include <QObject>
 #include <QPointer>
+#include <QComboBox>
 
 namespace {
 struct Controls final : QObject {
     explicit Controls(V2SurfaceDock& dock) : QObject(&dock) {}
     QPointer<QWidget> row;
     QPointer<QDoubleSpinBox> angle;
+    QPointer<QComboBox> output;
 };
 Controls* Inputs(V2SurfaceDock& dock)
 {
@@ -37,7 +39,8 @@ V2MainWindow* Owner(V2SurfaceDock& dock)
 void v2ui::InstallRevolveControls(V2SurfaceDock& dock, QVBoxLayout& layout)
 {
     auto* row = new QWidget(dock.widget()); row->setObjectName(QStringLiteral("surfaceRevolveControls"));
-    auto* line = new QHBoxLayout(row); line->setContentsMargins(0, 0, 0, 0);
+    auto* rows = new QVBoxLayout(row); rows->setContentsMargins(0, 0, 0, 0);
+    auto* line = new QHBoxLayout; rows->addLayout(line);
     line->addWidget(new QLabel(QStringLiteral("回す角度"), row));
     auto* angle = new V2NumericSpinBox(row); angle->setObjectName(QStringLiteral("surfaceRevolveAngle"));
     auto* inputs = new Controls(dock); inputs->row = row; inputs->angle = angle;
@@ -45,6 +48,12 @@ void v2ui::InstallRevolveControls(V2SurfaceDock& dock, QVBoxLayout& layout)
     angle->setKeyboardTracking(false); line->addWidget(angle, 1);
     auto* full = new QPushButton(QStringLiteral("一周"), row); full->setObjectName(QStringLiteral("surfaceRevolveFullTurn"));
     full->setToolTip(QStringLiteral("360°回して一周する面を下見します。")); line->addWidget(full);
+    auto* outputLine = new QHBoxLayout; rows->addLayout(outputLine);
+    outputLine->addWidget(new QLabel(QStringLiteral("生成するもの"),row));
+    auto* output = new QComboBox(row);output->setObjectName(QStringLiteral("surfaceRevolveOutput"));
+    output->addItems({QStringLiteral("面のみ"),QStringLiteral("ワイヤのみ"),QStringLiteral("面＋ワイヤ")});
+    output->setToolTip(QStringLiteral("ワイヤは端の円・円弧と回転後の形状線。一周では反対側の形状線を残します。元と同じ線は増やしません。"));
+    outputLine->addWidget(output,1);inputs->output=output;
     auto* window = Owner(dock);
     QObject::connect(angle, &QDoubleSpinBox::valueChanged, &dock, [window](double value) {
         if (window) window->ParameterDock().Apply(kachakacha::v2::app::ParameterId::RevolveAngleDeg, QString::number(value, 'g', 15));
@@ -53,7 +62,16 @@ void v2ui::InstallRevolveControls(V2SurfaceDock& dock, QVBoxLayout& layout)
         if (angle->value() != 360) angle->setValue(360);
         else if (window) window->ParameterDock().Apply(kachakacha::v2::app::ParameterId::RevolveAngleDeg, QStringLiteral("360"));
     });
+    QObject::connect(output,&QComboBox::currentIndexChanged,&dock,[window] {
+        if(window){window->RefreshSurfacePreview();window->RefreshSurfaceDock();}
+    });
     layout.addWidget(row); row->hide();
+}
+
+v2ui::RevolveOutput v2ui::RevolveOutputOf(V2SurfaceDock& dock)
+{
+    const auto* inputs=Inputs(dock);
+    return inputs && inputs->output ? static_cast<RevolveOutput>(inputs->output->currentIndex()) : RevolveOutput::Surface;
 }
 
 void v2ui::RefreshRevolveControls(V2SurfaceDock& dock, bool visible)

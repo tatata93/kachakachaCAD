@@ -1,6 +1,7 @@
 #include "V2SelectionRoleInputs.h"
 #include "kachakacha/app/PlaneFocus.h"
 #include "V2OffsetTool.h"
+#include "V2WireEditEvaluation.h"
 #include "V2PointTransform.h"
 #include "kachakacha/document/Dimension.h"
 //! 線の編集コマンド(V2MainWindow の一部)。
@@ -667,7 +668,7 @@ void V2MainWindow::RunWireTransform(
         return;
     }
     const auto computed =
-        kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+        v2ui::EvaluateWireEdit(definition,inputs,session_->GetDocument().Snapshot().settings.tolerance);
     if (!computed.HasValue()) {
         ReportDiagnostics(computed.Diagnostics());
         return;
@@ -765,7 +766,7 @@ void V2MainWindow::RunWireTransformEach(
             if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
                 continue;   // 線でないもの(点など)は直す相手にしない
             }
-            const auto computed = kachakacha::v2::document::EvaluateWireTransform(definition, curves);
+            const auto computed = v2ui::EvaluateWireEdit(definition,curves,document.Snapshot().settings.tolerance);
             if (!computed.HasValue()) {
                 ReportDiagnostics(computed.Diagnostics());
                 SetStatus(labelJa + QStringLiteral(": 「%1」を直せなかったので、どの線も変えていません。")
@@ -992,7 +993,7 @@ bool V2MainWindow::TransformOneWire(
         return false;
     }
     const auto computed =
-        kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+        v2ui::EvaluateWireEdit(definition,inputs,session_->GetDocument().Snapshot().settings.tolerance);
     if (!computed.HasValue()) {
         ReportDiagnostics(computed.Diagnostics());
         return false;

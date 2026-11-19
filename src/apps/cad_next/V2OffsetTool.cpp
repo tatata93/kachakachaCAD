@@ -2,6 +2,7 @@
 #include <QString>
 #include <QWidget>
 #include "V2OffsetTool.h"
+#include "V2WireEditEvaluation.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2OperationPanelHost.h"
@@ -21,20 +22,23 @@ base::Result<std::vector<geometry::CurveSegment>> PreviewOffsets(V2MainWindow& w
     const domain::TransformWireDefinition& definition) {
     using Out=base::Result<std::vector<geometry::CurveSegment>>;
     const auto& selection=w.Viewport().Selection();
+    const auto tolerance=w.Session().GetDocument().Snapshot().settings.tolerance;
     if(selection.entityIds.size()<=1)
-        return document::EvaluateWireTransform(definition,app::SelectedCurves(selection,w.Session().Scene()));
+        return v2ui::EvaluateWireEdit(definition,app::SelectedCurves(selection,w.Session().Scene()),tolerance);
     std::vector<geometry::CurveSegment> combined;
+    std::vector<base::Diagnostic> diagnostics;
     // Confirmation offsets each selected wire separately. Preview the same groups,
     // rather than accidentally joining edges from different objects into a contour.
     for(const auto id:selection.entityIds){
         app::SelectionSet one;one.entityIds={id};
         for(const auto& ref:selection.ordered)if(ref.entityId==id)one.ordered.push_back(ref);
         const auto curves=app::SelectedCurves(one,w.Session().Scene());if(curves.empty())continue;
-        const auto made=document::EvaluateWireTransform(definition,curves);
+        const auto made=v2ui::EvaluateWireEdit(definition,curves,tolerance);
         if(!made.HasValue())return Out::Failure(made.Diagnostics());
         combined.insert(combined.end(),made.Value().begin(),made.Value().end());
+        diagnostics.insert(diagnostics.end(),made.Diagnostics().begin(),made.Diagnostics().end());
     }
-    return Out::Success(std::move(combined));
+    return Out::Success(std::move(combined),std::move(diagnostics));
 }
 }
 void V2OffsetTool::Open(V2MainWindow& w) {
@@ -56,8 +60,9 @@ V2OffsetTool::V2OffsetTool(V2MainWindow& w):QWidget(&w),window_(w) {
     layout->addWidget(plane_);layout->addWidget(new QLabel(QStringLiteral("距離（符号で反転）"),this));
     distance_=new V2NumericSpinBox(this);distance_->setObjectName(QStringLiteral("offsetDistance"));
     distance_->setRange(-1000,1000);distance_->setDecimals(3);distance_->setSuffix(QStringLiteral(" mm"));
+    distance_->setKeyboardTracking(false);
     distance_->setValue(app::ParameterValueOf(w.ParameterDock().Values(),app::ParameterId::OffsetDistanceMm));layout->addWidget(distance_);
-    status_=new QLabel(this);status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();
+    status_=new QLabel(this);status_->setObjectName(QStringLiteral("offsetStatus"));status_->setWordWrap(true);layout->addWidget(status_);layout->addStretch();
     auto* confirm=new QPushButton(QStringLiteral("確定 Enter"),this);confirm->setObjectName(QStringLiteral("offsetConfirm"));layout->addWidget(confirm);
     auto* clear=new QPushButton(QStringLiteral("入力を取り消す Esc"),this);layout->addWidget(clear);
     auto* done=new QPushButton(QStringLiteral("ツール一覧に戻る"),this);layout->addWidget(done);
@@ -84,6 +89,7 @@ base::Result<modeling::WorkPlaneFrame> V2OffsetTool::PlaneFor(V2MainWindow& w,co
 void V2OffsetTool::Refresh(V2MainWindow& w){if(auto* tool=Active(w))tool->Preview();}
 void V2OffsetTool::Preview() {
     auto& view=window_.Viewport();view.HideToolPreview();
+    status_->setToolTip({});
     const auto inputs=app::SelectedCurves(view.Selection(),window_.Session().Scene());
     const auto plane=PlaneFor(window_,inputs);
     if(!plane.HasValue()){status_->setText(QString::fromStdString(plane.FirstSummaryJa())+QStringLiteral(" 平面候補を変更すると3Dで確認できます。"));return;}
@@ -91,8 +97,16 @@ void V2OffsetTool::Preview() {
     const auto made=PreviewOffsets(window_,d);
     if(!made.HasValue()){status_->setText(QString::fromStdString(made.FirstSummaryJa()));return;}
     view.ShowToolPreview(app::SurfaceBoundaryLines(made.Value(),24));
-    status_->setText(QStringLiteral("加工平面：%1。%2辺の下見。Enterで確定、Escで入力だけ取り消します。")
-        .arg(plane_->currentText()).arg(inputs.size()));
+    auto text=QStringLiteral("加工平面：%1。%2辺の下見。Enterで確定、Escで入力だけ取り消します。")
+        .arg(plane_->currentText()).arg(made.Value().size());
+    QString details;
+    for(const auto& diagnostic:made.Diagnostics()) {
+        const auto line=QString::fromStdString(diagnostic.summaryJa);
+        details+=line+QStringLiteral("\n");
+        if(details.count('\n')<=4)text+=QStringLiteral("\n")+line;
+    }
+    if(made.Diagnostics().size()>4)text+=QStringLiteral("\n残り%1件の計測値はここにポインターを置いて確認できます。").arg(made.Diagnostics().size()-4);
+    status_->setToolTip(details);status_->setText(text);
 }
 void V2OffsetTool::Confirm() {
     if(app::SelectedCurves(window_.Viewport().Selection(),window_.Session().Scene()).empty()){Preview();return;}

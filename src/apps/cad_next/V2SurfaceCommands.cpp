@@ -8,6 +8,7 @@
 #include "V2ShapeLifetime.h"
 #include "V2DocumentTiming.h"
 #include "V2SurfaceAnalysisTool.h"
+#include "V2RevolveOutput.h"
 
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
@@ -351,6 +352,16 @@ void V2MainWindow::RefreshSurfacePreview()
             snapshot->batch.emplace_back(table, *built);
         }
     }
+    const auto output=v2ui::RevolveOutputOf(*surfaceDock_);
+    if(snapshot && surfaceInput_.method==GuideSurfaceMethod::Revolve && output!=v2ui::RevolveOutput::Surface) {
+        const auto wires=v2ui::RevolveWires(*snapshot,session_->Scene(),session_->GetDocument().Snapshot());
+        if(!wires.HasValue()) { surfaceSolverNote_=wires.FirstSummaryJa();v2ui::ReleaseSurfacePreview(snapshot);return; }
+        if(output==v2ui::RevolveOutput::Wires)lines.clear();
+        for(const auto& group:wires.Value()) {
+            const auto preview=kachakacha::v2::app::SurfaceBoundaryLines(group,48);
+            lines.insert(lines.end(),preview.begin(),preview.end());
+        }
+    }
     surfaceSnapshot_ = std::move(snapshot);
     // 採用した断面の並びを状態へ書き戻す。画面の「3. 断面順」と 3D の札は、
     // 押した順ではなく **この順** を出す。手動固定なら渡した順がそのまま返ってくる。
@@ -682,6 +693,18 @@ void V2MainWindow::ConfirmSurface()
     }
     for (const auto& id : surfaceInput_.centerlines) {
         inputs.push_back(id);
+    }
+    const auto output=v2ui::RevolveOutputOf(*surfaceDock_);
+    if(surfaceInput_.method==GuideSurfaceMethod::Revolve && output!=v2ui::RevolveOutput::Surface) {
+        const auto made=v2ui::CommitRevolveOutput(*this,snapshot,output,[&](const auto& table,const auto& built) {
+            return AdoptGuideSurface(table,built,inputs,"面");
+        });
+        EndSurfacePreview();AdoptCurrentDocument();
+        if(!made.HasValue()){ReportDiagnostics(made.Diagnostics());return;}
+        kachakacha::v2::app::SelectionSet selected;selected.entityIds=made.Value();viewport_->SetSelection(selected);
+        SetStatus(output==v2ui::RevolveOutput::Wires?QStringLiteral("回転の輪郭ワイヤを作りました。")
+            :QStringLiteral("回転面と輪郭ワイヤを作りました。1回の取り消しでまとめて戻せます。"));
+        return;
     }
     // 一括は 1 回の取り消しで全部戻るようにまとめる(配列の道具と同じ)。
     const bool batch = !snapshot.batch.empty();

@@ -5,6 +5,8 @@ class V2SurfaceDock;
 class QVBoxLayout;
 
 namespace v2ui {
+enum class RevolveOutput { Surface, Wires, Both };
+RevolveOutput RevolveOutputOf(V2SurfaceDock&);
 void InstallRevolveControls(V2SurfaceDock&, QVBoxLayout&);
 void RefreshRevolveControls(V2SurfaceDock&, bool visible);
 // A circle/arc supplies a center and normal, not another revolved profile.

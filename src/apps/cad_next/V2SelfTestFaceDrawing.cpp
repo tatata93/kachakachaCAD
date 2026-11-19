@@ -7,6 +7,7 @@
 #include "V2ExtrudeDock.h"
 #include "V2ProjectionTool.h"
 #include "V2ParameterDock.h"
+#include "V2OffsetTool.h"
 #include "V2SelfTestPrimitiveUi.h"
 #include "V2SelfTestDeleteDialog.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -32,6 +33,8 @@
 #include <QCheckBox>
 #include <QStyle>
 #include <QStyleOptionViewItem>
+#include <QElapsedTimer>
+#include <QAbstractItemView>
 #include <algorithm>
 #include <cmath>
 
@@ -221,6 +224,7 @@ bool SelectTree(V2MainWindow& w, EntityId id)
     const auto at = tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
     if (tree->itemAt(at) != row) return false;
     Click(*tree->viewport(), at);
+    QApplication::processEvents(); // Drain the deferred item intake before changing tool roles.
     return true;
 }
 
@@ -837,7 +841,39 @@ bool OutlineUnsupportedProjection(V2MainWindow& w)
     return Explain("Enterでも部分生成しない", w.Session().GetDocument().Revision() == revision);
 }
 
-bool CircleAxisRevolve(V2MainWindow& w, bool arc, bool tilted, bool pointed = false)
+bool ChooseCombo(V2MainWindow& w,const char* name,int index)
+{
+    auto* combo=w.findChild<QComboBox*>(name);
+    if(!Explain("出力の選択欄が見えて使える",combo&&combo->isVisible()&&combo->isEnabled()))return false;
+    combo->setFocus();
+    for(int step=-1;step<index;++step) {
+        QKeyEvent event(QEvent::KeyPress,step<0?Qt::Key_Home:Qt::Key_Down,Qt::NoModifier);
+        QApplication::sendEvent(combo,&event);QApplication::processEvents();
+    }
+    return Explain(("出力候補を選択: expected="+std::to_string(index)+" actual="+std::to_string(combo->currentIndex())).c_str(),combo->currentIndex()==index);
+}
+
+void KeepProofDocument(V2MainWindow& w,const QString& name)
+{
+    const auto dir=qEnvironmentVariable("KACHACAD_FACE_DRAWING_PROOF_DIR");if(dir.isEmpty())return;
+    const auto path=QDir(dir).absoluteFilePath(name+".kcd2");
+    w.SetPathChooser([path](bool){return path;});w.RunCommand("file.save_as");
+    w.SetPathChooser([](bool){return QString();});
+}
+
+bool ClickPanelConfirm(V2MainWindow& w)
+{
+    for(auto* button:w.findChildren<QPushButton*>("panelConfirm")) {
+        if(!button->isVisible()||!button->isEnabled())continue;
+        const auto at=button->mapToGlobal(button->rect().center());
+        for(auto* parent=button->parentWidget();parent;parent=parent->parentWidget())
+            if(!parent->rect().contains(parent->mapFromGlobal(at)))return Explain("確定ボタンが切れていない",false);
+        Click(*button,button->rect().center());return true;
+    }
+    return Explain("見えて押せる確定ボタン",false);
+}
+
+bool CircleAxisRevolve(V2MainWindow& w, bool arc, bool tilted, bool pointed = false,int mode=0,bool partial=false,bool cancel=false)
 {
     Setup(w);
     const auto p = [tilted](Vector3 a) { return tilted ? Vector3{a.x + 10, -a.z + 5, a.y + 12} : a; };
@@ -850,6 +886,7 @@ bool CircleAxisRevolve(V2MainWindow& w, bool arc, bool tilted, bool pointed = fa
     const auto profileCurve = geometry::CurveSegment::MakeCubicBezier({p({3,0,0}),p({4,0,2}),p({pointed ? 2. : 4.,0,pointed ? 6. : 4.}),p({endRadius,0,6})}).Value();
     const auto profile = w.AddPlainWire({profileCurve}, "回す形状線", false);
     if (!w.SaveAndReopen("circle-axis-source.kcd2")) return false;
+    if(!tilted&&!pointed&&mode==0)KeepProofDocument(w,"revolve-input");
     w.Viewport().SetViewDirection(ViewDirection::Isometric); w.Viewport().FitToDocument();
     w.Viewport().SetSelection({}); w.RunCommand("guide.revolve");
     if (!w.SurfaceDock().ClickActivate(modeling::ChainRole::Section) || !SelectTree(w, profile)) return false;
@@ -858,28 +895,60 @@ bool CircleAxisRevolve(V2MainWindow& w, bool arc, bool tilted, bool pointed = fa
     if (!Explain("円の軸入力と角度欄を表示", angle && angle->isVisible())) return false;
     angle->setValue(180);
     if (!Explain("表示中の角度欄が入力値へ反映", std::abs(app::ParameterValueOf(w.ParameterDock().Values(), app::ParameterId::RevolveAngleDeg)-180) < 1e-8)) return false;
-    if (!ClickNamed(w, "surfaceRevolveFullTurn")) return false;
+    if (!partial && !ClickNamed(w, "surfaceRevolveFullTurn")) return false;
+    if(!ChooseCombo(w,"surfaceRevolveOutput",mode))return false;
+    if(mode==2)Shot(w,"revolve-output-both-preview");
     Shot(w, "circle-axis-revolve-preview");
     if (!Explain(("円から軸を決めた下見: " + w.StatusText().toStdString()).c_str(), w.SurfaceDock().CanConfirm() && w.SurfacePreviewShown())) return false;
-    w.SurfaceDock().PressConfirm();
+    const auto preview=w.Viewport().ToolPreview();
+    if(cancel) {
+        QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(&w.Viewport(),&escape);
+        const bool unchanged=CountOfKind(w,EntityKind::Wire)==2&&CountOfKind(w,EntityKind::GuideSurface)==0;
+        if(auto* combo=w.findChild<QComboBox*>("surfaceRevolveOutput"))combo->setCurrentIndex(0);
+        return Explain("出力の下見取消は文書へ何も追加しない",unchanged);
+    }
+    if(!ClickPanelConfirm(w))return false;
     const auto& table = w.GuideRoleTable();
-    if (!Explain("一周する面を生成、軸ワイヤーは増やさない", CountOfKind(w, EntityKind::GuideSurface) == 1
-            && CountOfKind(w, EntityKind::Wire) == 2 && (table.revolveAxisPoint-p({0,0,0})).Length() < 1e-7
-            && (table.revolveAxisDirection-normal).Length() < 1e-7 && std::abs(table.revolveAngleRad-2*3.141592653589793) < 1e-8)) return false;
+    const int added=mode==0?0:partial?3:pointed?1:arc?3:2;
+    if (!Explain("指定した生成物だけ作り元の2本を保持",CountOfKind(w,EntityKind::GuideSurface)==(mode==1?0:1)
+            &&CountOfKind(w,EntityKind::Wire)==2+added&&w.Session().GetDocument().FindEntity(axis)
+            &&w.Session().GetDocument().FindEntity(profile))) return false;
+    if(mode!=1&&!Explain("円の中心と向きで指定した角度を回す", (table.revolveAxisPoint-p({0,0,0})).Length()<1e-7
+            &&(table.revolveAxisDirection-normal).Length()<1e-7&&std::abs(table.revolveAngleRad-(partial?1:2)*3.141592653589793)<1e-8))return false;
+    if(mode!=0) {
+        int freeCurves=0,circles=0,arcs=0;
+        for(const auto& curve:w.Session().Scene().curves) {
+            if(curve.entityId==axis||curve.entityId==profile)continue;
+            const auto* entity=w.Session().GetDocument().FindEntity(curve.entityId);
+            if(!entity||entity->kind!=EntityKind::Wire)continue;
+            freeCurves+=curve.segment.Kind()==geometry::CurveKind::CubicBezier;
+            circles+=curve.segment.Kind()==geometry::CurveKind::Circle;
+            arcs+=curve.segment.Kind()==geometry::CurveKind::CircularArc;
+            for(int sample=0;sample<=8;++sample) {
+                const auto point=curve.segment.Evaluate(sample/8.);double distance=1e9;
+                for(const auto& line:preview)for(const auto& q:line)distance=std::min(distance,(q-point).Length());
+                if(!Explain("確定する輪郭は下見した位置にある",distance<.16))return false;
+            }
+        }
+        if(!Explain("曲線1本と端の円・円弧を保持し細分化しない",freeCurves==1&&circles==(partial||pointed?0:arc?2:1)&&arcs==(partial?2:0)))return false;
+    }
     bool opposite = false, rear = false;
     for (const auto& shape : w.Viewport().ShapeViews()) for (const auto& triangle : shape.mesh.triangles)
         for (const auto& point : triangle.points) {
             if ((point-p({-3,0,0})).Length() < .1) opposite = true;
             if ((point-p({-endRadius,0,6})).Length() < .1) rear = true;
         }
-    if (!Explain("反対側と奥側の輪郭まで曲面がある", opposite && rear)) return false;
+    if(mode!=1&&!Explain("反対側と奥側の輪郭まで曲面がある",opposite&&rear))return false;
     w.RunCommand("selection.activate"); w.Viewport().SetSelection({});
     w.Viewport().SetViewCenter(p({0,0,3})); w.Viewport().SetVisibleWidthMm(18);
     Shot(w, pointed ? "circle-axis-pointed-result" : "circle-axis-revolve-result");
+    if(mode!=0)KeepProofDocument(w,QStringLiteral("revolve-output-%1-%2").arg(mode).arg(partial?"partial":"full"));
     w.RunCommand("edit.undo");
-    if (!Explain("一度のUndoで面だけ戻る", CountOfKind(w, EntityKind::GuideSurface) == 0 && CountOfKind(w, EntityKind::Wire) == 2)) return false;
+    if (!Explain("一度のUndoで生成物全部が戻り元の線が残る",CountOfKind(w,EntityKind::GuideSurface)==0&&CountOfKind(w,EntityKind::Wire)==2))return false;
     w.RunCommand("edit.redo");
-    return w.SaveAndReopen("circle-axis-result.kcd2") && w.RebuildProblems().isEmpty();
+    if(auto* combo=w.findChild<QComboBox*>("surfaceRevolveOutput"))combo->setCurrentIndex(0);
+    return w.SaveAndReopen("circle-axis-result.kcd2")&&w.RebuildProblems().isEmpty()
+        &&CountOfKind(w,EntityKind::Wire)==2+added&&CountOfKind(w,EntityKind::GuideSurface)==(mode==1?0:1);
 }
 
 bool OwnerOutline(V2MainWindow& w)
@@ -895,6 +964,160 @@ bool OwnerOutline(V2MainWindow& w)
     w.Viewport().SetViewDirection(ViewDirection::Isometric); w.Viewport().SetViewCenter({-6,3.5,21});
     w.Viewport().SetVisibleWidthMm(35);
     return CopiedOutline(w, source, false, true, true);
+}
+
+bool RevolveBatchOutput(V2MainWindow& w,bool wiresOnly)
+{
+    Setup(w);
+    const auto a=geometry::CurveSegment::MakeCubicBezier({{3,0,0},{4,0,2},{4,0,4},{2,0,6}}).Value();
+    const auto b=geometry::CurveSegment::MakeCubicBezier({{2,0,6},{2,0,8},{4,0,10},{3,0,12}}).Value();
+    const auto first=w.AddPlainWire({a},"回す形状線",false),second=w.AddPlainWire({b},"回す形状線",false);
+    const auto axis=w.AddPlainWire({geometry::CurveSegment::MakeLine({0,0,-2},{0,0,14}).Value()},"回転軸",false);
+    if(first.IsNil()||second.IsNil()||axis.IsNil()||!w.SaveAndReopen("revolve-batch-source.kcd2"))return false;
+    w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();w.Viewport().SetSelection({});w.RunCommand("guide.revolve");
+    if(!w.SurfaceDock().ClickActivate(modeling::ChainRole::Section)||!SelectTree(w,first)
+        ||!w.SurfaceDock().ClickActivate(modeling::ChainRole::Section)||!SelectTree(w,second))return false;
+    if(!Explain("軸を選ぶ前に断面2本を取り込む",w.SurfaceInput().sections.size()==2&&w.SurfaceInput().guides.empty()))return false;
+    if(!w.SurfaceDock().ClickActivate(modeling::ChainRole::GuideU)||!SelectTree(w,axis))return false;
+    QApplication::processEvents();
+    if(!Explain(("複数断面と軸の入力: "+w.StatusText().toStdString()).c_str(),
+            w.SurfaceInput().sections.size()==2&&w.SurfaceInput().guides.size()==1))return false;
+    if(!ClickNamed(w,"surfaceRevolveFullTurn"))return false;
+    if(wiresOnly){w.resize(900,650);QApplication::processEvents();}
+    const auto revision=w.Session().GetDocument().Revision();
+    Shot(w,wiresOnly?"revolve-small-output-preview":"revolve-batch-output-preview");
+    if(!ChooseCombo(w,"surfaceRevolveOutput",wiresOnly?1:2)
+            ||!Explain("生成物の選択だけでは確定しない",revision==w.Session().GetDocument().Revision())
+            ||!ClickPanelConfirm(w))return false;
+    const int surfaces=wiresOnly?0:2;
+    if(!Explain("断面2本から一括生成し共有する端の円は1本だけ",CountOfKind(w,EntityKind::Wire)==8
+            &&CountOfKind(w,EntityKind::GuideSurface)==surfaces))return false;
+    int circles=0,profiles=0;
+    for(const auto& c:w.Session().Scene().curves) {
+        const auto* e=w.Session().GetDocument().FindEntity(c.entityId);
+        if(!e||e->kind!=EntityKind::Wire||c.entityId==first||c.entityId==second||c.entityId==axis)continue;
+        circles+=c.segment.Kind()==geometry::CurveKind::Circle;profiles+=c.segment.Kind()==geometry::CurveKind::CubicBezier;
+    }
+    if(!Explain("細切れにせず形状線2本と端の円3本",circles==3&&profiles==2))return false;
+    w.RunCommand("selection.activate");Shot(w,wiresOnly?"revolve-small-screen-wires":"revolve-batch-both");
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Wire)!=3||CountOfKind(w,EntityKind::GuideSurface)!=0)return false;
+    w.RunCommand("edit.redo");if(auto* combo=w.findChild<QComboBox*>("surfaceRevolveOutput"))combo->setCurrentIndex(0);
+    return w.SaveAndReopen("revolve-batch-result.kcd2")&&w.RebuildProblems().isEmpty()
+        &&CountOfKind(w,EntityKind::Wire)==8&&CountOfKind(w,EntityKind::GuideSurface)==surfaces;
+}
+
+bool OffsetMultipleFree(V2MainWindow& w)
+{
+    Setup(w);
+    const auto curve=[](double y){return geometry::CurveSegment::MakeCubicBezier({{-10,y,12},{-10,y+10,12},{10,y+10,12},{10,y,12}}).Value();};
+    const auto a=curve(-16),b=curve(4);
+    const auto first=w.AddPlainWire({a},"曲線",false),second=w.AddPlainWire({b},"曲線",false);
+    if(first.IsNil()||second.IsNil()||!w.SaveAndReopen("offset-multiple-source.kcd2"))return false;
+    w.Viewport().SetSelection({});V2OffsetTool::Open(w);
+    if(!ClickWorld(w,a.Evaluate(.4))||!ClickWorld(w,b.Evaluate(.4)))return false;
+    auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");auto* status=w.findChild<QLabel*>("offsetStatus");
+    if(!distance||!status)return false;distance->setValue(-.2);V2OffsetTool::Refresh(w);
+    if(!Explain("2本を3Dで続けて選べ、両方の誤差を表示",w.Viewport().Selection().entityIds.size()==2
+            &&status->text().count("RMS")==2&&!w.Viewport().ToolPreview().empty())||!ClickNamed(w,"offsetConfirm"))return false;
+    if(CountOfKind(w,EntityKind::Wire)!=4)return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    if(!Explain("2本のオフセットも1回のUndoで戻る",CountOfKind(w,EntityKind::Wire)==2
+        &&w.Session().GetDocument().FindEntity(first)&&w.Session().GetDocument().FindEntity(second)))return false;
+    w.RunCommand("edit.redo");return w.SaveAndReopen("offset-multiple-result.kcd2")&&w.RebuildProblems().isEmpty();
+}
+
+bool RevolveAfterSurface(V2MainWindow& w)
+{
+    if(!CircleAxisRevolve(w,false,false))return false;
+    EntityId axis,profile;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities) {
+        if(entity.kind!=EntityKind::Wire)continue;
+        if(entity.displayName=="中心と向き")axis=entity.id;
+        if(entity.displayName=="回す形状線")profile=entity.id;
+    }
+    w.Viewport().SetSelection({});w.RunCommand("guide.revolve");
+    if(axis.IsNil()||profile.IsNil()||!w.SurfaceDock().ClickActivate(modeling::ChainRole::Section)||!SelectTree(w,profile)
+        ||!w.SurfaceDock().ClickActivate(modeling::ChainRole::GuideU)||!SelectTree(w,axis)
+        ||!ChooseCombo(w,"surfaceRevolveOutput",1)||!ClickPanelConfirm(w))return false;
+    if(!Explain("面の表示エッジが既にあっても編集ワイヤを生成する",CountOfKind(w,EntityKind::GuideSurface)==1&&CountOfKind(w,EntityKind::Wire)==4))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    const bool kept=CountOfKind(w,EntityKind::GuideSurface)==1&&CountOfKind(w,EntityKind::Wire)==2;
+    if(auto* combo=w.findChild<QComboBox*>("surfaceRevolveOutput"))combo->setCurrentIndex(0);
+    return Explain("輪郭のUndoで既存の面を消さない",kept);
+}
+
+bool OffsetFreeInput(V2MainWindow& w,EntityId source,bool tree,bool invalid=false)
+{
+    const auto original=w.Session().Scene().curves;
+    const int wires=CountOfKind(w,EntityKind::Wire),surfaces=CountOfKind(w,EntityKind::GuideSurface);
+    w.Viewport().SetSelection({});V2OffsetTool::Open(w);
+    auto at=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==source;});
+    if(at==original.end()||!(tree?SelectTree(w,source):ClickWorld(w,at->segment.Evaluate(.4))))return false;
+    auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");auto* status=w.findChild<QLabel*>("offsetStatus");
+    if(!distance||!status)return false;
+    const auto revision=w.Session().GetDocument().Revision();
+    const bool free=std::any_of(original.begin(),original.end(),[&](const auto& c){return c.entityId==source
+        &&(c.segment.Kind()==geometry::CurveKind::CubicBezier||c.segment.Kind()==geometry::CurveKind::CubicBSpline);});
+    QElapsedTimer elapsed;elapsed.start();distance->setValue(.2);V2OffsetTool::Refresh(w);
+    if(!Explain(("曲線の下見計測 "+std::to_string(elapsed.elapsed())+" ms: "+status->text().toStdString()).c_str(),
+            invalid?w.Viewport().ToolPreview().empty():!w.Viewport().ToolPreview().empty()
+                &&(!free||(status->text().contains(QStringLiteral("偏差上限"))&&status->text().contains("RMS")))))return false;
+    if(!Explain("下見と距離変更で文書を変更しない",w.Session().GetDocument().Revision()==revision))return false;
+    Shot(w,invalid?"curve-offset-refused":"curve-offset-preview");
+    if(free&&!invalid)Shot(w,"free-curve-offset-error-preview");
+    if(!ClickNamed(w,"offsetConfirm"))return false;
+    if(invalid)return Explain("非平面の曲線を黙って平面化せず確定しない",w.Session().GetDocument().Revision()==revision&&CountOfKind(w,EntityKind::Wire)==wires);
+    if(!Explain("人が選んだ曲線からワイヤ1本を追加",CountOfKind(w,EntityKind::Wire)==wires+1&&CountOfKind(w,EntityKind::GuideSurface)==surfaces))return false;
+    std::vector<geometry::CurveSegment> result;
+    for(const auto& curve:w.Session().Scene().curves) {
+        const auto old=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==curve.entityId&&c.segmentId==curve.segmentId;});
+        if(old==original.end()){result.push_back(curve.segment);continue;}
+        for(double t:{0.,.25,.5,.75,1.})if(!Explain("元の曲線とUUIDはそのまま",(old->segment.Evaluate(t)-curve.segment.Evaluate(t)).Length()<1e-9))return false;
+    }
+    const auto sourceCount=std::count_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==source;});
+    if(!Explain("曲線の計算分割を細かなワイヤへ変換しない",result.size()==static_cast<std::size_t>(sourceCount)
+            &&(!free||std::any_of(result.begin(),result.end(),[](const auto& c){return c.Kind()==geometry::CurveKind::CubicBSpline;}))))return false;
+    w.RunCommand("selection.activate");Shot(w,"curve-offset-result");
+    w.RunCommand("edit.undo");if(CountOfKind(w,EntityKind::Wire)!=wires)return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("curved-offset-result.kcd2")&&w.RebuildProblems().isEmpty()&&CountOfKind(w,EntityKind::Wire)==wires+1;
+}
+
+bool CurvedOffsetFixture(V2MainWindow& w,int mode)
+{
+    Setup(w);
+    const auto p=[mode](double x,double y){return mode==2?Vector3{x,y,12+.2*x+.3*y}:Vector3{x,y,12};};
+    std::vector<geometry::CurveSegment> curves;
+    if(mode==0||mode==4)curves.push_back(geometry::CurveSegment::MakeCubicBezier(
+        {p(-10,0),p(-10,10),mode==4?Vector3{10,10,15}:p(10,10),p(10,0)}).Value());
+    if(mode==1)curves.push_back(geometry::CurveSegment::MakeCubicBSpline({p(-12,-4),p(-8,0),p(0,4),p(8,-4),p(16,0),p(20,4)}).Value());
+    if(mode==3)curves.push_back(geometry::CurveSegment::MakeCubicBSpline({p(-10,0),p(0,10),p(10,0),p(0,-10),p(-10,0),p(0,10),p(10,0)}).Value());
+    const auto line=[&](double ax,double ay,double bx,double by){return geometry::CurveSegment::MakeLine(p(ax,ay),p(bx,by)).Value();};
+    if(mode==2)curves={line(-10,10,10,10),line(10,10,10,-4),
+        geometry::CurveSegment::MakeCubicBezier({p(10,-4),p(10,-7.3137085),p(7.3137085,-10),p(4,-10)}).Value(),line(4,-10,-4,-10),
+        geometry::CurveSegment::MakeCubicBezier({p(-4,-10),p(-7.3137085,-10),p(-10,-7.3137085),p(-10,-4)}).Value(),line(-10,-4,-10,10)};
+    const auto source=w.AddPlainWire(curves,"曲線の入力",false);
+    if(source.IsNil()||!w.SaveAndReopen("curved-offset-source.kcd2"))return false;
+    if(mode==2)w.Viewport().SetViewDirection(ViewDirection::Isometric);
+    return OffsetFreeInput(w,source,mode!=0,mode==4);
+}
+
+bool OwnerCurvedOffset(V2MainWindow& w)
+{
+    Setup(w);const auto file=qEnvironmentVariable("KACHACAD_FACE_SKETCH_OWNER_FILE");
+    if(file.isEmpty()||!w.OpenDocumentFile(file))return false;
+    EntityId source;
+    for(const auto& entity:w.Session().GetDocument().Snapshot().entities)
+        if(entity.kind==EntityKind::GuideSurface&&entity.displayName=="非運転席側側窓")source=entity.id;
+    if(source.IsNil())return false;
+    if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({source},domain::Visibility::Visible)).committed
+            ||!w.SaveAndReopen("owner-free-source.kcd2"))return false;
+    w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
+    if(!PickDrawingFace(w,source)||!ClickNamed(w,"drawingFaceOutline")||!ClickNamed(w,"faceOutlineConfirm"))return false;
+    const auto copied=w.Viewport().Selection().entityIds;
+    if(copied.size()!=1)return false;
+    w.RunCommand("selection.activate");
+    return OffsetFreeInput(w,copied.front(),true);
 }
 
 bool OwnerFaceDrawing(V2MainWindow& w)
@@ -985,8 +1208,24 @@ std::vector<SelfTestCase> FaceDrawingCases()
     cases.push_back({"FACE-REVOLVE circle axis profile full turn undo reopen", [](auto& w) { return CircleAxisRevolve(w, false, false); }});
     cases.push_back({"FACE-REVOLVE arc axis tilted profile full turn", [](auto& w) { return CircleAxisRevolve(w, true, true); }});
     cases.push_back({"FACE-REVOLVE circle axis rounded nose closes on axis", [](auto& w) { return CircleAxisRevolve(w, false, false, true); }});
+    cases.push_back({"FACE-REVOLVE wires only full turn keeps exact curve and rear circle",[](auto& w){return CircleAxisRevolve(w,false,false,false,1);}});
+    cases.push_back({"FACE-REVOLVE surface and wires tilted full turn single undo",[](auto& w){return CircleAxisRevolve(w,false,true,false,2);}});
+    cases.push_back({"FACE-REVOLVE wires only partial turn keeps exact arcs",[](auto& w){return CircleAxisRevolve(w,false,true,false,1,true);}});
+    cases.push_back({"FACE-REVOLVE pointed wires omit zero radius circle",[](auto& w){return CircleAxisRevolve(w,false,false,true,1);}});
+    cases.push_back({"FACE-REVOLVE wire output cancel preserves source",[](auto& w){return CircleAxisRevolve(w,false,false,false,2,false,true);}});
+    cases.push_back({"FACE-REVOLVE multiple profiles both deduplicate common circle",[](auto& w){return RevolveBatchOutput(w,false);}});
+    cases.push_back({"FACE-REVOLVE small screen multiple profiles wires only",[](auto& w){return RevolveBatchOutput(w,true);}});
+    cases.push_back({"FACE-REVOLVE existing surface edges do not suppress editable wires",RevolveAfterSurface});
+    cases.push_back({"CURVE-OFFSET Bezier viewport selection preview confirm undo reopen",[](auto& w){return CurvedOffsetFixture(w,0);}});
+    cases.push_back({"CURVE-OFFSET spline explorer selection confirm reopen",[](auto& w){return CurvedOffsetFixture(w,1);}});
+    cases.push_back({"CURVE-OFFSET mixed tilted closed contour stays connected",[](auto& w){return CurvedOffsetFixture(w,2);}});
+    cases.push_back({"CURVE-OFFSET one closed spline stays one curve",[](auto& w){return CurvedOffsetFixture(w,3);}});
+    cases.push_back({"CURVE-OFFSET nonplanar refusal never partially commits",[](auto& w){return CurvedOffsetFixture(w,4);}});
+    cases.push_back({"CURVE-OFFSET multiple viewport inputs preserve two diagnostics",OffsetMultipleFree});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
         cases.push_back({"FACE-OUTLINE supplied ER1 skew face project offset", OwnerOutline});
+    if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
+        cases.push_back({"CURVE-OFFSET supplied ER1 rounded face outline offset",OwnerCurvedOffset});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_GRID_OWNER_FILE"))
         cases.push_back({"FACE-OWNER supplied model face grid drawing undo save", OwnerFaceDrawing});
     return cases;

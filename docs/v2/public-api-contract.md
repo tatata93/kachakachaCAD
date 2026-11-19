@@ -1208,3 +1208,7 @@ WP-03の既存 `EvaluateWireTransform` はOffset時にこれを呼び、WP-08の
 単独曲線と開いた入力は従来の `OffsetCurveInPlane` の意味を保つ。自由曲線の厳密オフセットを
 折れ線で代用しない。既存呼出の移行は不要。追加関数のコンパイルと幾何はwire_edit_tests、
 既存入口はfeature_reevaluation_tests、複数選択の下見と確定・保存はHP-OFFSET-LOOPで検査する。
+
+### 自由曲線オフセットの既存入口（2026-11-19、WP-04）
+
+ADR 0033に従い、既存OffsetCurveInPlane/OffsetCurvesInPlaneのsignatureを保持してベジェとBスプラインを受け付ける。自由曲線の等距離曲線を文書の許容差以内のCubicBSplineとして返し、GEO-I001で偏差上限と標本RMSを報告する。単独曲線の既定許容はGeometryToleranceの既定値とする。入力の線種を折れ線に置き換えず、直線・円弧の既存符号規則は維持する。鎖の生成に失敗した場合、一部の結果のみを成功として返さない。

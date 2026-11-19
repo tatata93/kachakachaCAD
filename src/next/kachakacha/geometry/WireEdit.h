@@ -54,11 +54,14 @@ struct CornerResult {
     std::optional<CurveSegment> first; //!< 使い切った辺は値なし
     CurveSegment corner;  //!< 面取りの線、または丸めの円弧
     std::optional<CurveSegment> second; //!< 使い切った辺は値なし
+    std::vector<CurveSegment> firstPrefix; //!< firstより前の厳密な区間
+    std::vector<CurveSegment> secondSuffix; //!< secondより後の厳密な区間
     [[nodiscard]] std::vector<CurveSegment> Segments() const {
-        std::vector<CurveSegment> result;
+        std::vector<CurveSegment> result=firstPrefix;
         if (first) result.push_back(*first);
         result.push_back(corner);
         if (second) result.push_back(*second);
+        result.insert(result.end(),secondSuffix.begin(),secondSuffix.end());
         return result;
     }
 };

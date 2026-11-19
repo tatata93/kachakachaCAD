@@ -4,6 +4,7 @@
 
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/CornerCurves.h"
+#include "kachakacha/geometry/CurveRange.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -75,16 +76,8 @@ Result<std::vector<CurveSegment>> ProcessOrderedCorners(
         const double removedOverlap=curve.ArcLength(std::min(a,b),std::max(a,b),1e-9);
         if(a>b&&removedOverlap>1e-8)return Out::Failure(MakeError("GEO-E004","隣り合う角の加工範囲が重なります。","半径・切戻し量を小さくしてください。"));
         if(b>a&&removedOverlap>1e-8){
-            CurveSegment piece=curve;
-            if(b<1){
-                const auto split=piece.Split(b);if(!split.HasValue())return Out::Failure(split.Diagnostics());
-                piece=*split.Value().first;
-            }
-            if(a>0){
-                const auto split=piece.Split(a/b);if(!split.HasValue())return Out::Failure(split.Diagnostics());
-                piece=*split.Value().second;
-            }
-            result.push_back(piece);
+            const auto pieces=ExtractCurveRange(curve,a,b);if(!pieces.HasValue())return Out::Failure(pieces.Diagnostics());
+            result.insert(result.end(),pieces.Value().begin(),pieces.Value().end());
         }
         if(bridges[i])result.push_back(*bridges[i]);
     }

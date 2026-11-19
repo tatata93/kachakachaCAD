@@ -4,6 +4,10 @@
 #include "kachakacha/geometry/PlanarWireOffset.h"
 #include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/CurveRange.h"
+#include "kachakacha/geometry/CurveTrim.h"
+#include "kachakacha/geometry/WireConnect.h"
+#include "kachakacha/geometry/CornerCurves.h"
 
 #include <cmath>
 #include <algorithm>
@@ -763,5 +767,102 @@ KACHA_V2_TEST(edit, curved_offset_refuses_collapse_nonplanar_input_and_partial_r
     Require(!OffsetCurvesInPlane({L({40,0,0},{45,0,0}),source},{0,0,1},-5).HasValue(),"a failure does not return an earlier successful edge");
     const auto unchanged=OffsetCurvesInPlane({source},{0,0,1},0);
     Require(unchanged.HasValue()&&unchanged.Value().front().ControlPoints()==source.ControlPoints(),"zero distance preserves the original curve exactly");
+}
+KACHA_V2_TEST(edit, exact_spline_restriction_keeps_geometry_with_three_pieces_at_most) {
+    using namespace kachakacha::v2::geometry;
+    std::vector<Vector3> poles;
+    for(int i=0;i<80;++i)poles.push_back({double(i),std::sin(i*.17)*4,std::cos(i*.23)});
+    const auto source=CurveSegment::MakeCubicBSpline(poles).Value();const double n=static_cast<double>(poles.size()-3);
+    for(const auto range:std::vector<std::pair<double,double>>{{0,1},{0,.731},{.137,1},{.137,.854},{.5,.5001},{10/n,35/n}}) {
+        const auto made=ExtractCurveRange(source,range.first,range.second);Require(made.HasValue(),made.FirstMessageJa());
+        Require(made.Value().size()<=3,"restriction does not expand the spline into its sampling spans");
+        std::vector<double> stops{range.first};
+        const double firstKnot=std::ceil(range.first*n-1e-12)/n,lastKnot=std::floor(range.second*n+1e-12)/n;
+        if(range.first>0&&firstKnot>range.first&&firstKnot<range.second)stops.push_back(firstKnot);
+        if(range.second<1&&lastKnot>stops.back()&&lastKnot<range.second)stops.push_back(lastKnot);
+        stops.push_back(range.second);
+        Require(made.Value().size()+1==stops.size(),"only exact end restrictions and one interior are returned");
+        for(std::size_t j=0;j<made.Value().size();++j)for(int i=0;i<=100;++i) {
+            const double t=i/100.,original=stops[j]+(stops[j+1]-stops[j])*t;
+            RequireNear(Distance(made.Value()[j].Evaluate(t),source.Evaluate(original)),0.,1e-10,"all retained points stay on the unchanged source locus");
+            Require(Dot(Normalized(made.Value()[j].FirstDerivative(t)),Normalized(source.FirstDerivative(original)))>1-1e-10,"the retained tangent is exact");
+        }
+    }
+    Require(source.ControlPoints()==poles,"restriction never edits source controls");
+    Require(!ExtractCurveRange(source,-.1,.4).HasValue()&&!ExtractCurveRange(source,.7,.2).HasValue(),"invalid ranges are rejected");
+}
+KACHA_V2_TEST(edit, analytic_spline_derivatives_remain_correct_at_endpoints_and_many_knots) {
+    using namespace kachakacha::v2::geometry;
+    std::vector<Vector3> poles;for(int i=0;i<4099;++i)poles.push_back({i*.01,std::sin(i*.01),0});
+    const auto spline=CurveSegment::MakeCubicBSpline(poles).Value();const double n=static_cast<double>(poles.size()-3);
+    const auto expectedFirst=(poles[2]-poles[0])*(n*.5),expectedLast=(poles.back()-poles[poles.size()-3])*(n*.5);
+    RequireNear(Distance(spline.FirstDerivative(0),expectedFirst),0.,1e-9,"first endpoint derivative is analytic");
+    RequireNear(Distance(spline.FirstDerivative(1),expectedLast),0.,1e-9,"last endpoint derivative is analytic");
+    for(double t:{0.,.001, .137,.5,.999,1.}) {
+        const double low=std::max(0.,t-1e-8),high=std::min(1.,t+1e-8);
+        const auto numerical=(spline.Evaluate(high)-spline.Evaluate(low))*(1/(high-low));
+        RequireNear(Distance(spline.FirstDerivative(t),numerical),0.,.0001,"dense-knot first derivatives match an independent positional difference");
+    }
+}
+KACHA_V2_TEST(edit, spline_chamfer_and_fillet_retain_all_unedited_sections) {
+    using namespace kachakacha::v2::geometry;
+    const auto spline=CurveSegment::MakeCubicBSpline({{-10,0,0},{-6,0,0},{-2,2,0},{2,5,0},{6,7,0},{10,8,0},{14,8,0}}).Value();
+    const auto line=L(spline.EndPoint(),spline.EndPoint()+Vector3{8,-6,0});
+    CornerOptions options;options.firstKeepSide=1;options.secondKeepSide=2;
+    for(bool fillet:{false,true}) {
+        const auto made=fillet?FilletLines(spline,line,.5,options,1e-7):ChamferLines(spline,line,.5,options,1e-7);
+        Require(made.HasValue(),made.FirstMessageJa());const auto pieces=made.Value().Segments();
+        Require(pieces.size()>=3&&pieces.size()<=5,"the spline corner keeps compact exact pieces");
+        RequireNear(Distance(pieces.front().StartPoint(),spline.StartPoint()),0.,1e-9,"the unedited start is retained");
+        RequireNear(Distance(pieces.back().EndPoint(),line.EndPoint()),0.,1e-9,"the unedited other end is retained");
+        for(std::size_t i=1;i<pieces.size();++i) {
+            RequireNear(Distance(pieces[i-1].EndPoint(),pieces[i].StartPoint()),0.,1e-6,"the corrected corner remains connected");
+            if(fillet)Require(Dot(Normalized(pieces[i-1].FirstDerivative(1)),Normalized(pieces[i].FirstDerivative(0)))>1-1e-5,"the R has tangent continuity without internal corners");
+        }
+        for(const auto& c:made.Value().firstPrefix)for(double t:{0.,.3,.7,1.})
+            RequireNear(spline.ClosestPoint(c.Evaluate(t)).distance,0.,1e-6,"uncut spline geometry is unchanged");
+    }
+}
+KACHA_V2_TEST(edit, offset_spline_can_be_chamfered_without_polyline_conversion) {
+    using namespace kachakacha::v2::geometry;
+    const auto spline=CurveSegment::MakeCubicBSpline({{-10,0,0},{-6,0,0},{-2,2,0},{2,5,0},{6,7,0},{10,8,0},{14,8,0}}).Value();
+    const auto shifted=OffsetCurvesInPlane({spline},{0,0,1},.3);Require(shifted.HasValue(),shifted.FirstMessageJa());
+    const auto& curve=shifted.Value().front();const auto other=L(curve.EndPoint(),curve.EndPoint()+Vector3{8,-6,0});
+    const auto result=ChamferLines(curve,other,.4,1e-7);Require(result.HasValue(),result.FirstMessageJa());
+    Require(result.Value().firstPrefix.size()<=2,"offset knots are not made into many editable edges");
+    RequireNear(Distance(result.Value().Segments().front().StartPoint(),curve.StartPoint()),0.,1e-8,"chamfer does not move the opposite end");
+}
+KACHA_V2_TEST(edit, spline_trim_keeps_exact_remainders_and_split_accepts_spline) {
+    using namespace kachakacha::v2::geometry;
+    const auto spline=CurveSegment::MakeCubicBSpline({{-12,0,0},{-8,1,0},{-4,-1,0},{0,1,0},{4,-1,0},{8,1,0},{12,0,0}}).Value();
+    TrimSpan span;span.low=.21;span.high=.73;
+    const auto remainder=RemoveSpan(spline,span);Require(remainder.HasValue(),remainder.FirstMessageJa());
+    Require(remainder.Value().before.size()<=3&&remainder.Value().after.size()<=3,"trim keeps two compact continuous remainders");
+    RequireNear(Distance(remainder.Value().before.back().EndPoint(),spline.Evaluate(.21)),0.,1e-10,"the first real cut is retained");
+    RequireNear(Distance(remainder.Value().after.front().StartPoint(),spline.Evaluate(.73)),0.,1e-10,"the second real cut is retained");
+    const auto blade=L({0,-5,0},{0,5,0});const auto split=SplitCurveAtIntersections(spline,{blade},1e-7);
+    Require(split.HasValue(),split.FirstMessageJa());Require(split.Value().size()>=2&&split.Value().size()<=6,"a spline intersection split is exact and compact");
+}
+KACHA_V2_TEST(edit, disconnected_lines_auto_extend_for_C_and_R_in_a_tilted_plane) {
+    const Vector3 origin{13,-17,8},u=Normalized(Vector3{1,2,.3}),n=Normalized(Cross(u,Vector3{.2,-.3,1})),v=Cross(n,u);
+    for(bool reverse:{false,true})for(bool fillet:{false,true}) {
+        auto a=L(origin+u*2,origin+u*12),b=L(origin+v*3,origin+v*11);
+        if(reverse){a=ReverseCurve(a).Value();b=ReverseCurve(b).Value();}
+        const auto result=fillet?FilletLines(a,b,.8,1e-7):ChamferLines(a,b,.8,1e-7);
+        Require(result.HasValue(),result.FirstMessageJa());const auto parts=result.Value().Segments();
+        Require(parts.size()==3,"auto extension returns only two retained lines and the corner");
+        RequireNear(Distance(parts.front().StartPoint(),origin+u*12),0.,1e-7,"the far end of A is unchanged");
+        RequireNear(Distance(parts.back().EndPoint(),origin+v*11),0.,1e-7,"the far end of B is unchanged");
+        for(std::size_t i=1;i<parts.size();++i)RequireNear(Distance(parts[i-1].EndPoint(),parts[i].StartPoint()),0.,1e-7,"extended pieces meet the bridge");
+        RequireNear(Distance(parts.front().EndPoint(),origin+u*.8),0.,1e-7,"the near gap is filled up to the requested setback");
+    }
+}
+KACHA_V2_TEST(edit, corner_uses_model_tolerance_without_silently_flattening_skew_lines) {
+    const auto a=L({2,0,0},{12,0,0}),b=L({0,3,.003},{0,11,.003});
+    Require(FilletLines(a,b,.8,.01).HasValue(),"small extraction deviations obey the declared model tolerance");
+    Require(!FilletLines(a,b,.8,.0001).HasValue(),"a real skew pair beyond tolerance is refused");
+    Require(!ChamferLines(a,L({0,3,.1},{0,11,.1}),.8,.01).HasValue(),"another plane is never silently projected");
+    Require(!FilletLines(a,L({2,3,0},{12,3,0}),.8,.01).HasValue(),"parallel lines have no extension corner");
+    RequireNear(a.StartPoint().x,2.,0.,"the input is never mutated");
 }
 KACHA_V2_TEST_MAIN("wire_edit_tests")

@@ -323,7 +323,8 @@ namespace {
 
 //! 2本の直線の無限交点。平行なら false。
 [[nodiscard]] bool LineCorner(const CurveSegment& first, const CurveSegment& second,
-    Vector3& corner, Vector3& firstAway, Vector3& secondAway, const CornerOptions& options)
+    Vector3& corner, Vector3& firstAway, Vector3& secondAway, const CornerOptions& options,
+    double toleranceMm)
 {
     const Vector3 p0 = first.StartPoint();
     const Vector3 d0 = first.EndPoint() - p0;
@@ -336,7 +337,7 @@ namespace {
     }
     const Vector3 a = p0 + d0 * t0;
     const Vector3 b = p1 + d1 * t1;
-    if (Distance(a, b) > 1.0e-6 * std::max(1.0, d0.Length())) {
+    if (Distance(a, b) > toleranceMm) {
         return false; // ねじれの位置
     }
     corner = (a + b) * 0.5;
@@ -371,7 +372,7 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway, options)) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, options, toleranceMm)) {
         return Result<CornerResult>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。",
             "平行な線やねじれの位置にある線は面取りできません。"));
@@ -420,7 +421,7 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway, options)) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, options, toleranceMm)) {
         return Result<CornerResult>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。", {}));
     }
@@ -472,7 +473,6 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
 Result<std::pair<CurveSegment, CurveSegment>> MeetLines(const CurveSegment& first,
     const CurveSegment& second, double toleranceMm)
 {
-    (void)toleranceMm;
     using Pair = std::pair<CurveSegment, CurveSegment>;
     if (!IsLine(first) || !IsLine(second)) {
         return Result<Pair>::Failure(MakeError(kNotSupported,
@@ -481,7 +481,7 @@ Result<std::pair<CurveSegment, CurveSegment>> MeetLines(const CurveSegment& firs
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway, CornerOptions{})) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, CornerOptions{}, toleranceMm)) {
         return Result<Pair>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。", {}));
     }

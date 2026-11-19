@@ -1,4 +1,5 @@
 #include "kachakacha/geometry/CornerCurves.h"
+#include "kachakacha/geometry/CurveRange.h"
 
 #include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
@@ -17,7 +18,6 @@ using base::Result;
 namespace {
 
 constexpr const char* kNoIntersection = "GEO-E001";
-constexpr const char* kNotSupported = "GEO-E003";
 constexpr const char* kDegenerate = "GEO-E004";
 constexpr double kTwoPi = 6.283185307179586;
 constexpr double kEps = 1.0e-9;
@@ -75,10 +75,8 @@ struct Reach {
         reach.closed = true;
         return Out::Success(reach);
     case CurveKind::CubicBezier:
-        return Out::Success(reach);   // 延ばさない(実交点だけ)
     case CurveKind::CubicBSpline:
-        return Out::Failure(MakeError(kNotSupported, "スプラインの角の加工はまだ入っていません。",
-            "スプラインは途中で切れません(GEO-C014)。"));
+        return Out::Success(reach);   // 延ばさない(実交点だけ)
     }
     (void)toleranceMm;
     return Out::Success(reach);
@@ -87,32 +85,6 @@ struct Reach {
 [[nodiscard]] double SubLength(const CurveSegment& curve, double a, double b)
 {
     return curve.ArcLength(std::min(a, b), std::max(a, b), 1.0e-6);
-}
-
-//! 伸ばした線の [a, b] だけを取り出す(種類を保つ)。
-[[nodiscard]] Result<CurveSegment> SubCurve(const CurveSegment& curve, double a, double b)
-{
-    using Out = Result<CurveSegment>;
-    if (!(b > a + kEps)) {
-        return Out::Failure(MakeError(kDegenerate, "残る線の長さが 0 になります。", {}));
-    }
-    CurveSegment piece = curve;
-    if (a > kEps) {
-        const auto split = curve.Split(std::min(a, 1.0 - kEps));
-        if (!split.HasValue()) {
-            return Out::Failure(split.Diagnostics());
-        }
-        piece = *split.Value().second;
-        b = (b - a) / (1.0 - a);
-    }
-    if (b < 1.0 - kEps) {
-        const auto split = piece.Split(std::max(b, kEps));
-        if (!split.HasValue()) {
-            return Out::Failure(split.Diagnostics());
-        }
-        piece = *split.Value().first;
-    }
-    return Out::Success(piece);
 }
 
 //! 1 本ぶんの角の読み方: 角の t、残す向き(+1 = t が増える側)、残す端の t。
@@ -194,14 +166,14 @@ struct Side {
 }
 
 //! 残る線: 角から切った点 cut までを捨て、cut から残す端まで。toward = 真なら cut で終わる向き。
-[[nodiscard]] Result<std::optional<CurveSegment>> KeptPiece(const Reach& reach, const Side& side, double cut,
+[[nodiscard]] Result<std::vector<CurveSegment>> KeptPiece(const Reach& reach, const Side& side, double cut,
     bool endAtCut)
 {
-    using Out = Result<std::optional<CurveSegment>>;
-    if (SubLength(reach.curve, cut, side.keptEnd)<=1e-8) return Out::Success(std::nullopt);
+    using Out = Result<std::vector<CurveSegment>>;
+    if (SubLength(reach.curve, cut, side.keptEnd)<=1e-8) return Out::Success({});
     const double a = std::min(cut, side.keptEnd);
     const double b = std::max(cut, side.keptEnd);
-    const auto piece = SubCurve(reach.curve, a, b);
+    const auto piece = ExtractCurveRange(reach.curve, a, b);
     if (!piece.HasValue()) {
         return Out::Failure(piece.Diagnostics());
     }
@@ -210,9 +182,20 @@ struct Side {
     if (endsAtCut == endAtCut) {
         return Out::Success(piece.Value());
     }
-    const auto reversed=ReverseCurve(piece.Value());
-    if(!reversed.HasValue())return Out::Failure(reversed.Diagnostics());
-    return Out::Success(reversed.Value());
+    std::vector<CurveSegment> reversed;
+    for(auto it=piece.Value().rbegin();it!=piece.Value().rend();++it) {
+        const auto curve=ReverseCurve(*it);if(!curve.HasValue())return Out::Failure(curve.Diagnostics());
+        reversed.push_back(curve.Value());
+    }
+    return Out::Success(std::move(reversed));
+}
+
+CornerResult AsCorner(std::vector<CurveSegment> first,CurveSegment bridge,std::vector<CurveSegment> second)
+{
+    CornerResult result{std::nullopt,std::move(bridge),std::nullopt};
+    if(!first.empty()){result.first=first.back();first.pop_back();result.firstPrefix=std::move(first);}
+    if(!second.empty()){result.second=second.front();second.erase(second.begin());result.secondSuffix=std::move(second);}
+    return result;
 }
 
 //! 角から線に沿って距離 d の位置(残す側)。届かなければ値なし。
@@ -393,7 +376,7 @@ struct Corner {
         return Out::Failure(MakeError(kDegenerate, "丸めの結果が作れません。",
             "接点が線の端と重なっています。半径を変えてください。"));
     }
-    return Out::Success(CornerResult{firstPiece.Value(), arc.Value(), secondPiece.Value()});
+    return Out::Success(AsCorner(firstPiece.Value(), arc.Value(), secondPiece.Value()));
 }
 
 //! 面取り。角から線に沿って切戻し、2 点を直線で結ぶ。
@@ -415,7 +398,7 @@ struct Corner {
     if (!chamfer.HasValue() || !firstPiece.HasValue() || !secondPiece.HasValue()) {
         return Out::Failure(MakeError(kDegenerate, "面取りの結果が長さ 0 になります。", {}));
     }
-    return Out::Success(CornerResult{firstPiece.Value(), chamfer.Value(), secondPiece.Value()});
+    return Out::Success(AsCorner(firstPiece.Value(), chamfer.Value(), secondPiece.Value()));
 }
 
 } // namespace

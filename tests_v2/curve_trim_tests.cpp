@@ -275,9 +275,9 @@ KACHA_V2_TEST(curve_trim, 円を分けると継ぎ目入りの一周円弧にな
         "掃引角はほぼ2π");
 }
 
-// ---- Bスプラインは切れない ----
+// ---- Bスプラインも厳密な区間で切る ----
 
-KACHA_V2_TEST(curve_trim, Bスプラインを横切る線があってもトリムでは切れない)
+KACHA_V2_TEST(curve_trim, Bスプラインを横切る線でトリムできる)
 {
     // 左右対称: t=0.5 でちょうど原点を通る。
     const auto made = CurveSegment::MakeCubicBSpline(
@@ -296,8 +296,10 @@ KACHA_V2_TEST(curve_trim, Bスプラインを横切る線があってもトリ�
     Require(!span.Value().whole, "区切りがあるので線ごとではない");
 
     const auto removed = RemoveSpan(target, span.Value());
-    Require(!removed.HasValue(), "Bスプラインは途中で切れないので断る");
-    RequireEqual(removed.FirstCode(), std::string("GEO-C014"), "GEO-C014で断る");
+    Require(removed.HasValue(), removed.FirstSummaryJa());
+    Require(!removed.Value().before.empty() || !removed.Value().after.empty(),"反対側を残す");
+    for(const auto& pieces:{removed.Value().before,removed.Value().after})for(const auto& piece:pieces)
+        for(double t:{0.,.25,.5,.75,1.})RequireNear(target.ClosestPoint(piece.Evaluate(t)).distance,0.,1e-7,"残る曲線の位置は変えない");
 }
 
 KACHA_V2_TEST(curve_trim, overlap_endpoints_bound_only_the_one_millimeter_tail)

@@ -276,15 +276,20 @@ KACHA_V2_TEST(corner_curves, tangent_line_and_arc_are_refused)
         "the refusal names the degenerate corner");
 }
 
-KACHA_V2_TEST(corner_curves, bspline_is_refused_as_not_supported)
+KACHA_V2_TEST(corner_curves, bspline_is_filleted_without_changing_the_retained_curve)
 {
     const auto bspline = CurveSegment::MakeCubicBSpline(
         {{0, 0, 0}, {3, 4, 0}, {6, 4, 0}, {10, 0, 0}}).Value();
     const auto line = L({5, -5, 0}, {5, 5, 0});
     const auto result = FilletLines(line, bspline, 1.0, 1.0e-6);
-    Require(!result.HasValue(), "a b-spline cannot be split mid-curve, so the corner is refused");
-    RequireEqual(result.Diagnostics().front().code, "GEO-E003",
-        "the refusal says the capability is missing");
+    Require(result.HasValue(), result.FirstMessageJa());
+    const auto segments=result.Value().Segments();
+    Require(segments.size()>=3 && segments.size()<=5,"the spline remains compact");
+    for(std::size_t i=1;i<segments.size();++i)
+        RequireNear(Distance(segments[i-1].EndPoint(),segments[i].StartPoint()),0.,1e-6,"the fillet stays connected");
+    RequireNear(result.Value().corner.Radius(),1.,1e-9,"the requested R is respected");
+    for(const auto& curve:result.Value().secondSuffix)for(double t:{0.,.5,1.})
+        RequireNear(bspline.ClosestPoint(curve.Evaluate(t)).distance,0.,1e-6,"retained spline points remain unchanged");
 }
 
 // ---- 直線どうし(既存の解析解の経路)も CornerCurves 経由の欄で確かめる ----

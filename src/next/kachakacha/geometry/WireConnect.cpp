@@ -2,6 +2,7 @@
 
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/CurveRange.h"
 
 #include <array>
 #include <algorithm>
@@ -200,22 +201,22 @@ Result<std::vector<CurveSegment>> SplitCurveAtIntersections(const CurveSegment& 
 
     // 端から順に切っていく。切るたびに残りのパラメータを詰め直す。
     std::vector<CurveSegment> pieces;
-    CurveSegment remaining = curve;
     double consumed = 0.0;
     for (const double cut : cuts) {
         const double local = (cut - consumed) / (1.0 - consumed);
         if (!(local > 1.0e-9) || !(local < 1.0 - 1.0e-9)) {
             continue;
         }
-        const auto split = remaining.Split(local);
+        const auto split = ExtractCurveRange(curve,consumed,cut);
         if (!split.HasValue()) {
             return Out::Failure(split.Diagnostics());
         }
-        pieces.push_back(*split.Value().first);
-        remaining = *split.Value().second;
+        pieces.insert(pieces.end(),split.Value().begin(),split.Value().end());
         consumed = cut;
     }
-    pieces.push_back(remaining);
+    const auto remaining=ExtractCurveRange(curve,consumed,1);
+    if(!remaining.HasValue())return Out::Failure(remaining.Diagnostics());
+    pieces.insert(pieces.end(),remaining.Value().begin(),remaining.Value().end());
     return Out::Success(std::move(pieces));
 }
 

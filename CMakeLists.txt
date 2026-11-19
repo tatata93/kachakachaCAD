@@ -736,6 +736,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/CurveTrim.cpp
     src/next/kachakacha/geometry/CornerCurves.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
+    src/next/kachakacha/geometry/CurveRange.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
     src/next/kachakacha/geometry/ScreenMapping.cpp

@@ -10,7 +10,7 @@
 //!       内側へ置いた中心が、B からちょうど r 離れる u を二分で探す)。接する条件は作ったあと測る。
 //! 面取り: 角から **線に沿った長さ** で切戻し、2 点を直線で結ぶ。
 //! 出来上がりは WireEdit の CornerResult(1 本目 → 角の線 → 2 本目、つながった向き)。
-//! B スプラインは途中で切れない(GEO-C014)ので断る。
+//! Bスプラインの切戻しは厳密な端区間と一様内部区間を保持し、折れ線にはしない。
 
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/geometry/CurveSegment.h"

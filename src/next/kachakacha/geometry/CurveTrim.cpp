@@ -1,4 +1,5 @@
 #include "kachakacha/geometry/CurveTrim.h"
+#include "kachakacha/geometry/CurveRange.h"
 
 #include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/WireEdit.h"
@@ -180,18 +181,18 @@ Result<TrimRemainder> RemoveSpan(const CurveSegment& target, const TrimSpan& spa
         return Out::Success(remainder);
     }
     if (span.low > kSameParameter) {
-        const auto split = target.Split(span.low);
+        const auto split = ExtractCurveRange(target,0,span.low);
         if (!split.HasValue()) {
             return Out::Failure(split.Diagnostics());
         }
-        remainder.before.push_back(*split.Value().first);
+        remainder.before=split.Value();
     }
     if (span.high < 1.0 - kSameParameter) {
-        const auto split = target.Split(span.high);
+        const auto split = ExtractCurveRange(target,span.high,1);
         if (!split.HasValue()) {
             return Out::Failure(split.Diagnostics());
         }
-        remainder.after.push_back(*split.Value().second);
+        remainder.after=split.Value();
     }
     return Out::Success(remainder);
 }

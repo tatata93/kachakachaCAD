@@ -243,15 +243,10 @@ Vector3 CurveSegment::FirstDerivative(double t) const
             + (p3 - p2) * (3.0 * t * t));
     }
     case CurveKind::CubicBSpline: {
-        // 中心差分。標本幅は曲線全体に対して十分小さく取る。
-        const double step = 1.0e-6;
-        const double lower = std::max(0.0, t - step);
-        const double upper = std::min(1.0, t + step);
-        const double span = upper - lower;
-        if (!(span > 0.0)) {
-            return {};
-        }
-        return (Evaluate(upper) - Evaluate(lower)) * (1.0 / span);
+        const auto spans=controlPoints_.size()-3;const double scaled=std::clamp(t,0.,1.)*spans;
+        const auto i=std::min(static_cast<std::size_t>(scaled),spans-1);const double u=scaled-i,v=1-u;
+        const auto a=controlPoints_[i+1]-controlPoints_[i],b=controlPoints_[i+2]-controlPoints_[i+1],c=controlPoints_[i+3]-controlPoints_[i+2];
+        return (a*(v*v*.5)+b*(.5+u-u*u)+c*(u*u*.5))*static_cast<double>(spans);
     }
     }
     return {};
@@ -278,16 +273,10 @@ Vector3 CurveSegment::SecondDerivative(double t) const
             + (p3 - p2 * 2.0 + p1) * (6.0 * t));
     }
     case CurveKind::CubicBSpline: {
-        const double step = 1.0e-4;
-        const double lower = std::max(0.0, t - step);
-        const double upper = std::min(1.0, t + step);
-        const double middle = (lower + upper) * 0.5;
-        const double half = (upper - lower) * 0.5;
-        if (!(half > 0.0)) {
-            return {};
-        }
-        return (Evaluate(upper) - Evaluate(middle) * 2.0 + Evaluate(lower))
-            * (1.0 / (half * half));
+        const auto spans=controlPoints_.size()-3;const double scaled=std::clamp(t,0.,1.)*spans;
+        const auto i=std::min(static_cast<std::size_t>(scaled),spans-1);const double u=scaled-i;
+        const auto a=controlPoints_[i+2]-controlPoints_[i+1]*2+controlPoints_[i],b=controlPoints_[i+3]-controlPoints_[i+2]*2+controlPoints_[i+1];
+        return (a*(1-u)+b*u)*static_cast<double>(spans*spans);
     }
     }
     return {};

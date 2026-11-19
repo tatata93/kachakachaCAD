@@ -1212,3 +1212,8 @@ WP-03の既存 `EvaluateWireTransform` はOffset時にこれを呼び、WP-08の
 ### 自由曲線オフセットの既存入口（2026-11-19、WP-04）
 
 ADR 0033に従い、既存OffsetCurveInPlane/OffsetCurvesInPlaneのsignatureを保持してベジェとBスプラインを受け付ける。自由曲線の等距離曲線を文書の許容差以内のCubicBSplineとして返し、GEO-I001で偏差上限と標本RMSを報告する。単独曲線の既定許容はGeometryToleranceの既定値とする。入力の線種を折れ線に置き換えず、直線・円弧の既存符号規則は維持する。鎖の生成に失敗した場合、一部の結果のみを成功として返さない。
+
+### 曲線を動かさない部分補正（2026-11-20、WP-04）
+
+`geometry/CurveRange.h` の `ExtractCurveRange(const CurveSegment&, double first, double last)` は元曲線の0<=first<last<=1を厳密抽出し、順序付きCurveSegment列を返す。一様3次Bスプラインは端のde Casteljau区間と元の一様な内部区間を用い、最大3区間に留める。元の全区間なら元値1本を返す。折れ線近似や制御点の再フィットを使わない。保存形式は既存の曲線列のままとする。
+`CornerResult` は従来のfirst/corner/secondに加え、firstより前の`firstPrefix`とsecondより後の`secondSuffix`を保持できる。`Segments()`は全区間を正しい順で返す。従来の線・円弧の結果は変えず、first/secondは角に接する区間を表す。BスプラインのC/R、トリム、切戻しはこの厳密範囲抽出を使い、元形状と未編集区間を動かさない。

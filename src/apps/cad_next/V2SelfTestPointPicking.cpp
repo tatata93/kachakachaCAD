@@ -9,12 +9,14 @@
 #include <QPushButton>
 #include <QKeyEvent>
 #include <QComboBox>
+#include <QColor>
 #include <QDialog>
 #include <QImage>
 #include <QDoubleSpinBox>
 #include <QTreeWidgetItem>
 #include <QEvent>
 #include <QPointF>
+#include <QString>
 #include <QWidget>
 #include <algorithm>
 #include <array>

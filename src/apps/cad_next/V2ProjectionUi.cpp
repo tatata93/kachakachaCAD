@@ -83,10 +83,11 @@ void V2ProjectionTool::BuildUi() {
     output_->addItems({QStringLiteral("出力: ワイヤーのみ"),QStringLiteral("出力: 面＋ワイヤー（閉領域を選択面へ）")});layout->addWidget(output_);
     layout->addWidget(new QLabel(QStringLiteral("ワイヤーの残し方"),body));
     wireForm_=new QComboBox(body);wireForm_->setObjectName(QStringLiteral("projectionWireForm"));
-    wireForm_->addItems({QStringLiteral("投影結果（読み取り専用）"),QStringLiteral("通常ワイヤー（編集可能）")});layout->addWidget(wireForm_);
+    wireForm_->addItems({QStringLiteral("投影結果（読み取り専用）"),QStringLiteral("通常ワイヤー（編集可能）")});
+    wireForm_->setCurrentIndex(1);layout->addWidget(wireForm_);
     auto* wireHelp=new QLabel(QStringLiteral("通常ワイヤーは投影した位置・曲線の形を保ち、元の線や面から独立して編集できます。"),body);
     wireHelp->setWordWrap(true);layout->addWidget(wireHelp);
-    auto* outputHelp=new QLabel(QStringLiteral("ライトや窓を押し出す場合は「面＋ワイヤー」を選び、確定後に投影した面を選択します。曲面の形・穴を保ちます。ワイヤーの保存方法を変えても、曲面上の輪郭は平面にはなりません。"),body);
+    auto* outputHelp=new QLabel(QStringLiteral("輪郭の内側に面も作る場合は「面＋ワイヤー」を選びます。曲面の形・穴を保ち、確定後の面は押し出し等に使えます。ワイヤーの残し方を変えても、曲面上の輪郭は平面にはなりません。"),body);
     outputHelp->setWordWrap(true);outputHelp->setProperty("projectionOnlyMode",0);layout->addWidget(outputHelp);
     connect(output_,&QComboBox::currentIndexChanged,this,[this]{hits_->setVisible(mode_->currentIndex()==0&&output_->currentIndex()==0);Invalidate();});
     BuildSettings(layout);

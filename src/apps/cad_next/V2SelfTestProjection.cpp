@@ -78,12 +78,22 @@ bool Fixture(V2MainWindow& window,bool solid=false,int circle=0) {
 bool AddGuideInputs(V2ProjectionTool& tool) {
     app::SelectionRef wire;wire.entityId=WireId();app::SelectionRef face;face.entityId=TargetId();return tool.AddWire(wire)&&tool.AddTarget(face);
 }
+bool IndependentOutput(V2MainWindow& window) {
+    const auto snapshot=window.Session().GetDocument().Snapshot();
+    if(snapshot.entities.empty())return false;const auto& wire=snapshot.entities.back();
+    const auto* feature=window.Session().GetDocument().FindFeature(wire.createdBy);
+    return wire.kind==domain::EntityKind::Wire&&wire.editPolicy==domain::EditPolicy::Source
+        &&feature&&feature->type==domain::FeatureType::CreateWire&&feature->inputEntityIds.empty();
+}
 bool ToolFirst(V2MainWindow& window) {
     window.Viewport().SetSelection({});window.RunCommand("wire.project_surface");
     auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!Explain("PROJ tool starts without preselection",tool!=nullptr))return false;
     auto* mode=tool->findChild<QComboBox*>("projectionMode");mode->setCurrentIndex(2);
+    auto* form=tool->findChild<QComboBox*>("projectionWireForm");
+    if(!Explain("PROJ editable ordinary wire is the initial default",form&&form->currentIndex()==1))return false;
     const auto revision=window.Session().GetDocument().Revision();tool->CancelInput();
-    return Explain("PROJ Esc preserves tool and mode",tool->isVisible()&&mode->currentIndex()==2&&revision==window.Session().GetDocument().Revision());
+    return Explain("PROJ Esc preserves tool, mode and editable output",tool->isVisible()&&mode->currentIndex()==2
+        &&form->currentIndex()==1&&revision==window.Session().GetDocument().Revision());
 }
 bool SelectionDeleteKeepsProjectionInputs(V2MainWindow& window) {
     if(!Fixture(window))return false;
@@ -116,11 +126,14 @@ bool SelectionDeleteKeepsProjectionInputs(V2MainWindow& window) {
     return Explain("projection can be reacquired after another tool",tool&&tool->WireCount()==1
         &&tool->TargetCount()==1&&tool->Preview());
 }
-bool GuideCommit(V2MainWindow& window) {
-    if(!Fixture(window))return false;window.RunCommand("wire.project_surface");auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!tool||!AddGuideInputs(*tool))return false;
+bool GuideCommit(V2MainWindow& window,bool wrap=false) {
+    if(!Fixture(window))return false;window.RunCommand(wrap?"wire.wrap_project":"wire.project_surface");auto* tool=dynamic_cast<V2ProjectionTool*>(window.findChild<QWidget*>("projectionPanel"));if(!tool||!AddGuideInputs(*tool))return false;
     const auto before=window.Session().GetDocument().Snapshot();const auto revision=window.Session().GetDocument().Revision();if(!Explain("PROJ native preview",tool->Preview()))return false;
     if(!Explain("PROJ preview is document immutable",window.Session().GetDocument().Revision()==revision))return false;
+    const auto screenshot=qEnvironmentVariable("KACHACAD_PROJECTION_DEFAULT_SCREENSHOT");
+    if(!screenshot.isEmpty()&&!wrap){QApplication::processEvents();window.grab().save(screenshot);}
     if(!Explain("PROJ commit uses displayed preview",tool->Commit()))return false;
+    if(!Explain("PROJ default output can be edited independently",IndependentOutput(window)))return false;
     const auto after=window.Session().GetDocument().Snapshot();if(!Explain("PROJ output added with inputs unchanged",after.features.size()==before.features.size()+1&&window.Session().GetDocument().FindEntity(WireId())&&window.Session().GetDocument().FindEntity(TargetId())))return false;
     io::DocumentFile file;file.snapshot=after;const auto bytes=io::SaveDocument(file);QTemporaryDir folder;
     if(!bytes.HasValue()||!io::WriteFileAtomically(folder.filePath("result.kcd2").toStdString(),bytes.Value()).HasValue())return false;
@@ -151,7 +164,9 @@ bool WrapClosestAndFraction(V2MainWindow& window) {
     auto* mode=tool->findChild<QComboBox*>("projectionMode");if(!Explain("PROJ wrap preview",mode->currentIndex()==1&&tool->Preview()))return false;
     auto* tolerance=tool->findChild<QDoubleSpinBox*>("projectionTolerance");auto* entry=tolerance->findChild<QLineEdit*>();entry->setText(QStringLiteral("0.0025 mm"));tolerance->interpretText();
     mode->setCurrentIndex(2);if(!Explain("PROJ closest and decimal input",std::abs(tolerance->value()-0.0025)<1e-10&&tool->Preview()))return false;
-    tool->CancelInput();return Explain("PROJ cancel then reuse",mode->currentIndex()==2&&AddGuideInputs(*tool)&&tool->Preview());
+    tool->CancelInput();
+    if(!Explain("PROJ cancel then reuse",mode->currentIndex()==2&&AddGuideInputs(*tool)&&tool->Preview()))return false;
+    return Explain("PROJ closest defaults to independent editable output",tool->Commit()&&IndependentOutput(window));
 }
 bool ManualDirectionPreserved(V2MainWindow& window) {
     if(!Fixture(window))return false;auto* tool=V2ProjectionTool::Open(window);
@@ -247,6 +262,7 @@ bool SourcePlaneDefault(V2MainWindow& window) {
 }
 bool ProjectedProfileExtrudes(V2MainWindow& window) {
     if(!Fixture(window))return false;auto* tool=V2ProjectionTool::Open(window);
+    tool->findChild<QComboBox*>("projectionWireForm")->setCurrentIndex(0);
     if(!AddGuideInputs(*tool)||!tool->Preview()||!tool->Commit())return false;
     const auto& entities=window.Session().GetDocument().Snapshot().entities;
     app::SelectionSet selected;selected.entityIds={entities.back().id};window.Viewport().SetSelection(selected);
@@ -263,9 +279,9 @@ bool CircleOutput(V2MainWindow& window,bool ordinary,bool curved,int wireOutput=
     if(!AddGuideInputs(*tool))return false;
     tool->findChild<QComboBox*>("projectionOutput")->setCurrentIndex(curved&&!insidePick?1:0);
     tool->findChild<QDoubleSpinBox*>("projectionTolerance")->setValue(.000001);
-    auto* form=tool->findChild<QComboBox*>("projectionWireForm");if(!form||form->count()!=2||form->currentIndex()!=0)return false;
+    auto* form=tool->findChild<QComboBox*>("projectionWireForm");if(!form||form->count()!=2||form->currentIndex()!=1)return false;
     if(!tool->Preview())return false;
-    const auto lines=window.Viewport().ToolPreviewFaceCount();form->setCurrentIndex(ordinary?1:0);
+    const auto lines=window.Viewport().ToolPreviewFaceCount();if(!ordinary)form->setCurrentIndex(0);
     if(!Explain("PROJ storage choice does not alter preview geometry",window.Viewport().ToolPreviewFaceCount()==lines)||!tool->Commit())return false;
     const auto snapshot=window.Session().GetDocument().Snapshot();
     base::EntityId wire,face;
@@ -372,7 +388,8 @@ bool ExplicitPlanarInterior(V2MainWindow& window) {
 std::vector<SelfTestCase> OwnerProjectionCases();
 std::vector<SelfTestCase> WindowHoleOwnerCases();
 bool PanoramaTwoPlanes(V2MainWindow& window);
-std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",GuideCommit},
+std::vector<SelfTestCase> ProjectionCases(){std::vector<SelfTestCase> cases={{"PROJ tool-first and Esc",ToolFirst},{"PROJ preview commit Undo save reopen",[](auto& w){return GuideCommit(w);}},
+    {"PROJ wrap defaults to independent editable output Undo reopen",[](auto& w){return GuideCommit(w,true);}},
     {"PROJ preselection",Preselection},{"PROJ solid face viewport click",SolidFaceClick},{"PROJ wrap closest fractional numeric retry",WrapClosestAndFraction},
     {"PROJ manual direction and one-button reverse",ManualDirectionPreserved},{"PROJ role marks preserve tree and document",RoleMarks},
     {"PROJ direct tree inputs and lifecycle",TreeInput},{"PROJ explicit segments and multiple marks",SegmentMarks},

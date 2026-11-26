@@ -8,6 +8,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/CurveSegment.h"
+#include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/modeling/MeshPick.h"
 #include <QApplication>
@@ -379,32 +380,106 @@ bool CaseLoopFacesWholeWires(V2MainWindow& w)
 }
 } // namespace
 namespace {
+bool OwnerInputsPreserved(V2MainWindow& w,const auto& original)
+{
+    io::DocumentFile before,after;before.snapshot=original;after.snapshot=w.Session().GetDocument().Snapshot();
+    std::erase_if(after.snapshot.entities,[&](const auto& e){return std::none_of(original.entities.begin(),original.entities.end(),[&](const auto& old){return old.id==e.id;});});
+    std::erase_if(after.snapshot.features,[&](const auto& f){return std::none_of(original.features.begin(),original.features.end(),[&](const auto& old){return old.id==f.id;});});
+    after.snapshot.revision=original.revision;after.snapshot.evaluationOrder=original.evaluationOrder;
+    return RoundTripContentEqual(io::WriteDocumentJson(before),io::WriteDocumentJson(after));
+}
+bool OwnerPickInputs(V2MainWindow& w,const std::vector<EntityId>& inputs,bool viewportPick)
+{
+    auto& view=w.Viewport();app::SelectionSet focus;focus.entityIds=inputs;
+    view.SetSelection(focus);w.RunCommand("view.fit_selection");view.SetSelection({});
+    auto* tree=w.EntityTree();if(!tree)return false;
+    for(std::size_t i=0;i<inputs.size();++i){
+        if(viewportPick){
+            bool picked=false;
+            for(const auto kind:{app::SelectionElementKind::Edge,app::SelectionElementKind::Object}){
+              for(const auto& curve:w.Session().Scene().curves){
+                if(curve.entityId!=inputs[i])continue;
+                for(const double parameter:{.23,.43,.67,.83}){
+                    const auto pixel=view.Mapping().Project(curve.segment.Evaluate(parameter));if(!pixel)continue;
+                    const QPointF point(pixel->x,pixel->y);view.HoverAt(point);
+                    for(std::size_t j=0,n=view.CandidateCount();j<n;++j){
+                        const auto candidate=view.CurrentCandidate();
+                        if(candidate&&candidate->entityId==inputs[i]&&candidate->kind==kind){
+                            MouseClick(view,point,Qt::ControlModifier);picked=true;break;
+                        }
+                        view.CycleCandidate(false);
+                    }
+                    if(picked)break;
+                }
+                if(picked)break;
+              }
+              if(picked)break;
+            }
+            if(!picked){Note(("no visible curve candidate for "+inputs[i].ToString()).c_str());return false;}
+        }else{
+            auto* item=tree->FindKey("entity:"+QString::fromStdString(inputs[i].ToString()));if(!item)return false;
+            for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
+            tree->scrollToItem(item);tree->setFocus();QApplication::processEvents();
+            const auto at=tree->visualItemRect(item).intersected(tree->viewport()->rect()).center();
+            if(tree->itemAt(at)!=item)return false;
+            MouseClick(*tree->viewport(),at,i?Qt::ControlModifier:Qt::NoModifier);
+        }
+        QApplication::processEvents();
+        Note(("input "+inputs[i].ToString()+" selected="+std::to_string(view.Selection().entityIds.size())).c_str());
+    }
+    return view.Selection().entityIds==inputs;
+}
+bool OwnerOpeningRays(V2MainWindow& w,EntityId made,const std::vector<EntityId>& inputs,bool band)
+{
+    std::vector<modeling::ShapeMesh> meshes;
+    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==made)meshes.push_back(shape.mesh);
+    if(meshes.empty())return false;
+    if(!band)return !modeling::PickMesh(meshes,{0,12.5,60},{0,0,-1})
+        &&modeling::PickMesh(meshes,{6,12.5,60},{0,0,-1}).has_value();
+    app::SelectionSet selected;selected.entityIds.assign(inputs.begin(),inputs.begin()+4);
+    const auto outer=app::SelectedCurves(selected,w.Session().Scene());
+    selected.entityIds.assign(inputs.begin()+4,inputs.end());
+    const auto inner=app::SelectedCurves(selected,w.Session().Scene());
+    std::vector<Vector3> points;Vector3 center{};std::size_t count=0;
+    for(const auto& c:outer)for(int i=0;i<16;++i)points.push_back(c.Evaluate(i/16.));
+    for(const auto& c:inner)for(int i=0;i<16;++i){center=center+c.Evaluate(i/16.);++count;}
+    if(!count)return false;center=center*(1./count);
+    const auto plane=geometry::FitPlane(points);if(!plane.valid)return false;
+    if(modeling::PickMesh(meshes,center+plane.normal*100,-plane.normal))return false;
+    // At least one point in the narrow band must contain material.
+    for(const auto& c:outer){
+        const auto p=c.Evaluate(.5),toward=geometry::Normalized(center-p);
+        if(modeling::PickMesh(meshes,p+toward*.05+plane.normal*100,-plane.normal))return true;
+    }
+    return false;
+}
 bool CaseOwnerCurvedOpening(V2MainWindow& w)
 {
     const auto path=qEnvironmentVariable("KACHACAD_OPENING_OWNER_FILE");
     if(path.isEmpty()||!w.OpenDocumentFile(path))return false;
     const auto original=w.Session().GetDocument().Snapshot();
+    const bool band=qEnvironmentVariable("KACHACAD_OPENING_OWNER_KIND")==QStringLiteral("band");
     std::vector<EntityId> inputs;
     // The supplied cap's six perimeter wires and four opening wires, all in model coordinates.
-    for(const char* suffix:{"041b","0481","0487","048a","041e","0484","15b3","15b6","15bf","15d0"}){
+    const std::vector<const char*> suffixes=band
+        ?std::vector<const char*>{"07aa","1612","1615","1618","1658","1667","1691","1664","1661","166a","165b","165e"}
+        :std::vector<const char*>{"041b","0481","0487","048a","041e","0484","15b3","15b6","15bf","15d0"};
+    for(const char* suffix:suffixes){
         const auto found=std::find_if(original.entities.begin(),original.entities.end(),[&](const auto& e){return e.id.ToString().ends_with(suffix);});
         if(found==original.entities.end())return false;inputs.push_back(found->id);
     }
     w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
     w.RunCommand("selection.activate");w.Viewport().SetSelection({});
-    auto* tree=w.EntityTree();if(!tree)return false;
-    for(std::size_t i=0;i<inputs.size();++i){
-        auto* item=tree->FindKey("entity:"+QString::fromStdString(inputs[i].ToString()));if(!item)return false;
-        for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
-        tree->scrollToItem(item);tree->setFocus();QApplication::processEvents();
-        const auto at=tree->visualItemRect(item).intersected(tree->viewport()->rect()).center();
-        if(tree->itemAt(at)!=item)return false;
-        MouseClick(*tree->viewport(),at,i?Qt::ControlModifier:Qt::NoModifier);QApplication::processEvents();
-        Note((std::string("selected ")+inputs[i].ToString()+" count="+std::to_string(w.Viewport().Selection().entityIds.size())).c_str());
-    }
-    if(!Explain("actual cap perimeter and opening selected through explorer",w.Viewport().Selection().entityIds.size()==inputs.size()))return false;
+    const bool viewportPick=qEnvironmentVariable("KACHACAD_OPENING_OWNER_PICK")==QStringLiteral("view");
+    if(!Explain("perimeter and opening selected with actual Ctrl clicks",OwnerPickInputs(w,inputs,viewportPick)))return false;
     if(!w.Ribbon().ClickCategory(QStringLiteral("面作成"))||!w.Ribbon().ClickTool(QStringLiteral("面にする")))return false;
     QApplication::processEvents();
+    if(viewportPick){
+        auto* whole=w.findChild<QPushButton*>("loopFacesWholeWires");
+        if(whole&&whole->isVisible()&&whole->isEnabled()){
+            MouseClick(*whole,whole->rect().center(),Qt::NoModifier);QApplication::processEvents();
+        }
+    }
     const auto& plan=w.LoopFacesTool().Plan();if(plan)Note(plan->summaryJa.c_str());
     for(const auto* label:w.findChildren<QLabel*>())if(label->text().contains(QStringLiteral("生成不可")))Note(label->text().toStdString().c_str());
     const auto output=qEnvironmentVariable("KACHACAD_OPENING_OWNER_OUTPUT");
@@ -415,15 +490,18 @@ bool CaseOwnerCurvedOpening(V2MainWindow& w)
     const auto snapshot=w.Session().GetDocument().Snapshot();EntityId made;
     for(const auto& e:snapshot.entities)if(e.kind==EntityKind::GuideSurface
         &&std::none_of(original.entities.begin(),original.entities.end(),[&](const auto& old){return old.id==e.id;}))made=e.id;
-    std::vector<modeling::ShapeMesh> meshes;
-    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==made)meshes.push_back(shape.mesh);
-    if(!Explain("light opening empty, surrounding curved material retained",!meshes.empty()
-        &&!modeling::PickMesh(meshes,{0,12.5,60},{0,0,-1})&&modeling::PickMesh(meshes,{6,12.5,60},{0,0,-1}).has_value()))return false;
-    if(!output.isEmpty())w.grab().save(output+"-result.png");
+    if(!Explain("opening empty, surrounding material and original definitions retained",OwnerOpeningRays(w,made,inputs,band)
+        &&OwnerInputsPreserved(w,original)))return false;
+    if(!output.isEmpty()){
+        app::SelectionSet result;result.entityIds={made};w.Viewport().SetSelection(result);
+        w.Viewport().IsolateSelection();w.RunCommand("view.fit_selection");QApplication::processEvents();
+        w.grab().save(output+"-result.png");w.Viewport().ClearIsolation();
+    }
     w.RunCommand("selection.activate");w.RunCommand("edit.undo");
     if(CountOfKind(w,EntityKind::GuideSurface)!=before)return false;
     w.RunCommand("edit.redo");
-    return w.SaveAndReopen("owner-curved-opening.kcd2")&&w.RebuildProblems().isEmpty();
+    return w.SaveAndReopen("owner-curved-opening.kcd2")&&w.RebuildProblems().isEmpty()
+        &&OwnerInputsPreserved(w,original)&&OwnerOpeningRays(w,made,inputs,band);
 }
 }
 std::vector<SelfTestCase> LoopFacesHrubberCases()

@@ -232,6 +232,17 @@ bool SelectTree(V2MainWindow& w, EntityId id)
     return true;
 }
 
+bool ToggleTreeVisibility(V2MainWindow& w, EntityId id)
+{
+    auto* tree=w.EntityTree();auto* row=w.ItemOfEntity(id);if(!tree||!row)return false;
+    for(auto* parent=row->parent();parent;parent=parent->parent())parent->setExpanded(true);
+    tree->scrollToItem(row);QApplication::processEvents();
+    QStyleOptionViewItem option;option.initFrom(tree);option.rect=tree->visualItemRect(row);
+    option.features|=QStyleOptionViewItem::HasCheckIndicator;option.checkState=row->checkState(0);
+    const auto checkbox=tree->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator,&option,tree).center();
+    Click(*tree->viewport(),checkbox);return true;
+}
+
 bool SelectDrawingPlane(V2MainWindow& w, const QString& text)
 {
     auto* combo = w.findChild<QComboBox*>("drawingPlane");
@@ -388,13 +399,7 @@ bool HiddenSupportBoundaries(V2MainWindow& w)
     auto* row = w.ItemOfEntity(guide);
     if (!tree || !row) return false;
     for (const auto hidden : {true, false}) {
-        tree->scrollToItem(row); QApplication::processEvents();
-        QStyleOptionViewItem option; option.initFrom(tree);
-        option.rect = tree->visualItemRect(row);
-        option.features |= QStyleOptionViewItem::HasCheckIndicator;
-        option.checkState = row->checkState(0);
-        const auto checkbox = tree->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &option, tree).center();
-        Click(*tree->viewport(), checkbox);
+        if(!ToggleTreeVisibility(w,guide))return false;
         const auto* entity = w.Session().GetDocument().FindEntity(guide);
         if (!Explain("左一覧のチェックで面の表示を変更", entity && entity->visibility
                 == (hidden ? domain::Visibility::Hidden : domain::Visibility::Visible))) return false;
@@ -1158,13 +1163,15 @@ bool DrawingFaceCamera(V2MainWindow& w,bool tangent)
         &&w.Session().GetDocument().Revision()==revision&&geometry::Distance(viewport.WorkPlane().origin,frame.origin)<1e-10);
 }
 
-bool DirectOriginalOffset(V2MainWindow& w,bool tangent,bool tree,bool owner=false)
+bool DirectOriginalOffset(V2MainWindow& w,bool tangent,bool tree,bool owner=false,bool hide=false,bool preselect=false)
 {
     Setup(w);EntityId face;
     if(owner){
         if(!w.OpenDocumentFile(qEnvironmentVariable("KACHACAD_FACE_SKETCH_OWNER_FILE")))return false;
+        const auto specified=qEnvironmentVariable("KACHACAD_FACE_SKETCH_OWNER_FACE");
         for(const auto& item:w.Session().GetDocument().Snapshot().entities)
-            if(item.kind==EntityKind::GuideSurface&&item.displayName=="非運転席側側窓")face=item.id;
+            if(item.kind==EntityKind::GuideSurface&&(specified.isEmpty()?item.displayName=="非運転席側側窓"
+                :item.id.ToString()==specified.toStdString()))face=item.id;
         if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({face},domain::Visibility::Visible)).committed)return false;
         w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
     }else face=tangent?WarpedGuide(w):MakeGuide(w,12,true);
@@ -1176,17 +1183,31 @@ bool DirectOriginalOffset(V2MainWindow& w,bool tangent,bool tree,bool owner=fals
     if(!w.Session().GetDocument().Run(document::SetVisibilityCommand({source},domain::Visibility::Visible)).committed
         ||!w.SaveAndReopen("direct-edit-source.kcd2")||!PickDrawingFace(w,face))return false;
     const auto original=w.Session().Scene().curves;const auto frame=w.Viewport().WorkPlane();
+    if(hide){
+        if(!ToggleTreeVisibility(w,face))return false;
+        const auto& current=w.Viewport().WorkPlane();const auto* hidden=w.Session().GetDocument().FindEntity(face);
+        if(!Explain("面を非表示にしても作図面の原点と全軸を固定する",hidden&&hidden->visibility==domain::Visibility::Hidden
+            &&w.ActiveWorkPlaneId()==face&&geometry::Distance(current.origin,frame.origin)<1e-10
+            &&geometry::Distance(current.normal,frame.normal)<1e-10&&geometry::Distance(current.uAxis,frame.uAxis)<1e-10
+            &&geometry::Distance(current.vAxis,frame.vAxis)<1e-10))return false;
+    }
     const auto beforeEntities=w.Session().GetDocument().Snapshot().entities;
     const auto at=std::find_if(original.begin(),original.end(),[&](const auto& c){return c.entityId==source;});
     if(at==original.end())return false;
     const int wires=CountOfKind(w,EntityKind::Wire),surfaces=CountOfKind(w,EntityKind::GuideSurface);
+    if(preselect&&!SelectTree(w,source))return false;
     if(!w.Ribbon().ClickCategory(QStringLiteral("編集"))||!w.Ribbon().ClickTool(QStringLiteral("オフセット")))return false;
-    if(!(tree?SelectTree(w,source):ClickWorld(w,at->segment.Evaluate(.4))))return false;
+    if(!preselect&&!(tree?SelectTree(w,source):ClickWorld(w,at->segment.Evaluate(.4))))return false;
     auto* plane=w.findChild<QComboBox*>("offsetPlaneChoice");auto* distance=w.findChild<QDoubleSpinBox*>("offsetDistance");
     if(!Explain("面の作図も通常作図と同じ加工平面を既定にする",plane&&distance&&plane->currentIndex()==1))return false;
     distance->setValue(-.3);V2OffsetTool::Refresh(w);
     if(owner)Shot(w,"owner-direct-offset-diagnostic");
     const auto* status=w.findChild<QLabel*>("offsetStatus");
+    if(hide){
+        const auto* drawing=w.findChild<QComboBox*>("drawingPlane");
+        if(!Explain("面を隠した後もオフセット欄で作図先を確認できる",status&&drawing
+            &&status->text().contains(drawing->currentText())))return false;
+    }
     if(!Explain(("元ワイヤを直接選んで下見できる: "+(status?status->text().toStdString():std::string("no panel"))).c_str(),!w.Viewport().ToolPreview().empty()&&w.Viewport().Selection().entityIds.size()==1))return false;
     Shot(w,tangent?"direct-tangent-source-offset-preview":"direct-planar-source-offset-preview");
     if(!ClickNamed(w,"offsetConfirm")||!Explain("輪郭コピーを要求せずオフセットだけ追加",CountOfKind(w,EntityKind::Wire)==wires+1
@@ -1386,6 +1407,8 @@ std::vector<SelfTestCase> FaceDrawingCases()
     cases.push_back({"DIRECT-EDIT tangent plane camera keeps pending input",[](auto& w){return DrawingFaceCamera(w,true);}});
     cases.push_back({"DIRECT-EDIT original face wire viewport offset on drawing plane",[](auto& w){return DirectOriginalOffset(w,false,false);}});
     cases.push_back({"DIRECT-EDIT original face wire explorer offset on tangent plane",[](auto& w){return DirectOriginalOffset(w,true,true);}});
+    cases.push_back({"DIRECT-EDIT hide planar drawing face before selecting offset wire",[](auto& w){return DirectOriginalOffset(w,false,true,false,true,true);}});
+    cases.push_back({"DIRECT-EDIT hide tangent drawing face before selecting offset wire",[](auto& w){return DirectOriginalOffset(w,true,true,false,true,true);}});
     cases.push_back({"DIRECT-EDIT smooth spline C preserves unselected straight section",[](auto& w){return LogicalSplineCorner(w,false);}});
     cases.push_back({"DIRECT-EDIT smooth spline R preserves unselected straight section",[](auto& w){return LogicalSplineCorner(w,true);}});
     cases.push_back({"DIRECT-EDIT disconnected lines extend for C",[](auto& w){return DisconnectedCorner(w,false);}});
@@ -1396,6 +1419,8 @@ std::vector<SelfTestCase> FaceDrawingCases()
     cases.push_back({"DIRECT-EDIT hover spline trim preview confirm undo reopen",[](auto& w){return HoverSplineSplit(w,true);}});
     if(!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
         cases.push_back({"DIRECT-EDIT supplied ER1 original wire offset without outline copy",[](auto& w){return DirectOriginalOffset(w,true,true,true);}});
+    if(!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FACE"))
+        cases.push_back({"DIRECT-EDIT supplied ER1 hide drawing face then select offset wire",[](auto& w){return DirectOriginalOffset(w,true,true,true,true,true);}});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))
         cases.push_back({"FACE-OUTLINE supplied ER1 skew face project offset", OwnerOutline});
     if (!qEnvironmentVariableIsEmpty("KACHACAD_FACE_SKETCH_OWNER_FILE"))

@@ -254,6 +254,6 @@ void V2FaceActions::DrawOnFace(const app::SelectionRef& ref)
         if (!window.snapEnabled_) window.ToggleSnap();
         window.SetStatus(planar
             ? QStringLiteral("選んだ面で作図できます。境界線との交点・端点やグリッドを指定できます。")
-            : QStringLiteral("選択位置の接平面で作図します。グリッドの交点や任意の位置をクリックしてください。"));
+            : QStringLiteral("曲面の接平面で作図します。元の曲面へ線を載せるときは「面へ投影」を使います。"));
     });
 }

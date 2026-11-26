@@ -128,6 +128,9 @@ void V2OffsetTool::Preview() {
     view.ShowToolPreview(app::SurfaceBoundaryLines(made.Value(),24));
     auto text=QStringLiteral("加工平面：%1。%2辺の下見。Enterで確定、Escで入力だけ取り消します。")
         .arg(plane_->currentText()).arg(made.Value().size());
+    if(plane_->currentIndex()==1)if(const auto* drawing=window_.findChild<QComboBox*>("drawingPlane"))
+        text+=QStringLiteral("\n結果の作図面：%1。この平面上に線を作ります。曲面へ沿わせる仕上げは「面へ投影」で行います。")
+            .arg(drawing->currentText());
     if(plane_->currentIndex()!=0){
         double maximum=0,squares=0;std::size_t count=0;
         for(const auto& curve:inputs)for(const auto& sample:geometry::SampleCurve(curve,tolerance.modelLinearMm,256)){

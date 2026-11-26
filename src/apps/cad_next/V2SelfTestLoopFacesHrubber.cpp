@@ -2,6 +2,7 @@
 #include "V2EntityTree.h"
 #include "V2LoopFacesTool.h"
 #include "V2MainWindow.h"
+#include "V2Ribbon.h"
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/Selection.h"
@@ -377,10 +378,60 @@ bool CaseLoopFacesWholeWires(V2MainWindow& w)
         &&CountOfKind(w,EntityKind::GuideSurface)==0);
 }
 } // namespace
+namespace {
+bool CaseOwnerCurvedOpening(V2MainWindow& w)
+{
+    const auto path=qEnvironmentVariable("KACHACAD_OPENING_OWNER_FILE");
+    if(path.isEmpty()||!w.OpenDocumentFile(path))return false;
+    const auto original=w.Session().GetDocument().Snapshot();
+    std::vector<EntityId> inputs;
+    // The supplied cap's six perimeter wires and four opening wires, all in model coordinates.
+    for(const char* suffix:{"041b","0481","0487","048a","041e","0484","15b3","15b6","15bf","15d0"}){
+        const auto found=std::find_if(original.entities.begin(),original.entities.end(),[&](const auto& e){return e.id.ToString().ends_with(suffix);});
+        if(found==original.entities.end())return false;inputs.push_back(found->id);
+    }
+    w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
+    w.RunCommand("selection.activate");w.Viewport().SetSelection({});
+    auto* tree=w.EntityTree();if(!tree)return false;
+    for(std::size_t i=0;i<inputs.size();++i){
+        auto* item=tree->FindKey("entity:"+QString::fromStdString(inputs[i].ToString()));if(!item)return false;
+        for(auto* parent=item->parent();parent;parent=parent->parent())parent->setExpanded(true);
+        tree->scrollToItem(item);tree->setFocus();QApplication::processEvents();
+        const auto at=tree->visualItemRect(item).intersected(tree->viewport()->rect()).center();
+        if(tree->itemAt(at)!=item)return false;
+        MouseClick(*tree->viewport(),at,i?Qt::ControlModifier:Qt::NoModifier);QApplication::processEvents();
+        Note((std::string("selected ")+inputs[i].ToString()+" count="+std::to_string(w.Viewport().Selection().entityIds.size())).c_str());
+    }
+    if(!Explain("actual cap perimeter and opening selected through explorer",w.Viewport().Selection().entityIds.size()==inputs.size()))return false;
+    if(!w.Ribbon().ClickCategory(QStringLiteral("面作成"))||!w.Ribbon().ClickTool(QStringLiteral("面にする")))return false;
+    QApplication::processEvents();
+    const auto& plan=w.LoopFacesTool().Plan();if(plan)Note(plan->summaryJa.c_str());
+    for(const auto* label:w.findChildren<QLabel*>())if(label->text().contains(QStringLiteral("生成不可")))Note(label->text().toStdString().c_str());
+    const auto output=qEnvironmentVariable("KACHACAD_OPENING_OWNER_OUTPUT");
+    if(!output.isEmpty())w.grab().save(output+"-preview.png");
+    if(!Explain("actual selected curved opening has a surface preview",plan&&plan->faces.size()==1&&w.Viewport().ToolPreviewFaceCount()>0))return false;
+    const int before=CountOfKind(w,EntityKind::GuideSurface);
+    if(!w.HandleToolKey(Qt::Key_Return,nullptr)||CountOfKind(w,EntityKind::GuideSurface)!=before+1)return false;
+    const auto snapshot=w.Session().GetDocument().Snapshot();EntityId made;
+    for(const auto& e:snapshot.entities)if(e.kind==EntityKind::GuideSurface
+        &&std::none_of(original.entities.begin(),original.entities.end(),[&](const auto& old){return old.id==e.id;}))made=e.id;
+    std::vector<modeling::ShapeMesh> meshes;
+    for(const auto& shape:w.Viewport().ShapeViews())if(shape.entityId==made)meshes.push_back(shape.mesh);
+    if(!Explain("light opening empty, surrounding curved material retained",!meshes.empty()
+        &&!modeling::PickMesh(meshes,{0,12.5,60},{0,0,-1})&&modeling::PickMesh(meshes,{6,12.5,60},{0,0,-1}).has_value()))return false;
+    if(!output.isEmpty())w.grab().save(output+"-result.png");
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    if(CountOfKind(w,EntityKind::GuideSurface)!=before)return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("owner-curved-opening.kcd2")&&w.RebuildProblems().isEmpty();
+}
+}
 std::vector<SelfTestCase> LoopFacesHrubberCases()
 {
     std::vector<SelfTestCase> cases{{"HP-LF-OPEN-INNER 閉じていない窓を別の閉輪で埋めない",CaseLoopFacesOpenInner}};
     cases.push_back({"HP-LF-WHOLE-WIRES 部分区間から明示的に選択ワイヤー全体へ切り替える",CaseLoopFacesWholeWires});
+    if(qEnvironmentVariableIsSet("KACHACAD_OPENING_OWNER_FILE"))
+        cases.push_back({"HP-LF-OWNER-OPENING actual curved cap and projected opening",CaseOwnerCurvedOpening});
     if(qEnvironmentVariableIsSet("KACHACAD_SURFACE_TEST_FILE")){
         cases.push_back({"HP-LF-115-HRUBBER パノラマ窓の投影継ぎ目を補正して面にする",[](V2MainWindow& w){return CaseLoopFacesPanoramaHrubber(w);}});
         cases.push_back({"HP-LF-115-HRUBBER-COMPOUND 同じ内外周を1ワイヤで選び穴付きの帯と立体にする",[](V2MainWindow& w){return CaseLoopFacesPanoramaHrubber(w,true);}});

@@ -458,15 +458,18 @@ bool CaseOwnerCurvedOpening(V2MainWindow& w)
     const auto path=qEnvironmentVariable("KACHACAD_OPENING_OWNER_FILE");
     if(path.isEmpty()||!w.OpenDocumentFile(path))return false;
     const auto original=w.Session().GetDocument().Snapshot();
-    const bool band=qEnvironmentVariable("KACHACAD_OPENING_OWNER_KIND")==QStringLiteral("band");
+    const auto kind=qEnvironmentVariable("KACHACAD_OPENING_OWNER_KIND");
+    const bool band=kind.startsWith(QStringLiteral("band"));
     std::vector<EntityId> inputs;
     // The supplied cap's six perimeter wires and four opening wires, all in model coordinates.
-    const std::vector<const char*> suffixes=band
-        ?std::vector<const char*>{"07aa","1612","1615","1618","1658","1667","1691","1664","1661","166a","165b","165e"}
+    const std::vector<const char*> suffixes=kind==QStringLiteral("band-current")
+        ?std::vector<const char*>{"07aa","1612","1615","1618","16a5"}
+        :band?std::vector<const char*>{"07aa","1612","1615","1618","1658","1667","1691","1664","1661","166a","165b","165e"}
         :std::vector<const char*>{"041b","0481","0487","048a","041e","0484","15b3","15b6","15bf","15d0"};
     for(const char* suffix:suffixes){
         const auto found=std::find_if(original.entities.begin(),original.entities.end(),[&](const auto& e){return e.id.ToString().ends_with(suffix);});
-        if(found==original.entities.end())return false;inputs.push_back(found->id);
+        if(found==original.entities.end()){Note((std::string("fixture input no longer present: ")+suffix).c_str());return false;}
+        inputs.push_back(found->id);
     }
     w.resize(1600,1000);w.Viewport().SetViewDirection(ViewDirection::Isometric);w.Viewport().FitToDocument();
     w.RunCommand("selection.activate");w.Viewport().SetSelection({});

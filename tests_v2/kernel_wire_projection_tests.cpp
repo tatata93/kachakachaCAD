@@ -23,10 +23,8 @@
 #include <TopoDS_Shape.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
-#include <TColgp_Array2OfPnt.hxx>
-#include <TColStd_Array2OfReal.hxx>
-#include <TColStd_Array1OfReal.hxx>
-#include <TColStd_Array1OfInteger.hxx>
+#include <NCollection_Array1.hxx>
+#include <NCollection_Array2.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Cylinder.hxx>
 #include <gp_Cone.hxx>
@@ -283,6 +281,26 @@ KACHA_V2_TEST(projection, SurfaceHoleSourceSeparateFromContinuityAndReportsDevia
     request.chains.back().supportShapeHandle=0;
     Require(!kernel::BuildSurfaceWithHoles(request,{}).HasValue(),"missing explicit source cannot silently refill");
 }
+KACHA_V2_TEST(projection, NewSurfaceFollowsRaisedOpeningWithoutReplacingExplicitSource) {
+    modeling::GuideSurfaceRequest request;request.method=modeling::GuideSurfaceMethod::BoundaryFill;
+    modeling::GuideChain outer;outer.role=modeling::ChainRole::BoundarySide;outer.closed=true;outer.segments=ClosedSquare(0);
+    modeling::GuideChain hole;hole.role=modeling::ChainRole::HoleBoundary;hole.closed=true;
+    hole.segments={geometry::CurveSegment::MakeCircle({0,0,.04},{0,0,1},{1,0,0},.6).Value()};
+    request.chains={outer,hole};
+    const auto made=kernel::BuildSurfaceWithHoles(request,{});Require(made.HasValue(),made.FirstMessageJa());
+    Require(made.Value().maximumDeviationMm<.001,"both outer and raised opening curves are retained");
+    const auto frame=kernel::OutputSurfaceFrame(made.Value().handle,{.6,0,.04});
+    Require(frame.HasValue()&&geometry::Distance(frame.Value().origin,{.6,0,.04})<.001,"opening is not flattened onto outer plane");
+    const auto mesh=kernel::BuildShapeMesh(made.Value().handle);Require(mesh.HasValue(),mesh.FirstMessageJa());
+    Require(!modeling::PickMesh({mesh.Value()},{0,0,1},{0,0,-1}),"raised opening is empty");
+    Require(modeling::PickMesh({mesh.Value()},{1.5,0,1},{0,0,-1}).has_value(),"surrounding material retained");
+    kernel::ReleaseShape(made.Value().handle);
+    auto plane=Plane();const auto original=kernel::CaptureOutputShape(plane.h).Value();
+    modeling::GuideChain source;source.role=modeling::ChainRole::SourceSurface;source.supportShapeHandle=plane.h.value;
+    request.chains.push_back(source);
+    Require(!kernel::BuildSurfaceWithHoles(request,{}).HasValue(),"explicit plane cannot be refilled to match an off-surface opening");
+    Require(kernel::CaptureOutputShape(plane.h).Value()==original,"rejected explicit support remains unchanged");
+}
 KACHA_V2_TEST(projection, SurfaceRegionOrderAndInteriorPatches) {
     std::vector<modeling::KernelShapeHandle> patches;
     for(int x=-2;x<2;++x)for(int y=-2;y<2;++y)
@@ -307,6 +325,40 @@ KACHA_V2_TEST(projection, SurfaceRegionNeverIncludesCylinderRear) {
     const auto mesh=kernel::BuildShapeMesh(patch.Value());Require(mesh.HasValue(),mesh.FirstMessageJa());
     Require(mesh.Value().minimum.x>9,"front-only window never generates the opposite patch");
     kernel::ReleaseShape(patch.Value());
+}
+KACHA_V2_TEST(projection, NativeCurvedRimKeepsTwoOpeningsAcrossSupportSeam) {
+    Owned left(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),-geometry::kPi*.5,0,-5,5).Face());
+    Owned right(BRepBuilderAPI_MakeFace(gp_Cylinder(gp_Ax3(),10),0,geometry::kPi*.5,-5,5).Face());
+    const auto leftBytes=kernel::CaptureOutputShape(left.h).Value(),rightBytes=kernel::CaptureOutputShape(right.h).Value();
+    auto lower=geometry::CurveSegment::MakeCircularArc({0,0,-5},{0,0,1},{1,0,0},10,-geometry::kPi*.5,geometry::kPi).Value();
+    auto upper=geometry::CurveSegment::MakeCircularArc({0,0,5},{0,0,1},{1,0,0},10,-geometry::kPi*.5,geometry::kPi).Value();
+    std::vector<std::vector<geometry::CurveSegment>> loops{{lower,Line(lower.EndPoint(),upper.EndPoint()),
+        geometry::ReverseCurve(upper).Value(),Line(upper.StartPoint(),lower.StartPoint())}};
+    for(double z:{-2.,2.}){
+        const auto circle=geometry::CurveSegment::MakeCircle({20,0,z},{1,0,0},{0,1,0},.75).Value();
+        const auto projected=kernel::ProjectNativeWires({left.h,right.h},{{{circle},{-1,0,0}}},Options());
+        Require(projected.HasValue(),projected.FirstMessageJa());Require(projected.Value().wires.size()==1,"one closed opening across seam");
+        loops.push_back(projected.Value().wires.front());
+    }
+    const auto cut=kernel::TrimSurfaceRegion({left.h,right.h},loops,{},Options().toleranceMm);
+    Require(cut.HasValue(),cut.FirstMessageJa());
+    const auto mesh=kernel::BuildShapeMesh(cut.Value());Require(mesh.HasValue(),mesh.FirstMessageJa());
+    for(double z:{-2.,2.})Require(!modeling::PickMesh({mesh.Value()},{20,0,z},{-1,0,0}),"both openings remain empty");
+    Require(modeling::PickMesh({mesh.Value()},{20,4,0},{-1,0,0}).has_value(),"curved surrounding material retained");
+    Require(mesh.Value().minimum.y<-9.999&&mesh.Value().maximum.y>9.999,"tangent curved rim retained");
+    Require(kernel::CaptureOutputShape(left.h).Value()==leftBytes&&kernel::CaptureOutputShape(right.h).Value()==rightBytes,
+        "native supports unchanged after cutting");kernel::ReleaseShape(cut.Value());
+}
+KACHA_V2_TEST(projection, NearbySmallerOuterBoundaryStillTrimsTheSource) {
+    Owned source(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(),gp_Dir(0,0,1)),-2,2,-2,2).Face());
+    const double r=1.995;
+    const std::vector<geometry::CurveSegment> outer{Line({-r,-r,0},{r,-r,0}),Line({r,-r,0},{r,r,0}),
+        Line({r,r,0},{-r,r,0}),Line({-r,r,0},{-r,-r,0})};
+    const auto cut=kernel::TrimSurfaceRegion({source.h},{outer},{},.01);Require(cut.HasValue(),cut.FirstMessageJa());
+    const auto mesh=kernel::BuildShapeMesh(cut.Value());Require(mesh.HasValue(),mesh.FirstMessageJa());
+    Require(modeling::PickMesh({mesh.Value()},{0,0,1},{0,0,-1}).has_value(),"selected interior retained");
+    Require(!modeling::PickMesh({mesh.Value()},{1.998,0,1},{0,0,-1}),"nearby source rim is not substituted for selected boundary");
+    kernel::ReleaseShape(cut.Value());
 }
 KACHA_V2_TEST(projection, ObliqueProjectionKeepsNearestFaceAndSourceParameter) {
     auto first=Plane(10),second=Plane(20);
@@ -377,10 +429,10 @@ KACHA_V2_TEST(projection, CircularAndBezierSourcesStaySmooth) {
     Require(spline.Value().wires.front().front().Kind()!=geometry::CurveKind::Line,"curved source never flattened to lines");
 }
 KACHA_V2_TEST(projection, PeriodicComplementaryArcsOnSplinePlane) {
-    TColgp_Array2OfPnt p(1,2,1,2);
+    NCollection_Array2<gp_Pnt> p(1,2,1,2);
     for(int i=1;i<=2;++i)for(int j=1;j<=2;++j){const double x=i==1?-30:30,y=j==1?-30:30;p.SetValue(i,j,gp_Pnt(x,y,.08*x));}
-    TColStd_Array1OfReal k(1,2);k.SetValue(1,0);k.SetValue(2,1);
-    TColStd_Array1OfInteger m(1,2);m.SetValue(1,2);m.SetValue(2,2);
+    NCollection_Array1<double> k(1,2);k.SetValue(1,0);k.SetValue(2,1);
+    NCollection_Array1<int> m(1,2);m.SetValue(1,2);m.SetValue(2,2);
     occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(p,k,k,m,m,1,1);
     Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());
     for(const double radius:{.1,.75,1.25,1.5,4.0})for(const double phase:{0.0,.4,1.7})for(const double sign:{-1.0,1.0}) {
@@ -430,8 +482,8 @@ KACHA_V2_TEST(projection, NativeCurveFormsAndUnnecessarySplits) {
     Require(line.HasValue()&&line.Value().wires.front().size()==1&&line.Value().wires.front().front().Kind()==geometry::CurveKind::Line,"collinear source splits do not create extra projected segments");
 }
 KACHA_V2_TEST(projection, PlanarSplineSupportPreservesSourceTypes) {
-    TColgp_Array2OfPnt p(1,2,1,2);for(int i=1;i<=2;++i)for(int j=1;j<=2;++j)p.SetValue(i,j,gp_Pnt(i==1?-30:30,j==1?-30:30,0));
-    TColStd_Array1OfReal k(1,2);k.SetValue(1,0);k.SetValue(2,1);TColStd_Array1OfInteger m(1,2);m.SetValue(1,2);m.SetValue(2,2);
+    NCollection_Array2<gp_Pnt> p(1,2,1,2);for(int i=1;i<=2;++i)for(int j=1;j<=2;++j)p.SetValue(i,j,gp_Pnt(i==1?-30:30,j==1?-30:30,0));
+    NCollection_Array1<double> k(1,2);k.SetValue(1,0);k.SetValue(2,1);NCollection_Array1<int> m(1,2);m.SetValue(1,2);m.SetValue(2,2);
     occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(p,k,k,m,m,1,1);Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());
     const std::vector<geometry::CurveSegment> sources={Line({-2,0,3},{2,0,3}),
         geometry::CurveSegment::MakeCircle({0,0,3},{0,0,1},{1,0,0},2).Value(),
@@ -473,9 +525,9 @@ KACHA_V2_TEST(projection, NearbyDisconnectedSourcesAreNeverHealed) {
     Require(r.HasValue(),r.FirstMessageJa());Require(r.Value().wires.size()==2&&r.Value().openEnds==4,"distinct nearby sources stay disconnected");
 }
 KACHA_V2_TEST(projection, RationalDegreeSevenSurface) {
-    TColgp_Array2OfPnt points(1,8,1,8);TColStd_Array2OfReal weights(1,8,1,8);
+    NCollection_Array2<gp_Pnt> points(1,8,1,8);NCollection_Array2<double> weights(1,8,1,8);
     for(int i=1;i<=8;++i)for(int j=1;j<=8;++j){const double x=(i-4.5)*3,y=(j-4.5)*3;points.SetValue(i,j,gp_Pnt(x,y,2*std::exp(-(x*x+y*y)/60)));weights.SetValue(i,j,1+.02*(i+j));}
-    TColStd_Array1OfReal knots(1,2);knots.SetValue(1,0);knots.SetValue(2,1);TColStd_Array1OfInteger mult(1,2);mult.SetValue(1,8);mult.SetValue(2,8);
+    NCollection_Array1<double> knots(1,2);knots.SetValue(1,0);knots.SetValue(2,1);NCollection_Array1<int> mult(1,2);mult.SetValue(1,8);mult.SetValue(2,8);
     occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(points,weights,knots,knots,mult,mult,7,7);
     Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());const auto original=kernel::CaptureOutputShape(face.h).Value();
     const auto r=kernel::ProjectNativeWires({face.h},{{ClosedSquare(10),{0,0,-1}}},Options());
@@ -484,10 +536,10 @@ KACHA_V2_TEST(projection, RationalDegreeSevenSurface) {
     Require(kernel::CaptureOutputShape(face.h).Value()==original,"rational input BRep unchanged");
 }
 KACHA_V2_TEST(projection, C0RationalFaceUnchangedInBothProjectionModes) {
-    TColgp_Array2OfPnt points(1,15,1,8);TColStd_Array2OfReal weights(1,15,1,8);
+    NCollection_Array2<gp_Pnt> points(1,15,1,8);NCollection_Array2<double> weights(1,15,1,8);
     for(int i=1;i<=15;++i)for(int j=1;j<=8;++j){const double x=(i-8)*1.5,y=(j-4.5)*3;points.SetValue(i,j,gp_Pnt(x,y,2*std::exp(-(x*x+y*y)/60)));weights.SetValue(i,j,1+.01*(i+j));}
-    TColStd_Array1OfReal uk(1,3),vk(1,2);uk.SetValue(1,0);uk.SetValue(2,.5);uk.SetValue(3,1);vk.SetValue(1,0);vk.SetValue(2,1);
-    TColStd_Array1OfInteger um(1,3),vm(1,2);um.SetValue(1,8);um.SetValue(2,7);um.SetValue(3,8);vm.SetValue(1,8);vm.SetValue(2,8);
+    NCollection_Array1<double> uk(1,3),vk(1,2);uk.SetValue(1,0);uk.SetValue(2,.5);uk.SetValue(3,1);vk.SetValue(1,0);vk.SetValue(2,1);
+    NCollection_Array1<int> um(1,3),vm(1,2);um.SetValue(1,8);um.SetValue(2,7);um.SetValue(3,8);vm.SetValue(1,8);vm.SetValue(2,8);
     occ::handle<Geom_BSplineSurface> surface=new Geom_BSplineSurface(points,weights,uk,vk,um,vm,7,7);
     Owned face(BRepBuilderAPI_MakeFace(surface,1e-7).Face());const auto original=kernel::CaptureOutputShape(face.h).Value();
     for(const auto mode:{kernel::WireProjectionMode::Direction,kernel::WireProjectionMode::Closest}) {

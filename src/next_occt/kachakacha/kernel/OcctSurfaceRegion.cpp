@@ -18,6 +18,7 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepLib.hxx>
 #include <BRepTools.hxx>
 #include <BRepClass_FaceClassifier.hxx>
@@ -48,7 +49,9 @@
 #include <TopoDS.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopExp.hxx>
-#include <TopTools_ListOfShape.hxx>
+#include <NCollection_List.hxx>
+#include <NCollection_IndexedDataMap.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Pln.hxx>
 #include <Standard_Failure.hxx>
@@ -162,6 +165,79 @@ TopoDS_Shape Cutter(const std::vector<geometry::CurveSegment>& loop,
     BRepPrimAPI_MakePrism prism(BRepBuilderAPI_Transform(face.Face(),shift,true).Shape(),ToVector(fit.normal*(2*reach)),true,true);
     Require(prism.IsDone(),"輪郭から切出し領域を作れません。");return prism.Shape();
 }
+std::optional<TopoDS_Shape> IsolatedSupport(modeling::KernelShapeHandle handle)
+{
+    TopoDS_Shape shape;if(!LookupShape(handle,shape))return {};
+    // Sewing and failed boolean operations may still populate edge data.
+    // Keep both topology and geometry separate from the cached source.
+    BRepBuilderAPI_Copy copy(shape,true,false);
+    return copy.IsDone()?std::optional<TopoDS_Shape>(copy.Shape()):std::nullopt;
+}
+std::optional<TopoDS_Shape> WholeSupportRegion(const std::vector<modeling::KernelShapeHandle>& handles,
+    const std::vector<geometry::CurveSegment>& outer,const geometry::GeometryTolerance& tolerance)
+{
+    BRepBuilderAPI_Sewing sewing(tolerance.modelLinearMm);
+    for(const auto handle:handles){
+        const auto shape=IsolatedSupport(handle);if(!shape)return {};
+        for(TopExp_Explorer face(*shape,TopAbs_FACE);face.More();face.Next())sewing.Add(face.Current());
+    }
+    sewing.Perform();const auto region=sewing.SewedShape();
+    if(region.IsNull()||!BRepCheck_Analyzer(region).IsValid())return {};
+    NCollection_IndexedDataMap<TopoDS_Shape,NCollection_List<TopoDS_Shape>,TopTools_ShapeMapHasher> ancestors;
+    TopExp::MapShapesAndAncestors(region,TopAbs_EDGE,TopAbs_FACE,ancestors);
+    BRep_Builder builder;TopoDS_Compound boundary;builder.MakeCompound(boundary);int count=0;
+    for(int i=1;i<=ancestors.Extent();++i){
+        if(ancestors.FindFromIndex(i).Extent()>2)return {};
+        if(ancestors.FindFromIndex(i).Extent()==1){builder.Add(boundary,ancestors.FindKey(i));++count;}
+    }
+    if(!count)return {};
+    const auto requested=ToWire(outer,tolerance.modelLinearMm);if(!requested.HasValue())return {};
+    const double epsilon=tolerance.modelLinearMm*5;
+    const auto near=[&](const gp_Pnt& point,const TopoDS_Shape& target){
+        BRepExtrema_DistShapeShape distance(BRepBuilderAPI_MakeVertex(point).Vertex(),target);
+        return distance.IsDone()&&distance.Value()<=epsilon;
+    };
+    // Check both directions: a smaller selected region must still be trimmed.
+    for(const auto& curve:outer)for(int i=0;i<=32;++i)
+        if(!near(ToPoint(curve.Evaluate(i/32.)),boundary))return {};
+    for(TopExp_Explorer edge(boundary,TopAbs_EDGE);edge.More();edge.Next()){
+        BRepAdaptor_Curve curve(TopoDS::Edge(edge.Current()));
+        for(int i=0;i<=32;++i)
+            if(!near(curve.Value(curve.FirstParameter()+(curve.LastParameter()-curve.FirstParameter())*i/32.),requested.Value()))return {};
+    }
+    return region;
+}
+
+TopoDS_Shape CutWholeSupport(TopoDS_Shape region,const std::vector<std::vector<geometry::CurveSegment>>& loops,
+    const geometry::PlaneFit& fit,double reach,const geometry::GeometryTolerance& tolerance)
+{
+    for(std::size_t i=1;i<loops.size();++i){
+        BRepAlgoAPI_Cut cut;cut.SetNonDestructive(true);
+        NCollection_List<TopoDS_Shape> args,tools;args.Append(region);tools.Append(Cutter(loops[i],fit,reach,tolerance));
+        cut.SetArguments(args);cut.SetTools(tools);cut.Build();
+        Require(cut.IsDone()&&!cut.HasErrors(),"支持面から開口を切り抜けません。");region=cut.Shape();
+    }
+    return region;
+}
+
+TopoDS_Shape ClipSupportFaces(const std::vector<modeling::KernelShapeHandle>& supports,
+    const TopoDS_Shape& cutter,const geometry::GeometryTolerance& tolerance,bool accelerated,bool& usedAcceleration)
+{
+    BRepBuilderAPI_Sewing sewing(tolerance.modelLinearMm);int count=0;
+    for(const auto handle:supports){
+        const auto support=IsolatedSupport(handle);Require(support.has_value(),"支持面がありません。");
+        for(TopExp_Explorer face(*support,TopAbs_FACE);face.More();face.Next()){
+            BRepAlgoAPI_Common common;common.SetNonDestructive(true);
+            if(accelerated){common.SetUseOBB(true);common.SetRunParallel(true);usedAcceleration=true;}
+            NCollection_List<TopoDS_Shape> args,tools;args.Append(face.Current());tools.Append(cutter);
+            common.SetArguments(args);common.SetTools(tools);common.Build();
+            Require(common.IsDone()&&!common.HasErrors(),"支持面から輪郭の領域を切り出せません。");
+            for(TopExp_Explorer patch(common.Shape(),TopAbs_FACE);patch.More();patch.Next()){sewing.Add(patch.Current());++count;}
+        }
+    }
+    Require(count>0,"閉輪郭の内側に支持面がありません。");sewing.Perform();return sewing.SewedShape();
+}
+
 double CheckBoundary(const TopoDS_Shape& result,const std::vector<std::vector<geometry::CurveSegment>>& loops,double eps,double& rms) {
     double maximum=0,squared=0;std::size_t count=0;
     BRep_Builder builder;TopoDS_Compound edges;builder.MakeCompound(edges);
@@ -177,6 +253,18 @@ double CheckBoundary(const TopoDS_Shape& result,const std::vector<std::vector<ge
     }
     rms=count?std::sqrt(squared/count):0;
     return maximum;
+}
+std::optional<TopoDS_Shape> TryWholeSupportCut(const std::vector<modeling::KernelShapeHandle>& supports,
+    const std::vector<std::vector<geometry::CurveSegment>>& loops,const geometry::PlaneFit& fit,
+    double reach,const geometry::GeometryTolerance& tolerance,double boundaryTolerance)
+{
+    try{
+        const auto whole=WholeSupportRegion(supports,loops.front(),tolerance);if(!whole)return {};
+        const auto cut=CutWholeSupport(*whole,loops,fit,reach,tolerance);
+        if(!BRepCheck_Analyzer(cut).IsValid())return {};
+        double rms=0;CheckBoundary(cut,loops,boundaryTolerance,rms);return cut;
+    }catch(const Standard_Failure&){return {};}
+    catch(const std::exception&){return {};}
 }
 TopoDS_Shape BoundaryConnected(const TopoDS_Shape& shape,
     const std::vector<geometry::CurveSegment>& boundary,double eps) {
@@ -228,34 +316,22 @@ static Out TrimSurfaceRegionWork(const std::vector<modeling::KernelShapeHandle>&
         Require(area.Length()>tolerance.modelLinearMm*tolerance.modelLinearMm,"輪郭の内側を一意に判定できません。");
         fit.normal=geometry::Normalized(area);
         double reach=1;for(const auto& p:points)reach=std::max(reach,geometry::Distance(p,fit.origin)*4);
-        auto cutter=Cutter(loops.front(),fit,reach,tolerance);
-        for(std::size_t i=1;i<loops.size();++i) {
-            BRepAlgoAPI_Cut cut(cutter,Cutter(loops[i],fit,reach,tolerance));
-            Require(cut.IsDone(),"窓の穴を切り抜けません。");cutter=cut.Shape();
-        }
-        trace("trim-cutter");
-        BRepBuilderAPI_Sewing sewing(tolerance.modelLinearMm);
-        int count=0;
-        for(const auto handle:supports) {
-            TopoDS_Shape support;Require(LookupShape(handle,support),"支持面がありません。");
-            for(TopExp_Explorer f(support,TopAbs_FACE);f.More();f.Next()) {
-                BRepAlgoAPI_Common common;common.SetNonDestructive(true);
-                if(accelerated) {
-                    // Same native operands and tolerances. Tight boxes reduce
-                    // disjoint intersection candidates before the exact solve.
-                    common.SetUseOBB(true);
-                    common.SetRunParallel(true);
-                    usedAcceleration=true;
-                }
-                TopTools_ListOfShape args,tools;args.Append(f.Current());tools.Append(cutter);
-                common.SetArguments(args);common.SetTools(tools);common.Build();
-                Require(common.IsDone()&&!common.HasErrors(),"支持面から輪郭の領域を切り出せません。");
-                for(TopExp_Explorer patch(common.Shape(),TopAbs_FACE);patch.More();patch.Next()) {sewing.Add(patch.Current());++count;}
+        TopoDS_Shape clipped;
+        if(const auto whole=TryWholeSupportCut(supports,loops,fit,reach,tolerance,boundaryTolerance)){
+            // A projected prism can shave a tangent curved rim. An already
+            // matching native boundary needs only its inner openings cut out.
+            clipped=*whole;
+        }else{
+            auto cutter=Cutter(loops.front(),fit,reach,tolerance);
+            for(std::size_t i=1;i<loops.size();++i){
+                BRepAlgoAPI_Cut cut(cutter,Cutter(loops[i],fit,reach,tolerance));
+                Require(cut.IsDone(),"穴の輪郭を切り抜けません。");cutter=cut.Shape();
             }
+            trace("trim-cutter");
+            clipped=ClipSupportFaces(supports,cutter,tolerance,accelerated,usedAcceleration);
         }
-        Require(count>0,"閉輪郭の内側に支持面がありません。");sewing.Perform();
         trace("trim-common-and-sew");
-        const auto result=BoundaryConnected(sewing.SewedShape(),loops.front(),boundaryTolerance);
+        const auto result=BoundaryConnected(clipped,loops.front(),boundaryTolerance);
         Require(BRepCheck_Analyzer(result).IsValid(),"切り出した面が重複または不正です。");
         trace("trim-component-and-validate");
         double rms=0;
@@ -329,7 +405,7 @@ Out TrimFabricationFace(modeling::KernelShapeHandle support,
         Require(BRepCheck_Analyzer(result).IsValid(),"製作境界から作った面が不正です。自己交差や面から離れた辺を確認してください。");
         if(const auto compact=CompactPlanarPolygon(result,tolerance.modelLinearMm))result=*compact;
         return Out::Success(StoreShape(result));
-    }catch(const Standard_Failure& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.GetMessageString()));}
+    }catch(const Standard_Failure& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.what()));}
     catch(const std::exception& e){return Out::Failure(base::MakeError("FAB-O003","製作境界から面を生成できません。",e.what()));}
 #else
     (void)support;(void)loops;(void)tolerance;
@@ -353,7 +429,13 @@ base::Result<modeling::GuideSurfaceResult> BuildSurfaceWithHoles(
     const bool owned=supports.empty();
     std::vector<base::Diagnostic> warnings;
     if(owned) {
-        const auto source=BuildGuideSurface(outer,analysis.Value(),tolerance);
+        auto constrained=outer;
+        for(auto chain:request.chains)if(chain.role==modeling::ChainRole::HoleBoundary){
+            chain.role=modeling::ChainRole::GuideU;constrained.chains.push_back(std::move(chain));
+        }
+        const auto fitting=modeling::AnalyzeGuideSurfaceRequest(constrained,tolerance);
+        if(!fitting.HasValue())return Result::Failure(fitting.Diagnostics());
+        const auto source=BuildGuideSurface(constrained,fitting.Value(),tolerance);
         if(!source.HasValue())return source;
         supports.push_back(source.Value().handle);
         warnings=source.Diagnostics();
@@ -368,7 +450,11 @@ base::Result<modeling::GuideSurfaceResult> BuildSurfaceWithHoles(
     if(!trimmed.HasValue())return Result::Failure(trimmed.Diagnostics());
     warnings.insert(warnings.end(),trimmed.Diagnostics().begin(),trimmed.Diagnostics().end());
 #ifdef KACHACAD_V2_WITH_OCCT
-    TopoDS_Shape shape;LookupShape(trimmed.Value(),shape);
+    TopoDS_Shape shape;
+    if(!LookupShape(trimmed.Value(),shape)){
+        ReleaseShape(trimmed.Value());
+        return Result::Failure(base::MakeError("EXT-008","切り出した面を取得できません。",{}));
+    }
     auto result=detail::FinishSurfaceResult(shape,tolerance);ReleaseShape(trimmed.Value());
     if(!result.HasValue())return result;
     warnings.insert(warnings.end(),result.Diagnostics().begin(),result.Diagnostics().end());

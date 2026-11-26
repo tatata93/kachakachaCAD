@@ -10,6 +10,7 @@
 #include <QKeyEvent>
 #include <QComboBox>
 #include <QDialog>
+#include <QImage>
 #include <QDoubleSpinBox>
 #include <QTreeWidgetItem>
 #include <QEvent>
@@ -278,13 +279,172 @@ bool SelectedWireExtension(V2MainWindow& w) {
     }
     return Explain("actual end click extends only the target and preserves the boundary",!v.PickPending()&&extended&&retained);
 }
+
+bool ZoomedCircularDisplay(V2MainWindow& w, bool circle)
+{
+    using geometry::CurveSegment;
+    w.RunCommand("file.new");
+    w.resize(1600,1000);QApplication::processEvents();
+    auto& view=w.Viewport();
+    constexpr double radius=20.06081081081081;
+    constexpr double angle=0.27;
+    const Vector3 center{0,radius,0};
+    const Vector3 at=center+Vector3{radius*std::cos(angle),radius*std::sin(angle),0};
+    const auto arc=CurveSegment::MakeCircularArc(center,{0,0,1},{1,0,0},radius,-0.4,2.8).Value();
+    const auto source=circle?CurveSegment::MakeCircle(center,{0,0,1},{1,0,0},radius).Value():arc;
+    const auto first=w.AddPlainWire({source},"円形の線",false);
+    if(first.IsNil()||!w.SaveAndReopen("zoomed-circle-input.kcd2"))return false;
+    view.SetViewDirection(ViewDirection::Top);view.SetViewCenter(at);
+    auto display=view.DisplaySettingsNow();display.gridVisible=false;display.workPlaneVisible=false;
+    view.SetDisplaySettings(display);for(int i=0;i<3;++i)view.SetAxisVisible(i,false);
+    view.SetSelection({});view.HoverAt({5,view.height()-40.0});
+    const auto frame=[&]{QImage result(view.size(),QImage::Format_ARGB32);view.render(&result);return result;};
+    const auto nearColor=[](const QImage& image,const geometry::ScreenPoint& pixel,QColor color){
+        for(int y=int(pixel.y)-2;y<=int(pixel.y)+2;++y)for(int x=int(pixel.x)-2;x<=int(pixel.x)+2;++x){
+            if(!image.rect().contains(x,y))continue;
+            const auto c=image.pixelColor(x,y);
+            if(std::abs(c.red()-color.red())+std::abs(c.green()-color.green())+std::abs(c.blue()-color.blue())<40)return true;
+        }
+        return false;
+    };
+    for(const auto direction:{ViewDirection::Top,ViewDirection::Isometric})for(const double pixelsPerMm:{100.0,5000.0,50000.0}){
+        view.SetViewDirection(direction);
+        view.SetVisibleWidthMm(view.width()/pixelsPerMm);
+        const auto image=frame();
+        const auto output=qEnvironmentVariable("KACHACAD_CURVE_ZOOM_PROOF_DIR");
+        if(!output.isEmpty())image.save(output+QString("/base-%1-%2.png").arg(circle).arg(pixelsPerMm));
+        for(int offset:{-180,0,180}){
+            const double a=angle+offset/(radius*pixelsPerMm);
+            const auto p=view.Mapping().Project(center+Vector3{radius*std::cos(a),radius*std::sin(a),0});
+            const auto reason="zoomed curve ink follows analytic circle rather than a coarse cubic: scale="
+                +std::to_string(pixelsPerMm)+" offset="+std::to_string(offset);
+            if(!Explain(reason.c_str(),p
+                &&nearColor(image,*p,view.SemanticColor(app::SemanticState::Default))))return false;
+        }
+    }
+    // A differently trimmed, reversed arc on exactly the same circle must cover it.
+    const auto second=w.AddPlainWire({CurveSegment::MakeCircularArc(center,{0,0,1},{1,0,0},radius,0.7,-0.9).Value()},"同じ円の部分",false);
+    if(second.IsNil()||!w.SaveAndReopen("zoomed-circle-overlap.kcd2"))return false;
+    view.SetViewDirection(ViewDirection::Top);view.SetViewCenter(at);view.SetVisibleWidthMm(view.width()/50000.0);
+    view.SetDisplaySettings(display);for(int i=0;i<3;++i)view.SetAxisVisible(i,false);
+    app::SelectionSet selected;selected.entityIds={second};view.SetSelection(selected);
+    const auto image=frame();
+    const auto p=view.Mapping().Project(at);if(!p)return false;
+    if(!Explain("selection of a reversed partial arc stays on the original circle",nearColor(image,*p,
+            view.SemanticColor(app::SemanticState::Selected))))return false;
+    for(int y=int(p->y)-100;y<=int(p->y)+100;++y)for(int x=int(p->x)-100;x<=int(p->x)+100;++x){
+        const auto ink=image.pixelColor(x,y);
+        if(ink.red()>45||ink.green()>45||ink.blue()>45)continue;
+        const auto world=view.Mapping().UnprojectOntoPlane({x+0.5,y+0.5},{},{0,0,1});
+        if(!Explain("coincident source arcs do not leave a second dark stroke away from the selected curve",world
+            &&std::abs(geometry::Distance(*world,center)-radius)*view.Mapping().PixelsPerMillimeterAt(at)<4.0))return false;
+    }
+    view.SetSelection({});view.HoverAt({p->x,p->y});
+    if(!Explain("hover ink uses the same exact curve position",nearColor(frame(),*p,
+        view.SemanticColor(app::SemanticState::Hover))))return false;
+    const auto output=qEnvironmentVariable("KACHACAD_CURVE_ZOOM_PROOF_DIR");
+    if(!output.isEmpty())image.save(output+(circle?"/circle.png":"/arc.png"));
+    const auto before=w.Session().Scene().curves;
+    if(!w.SaveAndReopen("zoomed-circle-display.kcd2"))return false;
+    return Explain("rendering zoom and selection preserve exact saved curve definitions",
+        w.Session().Scene().curves.size()==before.size()&&std::all_of(before.begin(),before.end(),[&](const auto& old){
+            return std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& now){
+                return now.entityId==old.entityId&&now.segmentId==old.segmentId
+                    &&now.segment.Kind()==old.segment.Kind()&&now.segment.Center()==old.segment.Center()
+                    &&now.segment.Normal()==old.segment.Normal()&&now.segment.ReferenceDirection()==old.segment.ReferenceDirection()
+                    &&now.segment.Radius()==old.segment.Radius()&&now.segment.StartAngleRad()==old.segment.StartAngleRad()
+                    &&now.segment.SweepAngleRad()==old.segment.SweepAngleRad();
+            });
+        }));
 }
-std::vector<SelfTestCase> PointPickingCases(){return {
+
+bool ZoomedArcEndpoint(V2MainWindow& w)
+{
+    using geometry::CurveSegment;using modeling::SnapKind;
+    constexpr double radius=20.06081081081081;
+    const Vector3 corner{12,radius-std::sqrt(radius*radius-144),16.5};
+    const Vector3 crossing{18,radius-std::sqrt(radius*radius-324),16.5};
+    w.RunCommand("file.new");w.resize(1600,1000);QApplication::processEvents();
+    if(w.AddPlainWire({CurveSegment::MakeCircularArc({0,radius,16.5},{0,0,1},
+        {-0.996968676321994,-0.0778039744021556,0},radius,0,2.985827281201636).Value()},"曲線",false).IsNil()
+        ||w.AddPlainWire({CurveSegment::MakeLine(corner,crossing).Value()},"曲線までの線",false).IsNil())return false;
+    app::SelectionSet selected;selected.entityIds={w.ActiveWorkPlaneId()};w.Viewport().SetSelection(selected);
+    w.SetWorkPlaneChooser([&](const WorkPlaneChoice&,const app::WorkPlaneFacts&){
+        WorkPlaneChoice c;c.method=modeling::WorkPlaneMethod::OffsetFromPlane;c.offsetMm=16.5;return std::optional{c};});
+    w.RunCommand("workplane.create");
+    auto& v=w.Viewport();v.SetSnapSuppressed(false);
+    const auto count=CountOfKind(w,domain::EntityKind::Wire);
+    for(const auto direction:{ViewDirection::Top,ViewDirection::Isometric})for(const double scale:{100.0,3000.0,20000.0}){
+        w.RunCommand("draw.line");v.SetViewDirection(direction);v.SetViewCenter(corner);v.SetVisibleWidthMm(35);
+        if(!ClickWorld(v,corner))return false;
+        v.SetViewCenter(crossing);v.SetVisibleWidthMm(v.width()/scale);
+        const auto pixel=v.Mapping().Project(crossing);if(!pixel)return false;
+        v.HoverAt({pixel->x,pixel->y});
+        if(!Explain("a line meeting a curve remains an exact point snap while drawing at every zoom",v.Hover().snap
+            &&(v.Hover().snap->kind==SnapKind::Endpoint||v.Hover().snap->kind==SnapKind::Intersection)
+            &&geometry::Distance(v.Hover().snap->position,crossing)<1e-8))return false;
+        if(!ClickWorld(v,crossing)||!Explain("click commits the actual curve intersection",
+            CountOfKind(w,domain::EntityKind::Wire)==count+1
+            &&geometry::Distance(w.Session().Scene().curves.back().segment.EndPoint(),crossing)<1e-8))return false;
+        w.RunCommand("edit.undo");
+    }
+    return Explain("repeated intersection drawings leave source wires intact",CountOfKind(w,domain::EntityKind::Wire)==count);
+}
+
+bool SharedZoomedCrossings(V2MainWindow& w)
+{
+    const auto file=qEnvironmentVariable("KACHACAD_ZOOM_OWNER_FILE");
+    if(file.isEmpty()||!w.OpenDocumentFile(file))return false;
+    w.resize(1600,1000);QApplication::processEvents();
+    auto& view=w.Viewport();
+    constexpr double radius=20.06081081081081;
+    const auto selectPlane=[&](const QString& name){
+        for(int i=0;i<w.PlaneComboCount();++i)if(w.PlaneComboText(i)==name){w.SelectPlaneCombo(i);return true;}
+        return false;
+    };
+    const auto original=CountOfKind(w,domain::EntityKind::Wire);
+    for(const double x:{-12.0,18.0})for(const auto direction:{ViewDirection::Top,ViewDirection::Isometric}){
+        if(!selectPlane(QStringLiteral("作業面4")))return false;
+        const Vector3 hit{x,radius-std::sqrt(radius*radius-x*x),16.5};
+        w.RunCommand("draw.line");view.SetViewDirection(direction);view.SetViewCenter(hit);
+        view.SetVisibleWidthMm(view.width()/20000.0);view.SetSnapSuppressed(false);
+        const auto pixel=view.Mapping().Project(hit);if(!pixel)return false;
+        view.HoverAt({pixel->x,pixel->y});
+        if(!Explain("shared model gives the actual circle crossing on its own drawing plane",view.Hover().snap
+            &&(view.Hover().snap->kind==modeling::SnapKind::Endpoint||view.Hover().snap->kind==modeling::SnapKind::Intersection)
+            &&geometry::Distance(view.Hover().snap->position,hit)<1e-8))return false;
+        const auto output=qEnvironmentVariable("KACHACAD_CURVE_ZOOM_PROOF_DIR");
+        if(!output.isEmpty()&&direction==ViewDirection::Top)w.grab().save(output+QString("/owner-%1.png").arg(x));
+        if(!ClickWorld(view,hit))return false;
+        view.SetSnapSuppressed(true);const bool clicked=ClickWorld(view,hit+Vector3{0.002,0.002,0});view.SetSnapSuppressed(false);
+        if(!clicked||!Explain("shared model drawing starts at the exact selected crossing",
+            CountOfKind(w,domain::EntityKind::Wire)==original+1
+            &&geometry::Distance(w.Session().Scene().curves.back().segment.StartPoint(),hit)<1e-8))return false;
+        w.RunCommand("edit.undo");
+    }
+    if(!selectPlane(QStringLiteral("作業面6")))return false;
+    w.RunCommand("draw.line");view.SetViewDirection(ViewDirection::Top);
+    const Vector3 offPlane{18,radius-std::sqrt(radius*radius-324),16.5};
+    view.SetViewCenter(offPlane);view.SetVisibleWidthMm(view.width()/20000.0);
+    const auto pixel=view.Mapping().Project(offPlane);if(!pixel)return false;view.HoverAt({pixel->x,pixel->y});
+    return Explain("a crossing 3.5mm away from work plane 6 is not mislabeled as an in-plane intersection",
+        std::abs(view.WorkPlane().origin.z-20)<1e-8
+        &&(!view.Hover().snap||view.Hover().snap->kind!=modeling::SnapKind::Intersection
+            ||geometry::Distance(view.Hover().snap->position,offPlane)>1e-6)
+        &&CountOfKind(w,domain::EntityKind::Wire)==original);
+}
+}
+std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",WorkPlaneRoles},
     {"HP-POINT-INPUT point requests override tools and reject undefined plane hits",GenericPointInputs},
     {"HP-POINT-SNAP 3D intersection midpoint hover and request transitions",SnapAndTransitions},
     {"HP-POINT-ARC draw from a nearby arc crossing on an offset work plane",ArcCrossingDrawing},
+    {"HP-POINT-ZOOM circular arc ink matches analytic geometry at strong zoom",[](auto& w){return ZoomedCircularDisplay(w,false);}},
+    {"HP-POINT-ZOOM circle and reversed partial arc stay coincident at strong zoom",[](auto& w){return ZoomedCircularDisplay(w,true);}},
+    {"HP-POINT-ZOOM draw to an arc endpoint at high zoom and oblique view",ZoomedArcEndpoint},
     {"HP-POINT-TOOLS grid origin measurement and output origin actual clicks",OtherPointTools},
     {"HP-POINT-VISIBLE hidden geometry is ignored and standalone points are picked",PointVisibility},
-    {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension}};}
+    {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension}};
+    if(!qEnvironmentVariableIsEmpty("KACHACAD_ZOOM_OWNER_FILE"))cases.push_back({"HP-POINT-ZOOM-OWNER supplied current model exact and off-plane crossings",SharedZoomedCrossings});
+    return cases;}
 }

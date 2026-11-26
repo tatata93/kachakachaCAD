@@ -27,6 +27,7 @@
 #include <QEvent>
 #include <QFocusEvent>
 #include <QKeyEvent>
+#include <QLineF>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -132,7 +133,6 @@ constexpr double kViewCubeEdgeBandRatio = 0.28;
 //! 平行投影なので、画面に対して正対している円弧は楕円ではなく円になる。
 //! 正対していないときは、細かく分けて折れ線にせず、3次ベジェで近似する。
 //! どちらも「折れ線で描いてしまう」ことは避ける。
-constexpr int kBezierPerQuarterTurn = 1;
 
 } // namespace
 
@@ -364,14 +364,27 @@ void V2Viewport::AppendLine(QPainterPath& path, const CurveSegment& segment,
 void V2Viewport::AppendArc(QPainterPath& path, const CurveSegment& segment,
     bool& started) const
 {
-    // 円弧は折れ線にしない。90度ごとに3次ベジェで表す。
-    // 平行投影では円が楕円になるので、始点・終点・接線を投影して繋ぐ。
+    // 円弧の正本とスナップは厳密な円。表示だけを固定90度ベジェにすると、
+    // 拡大時に交点から外れ、開始角の違う同一円弧も二重に見える。
+    // 平行投影の半径上限と円弧ベジェの最大半径誤差から、画素精度を決める。
     const double sweep = segment.Kind() == CurveKind::Circle
         ? 2.0 * kPi
         : segment.SweepAngleRad();
-    const int pieces = std::max(1,
-        static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 2.0)))
-            * kBezierPerQuarterTurn);
+    int pieces = std::max(1, static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 2.0))));
+    const auto centerPixel = ToScreen(segment.Center());
+    const auto xPixel = ToScreen(segment.Center() + segment.ReferenceDirection() * segment.Radius());
+    const auto yPixel = ToScreen(segment.Center()
+        + kachakacha::v2::geometry::Cross(segment.Normal(), segment.ReferenceDirection()) * segment.Radius());
+    if (!centerPixel || !xPixel || !yPixel) return;
+    const double radiusPx = std::hypot(QLineF(*centerPixel, *xPixel).length(),
+        QLineF(*centerPixel, *yPixel).length());
+    const auto errorPx = [&](double angle) {
+        const double sine = std::sin(std::abs(angle) * 0.25);
+        const double cosine = std::cos(std::abs(angle) * 0.25);
+        const double q = (4.0 / 27.0) * std::pow(sine, 6) / (cosine * cosine);
+        return radiusPx * q / (std::sqrt(1.0 + q) + 1.0);
+    };
+    while (pieces < 4096 && errorPx(sweep / pieces) > 0.05) pieces *= 2;
     const double step = sweep / pieces;
     const double alpha = (4.0 / 3.0) * std::tan(step / 4.0);
     const double startAngle = segment.Kind() == CurveKind::Circle

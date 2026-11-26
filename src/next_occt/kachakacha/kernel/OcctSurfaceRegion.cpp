@@ -193,17 +193,17 @@ std::optional<TopoDS_Shape> WholeSupportRegion(const std::vector<modeling::Kerne
     if(!count)return {};
     const auto requested=ToWire(outer,tolerance.modelLinearMm);if(!requested.HasValue())return {};
     const double epsilon=tolerance.modelLinearMm*5;
-    const auto near=[&](const gp_Pnt& point,const TopoDS_Shape& target){
+    const auto withinTolerance=[&](const gp_Pnt& point,const TopoDS_Shape& target){
         BRepExtrema_DistShapeShape distance(BRepBuilderAPI_MakeVertex(point).Vertex(),target);
         return distance.IsDone()&&distance.Value()<=epsilon;
     };
     // Check both directions: a smaller selected region must still be trimmed.
     for(const auto& curve:outer)for(int i=0;i<=32;++i)
-        if(!near(ToPoint(curve.Evaluate(i/32.)),boundary))return {};
+        if(!withinTolerance(ToPoint(curve.Evaluate(i/32.)),boundary))return {};
     for(TopExp_Explorer edge(boundary,TopAbs_EDGE);edge.More();edge.Next()){
         BRepAdaptor_Curve curve(TopoDS::Edge(edge.Current()));
         for(int i=0;i<=32;++i)
-            if(!near(curve.Value(curve.FirstParameter()+(curve.LastParameter()-curve.FirstParameter())*i/32.),requested.Value()))return {};
+            if(!withinTolerance(curve.Value(curve.FirstParameter()+(curve.LastParameter()-curve.FirstParameter())*i/32.),requested.Value()))return {};
     }
     return region;
 }

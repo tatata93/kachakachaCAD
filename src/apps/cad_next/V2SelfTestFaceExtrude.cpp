@@ -19,6 +19,7 @@
 #include <QCheckBox>
 #include <QObject>
 #include <QPointF>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QTimer>
 #include <QTreeWidgetItem>
@@ -27,8 +28,8 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <future>
 #include <iostream>
-#include <thread>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -130,24 +131,52 @@ bool CaseNativeFaceToLine(V2MainWindow& window,bool point=false) {
     return Explain("線への参照と面を保存して再計算できる", window.SaveAndReopen("native-face-to-line.kcd2")
         && CountOfKind(window, domain::EntityKind::Part) == 2);
 }
+template<class Work>
+bool CancelWhileCalculating(V2MainWindow& window, const char* title,
+    modeling::KernelShapeHandle input, Work work)
+{
+    int pulses = 0;
+    bool pressed = false;
+    bool builtResult = false;
+    std::promise<void> releaseWorker;
+    auto release = releaseWorker.get_future();
+    QTimer timer;
+    timer.setInterval(10);
+    QObject::connect(&timer, &QTimer::timeout, &window, [&] {
+        if (++pulses < 10) return;
+        auto* dialog = window.findChild<QDialog*>("calculationDialog");
+        if (!dialog || !dialog->isVisible()) return;
+        const auto* progress = dialog->findChild<QProgressBar*>("calculationProgress");
+        auto* cancel = dialog->findChild<QPushButton*>("calculationCancel");
+        if (!progress || !progress->isVisible() || !cancel || !cancel->isVisible() || !cancel->isEnabled()) return;
+        cancel->click();
+        pressed = !cancel->isEnabled();
+        timer.stop();
+        releaseWorker.set_value();
+    });
+    timer.start();
+    const auto result = V2Calculation::Call(&window, title, [&](auto handle) {
+        // Keep the fixture active until the real Cancel action has been tried.
+        // A broken dialog must still allow the worker to finish and the test to fail.
+        release.wait_for(std::chrono::seconds(3));
+        auto shape = work(handle);
+        builtResult = shape.HasValue();
+        return shape;
+    }, input);
+    timer.stop();
+    if (result.HasValue()) V2Calculation::Discard(result.Value());
+    return Explain("計算中もGUIが更新され進捗画面から取消できる", pressed && pulses >= 10
+            && !result.HasValue() && result.FirstDiagnostic().code == app::kGeometryJobCancelled)
+        && Explain("取消後に破棄する形状を実際に計算した", builtResult);
+}
+
 bool CaseProgressCancellation(V2MainWindow& window) {
     const auto source = CurvedSource(); if (!source.HasValue()) return false;
     const auto count = kernel::CachedShapeCount(); const auto revision = window.Session().GetDocument().Revision();
-    int pulses = 0; bool seen = false; QTimer timer; timer.setInterval(10);
-    QObject::connect(&timer, &QTimer::timeout, &window, [&] {
-        ++pulses;
-        auto* dialog = window.findChild<QDialog*>("calculationDialog");
-        if (dialog && dialog->isVisible()) {
-            seen = true; if (auto* button = dialog->findChild<QPushButton*>("calculationCancel")) button->click();
-        }
-    }); timer.start();
-    const auto result = V2Calculation::Call(&window, "面の押し出しを計算しています…",
-        [](auto handle) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(350));
-            return kernel::BuildSurfaceExtrude(handle, {1, 1, 0}, 0, 1, {});
-        }, source.Value().handle);
-    timer.stop(); kernel::ReleaseShape(source.Value().handle);
-    return Explain("計算中もGUIが更新され取消できる", seen && pulses >= 10 && !result.HasValue())
+    const bool cancelled = CancelWhileCalculating(window, "面の押し出しを計算しています…", source.Value().handle,
+        [](auto handle) { return kernel::BuildSurfaceExtrude(handle, {1, 1, 0}, 0, 1, {}); });
+    kernel::ReleaseShape(source.Value().handle);
+    return cancelled
         && Explain("取消で生成形状を残さない", kernel::CachedShapeCount() == count - 1)
         && Explain("計算の取消では文書を変更しない", revision == window.Session().GetDocument().Revision());
 }
@@ -156,22 +185,12 @@ bool CaseSplitCancellation(V2MainWindow& window) {
     const auto solid = kernel::BuildSurfaceExtrude(source.Value().handle, {1, 1, 0}, 0, 1, {});
     kernel::ReleaseShape(source.Value().handle);
     if (!solid.HasValue() || solid.Value().parts.size() != 1) return false;
-    const auto count = kernel::CachedShapeCount(); bool seen = false;
-    QTimer timer; timer.setInterval(10);
-    QObject::connect(&timer, &QTimer::timeout, &window, [&] {
-        auto* dialog = window.findChild<QDialog*>("calculationDialog");
-        if (dialog && dialog->isVisible()) {
-            seen = true; if (auto* button = dialog->findChild<QPushButton*>("calculationCancel")) button->click();
-        }
-    }); timer.start();
-    const auto result = V2Calculation::Call(&window, "部品を分割しています…", [](auto handle) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(350));
-        return kernel::SplitSolidByPlane(handle, {0, 0, 10}, {0, 0, 1}, {});
-    }, solid.Value().parts[0].handle);
-    timer.stop();
+    const auto count = kernel::CachedShapeCount();
+    const bool cancelled = CancelWhileCalculating(window, "部品を分割しています…", solid.Value().parts[0].handle,
+        [](auto handle) { return kernel::SplitSolidByPlane(handle, {0, 0, 10}, {0, 0, 1}, {}); });
     const bool clean = kernel::CachedShapeCount() == count;
     kernel::ReleaseShape(solid.Value().parts[0].handle);
-    return Explain("分割の取消で両側の立体を解放", seen && !result.HasValue() && clean);
+    return cancelled && Explain("分割の取消で両側の立体を解放", clean);
 }
 
 bool CaseExtrudeToolFirstSettings(V2MainWindow& window) {

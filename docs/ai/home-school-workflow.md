@@ -4,6 +4,11 @@
 学校PCは調査・修正・Windows検証を担当し、GitHubへ成果を残す。
 オーナーに依頼票の全項目を手入力させず、主担当が会話から記録を組み立てる。
 
+2026-11-27の追加指示: 自宅は学校PCのクリックやコマンドを逐次中継しない。
+作業目的・対象・残すもの・受入条件を一括で渡し、学校PCのCodexが自分のPCで
+調査、実装、ビルド、CAD操作、検証、commit/pushまで自律実行する。
+自宅は区切りの成果・重大な問題・必要な判断を確認し、通常の操作ごとの許可待ちを作らない。
+
 初回は[接続・環境確認](../development/home-school-start.md)から始める。
 Gitの保全・同期規則は[multi-machine-development.md](../multi-machine-development.md)、
 完成配布版の条件は[verification-workflow.md](../development/verification-workflow.md)に従う。

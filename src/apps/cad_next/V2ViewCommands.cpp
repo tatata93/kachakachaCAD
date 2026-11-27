@@ -729,6 +729,7 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         menu.addSeparator();
     }
     BuildToolContextActions(menu);
+    V2FaceActions::AddSourceOutlineAction(*this,menu);
     const auto candidate=viewport_->CurrentCandidate();
     const auto* entity=candidate?session_->GetDocument().FindEntity(candidate->entityId):nullptr;
     if(entity&&entity->kind==kachakacha::v2::domain::EntityKind::Wire&&!candidate->segmentId.IsNil()

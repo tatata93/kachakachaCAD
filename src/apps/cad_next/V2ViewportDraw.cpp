@@ -724,6 +724,7 @@ void V2Viewport::DrawSnap(QPainter& painter) const
             painter.drawEllipse(*screen, size, size);
             break;
         case SnapKind::Intersection:
+        case SnapKind::WorkPlaneIntersection:
         case SnapKind::ScreenIntersection:
             painter.drawLine(QPointF(screen->x() - size, screen->y() - size),
                 QPointF(screen->x() + size, screen->y() + size));

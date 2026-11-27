@@ -6,6 +6,7 @@
 #include "V2WorkPlaneDock.h"
 #include "V2ExtrudeDock.h"
 #include "V2ProjectionTool.h"
+#include "V2FaceActions.h"
 #include "V2ParameterDock.h"
 #include "V2OffsetTool.h"
 #include "V2CornerDock.h"
@@ -144,6 +145,92 @@ void Setup(V2MainWindow& w)
     w.Viewport().SetViewDirection(ViewDirection::Top);
     w.Viewport().SetViewCenter({0, 0, 12});
     w.Viewport().SetVisibleWidthMm(90);
+}
+
+bool SelectOriginalBoundary(V2MainWindow& w,bool isolated=false)
+{
+    Setup(w);
+    const auto guide=MakeGuide(w,12,false,true);if(guide.IsNil())return false;
+    const auto sources=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),EntityKind::Wire);
+    const auto curves=w.Session().Scene().curves;
+    base::EntityId unrelated;
+    if(isolated)unrelated=w.AddPlainWire({geometry::CurveSegment::MakeLine({-30,25,12},{30,25,12}).Value()},"無関係の線",false);
+    if(isolated&&unrelated.IsNil())return false;
+    if(!StartFaceTool(w)||!ClickWorld(w,{6,-10,12}))return false;
+    const auto frame=w.Viewport().WorkPlane();
+    w.Viewport().SetSelection(sources);w.RunCommand("view.hide_selected");
+    w.RunCommand("draw.line");
+    if(!ClickWorld(w,{20,15,12})||w.Session().PlacedPointCount()!=1)return false;
+    w.Viewport().SetSelection(app::SelectionSet{{guide}});
+    if(isolated) {
+        auto* planeOnly=w.findChild<QToolButton*>("quickPlaneWiresOnly");if(!planeOnly)return false;
+        planeOnly->setChecked(true);
+        w.Viewport().IsolateSelection();
+    }
+    QMenu menu(&w);w.BuildExplorerMenu(menu);
+    QAction* pick=nullptr;for(auto* action:menu.actions())if(action->objectName()=="selectSourceOutline")pick=action;
+    if(!Explain("source outline action is available for the selected face",pick!=nullptr))return false;
+    const auto wireCount=CountOfKind(w,EntityKind::Wire);
+    pick->trigger();
+    const auto& selected=w.Viewport().Selection();
+    if(!Explain("outer boundary and two holes select six original segments without copying",selected.entityIds.size()==3
+        &&selected.ordered.size()==6&&CountOfKind(w,EntityKind::Wire)==wireCount
+        &&w.Session().PlacedPointCount()==1&&w.Viewport().WorkPlane().origin==frame.origin
+        &&w.Viewport().WorkPlane().normal==frame.normal))return false;
+    for(const auto& ref:selected.ordered)if(!Explain("every selected segment retains its original source identity",
+        std::any_of(curves.begin(),curves.end(),[&](const auto& curve){return curve.entityId==ref.entityId
+            &&ref.segmentId==curve.segmentId;})))return false;
+    for(const auto id:sources.entityIds)if(!Explain("only referenced hidden source wires become visible",
+        w.Session().GetDocument().FindEntity(id)->visibility==domain::Visibility::Visible&&w.Viewport().EntityShown(id)))return false;
+    if(isolated&&!Explain("local view retains the face and reveals only its source lines",
+        w.Viewport().IsolationActive()&&w.Viewport().EntityShown(guide)&&!w.Viewport().EntityShown(unrelated)))return false;
+    const auto before=w.Session().GetDocument().Revision();
+    const auto retained=selected.entityIds;
+    app::SelectionSet invalid{{guide,sources.entityIds.front()}};
+    if(!Explain("an invalid mixed request does not partially change selection or visibility",
+        !V2FaceActions::SelectSourceOutline(w,invalid)&&w.Session().GetDocument().Revision()==before
+        &&w.Viewport().Selection().entityIds==retained))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
+    for(const auto id:sources.entityIds)if(w.Session().GetDocument().FindEntity(id)->visibility!=domain::Visibility::Hidden)return false;
+    w.RunCommand("edit.redo");
+    return w.SaveAndReopen("source-outline-selection.kcd2")&&CountOfKind(w,EntityKind::Wire)==wireCount;
+}
+
+bool SourceOutsideDisplayedPlane(V2MainWindow& w)
+{
+    Setup(w);const auto guide=MakeGuide(w,12,false,true);if(guide.IsNil())return false;
+    const auto sources=app::SelectAllOfKind(w.Session().GetDocument().Snapshot(),EntityKind::Wire);
+    w.Viewport().SetSelection(sources);w.RunCommand("view.hide_selected");
+    auto* planeOnly=w.findChild<QToolButton*>("quickPlaneWiresOnly");if(!planeOnly)return false;
+    planeOnly->setChecked(true);
+    w.Viewport().SetSelection(app::SelectionSet{{guide}});
+    const auto revision=w.Session().GetDocument().Revision();
+    if(!Explain("off-plane source request explains the display filter without changing selection or visibility",
+        !V2FaceActions::SelectSourceOutline(w,app::SelectionSet{{guide}})
+        &&w.Session().GetDocument().Revision()==revision&&w.Viewport().Selection().entityIds==std::vector{guide}
+        &&w.StatusText().contains(QStringLiteral("平面ワイヤのみ"))))return false;
+    for(const auto id:sources.entityIds)if(w.Session().GetDocument().FindEntity(id)->visibility!=domain::Visibility::Hidden)return false;
+    planeOnly->setChecked(false);
+    return Explain("removing the display restriction lets the same original lines be selected",
+        V2FaceActions::SelectSourceOutline(w,app::SelectionSet{{guide}})&&w.Viewport().Selection().entityIds.size()==3);
+}
+
+
+bool SourceOutlineDuringPointRequest(V2MainWindow& w)
+{
+    Setup(w);const auto guide=MakeGuide(w,12,false,true);if(guide.IsNil())return false;
+    w.RunCommand("selection.activate");auto& view=w.Viewport();view.SetSelection(app::SelectionSet{{guide}});
+    const auto revision=w.Session().GetDocument().Revision();
+    std::optional<Vector3> picked;view.BeginPointPick([&](const auto& point){picked=point.point;},"点を指定");
+    if(!V2FaceActions::SelectSourceOutline(w,app::SelectionSet{{guide}}))return false;
+    auto* resume=w.findChild<QToolButton*>("toolEditSelection");if(!resume)return false;
+    if(!Explain("original lines are selected while the reference point request stays paused",
+        view.Selection().entityIds.size()==3&&view.PickPending()&&!picked&&resume->isChecked()))return false;
+    Click(*resume,resume->rect().center());
+    if(!view.PickPending()||!ClickWorld(w,{25,20,12}))return false;
+    return Explain("resuming a reference request still accepts the actual source endpoint without geometry edits",
+        picked&&geometry::Distance(*picked,Vector3{25,20,12})<1e-9
+        &&w.Session().GetDocument().Revision()==revision);
 }
 
 bool DrawOnGrid(V2MainWindow& w)
@@ -1359,7 +1446,11 @@ bool OwnerFaceDrawing(V2MainWindow& w)
 
 std::vector<SelfTestCase> FaceDrawingCases()
 {
-    auto cases = std::vector<SelfTestCase>{{"FACE-GRID tool first ignores overlapping wires", GuideToolFirst},
+    auto cases = std::vector<SelfTestCase>{{"FACE-SOURCE original boundary and holes select without copying and preserve pending input", [](auto& w){return SelectOriginalBoundary(w);}},
+        {"FACE-SOURCE local view includes original wires without showing unrelated entities", [](auto& w){return SelectOriginalBoundary(w,true);}},
+        {"FACE-SOURCE off-plane display restriction refuses atomically and can retry", SourceOutsideDisplayedPlane},
+        {"FACE-SOURCE selecting original lines pauses and resumes a reference point request", SourceOutlineDuringPointRequest},
+        {"FACE-GRID tool first ignores overlapping wires", GuideToolFirst},
         {"FACE-SUPPORT native outer boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, false, false); }},
         {"FACE-SUPPORT native inclined boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, false, true); }},
         {"FACE-SUPPORT native inner curved boundary intersection", [](auto& w) { return SupportBoundaryCrossing(w, true, false); }},

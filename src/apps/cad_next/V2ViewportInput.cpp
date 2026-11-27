@@ -203,18 +203,19 @@ void V2Viewport::ApplySnapSettings()
     kachakacha::v2::modeling::SnapSettings settings;
     // 道具として切ってあるか、S を押している間は吸着しない。
     settings.suppressed = snapSuppressedBySetting_ || snapSuppressedByKey_;
+    if (settings.suppressed) ReleasePointTarget();
     session_->SetSnapSettings(settings);
     // ポインタを動かさなくても、いまのカーソル位置の吸着・リング・プレビューへすぐ効かせる。
     // 待つと、S を押している間も古いリングとプレビューが出続ける。
     const std::string before = hover_.messageJa;
-    hover_ = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
-        cursorPosition_.x(), cursorPosition_.y()});
+    const std::string previousStatus=status_;
+    HoverAt(cursorPosition_);
     // 帯を書き換えるのは、いま出ているのが案内のときだけにする。
     // 断った理由や作った結果が出ているときに上書きすると、
     // 読む前に消える。実際、つぶれた移動を断った直後に吸着を戻すと、
     // 理由が案内に置き換わって消えていた。
-    if (status_ == before || status_.empty()) {
-        status_ = hover_.messageJa;
+    if (previousStatus != before && !previousStatus.empty()) {
+        status_ = previousStatus;
         if (statusCallback_) {
             statusCallback_(status_);
         }
@@ -420,6 +421,9 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     // 次のクリックで選ばれるものが食い違う。
     cycle_.index = index;
     SyncHoverWithCandidate();
+    if (PointInputActive()) {
+        AdoptPointTarget();HoverAt(cursorPosition_);return true;
+    }
     auto picked = CurrentCandidate();
     if(ReferencePickPending()&&!V2ToolSelection::Active(*this)) {
         if(picked&&elementPickHandler_)return AcceptElementPick(*picked);
@@ -469,19 +473,24 @@ void V2Viewport::PressRightWithoutMoving()
 void V2Viewport::PressRightWithoutMoving(const QPointF& position)
 {
     if (!contextMenu_) return;
+    cursorPosition_=position;
     // Right-click never commits, cancels or clears inputs by itself.
     // Every tool uses the same contextual actions and candidate chooser.
     RefreshPickCycle(position);
     const bool selecting = session_->CurrentTool()
         == kachakacha::v2::modeling::DrawingTool::Select || toolPickActive_ || ReferencePickPending()
-        || V2DrawingSelection::CanSelect(*session_,*this);
+        || V2DrawingSelection::CanSelect(*session_,*this) || PointInputActive();
+    const auto previousIndex=cycle_.index;
+    const auto previousCandidates=cycle_.candidates;
     const auto labels = selecting && cycle_.candidates.size() >= 2
         ? CandidateLabels() : std::vector<QString>{};
     const QScopedValueRollback<bool> menuOpen(candidateMenuOpen_,true);
     const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
     if (chosen.has_value() && *chosen >= 0) {
         (void)SelectCandidate(static_cast<std::size_t>(*chosen));
-        if(V2DrawingSelection::CanSelect(*session_,*this))V2DrawingSelection::Of(*this).Select();
+        if(!PointInputActive()&&V2DrawingSelection::CanSelect(*session_,*this))V2DrawingSelection::Of(*this).Select();
+    } else if (SameCandidateOrder(previousCandidates,cycle_.candidates)) {
+        cycle_.index=previousIndex;SyncHoverWithCandidate();update();
     }
 }
 
@@ -898,9 +907,11 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     const QPointF& position) const
 {
     using kachakacha::v2::geometry::ScreenPoint;
+    auto focus=PickFocusNow();
+    if (PointInputActive()) focus.dimOffPlane=false; // Restrict the point, not its intersecting source curve.
     auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+        session_->GetDocument().Snapshot().settings.tolerance, focus);
     if(sectionView_)std::erase_if(candidates,[this](const auto& c){
         const auto* e=session_->GetDocument().FindEntity(c.entityId);
         return e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface);
@@ -930,7 +941,12 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     } else if (toolCandidateFilter_&&!V2ToolSelection::Active(*this)) {
         std::erase_if(candidates, [this](const auto& c) { return !toolCandidateFilter_(c); });
     }
-    if(V2UseLogicalCurvePicks(*this,*session_))
+    if (PointInputActive()) std::erase_if(candidates,[this](const auto& candidate) {
+        if (!candidate.segmentId.IsNil()) return false;
+        const auto* entity=session_->GetDocument().FindEntity(candidate.entityId);
+        return !entity || entity->kind!=kachakacha::v2::domain::EntityKind::Point;
+    });
+    if(!PointInputActive()&&V2UseLogicalCurvePicks(*this,*session_))
         V2PickWholeSmoothCurves(*this,*session_,candidates);
     return SortCandidatesForSlot(std::move(candidates));
 }
@@ -1095,6 +1111,7 @@ void V2Viewport::RefreshPickCycle(const QPointF& position)
         && std::hypot(position.x() - cycle_.anchorPx.x(),
                position.y() - cycle_.anchorPx.y()) <= resetPx;
     if (!sameSpot || !SameCandidateOrder(cycle_.candidates, collected)) {
+        ReleasePointTarget();
         cycle_.anchorPx = position;
         cycle_.index = 0;
     }
@@ -1107,6 +1124,7 @@ void V2Viewport::RefreshPickCycle(const QPointF& position)
 
 void V2Viewport::ForgetPickCycle()
 {
+    ReleasePointTarget();
     hoverShapeCandidates_.reset();
     cycle_ = PickCycle{};
     hoverOffPlane_ = false;
@@ -1181,7 +1199,9 @@ bool V2Viewport::CycleCandidate(bool backward)
         return false;   // 重なっていない。送る先が無い。
     }
     AdvanceCandidate(backward);
+    if (PointInputActive()) AdoptPointTarget();
     SyncHoverWithCandidate();
+    if (PointInputActive()) HoverAt(cursorPosition_);
     // どれを出しているかを言う。強調だけでは、何個のうちの何番目かが読めない。
     const auto current = CurrentCandidate();
     status_ = std::string("候補 ") + std::to_string(cycle_.index + 1) + "/"
@@ -1350,7 +1370,9 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         && V2DrawingSelection::CanSelect(*session_,*this)) {
         BeginBoxSelect(event->position(),event->modifiers());
         SelectAt(event->position(),event->modifiers());
+        ReleasePointTarget(); // Preserve the highlighted Ctrl pick, then resume ordinary point snapping.
         V2DrawingSelection::Of(*this).Select();
+        HoverAt(event->position());
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

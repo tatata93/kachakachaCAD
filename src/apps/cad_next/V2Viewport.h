@@ -157,6 +157,8 @@ public:
         std::function<void(const kachakacha::v2::geometry::Vector3&)> handler);
     [[nodiscard]] bool DirectionPickPending() const { return directionPick_.has_value(); }
     [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_) || DirectionPickPending(); }
+    [[nodiscard]] bool PointInputActive() const;
+    [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> ExplicitPointTarget() const;
     //! 拾うのをやめる。Esc で呼ぶ。
     void CancelPointPick();
     // Pick a reference without changing the source selection of the active tool.
@@ -531,6 +533,7 @@ public:
     //! 文書全体が入るように合わせる。
     void FitToDocument(bool selectedOnly=false);
     void IsolateSelection();
+    void IncludeInIsolation(const std::vector<kachakacha::v2::base::EntityId>& entities);
     void ClearIsolation();
     void ApplyVisibilityFilter();
     bool IsolationActive() const;
@@ -996,6 +999,9 @@ private:
     void RefreshForbiddenHover(const QPointF& position);
     //! 候補一覧を捨てる。文書が変わったら呼ぶ。無いものを送り続けないため。
     void ForgetPickCycle();
+    void AdoptPointTarget();
+    void ReleasePointTarget();
+    void AlignPointHoverCandidate();
     //! 道具の持ち物(吸着・位置・途中経過・候補送り・禁止の印)をまとめて捨てる。
     void DiscardHoverState();
     //! いまのカーソル位置で Hover と候補一覧を取り直す。帯には触らない。
@@ -1028,6 +1034,7 @@ private:
         std::vector<kachakacha::v2::app::PickCandidate> candidates;
         //! いま出している候補。candidates が空なら意味を持たない。
         std::size_t index = 0;
+        bool explicitInput = false;
     };
     PickCycle cycle_;
 

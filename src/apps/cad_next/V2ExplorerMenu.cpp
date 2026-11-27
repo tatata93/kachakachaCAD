@@ -10,6 +10,7 @@
 
 #include "V2EditDock.h"
 #include "V2EntityTree.h"
+#include "V2FaceActions.h"
 #include "kachakacha/app/GroupTree.h"
 
 #include <QAction>
@@ -68,6 +69,7 @@ void V2MainWindow::BuildExplorerMenu(QMenu& menu)
     AddCatalogAction(*this, menu, "view.align_selection");
     AddCatalogAction(*this, menu, "view.align_selection_back");
     AddCatalogAction(*this, menu, "workplane.from_face");
+    V2FaceActions::AddSourceOutlineAction(*this,menu);
     menu.addSeparator();
     BuildMoveToGroupMenu(menu);
     auto* sibling=menu.addAction(QStringLiteral("同じ階層にグループを作る"));

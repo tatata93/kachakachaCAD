@@ -1,6 +1,7 @@
 #include "V2PointPicking.h"
 #include "V2Viewport.h"
 #include "V2ToolSelection.h"
+#include "V2PointTarget.h"
 #include <algorithm>
 #include <cmath>
 #include <QPainter>
@@ -24,11 +25,30 @@ kachakacha::v2::app::HoverResult ReferencePointAt(const V2Viewport& view,
     modeling::SnapSettings settings;settings.suppressed=suppressed;
     const geometry::ScreenPoint pointer{position.x(),position.y()};
     app::HoverResult result;
-    result.snap=modeling::ChooseSnap(modeling::CollectSnapCandidates(
-        visible,view.Mapping(),pointer,settings,tolerance),settings);
+    const auto target=suppressed?std::nullopt:view.ExplicitPointTarget();
+    auto candidates=modeling::CollectSnapCandidates(visible,view.Mapping(),pointer,settings,tolerance);
+    if (target) std::erase_if(candidates,[&](const auto& candidate){return !SnapMatchesPointTarget(*target,candidate);});
+    result.snap=modeling::ChooseSnap(candidates,settings);
     result.position=result.snap?std::optional{result.snap->position}:
-        view.Mapping().UnprojectOntoPlane(pointer,view.WorkPlane().origin,view.WorkPlane().normal);
-    if(curve)*curve=app::PickCurve(visible,view.Mapping(),pointer,tolerance);
+        target?std::nullopt:view.Mapping().UnprojectOntoPlane(pointer,view.WorkPlane().origin,view.WorkPlane().normal);
+    if (curve) {
+        *curve=std::nullopt;
+        const auto entity=target?target->entityId:result.snap?result.snap->entityId:base::EntityId{};
+        auto segment=target?target->segmentId:result.snap?result.snap->segmentId:base::SegmentId{};
+        if (segment.IsNil() && result.snap) {
+            if (result.snap->entityId==entity) segment=result.snap->segmentId;
+            else if (result.snap->otherEntityId==entity) segment=result.snap->otherSegmentId;
+        }
+        if (result.position) for (const auto& source:visible.curves) {
+            if (source.entityId!=entity || (!segment.IsNil() && source.segmentId!=segment)) continue;
+            app::PickCandidate picked;
+            picked.entityId=source.entityId; picked.segmentId=source.segmentId;
+            picked.kind=app::SelectionElementKind::Edge; picked.hitPoint=*result.position;
+            picked.curveParameter=source.segment.ClosestPoint(*result.position).parameter;
+            *curve=picked;break;
+        }
+        if (!*curve && !target) *curve=app::PickCurve(visible,view.Mapping(),pointer,tolerance);
+    }
     return result;
 }
 }
@@ -52,6 +72,7 @@ void V2Viewport::CancelPointPick()
 {
     if(!PickPending())return;
     pickHandler_=nullptr;
+    ForgetPickCycle();
     directionPick_.reset();
     setProperty("inputPickGeneration",property("inputPickGeneration").toULongLong()+1);
     setProperty("pointPickPrompt",{});

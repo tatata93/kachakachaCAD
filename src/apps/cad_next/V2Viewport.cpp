@@ -856,10 +856,13 @@ void V2Viewport::HoverAt(const QPointF& position)
     hoverShapeCandidates_.reset();hoverPickReuse_=true;
     QElapsedTimer hoverTimer;hoverTimer.start();
     cursorPosition_ = position;
+    const bool pointInput=PointInputActive();
+    if (pointInput) RefreshPickCycle(position);
     if(PickPending()&&!V2ToolSelection::Active(*this)) {
         hover_=directionPick_ ? DirectionPointAt(position) : v2ui::ReferencePointAt(*this,session_->Scene(),
             session_->GetDocument().Snapshot().settings.tolerance,position,
             snapSuppressedByKey_||snapSuppressedBySetting_);
+        AlignPointHoverCandidate();SyncHoverWithCandidate();
         status_=property("pointPickPrompt").toString().toStdString();
         hover_.messageJa=status_;hoverOffPlane_=false;hoveredProfileRegion_.reset();
         if(statusCallback_)statusCallback_(status_);
@@ -884,7 +887,8 @@ void V2Viewport::HoverAt(const QPointF& position)
     // カーソルの下の候補を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
     // V1 は当たっている線を太く出していた。同じにする。
     // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
-    RefreshPickCycle(position);
+    if (!pointInput) RefreshPickCycle(position);
+    AlignPointHoverCandidate();
     SyncHoverWithCandidate();
     if (cursorPanel_.active && !V2ToolSelection::Active(*this)) {
         // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
@@ -1162,6 +1166,7 @@ void V2Viewport::ClickForMeasure(const QPointF& position, Qt::KeyboardModifiers 
 void V2Viewport::ClickAt(const QPointF& position)
 {
     V2DrawingSelection::Of(*this).ResumeInput();
+    if (PointInputActive()) RefreshPickCycle(position);
     if (ReferencePickPending()) { SelectAt(position, Qt::NoModifier); return; }
     if (directionPick_) { ClickDirectionPoint(position); return; }
     if (pickHandler_) {
@@ -1177,6 +1182,7 @@ void V2Viewport::ClickAt(const QPointF& position)
         picked.point=*hit.position;
         auto handler=std::move(pickHandler_);
         pickHandler_=nullptr;setProperty("pointPickPrompt",{});
+        ForgetPickCycle();
         status_="点を指定しました。";
         if(statusCallback_)statusCallback_(status_);
         handler(picked);
@@ -1247,6 +1253,7 @@ void V2Viewport::ClickAt(const QPointF& position)
 void V2Viewport::FinishTool()
 {
     const auto result = session_->FinishTool();
+    ReleasePointTarget();
     if (!result.diagnostics.empty()) {
         status_ = result.diagnostics.front().summaryJa;
     } else if (result.committed) {

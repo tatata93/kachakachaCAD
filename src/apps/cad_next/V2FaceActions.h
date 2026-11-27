@@ -13,6 +13,7 @@ class QLabel;
 class QEvent;
 class QCloseEvent;
 class QObject;
+class QMenu;
 namespace kachakacha::v2::modeling { struct SnapScene; }
 class V2FaceActions final : public QWidget {
 public:
@@ -26,6 +27,8 @@ public:
     static bool AlignDrawingView(V2MainWindow&,bool reverse);
     static bool OpenDrawingOutline(V2MainWindow&, bool explicitRequest = false);
     static void AppendDrawingSupportEdges(V2MainWindow&, kachakacha::v2::modeling::SnapScene&);
+    static void AddSourceOutlineAction(V2MainWindow&, QMenu&);
+    static bool SelectSourceOutline(V2MainWindow&, const kachakacha::v2::app::SelectionSet&);
 private:
     V2FaceActions(V2MainWindow& window, std::string command);
     bool eventFilter(QObject* object, QEvent* event) override;

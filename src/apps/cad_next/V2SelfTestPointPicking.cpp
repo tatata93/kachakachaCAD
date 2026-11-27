@@ -105,6 +105,200 @@ bool GenericPointInputs(V2MainWindow& w) {
     w.RunCommand("draw.line");
     return Explain("switching tools cancels the old point request",!v.PickPending());
 }
+
+std::vector<base::EntityId> OverlappingSources(V2MainWindow& w,bool coincident=false)
+{
+    w.resize(1600,1000);QApplication::processEvents();w.RunCommand("file.new");
+    std::vector<base::EntityId> ids;
+    for (double z:{0.,coincident?0.:7.}) {
+        std::vector<geometry::CurveSegment> segments;
+        if (coincident) segments={geometry::CurveSegment::MakeCubicBezier({{-20,0,z},{-16,0,z},{-12,0,z},{-8,0,z}}).Value(),
+            geometry::CurveSegment::MakeCubicBezier({{-8,0,z},{-4,0,z},{0,0,z},{4,0,z}}).Value()};
+        else segments={geometry::CurveSegment::MakeLine({-20,0,z},{20,0,z}).Value()};
+        ids.push_back(w.AddPlainWire(std::move(segments),"重なる線",false));
+    }
+    if (!w.SaveAndReopen("point-overlap-source.kcd2")) return {};
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!scope)return {};
+    scope->setCurrentIndex(1);
+    auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetViewCenter({});
+    view.SetVisibleWidthMm(80);view.SetSnapSuppressed(false);
+    return ids;
+}
+
+bool TabToPointSource(V2Viewport& view,base::EntityId id)
+{
+    for (int i=0;i<view.CandidateCount()+1;++i) {
+        if (view.CurrentCandidate() && view.CurrentCandidate()->entityId==id && view.ExplicitPointTarget()) return true;
+        QKeyEvent tab(QEvent::KeyPress,Qt::Key_Tab,Qt::NoModifier);QApplication::sendEvent(&view,&tab);
+    }
+    return false;
+}
+
+bool OverlapDrawingPoint(V2MainWindow& w)
+{
+    const auto ids=OverlappingSources(w);if(ids.size()!=2)return false;
+    w.RunCommand("draw.line");auto& view=w.Viewport();
+    const auto at=view.Mapping().Project({-3,0,7});if(!at)return false;
+    const QPointF pixel(at->x,at->y);view.HoverAt(pixel);
+    if(!Explain("actual Tab selects the other depth during drawing",TabToPointSource(view,ids[1])))return false;
+    if(!Explain("highlight snap source and preview point use the explicitly chosen curve",view.CurrentCandidate()->entityId==ids[1]
+        &&view.Hover().snap&&view.Hover().snap->entityId==ids[1]
+        &&view.Hover().position&&std::abs(view.Hover().position->z-7)<1e-10))return false;
+    QKeyEvent suppress(QEvent::KeyPress,Qt::Key_S,Qt::NoModifier);QApplication::sendEvent(&view,&suppress);
+    QKeyEvent release(QEvent::KeyRelease,Qt::Key_S,Qt::NoModifier);QApplication::sendEvent(&view,&release);
+    if(!Explain("S release immediately synchronizes normal hover and snap without pointer motion",!view.ExplicitPointTarget()
+        &&view.Hover().snap&&view.CurrentCandidate()&&view.Hover().snap->entityId==view.CurrentCandidate()->entityId))return false;
+    if(!TabToPointSource(view,ids[1]))return false;
+    const auto preview=*view.Hover().position;
+    Click(view,pixel);
+    if(!Explain("the actual click places the same 3D point",w.Session().PlacedPointCount()==1
+        &&geometry::Distance(w.Session().ConstraintAnchor(),preview)<1e-9))return false;
+    const auto far=view.Mapping().Project({10,20,0});if(!far)return false;
+    view.HoverAt({far->x,far->y});
+    if(!Explain("moving away releases the explicit source",!view.ExplicitPointTarget()))return false;
+    w.RunCommand("draw.line");
+    return Explain("changing the tool never retains the previous point source",!view.ExplicitPointTarget()
+        &&CountOfKind(w,domain::EntityKind::Wire)==2);
+}
+
+
+bool OverlapPointTransition(V2MainWindow& w,int mode)
+{
+    const auto ids=OverlappingSources(w);if(ids.size()!=2)return false;
+    auto& view=w.Viewport();w.RunCommand("draw.line");
+    if(mode && !ClickWorld(view,{-15,0,0}))return false;
+    if(mode)view.CloseCursorInput(); // Tab keeps its field-navigation role while the numeric panel is open.
+    const auto at=view.Mapping().Project({-3,0,7});if(!at)return false;
+    const QPointF pixel(at->x,at->y);view.HoverAt(pixel);
+    if(!view.Hover().position||!view.Hover().snap)return false;
+    const auto normal=*view.Hover().position;const auto normalSource=view.Hover().snap->entityId;
+    if(!TabToPointSource(view,ids[1]))return false;
+    if(mode==0) {
+        Click(view,pixel,Qt::ControlModifier);
+        if(!Explain("Ctrl selects the highlighted source without placing a point",
+            w.Session().PlacedPointCount()==0&&app::IsSelected(view.Selection(),ids[1])))return false;
+        if(!Explain("releasing Ctrl selection immediately refreshes the snap without pointer movement",
+            !view.ExplicitPointTarget()&&view.Hover().snap&&view.CurrentCandidate()
+            &&view.Hover().snap->entityId==normalSource&&view.CurrentCandidate()->entityId==normalSource))return false;
+    } else {
+        if(mode==2&&!view.OpenCursorInput())return false;
+        QKeyEvent escape(QEvent::KeyPress,Qt::Key_Escape,Qt::NoModifier);QApplication::sendEvent(&view,&escape);
+        if(!Explain("Esc cancels pending points and the cursor input panel",
+            w.Session().PlacedPointCount()==0&&!view.CursorPanel().active))return false;
+    }
+    view.HoverAt(pixel);
+    if(!Explain("returning to point input releases the old target and synchronizes normal snap and highlight",
+        !view.ExplicitPointTarget()&&view.Hover().position&&view.Hover().snap&&view.CurrentCandidate()
+        &&view.Hover().snap->entityId==normalSource&&view.CurrentCandidate()->entityId==normalSource
+        &&geometry::Distance(*view.Hover().position,normal)<1e-9))return false;
+    Click(view,pixel);
+    if(!Explain("the next real click uses the refreshed normal target",
+        w.Session().PlacedPointCount()==1&&geometry::Distance(w.Session().ConstraintAnchor(),normal)<1e-9))return false;
+    w.RunCommand("selection.activate");
+    return CountOfKind(w,domain::EntityKind::Wire)==2;
+}
+
+bool OverlapReferencePoint(V2MainWindow& w)
+{
+    const auto ids=OverlappingSources(w,true);if(ids.size()!=2)return false;
+    auto& view=w.Viewport();w.RunCommand("selection.activate");
+    base::SegmentId secondSegment;
+    for(const auto& source:w.Session().Scene().curves)if(source.entityId==ids[1]&&source.segment.StartPoint().x==-8)secondSegment=source.segmentId;
+    std::optional<V2Viewport::PickedPoint> picked;
+    view.BeginPointPick([&](const auto& value){picked=value;},"参照点を選ぶ");
+    const auto at=view.Mapping().Project({-3,0,0});if(!at)return false;
+    const QPointF pixel(at->x,at->y);view.HoverAt(pixel);
+    if(!Explain("point requests expose Tab candidates even over the selection tool",TabToPointSource(view,ids[1])))return false;
+    Click(view,pixel);
+    if(!Explain("coincident coordinates still return the selected curve UUID",picked&&picked->curve
+        &&picked->curve->entityId==ids[1]&&picked->curve->segmentId==secondSegment&&!view.PickPending()))return false;
+    view.BeginPointPick([&](const auto& value){picked=value;},"参照点を選ぶ");view.HoverAt(pixel);
+    std::optional<int> wanted;
+    for(int i=0;i<view.CandidateCount();++i) {view.PreviewCandidate(i);
+        if(view.CurrentCandidate()->entityId==ids[1])wanted=i;}
+    if(!wanted)return false;
+    view.SetContextMenuCallback([&](const auto&,const auto& labels){
+        if(labels.empty())return std::optional<int>{};
+        QEvent leave(QEvent::Leave);QApplication::sendEvent(&view,&leave);
+        view.PreviewCandidate(*wanted);return wanted;
+    });
+    view.PressRightWithoutMoving(pixel);
+    if(!Explain("right candidate menu chooses the point source without placing a point",view.PickPending()
+        &&view.ExplicitPointTarget()&&view.ExplicitPointTarget()->entityId==ids[1]))return false;
+    picked.reset();Click(view,pixel);
+    if(!picked||!picked->curve||picked->curve->entityId!=ids[1])return false;
+    return Explain("requested point completion releases the source and preserves wires",!view.ExplicitPointTarget()
+        &&CountOfKind(w,domain::EntityKind::Wire)==2);
+}
+
+bool CurvePlanePointInput(V2MainWindow& w)
+{
+    w.RunCommand("file.new");w.resize(1600,1000);QApplication::processEvents();
+    const auto line=geometry::CurveSegment::MakeLine({-20,-5,-3},{20,5,3}).Value();
+    const auto source=w.AddPlainWire({line},"平面を横切る曲線",false);
+    if(source.IsNil()||!w.SaveAndReopen("curve-plane-pick-source.kcd2"))return false;
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!scope)return false;scope->setCurrentIndex(0);
+    w.RunCommand("draw.line");auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);
+    view.SetViewCenter({});view.SetVisibleWidthMm(80);view.SetSnapSuppressed(false);
+    const auto at=view.Mapping().Project({});if(!at)return false;view.HoverAt({at->x,at->y});
+    if(!Explain("plane drawing snaps to the actual curve-plane crossing without flattening",view.Hover().snap
+        &&view.Hover().snap->kind==modeling::SnapKind::WorkPlaneIntersection
+        &&geometry::Distance(view.Hover().snap->position,{})<1e-10))return false;
+    if(!ClickWorld(view,{}))return false;
+    view.SetSnapSuppressed(true);const bool second=ClickWorld(view,{2,0,0});view.SetSnapSuppressed(false);
+    if(!second||CountOfKind(w,domain::EntityKind::Wire)!=2)return false;
+    const auto& made=w.Session().Scene().curves.back().segment;
+    if(!Explain("generated line starts exactly at the finite crossing",geometry::Distance(made.StartPoint(),{})<1e-10))return false;
+    w.RunCommand("edit.undo");w.RunCommand("edit.redo");
+    if(!w.SaveAndReopen("curve-plane-drawn.kcd2"))return false;
+    const auto& curves=w.Session().Scene().curves;
+    const auto found=std::find_if(curves.begin(),curves.end(),[&](const auto& curve){return curve.entityId==source;});
+    return Explain("history and reopen preserve the original spatial curve",found!=curves.end()
+        &&found->segment.StartPoint()==line.StartPoint()&&found->segment.EndPoint()==line.EndPoint()
+        &&CountOfKind(w,domain::EntityKind::Wire)==2);
+}
+
+bool SharedExplicitSource(V2MainWindow& w)
+{
+    const auto path=qEnvironmentVariable("KACHACAD_ZOOM_OWNER_FILE");
+    if(!Explain("open the preserved supplied source",!path.isEmpty()&&w.OpenDocumentFile(path)))return false;
+    w.resize(1600,1000);QApplication::processEvents();
+    const auto sources=w.Session().Scene().curves;
+    const auto revision=w.Session().GetDocument().Revision();
+    const auto body=std::find_if(sources.begin(),sources.end(),[](const auto& curve){return curve.entityId.ToString().ends_with("0095");});
+    if(!Explain(("the source scene contains formal body arc 0095; curve count="+std::to_string(sources.size())).c_str(),body!=sources.end()))return false;
+    const auto source=*body;
+    const auto expected=source.segment.Evaluate(.55);
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!Explain("the source model exposes the drawing scope control",scope!=nullptr))return false;scope->setCurrentIndex(1);
+    auto& view=w.Viewport();view.SetViewDirection(ViewDirection::Top);view.SetViewCenter(expected);
+    view.SetVisibleWidthMm(140);view.SetSnapSuppressed(false);
+    const auto screen=view.Mapping().Project(expected);if(!Explain("the source arc point can be projected into the viewport",screen.has_value()))return false;
+    const QPointF pixel(screen->x,screen->y);
+    w.RunCommand("selection.activate");
+    std::optional<V2Viewport::PickedPoint> picked;
+    view.BeginPointPick([&](const auto& value){picked=value;},"元の曲線から点を指定");view.HoverAt(pixel);
+    if(!Explain("supplied model exposes its formal source arc through actual Tab",TabToPointSource(view,source.entityId)))return false;
+    Click(view,pixel);
+    if(!Explain("supplied model reference takes its point and segment from that arc",picked&&picked->curve
+        &&picked->curve->entityId==source.entityId&&picked->curve->segmentId==source.segmentId
+        &&source.segment.ClosestPoint(picked->point).distance<1e-8))return false;
+    w.RunCommand("draw.line");QApplication::processEvents();
+    const auto drawingScreen=view.Mapping().Project(expected);
+    if(!Explain("reobserve the source point after changing the tool panel",drawingScreen.has_value()))return false;
+    const QPointF drawingPixel(drawingScreen->x,drawingScreen->y);view.HoverAt(drawingPixel);
+    if(!Explain(("actual drawing can target the formal arc; candidates="+std::to_string(view.CandidateCount())
+        +" status="+w.StatusText().toStdString()).c_str(),TabToPointSource(view,source.entityId)&&view.Hover().position))return false;
+    const auto point=*view.Hover().position;Click(view,drawingPixel);
+    if(!Explain("actual drawing uses the highlighted original body curve",w.Session().PlacedPointCount()==1
+        &&geometry::Distance(w.Session().ConstraintAnchor(),point)<1e-9
+        &&source.segment.ClosestPoint(point).distance<1e-8))return false;
+    w.RunCommand("selection.activate");
+    return Explain("source model geometry and segment identity remain untouched",w.Session().GetDocument().Revision()==revision
+        &&w.Session().Scene().curves.size()==sources.size()
+        &&std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& curve){
+            return curve.entityId==source.entityId&&curve.segmentId==source.segmentId
+                &&curve.segment.StartPoint()==source.segment.StartPoint()&&curve.segment.EndPoint()==source.segment.EndPoint();}));
+}
 bool SnapAndTransitions(V2MainWindow& w) {
     if(!Setup(w))return false;auto& v=w.Viewport();
     const Vector3 intersection{0,0,30};
@@ -450,6 +644,12 @@ bool SharedZoomedCrossings(V2MainWindow& w)
 }
 }
 std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
+    {"HP-POINT-TARGET Tab makes actual drawing follow the chosen depth",OverlapDrawingPoint},
+    {"HP-POINT-TARGET Ctrl selection releases the previous point target",[](auto& w){return OverlapPointTransition(w,0);}},
+    {"HP-POINT-TARGET Esc cancels drawing and releases the previous target",[](auto& w){return OverlapPointTransition(w,1);}},
+    {"HP-POINT-TARGET Esc closes cursor input and releases the previous target",[](auto& w){return OverlapPointTransition(w,2);}},
+    {"HP-POINT-TARGET reference Tab and right menu return the chosen UUID",OverlapReferencePoint},
+    {"HP-POINT-PLANE draw from a finite curve plane intersection with source preservation",CurvePlanePointInput},
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",[](auto& w){return WorkPlaneRoles(w);}},
     {"HP-POINT-WP fractional curve endpoints keep full precision through plane creation",[](auto& w){return WorkPlaneRoles(w,true);}},
     {"HP-POINT-INPUT point requests override tools and reject undefined plane hits",GenericPointInputs},
@@ -461,6 +661,9 @@ std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
     {"HP-POINT-TOOLS grid origin measurement and output origin actual clicks",OtherPointTools},
     {"HP-POINT-VISIBLE hidden geometry is ignored and standalone points are picked",PointVisibility},
     {"HP-POINT-EXTEND two selected wires accept the requested extension end",SelectedWireExtension}};
-    if(!qEnvironmentVariableIsEmpty("KACHACAD_ZOOM_OWNER_FILE"))cases.push_back({"HP-POINT-ZOOM-OWNER supplied current model exact and off-plane crossings",SharedZoomedCrossings});
+    if(!qEnvironmentVariableIsEmpty("KACHACAD_ZOOM_OWNER_FILE")) {
+        cases.push_back({"HP-POINT-ZOOM-OWNER supplied current model exact and off-plane crossings",SharedZoomedCrossings});
+        cases.push_back({"HP-POINT-TARGET-OWNER supplied original body arc explicit drawing and reference picks",SharedExplicitSource});
+    }
     return cases;}
 }

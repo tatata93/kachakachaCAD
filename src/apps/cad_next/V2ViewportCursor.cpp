@@ -408,12 +408,14 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
             V2DrawingSelection::Of(*this).CancelInputs();
             CloseCursorInput();
             session_->CancelTool();
-            hover_.preview.clear();
+            DiscardHoverState();
+            RefreshHoverInPlace();
             break;
         case kachakacha::v2::app::EscapeStep::CancelDrawing:
             V2DrawingSelection::Of(*this).CancelInputs();
             session_->CancelTool();
-            hover_.preview.clear();
+            DiscardHoverState();
+            RefreshHoverInPlace();
             break;
         case kachakacha::v2::app::EscapeStep::ClearSelection:
             SetSelection(kachakacha::v2::app::SelectionSet{});

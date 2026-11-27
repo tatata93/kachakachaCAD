@@ -59,6 +59,12 @@ void V2Viewport::ClearIsolation() {
     ApplyVisibilityFilter();ForgetPickCycle();update();
 }
 
+void V2Viewport::IncludeInIsolation(const std::vector<base::EntityId>& entities) {
+    if(!IsolationActive())return;
+    std::erase_if(isolationExcluded_,[&](const auto id){return std::find(entities.begin(),entities.end(),id)!=entities.end();});
+    ApplyVisibilityFilter();ForgetPickCycle();update();
+}
+
 void V2Viewport::ApplyVisibilityFilter() {
     if(!PlaneWireDisplayActive(*this)&&!sectionView_&&!IsolationActive()&&!display_.selectionOnly){session_->SetSnapEntityFilter({});return;}
     QPointer<V2Viewport> alive(this);

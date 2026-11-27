@@ -5,7 +5,10 @@
 #include <QIODevice>
 #include <QSaveFile>
 #include <QString>
+#include <QtEndian>
 #include <QtGlobal>
+#include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -39,9 +42,13 @@ public:
         Check();if(count>limit)throw std::runtime_error("Collection exceeds transfer limit");
         return static_cast<std::size_t>(count);
     }
-    void Check() {
+    void Check(std::size_t fields=1) {
         if(stream.status()!=QDataStream::Ok)throw std::runtime_error("Incomplete calculation result");
-        if(++ticks_%4096==0&&pulse_&&!pulse_())throw std::runtime_error("Cancelled while reading calculation result");
+        ticks_+=fields;
+        if(ticks_>=4096) {
+            ticks_-=4096;
+            if(pulse_&&!pulse_())throw std::runtime_error("Cancelled while reading calculation result");
+        }
     }
     QDataStream stream;bool read;
     std::size_t remainingElements=16000000;
@@ -113,9 +120,40 @@ void Fields(Archive& a,modeling::GuideTable& v) {
     a.Values(v.method,v.rows,v.offsetDistanceMm,v.revolveAxisPoint,v.revolveAxisDirection,v.revolveAngleRad,v.lockSectionOrder,v.fourEdgeStyle);
 }
 void Fields(Archive& a,modeling::MeshTriangle& v) {
-    for(auto& p:v.points)a.Values(p);
-    a.Values(v.normal,v.faceIndex);
-    for(auto& n:v.vertexNormals)a.Values(n);
+    // Each transfer word remains the existing big-endian IEEE double or
+    // unsigned face index. Only the I/O is grouped, not the validation.
+    std::array<quint64,22> words;
+    auto* bytes=reinterpret_cast<char*>(words.data());
+    const auto size=static_cast<int>(sizeof(words));
+    if(a.read&&a.stream.readRawData(bytes,size)!=size)
+        throw std::runtime_error("Incomplete calculation result");
+
+    std::size_t cursor=0;
+    const auto transferDouble=[&](double& value) {
+        auto& word=words[cursor++];
+        if(a.read)value=std::bit_cast<double>(qFromBigEndian(word));
+        if(!std::isfinite(value))throw std::runtime_error("Non-finite number");
+        if(!a.read)word=qToBigEndian(std::bit_cast<quint64>(value));
+    };
+    const auto transferVector=[&](geometry::Vector3& vector) {
+        transferDouble(vector.x);
+        transferDouble(vector.y);
+        transferDouble(vector.z);
+    };
+    for(auto& point:v.points)transferVector(point);
+    transferVector(v.normal);
+    auto& index=words[cursor++];
+    if(a.read) {
+        const auto decoded=qFromBigEndian(index);
+        if(decoded>std::numeric_limits<decltype(v.faceIndex)>::max())throw std::runtime_error("Integer overflow");
+        v.faceIndex=static_cast<decltype(v.faceIndex)>(decoded);
+    } else {
+        index=qToBigEndian(static_cast<quint64>(v.faceIndex));
+    }
+    for(auto& normal:v.vertexNormals)transferVector(normal);
+    if(!a.read&&a.stream.writeRawData(bytes,size)!=size)throw std::runtime_error("Cannot write result");
+    // The former scalar and vector checks accounted for the same 29 fields.
+    a.Check(29);
 }
 void Fields(Archive& a,modeling::ShapeMesh& v) {
     a.Values(v.triangles,v.edges,v.isoLines,v.minimum,v.maximum,v.closed,v.faceCount);

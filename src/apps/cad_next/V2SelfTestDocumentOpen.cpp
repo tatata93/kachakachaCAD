@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include <QApplication>
 #include <QByteArray>
+#include <QDataStream>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEvent>
@@ -186,8 +187,64 @@ bool Cache(V2MainWindow& w) {
     return Explain("bad cache falls back to full reconstruction and leaves source intact",rebuilt&&!hit&&w.KernelShapeCount()==1
         &&V2DocumentCache::Read(original.Value()).has_value()&&io::ReadWholeFile(path.toStdString()).Value()==original.Value());
 }
+bool TriangleTransferFormat(const QTemporaryDir& folder) {
+    V2PreparedDocument data;
+    modeling::MeshTriangle triangle;
+    triangle.points={geometry::Vector3{1.125,-2.25,-0.0},{4.0,5.0,6.0},{-7.5,8.25,9.0}};
+    triangle.normal={-.5,.25,.125};
+    triangle.vertexNormals={geometry::Vector3{.125,.25,.5},{-.75,0.,.875},{1.,.25,-.125}};
+    // The no-face sentinel and signed zero use their original wire encodings.
+    auto& mesh=data.meshes["mesh"];
+    mesh.triangles.push_back(triangle);
+    const auto output=folder.filePath("triangle-format.bin");
+    const QString token=QStringLiteral("mesh-validation");
+    if(!WritePreparedDocument(output,token,data))return false;
+    const auto readBytes=[](const QString& path) {
+        QFile file(path);return file.open(QIODevice::ReadOnly)?file.readAll():QByteArray{};
+    };
+    QByteArray record;
+    QDataStream legacy(&record,QIODevice::WriteOnly);
+    legacy.setVersion(QDataStream::Qt_6_0);
+    legacy.setFloatingPointPrecision(QDataStream::DoublePrecision);
+    const auto writeVector=[&](const geometry::Vector3& value){legacy<<value.x<<value.y<<value.z;};
+    for(const auto& point:triangle.points)writeVector(point);
+    writeVector(triangle.normal);
+    legacy<<static_cast<quint64>(triangle.faceIndex);
+    for(const auto& normal:triangle.vertexNormals)writeVector(normal);
+    const auto written=readBytes(output);
+    const auto position=written.indexOf(record);
+    const auto accept=[] {return true;};
+    const auto opened=ReadPreparedDocument(output,token,accept);
+    if(!Explain("triangle retains legacy transfer bytes, face index and vertex normals",record.size()==176
+        && position>=0 && written.indexOf(record,position+1)<0 && opened.HasValue()
+        && opened.Value()->meshes.contains("mesh") && SameMesh(mesh,opened.Value()->meshes.at("mesh"))))return false;
+
+    QByteArray invalidValue;
+    QDataStream invalid(&invalidValue,QIODevice::WriteOnly);
+    invalid.setFloatingPointPrecision(QDataStream::DoublePrecision);
+    invalid<<std::numeric_limits<double>::infinity();
+    auto broken=written;
+    broken.replace(position,invalidValue.size(),invalidValue);
+    const auto writeTestBytes=[](const QString& path,const QByteArray& bytes) {
+        QFile file(path);return file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size();
+    };
+    const auto invalidPath=folder.filePath("triangle-nonfinite.bin"),partialPath=folder.filePath("triangle-partial.bin");
+    if(!Explain("truncated and non-finite triangle values fail to restore",
+        writeTestBytes(invalidPath,broken)&&!ReadPreparedDocument(invalidPath,token,accept).HasValue()
+        &&writeTestBytes(partialPath,written.left(position+7))&&!ReadPreparedDocument(partialPath,token,accept).HasValue()))return false;
+    mesh.triangles.front().normal.x=std::numeric_limits<double>::infinity();
+    if(!Explain("failed triangle serialization leaves the previous valid file intact",
+        !WritePreparedDocument(output,token,data)&&readBytes(output)==written))return false;
+    mesh.triangles.assign(200,triangle);
+    if(!WritePreparedDocument(output,token,data))return false;
+    int pulses=0;
+    return Explain("reading a mesh still polls for cancellation within the triangle sequence",
+        !ReadPreparedDocument(output,token,[&]{++pulses;return false;}).HasValue() && pulses==1);
+}
+
 bool TransferValidation(V2MainWindow& w) {
     CacheScope scope;if(!scope.folder.isValid())return false;
+    if(!TriangleTransferFormat(scope.folder))return false;
     V2PreparedDocument data;data.archive=std::string(3*1024*1024,'x');
     const auto path=scope.folder.filePath("source.bin"),copy=scope.folder.filePath("copy.bin");
     if(!WritePreparedDocument(path,"source",data)||!CopyPreparedDocument(path,"source",copy,"destination"))return false;

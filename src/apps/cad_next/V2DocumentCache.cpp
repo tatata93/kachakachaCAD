@@ -1,4 +1,5 @@
 #include "V2DocumentCache.h"
+#include "V2DocumentTiming.h"
 #include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QByteArray>
@@ -13,7 +14,14 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QString>
+#include <QThread>
 #include <QtGlobal>
+
+#include <array>
+#include <atomic>
+#include <future>
+#include <system_error>
+#include <vector>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -95,6 +103,45 @@ bool WriteManifest(const QDir& dir,const QString& key,const QString& path) {
     const bool ok=manifest.open(QIODevice::WriteOnly)&&manifest.write(bytes)==bytes.size()&&manifest.commit();
     Prune(dir);return ok;
 }
+
+bool ValidateNativeShapes(const V2PreparedDocument& data)
+{
+    std::vector<const std::string*> shapes;
+    shapes.reserve(data.parts.size() + data.guides.size());
+    for (const auto* entries : {&data.parts, &data.guides}) {
+        for (const auto& entry : *entries) shapes.push_back(&entry.second);
+    }
+    // Each payload restores a fresh shape. The kernel protects its handle table.
+    // Bound concurrent native shapes and retain the normal serial test route.
+    const bool parallel = shapes.size() >= 64 && QThread::idealThreadCount() >= 4
+        && !qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL");
+    const std::size_t lanes = parallel ? 3 : 1;
+    std::atomic_bool valid{true};
+    const auto validateLane = [&](std::size_t lane) {
+        for (std::size_t index = lane; index < shapes.size() && valid.load(std::memory_order_relaxed);
+            index += lanes) {
+            const auto shape = kachakacha::v2::kernel::RestoreTransferShape(*shapes[index]);
+            if (!shape.HasValue()) {
+                valid.store(false, std::memory_order_relaxed);
+                return;
+            }
+            kachakacha::v2::kernel::ReleaseShape(shape.Value());
+        }
+    };
+    std::array<std::future<void>, 2> workers;
+    for (std::size_t lane = 1; lane < lanes; ++lane) {
+        try {
+            workers[lane - 1] = std::async(std::launch::async, validateLane, lane);
+        } catch (const std::system_error&) {
+            validateLane(lane);
+        }
+    }
+    validateLane(0);
+    for (auto& worker : workers) {
+        if (worker.valid()) worker.get();
+    }
+    return valid.load(std::memory_order_relaxed);
+}
 }
 QString Key(const std::string& source) {
     const auto binary=BinaryIdentity();if(binary.isEmpty())return {};
@@ -150,11 +197,10 @@ bool Write(const std::string& source,V2PreparedDocument& data) {
 bool Transfer(const std::string& source,const QString& destination,const QString& token) {
     // Retain full semantic validation, including malformed data with a matching manifest hash.
     const auto data=Read(source);if(!data)return false;
-    for(const auto* shapes:{&data->parts,&data->guides})for(const auto& [id,bytes]:*shapes) {
-        const auto shape=kachakacha::v2::kernel::RestoreTransferShape(bytes);
-        if(!shape.HasValue())return false;
-        kachakacha::v2::kernel::ReleaseShape(shape.Value());
-    }
+    V2DocumentTiming timing("cache-restore");
+    const bool valid = ValidateNativeShapes(*data);
+    timing.Mark("validate-native");
+    if (!valid) return false;
     const auto key=Key(source);
     return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token);
 }

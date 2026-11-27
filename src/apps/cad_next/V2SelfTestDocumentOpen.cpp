@@ -257,6 +257,31 @@ bool TransferValidation(V2MainWindow& w) {
     int blocks=0;
     if(!Explain("cancellation after a copied block never commits partial output",!CopyPreparedDocument(path,"source",copy,"destination",[&]{return ++blocks<2;})&&blocks==2))return false;
     if(!output.open(QIODevice::ReadOnly)||output.readAll()!=before)return false;output.close();
+    const auto temporary=scope.folder.filePath("worker-result.bin");
+    const auto aborted=scope.folder.filePath("worker-cancelled.bin");
+    const auto invalid=scope.folder.filePath("worker-invalid.bin");
+    int workerBlocks=0;
+    const auto mode=V2PreparedFile::WorkerReply;
+    if(!Explain("cancelled worker copy never publishes partial data",
+        !CopyPreparedDocument(path,"source",aborted,"destination",[&]{return ++workerBlocks<2;},mode)
+        &&workerBlocks==2&&!QFile::exists(aborted)))return false;
+    if(!Explain("worker reply preserves the durable transfer bytes",
+        CopyPreparedDocument(path,"source",temporary,"destination",[]{return true;},mode)))return false;
+    QFile reply(temporary);
+    if(!reply.open(QIODevice::ReadOnly)||reply.readAll()!=before)return false;
+    reply.close();
+    if(!Explain("an existing worker result can still be safely replaced",
+        WritePreparedDocument(temporary,"replacement",data,mode)
+        &&ReadPreparedDocument(temporary,"replacement",[]{return true;}).HasValue()
+        &&!ReadPreparedDocument(temporary,"destination",[]{return true;}).HasValue()))return false;
+    if(!Explain("worker serialization publishes a readable result",WritePreparedDocument(aborted,"destination",data,mode)
+        &&ReadPreparedDocument(aborted,"destination",[]{return true;}).HasValue()))return false;
+    auto& mesh=data.meshes["invalid"];
+    mesh.triangles.emplace_back().normal.x=std::numeric_limits<double>::infinity();
+    if(!Explain("bad geometry never publishes a worker result",
+        !WritePreparedDocument(invalid,"destination",data,mode)&&!QFile::exists(invalid)))return false;
+    if(!Explain("worker cleanup removes intermediate files",
+        QDir(scope.folder.path()).entryList({"worker-*.bin.*"},QDir::Files).isEmpty()))return false;
     QFile truncated(path);if(!truncated.open(QIODevice::ReadWrite)||!truncated.resize(4))return false;truncated.close();
     if(!Explain("truncated transfer header is rejected",!CopyPreparedDocument(path,"source",copy,"destination")))return false;
     w.RunCommand("file.new");if(!DrawRectangleByHand(w)||!ClickOnAnyCurve(w,Qt::NoModifier))return false;

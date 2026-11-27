@@ -20,11 +20,15 @@ struct V2PreparedDocument {
     kachakacha::v2::modeling::GuideTable guideTable;
 };
 
-bool WritePreparedDocument(const QString& path, const QString& token, V2PreparedDocument& data);
+enum class V2PreparedFile { Durable, WorkerReply };
+
+bool WritePreparedDocument(const QString& path, const QString& token, V2PreparedDocument& data,
+    V2PreparedFile file = V2PreparedFile::Durable);
 // Copy an already validated/just-written payload, replacing only its transfer identity.
 // Consumers must still use ReadPreparedDocument to validate all fields before adoption.
 bool CopyPreparedDocument(const QString& source, const QString& sourceToken,
     const QString& destination, const QString& destinationToken,
-    const std::function<bool()>& pulse = [] { return true; });
+    const std::function<bool()>& pulse = [] { return true; },
+    V2PreparedFile file = V2PreparedFile::Durable);
 kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDocument(
     const QString& path, const QString& token, const std::function<bool()>& pulse);

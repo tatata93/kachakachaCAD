@@ -1,10 +1,14 @@
 #include "V2PreparedDocument.h"
+#include "V2DocumentTiming.h"
 #include "kachakacha/app/GeometryJobDiagnostic.h"
 #include <QDataStream>
 #include <QFile>
+#include <QFileDevice>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QSaveFile>
 #include <QString>
+#include <QTemporaryFile>
 #include <QtEndian>
 #include <QtGlobal>
 #include <array>
@@ -193,10 +197,40 @@ template<class T> void Archive::Field(T& v) {
     } else Fields(*this,v);
     Check();
 }
+
+template<class Fill>
+bool WithPreparedOutput(const QString& path, V2PreparedFile kind, Fill&& fill)
+{
+    const bool workerReply = kind == V2PreparedFile::WorkerReply;
+    const bool scratch = workerReply && !QFileInfo::exists(path)
+        && !qEnvironmentVariableIsSet("KACHACAD_FORCE_DURABLE_DOCUMENT_TRANSFER");
+    V2DocumentTiming timing(workerReply ? "prepared-worker-output" : "prepared-durable-output");
+    if (scratch) {
+        // A worker result is private to this job until its success response.
+        // Rename the completed temporary in the same directory and check the
+        // operation before allowing the parent to read it.
+        QTemporaryFile file(path + QStringLiteral(".tmp"));
+        if (!file.open() || !fill(file)) return false;
+        timing.Mark("write");
+        if (!file.flush()) return false;
+        file.close();
+        if (file.error() != QFileDevice::NoError || !file.rename(path)) return false;
+        file.setAutoRemove(false);
+        timing.Mark("finish");
+        return true;
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || !fill(file)) return false;
+    timing.Mark("write");
+    const bool committed = file.commit();
+    timing.Mark("finish");
+    return committed;
+}
 }
 
 bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
-    const QString& destination,const QString& destinationToken,const std::function<bool()>& pulse) {
+    const QString& destination,const QString& destinationToken,const std::function<bool()>& pulse,
+    V2PreparedFile file) {
     try {
         if(source==destination||sourceToken.isEmpty()||destinationToken.isEmpty())return false;
         QFile input(source);
@@ -204,22 +238,24 @@ bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
         Archive reader(&input,true,pulse);std::string magic,id;int version=0;
         reader.Values(magic,version,id);
         if(magic!="kachakacha-prepared-document"||version!=4||id!=sourceToken.toStdString()||input.atEnd())return false;
-        QSaveFile output(destination);if(!output.open(QIODevice::WriteOnly))return false;
-        Archive writer(&output,false);id=destinationToken.toStdString();writer.Values(magic,version,id);
-        while(!input.atEnd()) {
-            if(!pulse())return false;
-            const auto bytes=input.read(1024*1024);
-            if(bytes.isEmpty()||output.write(bytes)!=bytes.size())return false;
-        }
-        return input.error()==QFile::NoError&&output.commit();
+        return WithPreparedOutput(destination, file, [&](QIODevice& output) {
+            Archive writer(&output,false);id=destinationToken.toStdString();writer.Values(magic,version,id);
+            while(!input.atEnd()) {
+                if(!pulse())return false;
+                const auto bytes=input.read(1024*1024);
+                if(bytes.isEmpty()||output.write(bytes)!=bytes.size())return false;
+            }
+            return input.error()==QFile::NoError;
+        });
     }catch(...){return false;}
 }
 
-bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDocument& data) {
+bool WritePreparedDocument(const QString& path,const QString& token,V2PreparedDocument& data,V2PreparedFile file) {
     try {
-        QSaveFile file(path);if(!file.open(QIODevice::WriteOnly))return false;
-        Archive stream(&file,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=4;
-        stream.Values(magic,version,id,data);stream.Check();return file.commit();
+        return WithPreparedOutput(path, file, [&](QIODevice& output) {
+            Archive stream(&output,false);std::string magic="kachakacha-prepared-document",id=token.toStdString();int version=4;
+            stream.Values(magic,version,id,data);stream.Check();return true;
+        });
     }catch(...){return false;}
 }
 kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDocument(const QString& path,const QString& token,const std::function<bool()>& pulse) {

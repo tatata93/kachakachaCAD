@@ -202,7 +202,8 @@ bool Transfer(const std::string& source,const QString& destination,const QString
     timing.Mark("validate-native");
     if (!valid) return false;
     const auto key=Key(source);
-    return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token);
+    return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token,
+        [] { return true; }, V2PreparedFile::WorkerReply);
 }
 bool StoreTransfer(const std::string& source,const QString& transfer,const QString& token) {
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;

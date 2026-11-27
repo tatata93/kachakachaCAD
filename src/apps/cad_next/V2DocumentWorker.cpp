@@ -118,7 +118,8 @@ int V2DocumentOpen::Worker(const QString& directory) {
         auto captured=Capture(window,archive.Value());if(!captured.HasValue())throw captured.FirstDiagnostic();
         auto& data=*captured.Value();
         timing.Mark("capture-native-and-meshes");
-        if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data))throw std::runtime_error("Cannot write prepared document");
+        if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data,V2PreparedFile::WorkerReply))
+            throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");
         if(V2DocumentCache::StoreTransfer(bytes.Value(),dir.filePath("prepared.bin"),token))
             V2EvaluationCache::IndexPrepared(window,bytes.Value(),data);

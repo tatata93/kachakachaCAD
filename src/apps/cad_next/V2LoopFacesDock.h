@@ -22,6 +22,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QMenu;
 class QPushButton;
 class QVBoxLayout;
 class QWidget;
@@ -70,6 +71,7 @@ struct V2LoopFacesView {
 class V2LoopFacesDock final : public QDockWidget {
 public:
     explicit V2LoopFacesDock(QWidget* parent);
+    void SetAlternativeMethods(QMenu* menu);
 
     //! 計画を映す。行は毎回作り直す(輪の数が変わる)。
     void ShowView(const V2LoopFacesView& view);

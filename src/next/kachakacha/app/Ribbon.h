@@ -33,6 +33,8 @@ struct RibbonTool {
     std::string_view blockedReasonJa;
     //! 正本に無いが既存の道具(「その他」)。帯では後ろに寄せる。
     bool extra = false;
+    //! 通常の帯を簡潔にするため、幅に関係なく「その他」から開く。
+    bool menuOnly = false;
 
     [[nodiscard]] bool Blocked() const noexcept { return !blockedReasonJa.empty(); }
 };

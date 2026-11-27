@@ -38,10 +38,11 @@ V2ToolbarRow::V2ToolbarRow(const QString& overflowLabel, QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 
-void V2ToolbarRow::Add(QWidget* widget, QAction* action)
+void V2ToolbarRow::Add(QWidget* widget, QAction* action, bool menuOnly)
 {
+    if (menuOnly) widget->hide();
     row_->insertWidget(static_cast<int>(entries_.size()), widget);
-    entries_.push_back({widget, action});
+    entries_.push_back({widget, action, menuOnly});
 }
 
 void V2ToolbarRow::Clear()
@@ -82,15 +83,18 @@ void V2ToolbarRow::Relayout()
     const auto margins = row_->contentsMargins();
     const int gap = row_->spacing();
     const int available = width() - margins.left() - margins.right() + gap;
-    int total = 0;
-    for (const auto& entry : entries_)
-        total += WidthOf(*entry.widget) + gap;
+    const auto toolbarEnd = std::find_if(entries_.begin(), entries_.end(),
+        [](const Entry& entry) { return entry.menuOnly; });
+    const auto toolbarCount = static_cast<std::size_t>(toolbarEnd - entries_.begin());
+    int total = toolbarCount == entries_.size() ? 0 : more_->sizeHint().width() + gap;
+    for (auto entry = entries_.begin(); entry != toolbarEnd; ++entry)
+        total += WidthOf(*entry->widget) + gap;
 
-    std::size_t count = entries_.size();
+    std::size_t count = toolbarCount;
     if (total > available) {
         int used = more_->sizeHint().width() + gap;
         count = 0;
-        while (count < entries_.size()) {
+        while (count < toolbarCount) {
             used += WidthOf(*entries_[count].widget) + gap;
             if (used > available) break;
             ++count;

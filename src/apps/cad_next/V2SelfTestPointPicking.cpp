@@ -1,4 +1,5 @@
 #include "V2SelfTest.h"
+#include "V2EditDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2WorkPlaneDock.h"
@@ -279,6 +280,140 @@ bool CurvePlanePointInput(V2MainWindow& w)
     return Explain("history and reopen preserve the original spatial curve",found!=curves.end()
         &&found->segment.StartPoint()==line.StartPoint()&&found->segment.EndPoint()==line.EndPoint()
         &&CountOfKind(w,domain::EntityKind::Wire)==2);
+}
+
+bool MarksVisibleCurvePlaneCrossings(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    w.resize(1600, 1000);
+    const auto add = [&](Vector3 start, Vector3 end) {
+        return w.AddPlainWire({geometry::CurveSegment::MakeLine(start, end).Value()}, "交点表示試験", false);
+    };
+    const auto crossing = add({-20,-8,-4}, {20,-8,4});
+    const auto coplanar = add({-20,2,0}, {20,2,0});
+    const auto above = add({-20,12,2}, {20,12,5});
+    if (crossing.IsNil() || coplanar.IsNil() || above.IsNil()
+        || !w.SaveAndReopen("workplane-crossing-markers.kcd2")) return false;
+    auto* scope = w.findChild<QComboBox*>("drawingScope");
+    if (!scope) return false;
+    scope->setCurrentIndex(0);
+    w.RunCommand("draw.line");
+    auto& view = w.Viewport();
+    view.SetViewDirection(ViewDirection::Top);
+    view.SetViewCenter({});
+    view.SetVisibleWidthMm(80);
+    view.SetSnapSuppressed(false);
+    view.HoverAt({4, view.height()-40.0});
+    const auto frame = [&] {
+        QImage image(view.size(), QImage::Format_ARGB32);
+        view.render(&image);
+        return image;
+    };
+    const auto hasMarker = [&](const QImage& image, Vector3 point) {
+        const auto projected = view.Mapping().Project(point);
+        if (!projected) return false;
+        const auto snapColor = view.SemanticColor(app::SemanticState::Snap);
+        for (int dx = -5; dx <= 5; ++dx) for (int dy = -5; dy <= 5; ++dy) {
+            const QPoint pixel(qRound(projected->x) + dx, qRound(projected->y) + dy);
+            if (!image.rect().contains(pixel)) continue;
+            const auto color = image.pixelColor(pixel);
+            if (std::abs(color.red()-snapColor.red()) + std::abs(color.green()-snapColor.green())
+                + std::abs(color.blue()-snapColor.blue()) < 28) return true;
+        }
+        return false;
+    };
+    const auto initial = frame();
+    if (!Explain("a diamond is drawn at the actual crossing before hover",
+            hasMarker(initial, {0,-8,0}))) return false;
+    if (!Explain("coplanar or disjoint wires have no crossing marker",
+            !hasMarker(initial, {0,2,0}) && !hasMarker(initial, {0,12,0}))) return false;
+    const auto original = view.WorkPlane();
+    auto raised = original;
+    raised.origin.z = 2;
+    view.SetWorkPlane(raised);
+    const auto shifted = frame();
+    if (!Explain("the marker follows the current plane",
+            !hasMarker(shifted, {0,-8,0}) && hasMarker(shifted, {10,-8,2}))) return false;
+    view.SetWorkPlane(original);
+    view.SetSelection(app::SelectionSet{{coplanar}});
+    view.IsolateSelection();
+    if (!Explain("isolation hides crossings of excluded wires", !hasMarker(frame(), {0,-8,0}))) return false;
+    view.ClearIsolation();
+    view.SetSelection({});
+    if (!Explain("restoring visibility restores its crossings", hasMarker(frame(), {0,-8,0})))
+        return false;
+    w.RunCommand("selection.activate");
+    return Explain("ending the drawing tool removes its markers", !hasMarker(frame(), {0,-8,0}));
+}
+
+bool WireRemainsEditableOnRecreatedPlane(V2MainWindow& w)
+{
+    w.RunCommand("file.new");
+    w.resize(1600, 1000);
+    w.SetWorkPlaneChooser({});
+    auto makePlane = [&](const char* name) {
+        w.RunCommand("workplane.create");
+        WorkPlaneChoice choice;
+        choice.method = modeling::WorkPlaneMethod::PointNormal;
+        choice.name = name;
+        choice.origin = {0,0,7};
+        choice.normal = {0,0,1};
+        choice.uAxis = {1,0,0};
+        w.WorkPlaneDock()->SetChoice(choice);
+        if (!w.WorkPlaneDock()->CanCreate()) return base::EntityId{};
+        w.WorkPlaneDock()->PressCreate();
+        return w.ActiveWorkPlaneId();
+    };
+    const auto first = makePlane("面1");
+    if (first.IsNil()) return false;
+    auto* scope = w.findChild<QComboBox*>("drawingScope");
+    if (!scope) return false;
+    scope->setCurrentIndex(0);
+    w.RunCommand("draw.line");
+    auto& view = w.Viewport();
+    view.SetViewDirection(ViewDirection::Top);
+    view.SetViewCenter({0,0,7});
+    view.SetVisibleWidthMm(80);
+    const Vector3 start{-15,-8,7}, end{16,-8,7};
+    view.SetSnapSuppressed(true);
+    const bool drew = ClickWorld(view,start) && ClickWorld(view,end);
+    view.SetSnapSuppressed(false);
+    if (!drew || CountOfKind(w,domain::EntityKind::Wire) != 1) return false;
+    const auto wire = w.Session().Scene().curves.back().entityId;
+    const auto segment = w.Session().Scene().curves.back().segmentId;
+    const auto* entity = w.Session().GetDocument().FindEntity(wire);
+    if (!entity) return false;
+    const auto* feature = w.Session().GetDocument().FindFeature(entity->createdBy);
+    if (!Explain("a wire drawn on a workplane has no feature dependency on it",
+            feature && feature->inputEntityIds.empty())) return false;
+    w.RunCommand("selection.activate");
+    view.SetSelection(app::SelectionSet{{first}});
+    w.RunCommand("edit.delete");
+    if (!Explain("deleting the active workplane preserves the wire",
+            !w.Session().GetDocument().FindEntity(first)
+            && w.Session().GetDocument().FindEntity(wire))) return false;
+    const auto second = makePlane("面2");
+    if (!Explain("the replacement plane has its own identity and the same location",
+            !second.IsNil() && first != second && std::abs(view.WorkPlane().origin.z-7) < 1e-9))
+        return false;
+    w.RunCommand("selection.activate");
+    view.SetSelection({});
+    if (!ClickWorld(view, (start+end)*.5)
+        || view.Selection().entityIds != std::vector<base::EntityId>{wire}) return false;
+    w.RunCommand("edit.numeric");
+    const Vector3 editedEnd{20,-5,7};
+    auto& dock = w.EditDock();
+    if (!dock.IsShowingWire()) return false;
+    dock.SetPoint(1, editedEnd);
+    dock.PressApply();
+    if (!w.SaveAndReopen("wire-on-recreated-workplane.kcd2")) return false;
+    const auto& curves = w.Session().Scene().curves;
+    const auto restored = std::find_if(curves.begin(), curves.end(),
+        [wire](const auto& curve) { return curve.entityId == wire; });
+    return Explain("editing on the replacement plane keeps both original IDs and saves the edited endpoint",
+        restored != curves.end() && restored->segmentId == segment
+        && geometry::Distance(restored->segment.StartPoint(),start) < 1e-8
+        && geometry::Distance(restored->segment.EndPoint(),editedEnd) < 1e-8);
 }
 
 
@@ -731,6 +866,8 @@ std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
     {"HP-POINT-TARGET Esc closes cursor input and releases the previous target",[](auto& w){return OverlapPointTransition(w,2);}},
     {"HP-POINT-TARGET reference Tab and right menu return the chosen UUID",OverlapReferencePoint},
     {"HP-POINT-PLANE draw from a finite curve plane intersection with source preservation",CurvePlanePointInput},
+    {"HP-POINT-PLANE show exact crossings before hover and track plane and visibility",MarksVisibleCurvePlaneCrossings},
+    {"HP-POINT-WP wire remains editable after replacing its original drawing plane",WireRemainsEditableOnRecreatedPlane},
     {"HP-POINT-PLANE finite roots remain point sources while off-plane element selection stays restricted",CrossingPointSourceIsNotAnOffPlaneSelection},
     {"HP-POINT-PLANE source menu order follows actual root distance",WorkPlaneSourceOrderUsesActualRoots},
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",[](auto& w){return WorkPlaneRoles(w);}},

@@ -141,11 +141,11 @@ void V2Ribbon::RebuildTools()
     if (current_ < 0 || current_ >= static_cast<int>(categories.size())) {
         return;
     }
-    // 正本の道具を先に、「その他」(正本に無い既存の道具)を後ろに。
-    for (const bool extra : {false, true}) {
+    // 常設道具を先に配置し、「その他」専用の道具は幅に関係なく末尾に置く。
+    for (const bool menuOnly : {false, true}) for (const bool extra : {false, true}) {
         for (const RibbonTool& tool : categories[static_cast<std::size_t>(current_)].tools) {
             if(tool.Blocked())continue;
-            if (tool.extra != extra) {
+            if (tool.extra != extra || tool.menuOnly != menuOnly) {
                 continue;
             }
             auto* button = new QToolButton(toolRow_);
@@ -193,8 +193,8 @@ void V2Ribbon::RebuildTools()
             if (tool.Blocked()) {
                 button->setToolTip(Text(tool.blockedReasonJa));
             }
-            toolRow_->Add(button, action);
-            button->show();   // 上と同じ理由
+            toolRow_->Add(button, action, tool.menuOnly);
+            if (!tool.menuOnly) button->show();
             toolButtons_.push_back(entry);
         }
     }

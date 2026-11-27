@@ -896,6 +896,7 @@ private:
     void DrawMeasureOverlay(QPainter& painter) const;
     void DrawKeptDimensions(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
+    void DrawWorkPlaneCrossings(QPainter& painter) const;
     void DrawExtrudeHandle(QPainter& painter) const;
     //! 道具の下見の線。細い破線で出す。
     void DrawToolPreview(QPainter& painter) const;

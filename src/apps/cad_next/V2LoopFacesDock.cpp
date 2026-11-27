@@ -12,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
+#include <QMenu>
 #include <QObject>
 #include <QPushButton>
 #include <QString>
@@ -33,6 +34,7 @@ namespace {
     }
     return QStringLiteral("(%1)").arg(number);
 }
+
 
 //! 行を片づける。欄の合図の中(押した欄自身のスロット)から作り直すことがあるので、
 //! その場で delete せず、隠して外して deleteLater(合図を出している最中の欄を消さない)。
@@ -176,6 +178,16 @@ V2LoopFacesDock::V2LoopFacesDock(QWidget* parent)
         }
     });
     PinToolActions(this, cancel_, confirm_);
+}
+
+void V2LoopFacesDock::SetAlternativeMethods(QMenu* menu)
+{
+    auto* button = new QToolButton(planBody_);
+    button->setObjectName(QStringLiteral("loopFacesAlternativeMethods"));
+    button->setText(QStringLiteral("別の作り方"));
+    button->setPopupMode(QToolButton::InstantPopup);
+    button->setMenu(menu);
+    planLayout_->insertWidget(1, button, 0, Qt::AlignLeft);
 }
 
 V2LoopFacesDock::FaceRowWidgets V2LoopFacesDock::MakeFaceRow(const V2LoopFaceRow& face)

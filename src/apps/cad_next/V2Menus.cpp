@@ -67,7 +67,7 @@ void V2MainWindow::BuildMenus()
         "wire.array_circular", "wire.intersection_points", "wire.center_points",
         "wire.key_points", "wire.spaced_points", "wire.corner_chamfer", "wire.corner_fillet",
         "wire.set_datum", "wire.clear_datum", "wire.move", "wire.copy",
-        "wire.mirror", "wire.rotate", "wire.scale", "wire.project", "wire.project_surface",
+        "wire.mirror", "wire.rotate", "wire.scale", "wire.project_surface", "wire.project",
         "wire.wrap_project"});
     QMenu* groups = edit->addMenu(QStringLiteral("グループ(&G)"));
     addCommands(groups, {"group.set_active", "group.create", "group.dissolve",
@@ -81,7 +81,7 @@ void V2MainWindow::BuildMenus()
         "grid.move_origin"});
 
     QMenu* shape = menuBar()->addMenu(QStringLiteral("形(&M)"));
-    addCommands(shape, {"surface.gpt_create", "surface.from_lines", "surface.create", "surface.match", "surface.bridge",
+    addCommands(shape, {"surface.from_lines", "surface.gpt_create", "surface.create", "surface.match", "surface.bridge",
         "surface.refit", "surface.mirror", "surface.iso_curves", "guide.revolve",
         "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",

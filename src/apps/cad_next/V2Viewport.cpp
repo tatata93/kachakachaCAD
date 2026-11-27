@@ -814,6 +814,7 @@ void V2Viewport::PaintScene(QPainter& painter)
     const auto documentTime=paintTimer.nsecsElapsed();
     DrawGuideRows(painter);
     DrawPreview(painter);
+    DrawWorkPlaneCrossings(painter);
     DrawSnap(painter);
     // 道具の下見(面を作る)は、文書の線の上・矢印の下に出す。
     DrawToolPreview(painter);

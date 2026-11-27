@@ -12,6 +12,24 @@
 #include <utility>
 #include <cmath>
 
+namespace {
+kachakacha::v2::app::PickCandidate PickOf(const kachakacha::v2::app::SelectionRef& ref)
+{
+    using namespace kachakacha::v2;
+    app::PickCandidate pick;
+    pick.entityId = ref.entityId;
+    pick.kind = ref.kind;
+    pick.segmentId = ref.segmentId.value_or(base::SegmentId{});
+    pick.subshapeKey = ref.subshapeKey;
+    pick.curveParameter = ref.curveParameter;
+    pick.hitPoint = ref.hitPoint;
+    pick.distancePx = ref.screenDistancePx;
+    pick.pickedFaceIndex = ref.pickedFaceIndex;
+    pick.profileSeed = ref.profileSeed;
+    return pick;
+}
+}
+
 void v2ui::AppendReferencePlaneCandidates(const std::vector<V2Viewport::WorkPlaneView>& planes,
     const kachakacha::v2::geometry::ScreenMapping& mapping,double width,double tolerance,
     const QPointF& pointer,std::vector<kachakacha::v2::app::PickCandidate>& candidates)
@@ -41,6 +59,7 @@ void v2ui::AppendReferencePlaneCandidates(const std::vector<V2Viewport::WorkPlan
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 {
+    using namespace kachakacha::v2;
     V2DocumentTiming timing("viewport-selection");timing.Mark("begin");
     const bool treeInput=property("treePickInput").toBool();
     const bool treeToolInput=property("treeToolInput").toBool();
@@ -49,20 +68,37 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     setProperty("treePickInput",false); // Consume before callbacks can re-enter selection.
     setProperty("treeToolInput",false);
     if(treeInput && !V2ToolSelection::Active(*this) && pickHandler_) {
+        std::optional<PickedPoint> picked;
         if(selection.entityIds.size()==1) {
             const auto id=selection.entityIds.front();
+            if (selection.ordered.size()==1 && selection.ordered.front().entityId==id
+                && selection.ordered.front().kind==app::SelectionElementKind::Vertex) {
+                auto pick = PickOf(selection.ordered.front());
+                const auto& curves = session_->Scene().curves;
+                const auto curve = std::find_if(curves.begin(), curves.end(), [&](const auto& item) {
+                    return item.entityId==id && item.segmentId==pick.segmentId;
+                });
+                if (curve!=curves.end() && EntityShown(id) && pick.curveParameter
+                    && *pick.curveParameter>=0 && *pick.curveParameter<=1) {
+                    pick.hitPoint=curve->segment.Evaluate(*pick.curveParameter);
+                    pick.kind=app::SelectionElementKind::Edge;
+                    picked=PickedPoint{pick.hitPoint,pick};
+                }
+            }
             const auto* entity=session_->GetDocument().FindEntity(id);
             const auto* feature=entity?session_->GetDocument().FindFeature(entity->createdBy):nullptr;
             const auto* point=feature&&feature->enabled
                 ?std::get_if<kachakacha::v2::domain::CreatePointDefinition>(&feature->definition):nullptr;
-            if(point && entity->kind==kachakacha::v2::domain::EntityKind::Point) {
-                PickedPoint picked;picked.point=point->positionMm;
-                auto handler=std::move(pickHandler_);pickHandler_=nullptr;setProperty("pointPickPrompt",{});
-                status_="点を指定しました。";if(statusCallback_)statusCallback_(status_);
-                handler(picked);RefreshCursorShape();update();return;
-            }
+            if (point && entity->kind==domain::EntityKind::Point)
+                picked=PickedPoint{point->positionMm, std::nullopt};
         }
-        status_="点の項目を選んでください。線の端点・交点・面上の位置は3Dビューで指定できます。";
+        if (picked) {
+            auto handler=std::move(pickHandler_);pickHandler_=nullptr;setProperty("pointPickPrompt",{});
+            ForgetPickCycle();
+            status_="点を指定しました。";if(statusCallback_)statusCallback_(status_);
+            handler(*picked);RefreshCursorShape();update();return;
+        }
+        status_="作図点を選ぶか、一覧の右クリックから線の端点を指定してください。";
         if(statusCallback_)statusCallback_(status_);update();return;
     }
     if(treeInput && !V2ToolSelection::Active(*this) && referencePickHandler_) {
@@ -76,18 +112,17 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     }
     if (elementPickHandler_ && !V2ToolSelection::Active(*this)) {
         for (const auto& ref : selection.ordered) {
-            kachakacha::v2::app::PickCandidate pick;
-            pick.entityId = ref.entityId; pick.kind = ref.kind;
-            pick.pickedFaceIndex = ref.pickedFaceIndex; pick.hitPoint = ref.hitPoint;
-            pick.segmentId = ref.segmentId.value_or(kachakacha::v2::base::SegmentId{}); pick.subshapeKey = ref.subshapeKey;
-            if (AcceptElementPick(pick)) return;
+            if (AcceptElementPick(PickOf(ref))) return;
         }
         for (const auto& id : selection.entityIds) {
+            if (treeInput && std::any_of(selection.ordered.begin(),selection.ordered.end(),[id](const auto& ref) {
+                    return ref.entityId==id && ref.kind!=app::SelectionElementKind::Object;
+                })) continue;
             kachakacha::v2::app::PickCandidate pick; pick.entityId = id;
             if (AcceptElementPick(pick)) return;
         }
         if(treeInput) {
-            status_="この項目全体は現在の入力には使えません。必要な面・辺などは3Dビューで選んでください。";
+            status_="一覧の右クリックで面・辺を指定するか、3Dビューで位置を指定してください。";
             if(statusCallback_)statusCallback_(status_);update();
         }
         return;
@@ -96,7 +131,17 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     if(treeToolInput&&!V2ToolSelection::Active(*this)&&toolPickActive_) {
         const auto requested=SelectionModeFor(treeModifiers);
         if(selection.entityIds.size()==1) {
-            kachakacha::v2::app::PickCandidate pick;pick.entityId=selection.entityIds.front();
+            app::PickCandidate pick;
+            pick.entityId=selection.entityIds.front();
+            if (selection.ordered.size()==1 && selection.ordered.front().entityId==pick.entityId)
+                pick=PickOf(selection.ordered.front());
+            if (pick.kind!=app::SelectionElementKind::Object && toolCandidateFilter_
+                && !toolCandidateFilter_(pick)) {
+                status_="この部分は現在の入力に使用できません。";
+                if (statusCallback_) statusCallback_(status_);
+                update();
+                return;
+            }
             const auto mode=ModeForTogglePick(pick,ModeForToolPick(pick,requested));
             selection=kachakacha::v2::app::ApplySelection(selection_,pick,mode);
         } else if(requested==kachakacha::v2::app::SelectionMode::Toggle) {

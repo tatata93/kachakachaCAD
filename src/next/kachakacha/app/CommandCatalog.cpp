@@ -477,9 +477,9 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreGuideRows, "役割表に行を1つ以上入れてください。",
             "役割表の行を全部消します。作り方はそのままです。", false,
             {"AT-GEO-008"}},
-        {"wire.project", "面へ投影", CommandMode::Tool, "project", "",
+        {"wire.project", "簡易投影", CommandMode::Tool, "project", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
-            "線を作業平面や面へ投影します。", true,
+            "元の線を作業平面へ投影します。作図に使う面だけを選んでいる場合は、その面の輪郭を写します。", true,
             {"AT-FAB-007"}},
         {"wire.wrap_project", "回り込み投影", CommandMode::Dialog, "wrap_project", "",
             SelectionPredicate::Always,
@@ -487,7 +487,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "投影ツールの等長巻き付けを開始します。平面・円柱・円錐の1面に対応。"
             "複数面には方向投影／最近点投影を選び、接続する端点を確認してください。", true,
             {"AT-FAB-006"}},
-        {"wire.project_surface", "面へ投影", CommandMode::Dialog, "project_surface", "",
+        {"wire.project_surface", "ワイヤーを投影", CommandMode::Dialog, "project_surface", "",
             SelectionPredicate::Always,
             "元ワイヤーと投影先の面を、道具を開始してから指定できます。",
             "図面からの方向投影・等長巻き付け・最近点投影を切り替えます。サーフェス・ソリッドのフェイス・作業面と複数の面に対応。"

@@ -2,7 +2,7 @@
 //!
 //!   名前変更 / 表示・非表示 / 選択に正対 / グループへ移動 / 複製 / 削除 / プロパティ
 //!
-//! 並べるのは台帳のコマンドだけ(押せるかどうかの判断も文言も台帳が持つ)。
+//! 台帳のコマンドと、現在の図形から指定できる部分要素を並べる。
 //! 「グループへ移動」だけは、引きずって落とすのと同じ道(DropTreeItemsOnto)を通す。
 //! 消せないときの理由は core(RemoveFeatureCommand)が人の言葉で出す。ここでは言い直さない。
 
@@ -11,9 +11,13 @@
 #include "V2EditDock.h"
 #include "V2EntityTree.h"
 #include "V2FaceActions.h"
+#include "V2Viewport.h"
 #include "kachakacha/app/GroupTree.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 
 #include <QAction>
+#include <QApplication>
+#include <QItemSelectionModel>
 #include <QMenu>
 #include <QObject>
 #include <QPoint>
@@ -36,6 +40,97 @@ void AddCatalogAction(V2MainWindow& window, QMenu& menu, const char* id)
     }
 }
 
+using namespace kachakacha::v2;
+
+void ApplyExplorerPick(V2Viewport& viewport, const app::PickCandidate& pick)
+{
+    if (!viewport.EntityShown(pick.entityId)) return;
+    const bool pending = viewport.PickPending() || viewport.ReferencePickPending();
+    const bool toolInput = viewport.ToolPickActive() && !pending;
+    const auto modifiers = QApplication::keyboardModifiers();
+    viewport.setProperty("treePickInput", pending);
+    viewport.setProperty("treeToolInput", toolInput);
+    viewport.setProperty("treeInputModifiers", static_cast<int>(modifiers));
+    const auto mode = !pending && !toolInput && modifiers.testFlag(Qt::ControlModifier)
+        ? app::SelectionMode::Toggle : app::SelectionMode::Replace;
+    viewport.SetSelection(app::ApplySelection(viewport.Selection(), pick, mode));
+}
+
+void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
+{
+    auto& viewport = window.Viewport();
+    if (!viewport.EntityShown(id) || viewport.DirectionPickPending()) return;
+    const auto& session = window.Session();
+    const auto& scene = session.Scene();
+    const auto& tolerance = session.GetDocument().Snapshot().settings.tolerance;
+    auto* elements = new QMenu(QStringLiteral("部分を指定"), &menu);
+    elements->setObjectName(QStringLiteral("explorerElements"));
+    elements->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
+    const auto add = [&](QMenu& target, const QString& label, const app::PickCandidate& pick) {
+        target.addAction(label, &window, [&viewport, pick] { ApplyExplorerPick(viewport, pick); });
+    };
+    int segmentIndex = 0;
+    for (const auto& curve : scene.curves) {
+        if (curve.entityId != id || (curve.construction && !viewport.DisplaySettingsNow().constructionVisible))
+            continue;
+        app::PickCandidate pick;
+        pick.entityId = id;
+        pick.segmentId = curve.segmentId;
+        pick.kind = app::SelectionElementKind::Edge;
+        pick.curveParameter = .5;
+        pick.hitPoint = curve.segment.Evaluate(.5);
+        auto* segment = elements->addMenu(QStringLiteral("線分 %1").arg(++segmentIndex));
+        if (!viewport.PickPending())
+            add(*segment, QStringLiteral("線分を選ぶ"), pick);
+        pick.kind = app::SelectionElementKind::Vertex;
+        pick.curveParameter = 0;
+        pick.hitPoint = curve.segment.StartPoint();
+        add(*segment, QStringLiteral("始点"), pick);
+        pick.curveParameter = 1;
+        pick.hitPoint = curve.segment.EndPoint();
+        add(*segment, QStringLiteral("終点"), pick);
+        if (scene.workPlane.active && viewport.PickPending()) {
+            const auto roots = geometry::IntersectCurveWithPlane(curve.segment, scene.workPlane.origin,
+                scene.workPlane.normal, tolerance);
+            int index = 0;
+            for (const auto& root : roots) {
+                pick.curveParameter = root.parameter;
+                pick.hitPoint = root.position;
+                add(*segment, QStringLiteral("作業面との交点 %1").arg(++index), pick);
+            }
+        }
+    }
+    if (!viewport.PickPending() && viewport.DisplaySettingsNow().shapesVisible) {
+        for (const auto& shape : viewport.ShapeViews()) {
+            if (shape.entityId != id) continue;
+            std::map<std::size_t, const modeling::MeshTriangle*> faces;
+            for (const auto& triangle : shape.mesh.triangles) {
+                if (triangle.faceIndex == modeling::kNoFaceIndex) continue;
+                auto& representative = faces[triangle.faceIndex];
+                const auto area = [](const modeling::MeshTriangle& value) {
+                    return geometry::Cross(value.points[1]-value.points[0],
+                        value.points[2]-value.points[0]).LengthSquared();
+                };
+                if (representative == nullptr || area(triangle) > area(*representative))
+                    representative = &triangle;
+            }
+            for (const auto& [index, triangle] : faces) {
+                app::PickCandidate pick;
+                pick.entityId = id;
+                pick.kind = app::SelectionElementKind::Face;
+                pick.pickedFaceIndex = index;
+                pick.hitPoint = triangle->Center();
+                add(*elements, QStringLiteral("面 %1").arg(index + 1), pick);
+            }
+        }
+    }
+    if (elements->isEmpty()) {
+        delete elements;
+        return;
+    }
+    menu.insertMenu(menu.actions().isEmpty() ? nullptr : menu.actions().front(), elements);
+}
+
 } // namespace
 
 void V2MainWindow::ShowExplorerMenu(const QPoint& at)
@@ -45,8 +140,10 @@ void V2MainWindow::ShowExplorerMenu(const QPoint& at)
     }
     // 右クリックした行がまだ選ばれていなければ、その行を選ぶ(選択の同期は普段の道)。
     QTreeWidgetItem* under = entityTree_->itemAt(at);
-    if (under != nullptr && !under->isSelected() && (under->flags() & Qt::ItemIsSelectable)) {
-        entityTree_->setCurrentItem(under);
+    if (under != nullptr && (under->flags() & Qt::ItemIsSelectable)) {
+        if (!under->isSelected()) entityTree_->setCurrentItem(under);
+        else if (under != entityTree_->currentItem())
+            entityTree_->setCurrentItem(under, 0, QItemSelectionModel::NoUpdate);
     }
     if (under == nullptr) entityTree_->clearSelection();
     QMenu menu(this);
@@ -59,6 +156,12 @@ void V2MainWindow::ShowExplorerMenu(const QPoint& at)
 //! 献立を組むだけ。出すのは呼び出し側なので、試験は exec を通さずに並びを確かめられる。
 void V2MainWindow::BuildExplorerMenu(QMenu& menu)
 {
+    if (entityTree_ != nullptr && viewport_ != nullptr) {
+        const auto* current = entityTree_->currentItem();
+        const auto row = std::find_if(entityItems_.begin(), entityItems_.end(),
+            [current](const auto& item) { return current == item.first; });
+        if (row != entityItems_.end()) AddExplorerElements(*this, menu, row->second);
+    }
     AddCatalogAction(*this, menu, "entity.rename");
     AddCatalogAction(*this, menu, "group.rename");
     menu.addSeparator();

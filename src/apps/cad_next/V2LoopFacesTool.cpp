@@ -8,6 +8,7 @@
 
 #include "kachakacha/app/ExplorerModel.h"
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/Ribbon.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/document/Commands.h"
@@ -16,6 +17,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
+#include <QMenu>
 #include <QString>
 #include <QScopedValueRollback>
 #include <Qt>
@@ -86,6 +88,19 @@ void V2LoopFacesTool::ApplyStyle(int face,int style,bool all)
 V2LoopFacesTool::V2LoopFacesTool(V2MainWindow& window) : window_(window)
 {
     dock_ = new V2LoopFacesDock(&window);
+    auto* methods = new QMenu(dock_);
+    using namespace kachakacha::v2::app;
+    for (const auto& category : RibbonCategoriesFor(UiMode::Drawing)) {
+        if (category.key != "surface") continue;
+        for (const auto& tool : category.tools) {
+            if (!tool.surfaceMethod && tool.commandId != "surface.gpt_create"
+                && tool.commandId != "guide.revolve") continue;
+            methods->addAction(QString::fromUtf8(tool.labelJa.data(),
+                static_cast<qsizetype>(tool.labelJa.size())),
+                [this, tool] { window_.RunRibbonVariant(tool); });
+        }
+    }
+    dock_->SetAlternativeMethods(methods);
     dock_->SetMethodHandler([this](int face, int methodIndex) {
         if (!plan_.has_value() || face < 0 || static_cast<std::size_t>(face) >= plan_->faces.size()) {
             return;

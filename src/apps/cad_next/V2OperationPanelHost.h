@@ -56,7 +56,7 @@ private:
     QLineEdit* search_=nullptr;
     QCheckBox* allModes_=nullptr;
     QLabel* searchCount_=nullptr;
-    struct SearchEntry { kachakacha::v2::app::UiMode mode; QGroupBox* group; QPushButton* button; QString text; };
+    struct SearchEntry { kachakacha::v2::app::UiMode mode; QGroupBox* group; QPushButton* button; QString text; bool menuOnly; };
     std::vector<SearchEntry> searchEntries_;
     std::function<QAction*(std::string_view)> actionLookup_;
 

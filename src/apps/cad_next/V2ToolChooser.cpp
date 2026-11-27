@@ -70,7 +70,7 @@ void V2OperationPanelHost::SetToolMode(UiMode mode) {
             refresh();if(action)connect(action,&QAction::changed,button,refresh);
             connect(button,&QPushButton::clicked,this,[this,toolMode,tool]{if(toolHandler_)toolHandler_(toolMode,tool);});
             grid->addWidget(button,index/2,index%2);++index;
-            searchEntries_.push_back({toolMode,group,button,Text(tool.labelJa)+QStringLiteral(" ")+Text(category.labelJa)+QStringLiteral(" ")+guide+QStringLiteral(" ")+Text(tool.commandId)});
+            searchEntries_.push_back({toolMode,group,button,Text(tool.labelJa)+QStringLiteral(" ")+Text(category.labelJa)+QStringLiteral(" ")+guide+QStringLiteral(" ")+Text(tool.commandId),tool.menuOnly});
         }
         layout->addWidget(group);
     }
@@ -85,7 +85,8 @@ void V2OperationPanelHost::FilterTools() {
     const auto query=search_->text().trimmed();int count=0;std::map<QGroupBox*,int> positions;
     for(const auto& entry:searchEntries_){entry.group->hide();entry.group->layout()->removeWidget(entry.button);}
     for(const auto& entry:searchEntries_){
-        const bool match=((allModes_->isChecked()&&!entry.group->property("commonTools").toBool())||entry.mode==chooserMode_)&&(query.isEmpty()||entry.text.contains(query,Qt::CaseInsensitive));
+        const bool matchMode=(allModes_->isChecked()&&!entry.group->property("commonTools").toBool())||entry.mode==chooserMode_;
+        const bool match=matchMode&&(query.isEmpty()?!entry.menuOnly:entry.text.contains(query,Qt::CaseInsensitive));
         entry.button->setVisible(match);if(match){entry.group->show();const int at=positions[entry.group]++;static_cast<QGridLayout*>(entry.group->layout())->addWidget(entry.button,at/2,at%2);++count;}
     }
     searchCount_->setText(count?QStringLiteral("%1件 — 上下の道具は同じ操作です").arg(count):QStringLiteral("該当する道具がありません。別の名前か全モードで探してください。"));

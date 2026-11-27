@@ -87,7 +87,9 @@ using kachakacha::v2::modeling::DrawingTool;
 
 }
 
-//! HP-RB-03。モードを変えると帯が入れ替わり、面作成は作り方つきで「面を作る」へ入る。
+bool ChooseOverflow(QToolButton& button, const QString& label, const QString& submenu = {});
+
+//! HP-RB-03。「面にする」と、入力を引き継ぐ個別方式の両方を実操作で通す。
 [[nodiscard]] bool CaseRibbonFollowsModeAndSurfaceMethod(V2MainWindow& window)
 {
     using kachakacha::v2::modeling::GuideSurfaceMethod;
@@ -101,13 +103,26 @@ using kachakacha::v2::modeling::DrawingTool;
         return false;
     }
     window.SetMode(UiMode::Drawing);
+    const auto press = [](QWidget* button) { static_cast<QToolButton*>(button)->click(); return true; };
     if (!Explain("作図へ戻ると9カテゴリ", ribbon.CategoryCount() == 9)
         || !Explain("「面作成」を押せる", ribbon.ClickCategory(QStringLiteral("面作成")))
-        || !Explain("「ロフト面」を押せる", ribbon.ClickTool(QStringLiteral("ロフト面")))
+        || !Explain("帯の主ボタンから「面にする」へ入る",
+            ribbon.ClickTool(QStringLiteral("面にする")) && window.ShelfShown(Shelf::LoopFaces))) {
+        return false;
+    }
+    QApplication::processEvents();
+    auto* alternatives = window.findChild<QToolButton*>("loopFacesAlternativeMethods");
+    const auto tools = ribbon.findChildren<QToolButton*>(QStringLiteral("ribbonTool"));
+    const auto loft = std::find_if(tools.begin(), tools.end(), [](const auto* button) {
+        return button->text() == QStringLiteral("ロフト面");
+    });
+    if (!Explain("「ロフト面」は帯に常設せず、その他で選べる", loft != tools.end() && !(*loft)->isVisible())
+        || !Explain("右ペインの「別の作り方」が見える", alternatives && alternatives->isVisible())
+        || !Explain("別の作り方からロフトを押せる", ChooseOverflow(*alternatives, QStringLiteral("ロフト面")))
         || !Explain("面を作るの棚が構える", window.ShelfShown(Shelf::Surface))
         || !Explain("作り方はロフト", window.SurfaceInput().method == GuideSurfaceMethod::LoftSections)
-        || !Explain("「平面」を押すと作り方が平面に変わる(入力は捨てない)",
-            ribbon.ClickTool(QStringLiteral("平面"))
+        || !Explain("帯のその他から平面へ切り替えられる",
+            ClickRibbonItem(ribbon, "ribbonTool", QStringLiteral("平面"), press)
                 && window.SurfaceInput().method == GuideSurfaceMethod::PlanarBoundary)) {
         return false;
     }
@@ -137,7 +152,7 @@ void ClickAt(QWidget& widget, const QPoint& at)
     }
 }
 
-bool ChooseOverflow(QToolButton& button, const QString& label, const QString& submenu = {})
+bool ChooseOverflow(QToolButton& button, const QString& label, const QString& submenu)
 {
     auto* menu = button.menu();
     if (!menu || button.visibleRegion().boundingRect() != button.rect()) return false;

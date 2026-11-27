@@ -13,6 +13,8 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QApplication>
+#include <QAction>
+#include <QMenu>
 #include <QPointF>
 #include <QString>
 #include <QTreeWidgetItem>
@@ -35,6 +37,8 @@
 
 #include <map>
 #include <algorithm>
+#include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +48,79 @@ namespace {
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::domain::Visibility;
+
+bool PickExplorerElement(V2MainWindow& window, EntityId id, const QString& label)
+{
+    auto* row = window.ItemOfEntity(id);
+    if (!row) return false;
+    window.EntityTree()->setCurrentItem(row);
+    QMenu menu(&window);
+    window.BuildExplorerMenu(menu);
+    auto* elements = menu.findChild<QMenu*>(QStringLiteral("explorerElements"));
+    if (!elements) return false;
+    for (auto* action : elements->actions()) {
+        if (action->text() == label) {
+            action->trigger();
+            return true;
+        }
+        if (auto* segment = action->menu()) {
+            for (auto* choice : segment->actions()) {
+                if (choice->text() == label) {
+                    choice->trigger();
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool CaseExplorerSubelements(V2MainWindow& window)
+{
+    using geometry::Vector3;
+    using geometry::CurveSegment;
+    window.RunCommand("file.new");
+    const auto wire = window.AddPlainWire({CurveSegment::MakeLine({-24,-6,-3},{16,-6,2}).Value()},
+        "作業面を横切る線", false);
+    if (wire.IsNil() || !window.SaveAndReopen("explorer-workplane-crossing.kcd2")) return false;
+    auto& viewport = window.Viewport();
+    window.RunCommand("selection.activate");
+    std::optional<V2Viewport::PickedPoint> point;
+    viewport.BeginPointPick([&point](const auto& value) { point = value; }, "作図点を指定してください");
+    if (!Explain("the left list gives an exact endpoint of the selected wire",
+            PickExplorerElement(window,wire,QStringLiteral("終点")) && point && point->curve
+            && point->curve->entityId==wire && point->point==Vector3{16,-6,2})) return false;
+    point.reset();
+    viewport.BeginPointPick([&point](const auto& value) { point = value; }, "作図点を指定してください");
+    if (!Explain("the left list gives the finite curve/plane root with curve identity",
+            PickExplorerElement(window,wire,QStringLiteral("作業面との交点 1")) && point
+            && point->curve && point->curve->entityId==wire
+            && geometry::Distance(point->point,{0,-6,0}) < 1e-10)) return false;
+
+    const std::array<Vector3,4> corner{{{-12,-10,0},{12,-10,0},{12,10,0},{-12,10,0}}};
+    std::vector<CurveSegment> boundaries;
+    for (std::size_t i = 0; i < corner.size(); ++i)
+        boundaries.push_back(CurveSegment::MakeLine(corner[i],corner[(i+1)%corner.size()]).Value());
+    const auto boundary = window.AddPlainWire(boundaries, "面の外周", false);
+    if (boundary.IsNil() || !window.SaveAndReopen("explorer-face-input.kcd2")) return false;
+    viewport.SetSelection(app::SelectionSet{{boundary}});
+    window.RunCommand("surface.from_lines");
+    if (!window.HandleToolKey(Qt::Key_Return,nullptr)) return false;
+    window.RunCommand("selection.activate");
+    const auto& entities = window.Session().GetDocument().Snapshot().entities;
+    const auto face = std::find_if(entities.begin(), entities.end(), [](const auto& entity) {
+        return entity.kind==EntityKind::GuideSurface;
+    });
+    if (face==entities.end()) return false;
+    const auto faceId=face->id;
+    std::optional<app::PickCandidate> pickedFace;
+    viewport.BeginElementPick([](const auto& pick) { return pick.kind==app::SelectionElementKind::Face; },
+        [&pickedFace](const auto& pick) { pickedFace=pick; });
+    return Explain("the left list submits the chosen face to a pending face role",
+        PickExplorerElement(window,faceId,QStringLiteral("面 1")) && pickedFace
+        && pickedFace->entityId==faceId && pickedFace->pickedFaceIndex==0
+        && std::abs(pickedFace->hitPoint.z) < 1e-10 && !viewport.ReferencePickPending());
+}
 
 //! 線を1本引いて、その物の番号を返す。取れなければ Nil。
 [[nodiscard]] EntityId DrawLineAt(V2MainWindow& window, double offsetMm)
@@ -295,6 +372,7 @@ std::vector<SelfTestCase> ExplorerCases()
         {"HP-XP-03 3D と一覧の選択が両方向に同期する", CaseExplorerSelectionSyncBothWays},
         {"HP-XP-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
         {"HP-XP-05 collapse, nested groups, visibility, search and undo redo", CaseExplorerKeepsViewState},
+        {"HP-XP explicit tree endpoints, workplane roots and face roles", CaseExplorerSubelements},
     };
     const auto updates=ExplorerUpdateCases();cases.insert(cases.end(),updates.begin(),updates.end());
     if(qEnvironmentVariableIsSet("KACHACAD_EXPLORER_OWNER_INPUT"))cases.push_back({"HP-XP-OWNER actual explorer latency and checkbox position",ExplorerOwnerLatency});

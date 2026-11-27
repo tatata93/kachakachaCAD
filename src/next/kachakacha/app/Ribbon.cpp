@@ -29,9 +29,14 @@ constexpr int kMeasureArea = 4;
     return RibbonTool{label, id, std::nullopt, std::nullopt, {}, true};
 }
 
-[[nodiscard]] RibbonTool Surface(std::string_view label, int method, bool extra = false)
+[[nodiscard]] RibbonTool MenuTool(std::string_view label, std::string_view id)
 {
-    return RibbonTool{label, "surface.create", method, std::nullopt, {}, extra};
+    return RibbonTool{label, id, std::nullopt, std::nullopt, {}, true, true};
+}
+
+[[nodiscard]] RibbonTool Surface(std::string_view label, int method)
+{
+    return RibbonTool{label, "surface.create", method, std::nullopt, {}, true, true};
 }
 
 [[nodiscard]] RibbonTool Measure(std::string_view label, int mode)
@@ -61,12 +66,12 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Extra("接線でつなぐ", "wire.tangent"), Extra("曲率でつなぐ", "wire.curvature"),
                 Extra("端点を合わせる", "wire.coincident"),
                 Extra("2本を交点まで", "wire.meet_lines"),
-                Extra("角を落とす", "wire.corner_chamfer"), Extra("角を丸める", "wire.corner_fillet"),
+                MenuTool("角を落とす", "wire.corner_chamfer"), MenuTool("角を丸める", "wire.corner_fillet"),
                 Extra("交点を点に", "wire.intersection_points"),
                 Extra("中心を点に", "wire.center_points"), Extra("主要点を点に", "wire.key_points"),
                 Extra("曲線に等間隔の点", "wire.spaced_points"),
-                Extra("平面へ投影", "wire.project"), Extra("面へ投影", "wire.project_surface"),
-                Extra("巻き付け投影", "wire.wrap_project"),
+                Tool("ワイヤーを投影", "wire.project_surface"),
+                MenuTool("簡易投影", "wire.project"), MenuTool("巻き付け投影", "wire.wrap_project"),
                 Extra("基準線にする", "wire.set_datum"), Extra("基準線を外す", "wire.clear_datum"),
                 Extra("数値で直す", "edit.numeric")}},
         {"transform", "変形",
@@ -82,19 +87,21 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Extra("グリッド原点", "grid.move_origin")}},
         {"surface", "面作成",
             // 2026-09-22: 「ガイド付きロフト」は「ロフト面」へ統合(ガイド 0〜任意)。
-            // 互換の入口は面の棚の「その他」に残す。空いた場所へ「四辺面」。
-            {Tool("曲線から近似面", "surface.gpt_create"), Tool("面にする", "surface.from_lines"), Surface("平面", kPlanar), Surface("2本を直線でつなぐ", kRuled),
+            // 個別方式は「面にする」の「別の作り方」と帯の「その他」から開く。
+            {Tool("面にする", "surface.from_lines"),
+                MenuTool("曲線から近似面", "surface.gpt_create"),
+                Surface("平面", kPlanar), Surface("2本を直線でつなぐ", kRuled),
                 Surface("ロフト面", kLoft),
                 Surface("境界面", kBoundaryFill), Surface("四辺面", kFourEdgePatch),
-                Surface("曲線網", kGordon), Surface("オフセット面", kOffsetGuide, true),
-                Extra("回転面", "guide.revolve"),
+                Surface("曲線網", kGordon), Surface("オフセット面", kOffsetGuide),
+                MenuTool("回転面", "guide.revolve"),
                 // 面の編集(プロンプト additional_surface_tools)。正本のカテゴリは増やさず、
                 // 面作成の後ろ(「その他」)に置く。面を作ったあとに直す・つなぐ道具。
-                Extra("面を合わせる", "surface.match"), Extra("面をつなぐ", "surface.bridge"),
-                Extra("面を整える", "surface.refit"), Extra("対称に写す", "surface.mirror"),
-                Extra("面の縦横線", "surface.iso_curves"),
+                MenuTool("面を合わせる", "surface.match"), MenuTool("面をつなぐ", "surface.bridge"),
+                MenuTool("面を整える", "surface.refit"), MenuTool("対称に写す", "surface.mirror"),
+                MenuTool("面の縦横線", "surface.iso_curves"),
                 // 面の解析(プロンプト surface_analysis)。作りながら見るので面作成に並べる。
-                Extra("面の解析", "view.surface_analysis"), Extra("ゼブラ", "view.analysis_zebra")}},
+                MenuTool("面の解析", "view.surface_analysis"), MenuTool("ゼブラ", "view.analysis_zebra")}},
         {"note", "注記",
             {Tool("寸法", "dimension.open"),
                 Blocked("テキスト", "テキストの注記はまだありません(文書に文字の要素がありません)")}},
@@ -153,12 +160,12 @@ const std::vector<RibbonCategory>& FabricationCategories()
                 Tool("展開基準辺", "fabrication.set_unfold_base"),
                 Blocked("表裏反転", "表裏反転はまだできません(型紙の配置に鏡映がありません)")}},
         {"generate", "生成",
-            {Tool("現在形状を生成", "fabrication.freeze_state"),
-                Tool("Flat Wire", "fabrication.freeze_flat"),
-                Tool("目標形状(100%)を固定", "fabrication.freeze_target"),
+            {Tool("形状を生成", "fabrication.freeze_state"),
+                MenuTool("Flat Wire", "fabrication.freeze_flat"),
+                MenuTool("目標形状(100%)を固定", "fabrication.freeze_target"),
                 // 以前は fabrication.freeze_state を指す張りぼてで、
                 // 「現在形状を生成」と中身が同じだった(指示書 F-14)。
-                Tool("輪郭 Wire", "fabrication.freeze_wires")}},
+                MenuTool("輪郭 Wire", "fabrication.freeze_wires")}},
     };
     return categories;
 }
@@ -167,8 +174,10 @@ const std::vector<RibbonCategory>& OutputCategories()
 {
     static const std::vector<RibbonCategory> categories{
         {"export", "書き出し",
-            {Tool("選択を出力・配置", "export.selection"), Tool("別KCD", "export.kcd"), Tool("同一KCD", "output.copy"), Tool("出力を検査", "export.validate"), Tool("STL", "export.stl"),
-                Tool("STEP", "export.step"), Tool("SVG", "export.svg"), Tool("DXF", "export.dxf"),
+            {Tool("選択を出力・配置", "export.selection"), Tool("出力を検査", "export.validate"),
+                MenuTool("別KCD", "export.kcd"), MenuTool("同一KCD", "output.copy"),
+                MenuTool("STL", "export.stl"), MenuTool("STEP", "export.step"),
+                Tool("SVG", "export.svg"), Tool("DXF", "export.dxf"),
                 Tool("PDF 原寸", "export.pdf_1to1")}},
         {"view", "表示", {Tool("表示設定", "view.display_settings")}},
     };

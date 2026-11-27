@@ -71,7 +71,7 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(
         SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));
     if (!window.Ribbon().ClickCategory(QStringLiteral("生成"))
-        || !window.Ribbon().ClickTool(QStringLiteral("現在形状を生成"))) return false;
+        || !window.Ribbon().ClickTool(QStringLiteral("形状を生成"))) return false;
     window.Viewport().SetSelection({});
     window.Viewport().SetSelection(
         SelectAllOfKind(window.Session().GetDocument().Snapshot(), EntityKind::FabricationModel));

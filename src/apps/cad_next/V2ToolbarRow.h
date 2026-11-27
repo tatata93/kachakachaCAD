@@ -11,7 +11,7 @@ class QToolButton;
 class V2ToolbarRow final : public QWidget {
 public:
     V2ToolbarRow(const QString& overflowLabel, QWidget* parent);
-    void Add(QWidget* widget, QAction* action);
+    void Add(QWidget* widget, QAction* action, bool menuOnly = false);
     void Clear();
     void Relayout();
 
@@ -27,6 +27,7 @@ private:
     struct Entry {
         QWidget* widget;
         QAction* action;
+        bool menuOnly;
     };
     std::vector<Entry> entries_;
     QHBoxLayout* row_;

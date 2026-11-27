@@ -14,6 +14,7 @@
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/WireEdit.h"
 
 #include <QColor>
@@ -694,6 +695,45 @@ void V2Viewport::DrawPreview(QPainter& painter) const
     painter.setPen(PreviewPen());
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
+}
+
+void V2Viewport::DrawWorkPlaneCrossings(QPainter& painter) const
+{
+    const auto& scene = session_->Scene();
+    if (!scene.workPlane.active || !session_->DrawingPlaneLimited()
+        || snapSuppressedByKey_ || snapSuppressedBySetting_) {
+        return;
+    }
+    const auto& document = session_->GetDocument().Snapshot();
+    const auto& tolerance = document.settings.tolerance;
+    std::unordered_set<kachakacha::v2::base::EntityId> wires;
+    for (const auto& entity : document.entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Wire) wires.insert(entity.id);
+    }
+    constexpr double radius = 4.0;
+    const QRectF visible = QRectF(rect()).adjusted(-radius, -radius, radius, radius);
+    QPainterPath markers;
+    for (const auto& curve : scene.curves) {
+        if (!wires.contains(curve.entityId) || !EntityShown(curve.entityId)
+            || (curve.construction && !display_.constructionVisible)) continue;
+        const auto roots = kachakacha::v2::geometry::IntersectCurveWithPlane(curve.segment,
+            scene.workPlane.origin, scene.workPlane.normal, tolerance);
+        for (const auto& root : roots) {
+            const auto screen = ToScreen(root.position);
+            if (!screen || !visible.contains(*screen)) continue;
+            markers.moveTo(screen->x(), screen->y() - radius);
+            markers.lineTo(screen->x() + radius, screen->y());
+            markers.lineTo(screen->x(), screen->y() + radius);
+            markers.lineTo(screen->x() - radius, screen->y());
+            markers.closeSubpath();
+        }
+    }
+    if (markers.isEmpty()) return;
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(QColor(255, 255, 255, 225), 3.5));
+    painter.drawPath(markers);
+    painter.setPen(QPen(SemanticColor(SemanticState::Snap), 1.5));
+    painter.drawPath(markers);
 }
 
 void V2Viewport::DrawSnap(QPainter& painter) const

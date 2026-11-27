@@ -39,6 +39,9 @@ setx KACHACAD_QT_ROOT "C:\Qt\6.9.2\msvc2022_64"
 setx VCPKG_ROOT "%USERPROFILE%\vcpkg"
 ```
 
+OCCTを直接導入した場合は、`OpenCASCADEConfig.cmake` のあるディレクトリを環境変数
+`OpenCASCADE_DIR` に指定する。`doctor.ps1` とCMakeはこの構成を利用できる。
+
 複数PCでの運用は `docs/multi-machine-development.md` を参照。
 
 ## 構成・ビルド・テスト

@@ -73,10 +73,18 @@ foreach ($candidate in @($env:VCPKG_ROOT, (Join-Path $env:USERPROFILE "vcpkg"), 
 if ($VcpkgRoot -eq "") { $VcpkgRoot = Join-Path $env:USERPROFILE "vcpkg" }
 $VcpkgToolchain = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $OcctConfig = Join-Path $VcpkgRoot "installed\x64-windows\share\opencascade\OpenCASCADEConfig.cmake"
+if ($env:OpenCASCADE_DIR) {
+    $ExplicitOcctConfig = Join-Path $env:OpenCASCADE_DIR "OpenCASCADEConfig.cmake"
+    if (Test-Path -LiteralPath $ExplicitOcctConfig -PathType Leaf) {
+        $OcctConfig = $ExplicitOcctConfig
+    }
+}
 Write-Host "Desktop CAD dependencies:"
+if (Test-Path -LiteralPath $VcpkgToolchain -PathType Leaf) {
+    Write-Host "[ok]      vcpkg toolchain -> $VcpkgToolchain"
+}
 foreach ($dependency in @(
     @{ Name = "Qt 6"; Path = $QtRoot },
-    @{ Name = "vcpkg toolchain"; Path = $VcpkgToolchain },
     @{ Name = "Open CASCADE"; Path = $OcctConfig }
 )) {
     if (Test-Path $dependency.Path) {

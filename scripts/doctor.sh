@@ -31,7 +31,11 @@ else
 fi
 
 occt_found=""
+if [ -n "${OpenCASCADE_DIR:-}" ] && [ -f "$OpenCASCADE_DIR/OpenCASCADEConfig.cmake" ]; then
+    occt_found="$OpenCASCADE_DIR"
+fi
 for candidate in "${VCPKG_ROOT:-}/installed" /opt/occt /usr/local/lib/cmake/opencascade /usr/lib/cmake/opencascade; do
+    [ -n "$occt_found" ] && break
     [ -n "$candidate" ] && [ -e "$candidate" ] && occt_found="$candidate" && break
 done
 if [ -n "$occt_found" ]; then

@@ -1106,6 +1106,9 @@ private:
     std::optional<DirectionPick> directionPick_;
     [[nodiscard]] kachakacha::v2::app::HoverResult DirectionPointAt(const QPointF& position) const;
     void ClickDirectionPoint(const QPointF& position);
+    void AcceptDirectionPoint(const std::optional<kachakacha::v2::geometry::Vector3>& point,
+        const QPointF& position);
+    void AcceptListedDirectionPoint(const std::optional<kachakacha::v2::geometry::Vector3>& point);
     void DrawDirectionGuide(QPainter& painter) const;
     void UpdateDirectionPrompt();
     std::vector<kachakacha::v2::base::EntityId> referencePickIds_;

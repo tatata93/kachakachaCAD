@@ -99,8 +99,13 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     setProperty("treeInputModifiers",{});
     setProperty("treePickInput",false); // Consume before callbacks can re-enter selection.
     setProperty("treeToolInput",false);
-    if(treeInput && !V2ToolSelection::Active(*this) && pickHandler_) {
-        if (const auto picked = ResolveTreePoint(*this, *session_, selection)) {
+    if(treeInput && !V2ToolSelection::Active(*this) && (pickHandler_ || directionPick_)) {
+        const auto picked = ResolveTreePoint(*this, *session_, selection);
+        if (directionPick_) {
+            AcceptListedDirectionPoint(picked ? std::optional{picked->point} : std::nullopt);
+            return;
+        }
+        if (picked) {
             auto handler=std::move(pickHandler_);pickHandler_=nullptr;setProperty("pointPickPrompt",{});
             ForgetPickCycle();
             status_="点を指定しました。";if(statusCallback_)statusCallback_(status_);

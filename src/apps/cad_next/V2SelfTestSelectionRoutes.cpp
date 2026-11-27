@@ -287,8 +287,15 @@ bool GridPoint(V2MainWindow& w) {
     if(!w.Viewport().PickPending() || !Tree(w,Id("point1")))return false;
     const auto& plane=w.Viewport().WorkPlane();
     const auto expected=plane.PointAt(plane.CoordinateU(points[1]),plane.CoordinateV(points[1]));
-    return Explain("tree point supplies the grid reference without guessing a wire end",!w.Viewport().PickPending()
-        && geometry::Distance(expected,w.Session().Scene().grid.origin)<1e-7);
+    if(!Explain("tree point supplies the grid reference without guessing a wire end",!w.Viewport().PickPending()
+        && geometry::Distance(expected,w.Session().Scene().grid.origin)<1e-7))return false;
+    w.RunCommand("grid.edit");
+    const auto delta=points[1]-points[0];
+    const auto tangent=geometry::Normalized(delta-plane.normal*geometry::Dot(delta,plane.normal));
+    return Explain("clicking two visible explorer point rows sets the grid direction",
+        Press(w.findChild<QPushButton*>("gridPickAngle")) && Tree(w,Id("point0"))
+        && w.Viewport().DirectionPickPending() && Tree(w,Id("point1")) && !w.Viewport().DirectionPickPending()
+        && std::abs(geometry::Dot(w.Session().Scene().grid.uDirection,tangent))>0.99999999);
 }
 
 bool Button(V2MainWindow& w,const QString& text) {

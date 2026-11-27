@@ -59,7 +59,7 @@ void ApplyExplorerPick(V2Viewport& viewport, const app::PickCandidate& pick)
 void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
 {
     auto& viewport = window.Viewport();
-    if (!viewport.EntityShown(id) || viewport.DirectionPickPending()) return;
+    if (!viewport.EntityShown(id)) return;
     const auto& session = window.Session();
     const auto& scene = session.Scene();
     const auto& tolerance = session.GetDocument().Snapshot().settings.tolerance;

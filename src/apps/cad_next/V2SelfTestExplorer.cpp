@@ -11,11 +11,13 @@
 
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/view/ViewOrientation.h"
 
 #include <QApplication>
 #include <QAction>
 #include <QMenu>
 #include <QPointF>
+#include <QPushButton>
 #include <QString>
 #include <QTreeWidgetItem>
 #include <QElapsedTimer>
@@ -120,6 +122,75 @@ bool CaseExplorerSubelements(V2MainWindow& window)
         PickExplorerElement(window,faceId,QStringLiteral("面 1")) && pickedFace
         && pickedFace->entityId==faceId && pickedFace->pickedFaceIndex==0
         && std::abs(pickedFace->hitPoint.z) < 1e-10 && !viewport.ReferencePickPending());
+}
+
+bool CaseExplorerDirection(V2MainWindow& window)
+{
+    using geometry::CurveSegment;
+    using geometry::Vector3;
+    window.RunCommand("file.new");
+    window.resize(1440, 850);
+    const Vector3 start{-25,-12,0}, end{10,9,0};
+    const auto line = window.AddPlainWire({CurveSegment::MakeLine(start,{5,-3,0}).Value()},
+        "Direction start", false);
+    const auto cutter = window.AddPlainWire({CurveSegment::MakeLine({4,6,-3},{16,12,3}).Value()},
+        "Direction across the workplane", false);
+    if (line.IsNil() || cutter.IsNil() || !window.SaveAndReopen("explorer-direction.kcd2")) return false;
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetViewCenter({});
+    viewport.SetVisibleWidthMm(100);
+    window.RunCommand("grid.edit");
+    auto* fit = window.findChild<QPushButton*>("gridPickAngle");
+    if (!fit || !fit->isVisible()) return false;
+    const auto revision = window.Session().GetDocument().Revision();
+    const auto selectedPlane = window.ActiveWorkPlaneId();
+    const auto wanted = geometry::Normalized(end-start);
+    const auto gridMatches = [&] {
+        const auto actual = window.Session().Scene().grid.uDirection;
+        return !viewport.DirectionPickPending() && std::abs(geometry::Dot(actual,wanted)) > 0.99999999;
+    };
+    const auto pickEnd = [&] { return PickExplorerElement(window,cutter,QStringLiteral("作業面との交点 1")); };
+    const auto pickStart = [&] { return PickExplorerElement(window,line,QStringLiteral("始点")); };
+    fit->click();
+    if (!Explain("two explorer endpoints can set the grid direction",
+            pickStart() && viewport.DirectionPickPending() && pickStart() && viewport.DirectionPickPending()
+            && pickEnd() && gridMatches())) return false;
+
+    const auto clickModelPoint = [&](const Vector3& p) {
+        const auto pos = viewport.Mapping().Project(p);
+        if (!pos) return false;
+        viewport.ClickAt(QPointF(pos->x,pos->y));
+        return true;
+    };
+    viewport.SetSnapSuppressed(true);
+    fit->click();
+    const bool viewThenExplorer = clickModelPoint(start) && pickEnd() && gridMatches();
+    fit->click();
+    const bool explorerThenView = pickStart() && clickModelPoint(end) && gridMatches();
+    viewport.SetSnapSuppressed(false);
+    if (!Explain("both directions of mixed explorer and viewport input work", viewThenExplorer && explorerThenView)) return false;
+    fit->click();
+    if (!Explain("the workplane component of a listed off-plane direction is used",
+            PickExplorerElement(window,cutter,QStringLiteral("始点")) && pickEnd()
+            && !viewport.DirectionPickPending()
+            && std::abs(geometry::Dot(window.Session().Scene().grid.uDirection,
+                geometry::Normalized(Vector3{6,3,0})))>0.99999999)) return false;
+    const auto configuredAngle = window.Session().Scene().grid.angleDegrees;
+    fit->click();
+    if (!pickStart() || !window.HandleToolKey(Qt::Key_Escape,nullptr)
+        || viewport.DirectionPickPending() || window.Session().Scene().grid.angleDegrees != configuredAngle) return false;
+
+    const auto forward = view::ForwardOf(viewport.Orientation());
+    window.RunCommand("view.align_horizontal");
+    if (!pickStart() || !pickEnd()) return false;
+    const auto a = viewport.Mapping().Project(start);
+    const auto b = viewport.Mapping().Project(end);
+    return Explain("explorer points also align the screen without changing document or grid",
+        !viewport.DirectionPickPending() && a && b && std::abs(a->y-b->y)<1e-7
+        && geometry::Dot(view::ForwardOf(viewport.Orientation()),forward)>0.99999999
+        && window.Session().Scene().grid.angleDegrees==configuredAngle
+        && window.Session().GetDocument().Revision()==revision && window.ActiveWorkPlaneId()==selectedPlane);
 }
 
 //! 線を1本引いて、その物の番号を返す。取れなければ Nil。
@@ -373,6 +444,7 @@ std::vector<SelfTestCase> ExplorerCases()
         {"HP-XP-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
         {"HP-XP-05 collapse, nested groups, visibility, search and undo redo", CaseExplorerKeepsViewState},
         {"HP-XP explicit tree endpoints, workplane roots and face roles", CaseExplorerSubelements},
+        {"HP-XP explorer and viewport two-point directions", CaseExplorerDirection},
     };
     const auto updates=ExplorerUpdateCases();cases.insert(cases.end(),updates.begin(),updates.end());
     if(qEnvironmentVariableIsSet("KACHACAD_EXPLORER_OWNER_INPUT"))cases.push_back({"HP-XP-OWNER actual explorer latency and checkbox position",ExplorerOwnerLatency});

@@ -48,7 +48,7 @@ void AddAngleControls(QFormLayout& form, QWidget* body, QDoubleSpinBox*& angle, 
     angle->setToolTip(QStringLiteral("作業平面の X 方向を 0° とします。正の角度で Y 方向へ回ります。"));
     pickAngle = new QPushButton(QStringLiteral("2点で合わせる"), body);
     pickAngle->setObjectName(QStringLiteral("gridPickAngle"));
-    pickAngle->setToolTip(QStringLiteral("3Dビューで始点と終点をクリックして、グリッドの向きを合わせます。"));
+    pickAngle->setToolTip(QStringLiteral("3Dビューか左ペインで始点と終点を指定して、グリッドの向きを合わせます。"));
     form.addRow(QStringLiteral("角度"), PairRow(body, angle, pickAngle));
 }
 

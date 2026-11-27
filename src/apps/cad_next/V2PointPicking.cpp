@@ -99,8 +99,8 @@ void V2Viewport::BeginDirectionPick(DirectionPickPlane plane, std::string label,
 void V2Viewport::UpdateDirectionPrompt()
 {
     status_ = directionPick_->label + (directionPick_->first
-        ? "終点をクリックしてください。Escで取消。"
-        : "始点をクリックしてください。Escで取消。");
+        ? "終点を3Dビューか左ペインで指定してください。Escで取消。"
+        : "始点を3Dビューか左ペインで指定してください。Escで取消。");
     setProperty("pointPickPrompt", QString::fromStdString(status_));
 }
 
@@ -119,22 +119,42 @@ kachakacha::v2::app::HoverResult V2Viewport::DirectionPointAt(const QPointF& pos
 
 void V2Viewport::ClickDirectionPoint(const QPointF& position)
 {
+    AcceptDirectionPoint(DirectionPointAt(position).position, position);
+}
+
+void V2Viewport::AcceptListedDirectionPoint(const std::optional<kachakacha::v2::geometry::Vector3>& point)
+{
+    const auto screen = point ? ToScreen(*point) : std::nullopt;
+    if (!screen) {
+        status_ = directionPick_->label + "作図点か、左ペインの「部分を指定」から端点・交点を選んでください。";
+        if (statusCallback_) statusCallback_(status_);
+        update();
+        return;
+    }
+    // For screen alignment, use the same view plane as a click at this pixel.
+    // For grid alignment, the shared acceptance code projects the exact delta.
+    AcceptDirectionPoint(directionPick_->plane == DirectionPickPlane::Screen
+        ? DirectionPointAt(*screen).position : point, *screen);
+}
+
+void V2Viewport::AcceptDirectionPoint(const std::optional<kachakacha::v2::geometry::Vector3>& point,
+    const QPointF& position)
+{
     using kachakacha::v2::geometry::Dot;
-    const auto hit = DirectionPointAt(position);
     auto& pick = *directionPick_;
-    if (hit.position && !pick.first) {
-        pick.first = hit.position;
+    if (point && !pick.first) {
+        pick.first = point;
         UpdateDirectionPrompt();
         HoverAt(position);
         return;
     }
-    if (hit.position && pick.first) {
-        const auto delta = *hit.position - *pick.first;
+    if (point && pick.first) {
+        const auto delta = *point - *pick.first;
         const auto normal = pick.plane == DirectionPickPlane::WorkPlane ? workPlane_.normal
             : kachakacha::v2::view::ForwardOf(orientation_);
         const auto direction = delta - normal * Dot(delta, normal);
         const auto from = ToScreen(*pick.first);
-        const auto to = ToScreen(*hit.position);
+        const auto to = ToScreen(*point);
         if (from && to && std::hypot(to->x() - from->x(), to->y() - from->y()) >= 2.0
             && direction.Length() > std::max(1.0, delta.Length()) * 1.0e-9) {
             auto handler = std::move(pick.handler);
@@ -148,7 +168,7 @@ void V2Viewport::ClickDirectionPoint(const QPointF& position)
             return;
         }
     }
-    status_ = pick.label + (hit.position ? "始点と離れた終点を指定してください。"
+    status_ = pick.label + (point ? "始点と離れた終点を指定してください。"
         : "作業面が見える方向へ回すか、端点・交点を指定してください。");
     if (statusCallback_) statusCallback_(status_);
     update();

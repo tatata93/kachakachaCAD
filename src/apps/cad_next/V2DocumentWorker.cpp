@@ -18,8 +18,10 @@
 #include <QSaveFile>
 #include <QThread>
 #include <QString>
+#include <future>
 #include <iostream>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 using namespace kachakacha::v2;
@@ -113,11 +115,37 @@ int V2DocumentOpen::Worker(const QString& directory) {
         timing.Mark("rebuild-and-adopt");
         auto sourceFile=loaded.Value();sourceFile.snapshot=window.session_->GetDocument().Snapshot();
         Progress(1,1,"計算済み形状と製作データを転送する準備をしています");
-        const auto archive=io::SaveDocument(sourceFile);if(!archive.HasValue())throw archive.FirstDiagnostic();
-        timing.Mark("encode-archive");
-        auto captured=Capture(window,archive.Value());if(!captured.HasValue())throw captured.FirstDiagnostic();
-        auto& data=*captured.Value();
+        std::future<base::Result<std::string>> archiveJob;
+        if (window.KernelShapeCount() >= 64 && QThread::idealThreadCount() >= 4
+            && !qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")
+            && !qEnvironmentVariableIsSet("KACHACAD_OPEN_ARCHIVE_SERIAL")) {
+            try {
+                // The detached snapshot contains no viewport or kernel shapes.
+                archiveJob = std::async(std::launch::async, [&sourceFile] { return io::SaveDocument(sourceFile); });
+                timing.Mark("schedule-archive-encode");
+            } catch (const std::system_error&) {
+                // Continue on this worker when the extra thread cannot start.
+            }
+        }
+        std::string archiveBytes;
+        if (!archiveJob.valid()) {
+            const auto archive = io::SaveDocument(sourceFile);
+            if (!archive.HasValue()) throw archive.FirstDiagnostic();
+            archiveBytes = archive.Value();
+            timing.Mark("encode-archive");
+        }
+        auto captured = Capture(window, {});
         timing.Mark("capture-native-and-meshes");
+        if (archiveJob.valid()) {
+            const auto archive = archiveJob.get();
+            if (!archive.HasValue()) throw archive.FirstDiagnostic();
+            archiveBytes = archive.Value();
+            timing.Mark("await-archive-encode");
+        }
+        if (!captured.HasValue()) throw captured.FirstDiagnostic();
+        auto& data=*captured.Value();
+        data.archive = std::move(archiveBytes);
+        timing.Mark("ready-to-write-transfer");
         if(!WritePreparedDocument(dir.filePath("prepared.bin"),token,data,V2PreparedFile::WorkerReply))
             throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");

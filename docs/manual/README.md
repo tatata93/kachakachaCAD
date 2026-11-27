@@ -123,10 +123,10 @@ zip の中身は次のとおりです。
 
 版を確かめるには `kachakacha_cad_next.exe --version` と打ちます。
 
-組み立てたばかりの本体は、次の場所にあります。
+リポジトリのルートから、ビルドした本体を次のパスで起動できます。
 
 ```
-C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_next.exe
+.\build-msvc2022-x64\Release\kachakacha_cad_next.exe
 ```
 
 配布のひとまとめは `scripts\package-v2.ps1` で作ります。

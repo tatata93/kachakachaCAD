@@ -313,7 +313,7 @@ bool CheckIntersectionAndDraw(V2MainWindow& w, Vector3 target)
             && (hover.snap->position - target).Length() < 1e-6)) return false;
     const auto revision = w.Session().GetDocument().Revision();
     const auto end = target + w.Viewport().WorkPlane().vAxis * -3.0 + w.Viewport().WorkPlane().uAxis * -2.0;
-    if (!ClickWorld(w, target) || !ClickWorld(w, end)) return false;
+    if (!Explain("画面内で交点と終点をクリックできる", ClickWorld(w, target) && ClickWorld(w, end))) return false;
     if (!Explain("交点から線を確定", w.Session().GetDocument().Revision() == revision + 1)) return false;
     const auto& snapshot = w.Session().GetDocument().Snapshot();
     for (auto it = snapshot.features.rbegin(); it != snapshot.features.rend(); ++it)
@@ -327,7 +327,7 @@ bool SupportBoundaryCrossing(V2MainWindow& w, bool hole, bool tilted)
 {
     Setup(w);
     const auto guide = MakeGuide(w, 12, tilted, hole);
-    if (guide.IsNil()) return false;
+    if (!Explain(("作図基準の面を作成: " + w.StatusText().toStdString()).c_str(), !guide.IsNil())) return false;
     std::vector<EntityId> sources;
     for (const auto& entity : w.Session().GetDocument().Snapshot().entities)
         if (entity.kind == EntityKind::Wire) sources.push_back(entity.id);
@@ -337,14 +337,20 @@ bool SupportBoundaryCrossing(V2MainWindow& w, bool hole, bool tilted)
     const auto crossing = point(x, y);
     const auto ends = hole ? std::pair{point(6, y), point(19, y)} : std::pair{point(20, y), point(30, y)};
     const auto line = w.AddPlainWire({geometry::CurveSegment::MakeLine(ends.first, ends.second).Value()}, "境界を横切る線", false);
+    if (!Explain("面の外周を横切るワイヤーを追加", !line.IsNil())) return false;
     // Hide the generating wires so only the actual native face boundary can supply the snap.
-    if (!w.Session().GetDocument().Run(document::SetVisibilityCommand(sources, domain::Visibility::Hidden)).committed
-        || !w.SaveAndReopen("direct-face-native-boundary.kcd2")) return false;
-    if (!SelectTree(w, guide) || !StartFaceTool(w)) return false;
+    if (!Explain("面を作ったワイヤーを非表示にする",
+            w.Session().GetDocument().Run(document::SetVisibilityCommand(sources, domain::Visibility::Hidden)).committed)
+        || !Explain("作図面と交差ワイヤーを保存して開き直す",
+            w.SaveAndReopen("direct-face-native-boundary.kcd2"))) return false;
+    if (!Explain("左ペインから作図面を選べる", SelectTree(w, guide)) || !StartFaceTool(w)) return false;
     auto* only = w.findChild<QToolButton*>("quickPlaneWiresOnly");
-    if (!only) return false;
+    if (!Explain("平面ワイヤの表示設定がある", only != nullptr)) return false;
     if (!only->isChecked()) Click(*only, only->rect().center());
     if (!Explain("平面ワイヤのみでも作図する面と交差ワイヤを表示", w.Viewport().EntityShown(guide) && w.Viewport().EntityShown(line))) return false;
+    // Use the central drawing area so the native intersection stays clickable
+    // when an inspector or navigation control occupies the edge of the viewport.
+    w.Viewport().SetViewCenter(crossing);
     Shot(w, hole ? "direct-face-hole-boundary" : "direct-face-outer-boundary");
     if (!CheckIntersectionAndDraw(w, crossing)) return false;
     w.RunCommand("edit.undo");

@@ -335,6 +335,9 @@ WP-10の限定所有は完了し、他WPへ同時着手しない。従来の進�
 
 ### 所有
 
+- 2026-11-27のER2限定担当は学校PCのCodex。ブランチは
+  `codex/school/er2-20261127`。実交点・作業面・元輪郭の画面入力と
+  対応する回帰に限定し、自宅側は固定版の検証と統合を担当する。
 - `src/apps/cad_next/` のshell、viewport、selection、tool controller、作図panel、測定window、theme。
 - core変更は禁止。必要APIは統合担当へ依頼する。
 

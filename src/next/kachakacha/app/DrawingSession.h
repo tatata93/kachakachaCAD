@@ -131,7 +131,7 @@ public:
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
     //! 次の Hover まで待つと、Hover が無いまま離したときに古い吸着先が残る。
     void SetSnapSettings(SnapSettings settings);
-    void SetSnapEntityFilter(std::function<bool(base::EntityId)> filter) { snapEntityFilter_=std::move(filter);snapHysteresis_.Reset(); }
+    void SetSnapEntityFilter(std::function<bool(base::EntityId)> filter) { snapEntityFilter_=std::move(filter);snapHysteresis_.Reset();explicitHeldSnap_.reset(); }
     //! Explicit input target, applied after collecting intersections from all visible curves.
     //! Empty restores normal snapping; no candidate means no point while restricted.
     void SetSnapCandidateFilter(std::function<bool(const SnapCandidate&)> filter);
@@ -227,6 +227,8 @@ private:
     SnapSettings snapSettings_;
     bool drawingPlaneOnly_ = false;
     std::function<bool(base::EntityId)> snapEntityFilter_;
+    std::function<bool(const SnapCandidate&)> snapCandidateFilter_;
+    std::optional<SnapCandidate> explicitHeldSnap_;
     modeling::SnapHysteresis snapHysteresis_;
     //! 場面の入れ替わりを聞いている相手。綱が切れたものは呼ばない。
     struct SceneListener {

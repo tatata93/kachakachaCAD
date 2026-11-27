@@ -76,6 +76,77 @@ struct Fixture {
 
 } // namespace
 
+KACHA_V2_TEST(session, explicit_snap_target_keeps_intersection_partners_preview_and_click_consistent)
+{
+    using namespace kachakacha::v2;
+    Fixture f;
+    const auto selected=f.ids.NextTyped<base::IdKind::Entity>();
+    const auto selectedSegment=f.ids.NextTyped<base::IdKind::Segment>();
+    auto scene=PlaneScene();
+    scene.curves.push_back({f.ids.NextTyped<base::IdKind::Entity>(),f.ids.NextTyped<base::IdKind::Segment>(),
+        geometry::CurveSegment::MakeLine({40,10,0},{80,10,0}).Value()});
+    scene.curves.push_back({selected,selectedSegment,
+        geometry::CurveSegment::MakeLine({10,10,7},{80,10,7}).Value()});
+    scene.curves.push_back({f.ids.NextTyped<base::IdKind::Entity>(),f.ids.NextTyped<base::IdKind::Segment>(),
+        geometry::CurveSegment::MakeLine({40,-20,7},{40,40,7}).Value()});
+    f.session.SetScene(scene);
+    f.session.SetSnapCandidateFilter([=](const auto& candidate){
+        return (candidate.entityId==selected && candidate.segmentId==selectedSegment)
+            || (candidate.otherEntityId==selected && candidate.otherSegmentId==selectedSegment);
+    });
+    const auto pointer=f.At({40,10,7});
+    const auto hover=f.session.Hover(pointer), peek=f.session.PeekHover(pointer);
+    Require(hover.snap && hover.snap->kind==SnapKind::Intersection,"third curve remains an intersection partner");
+    Require(hover.position==peek.position && hover.position==std::optional{Vector3{40,10,7}},"hover and peek use selected source");
+    Require(f.session.Click(pointer).placedPoint,"click follows the same candidate");
+    Require(f.session.ConstraintAnchor()==*hover.position,"actual placed point matches preview");
+    const auto other=scene.curves.back();
+    f.session.SetSnapCandidateFilter([=](const auto& candidate){
+        return candidate.otherEntityId==other.entityId && candidate.otherSegmentId==other.segmentId;
+    });
+    Require(f.session.Hover(pointer).snap->kind==SnapKind::Intersection,
+        "selected curve remains usable on the other side of deterministic intersection ID ordering");
+    Require(!f.session.Hover(f.At({5,80,0})).position,"explicit target never falls back to another curve or plane");
+    f.session.SetSnapSettings(SnapSettings{.suppressed=true});
+    Require(f.session.Hover(f.At({5,80,0})).position.has_value(),"suppression releases explicit target");
+    f.session.SetSnapSettings({});
+    f.session.CancelTool();
+    Require(f.session.Hover(pointer).snap->position.z==0,"normal endpoint priority returns after release");
+    f.session.SetSnapCandidateFilter([=](const auto& candidate){
+        return candidate.entityId==selected && candidate.segmentId==selectedSegment
+            && candidate.kind==SnapKind::Endpoint && candidate.featureIndex==0;
+    });
+    Require(f.session.Hover(f.At({10,10,7})).snap.has_value(),"explicit endpoint initially acquired");
+    (void)f.session.PeekHover(f.At({5,80,0}));
+    Require(f.session.Hover(f.At({8.6,10,7})).snap.has_value(),"peek does not alter explicit hold margin");
+    f.session.SetSnapEntityFilter([](auto){return true;});
+    Require(!f.session.Hover(f.At({8.6,10,7})).snap,"changing the visible entity filter resets explicit hold");
+}
+
+KACHA_V2_TEST(session, finite_curve_workplane_intersection_can_be_drawn_without_projecting_the_curve)
+{
+    using namespace kachakacha::v2;
+    Fixture f;
+    auto scene=PlaneScene();
+    scene.curves.push_back({f.ids.NextTyped<base::IdKind::Entity>(),f.ids.NextTyped<base::IdKind::Segment>(),
+        geometry::CurveSegment::MakeLine({10,10,-6},{80,40,8}).Value()});
+    f.session.SetScene(scene);
+    f.session.SetDrawingPlaneOnly(true);
+    const auto point=scene.curves.front().segment.Evaluate(3./7.);
+    const auto hover=f.session.Hover(f.At(point));
+    Require(hover.snap && hover.snap->kind==SnapKind::WorkPlaneIntersection,"actual curve/plane intersection is available");
+    Require((hover.snap->position-point).Length()<1e-12,"source curve is not flattened");
+    Require(f.session.Click(f.At(point)).placedPoint,"plane-limited drawing accepts that actual point");
+    Require((f.session.ConstraintAnchor()-point).Length()<1e-12,"placed point stays on both objects");
+    const auto changed=scene;
+    scene.workPlane.origin.z=4;
+    f.session.SetScene(scene);
+    const auto next=scene.curves.front().segment.Evaluate(5./7.);
+    const auto moved=f.session.Hover(f.At(next));
+    Require(moved.snap && moved.snap->kind==SnapKind::WorkPlaneIntersection && moved.snap->position.z==4,"changing planes discards stale intersection");
+    Require(scene.curves.front().segment.StartPoint()==changed.curves.front().segment.StartPoint(),"source remains unchanged");
+}
+
 KACHA_V2_TEST(session, prompt_reads_input_stage_without_snap_or_geometry_work)
 {
     static_assert(std::is_same_v<decltype(std::declval<const DrawingSession&>().Prompt()),kachakacha::v2::modeling::ToolPrompt>);

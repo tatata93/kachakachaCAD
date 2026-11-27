@@ -55,6 +55,7 @@ enum class SnapKind {
     GridMinor,         //!< 副グリッド点
     FreeOnPlane,       //!< 作業平面上の自由点
     ScreenIntersection,//!< 画面上だけの交差。既定では選ばない
+    WorkPlaneIntersection,//!< 有限曲線と現在の作図面の実交点
 };
 
 [[nodiscard]] std::string_view SnapKindLabelJa(SnapKind kind) noexcept;

@@ -1169,7 +1169,8 @@ public:
 `geometry::IntersectCurveWithPlane(curve, origin, normal, tolerance) -> vector<CurvePoint>`
 は有限区間[0,1]内の実交点をパラメータ順に返す。位置は元曲線のEvaluate値で、
 平面への投影や無限延長で代用しない。平面内の曲線/区間は無数の交点として列挙せず、
-既存の端点・最近点入力を維持する。接する根、負方向円弧、Bスプラインの各区間も対象。
+既存の端点・最近点入力を維持する。平面に含まれる区間と平面外の区間との接続位置は
+後者の端の交点として返してよい。接する根、負方向円弧、Bスプラインの各区間も対象。
 `SnapKind::WorkPlaneIntersection`をenum末尾に追加し、既存値を維持する。
 順位は実交点と同じ、出所は曲線のEntityId/SegmentId、番号は交点のパラメータ順とする。
 作図面の変更時は既存SetSceneと同じく持越しを捨てる。保存enumは増やさない。

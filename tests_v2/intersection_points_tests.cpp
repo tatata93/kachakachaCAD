@@ -4,8 +4,11 @@
 #include "kachakacha/geometry/CurveIntersection.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 using kachakacha::v2::app::IntersectionPointsOf;
 using kachakacha::v2::geometry::CurveSegment;
@@ -24,6 +27,70 @@ namespace {
 }
 
 } // namespace
+
+KACHA_V2_TEST(intersection_points, finite_curve_plane_roots_preserve_exact_curve_positions)
+{
+    using namespace kachakacha::v2::geometry;
+    static_assert(std::is_same_v<decltype(IntersectCurveWithPlane(std::declval<CurveSegment>(),
+        Vector3{},Vector3{},GeometryTolerance{})),std::vector<CurvePoint>>);
+    const GeometryTolerance tolerance;
+    const auto line=Line({1,2,-3},{1,2,5});
+    const auto roots=IntersectCurveWithPlane(line,{0,0,1},{0,0,8},tolerance);
+    Require(roots.size()==1,"one finite line/plane crossing");
+    RequireNear(roots[0].parameter,.5,1e-14,"finite parameter");
+    Require(roots[0].position==line.Evaluate(roots[0].parameter),"position is not projected");
+    Require(IntersectCurveWithPlane(line,{0,0,6},{0,0,1},tolerance).empty(),"no infinite extension root");
+    Require(IntersectCurveWithPlane(line,{1,0,0},{1,0,0},tolerance).empty(),"coplanar line has no discrete roots");
+    const auto circle=CurveSegment::MakeCircle({0,0,3},{0,0,1},{1,0,0},20).Value();
+    Require(IntersectCurveWithPlane(circle,{20,0,0},{1,0,0},tolerance).size()==1,"one tangent contact");
+    Require(IntersectCurveWithPlane(circle,{20+2*tolerance.modelLinearMm,0,0},{1,0,0},tolerance).empty(),"nearby plane does not invent contact");
+    for (double sweep:{2.8,-2.8}) {
+        const auto arc=CurveSegment::MakeCircularArc({0,0,3},{0,0,1},{1,0,0},20,sweep>0?.1:2.9,sweep).Value();
+        const auto crossed=IntersectCurveWithPlane(arc,{3,0,0},{1,0,0},tolerance);
+        Require(crossed.size()==1,"one crossing in either finite sweep");
+        RequireNear(crossed[0].position.x,3,1e-12,"analytic arc point");
+        Require(crossed[0].parameter>=0 && crossed[0].parameter<=1,"finite interval");
+    }
+    const auto quarter=CurveSegment::MakeCircularArc({0,0,0},{0,0,1},{1,0,0},20,0,.4).Value();
+    Require(IntersectCurveWithPlane(quarter,{-3,0,0},{1,0,0},tolerance).empty(),"circle intersection outside the arc is rejected");
+}
+
+KACHA_V2_TEST(intersection_points, cubic_plane_crossings_and_touching_roots_are_not_sampled_away)
+{
+    using namespace kachakacha::v2::geometry;
+    const GeometryTolerance tolerance;
+    const auto triple=CurveSegment::MakeCubicBezier({{0,0,-.08},{1,0,.14},{2,0,-.14},{3,0,.08}}).Value();
+    const auto roots=IntersectCurveWithPlane(triple,{},{0,0,1},tolerance);
+    Require(roots.size()==3,"all three cubic crossings");
+    for (std::size_t i=0;i<roots.size();++i) {
+        RequireNear(roots[i].parameter,.2+.3*i,1e-12,"ordered roots");
+        Require(roots[i].position==triple.Evaluate(roots[i].parameter),"source position retained");
+    }
+    const auto tangent=CurveSegment::MakeCubicBezier({{0,0,.25},{1,0,-1./12},{2,0,-1./12},{3,0,.25}}).Value();
+    const auto touching=IntersectCurveWithPlane(tangent,{},{0,0,1},tolerance);
+    Require(touching.size()==1,"double root survives without a sign change");
+    RequireNear(touching[0].parameter,.5,1e-12,"double root parameter");
+    const auto shallow=CurveSegment::MakeCubicBezier({{0,0,.25-1e-16},{1000./3,0,-1./12-1e-16},
+        {2000./3,0,-1./12-1e-16},{1000,0,.25-1e-16}}).Value();
+    const auto closeRoots=IntersectCurveWithPlane(shallow,{},{0,0,1},tolerance);
+    Require(closeRoots.size()==2 && Distance(closeRoots[0].position,closeRoots[1].position)>tolerance.modelLinearMm,
+        "two shallow crossings farther apart than model tolerance are not collapsed into a tangent");
+    const auto nearMiss=CurveSegment::MakeCubicBezier({{0,0,.25001},{1,0,-1./12+.00001},{2,0,-1./12+.00001},{3,0,.25001}}).Value();
+    Require(IntersectCurveWithPlane(nearMiss,{},{0,0,1},tolerance).empty(),"nearby extrema are not intersections");
+    const auto spline=CurveSegment::MakeCubicBSpline({{0,0,-3},{1,0,1},{2,0,-1},{3,0,1},{4,0,-1},{5,0,3}}).Value();
+    const auto splineRoots=IntersectCurveWithPlane(spline,{},{0,0,1},tolerance);
+    const double first=(9-std::sqrt(21.))/30;
+    const std::array<double,5> expected{0,first,.5,1-first,1};
+    Require(splineRoots.size()==expected.size(),"all five spline roots including finite endpoints");
+    for (std::size_t i=0;i<expected.size();++i)
+        RequireNear(splineRoots[i].parameter,expected[i],1e-12,"all spline spans and endpoints");
+    for (const auto& root:splineRoots) Require(std::abs(root.position.z)<1e-12
+        && root.position==spline.Evaluate(root.parameter),"spline root stays on both objects");
+    const auto partial=CurveSegment::MakeCubicBSpline({{0,0,0},{1,0,0},{2,0,0},{3,0,0},{4,0,6}}).Value();
+    const auto boundary=IntersectCurveWithPlane(partial,{},{0,0,1},tolerance);
+    Require(boundary.size()==1 && boundary[0].parameter==.5,
+        "coplanar spans are not enumerated but their transition boundary remains available");
+}
 
 KACHA_V2_TEST(intersection_points, 十字の交点が1つ出る)
 {

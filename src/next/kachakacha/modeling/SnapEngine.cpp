@@ -208,6 +208,7 @@ std::string_view SnapKindLabelJa(SnapKind kind) noexcept
     case SnapKind::Endpoint:           return "端点";
     case SnapKind::DrawingPoint:       return "作図点";
     case SnapKind::Intersection:       return "交点";
+    case SnapKind::WorkPlaneIntersection: return "作図面との交点";
     case SnapKind::Midpoint:           return "中点";
     case SnapKind::Center:             return "中心";
     case SnapKind::Quadrant:           return "四半点";
@@ -233,6 +234,7 @@ int SnapPriorityRank(SnapKind kind) noexcept
     case SnapKind::DrawingPoint:
         return 0;
     case SnapKind::Intersection:
+    case SnapKind::WorkPlaneIntersection:
         return 1;
     case SnapKind::Midpoint:
     case SnapKind::Center:
@@ -413,6 +415,15 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
 
     }
 
+    if (scene.workPlane.active) {
+        for (const auto* curve:nearby) {
+            const auto roots=geometry::IntersectCurveWithPlane(curve->segment,
+                scene.workPlane.origin,scene.workPlane.normal,tolerance);
+            for (std::size_t i=0;i<roots.size();++i)
+                collector.Add(SnapKind::WorkPlaneIntersection,roots[i].position,
+                    From(curve->entityId,curve->segmentId,static_cast<std::int64_t>(i)));
+        }
+    }
     const auto curvesDone=std::chrono::steady_clock::now();
     // Intersection candidates must be near the pointer on BOTH curves. Retain a
     // same radius as Collector, including the held-target margin and roundoff.
@@ -545,7 +556,8 @@ std::optional<SnapCandidate> ChooseSnap(const std::vector<SnapCandidate>& candid
         if (held == nullptr && candidate.held) {
             held = &candidate;
         }
-        if (directIntersection == nullptr && candidate.kind == SnapKind::Intersection
+        if (directIntersection == nullptr && (candidate.kind == SnapKind::Intersection
+                || candidate.kind == SnapKind::WorkPlaneIntersection)
             && candidate.screenDistancePx <= 1.0) {
             directIntersection = &candidate;
         }

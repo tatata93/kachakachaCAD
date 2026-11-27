@@ -66,6 +66,7 @@ void DrawingSession::SelectTool(DrawingTool tool)
     session_ = std::make_unique<ToolSession>(tool_, toolSettings_,
         document_.Snapshot().settings.tolerance);
     snapHysteresis_.Reset();
+    SetSnapCandidateFilter({});
 }
 
 void DrawingSession::SetToolSettings(ToolSettings settings)
@@ -82,6 +83,7 @@ void DrawingSession::SetToolSettings(ToolSettings settings)
         document_.Snapshot().settings.tolerance);
     if (start) (void)session_->AddPoint(*start); // One previously validated point cannot finish an arc.
     snapHysteresis_.Reset();
+    SetSnapCandidateFilter({});
 }
 
 void DrawingSession::SetScene(SnapScene scene)
@@ -89,6 +91,7 @@ void DrawingSession::SetScene(SnapScene scene)
     // 場面が入れ替わったら、持ち越していた吸着先は当てにならない。その場で捨てる。
     scene_ = std::move(scene);
     snapHysteresis_.Reset();
+    SetSnapCandidateFilter({});
     NotifySceneChanged();
 }
 
@@ -145,8 +148,16 @@ void DrawingSession::SetSnapSettings(SnapSettings settings)
 {
     if (settings.suppressed) {
         snapHysteresis_.Reset();
+        SetSnapCandidateFilter({});
     }
     snapSettings_ = std::move(settings);
+}
+
+void DrawingSession::SetSnapCandidateFilter(std::function<bool(const SnapCandidate&)> filter)
+{
+    snapCandidateFilter_=std::move(filter);
+    explicitHeldSnap_.reset();
+    snapHysteresis_.Reset();
 }
 
 void DrawingSession::SetDrawingPlaneOnly(bool enabled)
@@ -186,7 +197,13 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
         std::erase_if(filtered->curves,[this](const auto& c){return !snapEntityFilter_(c.entityId);});
         std::erase_if(filtered->points,[this](const auto& p){return !snapEntityFilter_(p.entityId);});}
     const auto& snapScene=filtered?*filtered:scene_;
-    if (keepHold) {
+    if (snapCandidateFilter_ && !settings.suppressed) {
+        settings.heldSnap=explicitHeldSnap_;
+        auto candidates=modeling::CollectSnapCandidates(snapScene,mapping_,pointer,settings,tolerance);
+        std::erase_if(candidates,[this](const auto& candidate){return !snapCandidateFilter_(candidate);});
+        result.snap=modeling::ChooseSnap(candidates,settings);
+        if (keepHold) explicitHeldSnap_=result.snap;
+    } else if (keepHold) {
         result.snap = snapHysteresis_.Resolve(snapScene, mapping_, pointer, settings, tolerance);
     } else {
         // 持ち越しを読むだけで書き換えない。答えは Hover と同じ規則で出す。
@@ -197,7 +214,7 @@ HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
     }
     if (result.snap.has_value()) {
         result.position = result.snap->position;
-    } else if (scene_.workPlane.active) {
+    } else if (scene_.workPlane.active && !snapCandidateFilter_) {
         result.position = mapping_.UnprojectOntoPlane(pointer, scene_.workPlane.origin,
             scene_.workPlane.normal);
     }
@@ -298,6 +315,7 @@ void DrawingSession::CancelTool()
 {
     session_->Cancel();
     snapHysteresis_.Reset();
+    SetSnapCandidateFilter({});
 }
 
 bool DrawingSession::UndoLastPoint()

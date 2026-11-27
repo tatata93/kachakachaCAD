@@ -1494,6 +1494,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             COMMAND_EXPAND_LISTS)
     endif()
     if(WIN32)
+        target_link_libraries(kachakacha_cad_next PRIVATE bcrypt)
         # Keep the developer executable's image formats consistent with windeployqt packages.
         foreach(KACHACAD_IMAGE_PLUGIN QJpegPlugin QGifPlugin QICNSPlugin QICOPlugin QTgaPlugin QTiffPlugin QWbmpPlugin QWebpPlugin)
             if(TARGET Qt6::${KACHACAD_IMAGE_PLUGIN})

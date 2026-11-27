@@ -15,6 +15,13 @@
 #include <QString>
 #include <QtGlobal>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <bcrypt.h>
+
+#include <limits>
+#endif
+
 namespace V2DocumentCache {
 namespace {
 // Detailed native models can exceed 128 MiB while still fitting the bounded
@@ -27,6 +34,21 @@ QString Root() {
 }
 QByteArray DigestFile(const QString& path) {
     QFile file(path);if(!file.open(QIODevice::ReadOnly))return {};
+#ifdef Q_OS_WIN
+    // The OS SHA-256 provider can use the CPU's accelerated implementation.
+    // Mapping avoids copying a whole prepared document into another buffer.
+    const auto size = file.size();
+    if (size > 0 && size <= (std::numeric_limits<ULONG>::max)()) {
+        if (auto* data = file.map(0, size)) {
+            QByteArray digest(QCryptographicHash::hashLength(QCryptographicHash::Sha256), '\0');
+            const auto status = BCryptHash(BCRYPT_SHA256_ALG_HANDLE, nullptr, 0, data,
+                static_cast<ULONG>(size), reinterpret_cast<PUCHAR>(digest.data()),
+                static_cast<ULONG>(digest.size()));
+            file.unmap(data);
+            if (status >= 0) return digest.toHex();
+        }
+    }
+#endif
     QCryptographicHash hash(QCryptographicHash::Sha256);
     return hash.addData(&file) ? hash.result().toHex() : QByteArray{};
 }

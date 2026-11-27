@@ -108,6 +108,12 @@ std::map<std::string,QString> Keys(const document::DocumentSnapshot& snapshot) {
     }
     return keys;
 }
+bool Enabled() {
+    return V2DocumentOpen::IsWorker()&&!qEnvironmentVariableIsSet("KACHACAD_EVALUATION_CACHE_DISABLE");
+}
+std::map<std::string,QString> TryKeys(const document::DocumentSnapshot& snapshot) {
+    try {return Keys(snapshot);}catch(...){return {};}
+}
 template<class Map> void CopyOne(const Map& source,Map& target,const std::string& id) {
     if(const auto found=source.find(id);found!=source.end())target.emplace(id,found->second);
 }
@@ -126,18 +132,13 @@ struct V2EvaluationCache::Impl {
         modeling::KernelShapeHandle handle;
     };
     V2MainWindow& w;
-    std::map<std::string,QString> keys;
     std::map<std::string,Ready> ready;
-    explicit Impl(V2MainWindow& window):w(window) {
-        if(V2DocumentOpen::IsWorker()&&!qEnvironmentVariableIsSet("KACHACAD_EVALUATION_CACHE_DISABLE"))
-            try {keys=Keys(window.Session().GetDocument().Snapshot());}catch(...){keys.clear();}
-    }
+    explicit Impl(V2MainWindow& window):w(window) {}
     ~Impl(){for(const auto& [id,value]:ready)if(value.handle.Valid())kernel::ReleaseShape(value.handle);}
 };
 V2EvaluationCache::V2EvaluationCache(V2MainWindow& w,const std::vector<app::ShapeRebuildStep>& steps)
     :impl_(std::make_unique<Impl>(w)) {
-    if(impl_->keys.empty()||steps.empty())return;
-    V2DocumentTiming timing("feature-cache");
+    if(!Enabled()||steps.empty())return;
     const auto& document=w.Session().GetDocument();
     std::map<std::string,bool> wanted;
     for(const auto& step:steps) {
@@ -145,13 +146,21 @@ V2EvaluationCache::V2EvaluationCache(V2MainWindow& w,const std::vector<app::Shap
         if(const auto* entity=document.FindEntity(step.outputEntityId))
             wanted.emplace(step.outputEntityId.ToString(),entity->kind==domain::EntityKind::Part);
     }
-    for(const auto& entry:V2DocumentCache::FeatureIndexes()) {
+    if(wanted.empty())return;
+    const auto indexes=V2DocumentCache::FeatureIndexes();
+    // On a first open there is no index to match against. Write its keys
+    // after the successful rebuild, using the snapshot actually cached.
+    if(indexes.empty())return;
+    const auto keys=TryKeys(document.Snapshot());
+    if(keys.empty())return;
+    V2DocumentTiming timing("feature-cache");
+    for(const auto& entry:indexes) {
         if(wanted.empty())break;
         const auto index=QJsonDocument::fromJson(entry.contents).object();
         std::vector<std::string> matches;
         for(const auto& [id,part]:wanted) {
-            const auto key=impl_->keys.find(id);
-            if(key!=impl_->keys.end()&&!key->second.isEmpty()
+            const auto key=keys.find(id);
+            if(key!=keys.end()&&!key->second.isEmpty()
                 &&index.value(QString::fromStdString(id)).toString()==key->second)matches.push_back(id);
         }
         if(matches.empty())continue;
@@ -164,7 +173,7 @@ V2EvaluationCache::V2EvaluationCache(V2MainWindow& w,const std::vector<app::Shap
             const auto prior=Keys(archive.Value().snapshot);
             auto data=std::make_shared<V2PreparedDocument>(std::move(*payload));
             for(const auto& id:matches) {
-                const auto old=prior.find(id);if(old==prior.end()||old->second!=impl_->keys.at(id))continue;
+                const auto old=prior.find(id);if(old==prior.end()||old->second!=keys.at(id))continue;
                 const auto& shapes=wanted.at(id)?data->parts:data->guides;
                 const auto found=shapes.find(id);if(found==shapes.end())continue;
                 const auto shape=kernel::RestoreTransferShape(found->second);if(!shape.HasValue())continue;
@@ -203,13 +212,15 @@ bool V2EvaluationCache::Restore(const app::ShapeRebuildStep& step) {
     impl_->ready.erase(found);return true;
 }
 void V2EvaluationCache::IndexPrepared(V2MainWindow& w,const std::string& source,const V2PreparedDocument& prepared) {
-    V2EvaluationCache cache(w,{});
+    if(!Enabled())return;
     const auto& document=w.Session().GetDocument();
+    const auto keys=TryKeys(document.Snapshot());
+    if(keys.empty())return;
     QJsonObject index;
     for(const auto& step:app::PlanShapeRebuild(document.Snapshot())) {
         if(!Cacheable(step,document))continue;
         const auto id=step.outputEntityId.ToString();
-        const auto key=cache.impl_->keys.find(id);if(key==cache.impl_->keys.end())continue;
+        const auto key=keys.find(id);if(key==keys.end())continue;
         if(prepared.parts.contains(id)||prepared.guides.contains(id))index[QString::fromStdString(id)]=key->second;
     }
     if(!index.isEmpty())V2DocumentCache::WriteFeatureIndex(source,QJsonDocument(index).toJson(QJsonDocument::Compact));

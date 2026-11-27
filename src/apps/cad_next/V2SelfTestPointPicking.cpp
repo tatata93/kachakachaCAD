@@ -16,6 +16,7 @@
 #include <QDoubleSpinBox>
 #include <QTreeWidgetItem>
 #include <QEvent>
+#include <QPoint>
 #include <QPointF>
 #include <QString>
 #include <QWidget>

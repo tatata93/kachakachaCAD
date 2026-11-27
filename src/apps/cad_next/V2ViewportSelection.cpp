@@ -28,6 +28,38 @@ kachakacha::v2::app::PickCandidate PickOf(const kachakacha::v2::app::SelectionRe
     pick.profileSeed = ref.profileSeed;
     return pick;
 }
+
+std::optional<V2Viewport::PickedPoint> ResolveTreePoint(const V2Viewport& viewport,
+    const kachakacha::v2::app::DrawingSession& session,
+    const kachakacha::v2::app::SelectionSet& selection)
+{
+    using namespace kachakacha::v2;
+    if (selection.entityIds.size() != 1) return std::nullopt;
+    const auto id = selection.entityIds.front();
+    if (selection.ordered.size() == 1 && selection.ordered.front().entityId == id
+        && selection.ordered.front().kind == app::SelectionElementKind::Vertex
+        && viewport.EntityShown(id)) {
+        auto pick = PickOf(selection.ordered.front());
+        const auto& curves = session.Scene().curves;
+        const auto curve = std::find_if(curves.begin(), curves.end(), [&](const auto& item) {
+            return item.entityId == id && item.segmentId == pick.segmentId;
+        });
+        if (curve != curves.end() && pick.curveParameter
+            && *pick.curveParameter >= 0 && *pick.curveParameter <= 1) {
+            pick.hitPoint = curve->segment.Evaluate(*pick.curveParameter);
+            pick.kind = app::SelectionElementKind::Edge;
+            return V2Viewport::PickedPoint{pick.hitPoint, pick};
+        }
+    }
+    const auto& document = session.GetDocument();
+    const auto* entity = document.FindEntity(id);
+    const auto* feature = entity ? document.FindFeature(entity->createdBy) : nullptr;
+    const auto* point = feature && feature->enabled
+        ? std::get_if<domain::CreatePointDefinition>(&feature->definition) : nullptr;
+    if (point && entity->kind == domain::EntityKind::Point)
+        return V2Viewport::PickedPoint{point->positionMm, std::nullopt};
+    return std::nullopt;
+}
 }
 
 void v2ui::AppendReferencePlaneCandidates(const std::vector<V2Viewport::WorkPlaneView>& planes,
@@ -68,31 +100,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
     setProperty("treePickInput",false); // Consume before callbacks can re-enter selection.
     setProperty("treeToolInput",false);
     if(treeInput && !V2ToolSelection::Active(*this) && pickHandler_) {
-        std::optional<PickedPoint> picked;
-        if(selection.entityIds.size()==1) {
-            const auto id=selection.entityIds.front();
-            if (selection.ordered.size()==1 && selection.ordered.front().entityId==id
-                && selection.ordered.front().kind==app::SelectionElementKind::Vertex) {
-                auto pick = PickOf(selection.ordered.front());
-                const auto& curves = session_->Scene().curves;
-                const auto curve = std::find_if(curves.begin(), curves.end(), [&](const auto& item) {
-                    return item.entityId==id && item.segmentId==pick.segmentId;
-                });
-                if (curve!=curves.end() && EntityShown(id) && pick.curveParameter
-                    && *pick.curveParameter>=0 && *pick.curveParameter<=1) {
-                    pick.hitPoint=curve->segment.Evaluate(*pick.curveParameter);
-                    pick.kind=app::SelectionElementKind::Edge;
-                    picked=PickedPoint{pick.hitPoint,pick};
-                }
-            }
-            const auto* entity=session_->GetDocument().FindEntity(id);
-            const auto* feature=entity?session_->GetDocument().FindFeature(entity->createdBy):nullptr;
-            const auto* point=feature&&feature->enabled
-                ?std::get_if<kachakacha::v2::domain::CreatePointDefinition>(&feature->definition):nullptr;
-            if (point && entity->kind==domain::EntityKind::Point)
-                picked=PickedPoint{point->positionMm, std::nullopt};
-        }
-        if (picked) {
+        if (const auto picked = ResolveTreePoint(*this, *session_, selection)) {
             auto handler=std::move(pickHandler_);pickHandler_=nullptr;setProperty("pointPickPrompt",{});
             ForgetPickCycle();
             status_="点を指定しました。";if(statusCallback_)statusCallback_(status_);

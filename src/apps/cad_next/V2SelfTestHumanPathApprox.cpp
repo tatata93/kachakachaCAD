@@ -26,6 +26,8 @@
 #include "kachakacha/io/DocumentFile.h"
 
 #include <QApplication>
+#include <QEvent>
+#include <QObject>
 #include <QPointF>
 #include <QVariant>
 #include <QString>

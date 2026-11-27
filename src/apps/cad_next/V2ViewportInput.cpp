@@ -62,6 +62,15 @@ namespace {
 //! 別の値にすると、同じ手つきなのに回り方が変わる。
 constexpr double kOrbitDegreesPerPixel = 0.5;
 
+kachakacha::v2::view::AxisArrowModifier NavigatorModifier(Qt::KeyboardModifiers modifiers)
+{
+    using kachakacha::v2::view::AxisArrowModifier;
+    if (modifiers & Qt::ShiftModifier) return AxisArrowModifier::Fine;
+    if (modifiers & Qt::ControlModifier) return AxisArrowModifier::Coarse;
+    return AxisArrowModifier::None;
+}
+
+
 //! 候補の並びが前と同じか。同じなら Tab の番号を持ち越せる。
 //!
 //! 位置(距離)は比べない。カーソルが1px動くたびに距離は変わるので、
@@ -1334,13 +1343,7 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     if (panning_) {
         return;
     }
-    kachakacha::v2::view::AxisArrowModifier modifier =
-        kachakacha::v2::view::AxisArrowModifier::None;
-    if ((event->modifiers() & Qt::ShiftModifier) != 0) {
-        modifier = kachakacha::v2::view::AxisArrowModifier::Fine;
-    } else if ((event->modifiers() & Qt::ControlModifier) != 0) {
-        modifier = kachakacha::v2::view::AxisArrowModifier::Coarse;
-    }
+    const auto modifier = NavigatorModifier(event->modifiers());
     // 順は PressViewNavigator が持っている。ここで書き写さない。
     if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
         return;

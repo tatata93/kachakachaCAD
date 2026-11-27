@@ -12,6 +12,8 @@
 #include "kachakacha/kernel/OcctFaceQuery.h"
 #include <QAction>
 #include <QMenu>
+#include <QObject>
+#include <QString>
 #include <algorithm>
 #include <set>
 

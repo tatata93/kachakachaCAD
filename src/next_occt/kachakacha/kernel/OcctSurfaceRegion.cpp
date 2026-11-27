@@ -323,9 +323,28 @@ static Out TrimSurfaceRegionWork(const std::vector<modeling::KernelShapeHandle>&
             clipped=*whole;
         }else{
             auto cutter=Cutter(loops.front(),fit,reach,tolerance);
-            for(std::size_t i=1;i<loops.size();++i){
-                BRepAlgoAPI_Cut cut(cutter,Cutter(loops[i],fit,reach,tolerance));
-                Require(cut.IsDone(),"穴の輪郭を切り抜けません。");cutter=cut.Shape();
+            if (accelerated && loops.size() > 2) {
+                // Subtract the same projected holes together and let the
+                // caller retry the sequential path if this result fails validation.
+                usedAcceleration = true;
+                NCollection_List<TopoDS_Shape> arguments, holes;
+                arguments.Append(cutter);
+                for (std::size_t i = 1; i < loops.size(); ++i) {
+                    holes.Append(Cutter(loops[i], fit, reach, tolerance));
+                }
+                BRepAlgoAPI_Cut cut;
+                cut.SetNonDestructive(true);
+                cut.SetRunParallel(true);
+                cut.SetArguments(arguments);
+                cut.SetTools(holes);
+                cut.Build();
+                Require(cut.IsDone() && !cut.HasErrors(), "穴の輪郭を切り抜けません。");
+                cutter = cut.Shape();
+            } else {
+                for(std::size_t i=1;i<loops.size();++i){
+                    BRepAlgoAPI_Cut cut(cutter,Cutter(loops[i],fit,reach,tolerance));
+                    Require(cut.IsDone(),"穴の輪郭を切り抜けません。");cutter=cut.Shape();
+                }
             }
             trace("trim-cutter");
             clipped=ClipSupportFaces(supports,cutter,tolerance,accelerated,usedAcceleration);

@@ -153,8 +153,8 @@ bool OverlapDrawingPoint(V2MainWindow& w)
     Click(view,pixel);
     if(!Explain("the actual click places the same 3D point",w.Session().PlacedPointCount()==1
         &&geometry::Distance(w.Session().ConstraintAnchor(),preview)<1e-9))return false;
-    const auto far=view.Mapping().Project({10,20,0});if(!far)return false;
-    view.HoverAt({far->x,far->y});
+    const auto away=view.Mapping().Project({10,20,0});if(!away)return false;
+    view.HoverAt({away->x,away->y});
     if(!Explain("moving away releases the explicit source",!view.ExplicitPointTarget()))return false;
     w.RunCommand("draw.line");
     return Explain("changing the tool never retains the previous point source",!view.ExplicitPointTarget()
@@ -195,6 +195,29 @@ bool OverlapPointTransition(V2MainWindow& w,int mode)
     if(!Explain("the next real click uses the refreshed normal target",
         w.Session().PlacedPointCount()==1&&geometry::Distance(w.Session().ConstraintAnchor(),normal)<1e-9))return false;
     w.RunCommand("selection.activate");
+    return CountOfKind(w,domain::EntityKind::Wire)==2;
+}
+
+
+bool IncompleteFinishKeepsPointTarget(V2MainWindow& w)
+{
+    const auto ids=OverlappingSources(w);if(ids.size()!=2)return false;
+    auto& view=w.Viewport();w.RunCommand("draw.line");
+    if(!ClickWorld(view,{-15,0,0}))return false;
+    view.CloseCursorInput();
+    const auto at=view.Mapping().Project({-3,0,7});if(!at)return false;
+    const QPointF pixel(at->x,at->y);view.HoverAt(pixel);
+    if(!TabToPointSource(view,ids[1])||!view.Hover().position)return false;
+    const auto expected=*view.Hover().position;
+    QKeyEvent enter(QEvent::KeyPress,Qt::Key_Return,Qt::NoModifier);QApplication::sendEvent(&view,&enter);
+    if(!Explain("an incomplete finish retains the pending point and explicitly chosen source",
+        w.Session().PlacedPointCount()==1&&view.ExplicitPointTarget()&&view.Hover().position
+        &&geometry::Distance(*view.Hover().position,expected)<1e-9))return false;
+    Click(view,pixel);
+    if(!Explain("continuing after a refused finish commits to that same source",CountOfKind(w,domain::EntityKind::Wire)==3
+        &&std::any_of(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& curve){
+            return curve.entityId!=ids[0]&&curve.entityId!=ids[1]&&geometry::Distance(curve.segment.EndPoint(),expected)<1e-9;})))return false;
+    w.RunCommand("selection.activate");w.RunCommand("edit.undo");
     return CountOfKind(w,domain::EntityKind::Wire)==2;
 }
 
@@ -645,6 +668,7 @@ bool SharedZoomedCrossings(V2MainWindow& w)
 }
 std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
     {"HP-POINT-TARGET Tab makes actual drawing follow the chosen depth",OverlapDrawingPoint},
+    {"HP-POINT-TARGET refused finish keeps the chosen curve and pending point",IncompleteFinishKeepsPointTarget},
     {"HP-POINT-TARGET Ctrl selection releases the previous point target",[](auto& w){return OverlapPointTransition(w,0);}},
     {"HP-POINT-TARGET Esc cancels drawing and releases the previous target",[](auto& w){return OverlapPointTransition(w,1);}},
     {"HP-POINT-TARGET Esc closes cursor input and releases the previous target",[](auto& w){return OverlapPointTransition(w,2);}},

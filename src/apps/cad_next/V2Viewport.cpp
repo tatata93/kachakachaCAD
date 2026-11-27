@@ -1253,7 +1253,7 @@ void V2Viewport::ClickAt(const QPointF& position)
 void V2Viewport::FinishTool()
 {
     const auto result = session_->FinishTool();
-    ReleasePointTarget();
+    if (result.committed) ReleasePointTarget();
     if (!result.diagnostics.empty()) {
         status_ = result.diagnostics.front().summaryJa;
     } else if (result.committed) {

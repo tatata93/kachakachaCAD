@@ -1,4 +1,5 @@
 #include "V2GeometryJob.h"
+#include "V2DocumentTiming.h"
 #include "V2PreparedDocument.h"
 #include "kachakacha/app/GeometryJobDiagnostic.h"
 #include "kachakacha/kernel/OcctOutput.h"
@@ -6,6 +7,7 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QApplication>
 #include <QByteArray>
+#include <QByteArrayView>
 #include <QChar>
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -94,6 +96,23 @@ geometry::Vector3 Point(const QJsonValue& value) {
 }
 void Phase(const char* text) {std::cout<<"KACHACAD_PHASE:"<<text<<std::endl;}
 
+QString TakeLatestPhase(QByteArray& output)
+{
+    constexpr QByteArrayView prefix("KACHACAD_PHASE:");
+    const QByteArrayView bytes(output);
+    QByteArrayView latest;
+    qsizetype consumed=0;
+    for (auto end=bytes.indexOf('\n');end>=0;end=bytes.indexOf('\n',consumed)) {
+        const auto line=bytes.sliced(consumed,end-consumed).trimmed();
+        if(line.startsWith(prefix))latest=line.sliced(prefix.size());
+        consumed=end+1;
+    }
+    const auto phase=latest.isNull()?QString():QString::fromUtf8(latest);
+    output.remove(0,consumed);
+    if(output.size()>4096)output=output.right(4096);
+    return phase;
+}
+
 JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const DocumentReader& reader,
     const std::function<bool()>& pulse) {
     const auto response=ReadJson(scratch.filePath("response.json"));
@@ -143,8 +162,15 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     QProcess process(&dialog);process.setObjectName("geometryJobProcess");
     bool cancelled=false;bool exited=false;int exitCode=-1;std::optional<JsonResult> result;
     QByteArray output,errorOutput;
+    const bool coalesceProgress=documentJob&&!qEnvironmentVariableIsSet("KACHACAD_OPEN_PROGRESS_IMMEDIATE");
+    V2DocumentTiming progressTiming("document-progress");int labelUpdates=0;
+    QString pendingPhase;
+    const auto showPhase=[&](const QString& text){label->setText(text);++labelUpdates;};
     QElapsedTimer clock;clock.start();QTimer timer;timer.setInterval(100);
-    QObject::connect(&timer,&QTimer::timeout,&dialog,[&]{elapsed->setText(QStringLiteral("経過 %1 秒 — 完了するまで文書は変更しません").arg(clock.elapsed()/1000));});
+    QObject::connect(&timer,&QTimer::timeout,&dialog,[&]{
+        elapsed->setText(QStringLiteral("経過 %1 秒 — 完了するまで文書は変更しません").arg(clock.elapsed()/1000));
+        if(!cancelled&&!exited&&!pendingPhase.isNull()){showPhase(pendingPhase);pendingPhase.clear();}
+    });
     dialog.cancel=[&]{
         if(cancelled)return;cancelled=true;cancel->setEnabled(false);
         label->setText(QStringLiteral("計算を取り消しています…"));
@@ -155,10 +181,18 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     QObject::connect(&process,&QProcess::started,&dialog,[&]{dialog.setProperty("calculationPid",process.processId());});
     QObject::connect(&process,&QProcess::readyReadStandardOutput,&dialog,[&]{
         output+=process.readAllStandardOutput();
+        if(coalesceProgress) {
+            const auto phase=TakeLatestPhase(output);
+            if(!phase.isNull()&&!cancelled&&!exited) {
+                dialog.setProperty("calculationPhase",phase);
+                if(labelUpdates==0)showPhase(phase);else pendingPhase=phase;
+            }
+            return;
+        }
         while(output.contains('\n')) {
             const auto line=output.left(output.indexOf('\n')).trimmed();output.remove(0,output.indexOf('\n')+1);
             if(!cancelled&&line.startsWith("KACHACAD_PHASE:")) {
-                const auto text=QString::fromUtf8(line.mid(15));label->setText(text);dialog.setProperty("calculationPhase",text);
+                const auto text=QString::fromUtf8(line.mid(15));showPhase(text);dialog.setProperty("calculationPhase",text);
             }
         }
         if(output.size()>4096)output=output.right(4096);
@@ -192,6 +226,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
     } else dialog.exec();
     // Also cover application shutdown while the modal event loop is running.
     if(process.state()!=QProcess::NotRunning){cancelled=true;process.kill();process.waitForFinished(3000);}
+    if(documentJob)progressTiming.Mark(((coalesceProgress?"coalesced-":"immediate-")+std::to_string(labelUpdates)).c_str());
     if(cancelled)return JsonResult::Failure(base::MakeError(cancelledCode,"計算を取り消しました。文書は変更していません。","入力を変更するか、選び直して再計算できます。"));
     if(!exited||exitCode!=0)return JsonResult::Failure(Failed(QStringLiteral("計算用プロセスが正常に終了しませんでした。再試行できます。\n終了コード: %1\n%2")
         .arg(exitCode).arg(QString::fromUtf8(errorOutput))));

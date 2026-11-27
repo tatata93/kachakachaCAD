@@ -1,7 +1,12 @@
 #include "V2PointTarget.h"
 #include "V2Viewport.h"
 #include "V2ToolSelection.h"
+#include "V2TransformPreview.h"
+#include "kachakacha/app/PlaneFocus.h"
 #include "kachakacha/app/ToolTargeting.h"
+#include "kachakacha/geometry/CurveIntersection.h"
+#include <algorithm>
+#include <cmath>
 
 namespace v2ui {
 bool SnapMatchesPointTarget(const kachakacha::v2::app::PickCandidate& target,
@@ -17,6 +22,43 @@ bool SnapMatchesPointTarget(const kachakacha::v2::app::PickCandidate& target,
     return matches(candidate.entityId,candidate.segmentId)
         || matches(candidate.otherEntityId,candidate.otherSegmentId);
 }
+
+void KeepWorkPlanePointSources(std::vector<kachakacha::v2::app::PickCandidate>& candidates,
+    const kachakacha::v2::modeling::SnapScene& scene,const kachakacha::v2::geometry::ScreenMapping& mapping,
+    const kachakacha::v2::geometry::ScreenPoint& pointer,const kachakacha::v2::modeling::WorkPlaneFrame& plane,
+    const kachakacha::v2::geometry::GeometryTolerance& tolerance)
+{
+    using namespace kachakacha::v2;
+    std::vector<app::PickCandidate> kept;kept.reserve(candidates.size());
+    for(auto candidate:candidates) {
+        if(candidate.segmentId.IsNil()) {
+            if(std::abs(plane.SignedDistance(candidate.hitPoint))<=app::kOnPlaneToleranceMm)kept.push_back(candidate);
+            continue;
+        }
+        const auto source=std::find_if(scene.curves.begin(),scene.curves.end(),[&](const auto& curve) {
+            return curve.entityId==candidate.entityId && curve.segmentId==candidate.segmentId;
+        });
+        if(source==scene.curves.end())continue;
+        if(app::CurveLiesOnPlane(source->segment,plane)) {kept.push_back(candidate);continue;}
+        const auto roots=geometry::IntersectCurveWithPlane(source->segment,plane.origin,plane.normal,tolerance);
+        bool found=false;double nearest=tolerance.snapPickPx;
+        for(const auto& root:roots) {
+            const auto projected=mapping.Project(root.position);if(!projected)continue;
+            const auto distance=std::hypot(projected->x-pointer.x,projected->y-pointer.y);
+            if(distance>nearest || (found && distance==nearest))continue;
+            candidate.hitPoint=root.position;candidate.curveParameter=root.parameter;candidate.distancePx=distance;
+            nearest=distance;found=true;
+        }
+        if(found)kept.push_back(candidate);
+    }
+    // Keep point/curve group priority; distances now refer to the actual roots.
+    for(auto first=kept.begin();first!=kept.end();) {
+        const auto end=std::find_if(first,kept.end(),[&](const auto& item){return item.kind!=first->kind;});
+        std::stable_sort(first,end,[](const auto& a,const auto& b){return a.distancePx<b.distancePx;});
+        first=end;
+    }
+    candidates=std::move(kept);
+}
 }
 
 bool V2Viewport::PointInputActive() const
@@ -25,8 +67,9 @@ bool V2Viewport::PointInputActive() const
     if (ReferencePickPending() || V2ToolSelection::Active(*this)) return false;
     if (directionPick_) return directionPick_->plane==DirectionPickPlane::WorkPlane;
     if (pickHandler_) return true;
-    if (toolPickActive_) return false;
+    if (toolPickActive_ || boxSelect_.active) return false;
     const auto tool=session_->CurrentTool();
+    if (v2ui::TransformTool(tool) && property("transformTargetPicking").toBool()) return false;
     if (tool==DrawingTool::Measure) return measurePointCount_>0;
     const auto prompt=session_->Prompt();
     return (prompt.remainingPoints>0 || prompt.acceptsMorePoints)

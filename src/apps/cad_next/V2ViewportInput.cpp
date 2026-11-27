@@ -3,6 +3,7 @@
 #include "V2GeneratedWirePicking.h"
 #include "V2RenderSelection.h"
 #include "V2TransformPreview.h"
+#include "V2PointTarget.h"
 //! マウスとキーの土台(V1同等、docs/v2/v1-input-parity.md)。
 //!
 //! ここに集めたのは、V1にあって V2 に無かったものである。
@@ -917,10 +918,13 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
 {
     using kachakacha::v2::geometry::ScreenPoint;
     auto focus=PickFocusNow();
-    if (PointInputActive()) focus.dimOffPlane=false; // Restrict the point, not its intersecting source curve.
+    const bool planePoint=PointInputActive() && !PickPending() && focus.drawing && focus.dimOffPlane;
+    if (PointInputActive()) focus.dimOffPlane=false;
     auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, focus);
+    if(planePoint)v2ui::KeepWorkPlanePointSources(candidates,session_->Scene(),mapping_,
+        ScreenPoint{position.x(),position.y()},workPlane_,session_->GetDocument().Snapshot().settings.tolerance);
     if(sectionView_)std::erase_if(candidates,[this](const auto& c){
         const auto* e=session_->GetDocument().FindEntity(c.entityId);
         return e&&(e->kind==kachakacha::v2::domain::EntityKind::Part||e->kind==kachakacha::v2::domain::EntityKind::GuideSurface);
@@ -1355,7 +1359,8 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     // Copy/Move targets are additive Ctrl picks, not temporary deletion inputs.
     if(v2ui::TransformTargetPick(*this,*session_,*event)){
         auto modifiers=event->modifiers()|Qt::ControlModifier;
-        BeginBoxSelect(event->position(),modifiers);SelectAt(event->position(),modifiers);return;
+        BeginBoxSelect(event->position(),modifiers);SelectAt(event->position(),modifiers);
+        ReleasePointTarget();return;
     }
     // The visible navigator is in front of extrusion handles as well as model edges.
     // Ctrl is the active tool's additive selection. Enter scratch deletion only

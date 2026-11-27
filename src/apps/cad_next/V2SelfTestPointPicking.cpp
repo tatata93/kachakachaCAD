@@ -281,6 +281,63 @@ bool CurvePlanePointInput(V2MainWindow& w)
         &&CountOfKind(w,domain::EntityKind::Wire)==2);
 }
 
+
+bool CrossingPointSourceIsNotAnOffPlaneSelection(V2MainWindow& w)
+{
+    w.RunCommand("file.new");w.resize(1600,1000);QApplication::processEvents();
+    const auto a=geometry::CurveSegment::MakeLine({-20,-5,-3},{20,5,3}).Value();
+    const auto b=geometry::CurveSegment::MakeLine({-20,5,-4},{20,-5,4}).Value();
+    const auto first=w.AddPlainWire({a},"平面を横切る線",false),second=w.AddPlainWire({b},"平面を横切る別の線",false);
+    if(first.IsNil()||second.IsNil()||!w.SaveAndReopen("crossing-point-sources.kcd2"))return false;
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!scope)return false;scope->setCurrentIndex(0);
+    w.RunCommand("draw.line");auto& view=w.Viewport();view.SetSelection({});
+    view.SetViewDirection(ViewDirection::Top);view.SetViewCenter({});view.SetVisibleWidthMm(80);view.SetSnapSuppressed(false);
+    const auto root=view.Mapping().Project({});if(!root)return false;
+    const QPointF crossing(root->x,root->y);view.HoverAt(crossing);
+    if(!Explain("Tab can choose the source of a real finite workplane crossing",TabToPointSource(view,second)
+        &&view.Hover().position&&geometry::Distance(*view.Hover().position,{})<1e-9))return false;
+    if(!Explain("the source candidate stores the actual root rather than an off-plane closest point",
+        view.CurrentCandidate()&&geometry::Distance(view.CurrentCandidate()->hitPoint,{})<1e-9
+        &&view.CurrentCandidate()->curveParameter&&std::abs(*view.CurrentCandidate()->curveParameter-.5)<1e-9))return false;
+    Click(view,crossing,Qt::ControlModifier);
+    if(!Explain("Ctrl target selection does not select the entire off-plane curves at their crossing",
+        view.Selection().entityIds.empty()&&w.Session().PlacedPointCount()==0))return false;
+    const auto away=a.Evaluate(.8);const auto screen=view.Mapping().Project(away);if(!screen)return false;
+    const QPointF pixel(screen->x,screen->y);view.HoverAt(pixel);
+    if(!Explain("away from the real root an off-plane or projected line is not a drawing source",
+        view.HoveredEntityId().IsNil()&&!view.ExplicitPointTarget()))return false;
+    scope->setCurrentIndex(1);view.HoverAt(pixel);
+    if(!Explain("3D drawing still permits the spatial source curve",view.HoveredEntityId()==first))return false;
+    scope->setCurrentIndex(0);w.RunCommand("selection.activate");
+    const auto revision=w.Session().GetDocument().Revision();std::optional<Vector3> picked;
+    view.BeginPointPick([&](const auto& point){picked=point.point;},"空間上の点を指定");view.HoverAt(pixel);Click(view,pixel);
+    return Explain("reference point requests still accept actual 3D points without modifying sources",
+        picked&&geometry::Distance(*picked,away)<1e-8&&w.Session().GetDocument().Revision()==revision
+        &&CountOfKind(w,domain::EntityKind::Wire)==2);
+}
+
+
+bool WorkPlaneSourceOrderUsesActualRoots(V2MainWindow& w)
+{
+    w.RunCommand("file.new");w.resize(1600,1000);QApplication::processEvents();
+    const Vector3 center{5,5,0};
+    const auto a=geometry::CurveSegment::MakeLine(center+Vector3{-1,0,2},center+Vector3{1,0,-.5}).Value();
+    const auto b=geometry::CurveSegment::MakeLine(center+Vector3{-1,.08,1.08},center+Vector3{1,.08,-.92}).Value();
+    if(w.AddPlainWire({a},"投影上は近い線",false).IsNil())return false;
+    const auto closerRoot=w.AddPlainWire({b},"実交点が近い線",false);if(closerRoot.IsNil())return false;
+    if(!w.SaveAndReopen("workplane-source-order.kcd2"))return false;
+    auto* scope=w.findChild<QComboBox*>("drawingScope");if(!scope)return false;scope->setCurrentIndex(0);
+    w.RunCommand("draw.line");QApplication::processEvents();auto& view=w.Viewport();
+    view.SetViewDirection(ViewDirection::Top);view.SetViewCenter(center);view.SetVisibleWidthMm(80);view.SetSnapSuppressed(false);
+    const auto screen=view.Mapping().Project(center);if(!screen)return false;
+    view.HoverAt({screen->x,screen->y});
+    if(!Explain(("the plane roots have source candidates; count="+std::to_string(view.CandidateCount())).c_str(),
+        view.PreviewCandidate(0)))return false;
+    return Explain("the first source is ordered by its actual plane intersection rather than the projected line distance",
+        view.CurrentCandidate()&&view.CurrentCandidate()->entityId==closerRoot
+        &&geometry::Distance(view.CurrentCandidate()->hitPoint,center+Vector3{.08,.08,0})<1e-8);
+}
+
 bool SharedExplicitSource(V2MainWindow& w)
 {
     const auto path=qEnvironmentVariable("KACHACAD_ZOOM_OWNER_FILE");
@@ -674,6 +731,8 @@ std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
     {"HP-POINT-TARGET Esc closes cursor input and releases the previous target",[](auto& w){return OverlapPointTransition(w,2);}},
     {"HP-POINT-TARGET reference Tab and right menu return the chosen UUID",OverlapReferencePoint},
     {"HP-POINT-PLANE draw from a finite curve plane intersection with source preservation",CurvePlanePointInput},
+    {"HP-POINT-PLANE finite roots remain point sources while off-plane element selection stays restricted",CrossingPointSourceIsNotAnOffPlaneSelection},
+    {"HP-POINT-PLANE source menu order follows actual root distance",WorkPlaneSourceOrderUsesActualRoots},
     {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",[](auto& w){return WorkPlaneRoles(w);}},
     {"HP-POINT-WP fractional curve endpoints keep full precision through plane creation",[](auto& w){return WorkPlaneRoles(w,true);}},
     {"HP-POINT-INPUT point requests override tools and reject undefined plane hits",GenericPointInputs},

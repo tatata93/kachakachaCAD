@@ -15,10 +15,11 @@ base::Result<bool> V2BuildPreparedMeshes(const std::vector<V2PreparedMeshRequest
     using Result=base::Result<modeling::ShapeMesh>;
     std::vector<std::optional<Result>> results(requests.size());
     const auto hardware=std::thread::hardware_concurrency();
-    const std::size_t lanes=parallel&&hardware>=4?std::min<std::size_t>(3,requests.size()):1;
+    const std::size_t laneLimit=hardware>=12&&requests.size()>=128?6:3;
+    const std::size_t lanes=parallel&&hardware>=4?std::min(laneLimit,requests.size()):1;
     // BuildShapeMesh tessellates a deep topology copy, never a shared editable
-    // shape. At most three fixed lanes leave capacity for the visible process
-    // and bound native copies instead of launching a thread per small part.
+    // shape. Keep three lanes for smaller batches and machines, and allow six
+    // for large batches when the worker has at least twelve hardware threads.
     const auto build=[&](std::size_t lane) {
         for(auto i=lane;i<requests.size();i+=lanes) {
             try {results[i].emplace(kernel::BuildShapeMesh(requests[i].shape,0.0,requests[i].surface?8:0));}

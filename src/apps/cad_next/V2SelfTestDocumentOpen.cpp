@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include <QApplication>
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDataStream>
 #include <QDir>
 #include <QElapsedTimer>
@@ -28,6 +29,7 @@
 #include <QPushButton>
 #include <QString>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 #include <QImage>
 #include <QColor>
@@ -434,6 +436,92 @@ bool ParallelReadMode(V2MainWindow& w,bool withParts) {
 bool ParallelRead(V2MainWindow& w) {
     return ParallelReadMode(w,false)&&ParallelReadMode(w,true);
 }
+bool ForegroundRestore(V2MainWindow& w)
+{
+    CacheScope scope;
+    if (!scope.folder.isValid()) return false;
+    w.RunCommand("file.new");
+    if (!DrawRectangleByHand(w) || !ClickOnAnyCurve(w, Qt::NoModifier)) return false;
+    w.RunCommand("surface.create");
+    if (!w.HandleToolKey(Qt::Key_Return, nullptr) || w.KernelShapeCount() != 1) return false;
+
+    auto incoming = V2DocumentOpen::FileForSave(w);
+    const auto& initial = incoming.snapshot;
+    const auto source = std::find_if(initial.entities.begin(), initial.entities.end(),
+        [](const auto& entity) { return entity.kind == domain::EntityKind::GuideSurface; });
+    if (source == initial.entities.end()) return false;
+    const auto feature = std::find_if(initial.features.begin(), initial.features.end(),
+        [&](const auto& item) { return item.id == source->createdBy; });
+    if (feature == initial.features.end()) return false;
+    const auto exemplar = *source;
+    const auto producer = *feature;
+    base::DeterministicIdGenerator ids(960000);
+    constexpr int count = 80;
+    for (int i = 1; i < count; ++i) {
+        auto entity = exemplar;
+        auto clone = producer;
+        clone.id = ids.NextTyped<base::IdKind::Feature>();
+        entity.id = ids.NextTyped<base::IdKind::Entity>();
+        entity.createdBy = clone.id;
+        clone.outputs = {{"surface", entity.id, entity.kind}};
+        incoming.snapshot.features.push_back(std::move(clone));
+        incoming.snapshot.entities.push_back(std::move(entity));
+    }
+    const auto path = scope.folder.filePath("large-native.kcd2");
+    if (!Write(path, incoming)) return false;
+    const auto input = io::ReadWholeFile(path.toStdString());
+    if (!input.HasValue() || !w.OpenDocumentFile(path) || w.KernelShapeCount() != count) return false;
+    const auto expected = Snapshot(w);
+    const auto views = w.Viewport().ShapeViews();
+    if (!Explain("the cold open attaches every restored surface", views.size() == count)) return false;
+
+    if (QThread::idealThreadCount() >= 4 && !qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")
+        && !qEnvironmentVariableIsSet("KACHACAD_OPEN_FOREGROUND_SERIAL")) {
+        struct TraceDirectory {
+            QByteArray previous = qgetenv("KACHACAD_OPEN_TRACE_DIR");
+            ~TraceDirectory()
+            {
+                if (previous.isNull()) qunsetenv("KACHACAD_OPEN_TRACE_DIR");
+                else qputenv("KACHACAD_OPEN_TRACE_DIR", previous);
+            }
+        } traceScope;
+        qputenv("KACHACAD_OPEN_TRACE_DIR", scope.folder.path().toUtf8());
+        w.RunCommand("file.new");
+        if (!DrawRectangleByHand(w)) return false;
+        const auto before = Snapshot(w);
+        const auto handles = kernel::CachedShapeCount();
+        const auto tracePath = scope.folder.filePath(QStringLiteral("load-%1.jsonl").arg(QCoreApplication::applicationPid()));
+        bool responded = false;
+        QTimer timer;
+        timer.setTimerType(Qt::PreciseTimer);
+        timer.setInterval(1);
+        QObject::connect(&timer, &QTimer::timeout, &w, [&] {
+            auto* job = QApplication::activeModalWidget();
+            if (!job || responded || job->objectName() != "geometryJobDialog") return;
+            QFile trace(tracePath);
+            if (trace.open(QIODevice::ReadOnly) && trace.readAll().contains("\"stage\":\"workers-started\"")) {
+                auto* cancel = job->findChild<QPushButton*>("geometryJobCancel");
+                if (cancel) {
+                    responded = true;
+                    cancel->click();
+                }
+            }
+        });
+        timer.start();
+        const bool opened = w.OpenDocumentFile(path);
+        timer.stop();
+        if (!Explain("cancelling foreground native restoration releases pending handles and preserves the document",
+                responded && !opened && kernel::CachedShapeCount() == handles && Snapshot(w) == before
+                    && !V2GeometryJob::Active())) return false;
+    }
+    if (!w.OpenDocumentFile(path) || Snapshot(w) != expected || w.KernelShapeCount() != count) return false;
+    const auto& warm = w.Viewport().ShapeViews();
+    return Explain("retry attaches the exact visible geometry and editable history", warm.size() == views.size()
+        && std::equal(warm.begin(), warm.end(), views.begin(), [](const auto& a, const auto& b) {
+            return a.entityId == b.entityId && a.surface == b.surface && SameMesh(a.mesh, b.mesh);
+        }) && io::ReadWholeFile(path.toStdString()).Value() == input.Value());
+}
+
 void InteractionTiming(V2MainWindow& w,const char* label,ViewDirection direction=ViewDirection::Top) {
     auto& v=w.Viewport();w.resize(1500,950);QApplication::processEvents();
     v.SetViewDirection(direction);v.SetViewCenter({0,0,0});v.SetVisibleWidthMm(35);
@@ -586,6 +674,7 @@ std::vector<SelfTestCase> DocumentOpenCases(){std::vector<SelfTestCase> cases{
     {"HP-OPEN-07 hidden native shapes mesh on first visibility",HiddenMesh},
     {"HP-OPEN-08 parallel independent surfaces match serial cold rebuild",ParallelRead},
     {"HP-OPEN-09 prepared transfer identities cancellation and poisoned cache",TransferValidation},
+    {"HP-OPEN-10 cancellation during foreground restoration releases the prepared shapes",ForegroundRestore},
     {"HP-PERF-01 dense face hover and image compositing",Interaction},
     {"HP-PROFILE-CACHE source identity geometry visibility and reload",ProfileCache}};
     if(qEnvironmentVariableIsSet("KACHACAD_OWNER_OPEN_FILE"))cases.push_back({"HP-OPEN-OWNER actual KCD load timing",OwnerRead});return cases;}

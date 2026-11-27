@@ -1,4 +1,5 @@
 #include "V2EvaluationCache.h"
+#include <QThread>
 #include "V2DocumentCache.h"
 #include "V2DocumentOpen.h"
 #include "V2DocumentTiming.h"
@@ -211,10 +212,32 @@ bool V2EvaluationCache::Restore(const app::ShapeRebuildStep& step) {
         w.shapeMeshes_[handle.value]=std::move(data.meshes.at(id));
     impl_->ready.erase(found);return true;
 }
-void V2EvaluationCache::IndexPrepared(V2MainWindow& w,const std::string& source,const V2PreparedDocument& prepared) {
+std::future<V2EvaluationCache::IndexKeys> V2EvaluationCache::PrepareIndexKeys(
+    const document::DocumentSnapshot& snapshot, std::size_t shapeCount)
+{
+    if (!Enabled() || shapeCount < 64 || QThread::idealThreadCount() < 6
+        || qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")
+        || qEnvironmentVariableIsSet("KACHACAD_OPEN_FEATURE_INDEX_SERIAL")) {
+        return {};
+    }
+    try {
+        // The caller keeps this detached snapshot alive until the future has
+        // joined. No native shapes, windows or cache files enter this task.
+        return std::async(std::launch::async, [&snapshot] { return TryKeys(snapshot); });
+    } catch (...) {
+        // Index preparation is optional even under resource pressure.
+        return {};
+    }
+}
+
+void V2EvaluationCache::IndexPrepared(V2MainWindow& w,const std::string& source,
+    const V2PreparedDocument& prepared,std::future<IndexKeys>& keyed)
+{
     if(!Enabled())return;
     const auto& document=w.Session().GetDocument();
-    const auto keys=TryKeys(document.Snapshot());
+    V2DocumentTiming timing("feature-index");
+    const auto keys=keyed.valid()?keyed.get():TryKeys(document.Snapshot());
+    timing.Mark("keys-ready");
     if(keys.empty())return;
     QJsonObject index;
     for(const auto& step:app::PlanShapeRebuild(document.Snapshot())) {
@@ -224,4 +247,5 @@ void V2EvaluationCache::IndexPrepared(V2MainWindow& w,const std::string& source,
         if(prepared.parts.contains(id)||prepared.guides.contains(id))index[QString::fromStdString(id)]=key->second;
     }
     if(!index.isEmpty())V2DocumentCache::WriteFeatureIndex(source,QJsonDocument(index).toJson(QJsonDocument::Compact));
+    timing.Mark("index-written");
 }

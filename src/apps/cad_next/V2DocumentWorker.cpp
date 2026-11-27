@@ -134,6 +134,8 @@ int V2DocumentOpen::Worker(const QString& directory) {
             archiveBytes = archive.Value();
             timing.Mark("encode-archive");
         }
+        auto indexJob = V2EvaluationCache::PrepareIndexKeys(sourceFile.snapshot, window.KernelShapeCount());
+        if (indexJob.valid()) timing.Mark("schedule-feature-index");
         auto captured = Capture(window, {});
         timing.Mark("capture-native-and-meshes");
         if (archiveJob.valid()) {
@@ -150,7 +152,7 @@ int V2DocumentOpen::Worker(const QString& directory) {
             throw std::runtime_error("Cannot write prepared document");
         timing.Mark("write-transfer");
         if(V2DocumentCache::StoreTransfer(bytes.Value(),dir.filePath("prepared.bin"),token))
-            V2EvaluationCache::IndexPrepared(window,bytes.Value(),data);
+            V2EvaluationCache::IndexPrepared(window,bytes.Value(),data,indexJob);
         timing.Mark("write-cache");
         response["ok"]=true;
         }

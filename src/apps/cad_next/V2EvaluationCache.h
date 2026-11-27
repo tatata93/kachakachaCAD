@@ -1,6 +1,10 @@
 #pragma once
 
 #include "kachakacha/app/ShapeRebuild.h"
+#include <QString>
+#include <cstddef>
+#include <future>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,7 +22,11 @@ public:
     V2EvaluationCache& operator=(const V2EvaluationCache&)=delete;
     [[nodiscard]] bool Available(const kachakacha::v2::app::ShapeRebuildStep&) const;
     [[nodiscard]] bool Restore(const kachakacha::v2::app::ShapeRebuildStep&);
-    static void IndexPrepared(V2MainWindow&,const std::string& source,const V2PreparedDocument&);
+    using IndexKeys = std::map<std::string, QString>;
+    static std::future<IndexKeys> PrepareIndexKeys(
+        const kachakacha::v2::document::DocumentSnapshot&, std::size_t shapeCount);
+    static void IndexPrepared(V2MainWindow&,const std::string& source,const V2PreparedDocument&,
+        std::future<IndexKeys>&);
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

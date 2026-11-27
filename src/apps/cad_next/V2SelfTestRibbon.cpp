@@ -25,6 +25,7 @@
 #include <QEvent>
 #include <QEventLoop>
 #include <QKeyEvent>
+#include <QLayout>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QObject>
@@ -321,20 +322,22 @@ void SettleLayout()
 bool ClickRibbonItem(V2Ribbon& ribbon, const char* objectName, const QString& label,
     const std::function<bool(QWidget*)>& press)
 {
+    QToolButton* overflow = nullptr;
     for (auto* button : ribbon.findChildren<QToolButton*>(QString::fromLatin1(objectName))) {
         if (button->text() != label || !button->isEnabled()) continue;
         if (button->isVisible() && button->visibleRegion().boundingRect() == button->rect())
             return press(button);
-        if (button->isHidden()) {
-            auto* more = button->parentWidget()->findChild<QToolButton*>(QStringLiteral("toolbarOverflowButton"));
-            if (more && more->isVisible()) {
-                more->window()->activateWindow();
-                more->setFocus(Qt::MouseFocusReason);
-                if (ChooseOverflow(*more, label)) return true;
-            }
-        }
+        // Rebuilding the ribbon removes old widgets from the layout before Qt deletes them.
+        auto* row = button->parentWidget();
+        if (!button->isHidden() || !row || !row->layout() || row->layout()->indexOf(button) < 0)
+            continue;
+        auto* more = row->findChild<QToolButton*>(QStringLiteral("toolbarOverflowButton"));
+        if (more && more->isVisible()) overflow = more;
     }
-    return false;
+    if (!overflow) return false;
+    overflow->window()->activateWindow();
+    overflow->setFocus(Qt::MouseFocusReason);
+    return ChooseOverflow(*overflow, label);
 }
 
 std::vector<SelfTestCase> RibbonCases()

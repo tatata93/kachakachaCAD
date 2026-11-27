@@ -127,11 +127,14 @@ foreach ($key in @('Path', 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QT_
 }
 $testRoot = Join-Path (Split-Path $Output -Parent) ("package-runtime-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
-$fixtureRoot = Join-Path $Output 'test-fixtures'
+$fixtureRoot = Join-Path $testRoot 'test-fixtures'
 New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'examples/railway-nose-acceptance.kcd') -Destination $fixtureRoot
 [System.IO.File]::WriteAllText((Join-Path $Output 'qt.conf'), "[Paths]`nPrefix=.`nPlugins=.`n", (New-Object System.Text.UTF8Encoding($false)))
-Push-Location -LiteralPath $Output
+# Collect the deployed entries before the watchdog's UI reports are written.
+# Tests that write relative files must also work outside the application directory.
+$PayloadPaths = @(Get-ChildItem -LiteralPath $Output | Select-Object -ExpandProperty FullName)
+Push-Location -LiteralPath $testRoot
 try {
     $env:QT_QPA_PLATFORM = "offscreen"
     $env:QT_PLUGIN_PATH = $Output
@@ -155,14 +158,14 @@ try {
     Invoke-Deployed -AppArguments @('--self-test', '--self-test-all', '--self-test-report', $uiReport)
     if ($LASTEXITCODE -ne 0) { throw "Self-tests failed" }
 
-    $Opened = Join-Path $Output "opened-sample.png"
+    $Opened = Join-Path $testRoot "opened-sample.png"
     Invoke-Deployed -AppArguments @('--open', (Join-Path $Samples 'v2-sample.kcd2'), '--snapshot', $Opened)
     if ($LASTEXITCODE -ne 0) { throw "Sample open failed" }
     if (-not (Test-Path $Opened) -or (Get-Item -LiteralPath $Opened).Length -lt 1024) {
         throw "Opened sample image is missing: $Opened"
     }
 
-    $NoseOpened = Join-Path $Output "opened-railway-nose.png"
+    $NoseOpened = Join-Path $testRoot "opened-railway-nose.png"
     Invoke-Deployed -AppArguments @('--open', (Join-Path $Samples 'streamlined-railway-nose-1-87.kcd2'), '--snapshot', $NoseOpened)
     if ($LASTEXITCODE -ne 0) { throw "Railway sample open failed" }
     if (-not (Test-Path $NoseOpened) -or (Get-Item -LiteralPath $NoseOpened).Length -lt 1024) {
@@ -178,5 +181,5 @@ finally {
 
 $Zip = "$Output.zip"
 if (Test-Path -LiteralPath $Zip) { throw "Package ZIP already exists: $Zip" }
-Compress-Archive -Path (Join-Path $Output "*") -DestinationPath $Zip
+Compress-Archive -LiteralPath $PayloadPaths -DestinationPath $Zip
 Write-Host "Package: $Zip"

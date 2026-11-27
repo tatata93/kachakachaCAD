@@ -17,15 +17,23 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDoubleSpinBox>
+#include <QHBoxLayout>
 #include <QItemSelectionModel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QObject>
 #include <QPoint>
+#include <QPushButton>
 #include <QString>
 #include <QStringList>
 #include <QTreeWidgetItem>
+#include <QWidget>
+#include <QWidgetAction>
 
 #include <algorithm>
+#include <cmath>
+#include <numeric>
 #include <string>
 #include <vector>
 #include <map>
@@ -54,6 +62,86 @@ void ApplyExplorerPick(V2Viewport& viewport, const app::PickCandidate& pick)
     const auto mode = !pending && !toolInput && modifiers.testFlag(Qt::ControlModifier)
         ? app::SelectionMode::Toggle : app::SelectionMode::Replace;
     viewport.SetSelection(app::ApplySelection(viewport.Selection(), pick, mode));
+}
+
+double ParameterAtLengthFraction(const geometry::CurveSegment& curve, double fraction, double tolerance)
+{
+    if (fraction == 0.0 || fraction == 1.0
+        || (curve.Kind() != geometry::CurveKind::CubicBezier && curve.Kind() != geometry::CurveKind::CubicBSpline))
+        return fraction;
+
+    const double target = fraction * curve.TotalLength(tolerance);
+    double low = 0.0;
+    double high = 1.0;
+    for (int step = 0; step < 50; ++step) {
+        const double mid = std::midpoint(low, high);
+        const double length = curve.ArcLength(0.0, mid, tolerance);
+        if (std::abs(length - target) <= tolerance)
+            return mid;
+        if (length < target) low = mid;
+        else high = mid;
+    }
+    return std::midpoint(low, high);
+}
+
+void ApplyCurveLengthPoint(V2MainWindow& window, app::PickCandidate pick,
+    double fraction, qulonglong inputGeneration)
+{
+    auto& viewport = window.Viewport();
+    if (!viewport.PickPending() || viewport.property("inputPickGeneration").toULongLong() != inputGeneration)
+        return;
+    const auto& session = window.Session();
+    const auto& curves = session.Scene().curves;
+    const auto curve = std::find_if(curves.begin(), curves.end(), [&](const auto& entry) {
+        return entry.entityId == pick.entityId && entry.segmentId == pick.segmentId;
+    });
+    if (curve == curves.end() || !viewport.EntityShown(pick.entityId)
+        || (curve->construction && !viewport.DisplaySettingsNow().constructionVisible))
+        return;
+    const double tolerance = session.GetDocument().Snapshot().settings.tolerance.modelLinearMm;
+    const double parameter = ParameterAtLengthFraction(curve->segment, fraction, tolerance);
+    pick.curveParameter = parameter;
+    pick.hitPoint = curve->segment.Evaluate(parameter);
+    ApplyExplorerPick(viewport, pick);
+}
+
+void AddCurveLengthChoices(V2MainWindow& window, QMenu& segment, app::PickCandidate pick)
+{
+    const auto generation = window.Viewport().property("inputPickGeneration").toULongLong();
+    segment.addAction(QStringLiteral("中点"), &window, [&window, pick, generation] {
+        ApplyCurveLengthPoint(window, pick, 0.5, generation);
+    });
+    auto* position = segment.addMenu(QStringLiteral("始点からの長さ (%)"));
+    position->setObjectName(QStringLiteral("explorerCurveLengthMenu"));
+    QObject::connect(&segment, &QMenu::aboutToShow, position, [&window, position, pick, generation] {
+        auto* entry = new QWidgetAction(position);
+        auto* row = new QWidget(position);
+        auto* layout = new QHBoxLayout(row);
+        auto* percent = new QDoubleSpinBox(row);
+        percent->setObjectName(QStringLiteral("explorerCurveLengthPercent"));
+        percent->setAccessibleName(QStringLiteral("始点からの長さの割合"));
+        percent->setRange(0.0, 100.0);
+        percent->setDecimals(4);
+        percent->setSuffix(QStringLiteral(" %"));
+        percent->setValue(50.0);
+        percent->setKeyboardTracking(false);
+        auto* submit = new QPushButton(QStringLiteral("指定"), row);
+        submit->setObjectName(QStringLiteral("explorerCurvePointApply"));
+        layout->addWidget(percent);
+        layout->addWidget(submit);
+        entry->setDefaultWidget(row);
+        position->addAction(entry);
+        QObject::connect(submit, &QPushButton::clicked, position, [&window, position, percent, pick, generation] {
+            if (!percent->hasAcceptableInput()) return;
+            percent->interpretText();
+            const double fraction = percent->value() / 100.0;
+            for (auto* menu = position; menu; menu = qobject_cast<QMenu*>(menu->parentWidget()))
+                menu->close();
+            ApplyCurveLengthPoint(window, pick, fraction, generation);
+        });
+        if (auto* editor = percent->findChild<QLineEdit*>())
+            QObject::connect(editor, &QLineEdit::returnPressed, submit, &QPushButton::click);
+    }, Qt::SingleShotConnection);
 }
 
 void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
@@ -89,6 +177,7 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
         pick.curveParameter = 1;
         pick.hitPoint = curve.segment.EndPoint();
         add(*segment, QStringLiteral("終点"), pick);
+        if (viewport.PickPending()) AddCurveLengthChoices(window, *segment, pick);
         if (scene.workPlane.active && viewport.PickPending()) {
             const auto roots = geometry::IntersectCurveWithPlane(curve.segment, scene.workPlane.origin,
                 scene.workPlane.normal, tolerance);

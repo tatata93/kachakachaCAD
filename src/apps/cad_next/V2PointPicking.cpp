@@ -126,7 +126,7 @@ void V2Viewport::AcceptListedDirectionPoint(const std::optional<kachakacha::v2::
 {
     const auto screen = point ? ToScreen(*point) : std::nullopt;
     if (!screen) {
-        status_ = directionPick_->label + "作図点か、左ペインの「部分を指定」から端点・交点を選んでください。";
+        status_ = directionPick_->label + "作図点か、左ペインの「部分を指定」から線上の点を選んでください。";
         if (statusCallback_) statusCallback_(status_);
         update();
         return;

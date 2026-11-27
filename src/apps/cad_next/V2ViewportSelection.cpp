@@ -111,7 +111,7 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
             status_="点を指定しました。";if(statusCallback_)statusCallback_(status_);
             handler(*picked);RefreshCursorShape();update();return;
         }
-        status_="作図点を選ぶか、一覧の右クリックから線の端点を指定してください。";
+        status_="作図点を選ぶか、左一覧の「部分を指定」から線上の点を指定してください。";
         if(statusCallback_)statusCallback_(status_);update();return;
     }
     if(treeInput && !V2ToolSelection::Active(*this) && referencePickHandler_) {

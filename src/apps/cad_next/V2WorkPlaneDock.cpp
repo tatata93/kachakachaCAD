@@ -399,7 +399,9 @@ WorkPlaneChoice V2WorkPlaneDock::Choice() const
     choice.referencePlaneId = PlaneOf(referencePlane_);
     choice.secondPlaneId = PlaneOf(secondPlane_);
     choice.curveParameter = curveParameter_->value();
-    if (suppliedChoice_ && choice.method == WorkPlaneMethod::PointNormal) {
+    // Picked geometry keeps double precision. The spin boxes only format it;
+    // a component is replaced by its displayed value after an actual edit.
+    if (suppliedChoice_) {
         const auto preserve = [](Vector3 value, Vector3 shown, Vector3 exact) {
             return Vector3{value.x == shown.x ? exact.x : value.x,
                 value.y == shown.y ? exact.y : value.y, value.z == shown.z ? exact.z : value.z};
@@ -407,6 +409,12 @@ WorkPlaneChoice V2WorkPlaneDock::Choice() const
         choice.origin = preserve(choice.origin, displayedChoice_.origin, suppliedChoice_->origin);
         choice.normal = preserve(choice.normal, displayedChoice_.normal, suppliedChoice_->normal);
         choice.uAxis = preserve(choice.uAxis, displayedChoice_.uAxis, suppliedChoice_->uAxis);
+        for (std::size_t point = 0; point < 3; ++point) {
+            choice.threePoints[point] = preserve(choice.threePoints[point],
+                displayedChoice_.threePoints[point], suppliedChoice_->threePoints[point]);
+        }
+        choice.axisPoint = preserve(choice.axisPoint, displayedChoice_.axisPoint, suppliedChoice_->axisPoint);
+        choice.axisDirection = preserve(choice.axisDirection, displayedChoice_.axisDirection, suppliedChoice_->axisDirection);
     }
     return choice;
 }

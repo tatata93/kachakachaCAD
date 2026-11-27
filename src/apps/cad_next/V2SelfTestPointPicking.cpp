@@ -38,15 +38,18 @@ bool ClickWorld(V2Viewport& view,Vector3 point,Qt::KeyboardModifiers modifiers=Q
     const QPointF at(screen->x,screen->y);if(!view.rect().contains(at.toPoint())||view.ViewButtonAt(at))return false;
     Click(view,at,modifiers);return true;
 }
-bool Setup(V2MainWindow& w) {
+bool Setup(V2MainWindow& w,const std::array<Vector3,3>& input=points) {
     w.resize(1600,1000);QApplication::processEvents();w.RunCommand("file.new");
-    for(const auto p:points)if(w.AddPlainWire({geometry::CurveSegment::MakeLine(p,p+Vector3{7,3,2}).Value()},"点指定の入力",false).IsNil())return false;
+    for(const auto p:input)if(w.AddPlainWire({geometry::CurveSegment::MakeLine(p,p+Vector3{7,3,2}).Value()},"点指定の入力",false).IsNil())return false;
     if(!w.SaveAndReopen("point-input-source.kcd2"))return false;
     auto& v=w.Viewport();v.SetViewDirection(ViewDirection::Isometric);v.SetViewCenter({});v.SetVisibleWidthMm(150);v.SetSnapSuppressed(false);
     w.RunCommand("selection.activate");return true;
 }
-bool WorkPlaneRoles(V2MainWindow& w) {
-    if(!Setup(w))return false;w.SetWorkPlaneChooser({});w.RunCommand("workplane.create");
+bool WorkPlaneRoles(V2MainWindow& w,bool fractional=false) {
+    const std::array<Vector3,3> input=fractional?std::array<Vector3,3>{{
+        {-12,3.984861993178182,16.5},{-0.5,0.0062320222362686195,16.5},
+        {-11.5,6.797437494192961,25}}}:points;
+    if(!Setup(w,input))return false;w.SetWorkPlaneChooser({});w.RunCommand("workplane.create");
     auto* dock=w.WorkPlaneDock();if(!dock)return false;
     WorkPlaneChoice choice;choice.method=modeling::WorkPlaneMethod::ThreePoints;dock->SetChoice(choice);
     const auto source=w.Session().Scene().curves;
@@ -54,12 +57,12 @@ bool WorkPlaneRoles(V2MainWindow& w) {
         auto* button=w.findChild<QPushButton*>(QStringLiteral("workPlanePickRole%1").arg(i));
         if(!Explain("point role button is visible",button&&button->isVisible()))return false;Click(*button,button->rect().center());
         if(!Explain("point role is armed by its visible button",w.Viewport().PickPending()))return false;
-        if(!Explain("point is within the viewport",ClickWorld(w.Viewport(),points[i])))return false;
+        if(!Explain("point is within the viewport",ClickWorld(w.Viewport(),input[i])))return false;
         if(!Explain("actual viewport click completes the requested point",!w.Viewport().PickPending()))return false;
-        if(!Explain("3D reference point retains its height off the active plane",geometry::Distance(dock->Choice().threePoints[i],points[i])<1e-7))return false;
+        if(!Explain("3D reference point retains its full picked precision",geometry::Distance(dock->Choice().threePoints[i],input[i])<1e-10))return false;
     }
     const auto before=dock->Choice();auto* retake=w.findChild<QPushButton*>("workPlanePickRole1");
-    Click(*retake,retake->rect().center());const auto replacement=points[1]+Vector3{7,3,2};
+    Click(*retake,retake->rect().center());const auto replacement=input[1]+Vector3{7,3,2};
     if(!ClickWorld(w.Viewport(),replacement))return false;
     const auto after=dock->Choice();
     if(!Explain("retaking one point preserves the other two points",after.threePoints[0]==before.threePoints[0]
@@ -69,10 +72,20 @@ bool WorkPlaneRoles(V2MainWindow& w) {
     if(!Explain(("plane create button is enabled: "+dock->NeedsText().toStdString()).c_str(),create&&create->isEnabled()))return false;
     Click(*create,create->rect().center());
     if(!Explain("three actual point clicks create one plane",CountOfKind(w,domain::EntityKind::WorkPlane)==4))return false;
+    const auto& plane=w.Viewport().WorkPlane();
+    for(const auto p:after.threePoints)if(!Explain("the constructed plane passes through every picked point",
+        std::abs(geometry::Dot(p-plane.origin,plane.normal))<1e-9))return false;
     for(const auto& c:source){const auto at=std::find_if(w.Session().Scene().curves.begin(),w.Session().Scene().curves.end(),[&](const auto& x){return x.segmentId==c.segmentId;});
         if(!Explain("point selection does not change source wire geometry",at!=w.Session().Scene().curves.end()&&at->segment.StartPoint()==c.segment.StartPoint()&&at->segment.EndPoint()==c.segment.EndPoint()))return false;}
+    const auto planeId=w.ActiveWorkPlaneId();
     w.RunCommand("edit.undo");if(CountOfKind(w,domain::EntityKind::WorkPlane)!=3)return false;w.RunCommand("edit.redo");
-    return w.SaveAndReopen("three-picked-points.kcd2")&&CountOfKind(w,domain::EntityKind::WorkPlane)==4;
+    if(!w.SaveAndReopen("three-picked-points.kcd2")||CountOfKind(w,domain::EntityKind::WorkPlane)!=4)return false;
+    const auto restored=w.WorkPlaneFrameOf(planeId);
+    if(!restored)return false;
+    return Explain("reopened plane still contains the original exact picked points",
+        std::all_of(after.threePoints.begin(),after.threePoints.end(),[&](const auto p){
+            return std::abs(geometry::Dot(p-restored->origin,restored->normal))<1e-9;
+        }));
 }
 bool GenericPointInputs(V2MainWindow& w) {
     if(!Setup(w))return false;auto& v=w.Viewport();
@@ -437,7 +450,8 @@ bool SharedZoomedCrossings(V2MainWindow& w)
 }
 }
 std::vector<SelfTestCase> PointPickingCases(){std::vector<SelfTestCase> cases{
-    {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",WorkPlaneRoles},
+    {"HP-POINT-WP actual three-point role clicks preserve 3D source geometry",[](auto& w){return WorkPlaneRoles(w);}},
+    {"HP-POINT-WP fractional curve endpoints keep full precision through plane creation",[](auto& w){return WorkPlaneRoles(w,true);}},
     {"HP-POINT-INPUT point requests override tools and reject undefined plane hits",GenericPointInputs},
     {"HP-POINT-SNAP 3D intersection midpoint hover and request transitions",SnapAndTransitions},
     {"HP-POINT-ARC draw from a nearby arc crossing on an offset work plane",ArcCrossingDrawing},

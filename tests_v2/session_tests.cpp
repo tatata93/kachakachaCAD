@@ -32,6 +32,9 @@ using kachakacha::v2::test::RequireNear;
 
 namespace {
 
+static_assert(std::is_same_v<decltype(std::declval<DrawingSession&>().SetSnapCandidateFilter(
+    std::function<bool(const kachakacha::v2::modeling::SnapCandidate&)>{})), void>);
+
 void RequireCount(std::size_t actual, std::size_t expected, const std::string& why)
 {
     RequireEqual(std::to_string(actual), std::to_string(expected), why);

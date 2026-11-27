@@ -1163,6 +1163,25 @@ public:
 
 ## 17. 変更手続き
 
+### 2026-11-27 有限曲線と作図面の交点・点入力の明示対象
+
+統合担当の限定変更（WP-04→WP-08）。既存signatureは保持し、次を追加する。
+`geometry::IntersectCurveWithPlane(curve, origin, normal, tolerance) -> vector<CurvePoint>`
+は有限区間[0,1]内の実交点をパラメータ順に返す。位置は元曲線のEvaluate値で、
+平面への投影や無限延長で代用しない。平面内の曲線/区間は無数の交点として列挙せず、
+既存の端点・最近点入力を維持する。接する根、負方向円弧、Bスプラインの各区間も対象。
+`SnapKind::WorkPlaneIntersection`をenum末尾に追加し、既存値を維持する。
+順位は実交点と同じ、出所は曲線のEntityId/SegmentId、番号は交点のパラメータ順とする。
+作図面の変更時は既存SetSceneと同じく持越しを捨てる。保存enumは増やさない。
+
+`app::DrawingSession::SetSnapCandidateFilter(function<bool(const SnapCandidate&)>)`
+は生成済み候補へ適用する入力時限定の指定である。曲線を収集前に除去して交点の相手を
+失わない。空なら従来動作。明示対象なしに別の線や自由点へ代替せず、Hover/PeekHover/
+Clickで同じ候補・拘束・下見を使う。指定の変更/解除、場面/ツール/設定の変更、取消と
+スナップ抑止で持越しを捨てる。UIはポインタが候補位置から離れたときにも解除する。
+旧呼出の移行は不要。compileとコア回帰はsession_tests、交点はintersection_points_tests、
+スナップはsnap_tests、3Dでの候補送りと実点入力はHP-POINTで確認する。
+
 この公開契約を変える必要がある場合:
 
 1. 影響WPと試験IDを列挙する。

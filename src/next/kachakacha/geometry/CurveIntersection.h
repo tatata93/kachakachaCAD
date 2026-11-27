@@ -11,11 +11,17 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/ScreenMapping.h"
+#include "kachakacha/geometry/CurveSampling.h"
 
 #include <optional>
 #include <vector>
 
 namespace kachakacha::v2::geometry {
+
+//! Finite curve/plane roots in parameter order. Coplanar intervals are not enumerated.
+//! Returned positions are Evaluate(parameter), never projected onto the plane.
+[[nodiscard]] std::vector<CurvePoint> IntersectCurveWithPlane(const CurveSegment& curve,
+    const Vector3& planeOrigin, const Vector3& planeNormal, const GeometryTolerance& tolerance);
 
 struct CurveIntersection {
     Vector3 position{};        //!< 2曲線の最近点の中点

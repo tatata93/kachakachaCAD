@@ -132,6 +132,9 @@ public:
     //! 次の Hover まで待つと、Hover が無いまま離したときに古い吸着先が残る。
     void SetSnapSettings(SnapSettings settings);
     void SetSnapEntityFilter(std::function<bool(base::EntityId)> filter) { snapEntityFilter_=std::move(filter);snapHysteresis_.Reset(); }
+    //! Explicit input target, applied after collecting intersections from all visible curves.
+    //! Empty restores normal snapping; no candidate means no point while restricted.
+    void SetSnapCandidateFilter(std::function<bool(const SnapCandidate&)> filter);
 
     //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束と、直角スナップ)。
     //!

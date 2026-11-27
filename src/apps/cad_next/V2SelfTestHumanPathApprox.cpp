@@ -23,6 +23,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include <QApplication>
 #include <QPointF>
@@ -37,9 +38,12 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QDynamicPropertyChangeEvent>
+#include <QElapsedTimer>
 
 #include <cstddef>
 #include <cmath>
+#include <cstdio>
 #include <string>
 #include <variant>
 #include <vector>
@@ -600,6 +604,83 @@ using kachakacha::v2::domain::EntityKind;
     return CountOfKind(window, EntityKind::GuideSurface) == 1;
 }
 
+class ApproxJobCounter final : public QObject {
+public:
+    ApproxJobCounter() { qApp->installEventFilter(this); }
+    ~ApproxJobCounter() override { qApp->removeEventFilter(this); }
+    int count = 0;
+    bool eventFilter(QObject* object, QEvent* event) override {
+        if (object == qApp && event->type() == QEvent::DynamicPropertyChange
+            && static_cast<QDynamicPropertyChangeEvent*>(event)->propertyName() == "geometryJobActive"
+            && qApp->property("geometryJobActive").toBool()) ++count;
+        return false;
+    }
+};
+
+[[nodiscard]] bool CaseIdenticalApproxCandidates(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!MakeLegacyOutputFixture(window)) return false;
+    auto& dock = window.FabricationDock();
+    dock.SetAutomaticBoundaries(true); dock.SetManualBoundariesText({});
+    window.RunCommand("fabrication.create");
+    auto* one = window.findChild<QPushButton*>("fabricationOnePiece");
+    if (!Explain("one-piece command is visible in the active approximation tool", one && one->isVisible())) return false;
+    kachakacha::v2::io::DocumentFile original;
+    original.snapshot = window.Session().GetDocument().Snapshot();
+    const auto before = kachakacha::v2::io::WriteDocumentJson(original);
+    ApproxJobCounter jobs;
+    QElapsedTimer timer; timer.start();
+    one->click();
+    const int first = jobs.count;
+    std::fprintf(stderr, "approx batch identical jobs=%d elapsed_ms=%.3f\n", first, timer.nsecsElapsed()/1e6);
+    const auto outcomes = window.ApproxOutcomes();
+    if (outcomes.size() != 3 || !outcomes[1].available || !outcomes[2].available) return false;
+    if (!Explain("identical B and C retain the same available result and error",
+        outcomes[1].partCount == outcomes[2].partCount
+        && outcomes[1].maximumDeviationMm == outcomes[2].maximumDeviationMm
+        && outcomes[1].reachedTolerance == outcomes[2].reachedTolerance)) return false;
+    if (!dock.ClickCandidate(1)) return false;
+    const auto preview = window.Viewport().ToolPreview();
+    if (!dock.ClickCandidate(2) || !Explain("both identical candidates retain the same preview without recalculation",
+        preview == window.Viewport().ToolPreview() && jobs.count == first)) return false;
+    timer.restart(); jobs.count = 0;
+    dock.SetEqualPartCount(2);
+    const int distinct = jobs.count;
+    std::fprintf(stderr, "approx batch distinct jobs=%d elapsed_ms=%.3f\n", distinct, timer.nsecsElapsed()/1e6);
+    timer.restart(); jobs.count = 0;
+    one->click();
+    const int repeated = jobs.count;
+    std::fprintf(stderr, "approx batch identical-again jobs=%d elapsed_ms=%.3f\n", repeated, timer.nsecsElapsed()/1e6);
+    jobs.count = 0;
+    dock.SetMaximumPartCount(2);
+    const int sameShapeDifferentDefinition = jobs.count;
+    if (!Explain("different limits keep distinct definitions even when both results have one panel",
+        window.ApproxOutcomes()[1].partCount == 1 && window.ApproxOutcomes()[2].partCount == 1
+        && sameShapeDifferentDefinition == 3)) return false;
+    kachakacha::v2::io::DocumentFile after;
+    after.snapshot = window.Session().GetDocument().Snapshot();
+    if (!Explain("candidate comparison never modifies source definitions",
+        kachakacha::v2::io::WriteDocumentJson(after) == before)) return false;
+    if (!Explain("only fully identical definitions share one evaluation within each batch",
+        first == 2 && distinct == 3 && repeated == 2)) return false;
+    if (!dock.ClickCandidate(2) || !window.HandleToolKey(Qt::Key_Return, nullptr)
+        || window.FabricationModelCount() != 1) return false;
+    const auto& features = window.Session().GetDocument().Snapshot().features;
+    const auto saved = std::find_if(features.begin(), features.end(), [](const auto& feature) {
+        return std::holds_alternative<kachakacha::v2::domain::CreateFabricationModelDefinition>(feature.definition);
+    });
+    if (saved == features.end()) return false;
+    const auto definition = std::get<kachakacha::v2::domain::CreateFabricationModelDefinition>(saved->definition);
+    if (!Explain("selected C keeps its own one-piece definition", definition.method == 1
+        && definition.maximumPartCount == 1 && definition.equalPartCount == 1 && !definition.splitAtCorners)) return false;
+    window.RunCommand("edit.undo");
+    if (window.FabricationModelCount() != 0) return false;
+    window.RunCommand("edit.redo");
+    return window.SaveAndReopen("approx-identical-candidates.kcd2")
+        && window.FabricationModelCount() == 1 && window.FabricationPanelCount() == 1;
+}
+
 [[nodiscard]] bool CaseLegacyOnePieceAllOutputs(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -726,6 +807,7 @@ using kachakacha::v2::domain::EntityKind;
 std::vector<SelfTestCase> HumanPathApproxCases()
 {
     return {
+        {"HP-AP-REUSE identical batch candidates keep independent controls results and persistence", CaseIdenticalApproxCandidates},
         {"HP-AP-AUDIT worker round trip retains all material fields", CasePreparedMaterialRoundTrip},
         {"HP-AP-AUDIT legacy auto one-piece all poses and output formats", CaseLegacyOnePieceAllOutputs},
         {"HP-AP-AUDIT Escape Enter restarts preview before confirming", CaseCancelEnterRestarts},

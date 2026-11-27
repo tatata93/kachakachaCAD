@@ -32,6 +32,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include <QString>
 
@@ -74,7 +75,7 @@ kachakacha::v2::domain::CreateFabricationModelDefinition V2MainWindow::ApproxBas
     return definition;
 }
 
-//! 3通りを実際に作って比べる。**見積もりではない。**同じ backend を3回回す。
+//! 3候補を同じbackendで比較する。同一定義はこのbatch内だけで結果を共有する。
 void V2MainWindow::EvaluateApproxCandidates()
 {
     approxOutcomes_.clear();
@@ -93,10 +94,30 @@ void V2MainWindow::EvaluateApproxCandidates()
     const auto sources=FabricationSourcesFor(base.parts,base.splitSolidFaces);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    std::vector<std::string> definitionKeys;
+    definitionKeys.reserve(specs.size());
     for (std::size_t index = 0; index < specs.size(); ++index) {
         const auto definition = kachakacha::v2::app::ApproxCandidateDefinition(base,
             static_cast<int>(index));
         approxDefinitions_[index] = definition;
+        // Compare the complete stored definition, including expressions and future
+        // fields. A matching part count or similar geometry is not equivalence.
+        // Sources and tolerance are immutable for this batch; nothing survives it.
+        kachakacha::v2::io::DocumentFile keyFile;
+        kachakacha::v2::domain::Feature keyFeature;
+        keyFeature.type = kachakacha::v2::domain::FeatureType::CreateFabricationModel;
+        keyFeature.definition = definition;
+        keyFile.snapshot.features.push_back(std::move(keyFeature));
+        const auto key = kachakacha::v2::io::WriteDocumentJson(keyFile);
+        const auto same = std::find(definitionKeys.begin(), definitionKeys.end(), key);
+        if (same != definitionKeys.end()) {
+            const auto previous = static_cast<std::size_t>(same - definitionKeys.begin());
+            approxOutcomes_[index] = approxOutcomes_[previous];
+            approxEvaluations_[index] = approxEvaluations_[previous];
+            definitionKeys.push_back(key);
+            continue;
+        }
+        definitionKeys.push_back(key);
         auto& outcome = approxOutcomes_[index];
         outcome.evaluated = true;
         if (sources.empty()) {

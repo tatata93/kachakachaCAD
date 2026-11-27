@@ -59,7 +59,7 @@ struct LineStyle {
 //! 型紙の曲線を折れ線にする。直線は両端、曲線は 48 分割。
 //! 型紙は XY 平面に置いてあるので、z は見ない。
 [[nodiscard]] QPolygonF PolylineOf(const kachakacha::v2::geometry::CurveSegment& segment,
-    const PatternFit& fit)
+    const PatternFit& fit, double pageHeightMm)
 {
     const int steps =
         segment.Kind() == kachakacha::v2::geometry::CurveKind::Line ? 1 : 48;
@@ -67,7 +67,8 @@ struct LineStyle {
     for (int index = 0; index <= steps; ++index) {
         const auto point = segment.Evaluate(static_cast<double>(index)
             / static_cast<double>(steps));
-        const Point2 screen = fit.ToScreen(Point2{point.x, point.y});
+        // Pattern Y points up from the bottom of the page, as it does in SVG/PDF export.
+        const Point2 screen = fit.ToScreen(Point2{point.x, pageHeightMm - point.y});
         polygon << QPointF(screen.u, screen.v);
     }
     return polygon;
@@ -118,7 +119,7 @@ void V2PatternView::paintEvent(QPaintEvent* /*event*/)
         const LineStyle style = StyleFor(curve.layer);
         painter.setPen(QPen(style.color, style.widthPx, style.style, Qt::RoundCap,
             Qt::RoundJoin));
-        const QPolygonF polygon = PolylineOf(curve.segment, fit);
+        const QPolygonF polygon = PolylineOf(curve.segment, fit, page_.heightMm);
         if (polygon.size() >= 2) {
             painter.drawPolyline(polygon);
         }

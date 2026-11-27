@@ -5,6 +5,7 @@
 #include "V2ExportDock.h"
 #include "V2OperationPanelHost.h"
 #include "V2OutputPreview.h"
+#include "V2PatternDock.h"
 #include "V2FabricationMaterial.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -14,8 +15,11 @@
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/view/PatternView.h"
+#include <QColor>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QImage>
 #include "kachakacha/kernel/OcctTessellate.h"
 #include <QString>
 #include <QPointF>
@@ -33,6 +37,8 @@
 #include <QSize>
 #include <QToolButton>
 #include <cmath>
+#include <optional>
+#include <string>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QScopeGuard>
@@ -44,6 +50,48 @@
 namespace kachakacha::v2::selftest {
 std::vector<SelfTestCase> OutputMergeCases();
 namespace {
+bool PatternPreviewPrintCoordinates(V2MainWindow&)
+{
+    using geometry::CurveSegment;
+    using geometry::Point2;
+    using geometry::Vector3;
+    exporters::PatternPage page;
+    const Vector3 points[]{{18, 22, 0}, {43, 24, 0}, {26, 37, 0}};
+    for (int i = 0; i < 3; ++i) {
+        const auto line = CurveSegment::MakeLine(points[i], points[(i + 1) % 3]);
+        if (!line.HasValue()) return false;
+        page.curves.push_back({exporters::PatternLine::Outline, line.Value(), false, {}, std::nullopt});
+    }
+    const auto svg = exporters::WritePatternSvg(page, "Asymmetric pattern");
+    if (!Explain("SVG lays the asymmetric contour out in print coordinates",
+            svg.HasValue() && svg.Value().find("M 18,275 L 43,273") != std::string::npos)) return false;
+
+    V2PatternView preview(nullptr);
+    preview.resize(420, 480);
+    preview.SetPage(page);
+    QImage image(preview.size(), QImage::Format_RGB32);
+    preview.render(&image);
+    const auto fit = view::FitPatternPage(page.widthMm, page.heightMm, preview.width(), preview.height(), 14.0);
+    const auto hasInkNear = [&](Point2 point) {
+        const int u = static_cast<int>(std::lround(point.u));
+        const int v = static_cast<int>(std::lround(point.v));
+        for (int y = v - 2; y <= v + 2; ++y) {
+            for (int x = u - 2; x <= u + 2; ++x) {
+                if (image.pixelColor(x, y).red() < 120) return true;
+            }
+        }
+        return false;
+    };
+    for (const auto& curve : page.curves) {
+        const auto middle = curve.segment.Evaluate(0.5);
+        const auto printed = fit.ToScreen({middle.x, page.heightMm - middle.y});
+        const auto reversed = fit.ToScreen({middle.x, middle.y});
+        if (!Explain("each preview edge occupies the same sheet position as SVG",
+                hasInkNear(printed) && !hasInkNear(reversed))) return false;
+    }
+    return true;
+}
+
 bool DrawOutputRectangle(V2MainWindow& window,double visibleWidth=200) {
     auto& viewport=window.Viewport();viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetViewCenter({});viewport.SetVisibleWidthMm(visibleWidth);
@@ -615,5 +663,7 @@ bool FormatCommandResolvesCompatibleSelection(V2MainWindow&)
         &&missing.State().target==app::ExportTarget::VisibleParts);
 }
 }
-std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{{"HP-OUT-20 compact native boundary remains reusable as one wire",CompactNativeBoundaryOutput},{"HP-OUT-19 explicit export format survives count refresh",FormatSurvivesCountRefresh},{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
+std::vector<SelfTestCase> OutputCases(){auto cases=std::vector<SelfTestCase>{
+    {"HP-OUT-21 pattern preview matches paper SVG coordinates", PatternPreviewPrintCoordinates},
+    {"HP-OUT-20 compact native boundary remains reusable as one wire",CompactNativeBoundaryOutput},{"HP-OUT-19 explicit export format survives count refresh",FormatSurvivesCountRefresh},{"HP-OUT-18 format command resolves compatible explicit selection",FormatCommandResolvesCompatibleSelection},{"HP-OUT-15 native copy retains pickable edges after reopen",FrozenCopyKeepsPickableEdges},{"HP-OUT-13 visible output respects hidden ancestors",VisibleOutputHonorsAncestors},{"HP-OUT-14 explicit hidden wire and solid selection remains exportable",ExplicitHiddenOutput},{"HP-OUT-12 wire-only independent copy preserves existing shapes",WireCopyKeepsExistingShapes},{"HP-OUT-11 small STEP uses model accuracy",SmallAccurateStep},{"HP-OUT-10 selected fabrication patterns exclude other panels",SelectedPatternPanels},{"HP-OUT-09 same revision different document rejects stale export",OutputAcrossDocuments},{"HP-OUT-08 prepared output reuse and format changes",OutputPreviewReuse},{"HP-OUT-07 output snapshot and placement ownership",CaseOutputOwnership},{"HP-OUT-06 面と点の選択部分出力",CaseOutputSubelements},{"HP-OUT-04 近似の指定部材と生成配置の取消",CaseOutputManufacturing},{"HP-OUT-05 3D選択と選び直し",CaseOutputSelectionRecovery},{"HP-OUT-01 選択先行と道具先行の出力・3Dプレビュー・混在形式",CaseSelectedOutput},{"HP-OUT-02 同一と別KCDの配置・BRep保存・Undo再生成",CaseOutputPlacement},{"HP-OUT-03 不正な配置を拒否し元文書を保持",CaseOutputPlacementInvalid}};const auto merge=OutputMergeCases();cases.insert(cases.end(),merge.begin(),merge.end());return cases;}
 }

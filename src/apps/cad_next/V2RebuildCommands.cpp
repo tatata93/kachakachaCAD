@@ -78,52 +78,60 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
         && guideShapes_.count(definition->profiles.front().ToString()) != 0) {
         return RebuildSurfaceExtrude(*definition, output, ordinal);
     }
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    ExtrudeRequest request=SavedExtrudeRequest(*definition,ExtrudeProfilesFor(definition->profiles,definition->profileSeeds));
-    if (request.profiles.empty()) {
-        return false;
-    }
-    // 足す・引くも作り直す。作り直さないと、開いたときだけ足し引きが消えて
-    // 別の立体が2つ並ぶ。相手は定義が覚えている立体である。
-    kachakacha::v2::modeling::KernelShapeHandle booleanTarget;
-    if (request.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
-        if (definition->targets.empty()) {
+    // Independent jobs have already resolved and validated their immutable source profiles.
+    const bool takeBeforeProfiles = V2DocumentOpen::IsWorker()
+        && !qEnvironmentVariableIsSet("KACHACAD_OPEN_RECHECK_EXTRUDE_PROFILE");
+    auto result = takeBeforeProfiles ? V2ExtrudeBuildJobs::Take(*this,feature.id) : std::nullopt;
+    if (!result) {
+        const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+        ExtrudeRequest request=SavedExtrudeRequest(*definition,ExtrudeProfilesFor(definition->profiles,definition->profileSeeds));
+        if (request.profiles.empty()) {
             return false;
         }
-        const auto found = partShapes_.find(definition->targets.front().ToString());
-        if (found == partShapes_.end()) {
-            return false;   // 相手がまだ出来ていない。作り直せない。
-        }
-        booleanTarget = found->second;
-        request.hasSelectedPart = true;
-    }
-    const auto built = [&]() {
-        if(auto ready=V2ExtrudeBuildJobs::Take(*this,feature.id))return std::move(*ready);
-        if (request.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget || definition->endCap.Planar()) {
-            kachakacha::v2::app::ExtrudeChoice choice;
-            choice.customDirection = definition->direction;
-            choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-            choice.extent = request.extent;
-            choice.distanceMm = request.distanceMm; choice.secondDistanceMm = request.secondDistanceMm;
-            RestoreExtrudeReference(choice, *definition);
-            if (!choice.targetEntityId.has_value() && !definition->targets.empty()) choice.targetEntityId = definition->targets.back();
-            auto result = BuildToTarget(choice, request.profiles);
-            if (result.HasValue() && request.hasSelectedPart && result.Value().parts.size() == 1) {
-                const auto operation = request.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart
-                    ? kachakacha::v2::kernel::BooleanOperation::Union : kachakacha::v2::kernel::BooleanOperation::Difference;
-                const auto combined = kachakacha::v2::kernel::BuildBoolean(operation, booleanTarget,
-                    result.Value().parts[0].handle, tolerance.modelLinearMm);
-                if (!combined.HasValue()) return decltype(result)::Failure(combined.Diagnostics());
-                auto updated = result.Value();
-                updated.parts[0].handle = combined.Value().handle;
-                result = decltype(result)::Success(std::move(updated));
+        // 足す・引くも作り直す。相手は定義が覚えている立体である。
+        kachakacha::v2::modeling::KernelShapeHandle booleanTarget;
+        if (request.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
+            if (definition->targets.empty()) {
+                return false;
             }
-            return result;
+            const auto found = partShapes_.find(definition->targets.front().ToString());
+            if (found == partShapes_.end()) {
+                return false;
+            }
+            booleanTarget = found->second;
+            request.hasSelectedPart = true;
         }
-        const auto analysis = AnalyzeExtrudeRequest(request, tolerance);
-        if (!analysis.HasValue()) return kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult>::Failure(analysis.Diagnostics());
-        return kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(), tolerance, booleanTarget);
-    }();
+        result = [&]() {
+            if (!takeBeforeProfiles) {
+                if (auto ready=V2ExtrudeBuildJobs::Take(*this,feature.id)) return std::move(*ready);
+            }
+            if (request.extent == kachakacha::v2::modeling::ExtrudeExtentMode::ToTarget || definition->endCap.Planar()) {
+                kachakacha::v2::app::ExtrudeChoice choice;
+                choice.customDirection = definition->direction;
+                choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
+                choice.extent = request.extent;
+                choice.distanceMm = request.distanceMm; choice.secondDistanceMm = request.secondDistanceMm;
+                RestoreExtrudeReference(choice, *definition);
+                if (!choice.targetEntityId.has_value() && !definition->targets.empty()) choice.targetEntityId = definition->targets.back();
+                auto targeted = BuildToTarget(choice, request.profiles);
+                if (targeted.HasValue() && request.hasSelectedPart && targeted.Value().parts.size() == 1) {
+                    const auto operation = request.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart
+                        ? kachakacha::v2::kernel::BooleanOperation::Union : kachakacha::v2::kernel::BooleanOperation::Difference;
+                    const auto combined = kachakacha::v2::kernel::BuildBoolean(operation, booleanTarget,
+                        targeted.Value().parts[0].handle, tolerance.modelLinearMm);
+                    if (!combined.HasValue()) return decltype(targeted)::Failure(combined.Diagnostics());
+                    auto updated = targeted.Value();
+                    updated.parts[0].handle = combined.Value().handle;
+                    targeted = decltype(targeted)::Success(std::move(updated));
+                }
+                return targeted;
+            }
+            const auto analysis = AnalyzeExtrudeRequest(request, tolerance);
+            if (!analysis.HasValue()) return kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult>::Failure(analysis.Diagnostics());
+            return kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(), tolerance, booleanTarget);
+        }();
+    }
+    const auto& built = *result;
     // 同じ定義の押し出しが並ぶとき(1 回で N 個できた部品)は、作った順の番号の立体を取る。
     // 先頭だけを取ると、2 個目以降が 1 個目の写しになる。数が合わなければ作り直せない。
     if (!built.HasValue() || ordinal >= built.Value().parts.size()) {

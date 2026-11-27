@@ -18,13 +18,81 @@
 #include <QSaveFile>
 #include <QThread>
 #include <QString>
+#include <array>
 #include <future>
 #include <iostream>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 using namespace kachakacha::v2;
+
+namespace {
+
+using NativeShapes = std::map<std::string, modeling::KernelShapeHandle>;
+using NativeBytes = std::map<std::string, std::string>;
+using ShapeCapture = base::Result<std::string>;
+using CaptureResult = base::Result<bool>;
+
+CaptureResult TransferShape(const document::Document& document, const NativeShapes::value_type& entry,
+    const ShapeCapture& shape, NativeBytes& target)
+{
+    if (shape.HasValue()) {
+        target.emplace(entry.first, shape.Value());
+        return CaptureResult::Success(true);
+    }
+    auto diagnostics = shape.Diagnostics();
+    const auto id = base::EntityId::Parse(entry.first);
+    const auto* entity = id ? document.FindEntity(*id) : nullptr;
+    for (auto& diagnostic : diagnostics) {
+        diagnostic.summaryJa = (entity ? entity->displayName : entry.first) + ": " + diagnostic.summaryJa;
+        diagnostic.detailsJa += " (" + entry.first + ")";
+    }
+    return CaptureResult::Failure(std::move(diagnostics));
+}
+
+CaptureResult CaptureNativeShapes(const document::Document& document, const NativeShapes& source,
+    NativeBytes& target, bool parallel)
+{
+    if (!parallel || source.size() < 64) {
+        for (const auto& entry : source) {
+            const auto written = TransferShape(document, entry, kernel::CaptureTransferShape(entry.second), target);
+            if (!written.HasValue()) return written;
+        }
+        return CaptureResult::Success(true);
+    }
+
+    std::vector<const NativeShapes::value_type*> entries;
+    entries.reserve(source.size());
+    for (const auto& entry : source) entries.push_back(&entry);
+    std::vector<std::optional<ShapeCapture>> captures(entries.size());
+    constexpr std::size_t lanes = 3;
+    const auto capture = [&](std::size_t lane) {
+        for (auto i = lane; i < entries.size(); i += lanes)
+            captures[i].emplace(kernel::CaptureTransferShape(entries[i]->second));
+    };
+    // The rebuild has finished. Each lane only reads native shapes and writes its own result slots.
+    std::array<std::future<void>, lanes - 1> workers;
+    for (std::size_t lane = 1; lane < lanes; ++lane) {
+        try { workers[lane - 1] = std::async(std::launch::async, capture, lane); }
+        catch (const std::system_error&) { capture(lane); }
+    }
+    capture(0);
+    for (auto& worker : workers) if (worker.valid()) worker.get();
+    // Commit in the original order so a failed shape reports the same entity as serial capture.
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        const auto written = TransferShape(document, *entries[i], *captures[i], target);
+        if (!written.HasValue()) return written;
+        captures[i].reset();
+    }
+    return CaptureResult::Success(true);
+}
+
+} // namespace
+
 bool V2DocumentOpen::IsWorker(){return QCoreApplication::instance()&&QCoreApplication::instance()->property("documentRebuildWorker").toBool();}
 void V2DocumentOpen::Progress(int completed,int total,const std::string& name) {
     if(!IsWorker())return;
@@ -35,21 +103,12 @@ base::Result<std::unique_ptr<V2PreparedDocument>> V2DocumentOpen::Capture(V2Main
     V2DocumentTiming timing("capture");
     using Captured=base::Result<std::unique_ptr<V2PreparedDocument>>;
     auto result=std::make_unique<V2PreparedDocument>();auto& data=*result;data.archive=std::move(archive);
-    const auto capture=[&w](const auto& source,auto& target)->base::Result<bool>{
-        for(const auto& entry:source){const auto shape=kernel::CaptureTransferShape(entry.second);
-            if(!shape.HasValue()){
-                auto diagnostics=shape.Diagnostics();const auto id=base::EntityId::Parse(entry.first);
-                const auto* entity=id?w.Session().GetDocument().FindEntity(*id):nullptr;
-                for(auto& diagnostic:diagnostics){
-                    diagnostic.summaryJa=(entity?entity->displayName:entry.first)+": "+diagnostic.summaryJa;
-                    diagnostic.detailsJa+=" ("+entry.first+")";
-                }
-                return base::Result<bool>::Failure(std::move(diagnostics));
-            }
-            target[entry.first]=shape.Value();}
-        return base::Result<bool>::Success(true);
-    };
-    const auto parts=capture(w.partShapes_,data.parts),guides=capture(w.guideShapes_,data.guides);
+    const bool parallel = IsWorker() && QThread::idealThreadCount() >= 6
+        && !qEnvironmentVariableIsSet("KACHACAD_OPEN_SERIAL")
+        && !qEnvironmentVariableIsSet("KACHACAD_NATIVE_CAPTURE_SERIAL");
+    const auto& document = w.Session().GetDocument();
+    const auto parts = CaptureNativeShapes(document, w.partShapes_, data.parts, parallel);
+    const auto guides = CaptureNativeShapes(document, w.guideShapes_, data.guides, parallel);
     timing.Mark("serialize-native");
     if(!parts.HasValue())return Captured::Failure(parts.Diagnostics());
     if(!guides.HasValue())return Captured::Failure(guides.Diagnostics());

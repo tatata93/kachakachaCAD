@@ -156,6 +156,26 @@ KACHA_V2_TEST(exportSvg, 同じ入力からは同じ文字列が出る)
     }
 }
 
+KACHA_V2_TEST(exportSvg, 同じ出力座標に丸まる直線を除く)
+{
+    PatternPage page = SamplePage();
+    const auto reference = WritePatternSvg(page, "型紙");
+    page.curves.insert(page.curves.begin(),
+        {PatternLine::Outline, Line({10.00002, 10, 0}, {10, 10, 0}), false, ""});
+    page.curves.push_back(
+        {PatternLine::Annotation, Line({20, 30, 0}, {20, 30.00001, 0}), false, ""});
+    const auto cleaned = WritePatternSvg(page, "型紙");
+    Require(reference.HasValue() && cleaned.HasValue(), "書き出せること");
+    Require(cleaned.Value() == reference.Value(), "実寸、レイヤー、ほかの曲線を保つ");
+
+    page.curves.push_back(
+        {PatternLine::Cut, Line({30.00004, 10, 0}, {30.00006, 10, 0}), false, ""});
+    const auto visible = WritePatternSvg(page, "型紙");
+    Require(visible.HasValue(), "書き出せること");
+    Require(visible.Value().find("M 30,287 L 30.0001,287") != std::string::npos,
+        "短くても丸め後の端点が異なる線は保持する");
+}
+
 KACHA_V2_TEST(exportSvg, 型紙の面に無い線を断る)
 {
     PatternPage page;

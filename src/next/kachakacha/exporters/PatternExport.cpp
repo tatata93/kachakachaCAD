@@ -79,11 +79,18 @@ std::string XmlText(const std::string& value)
 
 [[nodiscard]] std::string SvgPathFor(const CurveSegment& segment, double pageHeight)
 {
-    std::string path = "M " + SvgPoint(segment.StartPoint(), pageHeight);
+    const std::string start = SvgPoint(segment.StartPoint(), pageHeight);
+    std::string path = "M " + start;
     switch (segment.Kind()) {
-    case CurveKind::Line:
-        path += " L " + SvgPoint(segment.EndPoint(), pageHeight);
+    case CurveKind::Line: {
+        const std::string end = SvgPoint(segment.EndPoint(), pageHeight);
+        // Both ends occupy the same SVG coordinate after rounding.
+        if (start == end) {
+            return {};
+        }
+        path += " L " + end;
         break;
+    }
     case CurveKind::CircularArc: {
         // SVG の円弧コマンド。折れ線へ落とさない。
         const double radius = segment.Radius();
@@ -244,13 +251,17 @@ Result<std::string> WritePatternSvg(const PatternPage& page, const std::string& 
             if (curve.layer != layer) {
                 continue;
             }
+            const std::string path = SvgPathFor(curve.segment, page.heightMm);
+            if (path.empty()) {
+                continue;
+            }
             if (!opened) {
                 svg += "  <g id=\"" + std::string(PatternLineLayerName(layer))
                     + "\" inkscape:label=\"" + std::string(PatternLineLayerName(layer))
                     + "\" inkscape:groupmode=\"layer\">\n";
                 opened = true;
             }
-            svg += "    <path d=\"" + SvgPathFor(curve.segment, page.heightMm) + "\" style=\""
+            svg += "    <path d=\"" + path + "\" style=\""
                 + SvgStyleFor(layer, curve.mountainFold) + "\"";
             if (!curve.label.empty()) {
                 svg += " data-label=\"" + XmlText(curve.label) + "\"";

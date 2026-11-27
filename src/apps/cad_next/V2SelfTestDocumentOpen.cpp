@@ -242,9 +242,42 @@ bool TriangleTransferFormat(const QTemporaryDir& folder) {
         !ReadPreparedDocument(output,token,[&]{++pulses;return false;}).HasValue() && pulses==1);
 }
 
+bool CachePayloadToken(const QTemporaryDir& folder)
+{
+    const std::string source="cache payload identity fixture";
+    V2PreparedDocument data;
+    data.archive="same cache contents";
+    const auto cold=folder.filePath("worker-cache-example.bin");
+    const auto warm=folder.filePath("worker-cache-reopen.bin");
+    const auto key=V2DocumentCache::Key(source);
+    if(!WritePreparedDocument(cold,"initial-worker",data,V2PreparedFile::WorkerReply))return false;
+    if(!Explain("cache rejects the wrong initial worker identity",
+            !V2DocumentCache::StoreTransfer(source,cold,"different-worker")))return false;
+    if(!V2DocumentCache::StoreTransfer(source,cold,"initial-worker"))return false;
+    const auto manifestPath=folder.filePath(key+".json");
+    QFile manifest(manifestPath);
+    if(!manifest.open(QIODevice::ReadOnly))return false;
+    auto info=QJsonDocument::fromJson(manifest.readAll()).object();
+    manifest.close();
+    if(!Explain("stored cache survives closing the original worker's lifetime",
+            QFile::remove(cold)&&V2DocumentCache::Transfer(source,warm,"new-worker")))return false;
+    const auto restored=ReadPreparedDocument(warm,"new-worker",[]{return true;});
+    if(!Explain("transferred cached payload uses the current worker identity",
+            restored.HasValue()&&restored.Value()->archive==data.archive
+            &&!ReadPreparedDocument(warm,"initial-worker",[]{return true;}).HasValue()))return false;
+    info["payloadToken"]="incorrect-token";
+    if(!manifest.open(QIODevice::WriteOnly|QIODevice::Truncate))return false;
+    const auto forged=QJsonDocument(info).toJson(QJsonDocument::Compact);
+    const bool wrote=manifest.write(forged)==forged.size();
+    manifest.close();
+    return Explain("matching cache digest with a wrong payload identity is rejected",
+        wrote&&!V2DocumentCache::HasMatchingPayload(source)&&!V2DocumentCache::Read(source)
+        &&!V2DocumentCache::Transfer(source,warm,"wrong-cache"));
+}
+
 bool TransferValidation(V2MainWindow& w) {
     CacheScope scope;if(!scope.folder.isValid())return false;
-    if(!TriangleTransferFormat(scope.folder))return false;
+    if(!TriangleTransferFormat(scope.folder)||!CachePayloadToken(scope.folder))return false;
     V2PreparedDocument data;data.archive=std::string(3*1024*1024,'x');
     const auto path=scope.folder.filePath("source.bin"),copy=scope.folder.filePath("copy.bin");
     if(!WritePreparedDocument(path,"source",data)||!CopyPreparedDocument(path,"source",copy,"destination"))return false;
@@ -291,9 +324,11 @@ bool TransferValidation(V2MainWindow& w) {
     const auto key=V2DocumentCache::Key(bytes.Value());const auto cachePath=scope.folder.filePath(key+".bin");
     QFile poisoned(cachePath);if(!poisoned.open(QIODevice::ReadWrite)||!poisoned.resize(poisoned.size()-1))return false;
     poisoned.seek(0);const auto content=poisoned.readAll();poisoned.close();
-    QFile manifest(scope.folder.filePath(key+".json"));if(!manifest.open(QIODevice::WriteOnly))return false;
-    const QJsonObject info{{"key",key},{"size",double(content.size())},
-        {"sha256",QString::fromLatin1(QCryptographicHash::hash(content,QCryptographicHash::Sha256).toHex())}};
+    QFile manifest(scope.folder.filePath(key+".json"));if(!manifest.open(QIODevice::ReadOnly))return false;
+    auto info=QJsonDocument::fromJson(manifest.readAll()).object();manifest.close();
+    if(info.value("key").toString()!=key||!manifest.open(QIODevice::WriteOnly|QIODevice::Truncate))return false;
+    info["size"]=double(content.size());
+    info["sha256"]=QString::fromLatin1(QCryptographicHash::hash(content,QCryptographicHash::Sha256).toHex());
     manifest.write(QJsonDocument(info).toJson());manifest.close();
     if(!Explain("matching SHA cannot legitimize malformed cache fields",!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
     if(!w.OpenDocumentFile(model))return false;

@@ -19,6 +19,7 @@
 
 #include <array>
 #include <atomic>
+#include <filesystem>
 #include <future>
 #include <system_error>
 #include <vector>
@@ -93,11 +94,12 @@ void Prune(const QDir& dir) {
         QFile::remove(dir.filePath(file.completeBaseName()+".features.json"));
     }
 }
-bool WriteManifest(const QDir& dir,const QString& key,const QString& path) {
+bool WriteManifest(const QDir& dir,const QString& key,const QString& path,const QString& payloadToken) {
     const auto size=QFileInfo(path).size();
     if(size<=0||size>entryLimit){QFile::remove(path);return false;}
     const auto digest=DigestFile(path);if(digest.isEmpty())return false;
-    const QJsonObject info{{"key",key},{"size",double(size)},{"sha256",QString::fromLatin1(digest)}};
+    QJsonObject info{{"key",key},{"size",double(size)},{"sha256",QString::fromLatin1(digest)}};
+    if(payloadToken!=key)info.insert("payloadToken",payloadToken);
     const auto bytes=QJsonDocument(info).toJson(QJsonDocument::Compact);
     QSaveFile manifest(dir.filePath(key+".json"));
     const bool ok=manifest.open(QIODevice::WriteOnly)&&manifest.write(bytes)==bytes.size()&&manifest.commit();
@@ -142,31 +144,63 @@ bool ValidateNativeShapes(const V2PreparedDocument& data)
     }
     return valid.load(std::memory_order_relaxed);
 }
+
+struct CachePayload {
+    QString path;
+    QString token;
+};
+
+std::optional<CachePayload> MatchingPayload(const QString& key)
+{
+    if(!OwnedName(key+".bin"))return std::nullopt;
+    const QDir dir(Root());
+    const auto path=dir.filePath(key+".bin");
+    QFile manifest(dir.filePath(key+".json"));
+    if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return std::nullopt;
+    const auto info=QJsonDocument::fromJson(manifest.readAll()).object();
+    const auto size=QFileInfo(path).size();
+    const auto storedToken=info.value("payloadToken");
+    const auto token=storedToken.isUndefined()?key:storedToken.toString();
+    if(token.isEmpty()||token.size()>256||info.value("key").toString()!=key||size<=0||size>entryLimit
+        ||info.value("size").toDouble()!=size||info.value("sha256").toString().toLatin1()!=DigestFile(path))
+        return std::nullopt;
+    return CachePayload{path,token};
+}
+
+std::optional<V2PreparedDocument> ReadPayload(const CachePayload& payload)
+{
+    auto restored=ReadPreparedDocument(payload.path,payload.token,[]{return true;});
+    if(!restored.HasValue())return std::nullopt;
+    return std::move(*restored.Value());
+}
+
+bool LinkCompletedTransfer(const QString& source, const QString& destination, const QString& token)
+{
+    if(qEnvironmentVariableIsSet("KACHACAD_FORCE_COPY_DOCUMENT_CACHE"))return false;
+    const QFileInfo original(source), target(destination);
+    const auto size=original.size();
+    if(size<=0||size>entryLimit||original.isSymLink()||!original.isFile()||target.exists()
+        ||token.size()>256||!PreparedDocumentHasToken(source,token))return false;
+    std::error_code error;
+    // The job closes its output before publishing the link. The digest
+    // and full shape validation still gate any later use of this cache.
+    std::filesystem::create_hard_link(original.filesystemAbsoluteFilePath(),
+        target.filesystemAbsoluteFilePath(),error);
+    return !error;
+}
 }
 QString Key(const std::string& source) {
     const auto binary=BinaryIdentity();if(binary.isEmpty())return {};
     QCryptographicHash hash(QCryptographicHash::Sha256);hash.addData("prepared-cache-v1");hash.addData(binary);
     hash.addData(QByteArray::fromStdString(source));return QString::fromLatin1(hash.result().toHex());
 }
-static bool HasMatchingKey(const QString& key) {
-    if(!OwnedName(key+".bin"))return false;
-    const QDir dir(Root());
-    const auto path=dir.filePath(key+".bin");
-    QFile manifest(dir.filePath(key+".json"));
-    if(!manifest.open(QIODevice::ReadOnly)||manifest.size()>4096)return false;
-    const auto info=QJsonDocument::fromJson(manifest.readAll()).object();
-    const auto size=QFileInfo(path).size();
-    if(info.value("key").toString()!=key||size<=0||size>entryLimit||info.value("size").toDouble()!=size
-        ||info.value("sha256").toString().toLatin1()!=DigestFile(path))return false;
-    return true;
+bool HasMatchingPayload(const std::string& source) {
+    const auto payload=MatchingPayload(Key(source));
+    return payload&&PreparedDocumentHasToken(payload->path,payload->token);
 }
-bool HasMatchingPayload(const std::string& source) { return HasMatchingKey(Key(source)); }
 std::optional<V2PreparedDocument> ReadKey(const QString& key) {
-    if(!HasMatchingKey(key))return std::nullopt;
-    const auto path=QDir(Root()).filePath(key+".bin");
-    auto restored=ReadPreparedDocument(path,key,[]{return true;});
-    if(!restored.HasValue())return std::nullopt;
-    return std::move(*restored.Value());
+    const auto payload=MatchingPayload(key);
+    return payload?ReadPayload(*payload):std::nullopt;
 }
 std::optional<V2PreparedDocument> Read(const std::string& source) { return ReadKey(Key(source)); }
 std::vector<FeatureIndex> FeatureIndexes() {
@@ -192,24 +226,31 @@ bool Write(const std::string& source,V2PreparedDocument& data) {
     const auto key=Key(source);if(key.isEmpty())return false;
     const auto path=dir.filePath(key+".bin");
     if(!WritePreparedDocument(path,key,data))return false;
-    return WriteManifest(dir,key,path);
+    return WriteManifest(dir,key,path,key);
 }
 bool Transfer(const std::string& source,const QString& destination,const QString& token) {
     // Retain full semantic validation, including malformed data with a matching manifest hash.
-    const auto data=Read(source);if(!data)return false;
     V2DocumentTiming timing("cache-restore");
+    const auto payload=MatchingPayload(Key(source));if(!payload)return false;
+    timing.Mark("verify-cache");
+    const auto data=ReadPayload(*payload);if(!data)return false;
+    timing.Mark("read-cache");
     const bool valid = ValidateNativeShapes(*data);
     timing.Mark("validate-native");
     if (!valid) return false;
-    const auto key=Key(source);
-    return CopyPreparedDocument(QDir(Root()).filePath(key+".bin"),key,destination,token,
+    return CopyPreparedDocument(payload->path,payload->token,destination,token,
         [] { return true; }, V2PreparedFile::WorkerReply);
 }
 bool StoreTransfer(const std::string& source,const QString& transfer,const QString& token) {
     const QDir dir(Root());if(!QDir().mkpath(dir.absolutePath()))return false;
     const auto key=Key(source);if(key.isEmpty())return false;
     const auto path=dir.filePath(key+".bin");
-    if(!CopyPreparedDocument(transfer,token,path,key))return false;
-    return WriteManifest(dir,key,path);
+    V2DocumentTiming timing("cache-store");
+    const bool linked=LinkCompletedTransfer(transfer,path,token);
+    if(!linked&&!CopyPreparedDocument(transfer,token,path,key))return false;
+    timing.Mark(linked?"link-payload":"copy-payload");
+    const bool saved=WriteManifest(dir,key,path,linked?token:key);
+    timing.Mark("publish-manifest");
+    return saved;
 }
 }

@@ -226,6 +226,27 @@ bool WithPreparedOutput(const QString& path, V2PreparedFile kind, Fill&& fill)
     timing.Mark("finish");
     return committed;
 }
+
+bool ReadPreparedHeader(Archive& reader, const QString& token)
+{
+    std::string magic, identity;
+    int version = 0;
+    reader.Values(magic, version, identity);
+    return magic == "kachakacha-prepared-document" && version == 4 && identity == token.toStdString();
+}
+}
+
+bool PreparedDocumentHasToken(const QString& path, const QString& token)
+{
+    if (token.isEmpty()) return false;
+    try {
+        QFile input(path);
+        if (!input.open(QIODevice::ReadOnly) || input.size() > 1024LL * 1024 * 1024) return false;
+        Archive reader(&input, true);
+        return ReadPreparedHeader(reader, token) && !input.atEnd();
+    } catch (...) {
+        return false;
+    }
 }
 
 bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
@@ -235,11 +256,12 @@ bool CopyPreparedDocument(const QString& source,const QString& sourceToken,
         if(source==destination||sourceToken.isEmpty()||destinationToken.isEmpty())return false;
         QFile input(source);
         if(!input.open(QIODevice::ReadOnly)||input.size()>1024LL*1024*1024)return false;
-        Archive reader(&input,true,pulse);std::string magic,id;int version=0;
-        reader.Values(magic,version,id);
-        if(magic!="kachakacha-prepared-document"||version!=4||id!=sourceToken.toStdString()||input.atEnd())return false;
+        Archive reader(&input,true,pulse);
+        if(!ReadPreparedHeader(reader,sourceToken)||input.atEnd())return false;
         return WithPreparedOutput(destination, file, [&](QIODevice& output) {
-            Archive writer(&output,false);id=destinationToken.toStdString();writer.Values(magic,version,id);
+            Archive writer(&output,false);
+            std::string magic="kachakacha-prepared-document",id=destinationToken.toStdString();
+            int version=4;writer.Values(magic,version,id);
             while(!input.atEnd()) {
                 if(!pulse())return false;
                 const auto bytes=input.read(1024*1024);
@@ -263,8 +285,8 @@ kachakacha::v2::base::Result<std::unique_ptr<V2PreparedDocument>> ReadPreparedDo
     using Result=base::Result<std::unique_ptr<V2PreparedDocument>>;
     try {
         QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>1024LL*1024*1024)throw std::runtime_error("Cannot read calculation result");
-        Archive stream(&file,true,pulse);std::string magic,id;int version=0;stream.Values(magic,version,id);
-        if(magic!="kachakacha-prepared-document"||version!=4||id!=token.toStdString())throw std::runtime_error("Calculation result identity mismatch");
+        Archive stream(&file,true,pulse);
+        if(!ReadPreparedHeader(stream,token))throw std::runtime_error("Calculation result identity mismatch");
         auto data=std::make_unique<V2PreparedDocument>();stream.Values(*data);stream.Check();if(!file.atEnd())throw std::runtime_error("Unexpected result tail");
         return Result::Success(std::move(data));
     }catch(const std::exception& e) {

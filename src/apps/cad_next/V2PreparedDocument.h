@@ -24,6 +24,7 @@ enum class V2PreparedFile { Durable, WorkerReply };
 
 bool WritePreparedDocument(const QString& path, const QString& token, V2PreparedDocument& data,
     V2PreparedFile file = V2PreparedFile::Durable);
+bool PreparedDocumentHasToken(const QString& path, const QString& token);
 // Copy an already validated/just-written payload, replacing only its transfer identity.
 // Consumers must still use ReadPreparedDocument to validate all fields before adoption.
 bool CopyPreparedDocument(const QString& source, const QString& sourceToken,

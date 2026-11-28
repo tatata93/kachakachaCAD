@@ -18,6 +18,7 @@
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/geometry/CurveIntersection.h"
 
+#include "V2NumericSpinBox.h"
 #include <QAction>
 #include <QApplication>
 #include <QDoubleSpinBox>
@@ -120,7 +121,7 @@ void AddCurveLengthChoices(V2MainWindow& window, QMenu& segment, app::PickCandid
         auto* entry = new QWidgetAction(position);
         auto* row = new QWidget(position);
         auto* layout = new QHBoxLayout(row);
-        auto* percent = new QDoubleSpinBox(row);
+        auto* percent = new V2NumericSpinBox(row);
         percent->setObjectName(QStringLiteral("explorerCurveLengthPercent"));
         percent->setAccessibleName(QStringLiteral("始点からの長さの割合"));
         percent->setRange(0.0, 100.0);

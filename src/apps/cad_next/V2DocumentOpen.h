@@ -11,7 +11,8 @@ class V2DocumentOpen final:public QObject {
 public:
     static bool Open(V2MainWindow& window,const QString& path);
     static bool Adopt(V2MainWindow& window,kachakacha::v2::document::DocumentSnapshot snapshot,
-        const std::function<void()>& install={});
+        const std::function<void()>& install={},
+        const kachakacha::v2::io::JsonValue* uiState=nullptr);
     static kachakacha::v2::io::DocumentFile FileForSave(V2MainWindow& window);
     static int Worker(const QString& directory);
     static void CacheSaved(V2MainWindow& window, const std::string& archive);

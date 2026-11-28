@@ -77,7 +77,7 @@ V2ArrayDock::V2ArrayDock(QWidget* parent)
     layout->addWidget(MakePanelSectionTitle(body, QStringLiteral("設定")));
     auto* form = new QFormLayout();
     layout->addLayout(form);
-    count_ = new QSpinBox(body);
+    count_ = new V2IntegerSpinBox(body);
     count_->setRange(2, 200);
     count_->setValue(5);
     count_->setToolTip(QStringLiteral("元のものを含めた数です。5 なら元 + 写し4つ。"));

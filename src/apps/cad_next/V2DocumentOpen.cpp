@@ -2,6 +2,7 @@
 #include "V2ToolSelection.h"
 #include "V2DocumentTiming.h"
 #include "V2GeometryJob.h"
+#include "V2GridDock.h"
 #include "V2MainWindow.h"
 #include "V2PatternDock.h"
 #include "kachakacha/app/GeometryJobDiagnostic.h"
@@ -11,6 +12,7 @@
 #include "kachakacha/kernel/OcctOutput.h"
 #include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include <QAbstractButton>
 #include <QObject>
 #include <QFileInfo>
 #include <QString>
@@ -19,6 +21,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <future>
 #include <map>
 #include <memory>
@@ -34,6 +37,110 @@ using Shapes=std::map<std::string,modeling::KernelShapeHandle>;
 using NativeTransfers = std::map<std::string, std::string>;
 using ShapeResult = base::Result<modeling::KernelShapeHandle>;
 using RestoreResult = base::Result<bool>;
+
+constexpr char kDocumentGridKey[] = "kachakacha.grid";
+
+const io::JsonValue* DocumentGrid(const io::JsonValue* state)
+{
+    const auto* extensions = state ? state->Find("extensions") : nullptr;
+    return extensions ? extensions->Find(kDocumentGridKey) : nullptr;
+}
+
+void StoreGrid(io::JsonValue& state, const V2GridChoice& choice, base::EntityId plane, bool gridOnTop)
+{
+    using J = io::JsonValue;
+    if (!state.IsObject()) state = J::Object({});
+    auto& extensions = state.MutableObject()["extensions"];
+    if (!extensions.IsObject()) extensions = J::Object({});
+    auto& grid = extensions.MutableObject()[kDocumentGridKey];
+    if (!grid.IsObject()) grid = J::Object({});
+    const io::JsonObject fields{
+        {"visible", J::Bool(choice.grid.visible)},
+        {"showInAllModes", J::Bool(choice.showInAllModes)},
+        {"dimOffPlane", J::Bool(choice.dimOffPlaneLines)},
+        {"workPlaneVisible", J::Bool(choice.workPlaneVisible)},
+        {"shapesVisible", J::Bool(choice.shapesVisible)},
+        {"gridOnTop", J::Bool(gridOnTop)},
+        {"spacingMm", J::Number(choice.grid.majorSpacingMm)},
+        {"subdivision", J::Number(choice.grid.subdivision)},
+        {"originUmm", J::Number(choice.grid.originUmm)},
+        {"originVmm", J::Number(choice.grid.originVmm)},
+        {"angleDegrees", J::Number(choice.grid.angleDegrees)},
+        {"surfaceGridMode", J::Number(choice.surfaceGridMode)},
+        {"workPlaneId", J::String(plane.ToString())},
+        {"majorColor", J::String(choice.majorColor.name(QColor::HexArgb).toStdString())},
+        {"minorColor", J::String(choice.minorColor.name(QColor::HexArgb).toStdString())},
+        {"backgroundColor", J::String(choice.backgroundColor.name(QColor::HexArgb).toStdString())},
+    };
+    for (const auto& [name, value] : fields) grid.MutableObject()[name] = value;
+}
+
+bool GridFlag(const io::JsonValue* saved, const char* key, bool fallback)
+{
+    const auto* value = saved ? saved->Find(key) : nullptr;
+    return value && value->Type() == io::JsonType::Bool ? value->AsBool() : fallback;
+}
+
+V2GridChoice RestoreGrid(const V2MainWindow& window, const io::JsonValue* saved)
+{
+    const auto palette = window.Theme() == UiTheme::Windows95 ? ViewportPalette::Win95() : ViewportPalette::Dark();
+    auto choice = window.CurrentGridChoice();
+    choice.grid = {};
+    choice.grid.subdivision = 2;
+    choice.showInAllModes = true;
+    choice.dimOffPlaneLines = true;
+    choice.workPlaneVisible = true;
+    choice.shapesVisible = true;
+    choice.surfaceGridMode = 1;
+    choice.majorColor = palette.gridMajor;
+    choice.minorColor = palette.gridMinor;
+    choice.backgroundColor = palette.background;
+    if (!saved || !saved->IsObject()) return choice;
+
+    const auto number = [&](const char* key, double fallback) {
+        const auto* value = saved->Find(key);
+        return value && value->Type() == io::JsonType::Number && std::isfinite(value->AsNumber())
+            ? value->AsNumber() : fallback;
+    };
+    const auto color = [&](const char* key, const QColor& fallback) {
+        const auto* value = saved->Find(key);
+        const QColor parsed(value && value->Type() == io::JsonType::String
+            ? QString::fromStdString(value->AsString()) : QString());
+        return parsed.isValid() ? parsed : fallback;
+    };
+    choice.grid.visible = GridFlag(saved, "visible", choice.grid.visible);
+    choice.showInAllModes = GridFlag(saved, "showInAllModes", choice.showInAllModes);
+    choice.dimOffPlaneLines = GridFlag(saved, "dimOffPlane", choice.dimOffPlaneLines);
+    choice.workPlaneVisible = GridFlag(saved, "workPlaneVisible", choice.workPlaneVisible);
+    choice.shapesVisible = GridFlag(saved, "shapesVisible", choice.shapesVisible);
+    const double spacing = number("spacingMm", choice.grid.majorSpacingMm);
+    if (spacing > 0.0) choice.grid.majorSpacingMm = spacing;
+    const double subdivision = number("subdivision", choice.grid.subdivision);
+    if (subdivision == 0 || subdivision == 2 || subdivision == 3 || subdivision == 4)
+        choice.grid.subdivision = static_cast<int>(subdivision);
+    choice.grid.originUmm = number("originUmm", choice.grid.originUmm);
+    choice.grid.originVmm = number("originVmm", choice.grid.originVmm);
+    choice.grid.angleDegrees = number("angleDegrees", choice.grid.angleDegrees);
+    const double surfaceMode = number("surfaceGridMode", choice.surfaceGridMode);
+    if (surfaceMode == 0 || surfaceMode == 1 || surfaceMode == 2)
+        choice.surfaceGridMode = static_cast<int>(surfaceMode);
+    choice.majorColor = color("majorColor", choice.majorColor);
+    choice.minorColor = color("minorColor", choice.minorColor);
+    choice.backgroundColor = color("backgroundColor", choice.backgroundColor);
+    return choice;
+}
+
+bool SameGrid(const V2GridChoice& a, const V2GridChoice& b)
+{
+    return a.grid.visible == b.grid.visible && a.showInAllModes == b.showInAllModes
+        && a.dimOffPlaneLines == b.dimOffPlaneLines && a.workPlaneVisible == b.workPlaneVisible
+        && a.shapesVisible == b.shapesVisible
+        && a.grid.majorSpacingMm == b.grid.majorSpacingMm && a.grid.subdivision == b.grid.subdivision
+        && a.grid.originUmm == b.grid.originUmm && a.grid.originVmm == b.grid.originVmm
+        && a.grid.angleDegrees == b.grid.angleDegrees && a.surfaceGridMode == b.surfaceGridMode
+        && a.majorColor == b.majorColor && a.minorColor == b.minorColor
+        && a.backgroundColor == b.backgroundColor;
+}
 
 RestoreResult CancelledRestore()
 {
@@ -150,9 +257,18 @@ V2DocumentOpen* V2DocumentOpen::State(V2MainWindow& window,bool create) {
 }
 kachakacha::v2::io::DocumentFile V2DocumentOpen::FileForSave(V2MainWindow& window) {
     const auto* state=State(window,false);auto file=state?state->extras_:kachakacha::v2::io::DocumentFile{};
-    file.snapshot=window.session_->GetDocument().Snapshot();return file;
+    file.snapshot=window.session_->GetDocument().Snapshot();
+    const auto choice = window.CurrentGridChoice();
+    const auto defaultPlane = app::OriginPlaneId(file.snapshot, modeling::StandardPlaneKind::XY);
+    const auto* onTopControl = window.findChild<QAbstractButton*>(QStringLiteral("quickGridOnTop"));
+    const bool onTop = !onTopControl || onTopControl->isChecked();
+    if (DocumentGrid(&file.uiState) || (defaultPlane && window.activeWorkPlaneId_ != *defaultPlane)
+        || !onTop || !SameGrid(choice, RestoreGrid(window, nullptr)))
+        StoreGrid(file.uiState, choice, window.activeWorkPlaneId_, onTop);
+    return file;
 }
-bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSnapshot snapshot,const std::function<void()>& install) {
+bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSnapshot snapshot,
+    const std::function<void()>& install, const kachakacha::v2::io::JsonValue* uiState) {
     using namespace kachakacha::v2;
     V2DocumentTiming timing("adopt");
     const auto problems=w.session_->GetDocument().ResetTo(std::move(snapshot));
@@ -178,7 +294,28 @@ bool V2DocumentOpen::Adopt(V2MainWindow& w,kachakacha::v2::document::DocumentSna
     // A private rebuild worker has no visible explorer, ribbon or viewport.
     // Geometry, derived wires and source scene were installed above; defer only
     // their presentation to the visible process that adopts the transfer.
-    if(!IsWorker())w.AdoptCurrentDocument(bool(install));timing.Mark("adopt-ui");
+    if (!IsWorker()) {
+        const auto* savedGrid = DocumentGrid(uiState);
+        const auto* savedPlane = savedGrid ? savedGrid->Find("workPlaneId") : nullptr;
+        const auto id = savedPlane && savedPlane->Type() == io::JsonType::String
+            ? base::EntityId::Parse(savedPlane->AsString()) : std::nullopt;
+        const auto frame = id ? w.WorkPlaneFrameOf(*id) : std::nullopt;
+        if (frame) {
+            w.ApplyWorkPlane(*frame, *id);
+        } else {
+            const auto top = app::OriginPlaneId(w.session_->GetDocument().Snapshot(),modeling::StandardPlaneKind::XY);
+            if (top) w.ApplyWorkPlane(modeling::StandardPlane(modeling::StandardPlaneKind::XY), *top);
+        }
+        const auto grid = RestoreGrid(w, savedGrid);
+        w.ApplyGridChoice(grid);
+        const bool onTop = GridFlag(savedGrid, "gridOnTop", true);
+        if (auto* control = w.findChild<QAbstractButton*>(QStringLiteral("quickGridOnTop")))
+            control->setChecked(onTop);
+        w.viewport_->SetGridOnTop(onTop);
+        w.gridDock_->SetChoice(w.CurrentGridChoice(), true);
+        w.AdoptCurrentDocument(bool(install));
+    }
+    timing.Mark("adopt-ui");
     if(!IsWorker()){w.RefreshWorkPlaneDock();w.viewport_->update();}
     timing.Mark("refresh-docks");return true;
 }
@@ -225,7 +362,7 @@ bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
         }
         w.rebuildProblems_.clear();Release(oldParts,oldGuides);
         w.RefreshGuideTable();w.RefreshFabricationView();
-    }))return false;
+    }, &prepared.file.uiState))return false;
     prepared.file.snapshot={};State(w,true)->extras_=std::move(prepared.file);
     w.documentPath_=path;V2ToolSelection::Caption(w,path);w.SetStatus(QStringLiteral("%1 を開きました。").arg(path));timing.Mark("complete");return true;
 }

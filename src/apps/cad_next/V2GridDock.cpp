@@ -238,7 +238,7 @@ bool V2GridDock::ApplySpacingExpression(const QString& expression)
     if (spacing_->text() != expression) spacing_->setText(expression);
     // 式は core が読む。読めなければ、その場で理由を出して当てない(黙って前の値にしない)。
     const auto evaluated = kachakacha::v2::geometry::EvaluateExpression(
-        expression.toStdString(), kachakacha::v2::geometry::QuantityKind::Length);
+        NormalizeV2NumericText(expression).toStdString(), kachakacha::v2::geometry::QuantityKind::Length);
     if (!evaluated.HasValue()) {
         message_->setText(QStringLiteral("主点間隔: %1")
                 .arg(QString::fromStdString(evaluated.FirstSummaryJa())));
@@ -291,14 +291,15 @@ V2GridChoice V2GridDock::Choice() const
     return choice;
 }
 
-void V2GridDock::SetChoice(const V2GridChoice& choice)
+void V2GridDock::SetChoice(const V2GridChoice& choice, bool documentChanged)
 {
     loading_ = true;
     visible_->setChecked(choice.grid.visible);
     const bool sameSpacing = spacingMm_ == choice.grid.majorSpacingMm;
     spacingMm_ = choice.grid.majorSpacingMm;
     // View-only sync must preserve the expression and caret, including unfinished input.
-    if (!sameSpacing) spacing_->setText(choice.spacingExpression.isEmpty()
+    if (documentChanged) message_->clear();
+    if (documentChanged || !sameSpacing) spacing_->setText(choice.spacingExpression.isEmpty()
             ? QString::number(choice.grid.majorSpacingMm)
             : choice.spacingExpression);
     spacingValue_->setText(QStringLiteral("= %1 mm").arg(spacingMm_, 0, 'f', 3));

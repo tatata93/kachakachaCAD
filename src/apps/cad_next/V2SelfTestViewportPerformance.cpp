@@ -2,10 +2,12 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2GridDock.h"
+#include "V2NumericSpinBox.h"
 #include "V2OperationPanelHost.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/modeling/GridModel.h"
 #include "kachakacha/app/OriginPlanes.h"
+#include "kachakacha/io/DocumentFile.h"
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -16,6 +18,7 @@
 #include <QJsonObject>
 #include <QEventLoop>
 #include <QTimer>
+#include <QTemporaryDir>
 #include <QWidget>
 #include <QPixmap>
 #include <QVariant>
@@ -196,6 +199,126 @@ bool PersistentGridControls(V2MainWindow&) {
     Shot(window,"grid-optional-settings-open");close->click();QApplication::processEvents();
     Shot(window,"grid-optional-settings-closed");return PendingActionsFit(window);
 }
+bool GridSettingsByDocument(V2MainWindow&) {
+    V2MainWindow window;
+    QTemporaryDir files;
+    if (!files.isValid()) return false;
+    const auto first = files.filePath("first.kcd2");
+    const auto second = files.filePath("second.kcd2");
+    const auto legacy = files.filePath("no-ui-state.kcd2");
+    const auto corrupt = files.filePath("bad.kcd2");
+    auto fileChoice = first;
+    window.SetPathChooser([&](bool saving) { return saving ? fileChoice : QString(); });
+    const auto defaults = window.CurrentGridChoice();
+    const auto front = app::OriginPlaneId(window.Session().GetDocument().Snapshot(),
+        modeling::StandardPlaneKind::ZX);
+    if (!front) return false;
+    window.Viewport().SetSelection(app::SelectionSet{{*front}});
+    window.RunCommand("workplane.set_active");
+    if (window.ActiveWorkPlaneId() != *front) return false;
+    auto* onTop = window.findChild<QToolButton*>(QStringLiteral("quickGridOnTop"));
+    if (!onTop) return false;
+    onTop->setChecked(false);
+    auto a = defaults;
+    a.grid.visible = false;
+    a.grid.majorSpacingMm = 1.25;
+    a.grid.subdivision = 4;
+    a.grid.originUmm = -1.5;
+    a.grid.originVmm = 2.75;
+    a.grid.angleDegrees = 27;
+    a.showInAllModes = false;
+    a.surfaceGridMode = 0;
+    a.dimOffPlaneLines = false;
+    a.workPlaneVisible = false;
+    a.majorColor = QColor(12, 28, 35, 167);
+    window.ApplyGridChoice(a);
+    window.RunCommand("file.save_as");
+    window.RunCommand("file.new");
+    auto b = defaults;
+    b.grid.majorSpacingMm = 3.5;
+    b.minorColor = QColor(50, 70, 95, 221);
+    window.ApplyGridChoice(b);
+    fileChoice = second;
+    window.RunCommand("file.save_as");
+
+    const auto same = [](const V2GridChoice& current, const V2GridChoice& wanted) {
+        return current.grid.visible == wanted.grid.visible
+            && current.grid.majorSpacingMm == wanted.grid.majorSpacingMm
+            && current.grid.subdivision == wanted.grid.subdivision
+            && std::abs(current.grid.originUmm - wanted.grid.originUmm) < 1e-8
+            && std::abs(current.grid.originVmm - wanted.grid.originVmm) < 1e-8
+            && current.grid.angleDegrees == wanted.grid.angleDegrees
+            && current.showInAllModes == wanted.showInAllModes
+            && current.surfaceGridMode == wanted.surfaceGridMode
+            && current.dimOffPlaneLines == wanted.dimOffPlaneLines
+            && current.workPlaneVisible == wanted.workPlaneVisible
+            && current.majorColor == wanted.majorColor
+            && current.minorColor == wanted.minorColor;
+    };
+    V2MainWindow reopened;
+    auto* reopenedOnTop = reopened.findChild<QToolButton*>(QStringLiteral("quickGridOnTop"));
+    if (!reopenedOnTop) return false;
+    if (!Explain("second document restores its own grid", reopened.OpenDocumentFile(second)
+            && same(reopened.CurrentGridChoice(), b) && reopenedOnTop->isChecked())) return false;
+    if (!Explain("first document restores hidden grid and retains snapping", reopened.OpenDocumentFile(first)
+            && same(reopened.CurrentGridChoice(), a) && reopened.ActiveWorkPlaneId() == *front
+            && !reopenedOnTop->isChecked() && reopened.Session().Scene().grid.visible)) return false;
+
+    kachakacha::v2::io::DocumentFile classic;
+    classic.snapshot = window.Session().GetDocument().Snapshot();
+    const auto saved = kachakacha::v2::io::SaveDocument(classic);
+    QFile f(legacy);
+    if (!saved.HasValue() || !f.open(QIODevice::WriteOnly)
+        || f.write(saved.Value().data(), saved.Value().size()) != static_cast<qint64>(saved.Value().size())) return false;
+    f.close();
+    if (!Explain("older document opens with default grid", reopened.OpenDocumentFile(legacy)
+            && same(reopened.CurrentGridChoice(), defaults) && reopenedOnTop->isChecked())) return false;
+    if (!Explain("failed open keeps current grid", !reopened.OpenDocumentFile(corrupt)
+            && same(reopened.CurrentGridChoice(), defaults))) return false;
+    reopened.SetPathChooser([](bool) { return QString(); });
+    reopened.RunCommand("file.save_as");
+    return Explain("cancelled save keeps current grid", same(reopened.CurrentGridChoice(), defaults));
+}
+
+bool FlexibleNumericInput(V2MainWindow& window) {
+    V2NumericSpinBox number(&window, V2NumericSpinBox::Precision::ExtrudeLength);
+    number.setRange(-100, 100);
+    number.setSuffix(QStringLiteral(" mm"));
+    auto* editor = number.findChild<QLineEdit*>();
+    if (!editor) return false;
+    for (const auto& example : {QStringLiteral(".5"), QStringLiteral("　０．５　"),
+            QStringLiteral("0.5 mm"), QStringLiteral("  .5 mm  mm")}) {
+        number.setValue(9);
+        editor->setText(example);
+        if (!Explain("a short or pasted length is acceptable", number.hasAcceptableInput())) return false;
+        number.interpretText();
+        if (!Explain("formatted edit commits exactly once", number.value() == .5
+                && number.text() == QStringLiteral("0.5 mm"))) return false;
+    }
+    editor->setText(QStringLiteral("０．２００４９７６５１ mm"));
+    number.interpretText();
+    if (!Explain("nine decimal places survive", std::abs(number.value() - .200497651) < 1e-12)) return false;
+    editor->setText(QStringLiteral("5 cm"));
+    if (!Explain("wrong unit is rejected", !number.hasAcceptableInput())) return false;
+    number.interpretText();
+    if (!Explain("wrong unit preserves the value", std::abs(number.value() - .200497651) < 1e-12)) return false;
+    editor->setText(QStringLiteral("−．"));
+    if (!Explain("incomplete minus and decimal preserve the value", !number.hasAcceptableInput()
+            && std::abs(number.value() - .200497651) < 1e-12)) return false;
+    V2IntegerSpinBox count(&window);
+    count.setRange(1, 99);
+    count.setSuffix(QStringLiteral(" 等分"));
+    auto* countEditor = count.findChild<QLineEdit*>();
+    if (!countEditor) return false;
+    countEditor->selectAll();
+    countEditor->insert(QStringLiteral("　１２　"));
+    count.interpretText();
+    if (!Explain("integer fields accept full-width pasted digits", count.value() == 12)) return false;
+    countEditor->setText(QStringLiteral("1.5"));
+    count.interpretText();
+    return Explain("integer fields never reinterpret a fraction", count.value() == 12);
+}
+
 bool GridProjectionReuse(V2MainWindow& window) {
     window.RunCommand("file.new");auto& view=window.Viewport();
     auto choice=window.CurrentGridChoice();choice.grid.visible=true;choice.showInAllModes=true;

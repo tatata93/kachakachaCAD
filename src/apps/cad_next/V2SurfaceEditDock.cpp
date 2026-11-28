@@ -187,7 +187,7 @@ void V2SurfaceEditDock::BuildOptions(QVBoxLayout* layout)
     isoDirection_->addItem(QStringLiteral("U 方向の線"));
     isoDirection_->addItem(QStringLiteral("V 方向の線"));
     isoDirection_->addItem(QStringLiteral("両方"));
-    isoCount_ = new QSpinBox(widget());
+    isoCount_ = new V2IntegerSpinBox(widget());
     isoCount_->setRange(1, 50);
     isoCount_->setSuffix(QStringLiteral(" 本"));
     isoRow->addWidget(isoDirection_);

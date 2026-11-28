@@ -103,7 +103,7 @@ V2CurvePointsTool::V2CurvePointsTool(V2MainWindow& window):QWidget(&window),wind
     layout->addWidget(new QLabel(QStringLiteral("② 並べ方"),this));
     mode_=new QComboBox(this);mode_->setObjectName("curvePointsMode");mode_->addItems({QStringLiteral("間隔を指定"),QStringLiteral("等分する数を指定")});layout->addWidget(mode_);
     pitch_=new V2NumericSpinBox(this);pitch_->setObjectName("curvePointsPitch");pitch_->setRange(0.001,100000);pitch_->setDecimals(3);pitch_->setSuffix(QStringLiteral(" mm 間隔"));pitch_->setValue(2);layout->addWidget(pitch_);
-    divisions_=new QSpinBox(this);divisions_->setObjectName("curvePointsDivisions");divisions_->setRange(1,999);divisions_->setSuffix(QStringLiteral(" 等分"));divisions_->setValue(8);layout->addWidget(divisions_);
+    divisions_=new V2IntegerSpinBox(this);divisions_->setObjectName("curvePointsDivisions");divisions_->setRange(1,999);divisions_->setSuffix(QStringLiteral(" 等分"));divisions_->setValue(8);layout->addWidget(divisions_);
     endpoints_=new QCheckBox(QStringLiteral("端点も作る（最後の間隔は短くなる場合があります）"),this);endpoints_->setObjectName("curvePointsEndpoints");endpoints_->setChecked(true);layout->addWidget(endpoints_);
     reverse_=new QCheckBox(QStringLiteral("点を並べ始める向きを反転"),this);reverse_->setObjectName("curvePointsReverse");layout->addWidget(reverse_);
     status_=new QLabel(this);status_->setObjectName("curvePointsStatus");status_->setWordWrap(true);layout->addWidget(status_);

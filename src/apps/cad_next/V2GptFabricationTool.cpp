@@ -50,7 +50,7 @@ void V2GptFabricationTool::Controls(QVBoxLayout* layout)
     tolerance_=number("gptFabricationTolerance",QStringLiteral("許容偏差 "),.25,.001,100);
     width_=number("gptFabricationWidth",QStringLiteral("分割方向の最小幅 "),.5,.01,1000);
     thickness_=number("gptFabricationThickness",QStringLiteral("板厚（記録） "),.2,.001,100);
-    count_=new QSpinBox(dock_->widget()); count_->setObjectName(QStringLiteral("gptFabricationCount"));
+    count_=new V2IntegerSpinBox(dock_->widget()); count_->setObjectName(QStringLiteral("gptFabricationCount"));
     count_->setRange(1,64); count_->setValue(12); count_->setPrefix(QStringLiteral("最大部材数 ")); layout->addWidget(count_);
     direction_=new QComboBox(dock_->widget()); direction_->setObjectName(QStringLiteral("gptFabricationDirection"));
     direction_->addItems({QStringLiteral("曲げ方向を自動比較"),QStringLiteral("方向1"),QStringLiteral("方向2")});

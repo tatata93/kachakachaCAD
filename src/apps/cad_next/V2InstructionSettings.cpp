@@ -61,7 +61,7 @@ void V2InstructionMode::AddImageExportControls(QWidget* panel){
     for(const auto* name:{"instructionImageWidth","instructionImageHeight"}){
         dimensions->addWidget(new QLabel(QString(name).endsWith("Width")?QStringLiteral("幅 px"):QStringLiteral("高さ px"),panel));
         const bool width=QString(name).endsWith("Width");
-        auto* value=new QSpinBox(panel);value->setObjectName(name);value->setRange(64,4096);value->setValue(width?imageOutputSize_.width():imageOutputSize_.height());dimensions->addWidget(value);
+        auto* value=new V2IntegerSpinBox(panel);value->setObjectName(name);value->setRange(64,4096);value->setValue(width?imageOutputSize_.width():imageOutputSize_.height());dimensions->addWidget(value);
         connect(value,&QSpinBox::valueChanged,this,[this,width](int v){if(width)imageOutputSize_.setWidth(v);else imageOutputSize_.setHeight(v);});}
     auto* output=new QPushButton(QStringLiteral("形式と保存先を選んで画像出力"),panel);layout->addWidget(output);
     connect(output,&QPushButton::clicked,this,[this]{FileAction("instructions.image");});

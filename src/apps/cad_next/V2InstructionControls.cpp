@@ -1,3 +1,4 @@
+#include "V2NumericSpinBox.h"
 #include <QString>
 #include "V2InstructionMode.h"
 #include <QCheckBox>
@@ -41,7 +42,7 @@ void V2InstructionMode::BuildViewControls(QHBoxLayout* row) {
     auto* layout=new QHBoxLayout(controls);layout->setContentsMargins(0,0,0,0);layout->setSpacing(3);
     auto* fit=new QPushButton(QStringLiteral("全体"),controls);fit->setObjectName("instructionPaperFit");
     fit->setToolTip(QStringLiteral("用紙全体を表示。ホイールで拡大、中ボタンで移動できます。"));layout->addWidget(fit);
-    auto* zoom=new QSpinBox(controls);zoom->setObjectName("instructionPaperZoom");zoom->setRange(25,800);zoom->setSuffix(" %");zoom->setValue(100);zoom->setKeyboardTracking(false);layout->addWidget(zoom);
+    auto* zoom=new V2IntegerSpinBox(controls);zoom->setObjectName("instructionPaperZoom");zoom->setRange(25,800);zoom->setSuffix(" %");zoom->setValue(100);zoom->setKeyboardTracking(false);layout->addWidget(zoom);
     row->addWidget(controls);connect(fit,&QPushButton::clicked,this,[this]{sheetView_->FitView();});
     connect(zoom,&QSpinBox::valueChanged,this,[this](int value){sheetView_->SetZoom(value/100.0);});
     sheetView_->viewChanged=[this,zoom]{const QSignalBlocker blocked(zoom);zoom->setValue(int(sheetView_->Zoom()*100+.5));};

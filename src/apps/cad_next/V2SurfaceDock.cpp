@@ -6,6 +6,7 @@
 #include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include "V2NumericSpinBox.h"
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QDockWidget>
@@ -111,7 +112,7 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
     layout->addWidget(otherMethods_);
     auto* offset=new QHBoxLayout();
     offsetTitle_=new QLabel(QStringLiteral("離す距離"),widget());offset->addWidget(offsetTitle_);
-    offsetDistance_=new QDoubleSpinBox(widget());offsetDistance_->setObjectName(QStringLiteral("surfaceOffsetDistance"));
+    offsetDistance_=new V2NumericSpinBox(widget());offsetDistance_->setObjectName(QStringLiteral("surfaceOffsetDistance"));
     offsetDistance_->setAccessibleName(QStringLiteral("離す距離"));offsetDistance_->setDecimals(6);
     offsetDistance_->setRange(-1000000,1000000);offsetDistance_->setSingleStep(.1);offsetDistance_->setSuffix(QStringLiteral(" mm"));
     offsetDistance_->setKeyboardTracking(false);offsetDistance_->setValue(1);

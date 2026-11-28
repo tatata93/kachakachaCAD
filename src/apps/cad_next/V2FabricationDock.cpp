@@ -739,13 +739,13 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     splitPart->setToolTip(QStringLiteral("「対象部材」の部材(何枚でも)を、それぞれ右の枚数に"
                                          "等分します。2 枚のときは右の位置で分けます。"
                                          "下見を確認して、下端の「編集を確定」を押してください。"));
-    splitPieces_ = new QSpinBox(splitRow);
+    splitPieces_ = new V2IntegerSpinBox(splitRow);
     splitPieces_->setRange(2, 8);
     splitPieces_->setValue(2);
     splitPieces_->setSuffix(QStringLiteral(" 枚に"));
     splitPieces_->setToolTip(QStringLiteral("1 枚を何枚に等分するか。"));
     // 2 枚に分けるときだけ、位置を選べる(番号の小さい側から測る)。3 枚以上は等分。
-    splitPercent_ = new QSpinBox(splitRow);
+    splitPercent_ = new V2IntegerSpinBox(splitRow);
     splitPercent_->setRange(5, 95);
     splitPercent_->setSingleStep(5);
     splitPercent_->setValue(50);

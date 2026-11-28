@@ -6,7 +6,7 @@
 //! 基準を 0,0 に戻す、原点を画面で指す、作図モード以外でも表示、作図面以外の線を常に薄く、
 //! 主点色・副点色・背景色。
 //!
-//! グリッドは見え方の都合なので文書には入れない。値の検査(間隔が正か、副点の数)は
+//! グリッドの設定は文書の画面状態に保存する。値の検査(間隔が正か、副点の数)は
 //! core(modeling/GridModel)が持ち、ここは欄を並べて集めるだけにする。
 
 #include "kachakacha/modeling/GridModel.h"
@@ -49,7 +49,7 @@ public:
     [[nodiscard]] V2GridChoice Choice() const;
     //! いまの欄をそのまま当てる(試験と、開いたときの同期に使う)。
     void Apply();
-    void SetChoice(const V2GridChoice& choice);
+    void SetChoice(const V2GridChoice& choice, bool documentChanged = false);
     //! 欄が変わったときに呼ぶもの。間隔の式が読めなければ呼ばず、理由を出す。
     void SetApplyHandler(std::function<void(const V2GridChoice&)> handler);
     //! 「原点を画面で指す」を押したときに呼ぶもの(grid.move_origin と同じ)。

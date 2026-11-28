@@ -43,6 +43,7 @@ public:
     static bool AncestorsExpanded(const QTreeWidgetItem* item);
     QTreeWidgetItem* FindKey(const QString& key) const;
     void SetChangeHandler(std::function<void(QTreeWidgetItem*)> handler);
+    Qt::KeyboardModifiers ContextModifiers() const noexcept { return contextModifiers_; }
 
 protected:
     void dropEvent(QDropEvent* event) override;
@@ -50,6 +51,9 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    bool viewportEvent(QEvent* event) override;
+    QItemSelectionModel::SelectionFlags selectionCommand(const QModelIndex& index,
+        const QEvent* event) const override;
 
 private:
     std::function<void(const std::vector<QTreeWidgetItem*>&, QTreeWidgetItem*)> dropHandler_;
@@ -65,6 +69,7 @@ private:
     bool changeQueued_=false;
     QString checkKey_;
     Qt::CheckState checkAtPress_=Qt::Unchecked;
+    Qt::KeyboardModifiers contextModifiers_ = Qt::NoModifier;
     bool CheckHit(QTreeWidgetItem* row,const QPoint& point) const;
     void FlushChanges();
 };

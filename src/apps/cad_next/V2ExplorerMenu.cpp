@@ -54,12 +54,12 @@ void AddCatalogAction(V2MainWindow& window, QMenu& menu, const char* id)
 
 using namespace kachakacha::v2;
 
-void ApplyExplorerPick(V2Viewport& viewport, const app::PickCandidate& pick)
+void ApplyExplorerPick(V2Viewport& viewport, const app::PickCandidate& pick, Qt::KeyboardModifiers contextModifiers)
 {
     if (!viewport.EntityShown(pick.entityId)) return;
     const bool pending = viewport.PickPending() || viewport.ReferencePickPending();
     const bool toolInput = viewport.ToolPickActive() && !pending;
-    const auto modifiers = QApplication::keyboardModifiers();
+    const auto modifiers = contextModifiers | QApplication::keyboardModifiers();
     viewport.setProperty("treePickInput", pending);
     viewport.setProperty("treeToolInput", toolInput);
     viewport.setProperty("treeInputModifiers", static_cast<int>(modifiers));
@@ -89,7 +89,7 @@ double ParameterAtLengthFraction(const geometry::CurveSegment& curve, double fra
 }
 
 void ApplyCurveLengthPoint(V2MainWindow& window, app::PickCandidate pick,
-    double fraction, qulonglong inputGeneration)
+    double fraction, qulonglong inputGeneration, Qt::KeyboardModifiers contextModifiers)
 {
     auto& viewport = window.Viewport();
     const auto& session = window.Session();
@@ -108,18 +108,19 @@ void ApplyCurveLengthPoint(V2MainWindow& window, app::PickCandidate pick,
     const double parameter = ParameterAtLengthFraction(curve->segment, fraction, tolerance);
     pick.curveParameter = parameter;
     pick.hitPoint = curve->segment.Evaluate(parameter);
-    ApplyExplorerPick(viewport, pick);
+    ApplyExplorerPick(viewport, pick, contextModifiers);
 }
 
-void AddCurveLengthChoices(V2MainWindow& window, QMenu& segment, app::PickCandidate pick)
+void AddCurveLengthChoices(V2MainWindow& window, QMenu& segment, app::PickCandidate pick,
+    Qt::KeyboardModifiers contextModifiers)
 {
     const auto generation = window.Viewport().property("inputPickGeneration").toULongLong();
-    segment.addAction(QStringLiteral("中点"), &window, [&window, pick, generation] {
-        ApplyCurveLengthPoint(window, pick, 0.5, generation);
+    segment.addAction(QStringLiteral("中点"), &window, [&window, pick, generation, contextModifiers] {
+        ApplyCurveLengthPoint(window, pick, 0.5, generation, contextModifiers);
     });
     auto* position = segment.addMenu(QStringLiteral("始点からの長さ (%)"));
     position->setObjectName(QStringLiteral("explorerCurveLengthMenu"));
-    QObject::connect(&segment, &QMenu::aboutToShow, position, [&window, position, pick, generation] {
+    QObject::connect(&segment, &QMenu::aboutToShow, position, [&window, position, pick, generation, contextModifiers] {
         auto* entry = new QWidgetAction(position);
         auto* row = new QWidget(position);
         auto* layout = new QHBoxLayout(row);
@@ -137,13 +138,13 @@ void AddCurveLengthChoices(V2MainWindow& window, QMenu& segment, app::PickCandid
         layout->addWidget(submit);
         entry->setDefaultWidget(row);
         position->addAction(entry);
-        QObject::connect(submit, &QPushButton::clicked, position, [&window, position, percent, pick, generation] {
+        QObject::connect(submit, &QPushButton::clicked, position, [&window, position, percent, pick, generation, contextModifiers] {
             if (!percent->hasAcceptableInput()) return;
             percent->interpretText();
             const double fraction = percent->value() / 100.0;
             for (auto* menu = position; menu; menu = qobject_cast<QMenu*>(menu->parentWidget()))
                 menu->close();
-            ApplyCurveLengthPoint(window, pick, fraction, generation);
+            ApplyCurveLengthPoint(window, pick, fraction, generation, contextModifiers);
         });
         if (auto* editor = percent->findChild<QLineEdit*>())
             QObject::connect(editor, &QLineEdit::returnPressed, submit, &QPushButton::click);
@@ -157,16 +158,17 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
     const auto& session = window.Session();
     const auto& scene = session.Scene();
     const auto& tolerance = session.GetDocument().Snapshot().settings.tolerance;
+    const auto contextModifiers = window.EntityTree()->ContextModifiers();
     auto* elements = new QMenu(QStringLiteral("部分を指定"), &menu);
     elements->setObjectName(QStringLiteral("explorerElements"));
     elements->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
     const auto add = [&](QMenu& target, const QString& label, const app::PickCandidate& pick) {
-        target.addAction(label, &window, [&window, &viewport, pick] {
+        target.addAction(label, &window, [&window, &viewport, pick, contextModifiers] {
             if (!viewport.EntityShown(pick.entityId)) return;
             if (pick.kind == app::SelectionElementKind::Face && pick.pickedFaceIndex
                 && viewport.ToolPickActive() && !viewport.PickPending() && !viewport.ReferencePickPending()
                 && window.ShellSplitTool().PickListedFace(pick.entityId, *pick.pickedFaceIndex, pick.hitPoint)) return;
-            ApplyExplorerPick(viewport, pick);
+            ApplyExplorerPick(viewport, pick, contextModifiers);
         });
     };
     int segmentIndex = 0;
@@ -191,7 +193,7 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
         add(*segment, QStringLiteral("終点"), pick);
         const bool normalSelection = session.CurrentTool() == modeling::DrawingTool::Select
             && !viewport.ToolPickActive() && !viewport.ReferencePickPending();
-        if (viewport.PickPending() || normalSelection) AddCurveLengthChoices(window, *segment, pick);
+        if (viewport.PickPending() || normalSelection) AddCurveLengthChoices(window, *segment, pick, contextModifiers);
         if (scene.workPlane.active && (viewport.PickPending() || normalSelection)) {
             const auto roots = geometry::IntersectCurveWithPlane(curve.segment, scene.workPlane.origin,
                 scene.workPlane.normal, tolerance);
@@ -248,7 +250,8 @@ void V2MainWindow::ShowExplorerMenu(const QPoint& at)
     // 右クリックした行がまだ選ばれていなければ、その行を選ぶ(選択の同期は普段の道)。
     QTreeWidgetItem* under = entityTree_->itemAt(at);
     if (under != nullptr && (under->flags() & Qt::ItemIsSelectable)) {
-        if (!under->isSelected()) entityTree_->setCurrentItem(under);
+        const bool addingPart = entityTree_->ContextModifiers().testFlag(Qt::ControlModifier);
+        if (!under->isSelected() && !addingPart) entityTree_->setCurrentItem(under);
         else if (under != entityTree_->currentItem())
             entityTree_->setCurrentItem(under, 0, QItemSelectionModel::NoUpdate);
     }

@@ -11,6 +11,7 @@
 #include "V2CornerDock.h"
 #include "V2OperationPanelHost.h"
 #include "V2DrawingDock.h"
+#include "V2EntityTree.h"
 #include "V2GridDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
@@ -27,15 +28,21 @@
 #include "kachakacha/geometry/WireChain.h"
 
 #include <QColor>
+#include <QAction>
+#include <QContextMenuEvent>
 #include <QDoubleSpinBox>
 #include <QApplication>
 #include <QMouseEvent>
 #include <QEvent>
 #include <QFileInfo>
+#include <QMenu>
+#include <QObject>
 #include <QPoint>
 #include <QPointF>
 #include <QPushButton>
 #include <QString>
+#include <QTimer>
+#include <QTreeWidgetItem>
 
 #include <cmath>
 #include <algorithm>
@@ -1002,6 +1009,48 @@ void ClickOnPlane(V2Viewport& viewport, double x, double y)
 
 }
 
+bool ChooseExplorerEndpoint(V2MainWindow& window, base::EntityId entity, const QString& label,
+    Qt::KeyboardModifiers modifiers)
+{
+    auto* tree = window.EntityTree();
+    auto* row = window.ItemOfEntity(entity);
+    if (!tree || !row) return false;
+    tree->scrollToItem(row);
+    QApplication::processEvents();
+    const auto pixel = tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+    if (tree->itemAt(pixel) != row) return false;
+    bool chosen = false;
+    QTimer choose;
+    choose.setSingleShot(true);
+    QObject::connect(&choose, &QTimer::timeout, &choose, [&] {
+        auto* popup = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!popup) return;
+        const auto* parts = popup->findChild<QMenu*>(QStringLiteral("explorerElements"));
+        if (parts && !parts->actions().empty()) {
+            if (const auto* segment = parts->actions().front()->menu()) {
+                for (auto* action : segment->actions()) {
+                    if (action->text() != label) continue;
+                    action->trigger();
+                    chosen = true;
+                    break;
+                }
+            }
+        }
+        popup->close();
+    });
+    auto* target = tree->viewport();
+    const auto at = target->mapToGlobal(pixel);
+    for (const auto type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+        QMouseEvent mouse(type, pixel, at, Qt::RightButton,
+            type == QEvent::MouseButtonPress ? Qt::RightButton : Qt::NoButton, modifiers);
+        QApplication::sendEvent(target, &mouse);
+    }
+    choose.start(0);
+    QContextMenuEvent menu(QContextMenuEvent::Mouse, pixel, at, modifiers);
+    QApplication::sendEvent(target, &menu);
+    return chosen;
+}
+
 [[nodiscard]] bool CaseAutomaticSelectionMeasurements(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -1068,6 +1117,16 @@ void ClickOnPlane(V2Viewport& viewport, double x, double y)
     window.SelectTool(DrawingTool::Select);
     view.SetSelection({});
     if (!Explain("clearing selection clears measurement", view.LiveMeasureOverlay().rows.empty())) return false;
+
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("left-pane point choices span two separate wires",
+            curves.size() == 2
+            && ChooseExplorerEndpoint(window,curves[0].entityId,QStringLiteral("終点"),Qt::NoModifier)
+            && ChooseExplorerEndpoint(window,curves[1].entityId,QStringLiteral("終点"),Qt::ControlModifier)
+            && measurement("距離",app::FormatMillimetersJa(std::sqrt(189.)))
+            && measurement("ΔX",app::FormatMillimetersJa(-3))
+            && measurement("ΔY",app::FormatMillimetersJa(-6))
+            && measurement("ΔZ",app::FormatMillimetersJa(-12)))) return false;
 
     request.kind = app::DirectWireKind::PlanarArc;
     request.points = {{16,0,0},{20,4,0},{24,0,0}};

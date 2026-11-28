@@ -2,6 +2,10 @@
 #include <QPoint>
 
 #include <QAbstractItemView>
+#include <QContextMenuEvent>
+#include <QEvent>
+#include <QModelIndex>
+#include <QScopedValueRollback>
 #include <QTreeWidget>
 #include <QWidget>
 #include <QDropEvent>
@@ -178,4 +182,29 @@ void V2EntityTree::mouseDoubleClickEvent(QMouseEvent* event){
         mousePressEvent(event);return;
     }
     QTreeWidget::mouseDoubleClickEvent(event);
+}
+
+bool V2EntityTree::viewportEvent(QEvent* event)
+{
+    if (event->type() == QEvent::ContextMenu) {
+        const auto* context = static_cast<QContextMenuEvent*>(event);
+        if (context->modifiers().testFlag(Qt::ControlModifier)) {
+            const QScopedValueRollback hold(contextModifiers_, context->modifiers());
+            emit customContextMenuRequested(context->pos());
+            event->accept();
+            return true;
+        }
+    }
+    return QTreeWidget::viewportEvent(event);
+}
+
+QItemSelectionModel::SelectionFlags V2EntityTree::selectionCommand(const QModelIndex& index,
+    const QEvent* event) const
+{
+    if (event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
+        const auto* mouse = static_cast<const QMouseEvent*>(event);
+        if (mouse->button() == Qt::RightButton && mouse->modifiers().testFlag(Qt::ControlModifier))
+            return QItemSelectionModel::NoUpdate;
+    }
+    return QTreeWidget::selectionCommand(index, event);
 }

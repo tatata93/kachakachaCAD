@@ -32,6 +32,7 @@
 #include <QMouseEvent>
 #include <QEvent>
 #include <QFileInfo>
+#include <QPoint>
 #include <QPointF>
 #include <QPushButton>
 #include <QString>
@@ -1001,6 +1002,100 @@ void ClickOnPlane(V2Viewport& viewport, double x, double y)
 
 }
 
+[[nodiscard]] bool CaseAutomaticSelectionMeasurements(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& view = window.Viewport();
+    using geometry::Vector3;
+    const Vector3 first{0,0,0}, last{3,4,12};
+    const Vector3 otherStart{0,-10,0}, otherEnd{0,-2,0};
+    auto* scope = window.findChild<QComboBox*>(QStringLiteral("drawingScope"));
+    if (!Explain("the drawing scope control is available", scope != nullptr)) return false;
+    scope->setCurrentIndex(1);
+    app::DirectWireRequest request;
+    request.kind = app::DirectWireKind::SpatialLine;
+    request.points = {first,last};
+    window.DrawingDock().SetDirectWire(request, QStringLiteral("水平と高さが変わる線"));
+    window.DrawingDock().PressCreateWire();
+    request.points = {otherStart,otherEnd};
+    window.DrawingDock().SetDirectWire(request, QStringLiteral("Y軸に平行な線"));
+    window.DrawingDock().PressCreateWire();
+    if (!Explain("both spatial test wires were created", CountOfKind(window, EntityKind::Wire) == 2)) return false;
+    view.SetViewDirection(ViewDirection::Isometric);
+    view.FitToDocument();
+    view.SetVisibleWidthMm(70);
+    window.SelectTool(DrawingTool::Select);
+    const auto click = [&](const Vector3& world, Qt::KeyboardModifiers modifiers) {
+        const auto point = view.Mapping().Project(world);
+        if (!point) return false;
+        view.SelectAt(QPointF(point->x, point->y), modifiers);
+        return true;
+    };
+    const auto measurement = [&](const std::string& label, const std::string& value) {
+        const auto& overlay = view.LiveMeasureOverlay();
+        return overlay.automatic && std::any_of(overlay.rows.begin(), overlay.rows.end(),
+            [&](const auto& row) { return row.labelJa == label && row.valueJa == value; });
+    };
+    if (!Explain("the sloped line is in the view", click((first+last)*.5,Qt::NoModifier))
+        || !Explain("selecting a sloped line shows its real length",
+            measurement("長さ",app::FormatMillimetersJa(13)) && view.LiveMeasureOverlay().components.size()==3)) return false;
+    if (!Explain("the second line is in the view", click((otherStart+otherEnd)*.5,Qt::ControlModifier))
+        || !Explain("two lines show finite distance and angle",
+            measurement("最短距離",app::FormatMillimetersJa(2))
+            && measurement("なす角",app::FormatDegreesJa(std::acos(4./13.))))) return false;
+    view.SetContextMenuCallback([](const QPoint&, const std::vector<QString>& labels) -> std::optional<int> {
+        for (std::size_t index = 0; index < labels.size(); ++index)
+            if (labels[index].contains(QStringLiteral(" / 点 区間"))) return static_cast<int>(index);
+        return std::nullopt;
+    });
+    const auto pickPoint = [&](const Vector3& world, Qt::KeyboardModifiers modifiers) {
+        const auto point = view.Mapping().Project(world);
+        if (!point) return false;
+        view.PressRightWithoutMoving(QPointF(point->x, point->y), modifiers);
+        return !view.Selection().ordered.empty()
+            && view.Selection().ordered.back().kind == app::SelectionElementKind::Vertex;
+    };
+    if (!Explain("the two endpoints are available as viewport point candidates",
+            pickPoint(first,Qt::NoModifier) && pickPoint(last,Qt::ControlModifier))
+        || !Explain("two actual endpoints of one wire show signed 3D differences",
+            measurement("距離",app::FormatMillimetersJa(13))
+            && measurement("ΔX",app::FormatMillimetersJa(3))
+            && measurement("ΔY",app::FormatMillimetersJa(4))
+            && measurement("ΔZ",app::FormatMillimetersJa(12))
+            && view.LiveMeasureOverlay().components.size()==3)) return false;
+    window.SelectTool(DrawingTool::Line);
+    if (!Explain("an active drawing tool hides the automatic measurements", view.LiveMeasureOverlay().rows.empty())) return false;
+    window.SelectTool(DrawingTool::Select);
+    view.SetSelection({});
+    if (!Explain("clearing selection clears measurement", view.LiveMeasureOverlay().rows.empty())) return false;
+
+    request.kind = app::DirectWireKind::PlanarArc;
+    request.points = {{16,0,0},{20,4,0},{24,0,0}};
+    window.DrawingDock().SetDirectWire(request, QStringLiteral("測定用の半円弧"));
+    window.DrawingDock().PressCreateWire();
+    view.SetViewDirection(ViewDirection::Top);
+    view.FitToDocument();
+    view.SetVisibleWidthMm(70);
+    if (!click(request.points[1],Qt::NoModifier) || !Explain("an arc displays its physical arc length and radius",
+            measurement("弧長",app::FormatMillimetersJa(4.*std::acos(-1.)))
+            && measurement("半径",app::FormatMillimetersJa(4))
+            && measurement("直径",app::FormatMillimetersJa(8)))) return false;
+    if (!click((otherStart+otherEnd)*.5,Qt::ControlModifier)
+        || !Explain("an arc pair labels the sampled distance and tangent location",
+            measurement("最短距離（近似）",app::FormatMillimetersJa(std::sqrt(260.)))
+            && measurement("最短点での接線角",app::FormatDegreesJa(0))
+            && view.LiveMeasureOverlay().points.size()==2)) return false;
+    window.RunCommand("edit.undo");
+    if (!Explain("undoing the arc recomputes the remaining line's measurement",
+            CountOfKind(window, EntityKind::Wire) == 2
+            && view.Selection().ordered.size() == 1
+            && measurement("長さ",app::FormatMillimetersJa(8))
+            && view.LiveMeasureOverlay().lines.empty())) return false;
+    click((otherStart+otherEnd)*.5,Qt::NoModifier);
+    window.RunCommand("file.new");
+    return Explain("opening a new document clears measurement", view.LiveMeasureOverlay().rows.empty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
@@ -1008,6 +1103,7 @@ std::vector<SelfTestCase> DrawingCases()
     return {
         {"HP-CORNER-ENTRY whole wire from a real viewport edge pick", &CaseCornerToolFirstEdgePick},
         {"HP-ME-03 測定を先に選んで線と位置を拾う", &CaseMeasureToolFirst},
+        {"HP-ME-04 ordinary selection measures lines and arbitrary endpoints", &CaseAutomaticSelectionMeasurements},
         {"HP-ME-01 測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
         {"HP-ME-02 面積は帯の測定から閉じた線の全体を測り厳密と言い寸法には残さない",
             &CaseAreaMeasureFromRibbon},

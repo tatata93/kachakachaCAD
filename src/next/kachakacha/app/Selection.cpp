@@ -36,6 +36,11 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
         && first.pickedFaceIndex != second.pickedFaceIndex) {
         return false;
     }
+    if (first.kind == SelectionElementKind::Vertex && first.segmentId) {
+        if (first.curveParameter.has_value() != second.curveParameter.has_value()) return false;
+        if (first.curveParameter && std::abs(*first.curveParameter - *second.curveParameter) > 1e-9)
+            return false;
+    }
     return !first.subshapeKey.has_value()
         || first.subshapeKey->ToString() == second.subshapeKey->ToString();
 }

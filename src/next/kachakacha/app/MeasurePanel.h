@@ -58,11 +58,20 @@ struct MeasureRequest {
     modeling::WorkPlaneFrame workPlane;
 };
 
+struct MeasureAxisComponent {
+    geometry::Vector3 first;
+    geometry::Vector3 last;
+    int axis = 0;
+    double signedLengthMm = 0.0;
+};
+
 //! 測定中の表示。計算は選択変更時だけ行い、描画中に再計算しない。
 struct MeasureOverlay {
     std::vector<MeasureRow> rows;
     std::vector<std::vector<geometry::Vector3>> lines;
     std::vector<geometry::Vector3> points;
+    std::vector<MeasureAxisComponent> components;
+    bool automatic = false;
 };
 [[nodiscard]] MeasureOverlay BuildMeasureOverlay(const MeasureRequest& request);
 

@@ -92,9 +92,11 @@ void ApplyCurveLengthPoint(V2MainWindow& window, app::PickCandidate pick,
     double fraction, qulonglong inputGeneration)
 {
     auto& viewport = window.Viewport();
-    if (!viewport.PickPending() || viewport.property("inputPickGeneration").toULongLong() != inputGeneration)
-        return;
     const auto& session = window.Session();
+    const bool normalSelection = session.CurrentTool() == modeling::DrawingTool::Select
+        && !viewport.ToolPickActive() && !viewport.ReferencePickPending();
+    if ((!viewport.PickPending() && !normalSelection)
+        || viewport.property("inputPickGeneration").toULongLong() != inputGeneration) return;
     const auto& curves = session.Scene().curves;
     const auto curve = std::find_if(curves.begin(), curves.end(), [&](const auto& entry) {
         return entry.entityId == pick.entityId && entry.segmentId == pick.segmentId;
@@ -187,8 +189,10 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
         pick.curveParameter = 1;
         pick.hitPoint = curve.segment.EndPoint();
         add(*segment, QStringLiteral("終点"), pick);
-        if (viewport.PickPending()) AddCurveLengthChoices(window, *segment, pick);
-        if (scene.workPlane.active && viewport.PickPending()) {
+        const bool normalSelection = session.CurrentTool() == modeling::DrawingTool::Select
+            && !viewport.ToolPickActive() && !viewport.ReferencePickPending();
+        if (viewport.PickPending() || normalSelection) AddCurveLengthChoices(window, *segment, pick);
+        if (scene.workPlane.active && (viewport.PickPending() || normalSelection)) {
             const auto roots = geometry::IntersectCurveWithPlane(curve.segment, scene.workPlane.origin,
                 scene.workPlane.normal, tolerance);
             int index = 0;

@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 #include "V2DocumentTiming.h"
+#include "V2PointPicking.h"
 #include "V2ToolSelection.h"
 #include "V2DrawingSelection.h"
 #include "V2RenderSelection.h"
@@ -87,6 +88,32 @@ void v2ui::AppendReferencePlaneCandidates(const std::vector<V2Viewport::WorkPlan
         app::PickCandidate pick;pick.entityId=plane.entityId;pick.kind=app::SelectionElementKind::WorkPlane;
         pick.hitPoint=hit;pick.distancePx=best;candidates.push_back(pick);
     }
+}
+
+bool V2Viewport::AppendOrdinaryPointCandidate(const QPointF& position)
+{
+    using namespace kachakacha::v2;
+    if (session_->CurrentTool() != modeling::DrawingTool::Select
+        || toolPickActive_ || ReferencePickPending() || PointInputActive() || V2ToolSelection::Active(*this)) return false;
+    if (!std::any_of(cycle_.candidates.begin(), cycle_.candidates.end(), [this](const auto& item) {
+            const auto* entity = session_->GetDocument().FindEntity(item.entityId);
+            return entity && entity->kind == domain::EntityKind::Wire;
+        })) return false;
+    std::optional<app::PickCandidate> onCurve;
+    (void)v2ui::ReferencePointAt(*this, session_->Scene(),
+        session_->GetDocument().Snapshot().settings.tolerance, position, false, &onCurve, false);
+    if (!onCurve || !onCurve->curveParameter) return false;
+    const auto* entity = session_->GetDocument().FindEntity(onCurve->entityId);
+    if (!entity || entity->kind != domain::EntityKind::Wire) return false;
+    onCurve->kind = app::SelectionElementKind::Vertex;
+    const auto duplicate = std::any_of(cycle_.candidates.begin(), cycle_.candidates.end(),
+        [&](const auto& item) {
+            return item.kind == onCurve->kind && item.entityId == onCurve->entityId
+                && item.segmentId == onCurve->segmentId && item.curveParameter == onCurve->curveParameter;
+        });
+    if (duplicate) return false;
+    cycle_.candidates.push_back(*onCurve);
+    return true;
 }
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)

@@ -190,7 +190,10 @@ void V2Viewport::OnToolChanged()
     const std::string beforeJa = hover_.messageJa;
     DiscardHoverState();
     measureOverlay_ = {};
+    const bool hadMeasurePicks = !measurePicks_.empty();
     ClearMeasurePicks();
+    if (!hadMeasurePicks && session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select
+        && measurePicksChanged_) measurePicksChanged_();
     // 押し出しの下見も残さない。前の道具の手つきが画面に残ると、
     // いま何をしているのか読めなくなる(オーナー指示 2026-09-14 §4)。
     if (extrudeHandle_.shown && cancelExtrude_) {

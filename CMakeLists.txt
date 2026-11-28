@@ -1428,6 +1428,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2DimensionUi.cpp
         src/apps/cad_next/V2DimensionDraw.cpp
         src/apps/cad_next/V2MeasureOverlay.cpp
+        src/apps/cad_next/V2SelectionMeasurement.cpp
         src/apps/cad_next/V2MeasureDock.cpp
         src/apps/cad_next/V2MeasureDock.h
         src/apps/cad_next/V2EditDock.cpp

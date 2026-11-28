@@ -5,6 +5,7 @@
 // 選んでいるものを core へ渡し、返った定義を文書へ入れるだけ。
 #include "V2MainWindow.h"
 #include "V2DrawingSelection.h"
+#include "V2SelectionMeasurement.h"
 #include "V2ToolSelection.h"
 #include "V2DimensionTool.h"
 #include "V2HistoryShapePlan.h"
@@ -58,19 +59,24 @@ void V2MainWindow::RefreshMeasurements()
     if (measureDock_ == nullptr || viewport_ == nullptr) {
         return;
     }
-    // Selection changes also refresh hidden shelves. Measuring every native
-    // edge and rebuilding thousands of rows is only useful in an open panel.
-    if(!ShelfShown(kachakacha::v2::app::Shelf::Measure)&&session_->CurrentTool()!=kachakacha::v2::modeling::DrawingTool::Measure) {
-        viewport_->SetMeasureOverlay({});return;
+    using namespace kachakacha::v2;
+    const auto tool = session_->CurrentTool();
+    const bool measuring = tool == modeling::DrawingTool::Measure;
+    app::MeasureOverlay overlay;
+    if (measuring || ShelfShown(app::Shelf::Measure)) {
+        viewport_->SetMeasurePointCount(app::MeasurePointCount(measureDock_->Mode()));
+        const auto request = CurrentMeasureRequest();
+        measureDock_->SetRequest(request);
+        measureDock_->SetKeptCount(static_cast<int>(
+            session_->GetDocument().Snapshot().referenceDimensions.size()));
+        if (measuring) overlay = app::BuildMeasureOverlay(request);
     }
-    viewport_->SetMeasurePointCount(kachakacha::v2::app::MeasurePointCount(measureDock_->Mode()));
-    const auto request = CurrentMeasureRequest();
-    measureDock_->SetRequest(request);
-    viewport_->SetMeasureOverlay(session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
-        ? kachakacha::v2::app::BuildMeasureOverlay(request)
-        : kachakacha::v2::app::MeasureOverlay{});
-    measureDock_->SetKeptCount(
-        static_cast<int>(session_->GetDocument().Snapshot().referenceDimensions.size()));
+    if (tool == modeling::DrawingTool::Select && !viewport_->ToolPickActive()
+        && !viewport_->PickPending() && !viewport_->ReferencePickPending()) {
+        overlay = v2ui::BuildSelectionMeasure(viewport_->Selection(),
+            session_->GetDocument(), session_->Scene());
+    }
+    viewport_->SetMeasureOverlay(std::move(overlay));
 }
 
 kachakacha::v2::app::MeasureRequest V2MainWindow::CurrentMeasureRequest() const

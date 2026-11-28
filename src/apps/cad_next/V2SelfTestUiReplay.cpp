@@ -133,6 +133,30 @@ bool Key(QWidget& target,const QString& sequence)
     QApplication::processEvents();return true;
 }
 
+bool ChooseCurvePoint(V2Viewport& view, QPointF pixel, Qt::KeyboardModifiers modifiers)
+{
+    bool chosen = false;
+    QTimer pick;
+    pick.setSingleShot(true);
+    QObject::connect(&pick, &QTimer::timeout, &pick, [&chosen] {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!menu) return;
+        for (auto* action : menu->actions()) {
+            if (!action->objectName().startsWith(QStringLiteral("pickCandidate"))
+                || !action->text().contains(QStringLiteral(" / 点 区間"))) continue;
+            menu->setActiveAction(action);
+            QKeyEvent accept(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+            QApplication::sendEvent(menu, &accept);
+            chosen = true;
+            return;
+        }
+        menu->close();
+    });
+    pick.start(0);
+    view.PressRightWithoutMoving(pixel, modifiers);
+    return chosen;
+}
+
 bool Text(QLineEdit& input,const QString& value,bool commit=true,bool exact=true)
 {
     Reveal(input);if(!input.isVisible()||!input.isEnabled()||input.isReadOnly())return false;
@@ -387,7 +411,8 @@ struct Replay {
         QMouseEvent move(QEvent::MouseMove,pixel,QPointF(w.Viewport().mapToGlobal(pixel.toPoint())),
             Qt::NoButton,Qt::NoButton,modifiers);
         QApplication::sendEvent(&w.Viewport(),&move);QApplication::processEvents();
-        const bool sent=Mouse(w.Viewport(),pixel,modifiers);
+        const bool sent=step["vertex"].toBool()
+            ? ChooseCurvePoint(w.Viewport(),pixel,modifiers) : Mouse(w.Viewport(),pixel,modifiers);
         QString picked;for(const auto& selected:w.Viewport().Selection().entityIds)picked+=QString::fromStdString(selected.ToString())+' ';
         Note(QStringLiteral("replay point %1 at %2,%3 add=%4 selected=%5")
             .arg(Resolve(step["id"].toString())).arg(pixel.x()).arg(pixel.y()).arg(step["add"].toBool()).arg(picked).toUtf8().constData());

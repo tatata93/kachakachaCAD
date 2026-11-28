@@ -21,6 +21,7 @@
 
 #include "V2Viewport.h"
 #include "V2ReferencePlanePicking.h"
+#include <QApplication>
 #include <QBrush>
 #include <QColor>
 #include <QCursor>
@@ -422,7 +423,7 @@ std::vector<QString> V2Viewport::CandidateLabels() const
     return labels;
 }
 
-bool V2Viewport::SelectCandidate(std::size_t index)
+bool V2Viewport::SelectCandidate(std::size_t index, Qt::KeyboardModifiers modifiers)
 {
     if (index >= cycle_.candidates.size()) {
         return false;
@@ -446,8 +447,12 @@ bool V2Viewport::SelectCandidate(std::size_t index)
     picked=AsSolidIfProfileTaken(picked);
     lastToolPick_=toolPickToggle_&&picked?std::optional{picked->entityId}:std::nullopt;
     lastToolPickPoint_=toolPickToggle_&&picked?std::optional{picked->hitPoint}:std::nullopt;
+    using namespace kachakacha::v2;
+    const bool addPoint = picked && picked->kind == app::SelectionElementKind::Vertex
+        && session_->CurrentTool() == modeling::DrawingTool::Select && !toolPickActive_
+        && modifiers.testFlag(Qt::ControlModifier);
     const auto mode = ModeForTogglePick(picked, ModeForToolPick(picked,
-        kachakacha::v2::app::SelectionMode::Replace));
+        addPoint ? app::SelectionMode::Toggle : app::SelectionMode::Replace));
     const bool smooth=V2UseLogicalCurvePicks(*this,*session_);
     SetSelection(smooth?V2ApplySmoothCurvePick(*this,*session_,selection_,picked,mode)
         :kachakacha::v2::app::ApplySelection(selection_,picked,mode));
@@ -477,10 +482,10 @@ bool V2Viewport::StepBackInputPoint()
 void V2Viewport::PressRightWithoutMoving()
 {
     // 場所を渡されなければ、最後にカーソルがあった場所で同じことをする。
-    PressRightWithoutMoving(cursorPosition_);
+    PressRightWithoutMoving(cursorPosition_, QApplication::keyboardModifiers());
 }
 
-void V2Viewport::PressRightWithoutMoving(const QPointF& position)
+void V2Viewport::PressRightWithoutMoving(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
     if (!contextMenu_) return;
     cursorPosition_=position;
@@ -492,14 +497,17 @@ void V2Viewport::PressRightWithoutMoving(const QPointF& position)
         || V2DrawingSelection::CanSelect(*session_,*this) || PointInputActive();
     const auto previousIndex=cycle_.index;
     const auto previousCandidates=cycle_.candidates;
+    const bool offeredPoint = AppendOrdinaryPointCandidate(position);
     const auto labels = selecting && cycle_.candidates.size() >= 2
         ? CandidateLabels() : std::vector<QString>{};
     const QScopedValueRollback<bool> menuOpen(candidateMenuOpen_,true);
     const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
     if (chosen.has_value() && *chosen >= 0) {
-        (void)SelectCandidate(static_cast<std::size_t>(*chosen));
+        (void)SelectCandidate(static_cast<std::size_t>(*chosen), modifiers);
         if(!PointInputActive()&&V2DrawingSelection::CanSelect(*session_,*this))V2DrawingSelection::Of(*this).Select();
-    } else if (SameCandidateOrder(previousCandidates,cycle_.candidates)) {
+    } else if ((offeredPoint && cycle_.candidates.size() == previousCandidates.size() + 1)
+        || SameCandidateOrder(previousCandidates, cycle_.candidates)) {
+        cycle_.candidates = previousCandidates;
         cycle_.index=previousIndex;SyncHoverWithCandidate();update();
     }
 }
@@ -1422,7 +1430,7 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         // 引きずった後の解放では献立を出さない。出すと、画面をなぞっただけで
         // メニューが飛び出す。押しただけのときが右クリックである。
         if (kind == kachakacha::v2::app::PointerGesture::Click) {
-            PressRightWithoutMoving(event->position());
+            PressRightWithoutMoving(event->position(), event->modifiers());
         }
         return;
     }

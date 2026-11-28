@@ -507,7 +507,7 @@ public:
     [[nodiscard]] bool HoverIsForbidden() const noexcept { return hoverOffPlane_; }
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
     //! 選択道具では、押したその場所で候補を集め直してから献立を出す。
-    void PressRightWithoutMoving(const QPointF& position);
+    void PressRightWithoutMoving(const QPointF& position, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     //! 場所を渡さない版。最後にカーソルがあった場所で同じことをする。
     void PressRightWithoutMoving();
     //! 選択道具で右クリックしたときに出すもの。窓が用意する。
@@ -525,7 +525,7 @@ public:
     [[nodiscard]] std::vector<QString> CandidateLabels() const;
     //! 候補を1つ、通常の選択として確定する(献立で選んだとき)。
     //! クリックと同じ道を通す。Replace、Hover、案内文、選択変更の知らせまで同じ。
-    bool SelectCandidate(std::size_t index);
+    bool SelectCandidate(std::size_t index, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     //! 作図の拘束(V1の Shift)。押している間だけ水平・垂直・正方形へ寄せる。
     void SetAxisConstraintByKey(bool constrained);
     void SetViewCenter(const kachakacha::v2::geometry::Vector3& center);
@@ -894,6 +894,7 @@ private:
     void DrawFoldBands(QPainter& painter, int level) const;
     //! 残した寸法。測った点を結ぶ細い線と、両端の短い印、名前と値。
     void DrawMeasureOverlay(QPainter& painter) const;
+    bool AppendOrdinaryPointCandidate(const QPointF& position);
     void DrawKeptDimensions(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawWorkPlaneCrossings(QPainter& painter) const;

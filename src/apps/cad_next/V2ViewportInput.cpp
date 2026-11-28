@@ -497,9 +497,11 @@ void V2Viewport::PressRightWithoutMoving(const QPointF& position, Qt::KeyboardMo
         || V2DrawingSelection::CanSelect(*session_,*this) || PointInputActive();
     const auto previousIndex=cycle_.index;
     const auto previousCandidates=cycle_.candidates;
-    const bool offeredPoint = AppendOrdinaryPointCandidate(position);
     const auto labels = selecting && cycle_.candidates.size() >= 2
         ? CandidateLabels() : std::vector<QString>{};
+    const bool offeredPoint = AppendOrdinaryPointCandidate(position);
+    const QScopedValueRollback pointChoice(ordinaryCurvePointCandidate_,
+        offeredPoint ? std::optional{previousCandidates.size()} : std::nullopt);
     const QScopedValueRollback<bool> menuOpen(candidateMenuOpen_,true);
     const auto chosen = contextMenu_(mapToGlobal(position.toPoint()), labels);
     if (chosen.has_value() && *chosen >= 0) {

@@ -1092,10 +1092,9 @@ bool ChooseExplorerEndpoint(V2MainWindow& window, base::EntityId entity, const Q
         || !Explain("two lines show finite distance and angle",
             measurement("最短距離",app::FormatMillimetersJa(2))
             && measurement("なす角",app::FormatDegreesJa(std::acos(4./13.))))) return false;
-    view.SetContextMenuCallback([](const QPoint&, const std::vector<QString>& labels) -> std::optional<int> {
-        for (std::size_t index = 0; index < labels.size(); ++index)
-            if (labels[index].contains(QStringLiteral(" / 点 区間"))) return static_cast<int>(index);
-        return std::nullopt;
+    view.SetContextMenuCallback([&view](const QPoint&, const std::vector<QString>&) -> std::optional<int> {
+        const auto candidate = view.OrdinaryCurvePointCandidate();
+        return candidate ? std::optional{static_cast<int>(*candidate)} : std::nullopt;
     });
     const auto pickPoint = [&](const Vector3& world, Qt::KeyboardModifiers modifiers) {
         const auto point = view.Mapping().Project(world);

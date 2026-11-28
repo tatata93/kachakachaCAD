@@ -802,6 +802,14 @@ std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
             menu.addSeparator();
         }
     }
+    const auto point = viewport_->OrdinaryCurvePointCandidate();
+    QAction* choosePoint = nullptr;
+    if (point) {
+        choosePoint = menu.addAction(QStringLiteral("この位置の点を選ぶ"));
+        choosePoint->setObjectName(QStringLiteral("ordinaryCurvePoint"));
+        connect(choosePoint, &QAction::hovered, viewport_, [this, point] { viewport_->PreviewCandidate(*point); });
+        menu.addSeparator();
+    }
     const std::vector<QAction*> candidateActions = BuildSelectMenu(menu, candidateLabels);
     if (menu.isEmpty()) {
         return std::nullopt;
@@ -812,6 +820,7 @@ std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
         viewport_->PreviewCandidate(static_cast<std::size_t>(previousCandidate));
         return std::nullopt;
     }
+    if (chosen == choosePoint) return static_cast<int>(*point);
     for (const auto& [action, role] : roleActions) {
         if (action == chosen) {
             SetSurfaceWireRole(roleTarget, role);

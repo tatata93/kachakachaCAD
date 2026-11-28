@@ -142,8 +142,7 @@ bool ChooseCurvePoint(V2Viewport& view, QPointF pixel, Qt::KeyboardModifiers mod
         auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
         if (!menu) return;
         for (auto* action : menu->actions()) {
-            if (!action->objectName().startsWith(QStringLiteral("pickCandidate"))
-                || !action->text().contains(QStringLiteral(" / 点 区間"))) continue;
+            if (action->objectName() != QStringLiteral("ordinaryCurvePoint")) continue;
             menu->setActiveAction(action);
             QKeyEvent accept(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
             QApplication::sendEvent(menu, &accept);

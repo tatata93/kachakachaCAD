@@ -523,6 +523,7 @@ public:
     //! いま持っている候補の見出し。物体の表示名と部分要素の種別を並べる。
     //! 同じ見出しになるものには通し番号を足して、選び分けられるようにする。
     [[nodiscard]] std::vector<QString> CandidateLabels() const;
+    [[nodiscard]] std::optional<std::size_t> OrdinaryCurvePointCandidate() const noexcept { return ordinaryCurvePointCandidate_; }
     //! 候補を1つ、通常の選択として確定する(献立で選んだとき)。
     //! クリックと同じ道を通す。Replace、Hover、案内文、選択変更の知らせまで同じ。
     bool SelectCandidate(std::size_t index, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
@@ -1086,6 +1087,7 @@ private:
     std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)>
         contextMenu_;
     bool candidateMenuOpen_ = false;
+    std::optional<std::size_t> ordinaryCurvePointCandidate_;
     //! 中ボタンで画面を動かしている最中か。
     //! 右ボタンはここに入らない。右はカメラを動かさない(ui-ux-integrated-spec §5.2)。
     bool panning_ = false;

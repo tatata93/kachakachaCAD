@@ -3,6 +3,7 @@
 #include "kachakacha/io/Json.h"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,23 @@ void RequireStableRoundTrip(const JsonValue& value, const std::string& why)
 }
 
 } // namespace
+
+KACHA_V2_TEST(json, writes_the_existing_number_format_at_boundaries)
+{
+    const JsonArray numbers{
+        JsonValue::Number(-0.0),
+        JsonValue::Number(999999999999999.0),
+        JsonValue::Number(1000000000000000.0),
+        JsonValue::Number(std::nextafter(1.0, 2.0)),
+        JsonValue::Number(0.1),
+        JsonValue::Number(std::numeric_limits<double>::denorm_min()),
+        JsonValue::Number(-std::numeric_limits<double>::max()),
+    };
+    RequireEqual(WriteJson(JsonValue::Array(numbers), -1),
+        "[0,999999999999999,1000000000000000,1.0000000000000002,0.10000000000000001,"
+        "4.9406564584124654e-324,-1.7976931348623157e+308]",
+        "the storage spelling matches the previous writer");
+}
 
 // ---- 受け付ける形 ----
 

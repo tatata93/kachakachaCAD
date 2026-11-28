@@ -1,5 +1,6 @@
 #include "kachakacha/io/Json.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -51,16 +52,24 @@ void AppendEscaped(std::string& out, std::string_view text)
 //! 数の書き方。往復して同じ値に戻ることを優先する。
 void AppendNumber(std::string& out, double value)
 {
-    if (value == static_cast<double>(static_cast<long long>(value))
-        && std::abs(value) < 1.0e15) {
-        // 整数はそのまま。ただし JSON としては小数点を付けない。
-        out += std::to_string(static_cast<long long>(value));
+    // 17桁の指数表記と符号付き整数はいずれも64文字に収まる。
+    char buffer[64];
+    if (std::abs(value) < 1.0e15) {
+        const auto integer = static_cast<long long>(value);
+        if (value == static_cast<double>(integer)) {
+            const auto formatted = std::to_chars(buffer, buffer + sizeof(buffer), integer);
+            out.append(buffer, formatted.ptr);
+            return;
+        }
+    }
+    if (!std::isfinite(value)) {
+        std::snprintf(buffer, sizeof(buffer), "%.17g", value);
+        out += buffer;
         return;
     }
-    char buffer[64];
-    // 17桁あれば double は往復する。
-    std::snprintf(buffer, sizeof(buffer), "%.17g", value);
-    out += buffer;
+    const auto formatted = std::to_chars(
+        buffer, buffer + sizeof(buffer), value, std::chars_format::general, 17);
+    out.append(buffer, formatted.ptr);
 }
 
 void WriteValue(std::string& out, const JsonValue& value, int indent, int depth)

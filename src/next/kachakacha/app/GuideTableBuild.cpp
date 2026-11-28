@@ -1,4 +1,5 @@
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/PlanarBoundaryAlignment.h"
 
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/domain/Entity.h"
@@ -91,6 +92,45 @@ GuideTableDraft AutoSectionTable(const document::Document& document,
 }
 
 namespace {
+
+void RestorePlanarHoleAlignment(GuideTable& table, const geometry::GeometryTolerance& tolerance)
+{
+    if (table.method != GuideSurfaceMethod::PlanarBoundary || table.rows.size() < 2) return;
+    std::vector<const geometry::CurveSegment*> curves;
+    bool open = false;
+    for (const auto& row : table.rows) {
+        if ((row.role != ChainRole::OuterBoundary && row.role != ChainRole::HoleBoundary) || row.segments.empty()) return;
+        auto previous = row.segments.back().EndPoint();
+        for (const auto& curve : row.segments) {
+            open = open || geometry::Distance(previous, curve.StartPoint()) > tolerance.modelLinearMm;
+            previous = curve.EndPoint();
+            curves.push_back(&curve);
+        }
+    }
+    if (!open || std::count_if(table.rows.begin(), table.rows.end(), [](const auto& row) {
+            return row.role == ChainRole::OuterBoundary;
+        }) != 1) return;
+
+    auto alignment = detail::AlignPlanarBoundaryEnds(curves, tolerance);
+    if (!alignment) return;
+    std::size_t start = 0;
+    for (const auto& row : table.rows) {
+        const auto end = start + row.segments.size();
+        bool anchored = false;
+        auto previous = alignment->curves[end - 1].EndPoint();
+        for (auto index = start; index < end; ++index) {
+            const auto& curve = alignment->curves[index];
+            if (geometry::Distance(previous, curve.StartPoint()) > tolerance.modelLinearMm) return;
+            previous = curve.EndPoint();
+            anchored = anchored || alignment->anchoredArcs[index];
+        }
+        if (!anchored) return;
+        start = end;
+    }
+    std::size_t index = 0;
+    for (auto& row : table.rows) for (auto& curve : row.segments)
+        curve = std::move(alignment->curves[index++]);
+}
 
 [[nodiscard]] Result<GuideTable> AddDefinitionRow(const document::Document& document,
     const modeling::SnapScene& scene, GuideTable table, ChainRole role,
@@ -193,6 +233,7 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
             table.rows.back().supportSurfaceId = definition.supportSurfaces[index];
         }
     }
+    RestorePlanarHoleAlignment(table, document.Snapshot().settings.tolerance);
     return Result<GuideTable>::Success(std::move(table));
 }
 

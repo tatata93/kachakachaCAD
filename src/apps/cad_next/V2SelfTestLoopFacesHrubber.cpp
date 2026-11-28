@@ -312,6 +312,54 @@ bool CaseLoopFacesOpenInner(V2MainWindow& window)
         &&CountOfKind(window,EntityKind::Wire)==3);
 }
 
+bool CaseLoopFacesAlignsNearPlanarEnds(V2MainWindow& window)
+{
+    const auto prepare = [&](double innerHeight, bool includeInnerChord) {
+        window.RunCommand("file.new");
+        const auto profile = [&](double radius, double y, double z, bool includeChord) {
+            constexpr double gap = 0.000017;
+            const double bottom = y - radius * 0.3;
+            std::vector<CurveSegment> curves{CurveSegment::MakeCircularArc({0,y,z}, {0,0,1},
+                {1,0,0}, radius, 0, std::acos(-1.0)).Value()};
+            curves.push_back(CurveSegment::MakeLine({-radius,y,z+gap}, {-radius,bottom,z+gap}).Value());
+            if (includeChord)
+                curves.push_back(CurveSegment::MakeLine({-radius,bottom,z+gap}, {radius,bottom,z+gap}).Value());
+            curves.push_back(CurveSegment::MakeLine({radius,bottom,z+gap}, {radius,y,z+gap}).Value());
+            return window.Session().AddWire(std::move(curves), false, "面の試験輪郭");
+        };
+        const auto outer = profile(10, 0, 0, true);
+        const auto inner = profile(2, 3, innerHeight, includeInnerChord);
+        if (!outer.committed || !inner.committed || !window.SaveAndReopen("nearly-planar-hole.kcd2")) return false;
+        app::SelectionSet selection;
+        selection.entityIds = {outer.createdEntityIds.front(), inner.createdEntityIds.front()};
+        window.Viewport().SetSelection(std::move(selection));
+        window.RunCommand("surface.from_lines");
+        QApplication::processEvents();
+        return true;
+    };
+    const auto corrected = [&] {
+        const auto& plan = window.LoopFacesTool().Plan();
+        return plan && plan->faces.size() == 1 && plan->summaryJa.find("穴 1個") != std::string::npos
+            && plan->summaryJa.find("共通平面へ補正") != std::string::npos;
+    };
+    if (!prepare(0, true)) return false;
+    if (!corrected()) {
+        const auto& plan = window.LoopFacesTool().Plan();
+        if (plan) Note(plan->summaryJa.c_str());
+        return Explain("closed planar projection previews one hole with its movement bound", false);
+    }
+    window.HandleToolKey(Qt::Key_Return, nullptr);
+    if (!Explain("the face and its untouched source wires survive reopening",
+            CountOfKind(window, EntityKind::GuideSurface) == 1
+            && window.SaveAndReopen("nearly-planar-hole-result.kcd2")
+            && CountOfKind(window, EntityKind::GuideSurface) == 1
+            && CountOfKind(window, EntityKind::Wire) == 2 && window.RebuildProblems().isEmpty())) return false;
+    if (!prepare(0, false) || !Explain("a genuinely missing inner chord cannot be aligned into a hole", !corrected()))
+        return false;
+    if (!prepare(0.001, true)) return false;
+    return Explain("nested outlines from separate planes cannot be flattened together", !corrected());
+}
+
 bool CaseLoopFacesWholeWires(V2MainWindow& w)
 {
     const std::string original=R"({"curve":[1,2],"uuid":"a"})";
@@ -510,6 +558,7 @@ bool CaseOwnerCurvedOpening(V2MainWindow& w)
 std::vector<SelfTestCase> LoopFacesHrubberCases()
 {
     std::vector<SelfTestCase> cases{{"HP-LF-OPEN-INNER 閉じていない窓を別の閉輪で埋めない",CaseLoopFacesOpenInner}};
+    cases.push_back({"HP-LF-NEAR-PLANAR-HOLE aligns closed projected ends and preserves true gaps",CaseLoopFacesAlignsNearPlanarEnds});
     cases.push_back({"HP-LF-WHOLE-WIRES 部分区間から明示的に選択ワイヤー全体へ切り替える",CaseLoopFacesWholeWires});
     if(qEnvironmentVariableIsSet("KACHACAD_OPENING_OWNER_FILE"))
         cases.push_back({"HP-LF-OWNER-OPENING actual curved cap and projected opening",CaseOwnerCurvedOpening});

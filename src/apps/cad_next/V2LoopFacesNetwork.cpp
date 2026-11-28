@@ -3,6 +3,7 @@
 #include "kachakacha/app/SurfaceNetwork.h"
 #include "kachakacha/app/LoopGraph.h"
 #include "kachakacha/app/ProfileNetwork.h"
+#include "kachakacha/app/PlanarBoundaryAlignment.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/geometry/CurveIntersection.h"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <QString>
 
 namespace {
@@ -18,12 +20,42 @@ bool WithinSamplingBudget(const geometry::CurveSegment& curve)
 {
     return curve.Kind()!=geometry::CurveKind::CubicBSpline||curve.ControlPoints().size()<=4098;
 }
+
+bool SameCircularInterval(const geometry::CurveSegment& first, const geometry::CurveSegment& second, double epsilon)
+{
+    using K = geometry::CurveKind;
+    using geometry::Distance;
+    const auto circular = [](K kind) { return kind == K::Circle || kind == K::CircularArc; };
+    if (!circular(first.Kind()) || !circular(second.Kind())) return false;
+    const double radius = std::max(first.Radius(), second.Radius());
+    const double originError = Distance(first.Center(), second.Center()) + std::abs(first.Radius() - second.Radius());
+    const double angleError = std::abs(std::abs(first.SweepAngleRad()) - std::abs(second.SweepAngleRad()));
+    if (originError + radius * angleError > epsilon) return false;
+    const auto frame = [](const geometry::CurveSegment& arc, bool reverse) {
+        const auto axisX = arc.ReferenceDirection();
+        const auto axisY = geometry::Cross(arc.Normal(), axisX);
+        const double angle = arc.StartAngleRad() + (reverse ? arc.SweepAngleRad() : 0.0);
+        const double x = std::cos(angle), y = std::sin(angle);
+        const double sign = (arc.SweepAngleRad() < 0) != reverse ? -1.0 : 1.0;
+        return std::pair{axisX*x + axisY*y, (axisY*x - axisX*y)*sign};
+    };
+    const auto [a, da] = frame(first, false);
+    for (const bool reverse : {false, true}) {
+        const auto [b, db] = frame(second, reverse);
+        const double axesError = std::hypot(Distance(a, b), Distance(da, db));
+        // Bound the displacement at every parameter, including reversed arcs.
+        if (originError + radius * (angleError + axesError) <= epsilon) return true;
+    }
+    return false;
+}
+
 // Seed every spline span: five global samples can miss an intervening bend.
 // Two spline projections may have one shared endpoint and a slightly different
 // terminal parameter. The whole span must remain inside the document join
 // tolerance; nearby straight branches are never merged by this allowance.
 bool SameInterval(const geometry::CurveSegment& a,const geometry::CurveSegment& b,double epsilon,double joinTolerance)
 {
+    if (SameCircularInterval(a, b, epsilon)) return true;
     const auto& ac=a.ControlPoints();const auto& bc=b.ControlPoints();
     if(a.Kind()==b.Kind()&&!ac.empty()&&ac.size()==bc.size()){
         bool same=true,reverse=true;
@@ -554,6 +586,40 @@ app::SurfaceNetworkPlan IndependentPlanarHoles(const std::vector<app::RoleWire>&
     return result;
 }
 
+app::SurfaceNetworkPlan PlanarHoleWithAlignedEnds(const std::vector<app::RoleWire>& wires,
+    const geometry::GeometryTolerance& tolerance, double& maximumMovement)
+{
+    std::vector<const geometry::CurveSegment*> curves;
+    for (const auto& wire : wires)
+        for (const auto& curve : wire.segments) curves.push_back(&curve);
+    auto alignment = app::detail::AlignPlanarBoundaryEnds(curves, tolerance);
+    if (!alignment) return {};
+
+    auto prepared = wires;
+    std::vector<const geometry::CurveSegment*> anchoredArcs;
+    std::size_t index = 0;
+    for (auto& wire : prepared) for (auto& curve : wire.segments) {
+        curve = std::move(alignment->curves[index]);
+        if (alignment->anchoredArcs[index]) anchoredArcs.push_back(&curve);
+        ++index;
+    }
+    auto plan = IndependentPlanarHoles(prepared, tolerance);
+    if (plan.tables.size() != 1 || plan.tables.front().rows.size() < 2) return {};
+    // Parallel contours on separate planes can overlap in projection. Each
+    // boundary must have a circular span already on the proposed common plane.
+    const auto anchored = [&](const auto& row) {
+        return std::any_of(row.segments.begin(), row.segments.end(), [&](const auto& curve) {
+            return std::any_of(anchoredArcs.begin(), anchoredArcs.end(), [&](const auto* arc) {
+                return SameInterval(curve, *arc, tolerance.modelLinearMm, tolerance.modelLinearMm);
+            });
+        });
+    };
+    const auto& rows = plan.tables.front().rows;
+    if (!std::all_of(rows.begin(), rows.end(), anchored)) return {};
+    maximumMovement = alignment->maximumMovementMm;
+    return plan;
+}
+
 app::SurfaceNetworkPlan ContactComponentPlan(const std::vector<app::RoleWire>& wires,
     const geometry::GeometryTolerance& tolerance,std::vector<modeling::GuideTableSelection>& unused)
 {
@@ -702,6 +768,13 @@ bool V2LoopFacesTool::TryNetworkPlan()
     // internal crossing. Normalise complete cycles first when available.
     if(!closed.empty())wires=closed;
     auto network = IndependentPlanarHoles(wires,tolerance);
+    double planarMovement = 0;
+    if (network.tables.empty() && closed.empty() && omitted == 0) {
+        auto alignmentTolerance = tolerance;
+        alignmentTolerance.interactiveJoinMm = std::min(tolerance.interactiveJoinMm,
+            window_.Session().GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+        network = PlanarHoleWithAlignedEnds(wires, alignmentTolerance, planarMovement);
+    }
     bool independent=false;
     if(network.tables.empty()){
         network=IndependentSpatialLoops(wires,tolerance);
@@ -756,6 +829,9 @@ bool V2LoopFacesTool::TryNetworkPlan()
     }
     plan_=NetworkDisplayPlan(networkTables_,tolerance,notch,
         network.unusedSegments.size()+(closed.empty()?0:omitted));
+    if (planarMovement > 0)
+        plan_->summaryJa += QStringLiteral("。共通平面へ補正（移動上限 %1 mm、元の線は保持）")
+            .arg(planarMovement, 0, 'g', 4).toStdString();
     styles_.assign(plan_->faces.size(),modeling::FourEdgeStyle::Coons);
     methodOverride_.assign(plan_->faces.size(), std::nullopt);
     make_.assign(plan_->faces.size(), true);

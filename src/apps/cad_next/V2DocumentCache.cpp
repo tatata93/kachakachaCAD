@@ -228,16 +228,19 @@ bool Write(const std::string& source,V2PreparedDocument& data) {
     if(!WritePreparedDocument(path,key,data))return false;
     return WriteManifest(dir,key,path,key);
 }
-bool Transfer(const std::string& source,const QString& destination,const QString& token) {
-    // Retain full semantic validation, including malformed data with a matching manifest hash.
+bool Transfer(const std::string& source,const QString& destination,const QString& token,TransferValidation validation) {
     V2DocumentTiming timing("cache-restore");
     const auto payload=MatchingPayload(Key(source));if(!payload)return false;
     timing.Mark("verify-cache");
-    const auto data=ReadPayload(*payload);if(!data)return false;
-    timing.Mark("read-cache");
-    const bool valid = ValidateNativeShapes(*data);
-    timing.Mark("validate-native");
-    if (!valid) return false;
+    if (validation == TransferValidation::InWorker) {
+        const auto data=ReadPayload(*payload);if(!data)return false;
+        timing.Mark("read-cache");
+        const bool valid = ValidateNativeShapes(*data);
+        timing.Mark("validate-native");
+        if (!valid) return false;
+    }
+    // The document opener checks the complete frame and restores every native
+    // shape before adoption. A rejected reply from this route is rebuilt.
     return CopyPreparedDocument(payload->path,payload->token,destination,token,
         [] { return true; }, V2PreparedFile::WorkerReply);
 }

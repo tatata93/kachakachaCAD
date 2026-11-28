@@ -335,13 +335,29 @@ bool TransferValidation(V2MainWindow& w) {
     if(!Explain("matching SHA cannot legitimize malformed cache fields",!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
     if(!w.OpenDocumentFile(model))return false;
     auto badNative=V2DocumentCache::Read(bytes.Value());if(!badNative||badNative->guides.empty())return false;
+    const auto expected = Snapshot(w);
+    const auto handles = kernel::CachedShapeCount();
+    const auto goodGuides = badNative->guides;
     auto& native=badNative->guides.begin()->second;if(native.empty())return false;native.back()^=1;
     if(!V2DocumentCache::Write(bytes.Value(),*badNative))return false;
     if(!Explain("matching outer hash cannot legitimize corrupted native shape bytes",
         V2DocumentCache::HasMatchingPayload(bytes.Value())&&!V2DocumentCache::Transfer(bytes.Value(),copy,"destination")))return false;
-    return Explain("malformed cache falls back to original model with native geometry intact",w.OpenDocumentFile(model)
-        &&w.KernelShapeCount()==1&&V2DocumentCache::Read(bytes.Value()).has_value()
-        &&io::ReadWholeFile(model.toStdString()).Value()==bytes.Value());
+    QTemporaryDir traceDirectory;
+    if (!traceDirectory.isValid()) return false;
+    const auto previousTrace = qgetenv("KACHACAD_OPEN_TRACE_DIR");
+    qputenv("KACHACAD_OPEN_TRACE_DIR", traceDirectory.path().toUtf8());
+    const bool opened = w.OpenDocumentFile(model);
+    if (previousTrace.isNull()) qunsetenv("KACHACAD_OPEN_TRACE_DIR");
+    else qputenv("KACHACAD_OPEN_TRACE_DIR", previousTrace);
+    QFile trace(traceDirectory.filePath(QStringLiteral("load-%1.jsonl").arg(QCoreApplication::applicationPid())));
+    if (!trace.open(QIODevice::ReadOnly)) return false;
+    const int expectedRetries = qEnvironmentVariableIsSet("KACHACAD_OPEN_KEEP_WORKER_CACHE_VALIDATION") ? 0 : 1;
+    if (!Explain("a rejected reader cache causes one fresh rebuild",
+            trace.readAll().count("\"stage\":\"rejected-cache-rebuild\"") == expectedRetries)) return false;
+    const auto recovered = V2DocumentCache::Read(bytes.Value());
+    return Explain("malformed cache falls back exactly, with no leaked native handles",
+        opened && w.KernelShapeCount()==1 && kernel::CachedShapeCount()==handles && Snapshot(w)==expected
+        && recovered && recovered->guides==goodGuides && io::ReadWholeFile(model.toStdString()).Value()==bytes.Value());
 }
 bool HiddenMesh(V2MainWindow& w) {
     CacheScope scope;if(!scope.folder.isValid())return false;

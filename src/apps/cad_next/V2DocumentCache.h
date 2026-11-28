@@ -17,6 +17,8 @@ void WriteFeatureIndex(const std::string& source, const QByteArray& contents);
 // Save-only existence check. Never authorizes adoption; Read still validates all fields.
 bool HasMatchingPayload(const std::string& source);
 bool Write(const std::string& source, V2PreparedDocument& data);
-bool Transfer(const std::string& source, const QString& destination, const QString& token);
+enum class TransferValidation { InWorker, InReader };
+bool Transfer(const std::string& source, const QString& destination, const QString& token,
+    TransferValidation validation = TransferValidation::InWorker);
 bool StoreTransfer(const std::string& source, const QString& transfer, const QString& token);
 }

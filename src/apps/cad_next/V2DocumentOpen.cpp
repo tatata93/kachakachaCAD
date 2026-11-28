@@ -21,6 +21,7 @@
 #include <chrono>
 #include <future>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <system_error>
@@ -187,24 +188,30 @@ bool V2DocumentOpen::Open(V2MainWindow& w,const QString& path) {
     if(V2GeometryJob::Active())return false;
     const auto revision=w.session_->GetDocument().Revision();
     const auto documentId=w.session_->GetDocument().Snapshot().id;
-    Prepared prepared;
+    std::unique_ptr<Prepared> accepted;
     const auto ready=V2GeometryJob::PrepareDocument(&w,QFileInfo(path).absoluteFilePath(),[&](const QString& dataPath,const QString& token,const std::function<bool()>& pulse){
         timing.Mark("worker-finished");
         auto result=ReadPreparedDocument(dataPath,token,pulse);
         timing.Mark("read-transfer");
         if(!result.HasValue())return base::Result<bool>::Failure(result.Diagnostics());
-        prepared.data=std::move(*result.Value());const auto loaded=io::LoadDocument(prepared.data.archive);
-        if(!loaded.HasValue())return base::Result<bool>::Failure(loaded.Diagnostics());prepared.file=loaded.Value();
+        auto attempt = std::make_unique<Prepared>();
+        attempt->data = std::move(*result.Value());
+        const auto loaded = io::LoadDocument(attempt->data.archive);
+        if (!loaded.HasValue()) return base::Result<bool>::Failure(loaded.Diagnostics());
+        attempt->file = loaded.Value();
         timing.Mark("parse-transferred-archive");
-        auto restored=Restore(prepared.data.parts,prepared.parts,prepared.file,domain::EntityKind::Part,pulse);
+        auto restored=Restore(attempt->data.parts,attempt->parts,attempt->file,domain::EntityKind::Part,pulse);
         if(!restored.HasValue())return restored;
-        restored=Restore(prepared.data.guides,prepared.guides,prepared.file,domain::EntityKind::GuideSurface,pulse);
-        timing.Mark("restore-native-shapes");return restored;
-    });
+        restored=Restore(attempt->data.guides,attempt->guides,attempt->file,domain::EntityKind::GuideSurface,pulse);
+        timing.Mark("restore-native-shapes");
+        if (restored.HasValue()) accepted = std::move(attempt);
+        return restored;
+    }, V2GeometryJob::CachedRead::ValidateOnOpen);
     if(!ready.HasValue()){w.ReportDiagnostics(ready.Diagnostics());return false;}
     if(w.session_->GetDocument().Revision()!=revision||w.session_->GetDocument().Snapshot().id!=documentId) {
         w.SetStatus(QStringLiteral("計算中に文書が変わったため、読込結果を採用しませんでした。"));return false;
     }
+    auto& prepared = *accepted;
     if(!Adopt(w,prepared.file.snapshot,[&]{
         auto oldParts=std::move(w.partShapes_),oldGuides=std::move(w.guideShapes_);
         w.partShapes_=std::move(prepared.parts);w.guideShapes_=std::move(prepared.guides);prepared.transferred=true;

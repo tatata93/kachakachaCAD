@@ -14,7 +14,9 @@ bool Active();
 void CancelPreview(QWidget* parent);
 using DocumentReader = std::function<kachakacha::v2::base::Result<bool>(
     const QString&, const QString&, const std::function<bool()>&)>;
-kachakacha::v2::base::Result<bool> PrepareDocument(QWidget* parent, const QString& path, const DocumentReader& reader);
+enum class CachedRead { ValidateInWorker, ValidateOnOpen };
+kachakacha::v2::base::Result<bool> PrepareDocument(QWidget* parent, const QString& path, const DocumentReader& reader,
+    CachedRead cachedRead = CachedRead::ValidateInWorker);
 int Worker(const QString& directory);
 kachakacha::v2::base::Result<kachakacha::v2::kernel::ThickenedSolid> Thicken(
     QWidget* parent, kachakacha::v2::modeling::KernelShapeHandle source,

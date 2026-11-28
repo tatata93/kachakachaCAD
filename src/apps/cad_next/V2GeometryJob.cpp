@@ -114,7 +114,7 @@ QString TakeLatestPhase(QByteArray& output)
 }
 
 JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const DocumentReader& reader,
-    const std::function<bool()>& pulse) {
+    const std::function<bool()>& pulse, bool* rejectedCache) {
     const auto response=ReadJson(scratch.filePath("response.json"));
     if(response.value("version").toInt()!=1||response.value("token").toString()!=token)
         return JsonResult::Failure(Failed(QStringLiteral("計算結果が不完全なため採用しませんでした。")));
@@ -122,7 +122,10 @@ JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const 
         response.value("code").toString(failedCode).toStdString(),response.value("summary").toString(QStringLiteral("計算に失敗しました。")).toStdString(),response.value("details").toString().toStdString()));
     if(reader) {
         const auto loaded=reader(scratch.filePath("prepared.bin"),token,pulse);
-        if(!loaded.HasValue())return JsonResult::Failure(loaded.Diagnostics());
+        if (!loaded.HasValue()) {
+            if (rejectedCache && response.value("validateCacheInReader").toBool()) *rejectedCache = true;
+            return JsonResult::Failure(loaded.Diagnostics());
+        }
     }
     return JsonResult::Success(response);
 }
@@ -130,7 +133,7 @@ JsonResult ReadResponse(const QTemporaryDir& scratch,const QString& token,const 
 // The only process we may stop is this private calculation child. Its only
 // writable outputs are scratch files; it never receives the document or a save path.
 JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::KernelShapeHandle>& inputs,
-    const DocumentReader& reader={}, bool interactivePreview=false) {
+    const DocumentReader& reader={}, bool interactivePreview=false, bool* rejectedCache=nullptr) {
     const bool documentJob=request.contains("source")&&!request.contains("operation");
     if(Active())return JsonResult::Failure(Failed(QStringLiteral("別の計算が終了してから再操作してください。")));
     struct Busy {
@@ -203,7 +206,7 @@ JsonResult Run(QWidget* parent,QJsonObject request,const std::vector<modeling::K
         QTimer::singleShot(0,&dialog,[&]{
             if(!cancelled&&exitCode==0) {
                 label->setText(QStringLiteral("計算結果を読み込んでいます…"));
-                result=ReadResponse(scratch,token,reader,[&]{QCoreApplication::processEvents();return !cancelled;});
+                result=ReadResponse(scratch,token,reader,[&]{QCoreApplication::processEvents();return !cancelled;},rejectedCache);
             }
             dialog.done(QDialog::Accepted);
         });
@@ -240,8 +243,19 @@ void CancelPreview(QWidget* parent) {
     if(dialog&&dialog->property("interactiveGeometryPreview").toBool())dialog->reject();
 }
 
-base::Result<bool> PrepareDocument(QWidget* parent,const QString& path,const DocumentReader& reader) {
-    const auto result=Run(parent,{{"source",path}}, {}, reader);
+base::Result<bool> PrepareDocument(QWidget* parent,const QString& path,const DocumentReader& reader,CachedRead cachedRead) {
+    const bool validateOnOpen = cachedRead == CachedRead::ValidateOnOpen
+        && !qEnvironmentVariableIsSet("KACHACAD_OPEN_KEEP_WORKER_CACHE_VALIDATION");
+    QJsonObject request{{"source",path}};
+    if (validateOnOpen) request.insert("cacheMode","validateOnOpen");
+    bool rejectedCache = false;
+    auto result = Run(parent, request, {}, reader, false, validateOnOpen ? &rejectedCache : nullptr);
+    if (rejectedCache && !result.HasValue() && result.FirstDiagnostic().code != cancelledCode) {
+        V2DocumentTiming timing("open");
+        timing.Mark("rejected-cache-rebuild");
+        request.insert("cacheMode","rebuild");
+        result = Run(parent, request, {}, reader);
+    }
     if(!result.HasValue())return base::Result<bool>::Failure(result.Diagnostics());
     return base::Result<bool>::Success(true);
 }

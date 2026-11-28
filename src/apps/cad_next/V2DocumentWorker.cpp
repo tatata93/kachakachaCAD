@@ -161,11 +161,16 @@ int V2DocumentOpen::Worker(const QString& directory) {
         const auto bytes=io::ReadWholeFile(request.value("source").toString().toStdString());
         if(!bytes.HasValue())throw bytes.FirstDiagnostic();
         timing.Mark("read-archive");
-        if(V2DocumentCache::Transfer(bytes.Value(),dir.filePath("prepared.bin"),token)) {
+        const auto cacheMode = request.value("cacheMode").toString();
+        const bool validateOnOpen = cacheMode == "validateOnOpen";
+        const auto validation = validateOnOpen ? V2DocumentCache::TransferValidation::InReader
+                                               : V2DocumentCache::TransferValidation::InWorker;
+        if(cacheMode != "rebuild" && V2DocumentCache::Transfer(bytes.Value(),dir.filePath("prepared.bin"),token,validation)) {
             timing.Mark("read-cache-hit");
             Progress(1,1,"内容が一致する計算済み形状を復元しています");
             timing.Mark("write-transfer-cache");
             response["ok"]=true;
+            if (validateOnOpen) response["validateCacheInReader"] = true;
         } else {
         timing.Mark("read-cache-miss");
         auto loaded=io::LoadDocument(bytes.Value());if(!loaded.HasValue())throw loaded.FirstDiagnostic();

@@ -82,17 +82,15 @@ void V2ExtrudeDialog::BuildExtentRows(
     extent_->setCurrentIndex(ExtentIndexOf(initial.extent));
     form->addRow(QStringLiteral("どこまで"), extent_);
 
-    distance_ = new V2NumericSpinBox(this);
+    distance_ = new V2NumericSpinBox(this, V2NumericSpinBox::Precision::ExtrudeLength);
     distance_->setRange(0.0, 10000.0);
-    distance_->setDecimals(3);
     distance_->setSingleStep(0.1);
     distance_->setSuffix(QStringLiteral(" mm"));
     distance_->setValue(initial.distanceMm);
     form->addRow(QStringLiteral("距離"), distance_);
 
-    secondDistance_ = new V2NumericSpinBox(this);
+    secondDistance_ = new V2NumericSpinBox(this, V2NumericSpinBox::Precision::ExtrudeLength);
     secondDistance_->setRange(0.0, 10000.0);
-    secondDistance_->setDecimals(3);
     secondDistance_->setSingleStep(0.1);
     secondDistance_->setSuffix(QStringLiteral(" mm"));
     secondDistance_->setValue(initial.secondDistanceMm);
@@ -115,8 +113,8 @@ void V2ExtrudeDialog::BuildExtentRows(
         }
     }
     form->addRow(QStringLiteral("届かせる相手"), target_);
-    stopOffset_ = new V2NumericSpinBox(this);
-    stopOffset_->setRange(-100000.0, 100000.0); stopOffset_->setDecimals(3);
+    stopOffset_ = new V2NumericSpinBox(this, V2NumericSpinBox::Precision::ExtrudeLength);
+    stopOffset_->setRange(-100000.0, 100000.0);
     stopOffset_->setSuffix(QStringLiteral(" mm")); stopOffset_->setValue(initial.targetOffsetMm);
     form->addRow(QStringLiteral("終端からの距離（＋奥／−手前）"), stopOffset_);
 }

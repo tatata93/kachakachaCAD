@@ -104,10 +104,9 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     form_ = new QFormLayout();
     form_->setContentsMargins(0, 0, 0, 0);
     form_->setSpacing(3);
-    distance_ = new V2NumericSpinBox(body_);
+    distance_ = new V2NumericSpinBox(body_, V2NumericSpinBox::Precision::ExtrudeLength);
     distance_->setObjectName(QStringLiteral("extrudeDistance"));
     distance_->setRange(-100000.0, 100000.0);
-    distance_->setDecimals(3);
     distance_->setSingleStep(1.0);
     distance_->setSuffix(QStringLiteral(" mm"));
     distance_->setValue(10.0);
@@ -125,9 +124,9 @@ void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
     }
     form_->addRow(QStringLiteral("範囲"), extent_);
     form_->addRow(QStringLiteral("距離"), distance_);
-    secondDistance_ = new V2NumericSpinBox(body_);
+    secondDistance_ = new V2NumericSpinBox(body_, V2NumericSpinBox::Precision::ExtrudeLength);
+    secondDistance_->setObjectName(QStringLiteral("extrudeSecondDistance"));
     secondDistance_->setRange(0.0, 100000.0);
-    secondDistance_->setDecimals(3);
     secondDistance_->setSingleStep(1.0);
     secondDistance_->setSuffix(QStringLiteral(" mm"));
     secondDistance_->setValue(10.0);
@@ -1036,10 +1035,10 @@ void V2ExtrudeDock::BuildStopRows()
     QObject::connect(stopPick_, &QPushButton::clicked, this, [this] { if (stopPickHandler_) stopPickHandler_(); });
     QObject::connect(clear, &QPushButton::clicked, this, [this] { target_->setCurrentIndex(-1); });
     form_->addRow(stopRow_);
-    stopOffset_ = new V2NumericSpinBox(body_);
+    stopOffset_ = new V2NumericSpinBox(body_, V2NumericSpinBox::Precision::ExtrudeLength);
     stopOffset_->setObjectName(QStringLiteral("extrudeStopOffset"));
     stopOffset_->setRange(-100000.0, 100000.0);
-    stopOffset_->setDecimals(3); stopOffset_->setSingleStep(0.1);
+    stopOffset_->setSingleStep(0.1);
     stopOffset_->setSuffix(QStringLiteral(" mm"));
     stopOffset_->setToolTip(QStringLiteral("押し出し方向へ終端を移動。正は奥、負は手前。0は指定面まで。曲面の法線方向の距離ではありません。"));
     form_->addRow(QStringLiteral("終端オフセット"), stopOffset_);

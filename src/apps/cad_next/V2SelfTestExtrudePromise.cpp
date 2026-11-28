@@ -17,6 +17,11 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/ToolController.h"
 
+#include <QApplication>
+#include <QDoubleSpinBox>
+#include <QKeyEvent>
+#include <QLineEdit>
+#include <QLocale>
 #include <QPointF>
 #include <QString>
 
@@ -399,8 +404,9 @@ namespace {
     initial.customDirection = {0.0, 0.0, 7.0};
     initial.reversed = true;
     initial.extent = ExtrudeExtentMode::SymmetricDistance;
-    initial.distanceMm = 3.25;
-    initial.secondDistanceMm = 1.5;
+    initial.distanceMm = 3.250000219;
+    initial.secondDistanceMm = 1.500000037;
+    initial.targetOffsetMm = -0.125000314;
     initial.booleanMode = ExtrudeBooleanMode::SubtractFromPart;
     initial.hasSelectedPart = true;
     initial.makePart = true;
@@ -429,9 +435,80 @@ namespace {
     if (!Explain("演算も残る", answered.booleanMode == initial.booleanMode)) {
         return false;
     }
+    if (!Explain("詳細を開くだけで距離やオフセットが丸まらない",
+            answered.distanceMm == initial.distanceMm
+                && answered.secondDistanceMm == initial.secondDistanceMm
+                && answered.targetOffsetMm == initial.targetOffsetMm)) {
+        return false;
+    }
     return Explain("作るものも残る",
         answered.makePart == initial.makePart
             && answered.makeEndProfileWire == initial.makeEndProfileWire);
+}
+
+[[nodiscard]] bool EnterPreciseDistance(QDoubleSpinBox& field, double distanceMm)
+{
+    auto* editor = field.findChild<QLineEdit*>();
+    if (editor == nullptr) {
+        return false;
+    }
+
+    const double before = field.value();
+    editor->selectAll();
+    editor->insert(field.locale().toString(distanceMm, 'f', 9));
+    if (!Explain("入力途中の数値は確定値を変えない", field.value() == before)) {
+        return false;
+    }
+    QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(&field, &enter);
+    return Explain("入力欄で小数9桁の距離が確定する", field.value() == distanceMm);
+}
+
+[[nodiscard]] bool CasePreciseDistanceSurvivesSaveAndReopen(V2MainWindow& window)
+{
+    using kachakacha::v2::domain::ExtrudeDefinition;
+    using kachakacha::v2::modeling::ExtrudeExtentMode;
+
+    constexpr double forwardMm = 0.200497651;
+    constexpr double backwardMm = 0.123456789;
+
+    window.RunCommand("file.new");
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    auto& dock = window.ExtrudeDock();
+    dock.ChooseExtent(ExtrudeExtentMode::TwoDistances);
+    auto* forward = window.findChild<QDoubleSpinBox*>(QStringLiteral("extrudeDistance"));
+    auto* backward = window.findChild<QDoubleSpinBox*>(QStringLiteral("extrudeSecondDistance"));
+    if (!Explain("両側の距離を入力できる", forward != nullptr && backward != nullptr)
+        || !EnterPreciseDistance(*forward, forwardMm)
+        || !EnterPreciseDistance(*backward, backwardMm)) {
+        return false;
+    }
+
+    const auto hasPreciseExtrusion = [&] {
+        const auto snapshot = window.Session().GetDocument().Snapshot();
+        return std::any_of(snapshot.features.begin(), snapshot.features.end(), [&](const auto& feature) {
+            const auto* extrude = std::get_if<ExtrudeDefinition>(&feature.definition);
+            return extrude != nullptr && extrude->distance.value == forwardMm
+                && extrude->secondDistanceMm == backwardMm
+                && extrude->extentMode == static_cast<int>(ExtrudeExtentMode::TwoDistances);
+        });
+    };
+
+    dock.PressConfirm();
+    if (!Explain("両側の入力距離で立体ができる", CountParts(window) == 1 && hasPreciseExtrusion())) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("取り消すと立体が消える", CountParts(window) == 0)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    return Explain("やり直しと保存・再読込でも両側の距離を保つ",
+        hasPreciseExtrusion() && window.SaveAndReopen(QStringLiteral("precise-extrude-distance.kcd2"))
+            && CountParts(window) == 1 && hasPreciseExtrusion());
 }
 
 //! Codex P1-EXTRUDE-R6 B2 / R7 B1 B2。詳細の窓で選んだ向きが、
@@ -570,6 +647,7 @@ std::vector<SelfTestCase> ExtrudePromiseCases()
         {"輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
             CaseDirectionFollowsWhatTheShelfShows},
         {"詳細の窓は渡した決めごとをそのまま見せる", CaseDialogKeepsWhatItWasGiven},
+        {"押し出しの小数9桁の距離を確定と保存で保つ", CasePreciseDistanceSurvivesSaveAndReopen},
         {"詳細の窓で選んだ向きが矢印と確定と次回まで通る",
             CaseDialogDirectionReachesTheShape},
     };

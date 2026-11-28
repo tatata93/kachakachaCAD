@@ -14,6 +14,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/kernel/OcctSolidTopology.h"
 
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -293,11 +294,15 @@ Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double to
         // BRepCheck validates topology and parameter consistency; it does not
         // perform a geometric self-intersection test. Check every solid itself,
         // leaving contacts between separate assembly parts to assembly checks.
+        const bool singleSolid = detail::UnwrapSingleSolid(shape).ShapeType() == TopAbs_SOLID;
         for (TopExp_Explorer e(shape, TopAbs_SOLID); e.More(); e.Next()) {
-            GProp_GProps component;
-            if(shape.ShapeType()==TopAbs_SOLID)component=properties;
-            else detail::VolumeProperties(e.Current(), component);
-            check.positiveVolume = check.positiveVolume && component.Mass() > floorVolume;
+            // The aggregate already integrated this exact oriented solid when
+            // the result consists of just that solid inside pure containers.
+            if (!singleSolid) {
+                GProp_GProps component;
+                detail::VolumeProperties(e.Current(), component);
+                check.positiveVolume = check.positiveVolume && component.Mass() > floorVolume;
+            }
             check.selfIntersectionFree = check.selfIntersectionFree
                 && SelfIntersectionFree(e.Current(),toleranceMm);
         }

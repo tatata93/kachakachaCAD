@@ -4,6 +4,7 @@
 // 出せない形は断り、0バイトのファイルを残さない。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/io/AtomicFile.h"
+#include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
@@ -34,6 +35,7 @@
 #include <gp_Vec2d.hxx>
 #include <gp_Dir2d.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepTools.hxx>
 #include <TopoDS_Compound.hxx>
@@ -726,6 +728,49 @@ KACHA_V2_TEST(kernel_export, binary_ipc_preserves_native_geometry_and_rejects_co
     Require(original.HasValue()&&kernel::CaptureOutputShape(recovered.Value()).Value()==original.Value(),
         "complex curved skins and all native trims survive without STEP healing or approximation");
     kernel::ReleaseShape(complex);kernel::ReleaseShape(recovered.Value());
+}
+
+KACHA_V2_TEST(kernel_export, nested_single_volume_and_mixed_component_validation)
+{
+    namespace kernel = kachakacha::v2::kernel;
+    const auto box = BRepPrimAPI_MakeBox(6, 7, 8).Shape();
+    BRep_Builder builder;
+    TopoDS_Compound inner, wrapped;
+    builder.MakeCompound(inner);
+    builder.Add(inner, box.Reversed());
+    inner.Reverse();
+    builder.MakeCompound(wrapped);
+    builder.Add(wrapped, inner);
+    gp_Trsf translation;
+    translation.SetTranslation(gp_Vec(103, -71, 12));
+    const TopLoc_Location location(translation);
+    wrapped.Move(location);
+
+    const auto wrappedHandle = kernel::StoreShape(wrapped);
+    const auto original = kernel::CaptureOutputShape(wrappedHandle);
+    const auto found = kernel::BooleanSolidComponents(wrappedHandle);
+    Require(found.HasValue() && found.Value().size() == 1, "one oriented solid in nested containers");
+    TopoDS_Shape component;
+    Require(kernel::LookupShape(found.Value().front(), component), "component remains live");
+    Require(component.IsEqual(box.Moved(location)),
+        "component includes both reversals and inherited placement");
+    const auto check = CheckSolidForExport(wrappedHandle, 1e-6);
+    Require(check.HasValue() && check.Value().Ok(), "the nested solid passes full export checks");
+    RequireNear(check.Value().volumeMm3, 336.0, 1e-8, "the wrapped volume matches the solid volume");
+    RequireEqual(kernel::CaptureOutputShape(wrappedHandle).Value(), original.Value(),
+        "component extraction and validation retain the original native form");
+
+    TopoDS_Compound mixed;
+    builder.MakeCompound(mixed);
+    builder.Add(mixed, box);
+    builder.Add(mixed, BRepPrimAPI_MakeBox(gp_Pnt(20, 0, 0), 2, 2, 2).Shape().Reversed());
+    const auto mixedHandle = kernel::StoreShape(mixed);
+    const auto negative = CheckSolidForExport(mixedHandle, 1e-6);
+    Require(negative.HasValue() && negative.Value().closed && negative.Value().volumeMm3 > 0
+        && !negative.Value().positiveVolume, "a positive aggregate must not hide a reversed component");
+    kernel::ReleaseShape(mixedHandle);
+    kernel::ReleaseShape(found.Value().front());
+    kernel::ReleaseShape(wrappedHandle);
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

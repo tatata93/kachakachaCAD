@@ -9,6 +9,7 @@
 
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctSolidTopology.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include <BRepAlgoAPI_Common.hxx>
@@ -23,7 +24,6 @@
 #include <GProp_GProps.hxx>
 #include <Standard_Failure.hxx>
 #include <TopoDS_Shape.hxx>
-#include <TopoDS_Iterator.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -97,30 +97,15 @@ bool HasOverlapWitness(const TopoDS_Shape& first,const TopoDS_Shape& second,doub
     return false;
 }
 
-// A pure container does not change a solid's material. Some native Booleans
-// nevertheless lose the larger operand when a container's sole solid has a
-// reversed relative orientation. Pass that same solid with the accumulated
-// location/orientation; never rewrite the cached source or discard siblings.
-TopoDS_Shape BooleanOperand(const TopoDS_Shape& source)
-{
-    auto candidate=source;
-    while(candidate.ShapeType()==TopAbs_COMPOUND||candidate.ShapeType()==TopAbs_COMPSOLID) {
-        TopoDS_Iterator children(candidate,true,true);
-        if(!children.More())return source;
-        const auto child=children.Value();children.Next();
-        if(children.More())return source;
-        candidate=child;
-    }
-    if(candidate.ShapeType()!=TopAbs_SOLID
-        ||(candidate.Orientation()!=TopAbs_FORWARD&&candidate.Orientation()!=TopAbs_REVERSED))return source;
-    return candidate;
-}
-
 template<class Operation>
 TopoDS_Shape NonDestructiveOperation(const TopoDS_Shape& base,const TopoDS_Shape& other,
     std::string& stoppedAt,const char* failure)
 {
-    TopTools_ListOfShape arguments,tools;arguments.Append(BooleanOperand(base));tools.Append(BooleanOperand(other));
+    // Native operations can lose an operand with a reversed solid inside a
+    // container. Supply the same oriented solid and keep mixed shapes intact.
+    TopTools_ListOfShape arguments,tools;
+    arguments.Append(detail::UnwrapSingleSolid(base));
+    tools.Append(detail::UnwrapSingleSolid(other));
     Operation operation;operation.SetArguments(arguments);operation.SetTools(tools);
     operation.SetNonDestructive(true);operation.Build();
     if(operation.IsDone())operation.SimplifyResult(true,true);
@@ -187,6 +172,8 @@ Result<std::vector<KernelShapeHandle>> BooleanSolidComponents(KernelShapeHandle 
     TopoDS_Shape source;
     if(!LookupShape(result,source))return Out::Failure(MakeError(kBooleanTargetMissing,"結果の立体がありません。",{}));
     try {
+        const auto single = detail::UnwrapSingleSolid(source);
+        if (single.ShapeType() == TopAbs_SOLID) return Out::Success({StoreShape(single)});
         std::vector<std::pair<std::array<double,6>,TopoDS_Shape>> solids;
         for(TopExp_Explorer e(source,TopAbs_SOLID);e.More();e.Next()) {
             Bnd_Box box;BRepBndLib::AddOptimal(e.Current(),box,false,false);
@@ -322,7 +309,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
         double sum = before, largest = before;
         if (!std::isfinite(before) || before <= 0) return Out::Failure(MakeError(kBooleanFailed, "土台の体積が不正です。", {}));
         TopTools_ListOfShape arguments, others;
-        arguments.Append(BooleanOperand(base));
+        arguments.Append(detail::UnwrapSingleSolid(base));
         for (const auto handle : tools) {
             TopoDS_Shape shape;
             if (!LookupShape(handle, shape)) return Out::Failure(MakeError(kBooleanTargetMissing, "相手の部品がありません。", {}));
@@ -330,7 +317,7 @@ Result<BooleanBuildResult> BuildBooleans(BooleanOperation operation,
             if (!std::isfinite(volume) || volume <= 0) return Out::Failure(MakeError(kBooleanFailed, "相手の体積が不正です。", {}));
             sum += volume;
             largest = std::max(largest, volume);
-            others.Append(BooleanOperand(shape));
+            others.Append(detail::UnwrapSingleSolid(shape));
         }
         BRepAlgoAPI_Fuse fuse;
         fuse.SetArguments(arguments);

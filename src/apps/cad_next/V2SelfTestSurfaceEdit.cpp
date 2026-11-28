@@ -22,10 +22,14 @@
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctOutput.h"
+#include "kachakacha/kernel/OcctTessellate.h"
 
 #include <QPointF>
 #include <QString>
+#include <QAction>
+#include <QMenu>
 #include <QPushButton>
+#include <QTimer>
 #include <QTreeWidgetItem>
 #include <QApplication>
 #include <QMouseEvent>
@@ -262,6 +266,139 @@ bool UiTreeSelect(V2MainWindow& window,EntityId id)
     return Explain("1 回の取り消しで消える", CountOfKind(window, EntityKind::GuideSurface) == 2);
 }
 
+bool PickListedSurfaceEdge(V2MainWindow& window, EntityId surface, int index, bool checked)
+{
+    auto* row = window.ItemOfEntity(surface);
+    if (!Explain("the surface has an explorer row", row != nullptr)) return false;
+    auto* tree = window.EntityTree();
+    tree->setFocus();
+    for (auto* parent = row->parent(); parent != nullptr; parent = parent->parent()) parent->setExpanded(true);
+    tree->scrollToItem(row);
+    QApplication::processEvents();
+    const auto at = tree->visualItemRect(row).intersected(tree->viewport()->rect()).center();
+    if (!Explain("the surface row is visible where the context is requested", tree->itemAt(at) == row)) return false;
+    bool picked = false;
+    QTimer choose;
+    choose.setSingleShot(true);
+    QObject::connect(&choose, &QTimer::timeout, &window, [&] {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (menu == nullptr) {
+            for (auto* candidate : window.findChildren<QMenu*>()) {
+                if (candidate->isVisible()) { menu = candidate; break; }
+            }
+        }
+        if (menu == nullptr) return;
+        auto* edges = menu->findChild<QMenu*>(QStringLiteral("explorerSurfaceEdges"));
+        if (Explain("the context menu lists four native edges of the clicked row",
+                edges && edges->actions().size() == 4)) {
+            const auto prefix = QStringLiteral("縁 %1  (").arg(index + 1);
+            for (auto* action : edges->actions()) {
+                if (!action->text().startsWith(prefix)) continue;
+                action->hover();
+                const auto& lines = window.Viewport().CurrentEditPreview().lines;
+                if (Explain("the listed edge has the expected check and one highlighted curve",
+                        action->isChecked() == checked && lines.size() == 1 && lines[0].size() >= 2)) {
+                    action->trigger();
+                    picked = window.Viewport().CurrentEditPreview().lines.empty();
+                }
+                break;
+            }
+        }
+        menu->close();
+    });
+    choose.start(0);
+    window.ShowExplorerMenu(at);
+    return Explain("the actual explorer context applies the requested edge", picked);
+}
+
+std::vector<kachakacha::v2::geometry::Vector3> MeshVertices(const modeling::ShapeMesh& mesh)
+{
+    std::vector<kachakacha::v2::geometry::Vector3> vertices;
+    for (const auto& triangle : mesh.triangles) {
+        vertices.insert(vertices.end(), triangle.points.begin(), triangle.points.end());
+    }
+    return vertices;
+}
+
+std::vector<kachakacha::v2::geometry::Vector3> SurfaceVertices(V2MainWindow& window, EntityId id)
+{
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (shape.entityId == id) return MeshVertices(shape.mesh);
+    }
+    return {};
+}
+
+template<bool Match>
+bool CaseListedSurfaceEdges(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto leftWire = DrawRectangleAtByHand(window, .18, .35, .40, .65);
+    const auto rightWire = DrawRectangleAtByHand(window, Match ? .40 : .60, .35, Match ? .62 : .82, .65);
+    const auto left = SurfaceFromRectangle(window, leftWire);
+    const auto right = SurfaceFromRectangle(window, rightWire);
+    const auto leftVertices = SurfaceVertices(window, left);
+    const auto rightVertices = SurfaceVertices(window, right);
+    if (!Explain("two source surfaces have visible source meshes",
+            !left.IsNil() && !right.IsNil() && !leftVertices.empty() && !rightVertices.empty())) return false;
+    window.Viewport().SelectAt(QPointF(2, 2), Qt::NoModifier);
+    window.RunCommand(Match ? "surface.match" : "surface.bridge");
+    auto& tool = window.SurfaceEdit();
+    const auto clickLeft = [&] { return ClickSurfaceAt(window, left, Match ? .90 : .93, .50); };
+    const auto clickRight = [&] { return ClickSurfaceAt(window, right, Match ? .10 : .07, .50); };
+    if (!Explain("both 3D positions can be clicked", clickLeft() && clickRight())) return false;
+    const auto chosen = tool.Input().edges;
+    if (!Explain(("both facing viewport edges produce a preview (" + tool.Outcome().refusalJa + ")").c_str(),
+            chosen.size() == 2 && chosen[0].surface == left && chosen[1].surface == right && tool.Outcome().available)) return false;
+    const auto first = tool.PreviewSurfaces();
+    if (!Explain("the initial preview contains one native surface", first.size() == 1)) return false;
+    const auto firstShape = kernel::BuildShapeMesh(first.front());
+    if (!Explain("the initial native surface has a display mesh", firstShape.HasValue() && !firstShape.Value().Empty())) return false;
+    if (!PickListedSurfaceEdge(window, right, chosen[1].edgeIndex, true)
+        || !Explain("the listed B edge toggles off while A stays selected",
+            tool.Input().edges[0].surface == left && tool.Input().edges[1].surface.IsNil())
+        || !PickListedSurfaceEdge(window, right, chosen[1].edgeIndex, false)) return false;
+    if (!clickLeft()
+        || !Explain("the viewport can remove A and preserve the listed B edge",
+            tool.Input().edges[0].surface.IsNil() && tool.Input().edges[1].surface == right)) return false;
+    auto* role = window.findChild<QPushButton*>(QStringLiteral("surfaceEditRole0"));
+    if (!Explain("the first edge role can be armed", role != nullptr && role->isVisible())) return false;
+    role->click();
+    if (!PickListedSurfaceEdge(window, left, chosen[0].edgeIndex, false)) return false;
+    const auto& mixed = tool.Input().edges;
+    if (!Explain("the listed edges keep the viewport identities and the output is available",
+            mixed[0].surface == left && mixed[0].edgeIndex == chosen[0].edgeIndex
+            && mixed[1].surface == right && mixed[1].edgeIndex == chosen[1].edgeIndex
+            && tool.Outcome().available)) return false;
+    const auto finalPreview = tool.PreviewSurfaces();
+    if (!Explain("the mixed preview contains one native surface", finalPreview.size() == 1)) return false;
+    const auto mixedShape = kernel::BuildShapeMesh(finalPreview.front());
+    if (!Explain("both selection routes calculate the same mesh from the native face",
+            mixedShape.HasValue() && MeshVertices(mixedShape.Value()) == MeshVertices(firstShape.Value()))) return false;
+    if (!Explain("clicking a whole row leaves the preview handle in place",
+            UiTreeSelect(window, right) && tool.PreviewSurfaces().size() == 1
+            && tool.PreviewSurfaces().front().value == finalPreview.front().value)) return false;
+    if (!Explain("the mixed selection can be committed", window.HandleToolKey(Qt::Key_Return, nullptr))) return false;
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    const auto& feature = snapshot.features.back();
+    const auto* edit = std::get_if<domain::EditSurfaceDefinition>(&feature.definition);
+    const std::vector<int> indices{chosen[0].edgeIndex, chosen[1].edgeIndex};
+    if (!Explain("the saved feature holds the two native edge indices",
+            edit && edit->surfaces == std::vector<EntityId>{left, right}
+            && edit->edgeIndices == indices && feature.outputs.size() == 1)) return false;
+    const auto output = feature.outputs.front().entityId;
+    const auto outputVertices = SurfaceVertices(window, output);
+    if (!Explain("the committed surface keeps the approved native preview",
+            !outputVertices.empty() && kernel::BuildShapeMesh(finalPreview.front()).HasValue())) return false;
+    window.RunCommand("edit.undo");
+    if (CountOfKind(window, EntityKind::GuideSurface) != 2) return false;
+    window.RunCommand("edit.redo");
+    if (!window.SaveAndReopen(Match ? QStringLiteral("listed-match.kcd2") : QStringLiteral("listed-bridge.kcd2"))) return false;
+    return Explain("history and reopen preserve both sources and the new surface",
+        window.RebuildProblems().isEmpty() && CountOfKind(window, EntityKind::GuideSurface) == 3
+        && SurfaceVertices(window, left) == leftVertices && SurfaceVertices(window, right) == rightVertices
+        && SurfaceVertices(window, output) == outputVertices);
+}
+
 } // namespace
 
 bool SurfacePreviewOwnership(V2MainWindow& w)
@@ -457,6 +594,8 @@ std::vector<SelfTestCase> SurfaceEditCases()
         {"HP-SE-06 surface history rebuild ownership",SurfaceHistoryOwnership},
         {"HP-SE-07 folder metadata preserves preview but geometry invalidates it",SurfaceFolderPreview},
         {"HP-SE-08 tree selection enters surface edits and survives tool switches",SurfaceTreeSelectionHandoff},
+        {"HP-SE-09 listed match edges agree with viewport and survive reopen",CaseListedSurfaceEdges<true>},
+        {"HP-SE-10 listed bridge edges agree with viewport and survive reopen",CaseListedSurfaceEdges<false>},
 #ifdef KACHACAD_V2_WITH_OCCT
         {"HP-SE-ACTIVE-UV cropped smooth support refit offset thickness and history",CroppedSupportToolChain},
 #endif

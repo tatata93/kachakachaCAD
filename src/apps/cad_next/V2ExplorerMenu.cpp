@@ -13,6 +13,7 @@
 #include "V2EntityTree.h"
 #include "V2FaceActions.h"
 #include "V2ShellSplitTool.h"
+#include "V2SurfaceEditTool.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/geometry/CurveIntersection.h"
@@ -198,8 +199,10 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
         }
     }
     if (!viewport.PickPending() && viewport.DisplaySettingsNow().shapesVisible) {
-        if (!viewport.ReferencePickPending() && viewport.ToolPickActive())
+        if (!viewport.ReferencePickPending() && viewport.ToolPickActive()) {
             window.EdgeFinishTool().AddListedEdges(*elements, id);
+            window.SurfaceEdit().AddListedEdges(*elements, id);
+        }
         for (const auto& shape : viewport.ShapeViews()) {
             if (shape.entityId != id) continue;
             std::map<std::size_t, const modeling::MeshTriangle*> faces;

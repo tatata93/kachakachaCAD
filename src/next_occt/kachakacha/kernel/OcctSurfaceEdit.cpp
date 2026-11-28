@@ -376,6 +376,24 @@ Result<SurfaceEdgeInfo> SurfaceEdgeAt(const KernelShapeHandle& surface, int edge
     }, kEditEdgeMissing, "縁の取り出し");
 }
 
+Result<std::vector<SurfaceEdgeInfo>> ListSurfaceEdges(const KernelShapeHandle& surface)
+{
+    using Out = Result<std::vector<SurfaceEdgeInfo>>;
+    return Guarded([&]() -> Out {
+        const auto face = FaceOf(surface);
+        if (!face.HasValue()) return Out::Failure(face.Diagnostics());
+        const auto edges = EdgesOf(face.Value());
+        std::vector<SurfaceEdgeInfo> listed;
+        listed.reserve(edges.size());
+        for (std::size_t index = 0; index < edges.size(); ++index) {
+            if (!BRep_Tool::Degenerated(edges[index])) {
+                listed.push_back({static_cast<int>(index), 0.0, EdgePolyline(edges[index])});
+            }
+        }
+        return Out::Success(std::move(listed));
+    }, kEditEdgeMissing, "縁の取り出し");
+}
+
 Result<SurfaceEditResult> MatchSurfaceEdge(const KernelShapeHandle& target, int targetEdge,
     const KernelShapeHandle& reference, int referenceEdge, SurfaceContinuity order,
     const GeometryTolerance& tolerance)
@@ -1024,6 +1042,11 @@ Result<SurfaceEdgeInfo> NearestSurfaceEdge(const KernelShapeHandle&, const Vecto
 Result<SurfaceEdgeInfo> SurfaceEdgeAt(const KernelShapeHandle&, int)
 {
     return NoKernel<SurfaceEdgeInfo>();
+}
+
+Result<std::vector<SurfaceEdgeInfo>> ListSurfaceEdges(const KernelShapeHandle&)
+{
+    return NoKernel<std::vector<SurfaceEdgeInfo>>();
 }
 
 Result<SurfaceEditResult> MatchSurfaceEdge(const KernelShapeHandle&, int,

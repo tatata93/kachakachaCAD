@@ -16,7 +16,10 @@
 #include "kachakacha/kernel/OcctSurfaceEdit.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
+#include <QAction>
 #include <QKeyEvent>
+#include <QMenu>
+#include <QObject>
 #include <QString>
 
 #include <algorithm>
@@ -127,7 +130,7 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
             int edge = -1;
             if (kachakacha::v2::app::SurfaceEditSlotsFor(operation).edges > 0) {
                 // A whole-object row has no hit position from which to choose
-                // an edge. Wait for the user's explicit pick in the 3D view.
+                // an edge. Wait for an explicit edge pick.
                 if(ref.kind==kachakacha::v2::app::SelectionElementKind::Object)continue;
                 const auto found = window_.guideShapes_.find(ref.entityId.ToString());
                 if (found != window_.guideShapes_.end()) {
@@ -149,8 +152,8 @@ void V2SurfaceEditTool::Begin(std::string_view commandId)
     Refresh();
     const bool hasInput=!input_.surfaces.empty()||!input_.wires.empty()||!input_.edges.empty();
     const std::string next=hasInput?(outcome_.available?"下見を確認し、Enterで確定します。":outcome_.refusalJa)
-        :kachakacha::v2::app::SurfaceEditSlotsFor(operation).edges>0
-            ?"3Dビューで、使う縁の近くを選んでください。"
+        :UsesEdgeRoles()
+            ?"3Dビューか左一覧の右クリック「部分を指定」から縁を選んでください。"
             :"3Dビューまたは左一覧から対象を選んでください。";
     window_.SetStatus(Text(std::string(kachakacha::v2::app::SurfaceEditLabelJa(operation))+": "+next
         +" Escで入力を取り消します。元の形は残ります。"));
@@ -225,14 +228,14 @@ void V2SurfaceEditTool::HandleSelectionChanged()
     const auto before=input_;
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
         ApplyPick(*pick);
-    } else if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges == 0) {
+    } else if (!UsesEdgeRoles()) {
         const auto selection = window_.viewport_->Selection().entityIds;
         for (const auto& id : selection) {
             if (std::find(input_.surfaces.begin(),input_.surfaces.end(),id)==input_.surfaces.end()
                 && std::find(input_.wires.begin(),input_.wires.end(),id)==input_.wires.end()) ApplyPick(id);
         }
     } else {
-        window_.SetStatus(QStringLiteral("縁は3Dビューで選んでください。面だけの一覧選択では縁を特定できません。"));
+        window_.SetStatus(QStringLiteral("縁は3Dビューか左一覧の右クリック「部分を指定」から選んでください。"));
     }
     MirrorToSelection();   // 受けなかったもの(部品など)を選択に残さない。
     const auto& plane=window_.viewport_->WorkPlane();
@@ -250,6 +253,66 @@ void V2SurfaceEditTool::HandleSelectionChanged()
     Refresh();
 }
 
+
+bool V2SurfaceEditTool::UsesEdgeRoles() const
+{
+    return kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges > 0;
+}
+
+std::size_t V2SurfaceEditTool::EdgeSlot(const EntityId& id) const
+{
+    if (activeRole_ == 0 || activeRole_ == 1) return static_cast<std::size_t>(activeRole_);
+    for (std::size_t i = input_.edges.size(); i > 0; --i) {
+        if (input_.edges[i - 1].surface == id) return i - 1;
+    }
+    return input_.edges.empty() || input_.edges.front().surface.IsNil() ? 0 : 1;
+}
+
+void V2SurfaceEditTool::ApplyEdgePick(const kachakacha::v2::app::SurfaceEdgePick& pick)
+{
+    const auto slot = EdgeSlot(pick.surface);
+    input_.edges.resize(2);
+    auto& selected = input_.edges[slot];
+    if (selected.surface == pick.surface && selected.edgeIndex == pick.edgeIndex) selected = {};
+    else selected = pick;
+}
+
+void V2SurfaceEditTool::AddListedEdges(QMenu& menu, const EntityId& id)
+{
+    if (!active_ || !UsesEdgeRoles()) return;
+    const auto found = window_.guideShapes_.find(id.ToString());
+    if (found == window_.guideShapes_.end()) return;
+    const auto shape = found->second;
+    const auto listed = kachakacha::v2::kernel::ListSurfaceEdges(shape);
+    if (!listed.HasValue() || listed.Value().empty()) return;
+
+    const auto operation = input_.operation;
+    const auto slot = EdgeSlot(id);
+    auto* edges = menu.addMenu(QStringLiteral("縁"));
+    edges->setObjectName(QStringLiteral("explorerSurfaceEdges"));
+    edges->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
+    QObject::connect(edges, &QMenu::aboutToHide, &window_, [this] { window_.viewport_->HideEditPreview(); });
+    for (const auto& edge : listed.Value()) {
+        const auto point = edge.polyline[edge.polyline.size() / 2];
+        auto* action = edges->addAction(QStringLiteral("縁 %1  (%2, %3, %4 mm)").arg(edge.index + 1)
+            .arg(point.x, 0, 'f', 2).arg(point.y, 0, 'f', 2).arg(point.z, 0, 'f', 2));
+        action->setCheckable(true);
+        action->setChecked(slot < input_.edges.size()
+            && input_.edges[slot].surface == id && input_.edges[slot].edgeIndex == edge.index);
+        QObject::connect(action, &QAction::hovered, edges, [this, line = edge.polyline] {
+            window_.viewport_->ShowEditPreview({{line}, {}, false});
+        });
+        QObject::connect(action, &QAction::triggered, &window_, [this, operation, shape, id, index = edge.index, point] {
+            window_.viewport_->HideEditPreview();
+            if (!active_ || input_.operation != operation || !window_.viewport_->EntityShown(id)) return;
+            const auto current = window_.guideShapes_.find(id.ToString());
+            if (current == window_.guideShapes_.end() || current->second.value != shape.value) return;
+            ApplyEdgePick({id, index, point});
+            MirrorToSelection();
+            Refresh();
+        });
+    }
+}
 
 void V2SurfaceEditTool::ApplyPick(const EntityId& id)
 {
@@ -273,29 +336,15 @@ void V2SurfaceEditTool::ApplyPick(const EntityId& id)
             hit = ref.hitPoint;
         }
     }
-    int edge = -1;
-    if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges > 0) {
-        const auto found = window_.guideShapes_.find(id.ToString());
-        if (found != window_.guideShapes_.end()) {
-            const auto nearest = kachakacha::v2::kernel::NearestSurfaceEdge(found->second, hit);
-            if (nearest.HasValue()) {
-                edge = nearest.Value().index;
-            } else {
-                window_.ReportDiagnostics(nearest.Diagnostics());
-            }
-        }
+    if (!UsesEdgeRoles()) {
+        input_ = kachakacha::v2::app::WithSurfaceEditSurfacePick(input_, id, hit, -1);
+        return;
     }
-    if (kachakacha::v2::app::SurfaceEditSlotsFor(input_.operation).edges > 0) {
-        input_.edges.resize(2);
-        int slot = activeRole_;
-        if (slot < 0 || slot > 1) {
-            slot = input_.edges[0].surface.IsNil() ? 0 : 1;
-            for (int i=0; i<2; ++i) if (input_.edges[i].surface == id) slot = i;
-        }
-        auto& selected = input_.edges[slot];
-        if (selected.surface == id && selected.edgeIndex == edge) selected = {};
-        else selected = {id, edge, hit};
-    } else input_ = kachakacha::v2::app::WithSurfaceEditSurfacePick(input_, id, hit, edge);
+    const auto found = window_.guideShapes_.find(id.ToString());
+    if (found == window_.guideShapes_.end()) return;
+    const auto nearest = kachakacha::v2::kernel::NearestSurfaceEdge(found->second, hit);
+    if (nearest.HasValue()) ApplyEdgePick({id, nearest.Value().index, hit});
+    else window_.ReportDiagnostics(nearest.Diagnostics());
 }
 
 std::string V2SurfaceEditTool::NameOf(const EntityId& id) const

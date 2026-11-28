@@ -67,6 +67,10 @@ struct SurfaceEditResult {
 [[nodiscard]] base::Result<SurfaceEdgeInfo> SurfaceEdgeAt(
     const modeling::KernelShapeHandle& surface, int edgeIndex);
 
+//! 縁を選ぶ候補。縮退した縁を飛ばしても、番号は拾い出し・保存と同じ。
+[[nodiscard]] base::Result<std::vector<SurfaceEdgeInfo>> ListSurfaceEdges(
+    const modeling::KernelShapeHandle& surface);
+
 //! 直す面の縁を、合わせ先の面の縁へ合わせる。ほかの縁はそのまま、元の面を初期形にして
 //! 張り直す(遠いところほど元の形のまま)。両方の縁の端が離れていれば断る。
 [[nodiscard]] base::Result<SurfaceEditResult> MatchSurfaceEdge(

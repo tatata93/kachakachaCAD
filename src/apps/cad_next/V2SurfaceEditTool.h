@@ -21,11 +21,13 @@
 
 #include <QString>
 
+#include <cstddef>
 #include <string>
 #include <cstdint>
 #include <string_view>
 #include <vector>
 
+class QMenu;
 class V2MainWindow;
 
 class V2SurfaceEditTool final {
@@ -41,6 +43,7 @@ public:
     void Begin(std::string_view commandId);
     void End(bool keepTool = false);
     void Confirm();
+    void AddListedEdges(QMenu& menu, const kachakacha::v2::base::EntityId& id);
     //! 3D の選択が変わった(窓の HandleSelectionChanged から)。
     void HandleSelectionChanged();
     //! Enter / Esc。引き受けたら真。
@@ -81,6 +84,9 @@ private:
     void RefreshDock();
     void MirrorToSelection();
     void ApplyPick(const kachakacha::v2::base::EntityId& id);
+    [[nodiscard]] bool UsesEdgeRoles() const;
+    [[nodiscard]] std::size_t EdgeSlot(const kachakacha::v2::base::EntityId& id) const;
+    void ApplyEdgePick(const kachakacha::v2::app::SurfaceEdgePick& pick);
     [[nodiscard]] std::string NameOf(const kachakacha::v2::base::EntityId& id) const;
     [[nodiscard]] bool AddSurfaceFeature(BuiltSurface& built);
     [[nodiscard]] bool AddWireFeature(const std::vector<kachakacha::v2::geometry::CurveSegment>& wire,

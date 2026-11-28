@@ -19,6 +19,7 @@
 
 #include <QApplication>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QLocale>

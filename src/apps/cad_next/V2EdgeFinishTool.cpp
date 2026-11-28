@@ -17,9 +17,10 @@
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ToolController.h"
 
-#include <QKeyEvent>
 #include <QAction>
+#include <QKeyEvent>
 #include <QMenu>
+#include <QObject>
 #include <QString>
 
 #include <algorithm>

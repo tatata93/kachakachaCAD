@@ -13,6 +13,7 @@
 #include "kachakacha/kernel/OcctShapeTransfer.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include <QAbstractButton>
+#include <QColor>
 #include <QObject>
 #include <QFileInfo>
 #include <QString>

@@ -1038,7 +1038,7 @@ private:
     kachakacha::v2::app::BooleanInputState booleanInput_;
     kachakacha::v2::app::BooleanPreviewOutcome booleanOutcome_;
     //! 下見に使った形。**確定はこれをそのまま入れる。**
-    std::optional<kachakacha::v2::modeling::KernelShapeHandle> booleanBuilt_;
+    std::unique_ptr<v2ui::BooleanPreview> booleanPreview_;
     std::vector<kachakacha::v2::base::EntityId> booleanMirror_;
     bool booleanMirroring_ = false;
     V2BooleanDock* booleanDock_ = nullptr;

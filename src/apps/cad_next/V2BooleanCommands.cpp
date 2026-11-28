@@ -45,7 +45,6 @@
 #include "V2CornerDock.h"
 #include "V2ShapeLifetime.h"
 #include "kachakacha/app/ExplorerModel.h"
-#include "kachakacha/kernel/OcctSolidExport.h"
 
 #include <QString>
 #include <QVariant>
@@ -334,8 +333,7 @@ void V2MainWindow::RefreshBooleanForSelectionChange()
 void V2MainWindow::RefreshBooleanPreview()
 {
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
-    if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
-    booleanBuilt_.reset();
+    booleanPreview_.reset();
     viewport_->HideToolPreview();
     if (!kachakacha::v2::app::BooleanReady(booleanInput_)) {
         return;
@@ -373,16 +371,28 @@ void V2MainWindow::RefreshBooleanPreview()
             booleanOutcome_.refusalJa += "\n" + built.Diagnostics().front().detailsJa;
         return;
     }
-    const auto current = built.Value().handle;
+    const v2ui::ShapeListOwner result{{built.Value().handle}};
+    const auto parts = kachakacha::v2::kernel::BooleanSolidComponents(result.values.front());
+    if (!parts.HasValue()) {
+        booleanOutcome_.refusalJa = parts.FirstSummaryJa();
+        if (!parts.Diagnostics().empty() && !parts.Diagnostics().front().detailsJa.empty())
+            booleanOutcome_.refusalJa += "\n" + parts.Diagnostics().front().detailsJa;
+        return;
+    }
+    auto preview = std::make_unique<v2ui::BooleanPreview>(parts.Value());
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
+    for (std::size_t i = 0; i < preview->parts.values.size(); ++i) {
+        auto mesh = kachakacha::v2::kernel::BuildShapeMesh(preview->parts.values[i]);
+        if (!mesh.HasValue()) continue;
+        preview->meshes[i] = std::move(mesh.Value());
+        const auto& edges = preview->meshes[i].edges;
+        lines.insert(lines.end(), edges.begin(), edges.end());
+    }
     booleanOutcome_.available = true;
     booleanOutcome_.volumeMm3 = built.Value().volumeMm3;
     booleanOutcome_.previousVolumeMm3 = built.Value().previousVolumeMm3;
-    booleanBuilt_ = current;
-    // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
-    const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(current);
-    if (mesh.HasValue()) {
-        viewport_->ShowToolPreview(mesh.Value().edges);
-    }
+    booleanPreview_ = std::move(preview);
+    viewport_->ShowToolPreview(std::move(lines));
 }
 
 //! 棚・札・一番下の一行を、いまの入力に合わせる。
@@ -403,9 +413,9 @@ void V2MainWindow::RefreshBooleanDock()
              booleanOutcome_, previewShown)) {
         lines.push_back(QString::fromStdString(line));
     }
-    if(booleanBuilt_) {
-        const auto count=kachakacha::v2::kernel::CountSolidComponents({*booleanBuilt_});
-        if(count.HasValue()&&count.Value()>1)lines.push_back(QStringLiteral("確定すると %1 個の部品になります。").arg(count.Value()));
+    if (booleanPreview_ && booleanPreview_->parts.values.size() > 1) {
+        lines.push_back(QStringLiteral("確定すると %1 個の部品になります。")
+            .arg(booleanPreview_->parts.values.size()));
     }
     // 相手の名前を並べる(何個でも)。
     std::string tools;
@@ -415,7 +425,7 @@ void V2MainWindow::RefreshBooleanDock()
         tools += (tools.empty() ? "" : " / ") + nameOf(id);
     }
     booleanDock_->ShowInput(booleanInput_, QString::fromStdString(nameOf(booleanInput_.target)),
-        QString::fromStdString(tools), lines, booleanBuilt_.has_value());
+        QString::fromStdString(tools), lines, booleanPreview_ != nullptr);
     booleanDock_->SetToolItems(toolNames);
     booleanDock_->removeTool = [this](int row) {
         if (row < 0 || row >= static_cast<int>(booleanInput_.tools.size())) return;
@@ -485,8 +495,7 @@ void V2MainWindow::EndBoolean(bool keepTool)
     contactBase_.reset();
     contactBuilt_.reset();
     booleanShelfShown_ = keepTool;
-    if(booleanBuilt_)kachakacha::v2::kernel::ReleaseShape(*booleanBuilt_);
-    booleanBuilt_.reset();
+    booleanPreview_.reset();
     booleanOutcome_ = kachakacha::v2::app::BooleanPreviewOutcome{};
     const auto kind=booleanInput_.kind;
     booleanInput_ = kachakacha::v2::app::BooleanInputState{};
@@ -508,17 +517,19 @@ void V2MainWindow::EndBoolean(bool keepTool)
 //! 確定。**下見に使った形をそのまま**文書へ入れる。土台と相手を隠すのも含めて1回で戻せる。
 void V2MainWindow::ConfirmBoolean()
 {
+    if (V2GeometryJob::Active()) return;
     if (ConfirmContact()) return;
-    if (!booleanBuilt_.has_value()) {
-        SetStatus(QStringLiteral("%1: まだ作れません。土台と相手を入れてください。")
-                .arg(QString::fromUtf8(std::string(kachakacha::v2::app::BooleanOperationLabelJa(
-                                                       booleanInput_.kind))
-                                           .c_str())));
+    const auto labelText = kachakacha::v2::app::BooleanOperationLabelJa(booleanInput_.kind);
+    if (!booleanPreview_) {
+        const auto reason = booleanOutcome_.refusalJa.empty()
+            ? QStringLiteral("まだ作れません。土台と相手を入れてください。")
+            : QString::fromStdString(booleanOutcome_.refusalJa);
+        SetStatus(QStringLiteral("%1: %2")
+            .arg(QString::fromUtf8(labelText.data(), labelText.size()), reason));
         RefreshBooleanDock();
         return;
     }
-    const std::string labelText(kachakacha::v2::app::BooleanOperationLabelJa(booleanInput_.kind));
-    const char* label = labelText.c_str();
+    const std::string label(labelText);
     kachakacha::v2::domain::BooleanDefinition definition;
     definition.mode = kachakacha::v2::app::BooleanModeOf(booleanInput_.kind);   // 0 足す 1 引く 2 交差
     definition.targets.push_back(booleanInput_.target);
@@ -526,19 +537,17 @@ void V2MainWindow::ConfirmBoolean()
     std::vector<EntityId> used{booleanInput_.target};
     used.insert(used.end(), booleanInput_.tools.begin(), booleanInput_.tools.end());
     const auto outcome = booleanOutcome_;
-    const auto handle = *booleanBuilt_;
-    const auto split=kachakacha::v2::kernel::BooleanSolidComponents(handle);
-    if(!split.HasValue()){ReportDiagnostics(split.Diagnostics());return;}
-    v2ui::ShapeListOwner pieces{split.Value()};
+    auto& preview = *booleanPreview_;
+    const auto count = preview.parts.values.size();
     kachakacha::v2::domain::Feature feature;
     feature.id=ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type=kachakacha::v2::domain::FeatureType::Boolean;feature.definition=definition;
-    feature.displayName=labelText;feature.inputEntityIds=used;
+    feature.displayName=label;feature.inputEntityIds=used;
     std::vector<kachakacha::v2::domain::Entity> outputs;
-    for(std::size_t i=0;i<pieces.values.size();++i) {
+    for(std::size_t i=0;i<count;++i) {
         kachakacha::v2::domain::Entity entity;entity.id=ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
         entity.kind=EntityKind::Part;entity.createdBy=feature.id;
-        const auto name=labelText+(pieces.values.size()>1?" "+std::to_string(i+1):"");
+        const auto name=label+(count>1?" "+std::to_string(i+1):"");
         entity.displayName=kachakacha::v2::app::UniqueDisplayName(session_->GetDocument().Snapshot(),EntityKind::Part,name);
         feature.outputs.push_back({"part/"+std::to_string(i+1),entity.id,EntityKind::Part});outputs.push_back(entity);
     }
@@ -556,11 +565,16 @@ void V2MainWindow::ConfirmBoolean()
     if (!transaction.Commit()) {
         return;
     }
-    for(std::size_t i=0;i<outputs.size();++i)partShapes_[outputs[i].id.ToString()]=pieces.Take(i);
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto handle = preview.parts.Take(i);
+        partShapes_[outputs[i].id.ToString()] = handle;
+        if (!preview.meshes[i].Empty())
+            shapeMeshes_[handle.value] = std::move(preview.meshes[i]);
+    }
     EndBoolean();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("%1: 体積が %2 mm3 から %3 mm3 になりました。")
-            .arg(QString::fromUtf8(label))
+            .arg(QString::fromStdString(label))
             .arg(outcome.previousVolumeMm3, 0, 'f', 4)
             .arg(outcome.volumeMm3, 0, 'f', 4));
 }

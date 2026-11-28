@@ -1,5 +1,7 @@
 #pragma once
 
+namespace v2ui { struct BooleanPreview; }
+
 class QAction;
 class QMenu;
 class QLabel;

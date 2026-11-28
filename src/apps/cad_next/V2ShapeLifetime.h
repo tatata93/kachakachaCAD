@@ -3,6 +3,7 @@
 #include "V2MainWindowTypes.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/document/Document.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 #include <map>
 #include <optional>
 #include <set>
@@ -19,6 +20,14 @@ struct ShapeListOwner {
     ShapeListOwner& operator=(const ShapeListOwner&)=delete;
     ~ShapeListOwner(){for(const auto handle:values)if(handle.Valid())kachakacha::v2::kernel::ReleaseShape(handle);}
     [[nodiscard]] auto Take(std::size_t index){const auto handle=values[index];values[index]={};return handle;}
+};
+
+struct BooleanPreview {
+    explicit BooleanPreview(const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& handles)
+        : parts(handles), meshes(handles.size()) {}
+
+    ShapeListOwner parts;
+    std::vector<kachakacha::v2::modeling::ShapeMesh> meshes;
 };
 
 // A preview and a committed document may briefly refer to the same native shape.

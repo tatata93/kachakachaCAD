@@ -207,5 +207,5 @@ bool V2MainWindow::ApplyBooleanShotState()
     }
     viewport_->SetViewDirection(ViewDirection::Isometric);
     viewport_->FitToDocument();
-    return booleanBuilt_.has_value();
+    return booleanPreview_ != nullptr;
 }

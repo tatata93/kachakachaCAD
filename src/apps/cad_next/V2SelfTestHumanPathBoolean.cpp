@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QWidget>
+#include <algorithm>
 //! 足す・引くの人の道(HP-BO)。引継ぎ 2026-09-17 の 4。
 //!
 //! 足す/引くを押す → 土台待ち → 3D で部品を押すと土台に入り、自動で相手待ちへ →
@@ -166,6 +167,7 @@ using kachakacha::v2::domain::EntityKind;
             window.ToolFooterTextJa().contains(QStringLiteral("Preview only")))) {
         return false;
     }
+    const auto previewEdges = window.Viewport().ToolPreview();
     const std::uint64_t before = window.Session().GetDocument().Revision();
     if (!Explain("Enterで確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
         || !Explain("足した部品が1つできる(元の2つは隠れる)",
@@ -184,6 +186,11 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("見えている部品は足した1つだけ", visibleParts == 1)) {
         return false;
     }
+    const auto& views = window.Viewport().ShapeViews();
+    if (!Explain("確定した部品に下見と同じ稜線が出る",
+            std::any_of(views.begin(), views.end(), [&](const auto& view) {
+                return !view.surface && view.mesh.closed && view.mesh.edges == previewEdges;
+            }))) return false;
     window.RunCommand("edit.undo");
     visibleParts = 0;
     for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
@@ -742,6 +749,26 @@ bool CaseCancelRunningBoolean(V2MainWindow& window)
     return Explain("boolean retry survives undo/redo and save/reopen",CountOfKind(window,EntityKind::Part)==3
         &&window.SaveAndReopen(QStringLiteral("cancelled-boolean-retry.kcd2"))&&window.RebuildProblems().isEmpty());
 }
+
+bool CaseRefusedCutKeepsReason(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto target = MakeBoxByHand(window, .20, .35, .35, .60);
+    const auto tool = MakeBoxByHand(window, .55, .35, .70, .60);
+    if (target.IsNil() || tool.IsNil()) return false;
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    window.RunCommand("part.boolean_cut");
+    if (!PressPart(window, target) || !PressPart(window, tool)) return false;
+    const auto revision = window.Session().GetDocument().Revision();
+    const auto reason = QStringLiteral("重なっていない");
+    return Explain("引けない理由が下見に出る",
+               window.BooleanDock().StatusTextJa().contains(reason))
+        && Explain("Enterでも同じ理由が表示される",
+            window.HandleToolKey(Qt::Key_Return, nullptr) && window.StatusText().contains(reason))
+        && Explain("拒否した演算は部品を追加しない",
+            window.Session().GetDocument().Revision() == revision
+                && CountOfKind(window, EntityKind::Part) == 2);
+}
 } // namespace
 
 std::vector<SelfTestCase> HumanPathBooleanCases()
@@ -753,6 +780,7 @@ std::vector<SelfTestCase> HumanPathBooleanCases()
         {"HP-CT-08 window wire cuts solid and retains boundaries",CaseWindowWireTrim},
         {"HP-CT-09 single picked solid face trims as an independent surface",CaseSingleFaceTrim},
         {"HP-BO-05 running job cancellation and saved retry",CaseCancelRunningBoolean},
+        {"HP-BO-06 refused cut keeps its reason after Enter", CaseRefusedCutKeepsReason},
         {"HP-BO-04 boolean preview release, cancel and retry",CaseBooleanPreviewOwnership},
         {"HP-FA-01 フェイスから作図と近似", CaseFaceToolFirst},
         {"HP-CT-06 ソリッドトリムのモード切替と境界ワイヤー保持", CaseSolidTrimModes},

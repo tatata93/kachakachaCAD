@@ -284,8 +284,28 @@ bool CaseDeleteWithGeneratedBoundaries(V2MainWindow& w)
         || !Explain("部品が 2 個できる", CountOfKind(window, EntityKind::Part) == 2)) {
         return false;
     }
+    const auto parts = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Part).entityIds;
+    const auto bothPartsVisible = [&] {
+        const auto& views = window.Viewport().ShapeViews();
+        return std::all_of(parts.begin(), parts.end(), [&](const auto& id) {
+            return window.ItemOfEntity(id) != nullptr
+                && std::any_of(views.begin(), views.end(), [&](const auto& view) {
+                    return view.entityId == id && !view.mesh.Empty();
+                });
+        });
+    };
+    if (!Explain("両方の部品が 3D と左一覧に出る", bothPartsVisible())) {
+        return false;
+    }
     window.RunCommand("edit.undo");
-    return Explain("1 回の取り消しで 2 個とも消える", CountOfKind(window, EntityKind::Part) == 0);
+    if (!Explain("1 回の取り消しで 2 個とも消える", CountOfKind(window, EntityKind::Part) == 0)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    return Explain("やり直しと保存・再読込でも 2 部品が表示される",
+        bothPartsVisible() && window.SaveAndReopen(QStringLiteral("thicken-two-surfaces.kcd2"))
+            && bothPartsVisible());
 }
 
 bool CaseThickenPreviewOwnership(V2MainWindow& window)

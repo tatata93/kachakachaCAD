@@ -459,21 +459,18 @@ void V2MainWindow::ConfirmThicken()
     const auto outputMode = thickenDock_->OutputMode();
     const auto* choice=findChild<QCheckBox*>(QStringLiteral("thickenIndependent"));
     const bool independent=choice&&choice->isChecked();
-    std::vector<std::string> independentParts;
-    std::vector<std::uint64_t> transferredMeshes;
-    auto cleanup=qScopeGuard([&]{for(const auto& id:independentParts){partShapes_.erase(id);partEdges_.erase(id);}
-        for(const auto handle:transferredMeshes)shapeMeshes_.erase(handle);});
+    const bool makeSolid=kachakacha::v2::app::IncludesSolid(outputMode);
+    std::vector<std::string> stagedParts;
+    auto cleanup=qScopeGuard([&]{
+        for(const auto& id:stagedParts) {
+            partShapes_.erase(id);
+            partEdges_.erase(id);
+        }
+    });
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
     for (std::size_t index = 0; index < surfaces.size(); ++index) {
         v2ui::BoundaryLinks boundaries;
         EntityId part;
-        const auto reuseMesh=[&]{
-            const auto mesh=thicken_->builtMeshes.find(built[index].value);
-            if(mesh!=thicken_->builtMeshes.end()&&!mesh->second.Empty()){
-                shapeMeshes_[mesh->first]=std::move(mesh->second);transferredMeshes.push_back(mesh->first);
-                thicken_->builtMeshes.erase(mesh);
-            }
-        };
         auto definition=SavedThickness(thicken_->input,surfaces[index],thickness[index]);
         if(kachakacha::v2::app::IncludesWires(outputMode)) {
             const auto wires=BoundaryWiresFor(*thicken_,built[index],
@@ -481,7 +478,7 @@ void V2MainWindow::ConfirmThicken()
             if(!wires.HasValue()){ReportDiagnostics(wires.Diagnostics());return;}
             for(const auto& wire:wires.Value())if(!boundaries.Add(AddPlainWire(wire,"厚みの境界")))return;
         }
-        if(kachakacha::v2::app::IncludesSolid(outputMode)&&independent) {
+        if(makeSolid&&independent) {
             using namespace kachakacha::v2;
             const auto brep=kernel::CaptureOutputShape(built[index]);
             if(!brep.HasValue()){ReportDiagnostics(brep.Diagnostics());return;}
@@ -495,26 +492,34 @@ void V2MainWindow::ConfirmThicken()
             const auto added=session_->GetDocument().Run(document::AddFeatureCommand(feature,{entity},label));
             if(!added.committed){ReportDiagnostics(added.diagnostics);return;}
             part=entity.id;
-            reuseMesh();
-            const auto key=entity.id.ToString();partShapes_[key]=built[index];partEdges_[key]=edges[index];independentParts.push_back(key);
-        } else if(kachakacha::v2::app::IncludesSolid(outputMode)) {
+            const auto key=entity.id.ToString();
+            partShapes_[key]=built[index];
+            partEdges_[key]=edges[index];
+        } else if(makeSolid) {
             std::vector<EntityId> inputs{surfaces[index]};
             if(toPlane)inputs.push_back(thicken_->input.targetPlane);
-            reuseMesh();
             part = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-                std::move(definition), built[index], edges[index], label, inputs);
+                std::move(definition), built[index], edges[index], label, inputs,
+                PartSceneUpdate::AfterCommit);
             if (part.IsNil()) return;
         }
+        if(makeSolid)stagedParts.push_back(part.ToString());
         if(!boundaries.Attach(session_->GetDocument(),part))return;
     }
     if (!transaction.Commit()) {
         SetStatus(QStringLiteral("厚み: 途中で失敗したので、何も作っていません。"));
-        AdoptCurrentDocument();
         return;
     }
     cleanup.dismiss();
-    // Committed parts now own these handles; cancelling only owns previews.
-    if(kachakacha::v2::app::IncludesSolid(outputMode))thicken_->built.clear();
+    // Transfer the preview only after the parts and boundary links have committed.
+    if(makeSolid) {
+        for(const auto handle:built) {
+            const auto mesh=thicken_->builtMeshes.find(handle.value);
+            if(mesh!=thicken_->builtMeshes.end()&&!mesh->second.Empty())
+                shapeMeshes_[handle.value]=std::move(mesh->second);
+        }
+        thicken_->built.clear();
+    }
     EndThicken();
     AdoptCurrentDocument();
     if(outputMode==kachakacha::v2::app::SolidOutputMode::WiresOnly) {

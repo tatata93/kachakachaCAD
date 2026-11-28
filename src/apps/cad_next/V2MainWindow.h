@@ -971,16 +971,16 @@ private:
     void RunPartCommand(std::string_view id);
     void RunExtrude();
     void RunWireCage();
-    //! 出来た部品を文書へ足す。形は持たせず、作り方だけを持たせる。
-    //! 足せたら、その部品の EntityId を返す。足せなければ空を返す。
-    //! `inputs` は「何に依っているか」。空なら画面の選択を使う(旧来の呼び口)。
-    //! 押し出しは必ず明示して渡す。記録と依存の番号を必ず一致させるため。
+    enum class PartSceneUpdate { Immediately, AfterCommit };
+    //! 作り方を登録して部品IDを返す。失敗時は空を返す。
+    //! 依存元 `inputs` が空なら選択を使う。押し出しは依存元を明示する。
     kachakacha::v2::base::EntityId AddPartFeature(kachakacha::v2::domain::FeatureType type,
         kachakacha::v2::domain::FeatureDefinition definition,
         kachakacha::v2::modeling::KernelShapeHandle handle,
         const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
         const char* labelJa,
-        const std::vector<kachakacha::v2::base::EntityId>& inputs = {});
+        const std::vector<kachakacha::v2::base::EntityId>& inputs = {},
+        PartSceneUpdate sceneUpdate = PartSceneUpdate::Immediately);
     //! 部品の辺を場面へ出し直す。立体そのものはまだ描かない。
     void RefreshPartEdges();
     //! 押し出しの距離(板厚)。数の棚から取る(決め打ちにするとプラ板を使い分けられない)。

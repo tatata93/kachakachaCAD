@@ -969,7 +969,8 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     kachakacha::v2::domain::FeatureDefinition definition,
     kachakacha::v2::modeling::KernelShapeHandle handle,
     const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
-    const char* labelJa, const std::vector<kachakacha::v2::base::EntityId>& inputs)
+    const char* labelJa, const std::vector<kachakacha::v2::base::EntityId>& inputs,
+    PartSceneUpdate sceneUpdate)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -1005,8 +1006,10 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     // 出来た形の handle と、見せるための辺だけを画面側で覚えておく。
     partShapes_[entity.id.ToString()] = handle;
     partEdges_[entity.id.ToString()] = edges;
-    AdoptCurrentDocument();
-    RefreshPartEdges();
+    if (sceneUpdate == PartSceneUpdate::Immediately) {
+        AdoptCurrentDocument();
+        RefreshPartEdges();
+    }
     return entity.id;
 }
 

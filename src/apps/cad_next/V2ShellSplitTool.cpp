@@ -14,6 +14,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 #include "kachakacha/kernel/OcctShellSplit.h"
 #include "kachakacha/kernel/OcctTessellate.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -167,7 +168,7 @@ void V2ShellSplitTool::Begin(std::string_view commandId)
     window_.SetStatus(Text(method == 1
             ? std::string("分割: 分けたい部品を 3D で押してください。いまの作業平面で 2 つに分けます"
                           "(位置は右の棚の「ずらす」で動かせます)。Enter で確定、Esc でやめます。")
-            : std::string("シェル: 部品の開けたい面を 3D で押してください(何枚でも。入っている面を押すと"
+            : std::string("シェル: 3Dビューか左一覧の「部分を指定」で抜く面を選んでください(選択済みの面を押すと"
                           "外れます)。肉厚は右の棚で決めます。Enter で確定、Esc でやめます。")));
 }
 
@@ -235,14 +236,14 @@ void V2ShellSplitTool::HandleSelectionChanged()
         return;
     }
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
-        ApplyPick(*pick);
+        ApplyPick(*pick, window_.viewport_->LastToolPickPoint());
     } else {
         for(const auto& id:window_.viewport_->Selection().entityIds) {
             const auto* entity=window_.session_->GetDocument().FindEntity(id);
             if(!entity || entity->kind!=EntityKind::Part)continue;
             if(!pickingFaces_ || input_.part.IsNil()) {
                 const bool previous=pickingFaces_;pickingFaces_=false;ApplyPick(id);pickingFaces_=previous;
-            } else window_.SetStatus(QStringLiteral("辺・フェイスは3Dビューで選んでください。部品を替える場合は①を押します。"));
+            } else window_.SetStatus(QStringLiteral("抜く面は3Dビューか左一覧の「部分を指定」から選んでください。部品を替える場合は①を押します。"));
             break;
         }
     }
@@ -250,8 +251,17 @@ void V2ShellSplitTool::HandleSelectionChanged()
     Refresh();
 }
 
+bool V2ShellSplitTool::PickListedFace(const EntityId& id, std::size_t faceIndex, const Vector3& hit)
+{
+    if (!active_ || !pickingFaces_ || input_.method != 0) return false;
+    ApplyPick(id, hit, faceIndex);
+    MirrorToSelection();
+    Refresh();
+    return true;
+}
+
 //! 部品を押した。シェルなら押した点に一番近い面を核に尋ね、入っている面と同じなら外す。
-void V2ShellSplitTool::ApplyPick(const EntityId& id)
+void V2ShellSplitTool::ApplyPick(const EntityId& id, std::optional<Vector3> hit, std::optional<std::size_t> faceIndex)
 {
     const auto* entity = window_.session_->GetDocument().FindEntity(id);
     if (entity == nullptr || entity->kind != EntityKind::Part) {
@@ -267,14 +277,25 @@ void V2ShellSplitTool::ApplyPick(const EntityId& id)
         return;
     }
     const auto shape = window_.partShapes_.find(id.ToString());
-    const auto hit = window_.viewport_->LastToolPickPoint();
     std::optional<Vector3> facePoint;
     std::optional<std::size_t> sameFaceAs;
     if (shape != window_.partShapes_.end() && hit.has_value()) {
+        const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
+        if (faceIndex) {
+            const auto pose = kachakacha::v2::kernel::FacePoseNear(shape->second, *faceIndex, *hit, tolerance);
+            if (!pose.HasValue()) {
+                window_.ReportDiagnostics(pose.Diagnostics());
+                return;
+            }
+            hit = pose.Value().point;
+        }
         const auto nearest = kachakacha::v2::kernel::NearestSolidFace(shape->second, *hit);
         if (nearest.HasValue()) {
+            if (faceIndex && *faceIndex != static_cast<std::size_t>(nearest.Value().faceIndex)) {
+                window_.SetStatus(QStringLiteral("指定した面を特定できませんでした。面を選び直してください。"));
+                return;
+            }
             facePoint = nearest.Value().point;
-            const auto& tolerance = window_.session_->GetDocument().Snapshot().settings.tolerance;
             for (std::size_t index = 0; input_.part == id && index < input_.faces.size(); ++index) {
                 const auto existing = kachakacha::v2::kernel::SolidFaceAt(shape->second,
                     input_.faces[index], tolerance);
@@ -285,6 +306,7 @@ void V2ShellSplitTool::ApplyPick(const EntityId& id)
             }
         } else {
             window_.ReportDiagnostics(nearest.Diagnostics());
+            if (faceIndex) return;
         }
     }
     input_ = kachakacha::v2::app::WithShellSplitPick(input_, id, facePoint, sameFaceAs);

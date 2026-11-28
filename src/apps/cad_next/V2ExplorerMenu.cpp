@@ -11,6 +11,7 @@
 #include "V2EditDock.h"
 #include "V2EntityTree.h"
 #include "V2FaceActions.h"
+#include "V2ShellSplitTool.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/geometry/CurveIntersection.h"
@@ -155,7 +156,13 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
     elements->setObjectName(QStringLiteral("explorerElements"));
     elements->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
     const auto add = [&](QMenu& target, const QString& label, const app::PickCandidate& pick) {
-        target.addAction(label, &window, [&viewport, pick] { ApplyExplorerPick(viewport, pick); });
+        target.addAction(label, &window, [&window, &viewport, pick] {
+            if (!viewport.EntityShown(pick.entityId)) return;
+            if (pick.kind == app::SelectionElementKind::Face && pick.pickedFaceIndex
+                && viewport.ToolPickActive() && !viewport.PickPending() && !viewport.ReferencePickPending()
+                && window.ShellSplitTool().PickListedFace(pick.entityId, *pick.pickedFaceIndex, pick.hitPoint)) return;
+            ApplyExplorerPick(viewport, pick);
+        });
     };
     int segmentIndex = 0;
     for (const auto& curve : scene.curves) {

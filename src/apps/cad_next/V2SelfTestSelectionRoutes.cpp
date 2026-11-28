@@ -33,6 +33,7 @@
 #include "kachakacha/io/DocumentFile.h"
 #include <QAbstractButton>
 #include <QAbstractItemView>
+#include <QAction>
 #include <QByteArray>
 #include <QDialog>
 #include <QEvent>
@@ -50,9 +51,11 @@
 #include <QComboBox>
 #include <QFile>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QTemporaryDir>
@@ -490,6 +493,67 @@ bool PartDetailRoute(V2MainWindow& w,int variant,bool tree) {
     }
     return Explain("split receives the exact part",w.ShellSplitTool().Input().part==Id("part0"));
 }
+bool ListedFace(V2MainWindow& w, base::EntityId entity, std::size_t faceIndex)
+{
+    auto* row = w.ItemOfEntity(entity);
+    if (!row) return false;
+    QMenu menu(&w);
+    {
+        const QSignalBlocker block(w.EntityTree());
+        w.EntityTree()->setCurrentItem(row);
+        w.BuildExplorerMenu(menu);
+    }
+    auto* elements = menu.findChild<QMenu*>(QStringLiteral("explorerElements"));
+    if (!elements) return false;
+    const QString label = QStringLiteral("面 %1").arg(faceIndex + 1);
+    for (auto* action : elements->actions()) {
+        if (action->text() != label) continue;
+        action->trigger();
+        QApplication::processEvents();
+        return true;
+    }
+    return false;
+}
+
+bool ShellListedFace(V2MainWindow& w)
+{
+    if (!Fixture(w) || !Ribbon(w, "part.shell")) return false;
+    const auto part = Id("part0");
+    w.Viewport().SetViewDirection(ViewDirection::Top);
+    if (!RolePick(w, QStringLiteral("① 部品"), "part0", true)) return false;
+    auto* role = Role(w, QStringLiteral("②"));
+    const auto& input = w.ShellSplitTool().Input();
+    if (!role || !Press(role->arm) || !Tree(w, part) || !input.faces.empty()) return false;
+    if (!Pick(w, "part0", false) || input.faces.size() != 1) return false;
+    const auto viewportPoint = input.faces.front();
+    const auto& shapes = w.Viewport().ShapeViews();
+    const auto shape = std::find_if(shapes.begin(), shapes.end(), [part](const auto& view) { return view.entityId == part; });
+    if (shape == shapes.end()) return false;
+    const auto onFace = [&](Vector3 point, const modeling::MeshTriangle& triangle) {
+        return triangle.faceIndex != modeling::kNoFaceIndex && triangle.normal.LengthSquared() > 0.5
+            && std::abs(geometry::Dot(triangle.normal, point - triangle.Center())) < 1e-6;
+    };
+    const auto triangle = std::find_if(shape->mesh.triangles.begin(), shape->mesh.triangles.end(),
+        [&](const auto& face) { return onFace(viewportPoint, face); });
+    if (triangle == shape->mesh.triangles.end()) return false;
+    const auto expected = *triangle;
+    if (!Explain("explicit face on another part leaves the open face unchanged",
+        ListedFace(w, Id("part1"), 0) && input.part == part && input.faces == std::vector<Vector3>{viewportPoint})) return false;
+    if (!Explain("listed face toggles the very same face selected in the viewport",
+        ListedFace(w, part, expected.faceIndex) && input.faces.empty())) return false;
+    if (!Explain("listed face arms the same native surface",
+        ListedFace(w, part, expected.faceIndex) && input.faces.size() == 1 && onFace(input.faces.front(), expected))) return false;
+    const auto savedFace = input.faces.front();
+    if (!w.ShellSplitTool().Dock()->TypeThickness(0.5) || !Key(w.Viewport(), Qt::Key_Return)
+        || !w.SaveAndReopen("shell-listed-face.kcd2")) return false;
+    const auto& features = w.Session().GetDocument().Snapshot().features;
+    return Explain("shell result retains the listed native face on reopen", std::any_of(features.begin(), features.end(),
+        [&](const auto& feature) {
+            const auto* shell = std::get_if<domain::ShellSplitDefinition>(&feature.definition);
+            return shell && shell->method == 0 && shell->source == part && shell->facePoints == std::vector<Vector3>{savedFace};
+        }));
+}
+
 bool TransformRoute(V2MainWindow& w,int variant,bool tree) {
     static const char* commands[]={"wire.move","wire.copy","wire.rotate","wire.mirror","wire.scale",
         "part.move","part.copy","part.rotate","part.mirror","wire.array_linear","wire.array_circular","part.array_linear","part.array_circular"};
@@ -764,6 +828,7 @@ std::vector<SelfTestCase> SelectionRouteCases() {
         {"HP-SELECT spaced points divisions tree",CurvePointsRoute<3>},
         {"HP-SELECT point invalid input stale click and tool transition",PointRejectAndStale},
         {"HP-SELECT grid origin accepts explicit tree point",GridPoint},
+        {"HP-SELECT shell opening face matches tree and viewport after reopen", ShellListedFace},
         {"HP-SELECT output surface reference picks release temporary faces",OutputFaceOwnership}});
     return cases;
 }

@@ -22,6 +22,7 @@
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 #include "kachakacha/modeling/ShapeMesh.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -44,6 +45,8 @@ public:
     void End(bool keepTool = false);
     void Confirm();
     void HandleSelectionChanged();
+    bool PickListedFace(const kachakacha::v2::base::EntityId& id, std::size_t faceIndex,
+        const kachakacha::v2::geometry::Vector3& hit);
     [[nodiscard]] bool HandleKey(int key);
     //! 開き直したときの作り直し(ShellSplit の Feature)。
     [[nodiscard]] bool Rebuild(const kachakacha::v2::domain::Feature& feature,
@@ -64,7 +67,8 @@ private:
         kachakacha::v2::geometry::Vector3 normal{0.0, 0.0, 1.0};
     };
 
-    void ApplyPick(const kachakacha::v2::base::EntityId& id);
+    void ApplyPick(const kachakacha::v2::base::EntityId& id,
+        std::optional<kachakacha::v2::geometry::Vector3> hit = {}, std::optional<std::size_t> faceIndex = {});
     void MirrorToSelection();
     void Refresh();
     void RefreshPreview();

@@ -10,6 +10,7 @@
 
 #include "V2MainWindow.h"
 
+#include "V2DocumentTiming.h"
 #include "V2EntityTree.h"
 #include "V2TreeIcons.h"
 
@@ -127,6 +128,7 @@ void V2MainWindow::RefreshEntityList()
         if(AppendDrawingRows(*this,appendIds,[this](auto* category,const auto& entity){return AddEntityRow(category,entity);})){
             RefreshExplorerCategoryChecks();ApplyEntityTreeFilter();return;}
     }
+    V2DocumentTiming timing("explorer-rebuild");
     setProperty("explorerDocumentId",QString::fromStdString(current.id.ToString()));
     setProperty("explorerBuilds",property("explorerBuilds").toInt()+1);
     // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
@@ -155,40 +157,35 @@ void V2MainWindow::RefreshEntityList()
     // グループは入れ子のまま「グループ」の節の下に(オーナー指示 §9・§10)。
     std::map<std::string, QTreeWidgetItem*> byGroupId;
     BuildGroupItems(byGroupId, sections.contains(ExplorerSection::Groups) ? sections[ExplorerSection::Groups] : root);
+    timing.Mark("origin-and-groups");
+
+    const auto placements = kachakacha::v2::app::BuildExplorerPlacements(snapshot);
     std::map<std::pair<std::string, ExplorerSection>, QTreeWidgetItem*> groupedSections;
-    for (const auto& [key, group] : byGroupId) if (group != nullptr) {
-        for (const auto category : kachakacha::v2::app::ExplorerSections()) {
-            if (category == ExplorerSection::Images && std::none_of(snapshot.entities.begin(), snapshot.entities.end(),
-                [&](const auto& e){ return e.kind == kachakacha::v2::domain::EntityKind::Image && e.groupId && e.groupId->ToString() == key; })) continue;
-            const bool populated=std::any_of(snapshot.entities.begin(),snapshot.entities.end(),[&](auto entity){
-                if(!entity.groupId||entity.groupId->ToString()!=key)return false;
-                entity.groupId.reset();return kachakacha::v2::app::SectionForEntity(snapshot,entity)==category;
-            });
-            if (populated && category != ExplorerSection::Origin && category != ExplorerSection::Groups)
-                groupedSections[{key, category}] = MakeSectionItem(group, category);
+    for (std::size_t i = 0; i < snapshot.entities.size(); ++i) {
+        if (placements[i].section == ExplorerSection::Groups) {
+            groupedSections.try_emplace({snapshot.entities[i].groupId->ToString(), placements[i].groupSection}, nullptr);
         }
     }
-    for (const auto& entity : snapshot.entities) {
-        const ExplorerSection section = kachakacha::v2::app::SectionForEntity(snapshot, entity);
-        if (section == ExplorerSection::Origin) {
-            continue;   // 原点の行は BuildOriginRows が出した
+    for (const auto& [id, group] : byGroupId) {
+        if (!group) continue;
+        for (const auto section : kachakacha::v2::app::ExplorerSections()) {
+            const auto slot = groupedSections.find({id, section});
+            if (slot != groupedSections.end()) slot->second = MakeSectionItem(group, section);
         }
-        if (section == ExplorerSection::Approximation
-            && kachakacha::v2::app::GeneratingModelOf(snapshot, entity).has_value()) {
-            continue;   // 生成物は近似モデルの行の下(AddGeneratedRows)に出る
-        }
-        QTreeWidgetItem* parent = sections[section];
-        if (section == ExplorerSection::Groups && entity.groupId.has_value()) {
-            const auto found = byGroupId.find(entity.groupId->ToString());
-            if (found != byGroupId.end() && found->second != nullptr) {
-                auto ungrouped = entity;
-                ungrouped.groupId.reset();
-                const auto category = kachakacha::v2::app::SectionForEntity(snapshot, ungrouped);
-                parent = groupedSections.at({found->first, category});
-            }
+    }
+    timing.Mark("group-sections");
+    for (std::size_t i = 0; i < snapshot.entities.size(); ++i) {
+        const auto& entity = snapshot.entities[i];
+        const auto& placement = placements[i];
+        if (placement.section == ExplorerSection::Origin || placement.underGeneratingModel) continue;
+        auto* parent = sections[placement.section];
+        if (placement.section == ExplorerSection::Groups) {
+            auto* groupSection = groupedSections.at({entity.groupId->ToString(), placement.groupSection});
+            if (groupSection) parent = groupSection;
         }
         AddEntityRow(parent, entity);
     }
+    timing.Mark("entity-rows");
     entityTree_->EndRebuild();
     RefreshExplorerCategoryChecks();
     for (int column = 0; column < entityTree_->columnCount(); ++column) {
@@ -203,6 +200,7 @@ void V2MainWindow::RefreshEntityList()
     // 作り直したら絞り込みをかけ直す。かけ直さないと、線を1本引いただけで
     // 絞り込みが外れたように見える。
     ApplyEntityTreeFilter();
+    timing.Mark("finish");
 }
 
 //! 原点: 基準平面 3 枚(top_XY / front_XZ / side_YZ)と 3 軸。V1 と同じく最上段に固定。
@@ -212,7 +210,7 @@ void V2MainWindow::BuildOriginRows(QTreeWidgetItem* originRoot)
     originRoot->setToolTip(0, QStringLiteral(
         "初期の基準平面(top_XY / front_XZ / side_YZ)と軸。削除やグループへの移動はできません"));
     for (const auto& entity : snapshot.entities) {
-        if (!kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
+        if (entity.kind != EntityKind::WorkPlane || !kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
             continue;
         }
         QTreeWidgetItem* item = AddEntityRow(originRoot, entity);
@@ -274,7 +272,8 @@ void V2MainWindow::AddGeneratedRows(QTreeWidgetItem* modelItem,
     const auto& snapshot = session_->GetDocument().Snapshot();
     std::vector<const kachakacha::v2::domain::Entity*> generated;
     for (const auto& entity : snapshot.entities) {
-        if (kachakacha::v2::app::SectionForEntity(snapshot, entity) == ExplorerSection::Approximation
+        if (entity.generatedFrom == model.id
+            && kachakacha::v2::app::SectionForEntity(snapshot, entity) == ExplorerSection::Approximation
             && kachakacha::v2::app::GeneratingModelOf(snapshot, entity) == model.id) {
             generated.push_back(&entity);
         }

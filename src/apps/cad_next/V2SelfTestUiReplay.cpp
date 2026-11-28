@@ -61,6 +61,7 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
 #include <QWidget>
 #include <algorithm>
 #include <array>
@@ -639,6 +640,7 @@ struct Replay {
         }
         if(op=="count")return CountOfKind(w,static_cast<domain::EntityKind>(step["kind"].toInt()))==step["value"].toInt();
         if(op=="inspect")return Inspect(Path(step));
+        if(op=="tree_rows")return TreeRows(Path(step));
         if(op=="mesh_points") {
             QJsonArray shapes;
             for(const auto& shape:w.Viewport().ShapeViews()) {
@@ -650,6 +652,22 @@ struct Replay {
             return Write(Path(step),{{"shapes",shapes}});
         }
         return false;
+    }
+
+    bool TreeRows(const QString& path)
+    {
+        auto* tree=w.EntityTree();
+        if(!tree)return false;
+        QJsonArray rows;
+        for(QTreeWidgetItemIterator it(tree);const auto* row=*it;++it) {
+            QJsonArray columns;
+            for(int column=0;column<tree->columnCount();++column)columns.append(row->text(column));
+            rows.append(QJsonObject{{"key",V2EntityTree::KeyOf(row)},
+                {"parent",V2EntityTree::KeyOf(row->parent())},{"columns",columns},
+                {"check",int(row->checkState(0))},{"flags",int(row->flags())},
+                {"expanded",row->isExpanded()},{"selected",row->isSelected()},{"hidden",row->isHidden()}});
+        }
+        return Write(path,{{"rows",rows}});
     }
 
     bool Inspect(const QString& path)

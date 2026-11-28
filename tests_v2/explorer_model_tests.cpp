@@ -96,6 +96,60 @@ KACHA_V2_TEST(explorer, 生成物は生成元の近似モデルの下でグル�
         "線は生成元にならない");
 }
 
+KACHA_V2_TEST(explorer_model, bulk_placement_preserves_section_precedence)
+{
+    using namespace kachakacha::v2;
+    base::DeterministicIdGenerator ids;
+    document::DocumentSnapshot snapshot;
+    document::Group group;
+    group.id = ids.NextTyped<base::IdKind::Group>();
+    snapshot.groups.push_back(group);
+    const auto append = [&](EntityKind kind) -> Entity& {
+        Entity entity;
+        entity.id = ids.NextTyped<base::IdKind::Entity>();
+        entity.createdBy = ids.NextTyped<base::IdKind::Feature>();
+        entity.kind = kind;
+        snapshot.entities.push_back(entity);
+        return snapshot.entities.back();
+    };
+    const auto model = append(EntityKind::FabricationModel).id;
+    auto& plane = append(EntityKind::WorkPlane);
+    domain::Feature origin;
+    origin.id = plane.createdBy;
+    origin.type = domain::FeatureType::CreateWorkPlane;
+    domain::CreateWorkPlaneDefinition datum;
+    datum.isOriginPlane = true;
+    origin.definition = datum;
+    snapshot.features.push_back(origin);
+    append(EntityKind::Wire).generatedFrom = model;
+    auto& grouped = append(EntityKind::Part);
+    grouped.groupId = group.id;
+    grouped.generatedFrom = model;
+    auto& frozen = append(EntityKind::GuideSurface);
+    domain::Feature freeze;
+    freeze.id = frozen.createdBy;
+    freeze.type = domain::FeatureType::FreezeDerived;
+    snapshot.features.push_back(freeze);
+    append(EntityKind::Image).groupId = group.id;
+    append(EntityKind::Point).generatedFrom = ids.NextTyped<base::IdKind::Entity>();
+    auto& self = append(EntityKind::FabricationModel);
+    self.generatedFrom = self.id;
+
+    const auto placements = app::BuildExplorerPlacements(snapshot);
+    Require(placements.size() == snapshot.entities.size(), "one placement for each item");
+    for (std::size_t i = 0; i < placements.size(); ++i) {
+        const auto& entity = snapshot.entities[i];
+        auto ungrouped = entity;
+        ungrouped.groupId.reset();
+        const auto section = app::SectionForEntity(snapshot, entity);
+        Require(placements[i].section == section, "root section agrees with ordinary classification");
+        Require(placements[i].groupSection == app::SectionForEntity(snapshot, ungrouped),
+            "group section agrees when membership is removed");
+        Require(placements[i].underGeneratingModel == (section == ExplorerSection::Approximation
+            && app::GeneratingModelOf(snapshot, entity).has_value()), "the same items are nested under the source model");
+    }
+}
+
 KACHA_V2_TEST(explorer_model, 同じ名前には番号を送る)
 {
     using kachakacha::v2::app::UniqueDisplayName;

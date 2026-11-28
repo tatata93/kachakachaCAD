@@ -3,7 +3,31 @@
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/domain/Feature.h"
 
+#include <algorithm>
+#include <set>
+#include <variant>
+
 namespace kachakacha::v2::app {
+namespace {
+
+ExplorerSection DetailSection(domain::EntityKind kind, bool generated, bool frozen)
+{
+    if (generated) return ExplorerSection::Approximation;
+    if (frozen) return ExplorerSection::Generated;
+    switch (kind) {
+    case domain::EntityKind::WorkPlane:        return ExplorerSection::WorkPlanes;
+    case domain::EntityKind::Point:
+    case domain::EntityKind::Wire:             return ExplorerSection::Wires;
+    case domain::EntityKind::GuideSurface:     return ExplorerSection::Surfaces;
+    case domain::EntityKind::Part:             return ExplorerSection::Solids;
+    case domain::EntityKind::FabricationModel: return ExplorerSection::Approximation;
+    case domain::EntityKind::Pattern:          return ExplorerSection::Generated;
+    case domain::EntityKind::Image:            return ExplorerSection::Images;
+    }
+    return ExplorerSection::Wires;
+}
+
+} // namespace
 
 std::string_view ExplorerSectionNameJa(ExplorerSection section) noexcept
 {
@@ -39,26 +63,42 @@ ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     if (entity.groupId.has_value()) {
         return ExplorerSection::Groups;
     }
-    if (GeneratingModelOf(snapshot, entity).has_value()) {
-        return ExplorerSection::Approximation;   // 近似モデルの下の「生成物」
-    }
+    const bool generated = GeneratingModelOf(snapshot, entity).has_value();
+    const bool frozen = !generated && std::any_of(snapshot.features.begin(), snapshot.features.end(),
+        [&](const auto& feature) {
+            return feature.id == entity.createdBy && feature.type == domain::FeatureType::FreezeDerived;
+        });
+    return DetailSection(entity.kind, generated, frozen);
+}
+
+std::vector<ExplorerRowPlacement> BuildExplorerPlacements(const document::DocumentSnapshot& snapshot)
+{
+    std::set<base::FeatureId> originFeatures;
+    std::set<base::FeatureId> frozenFeatures;
     for (const auto& feature : snapshot.features) {
-        if (feature.id == entity.createdBy
-            && feature.type == domain::FeatureType::FreezeDerived) {
-            return ExplorerSection::Generated;
+        const auto* plane = std::get_if<domain::CreateWorkPlaneDefinition>(&feature.definition);
+        if (plane && plane->isOriginPlane) originFeatures.insert(feature.id);
+        if (feature.type == domain::FeatureType::FreezeDerived) frozenFeatures.insert(feature.id);
+    }
+    std::set<base::EntityId> models;
+    for (const auto& entity : snapshot.entities) {
+        if (entity.kind == domain::EntityKind::FabricationModel) models.insert(entity.id);
+    }
+
+    std::vector<ExplorerRowPlacement> placements;
+    placements.reserve(snapshot.entities.size());
+    for (const auto& entity : snapshot.entities) {
+        if (originFeatures.contains(entity.createdBy)) {
+            placements.push_back({ExplorerSection::Origin, ExplorerSection::Origin, false});
+            continue;
         }
+        const bool generated = entity.generatedFrom && *entity.generatedFrom != entity.id
+            && models.contains(*entity.generatedFrom);
+        const auto detail = DetailSection(entity.kind, generated, frozenFeatures.contains(entity.createdBy));
+        placements.push_back({entity.groupId ? ExplorerSection::Groups : detail,
+            detail, generated && !entity.groupId});
     }
-    switch (entity.kind) {
-    case domain::EntityKind::WorkPlane:        return ExplorerSection::WorkPlanes;
-    case domain::EntityKind::Point:
-    case domain::EntityKind::Wire:             return ExplorerSection::Wires;
-    case domain::EntityKind::GuideSurface:     return ExplorerSection::Surfaces;
-    case domain::EntityKind::Part:             return ExplorerSection::Solids;
-    case domain::EntityKind::FabricationModel: return ExplorerSection::Approximation;
-    case domain::EntityKind::Pattern:          return ExplorerSection::Generated;
-    case domain::EntityKind::Image: return ExplorerSection::Images;
-    }
-    return ExplorerSection::Wires;
+    return placements;
 }
 
 std::optional<base::EntityId> GeneratingModelOf(const document::DocumentSnapshot& snapshot,

@@ -48,6 +48,16 @@ enum class ExplorerSection {
 [[nodiscard]] ExplorerSection SectionForEntity(const document::DocumentSnapshot& snapshot,
     const domain::Entity& entity);
 
+struct ExplorerRowPlacement {
+    ExplorerSection section;
+    ExplorerSection groupSection;
+    bool underGeneratingModel;
+};
+
+//! 一覧を組み直すときの分類。結果は snapshot.entities と同じ順序。
+[[nodiscard]] std::vector<ExplorerRowPlacement> BuildExplorerPlacements(
+    const document::DocumentSnapshot& snapshot);
+
 //! 製作の「生成」で作ったもので、生成元の近似モデルがまだ文書にあるなら、その近似モデル。
 //! 一覧はこれを近似モデルの下の「生成物」に並べる(F-15)。グループに入れたものは
 //! グループの節が先(ほかの物と同じ決まり)なので、ここでは見ない。

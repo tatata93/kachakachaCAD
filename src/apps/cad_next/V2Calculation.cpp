@@ -1,4 +1,5 @@
 #include "V2Calculation.h"
+#include "V2DocumentOpen.h"
 #include "V2GeometryJob.h"
 #include <QApplication>
 #include <QCoreApplication>
@@ -48,6 +49,12 @@ bool BackgroundAllowed() {
 }
 bool Execute(const QWidget* parent, const char* title, const std::function<void()>& work) {
     if (V2GeometryJob::Active()) throw std::runtime_error("別の計算が終了してから再操作してください。");
+    // The desktop already monitors and can cancel the document worker process.
+    // Rebuilding each feature there needs neither a dialog nor timer polling.
+    if (V2DocumentOpen::IsWorker()) {
+        work();
+        return false;
+    }
     struct Busy {
         Busy() { qApp->setProperty("geometryJobActive", true); }
         ~Busy() { qApp->setProperty("geometryJobActive", false); }

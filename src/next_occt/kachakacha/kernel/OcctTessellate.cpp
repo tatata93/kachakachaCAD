@@ -14,6 +14,7 @@
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepClass_FaceClassifier.hxx>
+#include <BRepClass_FaceExplorer.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepTools.hxx>
@@ -185,6 +186,11 @@ std::vector<std::vector<Vector3>> FaceIsoLines(const TopoDS_Face& face, int coun
     if (surface.IsNull() || !(u1 > u0) || !(v1 > v0)) {
         return lines;
     }
+    // Reuse the face's boundary data across samples. Each classifier starts a
+    // new point query with the same settings as the face-taking overload.
+    BRepClass_FaceExplorer boundary(face);
+    boundary.SetMaxTolerance(0.1);
+    boundary.SetUseBndBox(false);
     constexpr int kSteps = 64;
     // 1 本の線を面の内側だけの折れ線にする(トリムで外に出たところで切る)。
     const auto add = [&](bool alongU, double fixed, double from, double to) {
@@ -194,7 +200,7 @@ std::vector<std::vector<Vector3>> FaceIsoLines(const TopoDS_Face& face, int coun
             const double u = alongU ? at : fixed;
             const double v = alongU ? fixed : at;
             const bool inside =
-                BRepClass_FaceClassifier(face, gp_Pnt2d(u, v), 1.0e-7).State() != TopAbs_OUT;
+                BRepClass_FaceClassifier(boundary, gp_Pnt2d(u, v), 1.0e-7).State() != TopAbs_OUT;
             if (inside) {
                 run.push_back(ToVector(surface->Value(u, v)));
                 continue;

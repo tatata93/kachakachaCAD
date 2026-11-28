@@ -147,26 +147,27 @@ Estimate LineRule(const Function& function,double first,double last,const Quadra
     return result;
 }
 template<class Function>
-Estimate LineIntegral(const Function& function,double first,double last,bool centroid,int depth=0) {
+Estimate LineIntegral(const Function& function,double first,double last,bool centroid,int depthLimit,int depth=0) {
     static const Quadrature coarse(8),fine(12);
     const auto a=LineRule(function,first,last,coarse,centroid);
     auto b=LineRule(function,first,last,fine,centroid);double difference=0;
     for(int k=0;k<(centroid?4:1);++k)
         difference=std::max(difference,std::abs(a.value[k]-b.value[k])/std::max(1.,std::abs(b.value[k])));
-    if(difference<1e-10||depth==8) {
+    if(difference<1e-10||depth==depthLimit) {
         for(int k=0;k<(centroid?4:1);++k)b.error[k]+=std::abs(a.value[k]-b.value[k]);
         return b;
     }
     const double mid=(first+last)*.5;
-    auto left=LineIntegral(function,first,mid,centroid,depth+1);
-    const auto right=LineIntegral(function,mid,last,centroid,depth+1);
+    auto left=LineIntegral(function,first,mid,centroid,depthLimit,depth+1);
+    const auto right=LineIntegral(function,mid,last,centroid,depthLimit,depth+1);
     for(int k=0;k<4;++k){left.value[k]+=right.value[k];left.error[k]+=right.error[k];}
     return left;
 }
 // Green's theorem integrates the actual UV wires (including concave outlines
 // and clockwise holes), not their bounding rectangle. The primitive is split
 // at native U spans; nested quadrature errors are propagated to the final gate.
-Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt& origin,bool centroid) {
+Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt& origin,
+    bool centroid,int depthLimit) {
     face.Orientation(TopAbs_FORWARD);
     double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
     const int count=surface.NbUIntervals(GeomAbs_CN),vCount=surface.NbVIntervals(GeomAbs_CN);
@@ -179,7 +180,7 @@ Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt&
         for(int i=1;i<=count+1;++i)if(us(i)>first&&us(i)<last)cuts.push_back(us(i));
         cuts.push_back(last);
         for(std::size_t i=1;i<cuts.size();++i) {
-            const auto part=LineIntegral([&](double x){return Estimate{PointFlux(surface,origin,x,v,centroid),{}};},cuts[i-1],cuts[i],centroid);
+            const auto part=LineIntegral([&](double x){return Estimate{PointFlux(surface,origin,x,v,centroid),{}};},cuts[i-1],cuts[i],centroid,depthLimit);
             for(int k=0;k<(centroid?4:1);++k){result.value[k]+=(u<u0?-1:1)*part.value[k];result.error[k]+=part.error[k];}
         }
         return result;
@@ -189,6 +190,8 @@ Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt&
         const auto edge=TopoDS::Edge(e.Current());
         if(edge.Orientation()==TopAbs_INTERNAL||edge.Orientation()==TopAbs_EXTERNAL)continue;
         BRepAdaptor_Curve2d curve(edge,face);
+        // The boundary flux is integrated against dv. A horizontal UV line contributes zero.
+        if(curve.GetType()==GeomAbs_Line&&curve.Line().Direction().Y()==0.0)continue;
         const int intervals=curve.NbIntervals(GeomAbs_CN);
         if(intervals<=0||intervals>50000)throw Standard_Failure("Too many trim boundary intervals");
         NCollection_Array1<double> ts(1,intervals+1);curve.Intervals(ts,GeomAbs_CN);
@@ -215,10 +218,11 @@ Estimate TrimmedFlux(TopoDS_Face face,BRepAdaptor_Surface& surface,const gp_Pnt&
         for(std::size_t i=1;i<cuts.size();++i) {
             const auto part=LineIntegral([&](double t){
                 gp_Pnt2d p;gp_Vec2d derivative;curve.D1(t,p,derivative);
+                if(derivative.Y()==0.0)return Estimate{};
                 auto value=primitive(p.X(),p.Y());
                 for(int k=0;k<(centroid?4:1);++k){value.value[k]*=derivative.Y();value.error[k]*=std::abs(derivative.Y());}
                 return value;
-            },cuts[i-1],cuts[i],centroid);
+            },cuts[i-1],cuts[i],centroid,depthLimit);
             for(int k=0;k<(centroid?4:1);++k) {
                 result.value[k]+=(edge.Orientation()==TopAbs_REVERSED?-1:1)*part.value[k];
                 result.error[k]+=part.error[k];
@@ -235,6 +239,58 @@ public:
         inertia=gp_Mat(0,0,0,0,0,0,0,0,0);
     }
 };
+struct OffsetEstimate {
+    Estimate flux;
+    bool hasCurvedTrim=false;
+};
+
+OffsetEstimate MeasureOffsetVolume(const TopoDS_Shape& shape,const gp_Pnt& origin,
+    bool centroid,int trimDepthLimit) {
+    OffsetEstimate measured;
+    auto& sum=measured.flux.value;
+    auto& error=measured.flux.error;
+    for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
+        const auto face=TopoDS::Face(e.Current());BRepAdaptor_Surface s(face,true);
+        const double sign=face.Orientation()==TopAbs_REVERSED?-1:1;
+        if(s.GetType()==GeomAbs_Plane) {
+            GProp_GProps area;
+            const double relative=BRepGProp::SurfaceProperties(face,area,1e-10);
+            if(!Accurate(relative,area))throw Standard_Failure("Planar trim area integration failed");
+            const gp_Vec r(origin,area.CentreOfMass());
+            const double flux=sign*area.Mass()*r.Dot(gp_Vec(s.Plane().Axis().Direction()));
+            sum[0]+=flux/3;
+            if(centroid){sum[1]+=r.X()*flux/4;sum[2]+=r.Y()*flux/4;sum[3]+=r.Z()*flux/4;}
+            error[0]+=std::abs(flux/3)*relative;
+            if(centroid){error[1]+=std::abs(r.X()*flux/4)*relative;error[2]+=std::abs(r.Y()*flux/4)*relative;error[3]+=std::abs(r.Z()*flux/4)*relative;}
+            continue;
+        }
+        double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
+        if(!Rectangle(face,u0,u1,v0,v1)) {
+            measured.hasCurvedTrim=true;
+            const auto trimmed=TrimmedFlux(face,s,origin,centroid,trimDepthLimit);
+            for(int k=0;k<(centroid?4:1);++k){sum[k]+=sign*trimmed.value[k];error[k]+=trimmed.error[k];}
+            continue;
+        }
+        const int nu=s.NbUIntervals(GeomAbs_CN),nv=s.NbVIntervals(GeomAbs_CN);
+        if(nu<=0||nv<=0||nu>50000/nv)throw Standard_Failure("Too many surface integration intervals");
+        NCollection_Array1<double> us(1,nu+1),vs(1,nv+1);s.UIntervals(us,GeomAbs_CN);s.VIntervals(vs,GeomAbs_CN);
+        for(int u=1;u<=nu;++u)for(int v=1;v<=nv;++v) {
+            const auto value=Integrate(s,origin,us(u),us(u+1),vs(v),vs(v+1),centroid,0,error);
+            for(int k=0;k<4;++k)sum[k]+=sign*value[k];
+        }
+    }
+    return measured;
+}
+
+bool MeetsOffsetAccuracy(const Estimate& estimate,bool centroid) {
+    for(int k=0;k<(centroid?4:1);++k) {
+        const double value=estimate.value[k],error=estimate.error[k];
+        if(!std::isfinite(value)||!std::isfinite(error)||error>std::max(1e-10,std::abs(value)*1e-8))
+            return false;
+    }
+    return true;
+}
+
 // Offset surfaces hide the spline spans from OCCT's GK integration. Integrate
 // the exact native surface per continuity interval, without replacing geometry
 // by a mesh or an approximated surface. Planar trims retain their exact area
@@ -259,40 +315,16 @@ std::optional<GProp_GProps> OffsetVolume(const TopoDS_Shape& shape,bool centroid
         // have two pcurves on one edge; this new path handles open panel domains.
         if(!Rectangle(face,u0,u1,v0,v1)&&(surface.IsUClosed()||surface.IsVClosed()))return std::nullopt;
     }
-    Integral sum{},error{};
-    for(TopExp_Explorer e(shape,TopAbs_FACE);e.More();e.Next()) {
-        const auto face=TopoDS::Face(e.Current());BRepAdaptor_Surface s(face,true);
-        const double sign=face.Orientation()==TopAbs_REVERSED?-1:1;
-        if(s.GetType()==GeomAbs_Plane) {
-            GProp_GProps area;
-            const double relative=BRepGProp::SurfaceProperties(face,area,1e-10);
-            if(!Accurate(relative,area))throw Standard_Failure("Planar trim area integration failed");
-            const gp_Vec r(origin,area.CentreOfMass());
-            const double flux=sign*area.Mass()*r.Dot(gp_Vec(s.Plane().Axis().Direction()));
-            sum[0]+=flux/3;
-            if(centroid){sum[1]+=r.X()*flux/4;sum[2]+=r.Y()*flux/4;sum[3]+=r.Z()*flux/4;}
-            error[0]+=std::abs(flux/3)*relative;
-            if(centroid){error[1]+=std::abs(r.X()*flux/4)*relative;error[2]+=std::abs(r.Y()*flux/4)*relative;error[3]+=std::abs(r.Z()*flux/4)*relative;}
-            continue;
-        }
-        double u0,u1,v0,v1;BRepTools::UVBounds(face,u0,u1,v0,v1);
-        if(!Rectangle(face,u0,u1,v0,v1)) {
-            const auto trimmed=TrimmedFlux(face,s,origin,centroid);
-            for(int k=0;k<(centroid?4:1);++k){sum[k]+=sign*trimmed.value[k];error[k]+=trimmed.error[k];}
-            continue;
-        }
-        const int nu=s.NbUIntervals(GeomAbs_CN),nv=s.NbVIntervals(GeomAbs_CN);
-        if(nu<=0||nv<=0||nu>50000/nv)throw Standard_Failure("Too many surface integration intervals");
-        NCollection_Array1<double> us(1,nu+1),vs(1,nv+1);s.UIntervals(us,GeomAbs_CN);s.VIntervals(vs,GeomAbs_CN);
-        for(int u=1;u<=nu;++u)for(int v=1;v<=nv;++v) {
-            const auto value=Integrate(s,origin,us(u),us(u+1),vs(v),vs(v+1),centroid,0,error);
-            for(int k=0;k<4;++k)sum[k]+=sign*value[k];
-        }
+    auto measured=MeasureOffsetVolume(shape,origin,centroid,8);
+    if(measured.hasCurvedTrim&&!MeetsOffsetAccuracy(measured.flux,centroid)) {
+        // On difficult trims the summed error may exhaust the volume budget
+        // after the usual subdivisions. Refine the same exact UV integrals
+        // before applying the unchanged solid-level accuracy requirement.
+        measured=MeasureOffsetVolume(shape,origin,centroid,12);
     }
-    for(int k=0;k<(centroid?4:1);++k)
-        if(!std::isfinite(sum[k])||!std::isfinite(error[k])||error[k]>std::max(1e-10,std::abs(sum[k])*1e-8))
-            throw Standard_Failure("Offset volume integration did not reach relative accuracy 1e-8");
-    return IntegratedProperties(sum,origin,centroid);
+    if(!MeetsOffsetAccuracy(measured.flux,centroid))
+        throw Standard_Failure("Offset volume integration did not reach relative accuracy 1e-8");
+    return IntegratedProperties(measured.flux.value,origin,centroid);
 }
 }
 void VolumeProperties(const TopoDS_Shape& shape,GProp_GProps& properties,bool centroid,const gp_Pnt* offsetReference) {

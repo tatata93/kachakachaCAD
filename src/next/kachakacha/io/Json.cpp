@@ -530,8 +530,25 @@ JsonValue JsonValue::Object(JsonObject value)
 {
     JsonValue json;
     json.type_ = JsonType::Object;
-    json.object_ = std::move(value);
+    json.object_.emplace(std::move(value));
     return json;
+}
+
+const JsonObject& JsonValue::AsObject() const noexcept
+{
+    if (object_) {
+        return *object_;
+    }
+    static const JsonObject empty;
+    return empty;
+}
+
+JsonObject& JsonValue::MutableObject() noexcept
+{
+    if (!object_) {
+        object_.emplace();
+    }
+    return *object_;
 }
 
 const JsonValue* JsonValue::Find(const std::string& key) const
@@ -539,8 +556,9 @@ const JsonValue* JsonValue::Find(const std::string& key) const
     if (type_ != JsonType::Object) {
         return nullptr;
     }
-    const auto found = object_.find(key);
-    return found == object_.end() ? nullptr : &found->second;
+    const auto& object = AsObject();
+    const auto found = object.find(key);
+    return found == object.end() ? nullptr : &found->second;
 }
 
 // ---------------- 書き出し・読み込み ----------------

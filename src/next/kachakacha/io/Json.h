@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,8 +43,8 @@ public:
     [[nodiscard]] double AsNumber() const noexcept { return number_; }
     [[nodiscard]] const std::string& AsString() const noexcept { return string_; }
     [[nodiscard]] const JsonArray& AsArray() const noexcept { return array_; }
-    [[nodiscard]] const JsonObject& AsObject() const noexcept { return object_; }
-    [[nodiscard]] JsonObject& MutableObject() noexcept { return object_; }
+    [[nodiscard]] const JsonObject& AsObject() const noexcept;
+    [[nodiscard]] JsonObject& MutableObject() noexcept;
     [[nodiscard]] JsonArray& MutableArray() noexcept { return array_; }
 
     //! object のキー引き。無ければ nullptr。
@@ -55,7 +56,9 @@ private:
     double number_ = 0.0;
     std::string string_;
     JsonArray array_;
-    JsonObject object_;
+    // Some standard libraries allocate an empty map's sentinel. Only construct
+    // the map for object values and callers that explicitly ask to mutate it.
+    std::optional<JsonObject> object_;
 };
 
 //! 書き出し。キー順は挿入順ではなく辞書順で固定する(決定的にするため)。

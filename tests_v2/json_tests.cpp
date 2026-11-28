@@ -64,6 +64,23 @@ KACHA_V2_TEST(json, writes_the_existing_number_format_at_boundaries)
         "the storage spelling matches the previous writer");
 }
 
+KACHA_V2_TEST(json, object_storage_stays_independent_after_copy_and_move)
+{
+    const auto source = JsonValue::Object({{"inner", JsonValue::Object({{"a", JsonValue::Number(1)}})}});
+    auto copy = source;
+    copy.MutableObject().at("inner").MutableObject()["a"] = JsonValue::Number(2);
+    const auto moved = std::move(copy);
+    RequireEqual(WriteJson(source, -1), "{\"inner\":{\"a\":1}}", "a copy owns its object keys");
+    RequireEqual(WriteJson(moved, -1), "{\"inner\":{\"a\":2}}", "moving keeps the edited object");
+
+    auto scalar = JsonValue::Number(3);
+    const auto other = scalar;
+    Require(scalar.AsObject().empty(), "a scalar has an empty object view by default");
+    scalar.MutableObject()["extra"] = JsonValue::Number(4);
+    Require(other.AsObject().empty() && scalar.AsObject().size() == 1, "the empty view stays shared only for reads");
+    Require(scalar.Find("extra") == nullptr && WriteJson(scalar, -1) == "3", "mutation preserves the scalar type");
+}
+
 // ---- 受け付ける形 ----
 
 KACHA_V2_TEST(json, accepts_every_scalar_form)

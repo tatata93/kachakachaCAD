@@ -356,6 +356,16 @@ bool CaseLoopFacesAlignsNearPlanarEnds(V2MainWindow& window)
             && CountOfKind(window, EntityKind::Wire) == 2 && window.RebuildProblems().isEmpty())) return false;
     if (!prepare(0, false) || !Explain("a genuinely missing inner chord cannot be aligned into a hole", !corrected()))
         return false;
+    const auto beforeOpen = window.Session().GetDocument().Snapshot();
+    if (!Explain("a projected outer cycle cannot be confirmed over the open inner chord",
+            window.LoopFacesTool().Plan() && window.LoopFacesTool().Plan()->faces.empty()
+            && window.LoopFacesTool().Plan()->summaryJa.find("内側") != std::string::npos
+            && !window.LoopFacesTool().Dock()->ConfirmEnabled())) return false;
+    window.HandleToolKey(Qt::Key_Return, nullptr);
+    if (!Explain("refusal leaves both wires and history in place",
+            window.Session().GetDocument().Revision() == beforeOpen.revision
+            && CountOfKind(window, EntityKind::GuideSurface) == 0
+            && CountOfKind(window, EntityKind::Wire) == 2)) return false;
     if (!prepare(0.001, true)) return false;
     return Explain("nested outlines from separate planes cannot be flattened together", !corrected());
 }

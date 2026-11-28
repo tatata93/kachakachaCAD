@@ -586,13 +586,40 @@ app::SurfaceNetworkPlan IndependentPlanarHoles(const std::vector<app::RoleWire>&
     return result;
 }
 
+bool HasOpenInnerBoundary(const std::vector<app::RoleWire>& prepared,
+    const std::vector<bool>& anchoredArcs, const geometry::GeometryTolerance& tolerance)
+{
+    modeling::SnapScene scene;
+    base::DeterministicIdGenerator ids{81927};
+    for (const auto& wire : prepared) for (const auto& curve : wire.segments)
+        scene.curves.push_back({wire.id, ids.NextTyped<base::IdKind::Segment>(), curve});
+    auto exact = tolerance;
+    exact.interactiveJoinMm = exact.modelLinearMm;
+    std::vector<geometry::CurveSegment> kept, omitted;
+    std::vector<std::vector<geometry::CurveSegment>> loops;
+    for (const auto& boundary : app::DetectSpatialBoundaries(scene, exact)) {
+        loops.push_back(boundary.segments);
+        kept.insert(kept.end(), boundary.segments.begin(), boundary.segments.end());
+    }
+    if (kept.empty()) return false;
+    // Require an original coplanar arc inside the enclosing loop. This
+    // projection alone is not evidence that an offset work layer is a hole.
+    for (std::size_t i = 0; i < scene.curves.size(); ++i) {
+        const auto& curve = scene.curves[i].segment;
+        if (anchoredArcs[i] && std::none_of(kept.begin(), kept.end(), [&](const auto& boundary) {
+                return SameInterval(curve, boundary, exact.modelLinearMm, exact.modelLinearMm);
+            })) omitted.push_back(curve);
+    }
+    return !OmittedInputsAllowed(kept, omitted, tolerance, loops);
+}
+
 app::SurfaceNetworkPlan PlanarHoleWithAlignedEnds(const std::vector<app::RoleWire>& wires,
-    const geometry::GeometryTolerance& tolerance, double& maximumMovement)
+    const geometry::GeometryTolerance& tolerance, double& maximumMovement, bool& openInner)
 {
     std::vector<const geometry::CurveSegment*> curves;
     for (const auto& wire : wires)
         for (const auto& curve : wire.segments) curves.push_back(&curve);
-    auto alignment = app::detail::AlignPlanarBoundaryEnds(curves, tolerance);
+    auto alignment = app::detail::ProjectPlanarBoundaryEnds(curves, tolerance);
     if (!alignment) return {};
 
     auto prepared = wires;
@@ -602,6 +629,11 @@ app::SurfaceNetworkPlan PlanarHoleWithAlignedEnds(const std::vector<app::RoleWir
         curve = std::move(alignment->curves[index]);
         if (alignment->anchoredArcs[index]) anchoredArcs.push_back(&curve);
         ++index;
+    }
+    if (!alignment->closesAllEnds) {
+        openInner = alignment->maximumMovementMm > tolerance.modelLinearMm
+            && HasOpenInnerBoundary(prepared, alignment->anchoredArcs, tolerance);
+        return {};
     }
     auto plan = IndependentPlanarHoles(prepared, tolerance);
     if (plan.tables.size() != 1 || plan.tables.front().rows.size() < 2) return {};
@@ -769,12 +801,20 @@ bool V2LoopFacesTool::TryNetworkPlan()
     if(!closed.empty())wires=closed;
     auto network = IndependentPlanarHoles(wires,tolerance);
     double planarMovement = 0;
+    bool openInner = false;
     if (network.tables.empty() && closed.empty() && omitted == 0) {
         auto alignmentTolerance = tolerance;
         alignmentTolerance.interactiveJoinMm = std::min(tolerance.interactiveJoinMm,
             window_.Session().GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
-        network = PlanarHoleWithAlignedEnds(wires, alignmentTolerance, planarMovement);
+        network = PlanarHoleWithAlignedEnds(wires, alignmentTolerance, planarMovement, openInner);
     }
+    const auto blockOpenInner = [&] {
+        app::LoopFacePlan blocked;
+        blocked.summaryJa="閉じた輪郭の内側に、輪に使えない選択線があります。穴を埋めないため面を作りません。内側の輪を閉じるか、不要な線の選択を解除してください";
+        plan_=std::move(blocked);
+        styles_.clear();methodOverride_.clear();make_.clear();continuity_.clear();leaveGap_.clear();
+        return true;
+    };
     bool independent=false;
     if(network.tables.empty()){
         network=IndependentSpatialLoops(wires,tolerance);
@@ -782,6 +822,9 @@ bool V2LoopFacesTool::TryNetworkPlan()
     }
     bool notch=false;
     if(network.tables.empty()){network=SelectedNotches(wires,tolerance);notch=!network.tables.empty();}
+    // A closed projected outer rim with an open inner contour may survive
+    // the generic planner as a single filled face after endpoint repair.
+    if (network.tables.empty() && openInner) return blockOpenInner();
     // A visible near gap is not itself a reason to suppress a candidate. The
     // selected-wire tolerance already bounds which endpoints may connect, and
     // PlanSurfaceNetwork validates the resulting regions before preview.
@@ -807,11 +850,7 @@ bool V2LoopFacesTool::TryNetworkPlan()
     if(!independent&&!NetworkOmissionsAllowed(network,tolerance)){
         // This is a handled refusal. Returning false would let PlanLoopFaces
         // accept the same outer loop again and silently fill the open window.
-        app::LoopFacePlan blocked;
-        blocked.summaryJa="閉じた輪郭の内側に、輪に使えない選択線があります。穴を埋めないため面を作りません。内側の輪を閉じるか、不要な線の選択を解除してください";
-        plan_=std::move(blocked);
-        styles_.clear();methodOverride_.clear();make_.clear();continuity_.clear();leaveGap_.clear();
-        return true;
+        return blockOpenInner();
     }
     networkTables_ = std::move(network.tables);
     if(omitted&&!closed.empty())networkUnusedJa_=QStringLiteral("重複の余り %1区間（許容 %2 mm以内。元の線と曲線形式は保持）")

@@ -16,6 +16,7 @@ struct PlanarBoundaryAlignment {
     std::vector<geometry::CurveSegment> curves;
     std::vector<bool> anchoredArcs;
     double maximumMovementMm = 0;
+    bool closesAllEnds = false;
 };
 
 inline base::Result<geometry::CurveSegment> BoundaryCurveOnPlane(const geometry::CurveSegment& curve,
@@ -44,7 +45,7 @@ inline double CurveMovementBound(const geometry::CurveSegment& source, const geo
     return Distance(source.Center(), prepared.Center()) + source.Radius() * std::hypot(Distance(oldX, newX), Distance(oldY, newY));
 }
 
-inline std::optional<PlanarBoundaryAlignment> AlignPlanarBoundaryEnds(
+inline std::optional<PlanarBoundaryAlignment> ProjectPlanarBoundaryEnds(
     const std::vector<const geometry::CurveSegment*>& curves, const geometry::GeometryTolerance& tolerance)
 {
     using K = geometry::CurveKind;
@@ -79,6 +80,7 @@ inline std::optional<PlanarBoundaryAlignment> AlignPlanarBoundaryEnds(
     };
 
     PlanarBoundaryAlignment alignment;
+    bool validLinks = true;
     alignment.curves.reserve(curves.size());
     alignment.anchoredArcs.reserve(curves.size());
     for (const auto* curve : curves) {
@@ -86,14 +88,23 @@ inline std::optional<PlanarBoundaryAlignment> AlignPlanarBoundaryEnds(
         if (!result.HasValue()) return std::nullopt;
         const auto& projected = result.Value();
         const double movement = CurveMovementBound(*curve, projected);
-        if (movement > tolerance.interactiveJoinMm || !link(curve->StartPoint(), projected.StartPoint())
-            || !link(curve->EndPoint(), projected.EndPoint())) return std::nullopt;
+        if (movement > tolerance.interactiveJoinMm) return std::nullopt;
+        if (!link(curve->StartPoint(), projected.StartPoint())) validLinks = false;
+        if (!link(curve->EndPoint(), projected.EndPoint())) validLinks = false;
         alignment.curves.push_back(projected);
         alignment.anchoredArcs.push_back(curve->Kind() != K::Line && movement <= tolerance.modelLinearMm);
         alignment.maximumMovementMm = std::max(alignment.maximumMovementMm, movement);
     }
-    if (!closesGap || std::any_of(junctions.begin(), junctions.end(), [](const auto& join) { return join.uses != 2; }))
-        return std::nullopt;
+    alignment.closesAllEnds = validLinks && closesGap
+        && std::all_of(junctions.begin(), junctions.end(), [](const auto& join) { return join.uses == 2; });
+    return alignment;
+}
+
+inline std::optional<PlanarBoundaryAlignment> AlignPlanarBoundaryEnds(
+    const std::vector<const geometry::CurveSegment*>& curves, const geometry::GeometryTolerance& tolerance)
+{
+    auto alignment = ProjectPlanarBoundaryEnds(curves, tolerance);
+    if (!alignment || !alignment->closesAllEnds) return std::nullopt;
     return alignment;
 }
 

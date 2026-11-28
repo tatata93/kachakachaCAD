@@ -71,6 +71,42 @@ KACHA_V2_TEST(projection, 平行な面へなら円は円のまま落ちる)
     Require(Near(dropped.Value().Center().z, 0.0), "中心が面に載る");
 }
 
+KACHA_V2_TEST(projection, 微小に傾いた円弧も平面化して接点を保つ)
+{
+    const GeometryTolerance tolerance;
+    constexpr double tilt = 8.5e-6;
+    const auto arc = CurveSegment::MakeCircularArc({2., 3., 8.},
+        {0., std::sin(tilt), std::cos(tilt)}, {1., 0., 0.}, 4., 0.8, -2.1).Value();
+    const auto line = CurveSegment::MakeLine({8., 6., 8.}, arc.StartPoint()).Value();
+    for (const double sign : {1., -1.}) {
+        const ProjectionPlane plane{kXY.origin, kXY.normal*sign};
+        const auto result = ProjectCurvesOntoPlane({line, arc}, plane, tolerance);
+        Require(result.HasValue(), "楕円との差が許容内の円弧を投影できる");
+        const auto& dropped = result.Value()[1];
+        Require(dropped.Kind() == CurveKind::CircularArc && Near(dropped.Radius(), arc.Radius())
+                && Near(dropped.SweepAngleRad(), arc.SweepAngleRad()), "円弧の種類、半径と向きを維持");
+        Require((dropped.StartPoint() - result.Value()[0].EndPoint()).Length() < 1e-9,
+            "直線の接点とつながる");
+        for (int i = 0; i <= 16; ++i) {
+            const double t = i / 16.;
+            const auto actual = dropped.Evaluate(t);
+            Require(Near(actual.z, 0.), "接点から弧全体まで指定平面に載る");
+            Require((actual - ProjectPointOntoPlane(arc.Evaluate(t), plane)).Length() < 1e-9,
+                "正射影との面内差が許容内に収まる");
+        }
+    }
+}
+
+KACHA_V2_TEST(projection, 微小角度でも半径による楕円との差が大きければ断る)
+{
+    constexpr double tilt = 8.5e-6;
+    const auto circle = CurveSegment::MakeCircle({0., 0., 0.},
+        {0., std::sin(tilt), std::cos(tilt)}, {1., 0., 0.}, 1e6).Value();
+    const auto dropped = ProjectCurveOntoPlane(circle, kXY, GeometryTolerance{});
+    Require(!dropped.HasValue() && dropped.FirstCode() == "GEO-E017",
+        "半径を含めた幾何誤差が許容値を超えた円をそのまま投影しない");
+}
+
 KACHA_V2_TEST(projection, 斜めの面へ落とすと楕円になるので断る)
 {
     // 折れ線で近似すれば通せてしまうが、それは円を落としたことにならない。

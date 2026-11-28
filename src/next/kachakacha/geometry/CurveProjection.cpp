@@ -70,20 +70,29 @@ Out ProjectCurveOntoPlane(const CurveSegment& curve, const ProjectionPlane& plan
             return Out::Failure(EllipseRefusal("線の面が決まっていません"));
         }
         const Vector3 curveUnit = curve.Normal() * (1.0 / curveNormalLength);
-        const double along = std::abs(geometry::Dot(unit, curveUnit));
-        if (along < 1.0 - 1.0e-9) {
+        const double signedCosine = geometry::Dot(unit, curveUnit);
+        const double cosine = std::abs(signedCosine);
+        const Vector3 targetNormal = signedCosine < 0.0 ? unit * -1.0 : unit;
+        const Vector3 rotationAxis = geometry::Cross(curveUnit, targetNormal);
+        // 1 - cos(theta), without cancellation for nearly parallel normals.
+        const double flattening = rotationAxis.LengthSquared() / (1.0 + cosine);
+        if (flattening > 1.0e-9 || curve.Radius() * flattening > tolerance.modelLinearMm) {
             return Out::Failure(EllipseRefusal(
                 curve.Kind() == CurveKind::Circle ? "円です" : "円弧です"));
         }
-        // 面が平行なら、中心を落とすだけでよい。半径も向きも変わらない。
+        // The smallest rotation keeps the circular frame on the target plane.
+        // Orthogonal projection additionally shortens the inclined axis by
+        // cos(theta), so radius * flattening bounds the error for the whole arc.
         const Vector3 center = ProjectPointOntoPlane(curve.Center(), plane);
+        const Vector3 reference = curve.ReferenceDirection();
+        const Vector3 firstRotation = geometry::Cross(rotationAxis, reference);
+        const Vector3 targetReference = reference + firstRotation
+            + geometry::Cross(rotationAxis, firstRotation) * (1.0 / (1.0 + cosine));
         if (curve.Kind() == CurveKind::Circle) {
-            return CurveSegment::MakeCircle(center, curve.Normal(),
-                curve.ReferenceDirection(), curve.Radius());
+            return CurveSegment::MakeCircle(center, targetNormal, targetReference, curve.Radius());
         }
-        return CurveSegment::MakeCircularArc(center, curve.Normal(),
-            curve.ReferenceDirection(), curve.Radius(), curve.StartAngleRad(),
-            curve.SweepAngleRad());
+        return CurveSegment::MakeCircularArc(center, targetNormal, targetReference,
+            curve.Radius(), curve.StartAngleRad(), curve.SweepAngleRad());
     }
     }
     return Out::Failure(MakeError("GEO-E018", "落とす先の面が決まっていません。",

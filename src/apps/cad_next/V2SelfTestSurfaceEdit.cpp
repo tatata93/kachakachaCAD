@@ -28,6 +28,7 @@
 #include <QString>
 #include <QAction>
 #include <QMenu>
+#include <QObject>
 #include <QPushButton>
 #include <QTimer>
 #include <QTreeWidgetItem>

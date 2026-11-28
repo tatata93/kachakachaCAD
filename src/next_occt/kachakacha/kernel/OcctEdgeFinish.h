@@ -50,6 +50,9 @@ struct EdgeFinishResult {
 //! 点に一番近い、立体の辺(退化した辺は除く)。
 [[nodiscard]] base::Result<SolidEdgeInfo> NearestSolidEdge(
     const modeling::KernelShapeHandle& solid, const geometry::Vector3& point);
+//! 一覧で選べる辺。退化辺を除き、同じ位相の辺は一度だけ返す。
+[[nodiscard]] base::Result<std::vector<SolidEdgeInfo>> ListSolidEdges(
+    const modeling::KernelShapeHandle& solid);
 
 //! 真ん中の点で指した辺の折れ線(札と下見)。見つからなければ断る。
 [[nodiscard]] base::Result<SolidEdgeInfo> SolidEdgeAt(const modeling::KernelShapeHandle& solid,

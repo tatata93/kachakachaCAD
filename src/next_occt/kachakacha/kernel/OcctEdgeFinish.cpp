@@ -177,6 +177,24 @@ Result<SolidEdgeInfo> SolidEdgeAt(const KernelShapeHandle& solid, const Vector3&
     }, "辺の拾い出し");
 }
 
+Result<std::vector<SolidEdgeInfo>> ListSolidEdges(const KernelShapeHandle& solid)
+{
+    using Out = Result<std::vector<SolidEdgeInfo>>;
+    return Guarded<std::vector<SolidEdgeInfo>>([&]() -> Out {
+        TopoDS_Shape shape;
+        if (!solid.Valid() || !LookupShape(solid, shape)) {
+            return Out::Failure(MakeError(kEdgeFinishEdgeMissing, "部品の立体が見つかりません。", {}));
+        }
+        const auto edges = EdgesOf(shape);
+        std::vector<SolidEdgeInfo> items;
+        items.reserve(edges.size());
+        for (const auto& edge : edges) {
+            items.push_back({MidpointOf(edge), PolylineOf(edge), 0.0});
+        }
+        return Out::Success(std::move(items));
+    }, "辺の拾い出し");
+}
+
 Result<EdgeFinishResult> FinishSolidEdges(const KernelShapeHandle& solid, EdgeFinishKind kind,
     double sizeMm, const std::vector<Vector3>& edgeMidpoints,
     const geometry::GeometryTolerance& tolerance)
@@ -263,6 +281,12 @@ Result<SolidEdgeInfo> SolidEdgeAt(const KernelShapeHandle&, const Vector3&,
     const geometry::GeometryTolerance&)
 {
     return Result<SolidEdgeInfo>::Failure(MakeError(kEdgeFinishUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<std::vector<SolidEdgeInfo>> ListSolidEdges(const KernelShapeHandle&)
+{
+    return Result<std::vector<SolidEdgeInfo>>::Failure(MakeError(kEdgeFinishUnsupported,
         "この実行ファイルには幾何カーネルが入っていません。", {}));
 }
 

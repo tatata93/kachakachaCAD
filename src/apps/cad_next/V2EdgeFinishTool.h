@@ -23,6 +23,7 @@
 #include <string_view>
 
 class V2MainWindow;
+class QMenu;
 
 class V2EdgeFinishTool final {
 public:
@@ -38,6 +39,7 @@ public:
     void End(bool keepTool = false);
     void Confirm();
     void HandleSelectionChanged();
+    void AddListedEdges(QMenu& menu, const kachakacha::v2::base::EntityId& part);
     [[nodiscard]] bool HandleKey(int key);
     //! 開き直したときの作り直し(EdgeFinish の Feature)。
     [[nodiscard]] bool Rebuild(const kachakacha::v2::domain::Feature& feature,
@@ -53,7 +55,8 @@ public:
     }
 
 private:
-    void ApplyPick(const kachakacha::v2::base::EntityId& id);
+    [[nodiscard]] bool ApplyPick(const kachakacha::v2::base::EntityId& id,
+        std::optional<kachakacha::v2::geometry::Vector3> hit, bool listedEdge = false);
     void MirrorToSelection();
     void Refresh();
     void RefreshPreview();

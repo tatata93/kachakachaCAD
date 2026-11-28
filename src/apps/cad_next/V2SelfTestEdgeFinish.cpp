@@ -10,6 +10,7 @@
 
 #include "V2EdgeFinishDock.h"
 #include "V2EdgeFinishTool.h"
+#include "V2EntityTree.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -17,6 +18,9 @@
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/domain/Entity.h"
 
+#include <QAction>
+#include <QItemSelectionModel>
+#include <QMenu>
 #include <QPointF>
 #include <QString>
 
@@ -72,11 +76,10 @@ struct Box3 {
     return std::nullopt;
 }
 
-//! 矩形を引いて押し出し、箱を 1 つ作る。上から見た画面のまま返す。
-[[nodiscard]] EntityId MakeBox(V2MainWindow& window, Box3& bounds)
+//! 矩形を引いて押し出し、箱を 1 つ追加する。上から見た画面のまま返す。
+[[nodiscard]] EntityId AddBox(V2MainWindow& window, Box3& bounds, double left, double right)
 {
-    window.RunCommand("file.new");
-    const EntityId wire = DrawRectangleAtByHand(window, 0.40, 0.40, 0.60, 0.60);
+    const EntityId wire = DrawRectangleAtByHand(window, left, 0.40, right, 0.60);
     if (wire.IsNil() || !ClickOnCurveOf(window, wire)) {
         return EntityId{};
     }
@@ -93,6 +96,12 @@ struct Box3 {
     bounds = *found;
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     return box;
+}
+
+[[nodiscard]] EntityId MakeBox(V2MainWindow& window, Box3& bounds)
+{
+    window.RunCommand("file.new");
+    return AddBox(window, bounds, 0.40, 0.60);
 }
 
 //! 上から見て、上の面の点を素のクリックで押す(辺から inset mm 内側)。
@@ -256,12 +265,78 @@ bool CaseOutputKinds(V2MainWindow& window)
     return true;
 }
 
+bool ListedEdge(V2MainWindow& window, const EntityId& part, Vector3 midpoint, bool checked)
+{
+    auto* row = window.ItemOfEntity(part);
+    if (!row) return false;
+    QMenu menu(&window);
+    window.EntityTree()->setCurrentItem(row, 0, QItemSelectionModel::NoUpdate);
+    window.BuildExplorerMenu(menu);
+    auto* edges = menu.findChild<QMenu*>(QStringLiteral("explorerSolidEdges"));
+    if (!Explain("the box lists 12 unique native edges", edges && edges->actions().size() == 12)) return false;
+    for (auto* action : edges->actions()) {
+        action->hover();
+        const auto& lines = window.Viewport().CurrentEditPreview().lines;
+        if (!Explain("the row previews only its edge", lines.size() == 1 && lines.front().size() >= 2)) return false;
+        const auto& line = lines.front();
+        if (geometry::Distance((line.front() + line.back()) * 0.5, midpoint) > 1e-6) continue;
+        if (!Explain("the menu marks the same already chosen edge", action->isChecked() == checked)) return false;
+        action->trigger();
+        return Explain("applying the menu choice clears the hover line", window.Viewport().CurrentEditPreview().lines.empty());
+    }
+    return Explain("the box edge is in the menu", false);
+}
+
+template<int Kind>
+bool CaseListedSolidEdges(V2MainWindow& window)
+{
+    Box3 first{}, second{};
+    const auto source = MakeBox(window, first);
+    const auto other = AddBox(window, second, 0.68, 0.84);
+    if (source.IsNil() || other.IsNil()) return false;
+    window.RunCommand(Kind == 0 ? "part.fillet" : "part.chamfer");
+    auto& tool = window.EdgeFinishTool();
+    if (!tool.Dock()->TypeSize(1.0)) return false;
+    const double x = (first.minimum.x + first.maximum.x) * 0.5;
+    const Vector3 front{x, first.minimum.y, first.maximum.z};
+    const Vector3 rear{x, first.maximum.y, first.maximum.z};
+    const Vector3 otherFront{(second.minimum.x + second.maximum.x) * 0.5, second.minimum.y, second.maximum.z};
+    const auto clickFront = [&] { return PressTopFace(window, x, front.y + FaceInset(window), front.z); };
+    if (!ListedEdge(window, source, front, false) || !Explain("a listed edge supplies both roles when starting the tool",
+            tool.Input().part == source && tool.Input().edges.size() == 1 && tool.Outcome().available)) return false;
+    if (!clickFront() || !Explain("a 3D click toggles off the edge picked from the list", tool.Input().edges.empty())) return false;
+    if (!clickFront() || !Explain("the viewport selects the known top edge",
+            tool.Input().part == source && tool.Input().edges.size() == 1 && tool.Outcome().available)) return false;
+    const auto one = tool.Input().edges;
+    const double oneVolume = tool.Outcome().volumeMm3;
+    if (!ListedEdge(window, other, otherFront, false) || !Explain("the other solid cannot replace the current edge",
+            tool.Input().part == source && tool.Input().edges == one)) return false;
+    if (!ListedEdge(window, source, front, true) || !Explain("the list toggles off the edge picked in 3D",
+            tool.Input().edges.empty())) return false;
+    if (!clickFront() || !ListedEdge(window, source, rear, false)) return false;
+    const auto selected = tool.Input().edges;
+    if (!Explain("mixed input picks two different edges and previews a valid result", selected.size() == 2
+            && selected.front() == one.front() && tool.Outcome().available && tool.Outcome().volumeMm3 < oneVolume)) return false;
+    if (!tool.Dock()->ClickConfirm() || !Explain("confirm creates a result and hides the source only",
+            CountOfKind(window, EntityKind::Part) == 3 && VisibleParts(window).size() == 2)) return false;
+    if (!window.SaveAndReopen(Kind == 0 ? QStringLiteral("listed-fillet.kcd2") : QStringLiteral("listed-chamfer.kcd2"))) return false;
+    const auto& features = window.Session().GetDocument().Snapshot().features;
+    return Explain("the saved method and both exact picked edges rebuild", window.RebuildProblems().isEmpty()
+        && PartBounds(window, NewestPart(window)).has_value() && std::any_of(features.begin(), features.end(),
+            [&](const auto& feature) {
+                const auto* finish = std::get_if<domain::EdgeFinishDefinition>(&feature.definition);
+                return finish && finish->kind == Kind && finish->source == source && finish->edgeMidpoints == selected;
+            }));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> EdgeFinishCases()
 {
     return {
         {"HP-FL-03 edge output choices and atomic undo", CaseOutputKinds},
+        {"HP-FL-04 fillet edits the same listed and viewport solid edges", CaseListedSolidEdges<0>},
+        {"HP-FL-05 chamfer edits the same listed and viewport solid edges", CaseListedSolidEdges<1>},
         {"HP-FL-01 フィレットは辺の近くを押して半径で丸め体積が式どおり減り1回で戻り開き直しても同じ",
             CaseFilletOneEdge},
         {"HP-FL-02 面取りは辺を何本でも押して選び押し直すと外れ距離で落とす", CaseChamferTwoEdgesWithToggle},

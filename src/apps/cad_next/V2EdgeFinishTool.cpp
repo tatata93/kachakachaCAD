@@ -18,6 +18,8 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QKeyEvent>
+#include <QAction>
+#include <QMenu>
 #include <QString>
 
 #include <algorithm>
@@ -29,6 +31,7 @@
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::domain::EdgeFinishDefinition;
 using kachakacha::v2::domain::EntityKind;
+using kachakacha::v2::geometry::Vector3;
 
 namespace {
 
@@ -126,7 +129,7 @@ void V2EdgeFinishTool::Begin(std::string_view commandId)
     input_ = kachakacha::v2::app::EdgeFinishInputState{};
     input_.kind = kind;
     input_.sizeMm = previousSize > 0.0 ? previousSize : 1.0;
-    // 選んであった部品は相手に入れる(辺は 3D で押して選ぶ)。
+    // 選んであった部品は相手に入れる。辺は明示して指定する。
     for (const EntityId& id : window_.viewport_->Selection().entityIds) {
         const auto* entity = window_.session_->GetDocument().FindEntity(id);
         if (entity != nullptr && entity->kind == EntityKind::Part) {
@@ -142,7 +145,7 @@ void V2EdgeFinishTool::Begin(std::string_view commandId)
     MirrorToSelection();
     Refresh();
     window_.SetStatus(Text(LabelOf(kind) + ": 部品の" + (kind == 1 ? "落としたい" : "丸めたい")
-        + "辺の近くを 3D で押してください(何本でも。入っている辺の近くを押すと外れます)。"
+        + "辺を3Dビューか左一覧の右クリック「部分を指定」から選んでください。もう一度選ぶと外れます。"
           "大きさは右の棚で決めます。Enter で確定、Esc でやめます。"));
 }
 
@@ -206,48 +209,93 @@ void V2EdgeFinishTool::HandleSelectionChanged()
     if (!active_ || mirroring_ || window_.viewport_ == nullptr) {
         return;
     }
+    bool changed = false;
     if (const auto pick = window_.viewport_->TakeLastToolPick(); pick.has_value()) {
-        ApplyPick(*pick);
+        changed = ApplyPick(*pick, window_.viewport_->LastToolPickPoint());
     } else {
         for(const auto& id:window_.viewport_->Selection().entityIds) {
             const auto* entity=window_.session_->GetDocument().FindEntity(id);
             if(!entity || entity->kind!=EntityKind::Part)continue;
             if(!pickingEdges_ || input_.part.IsNil()) {
-                const bool previous=pickingEdges_;pickingEdges_=false;ApplyPick(id);pickingEdges_=previous;
-            } else window_.SetStatus(QStringLiteral("辺・フェイスは3Dビューで選んでください。部品を替える場合は①を押します。"));
+                const QScopedValueRollback<bool> partRole(pickingEdges_, false);
+                changed = ApplyPick(id, std::nullopt);
+            } else {
+                window_.SetStatus(QStringLiteral("辺は3Dビューか左一覧の右クリック「部分を指定」から選んでください。"));
+            }
             break;
         }
     }
     MirrorToSelection();   // 受けなかったもの(線など)を選択に残さない。
-    Refresh();
+    if (changed) Refresh();
 }
 
-//! 部品を押した: 押した点に一番近い辺を核に尋ねて入れる(同じ辺なら外れる)。
-void V2EdgeFinishTool::ApplyPick(const EntityId& id)
+void V2EdgeFinishTool::AddListedEdges(QMenu& menu, const EntityId& id)
+{
+    if (!active_ || !pickingEdges_) return;
+    const auto shape = window_.partShapes_.find(id.ToString());
+    if (shape == window_.partShapes_.end()) return;
+    const auto listed = kachakacha::v2::kernel::ListSolidEdges(shape->second);
+    if (!listed.HasValue() || listed.Value().empty()) return;
+
+    auto* edges = menu.addMenu(QStringLiteral("辺"));
+    edges->setObjectName(QStringLiteral("explorerSolidEdges"));
+    edges->setStyleSheet(QStringLiteral("QMenu { menu-scrollable: 1; }"));
+    QObject::connect(edges, &QMenu::aboutToHide, &window_, [this] { window_.viewport_->HideEditPreview(); });
+    const double tolerance = JoinMm();
+    int index = 0;
+    for (const auto& edge : listed.Value()) {
+        const auto point = edge.midpoint;
+        auto* action = edges->addAction(QStringLiteral("辺 %1  (%2, %3, %4 mm)").arg(++index)
+            .arg(point.x, 0, 'f', 2).arg(point.y, 0, 'f', 2).arg(point.z, 0, 'f', 2));
+        action->setCheckable(true);
+        action->setChecked(input_.part == id && std::any_of(input_.edges.begin(), input_.edges.end(),
+            [&](const auto& chosen) { return kachakacha::v2::geometry::Distance(chosen, point) <= tolerance; }));
+        QObject::connect(action, &QAction::hovered, edges, [this, line = edge.polyline] {
+            window_.viewport_->ShowEditPreview({{line}, {}, false});
+        });
+        QObject::connect(action, &QAction::triggered, &window_, [this, id, point] {
+            if (!active_ || !pickingEdges_ || !window_.viewport_->EntityShown(id)) return;
+            window_.viewport_->HideEditPreview();
+            if (ApplyPick(id, point, true)) {
+                MirrorToSelection();
+                Refresh();
+            }
+        });
+    }
+}
+
+//! 3Dの位置は最寄りの辺へ、一覧は明示された辺の中央へ結び付ける。
+bool V2EdgeFinishTool::ApplyPick(const EntityId& id, std::optional<Vector3> hit, bool listedEdge)
 {
     const auto* entity = window_.session_->GetDocument().FindEntity(id);
     if (entity == nullptr || entity->kind != EntityKind::Part) {
         window_.SetStatus(Text(LabelOf(input_.kind) + ": 部品の辺の近くを押してください。"));
-        return;
+        return false;
     }
     if(!pickingEdges_) {
-        input_=kachakacha::v2::app::WithEdgeFinishPick(input_,id,std::nullopt,JoinMm()); return;
+        if (input_.part == id) return false;
+        input_ = kachakacha::v2::app::WithEdgeFinishPick(input_, id, std::nullopt, JoinMm());
+        return true;
     }
     if(!input_.part.IsNil()&&input_.part!=id) {
-        window_.SetStatus(QStringLiteral("選択中の部品の辺を選んでください。部品を替える場合は①を押してください。"));return;
+        window_.SetStatus(QStringLiteral("選択中の部品の辺を選んでください。部品を替える場合は①を押してください。"));
+        return false;
     }
     const auto shape = window_.partShapes_.find(id.ToString());
-    const auto hit = window_.viewport_->LastToolPickPoint();
-    std::optional<kachakacha::v2::geometry::Vector3> midpoint;
+    std::optional<Vector3> midpoint;
     if (shape != window_.partShapes_.end() && hit.has_value()) {
-        const auto nearest = kachakacha::v2::kernel::NearestSolidEdge(shape->second, *hit);
-        if (nearest.HasValue()) {
-            midpoint = nearest.Value().midpoint;
+        const auto edge = listedEdge ? kachakacha::v2::kernel::SolidEdgeAt(shape->second, *hit,
+            window_.session_->GetDocument().Snapshot().settings.tolerance)
+            : kachakacha::v2::kernel::NearestSolidEdge(shape->second, *hit);
+        if (edge.HasValue()) {
+            midpoint = edge.Value().midpoint;
         } else {
-            window_.ReportDiagnostics(nearest.Diagnostics());
+            window_.ReportDiagnostics(edge.Diagnostics());
         }
     }
+    if (!midpoint && (listedEdge || input_.part == id)) return false;
     input_ = kachakacha::v2::app::WithEdgeFinishPick(input_, id, midpoint, JoinMm());
+    return true;
 }
 
 std::string V2EdgeFinishTool::NameOf(const EntityId& id) const

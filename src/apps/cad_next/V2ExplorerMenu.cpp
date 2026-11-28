@@ -8,6 +8,7 @@
 
 #include "V2MainWindow.h"
 
+#include "V2EdgeFinishTool.h"
 #include "V2EditDock.h"
 #include "V2EntityTree.h"
 #include "V2FaceActions.h"
@@ -197,6 +198,8 @@ void AddExplorerElements(V2MainWindow& window, QMenu& menu, base::EntityId id)
         }
     }
     if (!viewport.PickPending() && viewport.DisplaySettingsNow().shapesVisible) {
+        if (!viewport.ReferencePickPending() && viewport.ToolPickActive())
+            window.EdgeFinishTool().AddListedEdges(*elements, id);
         for (const auto& shape : viewport.ShapeViews()) {
             if (shape.entityId != id) continue;
             std::map<std::size_t, const modeling::MeshTriangle*> faces;
